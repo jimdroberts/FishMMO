@@ -507,6 +507,15 @@ namespace FishMMO.Client
 			pos.y += GetDisplayHeight(character);
 			int fx = 0; fx.EnableBit(LabelEffect.FadeIn); fx.EnableBit(LabelEffect.FadeOut); fx.EnableBit(LabelEffect.Bounce);
 			UITKLabelMaker.Display3D("Achievement: " + template.Name + "\r\n" + tier.TierCompleteMessage, pos, Color.yellow, 0.6f, 4.0f, false, fx);
+
+			// The floating label is gone in four seconds; the chat line is the record of it.
+			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+			{
+				string message = string.IsNullOrEmpty(tier.TierCompleteMessage)
+					? $"Achievement earned: {template.Name}."
+					: $"Achievement earned: {template.Name}. {tier.TierCompleteMessage}";
+				chat.InstantiateChatMessage(ChatChannel.System, "", message);
+			}
 		}
 	}
 }

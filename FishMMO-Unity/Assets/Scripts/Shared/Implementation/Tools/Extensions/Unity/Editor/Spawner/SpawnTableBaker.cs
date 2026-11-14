@@ -66,7 +66,9 @@ namespace FishMMO.Shared
 			foreach (string guid in AssetDatabase.FindAssets("t:Scene", folders.ToArray()))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				if (path.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) && !paths.Contains(path))
+				// A backdrop only the client draws has nothing to spawn and no server to spawn it.
+				if (path.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) && !paths.Contains(path)
+					&& !FishMMO.Shared.WorldDesign.ClientBackdropScenes.IsBackdropScene(path))
 				{
 					paths.Add(path);
 				}
@@ -85,9 +87,10 @@ namespace FishMMO.Shared
 				return false;
 			}
 			string normalized = scenePath.Replace('\\', '/');
-			return normalized.StartsWith(Constants.Configuration.WorldScenePath.TrimEnd('/') + "/", StringComparison.Ordinal) ||
+			bool inWorldFolder = normalized.StartsWith(Constants.Configuration.WorldScenePath.TrimEnd('/') + "/", StringComparison.Ordinal) ||
 				(EditorPrefs.GetBool("FishMMOEnableLocalDirectory") &&
 				 normalized.StartsWith(Constants.Configuration.LocalScenePath.TrimEnd('/') + "/", StringComparison.Ordinal));
+			return inWorldFolder && !FishMMO.Shared.WorldDesign.ClientBackdropScenes.IsBackdropScene(normalized);
 		}
 
 		/// <summary>

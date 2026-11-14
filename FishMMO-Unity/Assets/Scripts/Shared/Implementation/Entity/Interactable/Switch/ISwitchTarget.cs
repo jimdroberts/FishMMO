@@ -52,7 +52,34 @@ namespace FishMMO.Shared
 		/// <summary>How far along its travel it stood when that change began, 0..1.</summary>
 		float ChangeTravel { get; }
 
-		/// <summary>Adopts the server's state: <paramref name="activated"/>, changed at <paramref name="changeTick"/> from <paramref name="changeTravel"/>.</summary>
-		void SetState(bool activated, uint changeTick, float changeTravel);
+		/// <summary>
+		/// The server tick from which the pose it has come to rest in is solid: 0 while undecided (still moving, or held
+		/// open to characters because someone stands where it came to rest), 1 for settled since before anyone watched.
+		/// Only the server decides it, so every peer turns the target solid on the same tick.
+		/// </summary>
+		uint SolidTick { get; }
+
+		/// <summary>Raised on the server when it decides <see cref="SolidTick"/>, for the switch to tell its observers.</summary>
+		event System.Action<ITimedSwitchTarget> SolidDecided;
+
+		/// <summary>
+		/// Adopts the server's state: <paramref name="activated"/>, changed at <paramref name="changeTick"/> from
+		/// <paramref name="changeTravel"/>, solid at rest from <paramref name="solidTick"/> (0: not yet).
+		/// </summary>
+		void SetState(bool activated, uint changeTick, float changeTravel, uint solidTick);
+	}
+
+	/// <summary>
+	/// A <see cref="ISwitchTarget"/> that turns solid where it comes to rest, and so must not be moved onto a character:
+	/// a door shut on someone standing in its doorway would close its leaf around them, and the character controller
+	/// would pop them out through it to whichever side was nearer.
+	/// </summary>
+	public interface IClearanceSwitchTarget : ISwitchTarget
+	{
+		/// <summary>
+		/// True when going to <paramref name="activated"/> would leave solid colliders where a character stands now.
+		/// Asked by the server before it changes the target; a pose that is never solid is never obstructed.
+		/// </summary>
+		bool IsObstructed(bool activated);
 	}
 }

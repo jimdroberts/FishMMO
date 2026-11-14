@@ -22,6 +22,12 @@ namespace FishMMO.Shared.Core
 		bool IsAggressive { get; set; }
 
 		/// <summary>
+		/// A player's aggression toggle, as the server last set it: while on, they may harm neutral and allied targets, and
+		/// anyone may harm them. Off by default; always off for a character that has no toggle.
+		/// </summary>
+		bool AggressionEnabled => false;
+
+		/// <summary>
 		/// Dictionary of all factions and their standing values, keyed by template ID.
 		/// </summary>
 		Dictionary<int, Faction> Factions { get; }
@@ -94,5 +100,12 @@ namespace FishMMO.Shared.Core
 		/// <param name="otherFactionController">The other faction controller to compare against.</param>
 		/// <returns>Color representing the alliance level.</returns>
 		Color GetAllianceLevelColor(IFactionController otherFactionController);
+
+		/// <summary>
+		/// The standing this character's client shows for another: <see cref="GetAllianceLevel"/>, except that a player
+		/// whose aggression is on reads as an enemy to everyone but their companions (party, guild), as
+		/// FactionHarm treats them. What the nameplate's colour and mark both follow.
+		/// </summary>
+		FactionAllianceLevel GetDisplayedAllianceLevel(IFactionController otherFactionController) => GetAllianceLevel(otherFactionController);
 	}
 }

@@ -1264,6 +1264,23 @@ DoubleField.fish-input--compact > #unity-text-input {
     padding-bottom: 0;
 }
 
+/*
+    A multiline .fish-input: a text area. The base rule centres text vertically, which suits a
+    single-line field and parks the first line of a tall box in its middle. The glyph element has
+    flex-grow (above), so it fills the box and its own alignment is what places the text; it is
+    named alongside the input. Type-qualified to tie the base rule's specificity, and declared
+    after it so it wins the tie. Any multiline="true" .fish-input should carry this class.
+*/
+.fish-input--multiline > #unity-text-input,
+TextField.fish-input--multiline > #unity-text-input,
+TextField.fish-input--multiline > #unity-text-input .unity-text-element {
+    -unity-text-align: upper-left;
+}
+
+TextField.fish-input--multiline > #unity-text-input .unity-text-element {
+    white-space: normal;
+}
+
 .fish-input > #unity-text-input:hover,
 TextField.fish-input > #unity-text-input:hover {
     border-color: var(--abyss-300);

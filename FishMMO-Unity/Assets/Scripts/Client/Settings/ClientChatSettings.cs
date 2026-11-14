@@ -77,6 +77,146 @@ namespace FishMMO.Client
 			Raise();
 		}
 
+		// ── Line format ──────────────────────────────────────────────
+
+		/// <summary>How a chat timestamp is written.</summary>
+		public enum TimestampFormat
+		{
+			/// <summary><c>14:05</c></summary>
+			Hours24 = 0,
+			/// <summary><c>14:05:09</c></summary>
+			Hours24Seconds = 1,
+			/// <summary><c>2:05 PM</c></summary>
+			Hours12 = 2,
+			/// <summary><c>2:05:09 PM</c></summary>
+			Hours12Seconds = 3,
+		}
+
+		/// <summary>Option labels for <see cref="TimestampFormat"/>, indexed by its value.</summary>
+		public static readonly string[] TimestampFormatLabels =
+		{
+			"24-hour (14:05)",
+			"24-hour with seconds (14:05:09)",
+			"12-hour (2:05 PM)",
+			"12-hour with seconds (2:05:09 PM)",
+		};
+
+		/// <summary>.NET format strings for <see cref="TimestampFormat"/>, indexed by its value.</summary>
+		/// <remarks>Invariant culture is applied when formatting so "PM" is "PM" on every machine.</remarks>
+		private static readonly string[] TimestampFormatStrings =
+		{
+			"HH:mm",
+			"HH:mm:ss",
+			"h:mm tt",
+			"h:mm:ss tt",
+		};
+
+		/// <summary>Timestamps are off on a fresh install, so the log reads exactly as it did.</summary>
+		public const bool DefaultShowTimestamps = false;
+
+		/// <summary>Channel tags are on on a fresh install, as they always were.</summary>
+		public const bool DefaultShowChannelTags = true;
+
+		/// <summary>Grouping is on on a fresh install, as it always was.</summary>
+		public const bool DefaultGroupMessages = true;
+
+		/// <summary>
+		/// Raised when anything about how a chat line is laid out changes: timestamps, their
+		/// format, channel tags or grouping.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="OnChanged"/> because the panel answers it by rebuilding every
+		/// row, where a font change only restyles them — and the font slider raises on every step
+		/// of a drag.
+		/// </remarks>
+		public static event Action OnFormatChanged;
+
+		/// <summary>Whether every chat line starts with the local time it arrived.</summary>
+		public static bool ShowTimestamps => ClientSettings.GetBool(
+			ClientSettings.ChatShowTimestampsKey, DefaultShowTimestamps);
+
+		/// <summary>The chosen timestamp format; an out-of-range stored value reads as the default.</summary>
+		public static TimestampFormat Format
+		{
+			get
+			{
+				int value = ClientSettings.GetInt(ClientSettings.ChatTimestampFormatKey, (int)TimestampFormat.Hours24);
+				return value >= 0 && value < TimestampFormatStrings.Length
+					? (TimestampFormat)value
+					: TimestampFormat.Hours24;
+			}
+		}
+
+		/// <summary>Whether a line names its channel, e.g. <c>[Tell]</c>.</summary>
+		public static bool ShowChannelTags => ClientSettings.GetBool(
+			ClientSettings.ChatShowChannelTagsKey, DefaultShowChannelTags);
+
+		/// <summary>
+		/// Whether consecutive lines from the same sender on the same channel drop the repeated
+		/// name. Off, every line carries its sender.
+		/// </summary>
+		public static bool GroupMessages => ClientSettings.GetBool(
+			ClientSettings.ChatGroupMessagesKey, DefaultGroupMessages);
+
+		/// <summary>Writes the timestamp toggle and notifies the panel.</summary>
+		public static void SetShowTimestamps(bool value)
+		{
+			ClientSettings.Set(ClientSettings.ChatShowTimestampsKey, value);
+			RaiseFormat();
+		}
+
+		/// <summary>Writes the timestamp format and notifies the panel.</summary>
+		public static void SetFormat(TimestampFormat value)
+		{
+			int index = (int)value;
+			if (index < 0 || index >= TimestampFormatStrings.Length)
+			{
+				index = (int)TimestampFormat.Hours24;
+			}
+			ClientSettings.Set(ClientSettings.ChatTimestampFormatKey, index);
+			RaiseFormat();
+		}
+
+		/// <summary>Writes the channel tag toggle and notifies the panel.</summary>
+		public static void SetShowChannelTags(bool value)
+		{
+			ClientSettings.Set(ClientSettings.ChatShowChannelTagsKey, value);
+			RaiseFormat();
+		}
+
+		/// <summary>Writes the grouping toggle and notifies the panel.</summary>
+		public static void SetGroupMessages(bool value)
+		{
+			ClientSettings.Set(ClientSettings.ChatGroupMessagesKey, value);
+			RaiseFormat();
+		}
+
+		/// <summary>Writes a time in the chosen format, e.g. <c>[14:05]</c>.</summary>
+		/// <param name="localTime">The local time the message arrived.</param>
+		/// <param name="format">The format to write it in.</param>
+		public static string FormatTimestamp(DateTime localTime, TimestampFormat format)
+		{
+			int index = (int)format;
+			if (index < 0 || index >= TimestampFormatStrings.Length)
+			{
+				index = 0;
+			}
+			return "[" + localTime.ToString(TimestampFormatStrings[index], System.Globalization.CultureInfo.InvariantCulture) + "]";
+		}
+
+		/// <summary>Notifies format subscribers, reporting rather than propagating a handler's failure.</summary>
+		private static void RaiseFormat()
+		{
+			try
+			{
+				OnFormatChanged?.Invoke();
+			}
+			catch (Exception ex)
+			{
+				Log.Error("ClientChatSettings", "A chat-format subscriber threw.", ex);
+			}
+		}
+
 		/// <summary>Clamps a value, rejecting the non-finite ones a hand-edited file can carry.</summary>
 		private static float Clamp(float value, float fallback, float minimum, float maximum)
 		{

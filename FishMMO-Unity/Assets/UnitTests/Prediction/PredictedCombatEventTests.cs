@@ -71,6 +71,33 @@ namespace FishMMO.UnitTests
 
 		private void RecordConfirmed(long id) => confirmed.Add(id);
 
+		/// <summary>
+		/// The caster's predicted hit already moved the target's bar, so the server's report of the same hit must apply only
+		/// what was NOT predicted: otherwise the bar showed the hit twice (85 -> 82 -> 79) until the next resource push.
+		/// </summary>
+		[Test]
+		public void PendingAmount_IsWhatTheReportMustNotApplyAgain_AndSettlesNothing()
+		{
+			ICharacter target = MakeCharacter("BarTarget", objectId: 7);
+			ICharacter other = MakeCharacter("OtherAttacker", objectId: 8);
+
+			PredictedCombatEvents.Predict(attacker, target, 3, PredictedCombatEvents.Kind.Damage, null, 0f);
+			PredictedCombatEvents.Predict(attacker, target, 4, PredictedCombatEvents.Kind.Damage, null, 0f);
+
+			LogAssert.AreEqual(3, PredictedCombatEvents.PendingAmount(attacker, target, PredictedCombatEvents.Kind.Damage),
+				"one report of one hit: the oldest predicted hit's amount is already on the bar");
+			LogAssert.AreEqual(7, PredictedCombatEvents.PendingAmount(attacker, target, PredictedCombatEvents.Kind.Damage, occurrences: 2),
+				"a report merged from two hits covers both predictions");
+			LogAssert.AreEqual(7, PredictedCombatEvents.PendingAmount(attacker, target, PredictedCombatEvents.Kind.Damage, occurrences: 5),
+				"hits beyond what was predicted add nothing: their share of the report is applied");
+			LogAssert.AreEqual(0, PredictedCombatEvents.PendingAmount(other, target, PredictedCombatEvents.Kind.Damage),
+				"another attacker's report predicted nothing here and is applied whole");
+			LogAssert.AreEqual(0, PredictedCombatEvents.PendingAmount(attacker, target, PredictedCombatEvents.Kind.Heal),
+				"a heal report is not offset by predicted damage");
+			LogAssert.AreEqual(2, PredictedCombatEvents.PendingCount,
+				"reading the amount settles nothing: the display still confirms the labels afterwards");
+		}
+
 		/// <summary>A prediction must announce itself so the display can draw it at once.</summary>
 		[Test]
 		public void Predict_AnnouncesImmediately()

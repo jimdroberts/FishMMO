@@ -71,6 +71,8 @@ namespace FishMMO.Client
 		private static GraphicsBuffer counters, snapshot, cells, triangles, drawn, args, starts;
 		private static int triangleCapacity;
 		private static readonly List<Material> materials = new List<Material>();
+		/// <summary>Per look, the rock material its fillet copy was made from: a reused look slot holds another material.</summary>
+		private static readonly List<Material> materialSources = new List<Material>();
 		private static readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO rock fillets" };
 
 		// The profile's settings.
@@ -134,6 +136,7 @@ namespace FishMMO.Client
 			lookCountsKnown = false;
 			warnedCells = warnedTriangles = warnedLooks = reported = false;
 			materials.Clear();
+			materialSources.Clear();
 			compute = null;
 			shader = null;
 			clearKernel = -1;
@@ -286,6 +289,7 @@ namespace FishMMO.Client
 				}
 			}
 			materials.Clear();
+			materialSources.Clear();
 			lookCountsKnown = false;
 			warnedLooks = false;
 		}
@@ -460,26 +464,61 @@ namespace FishMMO.Client
 		private static Material MaterialFor(int look)
 		{
 			IReadOnlyList<Material> looks = RockContactField.Looks;
-			while (materials.Count <= look && materials.Count < looks.Count)
+			if (look < 0 || look >= looks.Count)
 			{
-				Material source = looks[materials.Count];
-				Material m = null;
-				if (source != null)
-				{
-					m = new Material(shader) { name = $"{source.name} (rock fillet)", hideFlags = HideFlags.DontSave };
-					m.CopyPropertiesFromMaterial(source);
-					// w: the rock's maps are look array slices (ProceduralArtLookArrays; the arrays and slices came with the copy).
-					m.SetVector(MapsId, new Vector4(
-						source.IsKeywordEnabled("_METALLICSPECGLOSSMAP") ? 1f : 0f,
-						source.IsKeywordEnabled("_OCCLUSIONMAP") ? 1f : 0f,
-						source.IsKeywordEnabled("_NORMALMAP") ? 1f : 0f,
-						source.IsKeywordEnabled(TerrainLookMath.Keyword) ? 1f : 0f));
-					// The rocks' base band and crevices (FishGroundColour.hlsl), as the rock renderers set it.
-					m.SetFloat(ContactOnId, 1f);
-				}
-				materials.Add(m);
+				return null;
 			}
-			return look < materials.Count ? materials[look] : null;
+			while (materials.Count <= look)
+			{
+				materials.Add(null);
+				materialSources.Add(null);
+			}
+			Material source = looks[look];
+			// Made from this look's material, or made again: the slot may have been freed and taken by another world's rock.
+			if (materialSources[look] != source || (source != null && materials[look] == null))
+			{
+				DestroyAt(look);
+				materialSources[look] = source;
+				materials[look] = source != null ? CopyFor(source) : null;
+			}
+			return materials[look];
+		}
+
+		private static Material CopyFor(Material source)
+		{
+			var m = new Material(shader) { name = $"{source.name} (rock fillet)", hideFlags = HideFlags.DontSave };
+			m.CopyPropertiesFromMaterial(source);
+			// w: the rock's maps are look array slices (ProceduralArtLookArrays; the arrays and slices came with the copy).
+			m.SetVector(MapsId, new Vector4(
+				source.IsKeywordEnabled("_METALLICSPECGLOSSMAP") ? 1f : 0f,
+				source.IsKeywordEnabled("_OCCLUSIONMAP") ? 1f : 0f,
+				source.IsKeywordEnabled("_NORMALMAP") ? 1f : 0f,
+				source.IsKeywordEnabled(TerrainLookMath.Keyword) ? 1f : 0f));
+			// The rocks' base band and crevices (FishGroundColour.hlsl), as the rock renderers set it.
+			m.SetFloat(ContactOnId, 1f);
+			return m;
+		}
+
+		private static void DestroyAt(int look)
+		{
+			if (look < 0 || look >= materials.Count)
+			{
+				return;
+			}
+			if (materials[look] != null)
+			{
+				Object.Destroy(materials[look]);
+			}
+			materials[look] = null;
+			materialSources[look] = null;
+		}
+
+		/// <summary>A look slot the crevice field freed (its world left): its copy is destroyed, and the drawn set rebuilt.</summary>
+		internal static void ForgetLook(int look)
+		{
+			Hide();
+			DestroyAt(look);
+			lookCountsKnown = false;
 		}
 
 		private static void Draw(Vector3 eye)
@@ -539,6 +578,7 @@ namespace FishMMO.Client
 				}
 			}
 			materials.Clear();
+			materialSources.Clear();
 			if (compute != null)
 			{
 				Object.Destroy(compute);

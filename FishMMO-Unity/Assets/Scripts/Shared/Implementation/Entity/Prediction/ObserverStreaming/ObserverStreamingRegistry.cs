@@ -102,6 +102,59 @@ namespace FishMMO.Shared
 		/// <summary>Per viewer, characters pinned into the budget regardless of rank.</summary>
 		private static readonly Dictionary<int, HashSet<int>> pinnedByClientId = new Dictionary<int, HashSet<int>>();
 
+		/// <summary>Per viewer, the objects its byte budget left out on the last pass (ObserverStreamingPolicy.FitByteBudget).</summary>
+		private static readonly Dictionary<int, HashSet<int>> byteEvictedByClientId = new Dictionary<int, HashSet<int>>();
+
+		/// <summary>
+		/// Viewers who, on the last pass, had a target, fought someone, or had a character in combat within their engagement
+		/// range. The adaptive send interval keeps these at the full flush rate; see <c>NetworkSendSchedule</c>.
+		/// </summary>
+		private static readonly HashSet<int> nearCombatClientIds = new HashSet<int>();
+
+		/// <summary>
+		/// True when the viewer's last pass found it near combat: a target selected, a fight it is part of, or a character
+		/// in combat within its engagement range. Refreshed every pass (<see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/>).
+		/// </summary>
+		public static bool IsViewerNearCombat(int clientId) => nearCombatClientIds.Contains(clientId);
+
+		/// <summary>The tick each budgeted character became visible to each viewer (viewer → object → tick).</summary>
+		private static readonly Dictionary<int, Dictionary<int, uint>> visibleSinceByClientId = new Dictionary<int, Dictionary<int, uint>>();
+
+		/// <summary>
+		/// Least time, in ticks, a character the budget let in stays in view before the budget may take it out again: 5 s at
+		/// 30 Hz. A crowd wandering across the budget's edge otherwise spawned and despawned its members over and over, each
+		/// time a full spawn (about 350 bytes) and an attribute snapshot (about 180) to the viewer for a few seconds of view.
+		/// </summary>
+		public static uint MinimumVisibleTicks = 150;
+
+		/// <summary>
+		/// Least time, in ticks, a character the byte budget took out of view stays out before the budget may let it back in:
+		/// 3 s at 30 Hz. The mirror of <see cref="MinimumVisibleTicks"/>: at the budget's edge a crowd otherwise left and came
+		/// back every few seconds, and each return was a full spawn. Never applies to a pinned character (party, target, a
+		/// fight) or to one within the viewer's engagement range, which come back at once.
+		/// </summary>
+		public static uint MinimumHiddenTicks = 90;
+
+		/// <summary>The tick each character was taken out of each viewer's view by the budget (viewer → object → tick).</summary>
+		private static readonly Dictionary<int, Dictionary<int, uint>> hiddenSinceByClientId = new Dictionary<int, Dictionary<int, uint>>();
+
+		/// <summary>Per viewer, the characters within its engagement range on the last pass (never held out).</summary>
+		private static readonly Dictionary<int, HashSet<int>> engagedByClientId = new Dictionary<int, HashSet<int>>();
+
+		/// <summary>Longest scheduling pass since the last <see cref="ResetLongestPass"/>, milliseconds (a diagnostic, never simulation).</summary>
+		public static double LongestPassMilliseconds { get; private set; }
+
+		/// <summary>Starts a new measurement of <see cref="LongestPassMilliseconds"/>.</summary>
+		public static void ResetLongestPass() => LongestPassMilliseconds = 0d;
+		private static readonly List<ObserverStreamingPolicy.BudgetSlot> budgetSlots = new List<ObserverStreamingPolicy.BudgetSlot>();
+		private static readonly List<int> budgetCandidateIndices = new List<int>();
+
+		/// <summary>(viewer, observed) pairs the byte budget left out in the last pass.</summary>
+		public static int LastPassByteEvicted { get; private set; }
+
+		/// <summary>(viewer, observed) pairs the byte budget slowed in the last pass.</summary>
+		public static int LastPassByteSlowed { get; private set; }
+
 		/// <summary>
 		/// The budget each ranked object is measured against, by object id. 0 means unlimited.
 		/// </summary>
@@ -124,6 +177,12 @@ namespace FishMMO.Shared
 			public bool Pinned;
 			/// <summary>Inside the viewer's engagement radius, so a candidate for full-rate updates.</summary>
 			public bool Engaged;
+			/// <summary>
+			/// Actually engaged: fighting the viewer in either direction, or the viewer's current target. Only these are
+			/// exempt from the byte budget; mere proximity is not, or a crowd inside the engagement radius (a town square)
+			/// is never budgeted at all.
+			/// </summary>
+			public bool Fighting;
 		}
 
 		/// <summary>Number of objects currently registered — characters and budgeted statics alike.</summary>
@@ -159,6 +218,82 @@ namespace FishMMO.Shared
 		/// <returns>True when the character is inside the budget.</returns>
 		public static bool IsWithinVisibilityBudget(int viewerClientId, int observedObjectId, bool currentlyVisible, out bool hasRanking)
 		{
+			bool within = IsWithinVisibilityBudgetRanked(viewerClientId, observedObjectId, currentlyVisible, out hasRanking);
+			if (!hasRanking)
+			{
+				return within;
+			}
+			bool visible = HoldForMinimumVisibleTime(viewerClientId, observedObjectId, currentlyVisible, within);
+			return HoldForMinimumHiddenTime(viewerClientId, observedObjectId, currentlyVisible, visible);
+		}
+
+		/// <summary>
+		/// Keeps a character the budget took out of view out for at least <see cref="MinimumHiddenTicks"/>, unless it is pinned
+		/// or within the viewer's engagement range. Records the moment the budget takes a visible character out.
+		/// </summary>
+		private static bool HoldForMinimumHiddenTime(int viewerClientId, int observedObjectId, bool currentlyVisible, bool visible)
+		{
+			uint now = timeManager != null ? timeManager.LocalTick : 0u;
+			if (currentlyVisible)
+			{
+				if (!visible)
+				{
+					if (!hiddenSinceByClientId.TryGetValue(viewerClientId, out Dictionary<int, uint> since))
+					{
+						hiddenSinceByClientId[viewerClientId] = since = new Dictionary<int, uint>();
+					}
+					since[observedObjectId] = now;
+				}
+				return visible;
+			}
+			if (!visible || !hiddenSinceByClientId.TryGetValue(viewerClientId, out Dictionary<int, uint> hidden) ||
+				!hidden.TryGetValue(observedObjectId, out uint hiddenAt))
+			{
+				return visible;
+			}
+			bool exempt = (pinnedByClientId.TryGetValue(viewerClientId, out HashSet<int> pinned) && pinned.Contains(observedObjectId)) ||
+				(engagedByClientId.TryGetValue(viewerClientId, out HashSet<int> engaged) && engaged.Contains(observedObjectId));
+			if (!exempt && now - hiddenAt < MinimumHiddenTicks)
+			{
+				return false;
+			}
+			hidden.Remove(observedObjectId);
+			return true;
+		}
+
+		/// <summary>
+		/// Keeps a character the budget let in visible for at least <see cref="MinimumVisibleTicks"/> before the budget may take
+		/// it out. Only the budget's own verdict is held: the distance condition still removes anything out of range, and a pin
+		/// never reaches a "no" here.
+		/// </summary>
+		private static bool HoldForMinimumVisibleTime(int viewerClientId, int observedObjectId, bool currentlyVisible, bool within)
+		{
+			if (!currentlyVisible)
+			{
+				if (visibleSinceByClientId.TryGetValue(viewerClientId, out Dictionary<int, uint> stale))
+				{
+					stale.Remove(observedObjectId);
+				}
+				return within;
+			}
+			uint now = timeManager != null ? timeManager.LocalTick : 0u;
+			if (!visibleSinceByClientId.TryGetValue(viewerClientId, out Dictionary<int, uint> since))
+			{
+				visibleSinceByClientId[viewerClientId] = since = new Dictionary<int, uint>();
+			}
+			if (!since.TryGetValue(observedObjectId, out uint visibleAt))
+			{
+				since[observedObjectId] = visibleAt = now;
+			}
+			if (!within && now - visibleAt < MinimumVisibleTicks)
+			{
+				return true;
+			}
+			return within;
+		}
+
+		private static bool IsWithinVisibilityBudgetRanked(int viewerClientId, int observedObjectId, bool currentlyVisible, out bool hasRanking)
+		{
 			hasRanking = rankedClientIds.Contains(viewerClientId);
 			if (!hasRanking)
 			{
@@ -169,6 +304,13 @@ namespace FishMMO.Shared
 				pinned.Contains(observedObjectId))
 			{
 				return true;
+			}
+
+			// Left out by the viewer's byte budget (hysteresis already applied when it was decided).
+			if (byteEvictedByClientId.TryGetValue(viewerClientId, out HashSet<int> evicted) &&
+				evicted.Contains(observedObjectId))
+			{
+				return false;
 			}
 
 			if (!ranksByClientId.TryGetValue(viewerClientId, out Dictionary<int, int> ranks) ||
@@ -465,6 +607,11 @@ namespace FishMMO.Shared
 			rankedClientIds.Clear();
 			budgetsByObjectId.Clear();
 			pinnedByClientId.Clear();
+			byteEvictedByClientId.Clear();
+			visibleSinceByClientId.Clear();
+			nearCombatClientIds.Clear();
+			hiddenSinceByClientId.Clear();
+			engagedByClientId.Clear();
 		}
 
 		private static void OnPostTick()
@@ -488,11 +635,76 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static void RunPass()
 		{
+			long started = System.Diagnostics.Stopwatch.GetTimestamp();
 			using (Markers.Pass.Auto())
 			{
 				RunPassCore();
 			}
+			double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000d / System.Diagnostics.Stopwatch.Frequency;
+			if (milliseconds > LongestPassMilliseconds)
+			{
+				LongestPassMilliseconds = milliseconds;
+			}
+			PruneVisibleSince();
 		}
+
+		/// <summary>Drops the visible-since records of viewers no longer ranked (gone).</summary>
+		private static void PruneVisibleSince()
+		{
+			if (visibleSinceByClientId.Count == 0)
+			{
+				return;
+			}
+			prunedViewers.Clear();
+			foreach (int clientId in visibleSinceByClientId.Keys)
+			{
+				if (!rankedClientIds.Contains(clientId))
+				{
+					prunedViewers.Add(clientId);
+				}
+			}
+			for (int i = 0; i < prunedViewers.Count; ++i)
+			{
+				visibleSinceByClientId.Remove(prunedViewers[i]);
+			}
+			PruneHiddenSince();
+		}
+
+		private static readonly List<int> expiredHidden = new List<int>();
+
+		/// <summary>Drops hidden-since records of viewers gone, and records old enough to hold nothing any more.</summary>
+		private static void PruneHiddenSince()
+		{
+			uint now = timeManager != null ? timeManager.LocalTick : 0u;
+			prunedViewers.Clear();
+			foreach (KeyValuePair<int, Dictionary<int, uint>> viewer in hiddenSinceByClientId)
+			{
+				if (!rankedClientIds.Contains(viewer.Key))
+				{
+					prunedViewers.Add(viewer.Key);
+					continue;
+				}
+				expiredHidden.Clear();
+				foreach (KeyValuePair<int, uint> entry in viewer.Value)
+				{
+					if (now - entry.Value >= MinimumHiddenTicks)
+					{
+						expiredHidden.Add(entry.Key);
+					}
+				}
+				for (int i = 0; i < expiredHidden.Count; ++i)
+				{
+					viewer.Value.Remove(expiredHidden[i]);
+				}
+			}
+			for (int i = 0; i < prunedViewers.Count; ++i)
+			{
+				hiddenSinceByClientId.Remove(prunedViewers[i]);
+				engagedByClientId.Remove(prunedViewers[i]);
+			}
+		}
+
+		private static readonly List<int> prunedViewers = new List<int>();
 
 		private static void RunPassCore()
 		{
@@ -501,8 +713,11 @@ namespace FishMMO.Shared
 			LastPassRangeChanges = 0;
 			LastPassPinned = 0;
 			LastPassBudgetExcluded = 0;
+			LastPassByteEvicted = 0;
+			LastPassByteSlowed = 0;
 			rankedClientIds.Clear();
 			budgetsByObjectId.Clear();
+			nearCombatClientIds.Clear();
 
 			// Prune destroyed objects and refresh cached inputs.
 			for (int i = entries.Count - 1; i >= 0; --i)
@@ -683,6 +898,11 @@ namespace FishMMO.Shared
 
 				Dictionary<int, int> ranks = RanksFor(viewerConnection.ClientId);
 				HashSet<int> pins = PinsFor(viewerConnection.ClientId);
+				if (!engagedByClientId.TryGetValue(viewerConnection.ClientId, out HashSet<int> engagedNow))
+				{
+					engagedByClientId[viewerConnection.ClientId] = engagedNow = new HashSet<int>();
+				}
+				engagedNow.Clear();
 
 				/* Only the objects that could pass a test below are read: the grid's query reaches the widest
 				 * range that admits a grid object and the proximity the AI asks about, and the wide-range objects
@@ -703,9 +923,41 @@ namespace FishMMO.Shared
 					Consider(viewer, wideEntries[w], viewerRange, engagementRange, viewerTargetId, pins);
 				}
 
+				for (int c = 0; c < candidates.Count; ++c)
+				{
+					if (candidates[c].Engaged)
+					{
+						engagedNow.Add(candidates[c].Entry.NetworkObject.ObjectId);
+					}
+				}
+				if (IsNearCombat(viewerTargetId, viewer.InCombat, candidates))
+				{
+					nearCombatClientIds.Add(viewerConnection.ClientId);
+				}
 				RankCandidates(viewerConnection, ranks, rateCap, engagedBudget, engagedOverflow);
 				rankedClientIds.Add(viewerConnection.ClientId);
 			}
+		}
+
+		/// <summary>
+		/// A viewer is near combat when it has a target, is in combat itself, or any candidate is fighting it or is in combat
+		/// within the engagement range (a fight it could be drawn into or is watching from striking distance).
+		/// </summary>
+		private static bool IsNearCombat(long viewerTargetId, bool viewerInCombat, List<Candidate> viewerCandidates)
+		{
+			if (viewerTargetId != 0 || viewerInCombat)
+			{
+				return true;
+			}
+			for (int i = 0; i < viewerCandidates.Count; ++i)
+			{
+				Candidate candidate = viewerCandidates[i];
+				if (candidate.Fighting || (candidate.Engaged && candidate.Entry.InCombat))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -805,6 +1057,9 @@ namespace FishMMO.Shared
 				Distance = distance,
 				Pinned = pinned,
 				Engaged = distance <= engagementRange,
+				Fighting = engagedWith ||
+					(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId &&
+					 distance <= ObserverStreamingPolicy.EngagementRangeCeiling),
 			});
 		}
 
@@ -825,6 +1080,11 @@ namespace FishMMO.Shared
 			 * and does not care what kind they are. */
 			classRanks.Clear();
 			int engagedSoFar = 0;
+			bool byteBudget = ObserverStreamingPolicy.ByteBudget > 0;
+			HashSet<int> evicted = EvictedFor(viewerConnection.ClientId);
+			evicted.Clear();
+			budgetSlots.Clear();
+			budgetCandidateIndices.Clear();
 			for (int i = 0; i < candidates.Count; ++i)
 			{
 				Candidate candidate = candidates[i];
@@ -841,6 +1101,32 @@ namespace FishMMO.Shared
 				if (budget > 0 && !candidate.Pinned && classRank >= budget)
 				{
 					LastPassBudgetExcluded++;
+				}
+
+				if (byteBudget)
+				{
+					/* Only what the count budget lets the viewer see competes for its bytes, with the same hysteresis as
+					 * IsWithinVisibilityBudget so the two agree about who is visible. Recorded BEFORE the rate rules below
+					 * count this candidate against the engaged budget, so DesiredInterval sees the earlier ones only. */
+					bool currentlyVisible = candidate.Entry.NetworkObject.Observers.Contains(viewerConnection);
+					int countLimit = budget <= 0 ? int.MaxValue
+						: currentlyVisible ? Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis)) : budget;
+					if (candidate.Pinned || classRank < countLimit)
+					{
+						budgetCandidateIndices.Add(i);
+						budgetSlots.Add(new ObserverStreamingPolicy.BudgetSlot
+						{
+							DesiredInterval = DesiredInterval(candidate, i, rateCap, engagedSoFar, engagedBudget, engagedOverflow),
+							Pinned = candidate.Pinned,
+							/* Fighting, not merely near. Proximity made every character within the engagement radius
+							 * exempt, so a simulated crowd of fifty within 25 m cost 8.4 kB/s against a 2 kB/s budget:
+							 * nothing was ever slowed or left out. Those the viewer actually fights or targets keep
+							 * full rate and their place; the rest of a crowd is budgeted like any other. */
+							Engaged = candidate.Fighting,
+							Moving = candidate.Entry.MovedSinceLastPass,
+							CurrentlyVisible = currentlyVisible,
+						});
+					}
 				}
 
 				/* Rate limiting, in one place, most relevant first.
@@ -882,6 +1168,65 @@ namespace FishMMO.Shared
 					}
 				}
 			}
+
+			if (byteBudget)
+			{
+				ApplyByteBudget(viewerConnection, evicted);
+			}
+		}
+
+		/// <summary>
+		/// The interval the relevance rules give a candidate, before any byte budget: what the loop in
+		/// <see cref="RankCandidates"/> assigns, computed without assigning it. Read BEFORE that loop counts the candidate
+		/// against the engaged budget, so <paramref name="engagedSoFar"/> is the count of earlier ones.
+		/// </summary>
+		private static byte DesiredInterval(Candidate candidate, int index, int rateCap, int engagedSoFar, int engagedBudget, byte engagedOverflow)
+		{
+			if (candidate.Engaged)
+			{
+				return engagedSoFar < engagedBudget ? (byte)1 : (byte)System.Math.Max(1, (int)engagedOverflow);
+			}
+			return index >= rateCap ? ObserverStreamingPolicy.LodInterval(candidate.Distance) : (byte)1;
+		}
+
+		/// <summary>
+		/// Fits one viewer's visible candidates into its byte budget: the ones left out are no longer visible to it, and the
+		/// ones slowed get a <see cref="ObserverStreamingEntry.IntervalOrigin.ByteBudget"/> interval. Engaged and pinned
+		/// characters are never left out, and engaged ones are never slowed (see ObserverStreamingPolicy.FitByteBudget).
+		/// </summary>
+		private static void ApplyByteBudget(NetworkConnection viewerConnection, HashSet<int> evicted)
+		{
+			if (budgetSlots.Count == 0)
+			{
+				return;
+			}
+			int tickRate = timeManager != null ? timeManager.TickRate : 30;
+			ObserverStreamingPolicy.FitByteBudget(budgetSlots, ObserverStreamingPolicy.ByteBudget, tickRate, ObserverStreamingPolicy.MaxSendInterval);
+			for (int s = 0; s < budgetSlots.Count; ++s)
+			{
+				ObserverStreamingPolicy.BudgetSlot slot = budgetSlots[s];
+				ObserverStreamingEntry entry = candidates[budgetCandidateIndices[s]].Entry;
+				if (!slot.Admitted)
+				{
+					evicted.Add(entry.NetworkObject.ObjectId);
+					LastPassByteEvicted++;
+					continue;
+				}
+				if (!slot.Engaged && slot.Interval > slot.DesiredInterval && slot.Interval > entry.GetInterval(viewerConnection))
+				{
+					entry.SetInterval(viewerConnection, slot.Interval, ObserverStreamingEntry.IntervalOrigin.ByteBudget);
+					LastPassByteSlowed++;
+				}
+			}
+		}
+
+		private static HashSet<int> EvictedFor(int clientId)
+		{
+			if (!byteEvictedByClientId.TryGetValue(clientId, out HashSet<int> set))
+			{
+				byteEvictedByClientId[clientId] = set = new HashSet<int>();
+			}
+			return set;
 		}
 
 		private static int CompareCandidates(Candidate a, Candidate b)

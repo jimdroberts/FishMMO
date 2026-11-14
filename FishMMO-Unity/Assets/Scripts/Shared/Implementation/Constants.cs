@@ -641,7 +641,7 @@ namespace FishMMO.Shared
 			public const float ClimbLandingMetres = 0.6f;
 
 			/// <summary>How far over the top the feet are lifted to clear the edge on the way off (and on), metres.</summary>
-			public const float ClimbStepClearance = 0.1f;
+			public const float ClimbStepClearance = 0.2f;
 
 			/// <summary>Seconds a step on or off at the top may take before it is given up (geometry in the way).</summary>
 			public const float ClimbStepTimeoutSeconds = 2.5f;

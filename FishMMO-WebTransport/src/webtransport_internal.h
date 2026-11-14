@@ -170,6 +170,13 @@ extern "C" {
 #define WT_MAX_ADDRESS_LENGTH      256
 
 #define WT_DEFAULT_IDLE_TIMEOUT_MS  120000
+
+/* How long a received packet may wait for its ACK. msquic's default (25 ms) is shorter than one game tick (33 ms at 30 Hz),
+ * so its timer often fired between two tick datagrams and the ACK went out alone: a measured 8.4 standalone ACK packets a
+ * second per player from the server (30 B each plus 28 B of IP/UDP header), about 11% of a player's egress. Just over one
+ * tick lets every pending ACK ride the next tick's datagram. Advertised to the peer as max_ack_delay, so its loss timers
+ * allow ~15 ms more before declaring a reliable packet lost; the game's own traffic is unaffected. */
+#define WT_MAX_ACK_DELAY_MS  40
 #define WT_DEFAULT_MTU              1200
 
 #define WT_DGRAM_MAX_SIZE          1500   /* max QUIC datagram payload (path MTU) */

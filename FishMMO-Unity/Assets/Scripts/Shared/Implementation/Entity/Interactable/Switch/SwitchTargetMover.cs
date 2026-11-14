@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 	/// tests against, so a door that only opened on clients would be an invisible wall.
 	/// </para>
 	/// </remarks>
-	public class SwitchTargetMover : MonoBehaviour, ITimedSwitchTarget
+	public class SwitchTargetMover : MonoBehaviour, ITimedSwitchTarget, IClearanceSwitchTarget, ITickPosed
 	{
 		[Tooltip("Transform to move. Defaults to this GameObject's own transform.")]
 		[SerializeField]
@@ -102,6 +102,21 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public float ChangeTravel => changeTravel;
 
+		/// <summary><see cref="SolidTick"/> for a pose settled since before anyone watched: solid at every tick.</summary>
+		private const uint SolidSettled = 1u;
+
+		/// <summary>The server tick the resting pose is solid from; 0 while undecided (see <see cref="ITimedSwitchTarget.SolidTick"/>).</summary>
+		private uint solidTick = SolidSettled;
+
+		/// <summary>The last tick the server looked for characters in the resting pose (once a tick, not once a frame).</summary>
+		private uint clearanceCheckedTick;
+
+		/// <inheritdoc />
+		public uint SolidTick => solidTick;
+
+		/// <inheritdoc />
+		public event Action<ITimedSwitchTarget> SolidDecided;
+
 		private void Awake()
 		{
 			if (movedTransform == null)
@@ -128,6 +143,7 @@ namespace FishMMO.Shared
 			travel = startActivated ? 1.0f : 0.0f;
 			changeTick = 0u;
 			changeTravel = travel;
+			solidTick = SolidSettled;
 			ApplyPose();
 			ApplySolid(!startActivated || solidWhenOpenToo);
 		}
@@ -154,17 +170,86 @@ namespace FishMMO.Shared
 			travel = activated ? 1.0f : 0.0f;
 			changeTick = 0u;
 			changeTravel = travel;
+			solidTick = SolidSettled;
 			ApplyPose();
 			ApplySolid(!activated || solidWhenOpenToo);
 		}
 
 		/// <inheritdoc />
-		public void SetState(bool activated, uint tick, float fromTravel)
+		public void SetState(bool activated, uint tick, float fromTravel, uint solidFrom)
 		{
+			// What a replay of the ticks before this change must still find: the state in force until now.
+			if (tick != changeTick && tick != 0u)
+			{
+				TimeManager timeManager = SharedTimeManager();
+				solidBeforeChange = timeManager != null ? SolidAt(tick, timeManager.TickDelta) : solid;
+			}
 			IsActivated = activated;
 			changeTick = tick;
 			changeTravel = Mathf.Clamp01(fromTravel);
+			solidTick = solidFrom;
 			Update();
+		}
+
+		/// <summary>Candidates near a pose's collider (<see cref="IsObstructed"/>); server, on an interaction only.</summary>
+		private static readonly Collider[] nearby = new Collider[32];
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// Each <see cref="solidWhenClosed"/> collider is placed where that pose puts it, and every character collider near
+		/// it is tested against it there (<see cref="Physics.ComputePenetration"/> takes both poses, so the leaf is never
+		/// moved to ask). The broad phase is a sphere round the posed collider with slack for transforms physics has not
+		/// synced yet; the test itself reads the transforms.
+		/// </remarks>
+		public bool IsObstructed(bool activated)
+		{
+			// Only a pose that turns solid can close around anyone: a door's open pose never does, a drawbridge's lowered one does.
+			if (solidWhenClosed == null || solidWhenClosed.Length == 0 || movedTransform == null || (activated && !solidWhenOpenToo))
+			{
+				return false;
+			}
+			Transform parent = movedTransform.parent;
+			Vector3 localPosition = activated ? openPosition : closedPosition;
+			Quaternion localRotation = activated ? openRotation : closedRotation;
+			Vector3 posePosition = parent != null ? parent.TransformPoint(localPosition) : localPosition;
+			Quaternion poseRotation = parent != null ? parent.rotation * localRotation : localRotation;
+			// From where the moved transform stands now to the pose; everything under it is carried rigidly.
+			Quaternion turn = poseRotation * Quaternion.Inverse(movedTransform.rotation);
+			Vector3 pivot = movedTransform.position;
+			PhysicsScene physicsScene = gameObject.scene.IsValid() ? gameObject.scene.GetPhysicsScene() : Physics.defaultPhysicsScene;
+
+			foreach (Collider leaf in solidWhenClosed)
+			{
+				if (leaf == null || !leaf.enabled || !leaf.gameObject.activeInHierarchy)
+				{
+					continue;
+				}
+				Transform leafTransform = leaf.transform;
+				Vector3 leafPosition = posePosition + turn * (leafTransform.position - pivot);
+				Quaternion leafRotation = turn * leafTransform.rotation;
+				Bounds bounds = leaf.bounds;
+				Vector3 centre = posePosition + turn * (bounds.center - pivot);
+				int count = physicsScene.OverlapSphere(centre, bounds.extents.magnitude + 0.5f, nearby, ~0, QueryTriggerInteraction.Ignore);
+				for (int i = 0; i < count; i++)
+				{
+					Collider other = nearby[i];
+					nearby[i] = null;
+					if (other == null || System.Array.IndexOf(solidWhenClosed, other) >= 0 || other.GetComponentInParent<ICharacter>() == null)
+					{
+						continue;
+					}
+					Transform otherTransform = other.transform;
+					if (Physics.ComputePenetration(leaf, leafPosition, leafRotation, other, otherTransform.position, otherTransform.rotation, out _, out _))
+					{
+						for (int j = i + 1; j < count; j++)
+						{
+							nearby[j] = null;
+						}
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		/// <summary>
@@ -185,10 +270,13 @@ namespace FishMMO.Shared
 				return;
 			}
 			uint now = timeManager.Tick;
+			solidBeforeChange = SolidAt(now, timeManager.TickDelta);
 			changeTravel = TravelAt(now, timeManager.TickDelta);
 			changeTick = now;
 			IsActivated = activated;
-			// Not solid from the tick it starts to move: the server's controller sees it at once.
+			// Not solid from the tick it starts to move (the server's controller sees it at once), nor at rest until the
+			// server finds its resting place clear (Update).
+			solidTick = 0u;
 			ApplySolid(false);
 		}
 
@@ -223,10 +311,28 @@ namespace FishMMO.Shared
 			if (timeManager != null)
 			{
 				next = TravelAt(timeManager.Tick + timeManager.GetTickPercentAsDouble(), timeManager.TickDelta);
-				// Solid again only from the whole tick it is shut, so the server and every client turn it solid on
-				// the same tick (the motion is timed by the shared tick; the frame's fraction is presentation).
-				float settled = TravelAt(timeManager.Tick, timeManager.TickDelta);
-				ApplySolid((!IsActivated && settled <= 0.0f) || (solidWhenOpenToo && IsActivated && settled >= 1.0f));
+				// Solid again only from a whole tick it is at rest in a solid pose (the motion is timed by the shared tick;
+				// the frame's fraction is presentation), and only from the tick the server found that pose clear of
+				// characters: shut on someone in the doorway, a door stays passable until they have stepped out of it,
+				// rather than closing its leaf round them for the controller to pop them out through it.
+				uint tick = timeManager.Tick;
+				float settled = TravelAt(tick, timeManager.TickDelta);
+				bool restsSolid = (!IsActivated && settled <= 0.0f) || (solidWhenOpenToo && IsActivated && settled >= 1.0f);
+				if (restsSolid && solidTick == 0u && tick != clearanceCheckedTick && timeManager.NetworkManager.IsServerStarted)
+				{
+					// The server's decision alone, once a tick, told to the observers (Switch): a client deciding for
+					// itself from interpolated characters would disagree with it about where the controller may go.
+					clearanceCheckedTick = tick;
+					if (!IsObstructed(IsActivated))
+					{
+						solidTick = Math.Max(tick, SolidSettled + 1u);
+						SolidDecided?.Invoke(this);
+					}
+				}
+				/* The solid state is NOT applied here any more: a frame's idea of the tick is not the tick a character is
+				 * simulated at (an owner predicts ahead of it, and replays earlier ones). TickPoser applies it before every
+				 * live and replayed tick, at the server tick that tick runs at, as the ships are posed. */
+				TickPoser.Ensure();
 			}
 			else if (travelSeconds <= 0.0f)
 			{
@@ -252,6 +358,59 @@ namespace FishMMO.Shared
 
 		private bool solid = true;
 		private bool solidApplied;
+		/// <summary>Whether the colliders blocked just before the latest change: what a replay of earlier ticks must find.</summary>
+		private bool solidBeforeChange = true;
+
+		/// <summary>
+		/// Whether the colliders block at server tick <paramref name="tick"/>: at rest in a solid pose from the tick the server
+		/// found it clear, and in the state before the latest change for a tick before it (a replay reaching back past it).
+		/// </summary>
+		private bool SolidAt(uint tick, double tickDelta)
+		{
+			if (changeTick != 0u && tick < changeTick)
+			{
+				return solidBeforeChange;
+			}
+			float settled = TravelAt(tick, tickDelta);
+			bool restsSolid = (!IsActivated && settled <= 0.0f) || (solidWhenOpenToo && IsActivated && settled >= 1.0f);
+			return restsSolid && solidTick != 0u && (solidTick == SolidSettled || tick >= solidTick);
+		}
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// Blocking or not, and when blocking, in the resting pose the controller collides with. Applied by
+		/// <see cref="TickPoser"/> before every live and replayed tick, at the server tick that tick runs at. Before it, a
+		/// door's collider turned solid or passable on the client's FRAME estimate of the server tick, which is not the tick
+		/// the owner's prediction runs at and was never rewound for a replay, so walking through a door as it opened or shut
+		/// was corrected.
+		/// </remarks>
+		public bool PoseForTick(uint tick, double tickDelta)
+		{
+			bool blocks = SolidAt(tick, tickDelta);
+			bool changed = solidApplied && blocks != solid;
+			ApplySolid(blocks);
+			if (blocks)
+			{
+				float rest = changeTick != 0u && tick < changeTick ? changeTravel : TravelAt(tick, tickDelta);
+				if (!Mathf.Approximately(rest, travel))
+				{
+					travel = rest;
+					ApplyPose();
+					changed = true;
+				}
+			}
+			return changed;
+		}
+
+		private void OnEnable()
+		{
+			TickPoser.Add(this);
+		}
+
+		private void OnDisable()
+		{
+			TickPoser.Remove(this);
+		}
 
 		/// <summary>Makes the <see cref="solidWhenClosed"/> colliders block, or turns them into triggers; only when it changes.</summary>
 		private void ApplySolid(bool blocks)

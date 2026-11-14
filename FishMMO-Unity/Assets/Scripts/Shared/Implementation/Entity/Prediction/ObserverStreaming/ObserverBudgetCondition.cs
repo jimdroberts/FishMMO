@@ -63,6 +63,13 @@ namespace FishMMO.Shared
 				return true;
 			}
 
+			/* /gm invis: a hidden game master is withheld from everyone but its own client and staff, whatever the budget
+			 * says. Ahead of the budget, which would otherwise admit it. One empty-set test when nobody is hidden. */
+			if (!GameMasterInvisibility.IsEmpty && GameMasterInvisibility.HidesFrom(NetworkObject, connection))
+			{
+				return false;
+			}
+
 			/* Characters register themselves from OnStartServer. Everything else that carries a
 			 * classification — a dropped item, a waypoint — has no such hook, so it is picked up
 			 * here on first evaluation; RegisterObject ignores anything unclassified. Either way an

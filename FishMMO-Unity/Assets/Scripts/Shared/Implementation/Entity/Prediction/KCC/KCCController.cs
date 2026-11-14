@@ -238,6 +238,10 @@ namespace FishMMO.Shared
 		private float timeSinceLastAbleToJump = 0f;
 		private bool isCrouching = false;
 		private bool isSwimming = false;
+		// Game-master flight (/gm fly): set only by the server, reconciled through IsFlying.
+		private bool isFlying = false;
+		// Crouch held while flying: sink. Rebuilt from the input every tick.
+		private bool descendInputDown;
 		private byte climbOutTicks = 0;
 		// The climb, reconciled through Climbable, ClimbPhase and ClimbTicks.
 		private ClimbState climb = ClimbState.Free;
@@ -256,6 +260,82 @@ namespace FishMMO.Shared
 
 		/// <summary>Whether the character is swimming now.</summary>
 		public bool IsSwimming => isSwimming;
+
+		/// <summary>Whether the character is in game-master flight now (/gm fly): no gravity, ground or collisions.</summary>
+		public bool IsFlying => isFlying;
+
+		/// <summary>Flying speed, metres per second; sprint multiplies it by <see cref="FlySprintMultiplier"/>.</summary>
+		public float FlySpeed = 12f;
+		/// <summary>Sprinting while flying multiplies the speed by this.</summary>
+		public float FlySprintMultiplier = 3f;
+		/// <summary>How quickly a flyer's velocity follows what it is asked for.</summary>
+		public float FlySharpness = 10f;
+
+		/// <summary>
+		/// Starts or stops game-master flight. SERVER ONLY: the owner learns it from the next reconcile (IsFlying), so both
+		/// fly the same path from that tick. Flying lets go of a climbable and stops swimming; while it lasts nothing collides
+		/// with the character and nothing holds it up or down.
+		/// </summary>
+		public void SetFlying(bool value)
+		{
+			if (isFlying == value)
+			{
+				return;
+			}
+			if (value)
+			{
+				if (climb.IsClimbing)
+				{
+					climb = ClimbState.Free;
+				}
+				isSwimming = false;
+				climbOutTicks = 0;
+				if (isCrouching)
+				{
+					isCrouching = false;
+					ApplyCapsuleDimensions(false);
+				}
+			}
+			isFlying = value;
+			ApplyFlightToMotor();
+			if (!value)
+			{
+				// Back to the world: probe for ground from scratch, as after a teleport.
+				ResetGroundProbe();
+			}
+		}
+
+		/// <summary>The motor's solvers follow the movement mode: flight turns off collisions and ground; swim and climb ground.</summary>
+		private void ApplyFlightToMotor()
+		{
+			SyncMovementCollisions();
+			Motor.SetGroundSolvingActivation(!isFlying && !isSwimming && !climb.IsClimbing);
+		}
+
+		/// <summary>Whether the motor currently solves movement collisions (its default is on).</summary>
+		private bool movementCollisionsSolved = true;
+
+		/// <summary>
+		/// The motor's movement collisions follow the movement state: off in flight, and off while stepping on or off a
+		/// climbable at its top.
+		/// </summary>
+		/// <remarks>
+		/// The step over a climbable's top used to be collided motion with ground solving off: on uneven rock it could catch
+		/// on the edge and time out, or slide past it, and which one happened turned on millimetres of contact, so the owner
+		/// and the server could take different ticks to get over it. Now it follows its fixed path (ClimbingRules: up to the
+		/// clearance, then over to the landing) with nothing to catch on, a pure function of the climb state. A function of
+		/// reconciled state only, so it is the same on the server, live and on every replayed tick.
+		/// </remarks>
+		private void SyncMovementCollisions()
+		{
+			bool stepping = climb.IsClimbing && (climb.Phase == ClimbPhase.SteppingOn || climb.Phase == ClimbPhase.SteppingOff);
+			bool collide = !isFlying && !stepping;
+			if (collide != movementCollisionsSolved)
+			{
+				Motor.SetMovementCollisionsSolvingActivation(collide);
+				movementCollisionsSolved = collide;
+			}
+		}
 
 		/// <summary>Whether the character is on a ladder, rope ladder or rope now (stepping on or off at its top included).</summary>
 		public bool IsClimbing => climb.IsClimbing;
@@ -428,7 +508,8 @@ namespace FishMMO.Shared
 			timeSinceJumpRequested = state.TimeSinceJumpRequested;
 			climbOutTicks = state.ClimbOutTicks;
 			// The motor's ground solving follows the swim and climb state: it is off for either, and they are what is reconciled.
-			bool wasSolvingGround = !isSwimming && !climb.IsClimbing;
+			bool wasSolvingGround = !isSwimming && !climb.IsClimbing && !isFlying;
+			isFlying = state.IsFlying;
 			isSwimming = state.IsSwimming;
 			climb.Index = state.Climbable - 1;
 			climb.Phase = (ClimbPhase)state.ClimbPhase;
@@ -439,11 +520,13 @@ namespace FishMMO.Shared
 				climb.Index = -1;
 				climb.Phase = ClimbPhase.None;
 			}
-			bool solvesGround = !isSwimming && !climb.IsClimbing;
+			bool solvesGround = !isSwimming && !climb.IsClimbing && !isFlying;
 			if (wasSolvingGround != solvesGround)
 			{
 				Motor.SetGroundSolvingActivation(solvesGround);
 			}
+			// Flight and a climb's step over the top move without collisions; restored with them.
+			SyncMovementCollisions();
 
 			/* Restore the collider to match the restored crouch state.
 			 *
@@ -541,6 +624,7 @@ namespace FishMMO.Shared
 			baseState.Climbable = climb.IsClimbing ? (ushort)(climb.Index + 1) : (ushort)0;
 			baseState.ClimbPhase = climb.IsClimbing ? (byte)climb.Phase : (byte)0;
 			baseState.ClimbTicks = climb.Ticks;
+			baseState.IsFlying = isFlying;
 
 			return baseState;
 		}
@@ -612,6 +696,7 @@ namespace FishMMO.Shared
 				crouchInputDown = false;
 				sprintInputDown = false;
 				ascendInputDown = false;
+				descendInputDown = false;
 				swimMoveVector = Vector3.zero;
 				/* A stunned, frozen, mesmerised or dead climber loses its hold and falls (BeforeCharacterUpdate lets go): the
 				 * hands are what these take away. Both peers reach this on the same tick (KCCPlayer.OnReplicate), so the drop
@@ -645,8 +730,10 @@ namespace FishMMO.Shared
 							jumpRequested = true;
 						}
 
-						// Crouching input
-						crouchInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Crouch);
+						// Crouching input. In flight crouch sinks instead (the reconciled flag decides, so both peers agree).
+						bool crouchHeld = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Crouch);
+						crouchInputDown = crouchHeld && !isFlying;
+						descendInputDown = crouchHeld && isFlying;
 
 						// Sprinting input
 						sprintInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Sprint);
@@ -685,6 +772,11 @@ namespace FishMMO.Shared
 			{
 				Motor.LastMovementIterationFoundAnyGround = true;
 				hasDoneInitialGroundProbe = true;
+			}
+			// In flight there is no water to swim in and nothing to take hold of.
+			if (isFlying)
+			{
+				return;
 			}
 			UpdateWater();
 			if (climb.IsClimbing && controlsSuppressedThisTick)
@@ -815,13 +907,15 @@ namespace FishMMO.Shared
 			Motor.SetGroundSolvingActivation(false);
 			Motor.ForceUnground();
 			StandUpIfRoom();
+			SyncMovementCollisions();
 		}
 
 		/// <summary>Lets go of the climbable, and waits <paramref name="regrabSeconds"/> before taking hold of one again.</summary>
 		private void ReleaseClimb(float regrabSeconds, float deltaTime)
 		{
 			ClimbingRules.Release(ref climb, regrabSeconds, deltaTime);
-			Motor.SetGroundSolvingActivation(!isSwimming);
+			Motor.SetGroundSolvingActivation(!isSwimming && !isFlying);
+			SyncMovementCollisions();
 		}
 
 		/// <summary>Stands a crouching character up if there is room: a climber, like a swimmer, is at full height.</summary>
@@ -884,6 +978,8 @@ namespace FishMMO.Shared
 
 			ClimbStep step = ClimbingRules.Step(in climbable, ref climb, feet, in intent, ClimbHang, ClimbSpeedScale(), deltaTime);
 			currentVelocity = step.Velocity;
+			// This tick's move already follows the phase the step just chose (the motor moves after UpdateVelocity).
+			SyncMovementCollisions();
 			if (step.Released)
 			{
 				Motor.SetGroundSolvingActivation(!isSwimming);
@@ -932,6 +1028,51 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Largest angle, in degrees, between the rotation and the upright heading it is turning to that counts as arrived.
+		/// Below Quaternion.Angle's own resolution (about 0.1 degrees), so the last step of a turn is invisible.
+		/// </summary>
+		public const float SettleDegrees = 0.05f;
+
+		/// <summary>Speed, in metres per second, below which a character slowing to a stop has stopped.</summary>
+		public const float SettleSpeed = 1e-4f;
+
+		/// <summary>
+		/// The velocity, or exactly zero when the character is coming to rest and is slower than <see cref="SettleSpeed"/>.
+		/// </summary>
+		/// <remarks>
+		/// The slow-down is an exponential approach too: without this the velocity of a character that let go of the keys took
+		/// seconds of ever-smaller float noise to reach zero, and each of those ticks was a reconcile that could not be skipped.
+		/// A tenth of a millimetre per second is far below anything drawn; both peers run the same arithmetic.
+		/// </remarks>
+		public static Vector3 SettleVelocity(Vector3 velocity, Vector3 target)
+		{
+			return target == Vector3.zero && velocity.sqrMagnitude < SettleSpeed * SettleSpeed ? Vector3.zero : velocity;
+		}
+
+		/// <summary>
+		/// The rotation, or exactly the upright heading it is turning to once it is within <see cref="SettleDegrees"/>.
+		/// </summary>
+		/// <remarks>
+		/// The turn is an exponential approach (a Slerp toward the heading every tick, then a Slerp back to upright), and in
+		/// floats it never lands: a character standing still kept a rotation that changed in its last bits on every tick. The
+		/// reconcile carries the rotation exactly, so that noise made every reconcile of an idle player differ from the last
+		/// and none could be skipped as a repeat (CharacterPredictionController quiet reconciles). Settling exactly on the
+		/// heading gives a fixed point instead. Server and owner run this same arithmetic on the same input, so it is no
+		/// less deterministic than the approach it ends. Only when the character turns upright (no bonus orientation), the
+		/// only case with a single heading to settle on.
+		/// </remarks>
+		public static Quaternion SettleRotation(Quaternion rotation, bool hasHeading, Quaternion heading, bool upright)
+		{
+			/* Without a heading there is nothing to settle on: deriving one from the rotation itself could differ from it in
+			 * the last bit and keep it moving. */
+			if (!upright || !hasHeading)
+			{
+				return rotation;
+			}
+			return Quaternion.Angle(rotation, heading) < SettleDegrees ? heading : rotation;
+		}
+
+		/// <summary>
 		/// (Called by KinematicCharacterMotor during its update cycle)
 		/// This is where you tell your character what its rotation should be right now. 
 		/// This is the ONLY place where you should set the character's rotation
@@ -950,6 +1091,8 @@ namespace FishMMO.Shared
 							break;
 						}
 
+						bool hasHeading = false;
+						Quaternion heading = Quaternion.identity;
 						if (lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
 						{
 							float targetRotationY = Mathf.Atan2(lookInputVector.x, lookInputVector.z) * Mathf.Rad2Deg;
@@ -962,7 +1105,9 @@ namespace FishMMO.Shared
 								targetRotationY -= 10f;
 							}
 
-							currentRotation = Quaternion.Slerp(Motor.TransientRotation, Quaternion.Euler(0.0f, targetRotationY, 0.0f), 1 - Mathf.Exp(-OrientationSharpness * deltaTime));
+							heading = Quaternion.Euler(0.0f, targetRotationY, 0.0f);
+							hasHeading = true;
+							currentRotation = Quaternion.Slerp(Motor.TransientRotation, heading, 1 - Mathf.Exp(-OrientationSharpness * deltaTime));
 						}
 
 						Vector3 currentUp = (currentRotation * Vector3.up);
@@ -995,6 +1140,7 @@ namespace FishMMO.Shared
 							Vector3 smoothedGravityDir = Vector3.Slerp(currentUp, Vector3.up, 1 - Mathf.Exp(-BonusOrientationSharpness * deltaTime));
 							currentRotation = Quaternion.FromToRotation(currentUp, smoothedGravityDir) * currentRotation;
 						}
+						currentRotation = SettleRotation(currentRotation, hasHeading, heading, BonusOrientationMethod == BonusOrientationMethod.None);
 						break;
 					}
 			}
@@ -1034,6 +1180,12 @@ namespace FishMMO.Shared
 						if (cachedAbilityController != null)
 						{
 							abilityType = cachedAbilityController.GetCurrentAbilityType();
+						}
+
+						if (isFlying)
+						{
+							UpdateFlyMovement(ref currentVelocity, deltaTime);
+							break;
 						}
 
 						if (climb.IsClimbing)
@@ -1110,6 +1262,7 @@ namespace FishMMO.Shared
 
 			// Smooth movement Velocity
 			currentVelocity = Vector3.Lerp(currentVelocity, targetMovementVelocity, StableMovementSharpness * deltaTime);
+			currentVelocity = SettleVelocity(currentVelocity, targetMovementVelocity);
 		}
 
 		/// <summary>
@@ -1264,6 +1417,30 @@ namespace FishMMO.Shared
 
 			// Drag
 			currentVelocity *= (1f / (1f + (Drag * deltaTime)));
+		}
+
+		/// <summary>
+		/// Game-master flight (<see cref="IsFlying"/>): velocity eases toward the camera's way in full 3D, jump up, crouch down.
+		/// </summary>
+		private void UpdateFlyMovement(ref Vector3 currentVelocity, float deltaTime)
+		{
+			// The way the camera looks, in full 3D; jump rises, crouch sinks; sprint is free. No gravity and no jump.
+			jumpRequested = false;
+			Vector3 direction = swimMoveVector;
+			if (ascendInputDown)
+			{
+				direction += Vector3.up;
+			}
+			if (descendInputDown)
+			{
+				direction += Vector3.down;
+			}
+			if (direction.sqrMagnitude > 1f)
+			{
+				direction.Normalize();
+			}
+			float speed = FlySpeed * (sprintInputDown ? FlySprintMultiplier : 1f);
+			currentVelocity = Vector3.Lerp(currentVelocity, direction * speed, 1f - Mathf.Exp(-FlySharpness * deltaTime));
 		}
 
 		/// <summary>
@@ -1536,7 +1713,8 @@ namespace FishMMO.Shared
 						if (cachedAnimationController != null)
 						{
 							cachedAnimationController.SetCrouching(isCrouching);
-							cachedAnimationController.SetGrounded(Motor.GroundingStatus.FoundAnyGround);
+							// In flight the motor solves no ground, but the figure stands as on the ground rather than falls.
+							cachedAnimationController.SetGrounded(isFlying || Motor.GroundingStatus.FoundAnyGround);
 
 							// Set speed parameter for locomotion blend tree
 							float speed = 0f;

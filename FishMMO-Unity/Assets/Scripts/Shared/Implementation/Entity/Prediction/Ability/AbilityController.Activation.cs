@@ -1639,10 +1639,17 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			uint useTick = activationData.GetTick();
+			/* A replay of a use this owner already predicted. The predicted use took the charge (or the last item), and a
+			 * reconcile restores resources but not the inventory, so the item checks below would now refuse the very use
+			 * being replayed and its effect would never be re-applied. Never true on the server, which does not replay. */
+			bool replayOfPredictedUse = state.ContainsReplayed() &&
+				predictedConsumableStarts.TryGetValue(useTick, out int predictedID) && predictedID == templateID;
+
 			// Both client and server validate the item exists in inventory.
 			// Deterministic: both iterate the same slot order, finding the same item.
 			Item item = FindConsumableItem(consumable.ID);
-			if (item == null)
+			if (item == null && !replayOfPredictedUse)
 			{
 				return false;
 			}
@@ -1652,9 +1659,13 @@ namespace FishMMO.Shared
 			// but the server must also check because a crafted replicate packet
 			// could bypass the client-side check. CanConsume verifies stackable
 			// status, sufficient charges, and cooldown state.
-			if (!consumable.CanConsume(PlayerCharacter, item, activationData.GetTick()))
+			if (item != null && !consumable.CanConsume(PlayerCharacter, item, useTick) && !replayOfPredictedUse)
 			{
 				return false;
+			}
+			if (!state.ContainsReplayed() && base.IsOwner && !base.IsServerStarted)
+			{
+				RecordPredictedConsumableStart(useTick, templateID);
 			}
 
 			// Set all logical state before the side-effecting LockSlot call.
@@ -1670,11 +1681,15 @@ namespace FishMMO.Shared
 			// Lock the inventory slot to prevent movement during activation.
 			// consumableSlot is assigned AFTER LockSlot so that if LockSlot throws,
 			// Cancel() won't try to unlock a slot that was never locked.
-			if (cachedInventoryController != null)
+			// A replayed use whose item the prediction already removed has no slot to lock.
+			if (item != null)
 			{
-				cachedInventoryController.LockSlot(item.Slot);
+				if (cachedInventoryController != null)
+				{
+					cachedInventoryController.LockSlot(item.Slot);
+				}
+				consumableSlot = item.Slot;
 			}
-			consumableSlot = item.Slot;
 
 			// Observers see a consumable being used exactly as they see an ability being cast.
 			BroadcastCastState(state, started: true, referenceID: consumable.ID, isConsumable: true);
@@ -1727,12 +1742,42 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Records a consumable use this owner predicted, so a reconcile replay of its tick starts it again (see
+		/// <see cref="predictedConsumableStarts"/>). Drops entries more than <see cref="PredictedConsumableHistoryTicks"/>
+		/// old, far beyond any replay window.
+		/// </summary>
+		private void RecordPredictedConsumableStart(uint tick, int templateID)
+		{
+			if (predictedConsumableStarts.Count > 8)
+			{
+				predictedConsumableStartsPruneScratch.Clear();
+				foreach (uint recorded in predictedConsumableStarts.Keys)
+				{
+					if (tick - recorded > PredictedConsumableHistoryTicks)
+					{
+						predictedConsumableStartsPruneScratch.Add(recorded);
+					}
+				}
+				for (int i = 0; i < predictedConsumableStartsPruneScratch.Count; ++i)
+				{
+					predictedConsumableStarts.Remove(predictedConsumableStartsPruneScratch[i]);
+				}
+			}
+			predictedConsumableStarts[tick] = templateID;
+		}
+
+		/// <summary>How long a predicted use is remembered, in ticks: ten seconds at 30 Hz, far beyond any replay.</summary>
+		private const uint PredictedConsumableHistoryTicks = 300;
+		private readonly List<uint> predictedConsumableStartsPruneScratch = new List<uint>();
+
+		/// <summary>
 		/// Completes a consumable activation. Both client and server execute the same code path
 		/// for prediction parity: invoke the consumable (handles cooldown, charge reduction,
 		/// item destruction, and the consumable effect), then clean up the inventory slot.
-		/// During reconcile replay the effect, inventory mutation, and event are skipped because
-		/// the server's authoritative state was already restored — re-applying them would
-		/// double-consume the item and fire duplicate events — but the COOLDOWN is re-applied,
+		/// During reconcile replay the inventory mutation and event are skipped — the reconcile does
+		/// not roll the inventory back, so re-applying them would double-consume the item and fire
+		/// duplicate events — but the EFFECT (<see cref="ConsumableTemplate.ReplayEffect"/>: a
+		/// potion's restored resources, which the reconcile DID roll back) and the COOLDOWN are re-applied,
 		/// exactly as <see cref="FinishAbility"/> re-applies its cooldown and cost: every reconcile
 		/// for a tick BEFORE the use carries no entry for this consumable, so the restore wipes the
 		/// predicted cooldown, and the replay of the use tick is the only thing that can put it
@@ -1801,10 +1846,20 @@ namespace FishMMO.Shared
 					}
 				}
 			}
-			else if (consumable.Cooldown > 0.0f && cachedCooldownController != null)
+			else
 			{
-				/* Replay re-applies ONLY the cooldown — see the summary above. AddCooldown is an
-				 * indexer write, so re-adding the same (tick, duration) entry is idempotent; the
+				/* The effect too: the reconcile restored this character's resources to a tick before the use, so without
+				 * this the potion's restore vanished for about a round trip and came back with the server's reconcile.
+				 * Only the effect: the charge and the item stay as the predicted use left them. */
+				if (PlayerCharacter != null)
+				{
+					consumable.ReplayEffect(PlayerCharacter);
+				}
+			}
+			if (state.ContainsReplayed() && consumable.Cooldown > 0.0f && cachedCooldownController != null)
+			{
+				/* Replay re-applies the cooldown (and, above, the effect) — see the summary. AddCooldown
+				 * is an indexer write, so re-adding the same (tick, duration) entry is idempotent; the
 				 * inventory mutation and OnConsumableUsed stay replay-guarded because the restore
 				 * did not undo them. */
 				cachedCooldownController.AddCooldown(consumable.ID, new CooldownInstance(
@@ -1996,18 +2051,22 @@ namespace FishMMO.Shared
 				 * successful cast rewrites Current, nothing could ever clear the refusal. The brain
 				 * has already decided reach for its live target (AIAbilityReach) before it calls
 				 * Activate; the server's own trace in ResolveTargetAndSpawn is the authority. */
-				if (cachedTargetController != null && PlayerCharacter != null)
+				/* Only for an ability that needs a target. One that does not (a projectile fired forward) is spawned by the
+				 * server whatever the trace finds, so nothing here may refuse it. And the reach is measured to the point the
+				 * ray hit, not to the hit object's origin: aiming at the ground "targets" a terrain tile, whose origin is its
+				 * far corner, and measuring to that refused every ranged cast aimed anywhere but at a creature. */
+				if (cachedTargetController != null && PlayerCharacter != null && validatedAbility.Template.RequiresTarget)
 				{
-					Transform target = cachedTargetController.Current.Target;
-					if (validatedAbility.Template.RequiresTarget && target == null)
+					TargetInfo current = cachedTargetController.Current;
+					if (current.Target == null)
 					{
 						return false;
 					}
 
 					float abilityRange = validatedAbility.Range;
-					if (abilityRange > 0f && target != null)
+					if (abilityRange > 0f)
 					{
-						float distSqr = (Character.Transform.position - target.position).sqrMagnitude;
+						float distSqr = (Character.Transform.position - current.HitPosition).sqrMagnitude;
 						if (distSqr > abilityRange * abilityRange)
 						{
 							return false;

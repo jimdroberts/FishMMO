@@ -278,6 +278,19 @@ namespace FishNet.Managing.Predicting
         /// How many states to try and hold in a buffer before running them. Larger values add resilience against network issues at the cost of running states later.
         /// </summary>
         public byte StateInterpolation => _stateInterpolation;
+
+        /// <summary>
+        /// FISHMMO EDIT (proposed upstream, feat/set-state-interpolation): sets <see cref="StateInterpolation"/> at runtime,
+        /// clamped and validated as in the inspector. FishMMO deepens it by one tick per extra tick of client send interval,
+        /// so inputs that arrive in pairs never leave the server's replicate queue empty (an empty queue runs default input:
+        /// a misprediction). See NetworkSendSchedule.
+        /// </summary>
+        public void SetStateInterpolation(byte value)
+        {
+            _stateInterpolation = (byte)Mathf.Clamp(value, 0, MAXIMUM_PAST_INPUTS);
+            if (_networkManager != null)
+                ValidateClampInterpolation();
+        }
         [Tooltip("How many states to try and hold in a buffer before running them on clients. Larger values add resilience against network issues at the cost of running states later.")]
         [Range(0, MAXIMUM_PAST_INPUTS)]
         [FormerlySerializedAs("_redundancyCount")] // Remove on V5.

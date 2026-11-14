@@ -50,6 +50,13 @@ MonoBehaviour:
     - Scene_Client
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a69e26cb1c4ef6302864dcebfd0d5045
+    m_Address: LoginBackdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Scene_Client
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:

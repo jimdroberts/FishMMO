@@ -1,5 +1,5 @@
 ﻿using System;
-using FishNet.Object;
+using FishNet.Transporting;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -35,13 +35,24 @@ namespace FishMMO.Shared
 
 			ISwitchTarget target = switchInteractable.SwitchTarget;
 
-			if (target.IsActivated && switchInteractable.IsToggle)
+			bool activate = !(target.IsActivated && switchInteractable.IsToggle);
+
+			/* Never moved onto anyone: a door shut on someone standing in its doorway would close
+			 * its leaf round them, and the character controller would pop them out through it. The
+			 * server's own positions decide; the refusal changes nothing, so no client disagrees. */
+			if (target is IClearanceSwitchTarget clearance && clearance.IsObstructed(activate))
 			{
-				target.Deactivate(player);
+				SendFeedback(player, $"Someone is in the way of the {data.Interactable.Title.ToLowerInvariant()}.");
+				return;
+			}
+
+			if (activate)
+			{
+				target.Activate(player);
 			}
 			else
 			{
-				target.Activate(player);
+				target.Deactivate(player);
 			}
 
 			/* World state, not a personal result — sent to the observers of the SWITCH rather
@@ -49,24 +60,27 @@ namespace FishMMO.Shared
 			 * Broadcasting from the player's NetworkObject, which is what this used to do, picked
 			 * the set of clients who can see the player: near enough to be plausible, and not the
 			 * same set at all. */
-			NetworkObject switchObject = data.Interactable.GameObject.GetComponent<NetworkObject>();
-			if (switchObject != null)
-			{
-				ITimedSwitchTarget timed = target as ITimedSwitchTarget;
-				switchObject.Broadcast(new SwitchStateBroadcast()
-				{
-					InteractableID = data.Interactable.ID,
-					Activated = target.IsActivated,
-					ChangeTick = timed != null ? timed.ChangeTick : 0u,
-					ChangeTravel = timed != null ? timed.ChangeTravel : 0f,
-				});
-			}
+			Switch.BroadcastState(data.Interactable, target);
 
 			if (switchInteractable.AchievementTemplate != null &&
 				player.TryGet(out IAchievementController achievementController))
 			{
 				achievementController.Increment(switchInteractable.AchievementTemplate, 1);
 			}
+		}
+
+		/// <summary>Tells the player why nothing moved, on the System chat channel (owner only).</summary>
+		private static void SendFeedback(IPlayerCharacter player, string text)
+		{
+			if (player?.Owner == null || !player.Owner.IsActive)
+			{
+				return;
+			}
+			player.Owner.Broadcast(new ChatBroadcast()
+			{
+				Channel = ChatChannel.System,
+				Text = text,
+			}, true, Channel.Reliable);
 		}
 	}
 }

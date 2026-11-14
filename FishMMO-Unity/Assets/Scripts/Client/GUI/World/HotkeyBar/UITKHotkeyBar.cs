@@ -70,6 +70,9 @@ namespace FishMMO.Client
 		/// <summary>USS class applied to each slot's icon element.</summary>
 		private const string ICON_CLASS = "hotkey-slot__icon";
 
+		/// <summary>USS class applied to each slot's stack-count badge (a bound stackable item's amount).</summary>
+		private const string AMOUNT_CLASS = "hotkey-slot__amount";
+
 		/// <summary>USS class applied to each slot's cooldown sweep overlay.</summary>
 		private const string COOLDOWN_CLASS = "hotkey-slot__cooldown";
 
@@ -108,6 +111,10 @@ namespace FishMMO.Client
 			public VisualElement Cooldown;
 			/// <summary>Key-map label (e.g. "1", "LMB").</summary>
 			public Label Label;
+			/// <summary>Stack-count badge: shown for a bound stackable item, like its inventory slot's.</summary>
+			public Label Amount;
+			/// <summary>The amount currently written into <see cref="Amount"/>; -1 while hidden.</summary>
+			public int AppliedAmount = -1;
 			/// <summary>The fixed hotkey slot index.</summary>
 			public int Index;
 
@@ -428,6 +435,8 @@ namespace FishMMO.Client
 				abilityController.OnAddAbility += Ability_OnAddAbility;
 				abilityController.OnRemoveAbility += Ability_OnRemoveAbility;
 				abilityController.OnReset += Ability_OnReset;
+				// A use takes a charge the moment it is predicted: the count follows at once, not on the server's slot update.
+				abilityController.OnConsumableItemChanged += Ability_OnConsumableItemChanged;
 			}
 		}
 
@@ -456,11 +465,15 @@ namespace FishMMO.Client
 				abilityController.OnAddAbility -= Ability_OnAddAbility;
 				abilityController.OnRemoveAbility -= Ability_OnRemoveAbility;
 				abilityController.OnReset -= Ability_OnReset;
+				abilityController.OnConsumableItemChanged -= Ability_OnConsumableItemChanged;
 			}
 		}
 
 		/// <summary>Marks the bar for a refresh when a container slot changed.</summary>
 		private void Container_OnSlotUpdated(IItemContainer container, Item item, int slotIndex) => bindingsDirty = true;
+
+		/// <summary>Marks the bar for a refresh when a consumable use changed an item's charges.</summary>
+		private void Ability_OnConsumableItemChanged(ICharacter character, Item item, int slot, bool destroyed) => bindingsDirty = true;
 
 		/// <summary>Marks the bar for a refresh when equipment changed.</summary>
 		private void Equipment_OnItemChanged(Item item, ItemSlot slot) => bindingsDirty = true;
@@ -683,6 +696,13 @@ namespace FishMMO.Client
 			cooldown.style.height = Length.Percent(0.0f);
 			slotRoot.Add(cooldown);
 
+			// Above the cooldown sweep, so the count stays readable while the item cools down.
+			Label amount = new Label();
+			amount.AddToClassList(AMOUNT_CLASS);
+			amount.pickingMode = PickingMode.Ignore;
+			amount.style.display = DisplayStyle.None;
+			slotRoot.Add(amount);
+
 			Label label = new Label(HotkeyKeyMap.SlotLabel(HotkeyBarLayout.BarOf(index), HotkeyBarLayout.PositionOf(index)));
 			label.AddToClassList(LABEL_CLASS);
 			slotRoot.Add(label);
@@ -693,6 +713,7 @@ namespace FishMMO.Client
 				Icon = icon,
 				Cooldown = cooldown,
 				Label = label,
+				Amount = amount,
 				Index = index,
 			};
 
@@ -809,6 +830,7 @@ namespace FishMMO.Client
 				for (int i = 0; i < slots.Count; ++i)
 				{
 					ApplySlotSprite(slots[i], null, occupied: false);
+					ApplySlotAmount(slots[i], -1);
 				}
 				return;
 			}
@@ -823,11 +845,58 @@ namespace FishMMO.Client
 					// leaving a slot that would activate nothing.
 					ClearBinding(i, broadcast: false);
 					ApplySlotSprite(slot, null, occupied: false);
+					ApplySlotAmount(slot, -1);
 					ApplyCooldownFraction(slot, 0.0f);
 					continue;
 				}
 
 				ApplySlotSprite(slot, sprite, bindings[i].Type != ReferenceButtonType.None);
+				ApplySlotAmount(slot, ResolveSlotAmount(i));
+			}
+		}
+
+		/// <summary>
+		/// The stack count a binding shows: a bound stackable item's amount (as its inventory slot shows it), else -1.
+		/// </summary>
+		private int ResolveSlotAmount(int index)
+		{
+			ref HotkeyBinding binding = ref bindings[index];
+			Item item = null;
+			switch (binding.Type)
+			{
+				case ReferenceButtonType.Inventory:
+					if (Character.TryGet(out IInventoryController inventoryController))
+					{
+						inventoryController.TryGetItem((int)binding.ReferenceID, out item);
+					}
+					break;
+				case ReferenceButtonType.Equipment:
+					if (Character.TryGet(out IEquipmentController equipmentController))
+					{
+						equipmentController.TryGetItem((int)binding.ReferenceID, out item);
+					}
+					break;
+			}
+			return item != null && item.IsStackable && item.Stackable != null ? (int)item.Stackable.Amount : -1;
+		}
+
+		/// <summary>Writes a slot's stack-count badge; only when it changed.</summary>
+		private static void ApplySlotAmount(HotkeySlot slot, int amount)
+		{
+			if (slot.Amount == null || slot.AppliedAmount == amount)
+			{
+				return;
+			}
+			slot.AppliedAmount = amount;
+			if (amount < 0)
+			{
+				slot.Amount.text = string.Empty;
+				slot.Amount.style.display = DisplayStyle.None;
+			}
+			else
+			{
+				slot.Amount.text = amount.ToString();
+				slot.Amount.style.display = DisplayStyle.Flex;
 			}
 		}
 

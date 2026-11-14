@@ -525,6 +525,10 @@ namespace FishMMO.Client
 				NetworkManager.SceneManager.OnLoadEnd -= OnSceneLoadEnd;
 				NetworkManager.SceneManager.OnUnloadEnd -= OnSceneUnloadEnd;
 			}
+			if (NetworkManager?.ClientManager != null)
+			{
+				NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
+			}
 			ClientPortalStateSystem.Destroy();
 			ClientInteractableStateSystem.Destroy();
 			ClientNamingSystem.Destroy();
@@ -570,6 +574,10 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
 			NetworkManager.ClientManager.RegisterBroadcast<DisconnectNoticeBroadcast>(OnDisconnectNotice);
 			NetworkManager.ClientManager.RegisterBroadcast<SceneTransferRefusedBroadcast>(OnSceneTransferRefused);
+			NetworkManager.ClientManager.RegisterBroadcast<NetworkScheduleBroadcast>(OnNetworkSchedule);
+			NetworkManager.ClientManager.RegisterBroadcast<SiteDiscoveredBroadcast>(OnSiteDiscovered);
+			NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
+			NetworkManager.ClientManager.OnClientConnectionState += OnScheduleConnectionState;
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 			NetworkManager.SceneManager.OnUnloadEnd += OnSceneUnloadEnd;
@@ -1333,6 +1341,25 @@ namespace FishMMO.Client
 		/// declined request from a frozen game, and the natural response — clicking again — is
 		/// exactly what the server-side cooldown rejects.
 		/// </remarks>
+		/// <summary>
+		/// The scene server's send schedule: flush at the interval it buffers for, with the matching replicate queue depth
+		/// (NetworkSendSchedule). Applied as told, so client and server can never disagree.
+		/// </summary>
+		private void OnNetworkSchedule(NetworkScheduleBroadcast msg, Channel ch)
+		{
+			NetworkSendSchedule.Apply(NetworkManager, msg.ServerSendInterval, msg.ClientSendInterval, asServer: false);
+			Log.Info("Client", $"Network schedule from the scene server: it sends every {NetworkSendSchedule.Clamp(msg.ServerSendInterval)} tick(s), this client every {NetworkSendSchedule.Clamp(msg.ClientSendInterval)}.");
+		}
+
+		/// <summary>Leaving a server (a hop, quit, disconnect) returns to every-tick sends until the next scene server says otherwise.</summary>
+		private void OnScheduleConnectionState(ClientConnectionStateArgs args)
+		{
+			if (args.ConnectionState == LocalConnectionState.Stopping || args.ConnectionState == LocalConnectionState.Stopped)
+			{
+				NetworkSendSchedule.Reset(NetworkManager, asServer: false);
+			}
+		}
+
 		private void OnSceneTransferRefused(SceneTransferRefusedBroadcast msg, Channel ch)
 		{
 			/* Queued rather than opened directly: the shared dialog refuses rather than replaces
@@ -2639,6 +2666,8 @@ namespace FishMMO.Client
 			{
 				c.CharacterNameplate.SetLine(NameplateSlot.GuildName,
 					!string.IsNullOrWhiteSpace(guildName) ? "[" + guildName + "]" : null);
+				// Green for the local player's guild (their own row included), grey for everyone else's.
+				ClientNameplateDisplay.ApplyGuildRowColor(c);
 			}
 		}
 		/// <summary>
@@ -2676,6 +2705,25 @@ namespace FishMMO.Client
 		private void OnRegionNameDisplay(string text, FontStyle style, Font font, int size, Color color, float life, bool fade, bool up, Vector2 offset)
 		{
 			if (this.regionNameLabel != null) { this.regionNameLabel.gameObject.SetActive(true); this.regionNameLabel.Initialize(text, style, font, size, color, life, fade, up, offset); }
+		}
+
+		/// <summary>Colour of the "Discovered" toast: gilt, apart from the green area-name toast.</summary>
+		private static readonly Color SiteDiscoveredColor = new Color(1.0f, 0.82f, 0.36f, 1.0f);
+
+		/// <summary>
+		/// The server counted a point of interest as discovered for the first time: announce it
+		/// over the region-name slot (it supersedes the plain name toast shown on entry) and record
+		/// it in the system chat.
+		/// </summary>
+		private void OnSiteDiscovered(SiteDiscoveredBroadcast msg, Channel ch)
+		{
+			string name = string.IsNullOrEmpty(msg.SiteName) ? "a place of interest" : msg.SiteName;
+			OnRegionNameDisplay("Discovered: " + name, FontStyle.Bold, null, 28, SiteDiscoveredColor, 4.0f, true, false,
+				new Vector2(0.0f, Screen.height * 0.2f));
+			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+			{
+				chat.InstantiateChatMessage(ChatChannel.System, "", $"Discovered: {name}.");
+			}
 		}
 	}
 }

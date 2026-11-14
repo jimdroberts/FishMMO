@@ -16,6 +16,9 @@ namespace FishMMO.Shared
 	/// next entry counts it.</para>
 	/// <para>The site is the region's <see cref="PointOfInterestDiscovery"/>; a region without one does
 	/// nothing.</para>
+	/// <para>A first discovery is announced to the owner with a <see cref="SiteDiscoveredBroadcast"/>:
+	/// discovery is decided here on the server, so the client has no other way to know the visit
+	/// counted.</para>
 	/// </remarks>
 	[Serializable]
 	public class DiscoverSiteAction : BaseAction, IAbortableAction
@@ -50,7 +53,17 @@ namespace FishMMO.Shared
 				store.RequestLoad(player.ID, null);
 				return false;
 			}
-			return store.ActivateForCharacter(player.ID, PointOfInterestDiscovery.RecordKey(site.gameObject.scene.name), site.SiteIndex);
+			if (!store.ActivateForCharacter(player.ID, PointOfInterestDiscovery.RecordKey(site.gameObject.scene.name), site.SiteIndex))
+			{
+				return false;
+			}
+
+			// First discovery only (the bit was newly set): tell the owner so it is announced.
+			SendToOwner(player, new SiteDiscoveredBroadcast()
+			{
+				SiteName = regionData.Region.Name,
+			});
+			return true;
 		}
 	}
 }

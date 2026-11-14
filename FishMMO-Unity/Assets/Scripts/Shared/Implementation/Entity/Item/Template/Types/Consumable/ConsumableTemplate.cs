@@ -106,5 +106,22 @@ namespace FishMMO.Shared
 			}
 			return false;
 		}
+
+		/// <summary>
+		/// Re-applies, on a reconcile replay of the owning client, the part of a use that the reconcile rolled back: the
+		/// effect on the character's own replicated state (a potion's restored resources). Never the charge, the cooldown or
+		/// the item itself: the reconcile does not roll those back, and the caller re-applies the cooldown separately.
+		/// </summary>
+		/// <remarks>
+		/// A reconcile for a tick BEFORE the use restores the character's resources without it, and the replay of the use
+		/// tick is the only thing that can put the effect back. Skipping it showed a potion's restore, then the old value
+		/// again for about a round trip, then the restore once more when the server's own reconcile included it. A reconcile
+		/// for a tick AT or after the use already contains the effect and does not replay the use tick, so this cannot
+		/// apply twice. Default: nothing to re-apply.
+		/// </remarks>
+		/// <param name="character">The character the consumable was used by.</param>
+		public virtual void ReplayEffect(IPlayerCharacter character)
+		{
+		}
 	}
 }

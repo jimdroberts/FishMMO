@@ -509,6 +509,13 @@ namespace FishNet.Managing.Client
                         NetworkManager.PacketIdHistory.ReceivedPacket(packetId, packetFromServer: true);
                         #endif
                     }
+                    /* FISHMMO EDIT: the bundle moves to a later tick here (PacketId.TickMarker): every message after it is
+                     * read against that tick, as it would have been in a bundle of its own. */
+                    if (packetId == PacketId.TickMarker)
+                    {
+                        NetworkManager.TimeManager.LastPacketTick.Update(reader.ReadTickUnpacked(), EstimatedTick.OldTickOption.Discard, false);
+                        continue;
+                    }
                     bool spawnOrDespawn = packetId == PacketId.ObjectSpawn || packetId == PacketId.ObjectDespawn;
                     /* Length of data. Only available if using unreliable. Unreliable packets
                      * can arrive out of order which means object orientated messages such as RPCs may

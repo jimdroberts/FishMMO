@@ -56,6 +56,13 @@ namespace FishMMO.Shared
 
 		// What was last read off a watched character.
 		private bool seenSwimming;
+
+		/// <summary>How much of a hidden game master's model still shows, to the few who see it (its owner and staff).</summary>
+		private const float HiddenOpacity = 0.5f;
+
+		/// <summary>Whether the server says this character is hidden (<see cref="MovementModeBits.Hidden"/>).</summary>
+		private bool faded;
+		private readonly CharacterFade fade = new CharacterFade();
 #endif
 
 		/// <summary>The model under a mesh root, skipping one that has been switched off to be destroyed.</summary>
@@ -93,6 +100,21 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			TryBuildBody();
+			// A new model (or one re-dressed) is faded too while hidden.
+			ApplyFade();
+#endif
+		}
+
+		/// <summary>
+		/// Draws the model half see-through (<see cref="CharacterFade"/>) while the character is hidden by <c>/gm invis</c>, or
+		/// solid again. Told by the server's movement-mode broadcast, which only the owner and staff receive while it is hidden,
+		/// and repeated every few seconds, so equipment put on since is faded at the next telling.
+		/// </summary>
+		public void SetFaded(bool value)
+		{
+#if !UNITY_SERVER
+			faded = value;
+			ApplyFade();
 #endif
 		}
 
@@ -105,6 +127,9 @@ namespace FishMMO.Shared
 			DropBody();
 			fedAt = float.NegativeInfinity;
 			seenSwimming = false;
+			// A pooled character reused by another player must not arrive faded.
+			faded = false;
+			fade.Restore();
 #endif
 		}
 
@@ -112,6 +137,19 @@ namespace FishMMO.Shared
 		private void OnDestroy()
 		{
 			DropBody();
+			fade.Restore();
+		}
+
+		private void ApplyFade()
+		{
+			if (faded && Character != null && Character.MeshRoot != null)
+			{
+				fade.Apply(Character.MeshRoot, HiddenOpacity);
+			}
+			else if (!faded && fade.IsApplied)
+			{
+				fade.Restore();
+			}
 		}
 
 		private void OnEnable()
@@ -122,6 +160,11 @@ namespace FishMMO.Shared
 		private void OnDisable()
 		{
 			body?.SetPlaying(false);
+			// Forget the told movement mode when the object goes back to the pool.
+			observedModeKnown = false;
+			observedMode = 0;
+			faded = false;
+			fade.Restore();
 		}
 
 		private void DropBody()
@@ -206,6 +249,21 @@ namespace FishMMO.Shared
 			else
 			{
 				Observe(position, ref motion);
+				// The server's word, once it has spoken, over the guess (CharacterMovementModeBroadcast).
+				if (observedModeKnown)
+				{
+					motion.Swimming = (observedMode & MovementModeBits.Swimming) != 0;
+					motion.Climbing = (observedMode & MovementModeBits.Climbing) != 0;
+					if (motion.Swimming || motion.Climbing)
+					{
+						motion.Grounded = false;
+					}
+					else if ((observedMode & MovementModeBits.Flying) != 0)
+					{
+						// A flying game master stands as on the ground rather than falls (KCCController feeds its owner alike).
+						motion.Grounded = true;
+					}
+				}
 			}
 			body.Pose(in motion, deltaTime);
 		}
@@ -263,7 +321,22 @@ namespace FishMMO.Shared
 		{
 			fedAt = Time.time;
 		}
+
+		private byte observedMode;
+		private bool observedModeKnown;
 #endif
+
+		/// <summary>
+		/// An observed character's movement mode as the server tells it (<see cref="MovementModeBits"/>). Used instead of
+		/// guessing it from where the body is; until it is told, the guess stands.
+		/// </summary>
+		public void SetObservedMovementMode(byte mode)
+		{
+#if !UNITY_SERVER
+			observedMode = mode;
+			observedModeKnown = true;
+#endif
+		}
 
 		/// <inheritdoc />
 		/// <remarks>Not used: the body measures how far its model really goes, which every peer can see.</remarks>

@@ -29,7 +29,7 @@
                     <ui:Label text="What happened" class="fish-label fish-label--caption report-caption" />
                     <ui:Label name="report-counter" text="0 / 512" class="fish-label fish-label--caption fish-label--numeric report-counter" />
                 </ui:VisualElement>
-                <ui:TextField name="report-description" class="fish-input report-description" multiline="true" />
+                <ui:TextField name="report-description" class="fish-input fish-input--multiline report-description" multiline="true" />
 
                 <ui:Label name="report-hint" text="Staff receive this with your character name. Say when and where it happened." class="fish-label fish-label--muted report-hint" />
                 <ui:Label name="report-status" text="" class="fish-label report-status" />

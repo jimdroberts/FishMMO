@@ -64,6 +64,16 @@ mergeInto(LibraryManager.library, {
         }
     },
 
+    /*
+        Only Firefox needs the loop on animation frames: it is the browser that presented the canvas out of order under
+        the timer loop. Every other browser keeps Unity's own loop (Application.targetFrameRate), which is not tied to
+        the display and runs as fast as the cap allows (Chrome measured 160 fps on a 60 Hz panel).
+    */
+    FishMMOFrameLoopOnAnimationFrames__sig: 'i',
+    FishMMOFrameLoopOnAnimationFrames: function () {
+        return (typeof navigator !== 'undefined' && /firefox/i.test(navigator.userAgent || '')) ? 1 : 0;
+    },
+
     FishMMOSetFrameCap__deps: ['$FishFrameLoop', 'emscripten_set_main_loop_timing'],
     FishMMOSetFrameCap__sig: 'vi',
     FishMMOSetFrameCap: function (framesPerSecond) {

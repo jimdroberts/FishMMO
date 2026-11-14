@@ -811,6 +811,8 @@ namespace FishMMO.Shared
 		public uint ChangeTick;
 		/// <summary>How far along its travel that target stood when the change began, 0..1.</summary>
 		public float ChangeTravel;
+		/// <summary>The server tick its resting pose turns solid from (<see cref="ITimedSwitchTarget.SolidTick"/>; 0: not yet).</summary>
+		public uint SolidTick;
 	}
 
 	// ──────────────────────────────────────────

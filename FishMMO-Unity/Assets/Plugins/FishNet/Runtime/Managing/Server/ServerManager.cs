@@ -725,6 +725,8 @@ namespace FishNet.Managing.Server
                 segment = NetworkManager.TransportManager.ProcessIntermediateIncoming(args.Data, false);
             else
                 segment = args.Data;
+            // FISHMMO EDIT: packet sampling (TransportManager.OnServerPacketObserved).
+            TransportManager.OnServerPacketObserved?.Invoke(segment, false);
 
             if (_networkTrafficStatistics != null)
                 _networkTrafficStatistics.AddInboundSocketData((ulong)segment.Count, asServer: true);
@@ -812,6 +814,14 @@ namespace FishNet.Managing.Server
                 #if DEVELOPMENT
                 NetworkManager.PacketIdHistory.ReceivedPacket(packetId, packetFromServer: false);
                 #endif
+                /* FISHMMO EDIT: the bundle moves to a later tick here (PacketId.TickMarker): every message after it is read
+                 * against that tick, as it would have been in a bundle of its own. */
+                if (packetId == PacketId.TickMarker)
+                {
+                    tick = reader.ReadTickUnpacked();
+                    timeManager.LastPacketTick.Update(tick);
+                    continue;
+                }
                 connection.LocalTick.Update(timeManager, tick, EstimatedTick.OldTickOption.Discard);
                 connection.PacketTick.Update(timeManager, tick, EstimatedTick.OldTickOption.SetLastRemoteTick);
                 /* If connection isn't authenticated and isn't a broadcast

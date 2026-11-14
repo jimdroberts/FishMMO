@@ -111,6 +111,10 @@ namespace FishMMO.Client
 		private const string MESSAGE_NAME_CLASS = "chat-message__name";
 		/// <summary>USS class applied to a message row's text label.</summary>
 		private const string MESSAGE_TEXT_CLASS = "chat-message__text";
+		/// <summary>USS class applied to a message row's timestamp label.</summary>
+		private const string MESSAGE_TIME_CLASS = "chat-message__time";
+		/// <summary>Written after the sender name, so the name reads apart from what they said.</summary>
+		private const string NAME_SEPARATOR = ":";
 
 		/// <summary>
 		/// The welcome message displayed when the chat is initialised.
@@ -183,8 +187,19 @@ namespace FishMMO.Client
 			public bool HasSender;
 			/// <summary>Body of the message.</summary>
 			public string Text;
+			/// <summary>
+			/// True when the sender is the subject of a sentence the text completes, e.g. the
+			/// party error "Bob" + " is already in a party." Such a line takes no name separator
+			/// and never folds under the line above it.
+			/// </summary>
+			public bool NameIsSubject;
 			/// <summary>Colour override, or null to use the channel colour.</summary>
 			public Color? Color;
+			/// <summary>
+			/// Local time the line reached this client. Kept on every record whether or not
+			/// timestamps are showing, so turning them on labels the lines already in the log.
+			/// </summary>
+			public DateTime ReceivedAt = DateTime.Now;
 		}
 
 		/// <summary>
@@ -200,6 +215,8 @@ namespace FishMMO.Client
 			public Label NameLabel;
 			/// <summary>Label displaying the message text.</summary>
 			public Label TextLabel;
+			/// <summary>Label displaying the arrival time, or null when timestamps are off.</summary>
+			public Label TimeLabel;
 		}
 
 		/// <summary>
@@ -281,6 +298,20 @@ namespace FishMMO.Client
 		/// event was dispatched.
 		/// </remarks>
 		private int inputFocusedOnFrame = -1;
+
+		/// <summary>
+		/// How many frames after the chat key opened (or a send closed) the field the same Enter is still recognised.
+		/// </summary>
+		/// <remarks>
+		/// The game's input actions and UI Toolkit's key events are fed from separate updates. In the editor and desktop
+		/// builds one press reaches both in the same frame, but in the browser the two can land a frame apart, so an exact
+		/// frame match let the Enter that opened chat send an empty line and close it again (or the Enter that sent a line
+		/// open chat again). Two frames covers that; nobody presses Enter twice inside two frames.
+		/// </remarks>
+		private const int SameKeypressFrames = 2;
+
+		/// <summary>True within <see cref="SameKeypressFrames"/> of <paramref name="frame"/>.</summary>
+		private static bool IsSameKeypress(int frame) => frame >= 0 && Time.frameCount - frame <= SameKeypressFrames;
 
 		/// <summary>
 		/// Channels a player can actually send on, in selector order. Tell is excluded because it
@@ -367,6 +398,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		private bool stickToBottom = true;
 
+		/// <summary>
+		/// True while <see cref="RebuildMessageViews"/> is re-rendering the log, so rows that were
+		/// already read do not raise the "new messages" pill as if they had just arrived.
+		/// </summary>
+		private bool rebuildingViews;
+
 		/// <summary>The "new messages" pill, shown when messages land out of view below.</summary>
 		private Button newMessagesPill;
 
@@ -452,6 +489,8 @@ namespace FishMMO.Client
 			ClientChatSettings.OnChanged -= OnChatFontSizeChanged;
 			ClientChatSettings.OnChanged += OnChatFontSizeChanged;
 			ApplyChatFontSize();
+			ClientChatSettings.OnFormatChanged -= OnChatFormatChanged;
+			ClientChatSettings.OnFormatChanged += OnChatFormatChanged;
 
 			/* The log's lower edge clears the hotbar's extra stacked rows, if it has any, by giving
 			 * up height rather than by moving: its top edge is what the toast stack and the party
@@ -461,6 +500,8 @@ namespace FishMMO.Client
 			ApplyHotbarInset();
 
 			ChatHelper.InitializeOnce(GetChannelCommand);
+
+			ExcludeFromTabNavigation(Root);
 
 			if (!welcomeSeeded)
 			{
@@ -521,6 +562,32 @@ namespace FishMMO.Client
 				{
 					view.TextLabel.style.fontSize = size;
 				}
+				if (view.TimeLabel != null)
+				{
+					view.TimeLabel.style.fontSize = size;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Re-renders every row after a line-format option changed (timestamps, their format,
+		/// channel tags, grouping).
+		/// </summary>
+		/// <remarks>
+		/// A rebuild rather than a patch: grouping decides which rows carry a sender at all, so
+		/// the change is structural. The log holds at most <see cref="MAX_MESSAGES"/> rows and this
+		/// runs once per click, never per frame. A reader at the bottom stays there; one who has
+		/// scrolled back is left where the rebuild puts them, as with the font size.
+		/// </remarks>
+		private void OnChatFormatChanged()
+		{
+			bool wasAtBottom = stickToBottom;
+
+			RebuildMessageViews();
+
+			if (wasAtBottom)
+			{
+				ScrollToBottomDeferred();
 			}
 		}
 
@@ -555,6 +622,7 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			ClientChatSettings.OnChanged -= OnChatFontSizeChanged;
+			ClientChatSettings.OnFormatChanged -= OnChatFormatChanged;
 			ClientHotbarSettings.OnChanged -= ApplyHotbarInset;
 		}
 
@@ -598,6 +666,105 @@ namespace FishMMO.Client
 				Text = text,
 				Color = color,
 			});
+		}
+
+		/// <summary>Prefix written in front of the guild's message of the day.</summary>
+		private const string GUILD_MOTD_PREFIX = "Guild Message of the Day: ";
+
+		/// <summary>
+		/// What has already been announced this login. Static because the panel may not survive a
+		/// zone change, and the zone change is exactly the repeat it exists to suppress.
+		/// </summary>
+		private static readonly GuildMessageOfTheDayGate guildMotdGate = new GuildMessageOfTheDayGate();
+
+		/// <summary>Clears the announcement state when play mode starts without a domain reload.</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ResetGuildMotdGate()
+		{
+			guildMotdGate.Reset();
+		}
+
+		/// <summary>
+		/// Subscribes to the guild's text and prints a message of the day that arrived before this
+		/// panel was bound.
+		/// </summary>
+		/// <remarks>
+		/// The server sends the text a few database round trips after the character spawns, so it
+		/// usually arrives after this runs — but not always, and the controller keeps it for the case
+		/// where it did not. The gate makes the replay and the live copy safe to both arrive.
+		/// </remarks>
+		public override void OnPostSetCharacter()
+		{
+			base.OnPostSetCharacter();
+
+			if (Character == null || !Character.TryGet(out IGuildController guildController))
+			{
+				return;
+			}
+
+			guildController.OnReceiveGuildInfo -= GuildController_OnReceiveGuildInfo;
+			guildController.OnReceiveGuildInfo += GuildController_OnReceiveGuildInfo;
+
+			if (guildController.InfoGuildID > 0)
+			{
+				AnnounceGuildMessageOfTheDay(guildController.InfoGuildID, guildController.MessageOfTheDay);
+			}
+		}
+
+		/// <summary>Drops the guild subscription from the outgoing character.</summary>
+		public override void OnPreSetCharacter()
+		{
+			base.OnPreSetCharacter();
+			UnsubscribeGuildInfo();
+		}
+
+		/// <summary>Drops the guild subscription before the character is cleared.</summary>
+		public override void OnPreUnsetCharacter()
+		{
+			base.OnPreUnsetCharacter();
+			UnsubscribeGuildInfo();
+		}
+
+		/// <summary>
+		/// Forgets the announced message of the day, so the next login prints it again.
+		/// </summary>
+		public override void OnQuitToLogin()
+		{
+			base.OnQuitToLogin();
+			guildMotdGate.Reset();
+		}
+
+		/// <summary>Removes the guild text handler from the current character, if any.</summary>
+		private void UnsubscribeGuildInfo()
+		{
+			if (Character != null && Character.TryGet(out IGuildController guildController))
+			{
+				guildController.OnReceiveGuildInfo -= GuildController_OnReceiveGuildInfo;
+			}
+		}
+
+		/// <summary>Handles the guild's descriptive text arriving from the server.</summary>
+		private void GuildController_OnReceiveGuildInfo(long guildID, string name, string notice, string messageOfTheDay)
+		{
+			AnnounceGuildMessageOfTheDay(guildID, messageOfTheDay);
+		}
+
+		/// <summary>
+		/// Writes the guild's message of the day into chat on the Guild channel, once per login and
+		/// again whenever it changes. See <see cref="GuildMessageOfTheDayGate"/>.
+		/// </summary>
+		/// <param name="guildID">The guild the text belongs to.</param>
+		/// <param name="messageOfTheDay">The text as received.</param>
+		private void AnnounceGuildMessageOfTheDay(long guildID, string messageOfTheDay)
+		{
+			long characterID = Character != null ? Character.ID : 0;
+			if (!guildMotdGate.ShouldAnnounce(characterID, guildID, messageOfTheDay, out string text))
+			{
+				return;
+			}
+
+			// Sender-less, like a System line, but on the Guild channel so guild tabs carry it.
+			InstantiateChatMessage(ChatChannel.Guild, null, GUILD_MOTD_PREFIX + text);
 		}
 
 		/// <summary>
@@ -647,13 +814,21 @@ namespace FishMMO.Client
 
 			/* Enter both sends and focuses; see inputReleasedOnFrame. Without this, whether the
 			 * send released the field at all comes down to undefined script execution order. */
-			if (inputReleasedOnFrame == Time.frameCount)
+			if (IsSameKeypress(inputReleasedOnFrame))
 			{
 				return;
 			}
 
 			// If the input already has focus, skip to avoid interfering with typing.
 			if (IsInputFocused)
+			{
+				return;
+			}
+
+			/* Nor while the player is typing into any other field. Chat is bound to Enter and '/',
+			 * so a '/' typed into a guild notice, or the Enter that confirms a dialog's text box,
+			 * pulled focus into chat, and the rest of what they typed landed there. */
+			if (UIManager.InputControlHasFocus(this))
 			{
 				return;
 			}
@@ -667,25 +842,20 @@ namespace FishMMO.Client
 			inputField.Focus();
 			inputFocusedOnFrame = Time.frameCount;
 
-			// Enable mouse mode so the cursor is available for typing.
-			PlayerInputController.MouseMode = true;
+			/* The cursor is left exactly as it was. Typing needs keyboard focus, not a cursor, and the camera and movement
+			 * already stand still while a text field has focus (PlayerInputController.CanUpdateInput). Freeing it here was
+			 * what broke chat in the browser: freeing the cursor exits pointer lock, and taking it back after the line is
+			 * sent is refused outside a click, so every chat line cost the player a click to get the mouse back. */
 		}
 
 		/// <summary>
-		/// Keeps the cursor released for exactly as long as the player is typing.
+		/// Keeps the panel's cursor claim at what the scene authored. Typing does not claim the cursor.
 		/// </summary>
 		/// <remarks>
-		/// <c>PlayerInputController.HandleAutoDismiss</c> runs every frame and re-captures the
-		/// cursor whenever no visible panel claims it via <c>ReleasesCursor</c>. Chat is always
-		/// visible and does not claim it — correctly, because a chat window sitting in the corner
-		/// must not hold the cursor released during play — so pressing Enter to type released the
-		/// cursor and auto-dismiss took it back on the very next frame, mid-sentence.
-		/// <para>
-		/// Claiming the cursor only while the input has focus resolves both halves: the cursor
-		/// stays available for the whole time the player is typing, and is handed straight back
-		/// when they finish. The flag is the same one the scene would otherwise set statically,
-		/// so nothing else has to know about this.
-		/// </para>
+		/// Typing used to claim it for as long as the input had focus, because Enter freed the cursor to type and
+		/// <c>PlayerInputController.HandleAutoDismiss</c> would otherwise take it back mid-sentence. Enter no longer frees it
+		/// (see <see cref="EnableChatInput"/>): a player looking around keeps the locked cursor while typing, and one who was
+		/// already using the cursor keeps it free, so there is nothing to hold.
 		/// </remarks>
 		private void UpdateCursorRelease()
 		{
@@ -695,16 +865,13 @@ namespace FishMMO.Client
 				authoredReleasesCursor = ReleasesCursor;
 			}
 
-			bool wanted = authoredReleasesCursor || IsInputFocused;
+			bool wanted = authoredReleasesCursor;
 			if (ReleasesCursor != wanted)
 			{
 				ReleasesCursor = wanted;
 			}
 		}
 
-		/// <summary>
-		/// True when the chat input field currently holds keyboard focus.
-		/// </summary>
 		/// <summary>Releases keyboard focus from the input, whichever element actually holds it.</summary>
 		/// <remarks>
 		/// A TextField delegates focus to an inner text element, so the focused element is a CHILD
@@ -788,13 +955,26 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Tab is the mouse-mode key in the world, and it means nothing to a chat line. Left
+			 * alone, the text field's own handler moves focus to the next element on Tab. The
+			 * player lost the line mid-sentence and the remaining keys went to the game, which
+			 * was the other half of "chat loses focus at random". Swallowed here in the
+			 * trickle-down phase, before it reaches the inner text element. The keyCode None
+			 * twin carrying only the '\t' character is swallowed with it. */
+			if (evt.keyCode == KeyCode.Tab || evt.character == '\t')
+			{
+				evt.StopPropagation();
+				inputField.focusController?.IgnoreEvent(evt);
+				return;
+			}
+
 			switch (evt.keyCode)
 			{
 				case KeyCode.Return:
 				case KeyCode.KeypadEnter:
 					/* The Enter that opened this field is not a send. Swallowed rather than
 					 * submitted, or opening chat with Enter immediately closes it again. */
-					if (inputFocusedOnFrame == Time.frameCount)
+					if (IsSameKeypress(inputFocusedOnFrame))
 					{
 						evt.StopPropagation();
 						break;
@@ -1128,6 +1308,36 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Takes every focusable element under <paramref name="element"/> out of UI Toolkit's
+		/// Tab focus ring, without stopping it from being clicked or focused from code.
+		/// </summary>
+		/// <remarks>
+		/// In the world Tab is the mouse-mode key, but UI Toolkit also reads it as "focus the next
+		/// element". With nothing focused that lands on the first element in the ring, which could
+		/// be this input. Chat then opened itself on a Tab press, and every key after that typed
+		/// into it instead of driving the game. That was half of the "chat gains focus at random"
+		/// report. A tab index below zero is the ring's own exclusion test
+		/// (<c>VisualElementFocusRing</c> skips <c>tabIndex &lt; 0</c>); clicks and
+		/// <see cref="Focusable.Focus"/> do not consult it. The buttons are excluded too, so Tab
+		/// cannot park focus on "+" or the channel selector, where the next Enter would press them.
+		/// </remarks>
+		/// <param name="element">The subtree to exclude; may be null.</param>
+		private static void ExcludeFromTabNavigation(VisualElement element)
+		{
+			if (element == null)
+			{
+				return;
+			}
+			element.Query<VisualElement>().ForEach((child) =>
+			{
+				if (child.focusable)
+				{
+					child.tabIndex = -1;
+				}
+			});
+		}
+
+		/// <summary>
 		/// Builds (or rebuilds) the button for a tab and attaches it to the current tab bar.
 		/// </summary>
 		/// <param name="tab">The tab to build a button for.</param>
@@ -1146,6 +1356,7 @@ namespace FishMMO.Client
 			button.AddToClassList(TAB_CLASS);
 			button.EnableInClassList(TAB_ACTIVE_CLASS, tab.Label.Equals(CurrentTab, StringComparison.Ordinal));
 			button.RegisterCallback<PointerDownEvent>((evt) => OnTabPointerDown(evt, tab));
+			ExcludeFromTabNavigation(button);
 			tab.Button = button;
 
 			tabsContainer.Add(button);
@@ -1402,9 +1613,17 @@ namespace FishMMO.Client
 			}
 			messagesContainer.Clear();
 
-			for (int i = 0; i < messages.Count; ++i)
+			rebuildingViews = true;
+			try
 			{
-				RenderRecord(messages[i], i);
+				for (int i = 0; i < messages.Count; ++i)
+				{
+					RenderRecord(messages[i], i);
+				}
+			}
+			finally
+			{
+				rebuildingViews = false;
 			}
 		}
 
@@ -1446,6 +1665,20 @@ namespace FishMMO.Client
 			textLabel.style.fontSize = fontSize;
 			DisableRichText(textLabel);
 
+			/* The time leads every line when it is on -- grouped repeats included, since the
+			 * point is to see when each one was said. Same colour as the line, dimmed by the
+			 * stylesheet, so it reads as part of the line rather than as a channel of its own. */
+			Label timeLabel = null;
+			if (ClientChatSettings.ShowTimestamps)
+			{
+				timeLabel = new Label(ClientChatSettings.FormatTimestamp(record.ReceivedAt, ClientChatSettings.Format));
+				timeLabel.AddToClassList(MESSAGE_TIME_CLASS);
+				timeLabel.style.color = resolved;
+				timeLabel.style.fontSize = fontSize;
+				DisableRichText(timeLabel);
+				row.Add(timeLabel);
+			}
+
 			/* Left out of the row entirely rather than hidden with display: none. The row wraps,
 			 * and a hidden child still counted as a flex item -- it opened an empty flex line above
 			 * the text, so every line without a visible sender drew about twice as tall as one with
@@ -1468,6 +1701,7 @@ namespace FishMMO.Client
 				Root = row,
 				NameLabel = nameLabel,
 				TextLabel = textLabel,
+				TimeLabel = timeLabel,
 			};
 			messageViews.Add(view);
 
@@ -1482,7 +1716,7 @@ namespace FishMMO.Client
 			{
 				ScrollToBottomDeferred();
 			}
-			else if (row.style.display != DisplayStyle.None)
+			else if (!rebuildingViews && row.style.display != DisplayStyle.None)
 			{
 				/* The reader has scrolled back and this line landed below them. Their position is
 				 * left exactly where they put it -- moving it is the thing that makes reading
@@ -1521,15 +1755,19 @@ namespace FishMMO.Client
 		/// Builds the sender-column text for a record.
 		/// </summary>
 		/// <param name="record">The record being rendered.</param>
-		/// <returns>The channel tag, plus the sender name when there is one.</returns>
+		/// <returns>
+		/// The channel tag (unless the player turned tags off), plus the sender name and a colon
+		/// when there is one: <c>[Tell] Anewbie:</c>.
+		/// </returns>
 		private static string BuildNameText(ChatMessageRecord record)
 		{
-			string tag = "[" + record.Channel.ToString() + "] ";
+			string tag = ClientChatSettings.ShowChannelTags ? "[" + record.Channel.ToString() + "] " : "";
 			if (!record.HasSender)
 			{
 				return tag;
 			}
-			return tag + record.NamePrefix + (record.ResolvedName ?? UNKNOWN_SENDER) + record.NameSuffix;
+			return tag + record.NamePrefix + (record.ResolvedName ?? UNKNOWN_SENDER) + record.NameSuffix +
+				   (record.NameIsSubject ? "" : NAME_SEPARATOR);
 		}
 
 		/// <summary>
@@ -1545,13 +1783,13 @@ namespace FishMMO.Client
 				return false;
 			}
 
-			if (index <= 0 || index > messages.Count)
+			if (record.NameIsSubject || !ClientChatSettings.GroupMessages || index <= 0 || index > messages.Count)
 			{
 				return true;
 			}
 
 			ChatMessageRecord previous = messages[index - 1];
-			if (previous.Channel != record.Channel || !previous.HasSender)
+			if (previous.Channel != record.Channel || !previous.HasSender || previous.NameIsSubject)
 			{
 				return true;
 			}
@@ -1574,8 +1812,9 @@ namespace FishMMO.Client
 		/// <param name="text">The message body.</param>
 		/// <param name="namePrefix">Text placed before the resolved name.</param>
 		/// <param name="nameSuffix">Text placed after the resolved name.</param>
+		/// <param name="nameIsSubject">True when the text completes a sentence about the sender.</param>
 		private void AddSenderMessage(ChatChannel channel, long senderID, string text,
-			string namePrefix = "", string nameSuffix = "")
+			string namePrefix = "", string nameSuffix = "", bool nameIsSubject = false)
 		{
 			ChatMessageRecord record = new ChatMessageRecord()
 			{
@@ -1585,6 +1824,7 @@ namespace FishMMO.Client
 				NamePrefix = namePrefix ?? "",
 				NameSuffix = nameSuffix ?? "",
 				Text = text,
+				NameIsSubject = nameIsSubject,
 			};
 
 			// A sender ID of zero has no character behind it and never will; do not ask.
@@ -1648,6 +1888,22 @@ namespace FishMMO.Client
 				}
 				view.NameLabel.text = BuildNameText(view.Record);
 			}
+		}
+
+		/// <summary>
+		/// Adds a sender-less line in a channel's colour: a notice about the channel, such as a
+		/// whisper target being offline, rather than something a character said.
+		/// </summary>
+		/// <param name="channel">The channel the notice belongs to (its colour and tab filter).</param>
+		/// <param name="text">The notice text.</param>
+		private void AddChannelNotice(ChatChannel channel, string text)
+		{
+			AddRecord(new ChatMessageRecord()
+			{
+				Channel = channel,
+				HasSender = false,
+				Text = text,
+			});
 		}
 
 		/// <summary>
@@ -1899,7 +2155,7 @@ namespace FishMMO.Client
 			if (!string.IsNullOrWhiteSpace(cmd) &&
 				 ErrorCodes.TryGetValue(cmd, out string targetErrorMsg))
 			{
-				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg);
+				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg, nameIsSubject: true);
 			}
 			else
 			{
@@ -1931,7 +2187,7 @@ namespace FishMMO.Client
 			if (!string.IsNullOrWhiteSpace(cmd) &&
 				 ErrorCodes.TryGetValue(cmd, out string targetErrorMsg))
 			{
-				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg);
+				AddSenderMessage(msg.Channel, msg.SenderID, targetErrorMsg, nameIsSubject: true);
 			}
 			else
 			{
@@ -1969,7 +2225,10 @@ namespace FishMMO.Client
 					string targetName = trimmed?.Trim();
 					if (!string.IsNullOrWhiteSpace(targetName))
 					{
-						AddSenderMessage(msg.Channel, msg.SenderID, targetName + offlineMsg);
+						/* A notice, not a line anyone said. It used to carry the local player as
+						 * its sender, and with the name separator that read "Anewbie: Sonez is not
+						 * online." -- as if the player had typed it. */
+						AddChannelNotice(msg.Channel, targetName + offlineMsg);
 						return true;
 					}
 				}
@@ -1977,7 +2236,7 @@ namespace FishMMO.Client
 				else if (cmd.Equals(ChatHelper.TELL_ERROR_MESSAGE_SELF) &&
 						 ErrorCodes.TryGetValue(ChatHelper.TELL_ERROR_MESSAGE_SELF, out string errorMsg))
 				{
-					AddSenderMessage(msg.Channel, msg.SenderID, errorMsg);
+					AddChannelNotice(msg.Channel, errorMsg);
 					return true;
 				}
 			}

@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15d1b8236d4cf0b5b3f74d99b9a983b, type: 3}
+  m_Name: Civilian - Simulated Player
+  m_EditorClassIdentifier: 
+  Description: 'Stress-test simulated player: a non-combatant that keeps walking around where it was placed. Spawned by /admin simulate.'
+  InitialState: {fileID: 11400000, guid: 5f2b5f321d9eeba97af4765740120b77, type: 2}
+  AttackingState: {fileID: 0}
+  IdleState: {fileID: 11400000, guid: 51f855b3de8e6644eb22eee716657935, type: 2}
+  WanderState: {fileID: 11400000, guid: 5f2b5f321d9eeba97af4765740120b77, type: 2}
+  PatrolState: {fileID: 0}
+  ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
+  RetreatState: {fileID: 0}
+  DeadState: {fileID: 0}
+  Personality: {fileID: 0}
+  AbilityRotation: {fileID: 0}
+  BehaviorTree: {fileID: 0}
+  AimProfile: {fileID: 0}
+  AggressionDamageWeight: 1
+  AggressionHealingWeight: 0.6
+  AggressionHitBonus: 5
+  AggressionDecayRate: 3
+  AggressionStaleTimeout: 30
+  AggressionVarietyChance: 0.15
+  Shelter:
+    Enabled: 0
+    ShelterFrom: 318
+    MinimumExposure: 0.5
+    MinimumSeverity: 0.35
+    SearchRadius: 45
+    MinimumShelterStrength: 0.5
+    CheckInterval: 6
+    ShelterState: {fileID: 0}
+  Swim:
+    CanSwim: 0
+    Mode: 0
+    SwimSkill: 0.5
+    BreathSeconds: 20
+    Courage: 0.5
+    ShorePatience: 20
+  CanClimb: 1
+  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
+  EnemySweepRate: 1.5
+  AvoidancePriority: 50

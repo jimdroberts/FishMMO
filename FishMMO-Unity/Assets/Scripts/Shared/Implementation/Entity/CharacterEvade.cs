@@ -3,7 +3,8 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Single definition of "this character is evading and accepts nothing hostile".
+	/// Single definition of "this character accepts nothing hostile": it is evading, or (with a source) the harm rule
+	/// (<see cref="FactionHarm"/>) does not let that source harm it.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -45,6 +46,21 @@ namespace FishMMO.Shared
 			return character is NPC &&
 				character.TryGet(out INPCBrain brain) &&
 				brain.IsEvading;
+		}
+
+		/// <summary>
+		/// True when <paramref name="target"/> must refuse a hostile effect from <paramref name="source"/>: it is evading
+		/// (<see cref="RefusesHostileEffects(ICharacter)"/>), or the harm rule does not let <paramref name="source"/> harm it
+		/// (<see cref="FactionHarm"/>: enemies only, unless an aggression toggle is on; a pet as its owner). The one question
+		/// every hostile route asks — damage, debuffs, knockback, interrupts, taunts, buff-stripping dispels, drains — so none
+		/// can be the one that still lands on a friend.
+		/// </summary>
+		/// <param name="target">The character the effect would land on.</param>
+		/// <param name="source">The character applying it; null for the world (never refused by the harm rule).</param>
+		/// <returns>True when the effect must be refused.</returns>
+		public static bool RefusesHostileEffects(ICharacter target, ICharacter source)
+		{
+			return RefusesHostileEffects(target) || !FactionHarm.Allows(source, target);
 		}
 
 		/// <summary>
@@ -96,7 +112,7 @@ namespace FishMMO.Shared
 
 			// The cheap template test first: almost nothing applied is a debuff on an evading NPC.
 			return IsHostileBuff(template.IsDebuff, fromAnotherCharacter) &&
-				RefusesHostileEffects(target);
+				RefusesHostileEffects(target, caster);
 		}
 	}
 }

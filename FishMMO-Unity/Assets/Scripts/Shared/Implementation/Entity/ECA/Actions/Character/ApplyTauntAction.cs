@@ -100,6 +100,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Only a creature the initiator may fight (FactionHarm): taunting a neutral or allied NPC would start a fight the
+			// harm rule then refused every blow of.
+			if (!FactionHarm.MayHarm(initiator, target, out _))
+			{
+				return;
+			}
+
 			brain.ApplyTaunt(initiator, ThreatPoints, GuaranteeTopThreat, LeadOverHighest, ForceImmediateTargetSwitch);
 		}
 	}

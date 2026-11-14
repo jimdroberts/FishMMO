@@ -1,4 +1,5 @@
 ﻿using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using FishMMO.Shared.Core;
@@ -70,27 +71,58 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		private void OnClientAchievementUpdateBroadcastReceived(AchievementUpdateBroadcast msg, Channel channel)
 		{
-			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.TemplateID);
-			if (template != null)
-			{
-				SetAchievement(template.ID, msg.Tier, msg.Value);
-			}
-			else
-			{
-				//Log.Debug($"Achievement Template not found while Updating: {msg.TemplateID}");
-			}
+			ApplyServerUpdate(msg, announceCompletions: true);
 		}
 
 		/// <summary>
-		/// Handles a broadcast from the server to update multiple achievements at once.
+		/// Handles a broadcast from the server to update multiple achievements at once: the login load
+		/// and coalesced progress. Neither completes a tier, so nothing is announced.
 		/// </summary>
 		/// <param name="msg">The multiple achievement update message.</param>
 		/// <param name="channel">The network channel.</param>
 		private void OnClientAchievementUpdateMultipleBroadcastReceived(AchievementUpdateMultipleBroadcast msg, Channel channel)
 		{
+			if (msg.Achievements == null)
+			{
+				return;
+			}
 			foreach (AchievementUpdateBroadcast subMsg in msg.Achievements)
 			{
-				OnClientAchievementUpdateBroadcastReceived(subMsg, channel);
+				ApplyServerUpdate(subMsg, announceCompletions: false);
+			}
+		}
+
+		/// <summary>
+		/// Installs the server's value for one achievement and, when asked, raises
+		/// <see cref="IAchievementController.OnCompleteAchievement"/> for every tier it newly completes.
+		/// </summary>
+		/// <remarks>
+		/// Progress is counted on the server only (<c>AchievementIncrementAction</c> is server-gated), so
+		/// the client's <see cref="Increment(AchievementTemplate, uint)"/> never runs and the completion
+		/// event — which the achievement popup listens to — was never raised on a client. The tier the
+		/// server reports is the authority; a rise from the tier held here is the completion. Only the
+		/// single live update announces: the server sends a tier change that way and at once, while the
+		/// batched broadcast is the login load (every tier already earned) and coalesced progress.
+		/// </remarks>
+		private void ApplyServerUpdate(AchievementUpdateBroadcast msg, bool announceCompletions)
+		{
+			AchievementTemplate template = AchievementTemplate.Get<AchievementTemplate>(msg.TemplateID);
+			if (template == null)
+			{
+				return;
+			}
+
+			byte previousTier = achievements.TryGetValue(template.ID, out Achievement existing) ? existing.CurrentTier : (byte)0;
+			SetAchievement(template.ID, msg.Tier, msg.Value);
+
+			if (!announceCompletions || msg.Tier <= previousTier || template.Tiers == null)
+			{
+				return;
+			}
+			int end = Math.Min(msg.Tier, template.Tiers.Count);
+			for (int i = previousTier; i < end; ++i)
+			{
+				IAchievementController.OnCompleteAchievement?.Invoke(Character, template, template.Tiers[i]);
 			}
 		}
 #endif

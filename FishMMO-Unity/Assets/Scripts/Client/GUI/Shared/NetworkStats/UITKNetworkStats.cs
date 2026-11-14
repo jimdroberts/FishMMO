@@ -141,6 +141,8 @@ namespace FishMMO.Client
 		private Label headlineBadge;
 		private VisualElement graph;
 		private Label graphScaleLabel;
+		private Label syncCorrectionsLabel;
+		private Label syncHitsLabel;
 		private NetworkStatsGraphSeries downSeries;
 		private NetworkStatsGraphSeries upSeries;
 
@@ -184,6 +186,9 @@ namespace FishMMO.Client
 			headlineBadge = Root.Q<Label>(HEADLINE_BADGE_NAME);
 			graph = Root.Q<VisualElement>(GRAPH_NAME);
 			graphScaleLabel = Root.Q<Label>(GRAPH_SCALE_NAME);
+			syncCorrectionsLabel = Root.Q<Label>("netstats-sync-corrections");
+			syncHitsLabel = Root.Q<Label>("netstats-sync-hits");
+			PredictionHealth.EnsureSubscribed();
 
 			if (rowTooltips == null)
 			{
@@ -318,6 +323,16 @@ namespace FishMMO.Client
 			readout = sampler.Readout();
 
 			SetText(backendLabel, NetworkStatsPresentation.BackendCaption(in readout));
+
+			// Prediction health, last minute: corrections over 1 cm (largest in brackets), and rejected predicted hits.
+			int corrections = PredictionHealth.CorrectionsPerMinute;
+			SetText(syncCorrectionsLabel, corrections > 0
+				? $"{corrections} ({PredictionHealth.LargestCorrectionMetres * 100f:0} cm)"
+				: "0");
+			double rejected = PredictionHealth.RejectedHitShare;
+			SetText(syncHitsLabel, double.IsNaN(rejected)
+				? "—"
+				: $"{rejected * 100.0:0}% of {PredictionHealth.HitsAnswered}");
 
 			NetworkStatsPresentation.Headline(in readout, out string down, out string up);
 			SetText(headlineDown, down);

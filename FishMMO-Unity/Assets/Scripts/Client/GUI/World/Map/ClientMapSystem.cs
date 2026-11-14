@@ -50,6 +50,21 @@ namespace FishMMO.Client
 		/// </remarks>
 		private const double SaveDebounce = 6.0;
 
+		/// <summary>
+		/// The longest an explored chunk may go unwritten, in seconds, however busy the walking.
+		/// </summary>
+		/// <remarks>
+		/// <para><b>The debounce alone never fired while travelling.</b> Every newly explored chunk
+		/// pushed the save back another <see cref="SaveDebounce"/>, and at forty-metre chunks a
+		/// running or mounted character enters a new one every few seconds — so a session spent
+		/// exploring wrote nothing until the character stood still for six seconds. On a web build
+		/// that also had no quit flush, closing the tab threw away the whole session's map, which
+		/// was reported as the explored map "not loading".</para>
+		/// <para>A write is a few kilobytes even for a five-kilometre scene, so capping the wait
+		/// costs nothing worth measuring.</para>
+		/// </remarks>
+		private const double MaxSaveDelay = 15.0;
+
 		/// <summary>The character whose map is being shown.</summary>
 		public static IPlayerCharacter Character { get; private set; }
 
@@ -109,6 +124,12 @@ namespace FishMMO.Client
 
 		/// <summary>Time, on the unscaled clock, at which a pending save comes due. Zero for none.</summary>
 		private static double saveDueTime;
+
+		/// <summary>
+		/// Time, on the unscaled clock, of the first change not yet written. Zero when none is
+		/// pending. Bounds <see cref="saveDueTime"/> by <see cref="MaxSaveDelay"/>.
+		/// </summary>
+		private static double unsavedSince;
 
 		/// <summary>Time, on the unscaled clock, of the next sweep of destroyed markers.</summary>
 		private static double nextPruneTime;
@@ -172,9 +193,15 @@ namespace FishMMO.Client
 
 			if (character == null)
 			{
+				WebGLPageLifecycle.PageHidden -= Flush;
 				UnloadScene();
 				return;
 			}
+
+			/* A closed tab gets no quit flush and stops the frame loop that the save timer runs
+			 * on, so the page-hide notification is the only chance a web build has to write the
+			 * last stretch of walking. Subscribing is idempotent and inert off the web. */
+			WebGLPageLifecycle.PageHidden += Flush;
 
 			/* The scene the character is standing in, which inside an instance is the instance
 			 * scene and not SceneName. The server keys waypoint unlocks and validates travel
@@ -234,13 +261,14 @@ namespace FishMMO.Client
 				}
 				else if (Fog.Reveal(transform.position))
 				{
-					saveDueTime = now + SaveDebounce;
+					ScheduleSave(now);
 				}
 			}
 
 			if (saveDueTime > 0.0 && now >= saveDueTime)
 			{
 				saveDueTime = 0.0;
+				unsavedSince = 0.0;
 				SaveFog();
 			}
 
@@ -268,11 +296,24 @@ namespace FishMMO.Client
 		/// </remarks>
 		public static void Flush()
 		{
-			if (saveDueTime > 0.0)
-			{
-				saveDueTime = 0.0;
-			}
+			saveDueTime = 0.0;
+			unsavedSince = 0.0;
 			SaveFog();
+		}
+
+		/// <summary>
+		/// Pushes the pending save back by the debounce, but never past <see cref="MaxSaveDelay"/>
+		/// after the first change it is holding.
+		/// </summary>
+		/// <param name="now">The unscaled clock.</param>
+		private static void ScheduleSave(double now)
+		{
+			if (unsavedSince <= 0.0)
+			{
+				unsavedSince = now;
+			}
+
+			saveDueTime = Math.Min(now + SaveDebounce, unsavedSince + MaxSaveDelay);
 		}
 
 		/// <summary>
@@ -341,6 +382,7 @@ namespace FishMMO.Client
 			Notes.Clear();
 			nextNoteID = 1;
 			saveDueTime = 0.0;
+			unsavedSince = 0.0;
 			nextRevealTime = 0.0;
 			revealRefusalReported = false;
 		}
@@ -472,7 +514,7 @@ namespace FishMMO.Client
 		{
 			if (revealed > 0)
 			{
-				saveDueTime = Time.unscaledTimeAsDouble + SaveDebounce;
+				ScheduleSave(Time.unscaledTimeAsDouble);
 			}
 
 			return revealed;
@@ -702,6 +744,7 @@ namespace FishMMO.Client
 		public static void Shutdown()
 		{
 			Flush();
+			WebGLPageLifecycle.PageHidden -= Flush;
 			UnloadScene();
 
 			Character = null;
@@ -738,7 +781,8 @@ namespace FishMMO.Client
 		/// <para>
 		/// Both failures have the same root: a whole-number percentage over a coarse grid. So the
 		/// grid is fine enough to be worth measuring and the readout shows the fraction —
-		/// <c>UITKMap</c> prints tenths. At this size one chunk is 0.13% and a hundred metres of
+		/// <c>UITKMap.FormatExplored</c> prints as many decimals as one chunk is worth (tenths here,
+		/// hundredths on a generated 4.6 km world). At this size one chunk is 0.13% and a hundred metres of
 		/// straight walking crosses two and a half of them, so the number climbs as the player
 		/// travels instead of lurching once a block.
 		/// </para>

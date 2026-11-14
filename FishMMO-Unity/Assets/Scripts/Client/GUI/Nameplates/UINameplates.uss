@@ -71,6 +71,23 @@
 }
 
 /*
+    Standing marks, drawn in the icon slot when a plate has no icon of its own. The art is white with a dark
+    outline; C# tints it with the viewer's standing colour (ColorVision), so the shape and the colour say the same.
+    Generated: crossed swords (hostile), lozenge (neutral), heater shield (friendly).
+*/
+.nameplate-icon--hostile {
+    background-image: url("Icons/NameplateHostile.png");
+}
+
+.nameplate-icon--neutral {
+    background-image: url("Icons/NameplateNeutral.png");
+}
+
+.nameplate-icon--friendly {
+    background-image: url("Icons/NameplateFriendly.png");
+}
+
+/*
     white-space: nowrap keeps a row breaking only where its writer put a newline, never on width:
     a name that wrapped would change the plate's height as the player walked toward it.
 

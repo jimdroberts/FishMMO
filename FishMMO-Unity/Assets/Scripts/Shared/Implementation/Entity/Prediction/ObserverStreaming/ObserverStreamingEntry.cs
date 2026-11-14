@@ -144,6 +144,12 @@ namespace FishMMO.Shared
 		public Vector3 Position { get; private set; }
 
 		/// <summary>
+		/// Moved more than a few centimetres since the previous pass. A still transform sends nothing after it settles, so the
+		/// byte budget charges it only a share of a moving one (ObserverStreamingPolicy.IdleCostShare).
+		/// </summary>
+		public bool MovedSinceLastPass { get; private set; } = true;
+
+		/// <summary>
 		/// Distance to the nearest PLAYER in this object's scene as of the last scheduling pass, or
 		/// <see cref="NoViewerDistance"/> when there is none.
 		/// </summary>
@@ -190,6 +196,9 @@ namespace FishMMO.Shared
 		/// <summary>Number of viewers this entry is currently rate limited for.</summary>
 		public int LimitedObserverCount => intervalsByClientId.Count;
 
+		/// <summary>Squared distance (5 cm) a character must move between passes to count as moving.</summary>
+		private const float MovedThresholdSqr = 0.05f * 0.05f;
+
 		/// <summary>
 		/// Why a per-observer interval was assigned. The engagement exemption honours one of these
 		/// and not the other, which is the whole reason the origin is recorded.
@@ -212,6 +221,12 @@ namespace FishMMO.Shared
 			/// This IS the bound on the engagement exemption, so the exemption must not cancel it.
 			/// </summary>
 			EngagedOverflow = 2,
+
+			/// <summary>
+			/// Slowed by the viewer's byte budget (ObserverStreamingPolicy.FitByteBudget). Never assigned to an engaged
+			/// character, which the budget keeps at its desired interval; like the relevance cap, an engaged observer is exempt.
+			/// </summary>
+			ByteBudget = 3,
 		}
 
 		/// <summary>One observer's assigned interval and which policy assigned it.</summary>
@@ -381,7 +396,9 @@ namespace FishMMO.Shared
 				}
 			}
 
+			Vector3 previous = Position;
 			Position = Transform.position;
+			MovedSinceLastPass = (Position - previous).sqrMagnitude > MovedThresholdSqr;
 
 			/* Reset before the pass ranks anything, and mark the measurement valid here rather than
 			 * after ranking: a scene with no players in it produces no viewer loop at all, and that
@@ -533,6 +550,9 @@ namespace FishMMO.Shared
 		/// relevance and knows nothing about distance, so without it a character standing next to its
 		/// attacker could be throttled to every 2nd tick and lag compensation would rewind to a pose
 		/// that was never rendered.</description></item>
+		/// <item><description>engaged, origin <see cref="IntervalOrigin.ByteBudget"/> → the cap interval.
+		/// The byte budget never slows a character the viewer is fighting or targeting, so whatever it did slow
+		/// is a bystander, near or not.</description></item>
 		/// <item><description>engaged, origin <see cref="IntervalOrigin.EngagedOverflow"/> → the cap
 		/// interval. That interval IS the bound on the exemption — assigned precisely because the
 		/// viewer already has <c>EngagedFullRateBudget</c> engaged characters at full rate — so
@@ -558,7 +578,12 @@ namespace FishMMO.Shared
 		{
 			if (engaged)
 			{
-				return capOrigin == IntervalOrigin.EngagedOverflow && capInterval > 1 ? capInterval : (byte)1;
+				/* The byte budget's interval is not exempt either: it is only ever assigned to a character the viewer
+				 * is NOT fighting or targeting (those are never slowed by it), so being inside the engagement radius is
+				 * no reason to discard it. Exempting it left a nearby crowd unbudgeted. */
+				return (capOrigin == IntervalOrigin.EngagedOverflow || capOrigin == IntervalOrigin.ByteBudget) && capInterval > 1
+					? capInterval
+					: (byte)1;
 			}
 			return capInterval > lodInterval ? capInterval : lodInterval;
 		}

@@ -1,0 +1,760 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1871709246293673807
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1243052260625837646}
+  m_Layer: 0
+  m_Name: MeshRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1243052260625837646
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1871709246293673807}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 7384954842214361304}
+  - {fileID: 7224747902967457952}
+  - {fileID: 7531567419100135345}
+  - {fileID: 264472249019026331}
+  m_Father: {fileID: 6495375483384920727}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2807285308115285697
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7384954842214361304}
+  - component: {fileID: 847723461160703634}
+  m_Layer: 0
+  m_Name: NameLabels
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7384954842214361304
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2807285308115285697}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.85, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1243052260625837646}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &847723461160703634
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2807285308115285697}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec1f9c8741254f67a74c53657f87e18d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Core.Nameplate
+  worldOffset: {x: 0, y: 0, z: 0}
+  visible: 0
+  priority: 0
+  styleAsset: {fileID: 0}
+  useCustomStyle: 0
+  customStyle:
+    FontSize: 0.25
+    NameTint: 1
+    NameColor: {r: 1, g: 1, b: 1, a: 1}
+    NameBlend: 1
+    SecondaryColor: {r: 0.82, g: 0.82, b: 0.86, a: 1}
+    LineHeight: 1
+    LineSpacing: 4
+    ShowBackground: 1
+    BackgroundTint: 1
+    BackgroundColor: {r: 0.04, g: 0.04, b: 0.06, a: 1}
+    BackgroundBlend: 0.3
+    BackgroundOpacity: 0.55
+    ShowBorder: 0
+    BorderTint: 1
+    BorderColor: {r: 0.85, g: 0.85, b: 0.9, a: 1}
+    BorderBlend: 0.75
+    BorderWidth: 1
+    CornerRadius: 4
+    PaddingHorizontal: 6
+    PaddingVertical: 2
+    MinWidth: 0
+    AnchorGap: 0
+    Icon: {fileID: 0}
+    IconPlacement: 0
+    IconSize: 0
+    IconSpacing: 4
+    IconTint: 0
+    IconBlend: 1
+--- !u!1 &4811273059840484731
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6495375483384920727}
+  - component: {fileID: 49462260382753988}
+  - component: {fileID: 7163688216170662259}
+  - component: {fileID: 7250114663715075110}
+  - component: {fileID: 2119787057571980410}
+  - component: {fileID: 7824644601122125574}
+  - component: {fileID: 2150267445961412781}
+  - component: {fileID: 2419637757703598923}
+  - component: {fileID: 3332016334047483617}
+  - component: {fileID: 2898743231479186744}
+  - component: {fileID: 3962825829099883798}
+  - component: {fileID: 9168136948286660220}
+  - component: {fileID: 1880843646148751759}
+  - component: {fileID: 6308388451046359136}
+  - component: {fileID: 251157398792487894}
+  - component: {fileID: 7246315852314852023}
+  - component: {fileID: 133104273134037835}
+  - component: {fileID: 7268034718613146375}
+  - component: {fileID: 6609252777704453673}
+  m_Layer: 6
+  m_Name: Simulated Player
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6495375483384920727
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1243052260625837646}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!136 &49462260382753988
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5
+  m_Height: 2
+  m_Direction: 1
+  m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &7163688216170662259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 062bf3d012d45c24daab9ccf68ee2be6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 0
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  settings:
+    Mode: 0
+    RaceOverrideID: 0
+    Culture: 
+    ModifierID: 0
+    GenderPolicy: 0
+    NameFormat: 1
+    TitlePolicy: 0
+    Register: 1
+    Profession: 
+    MaxTitleLength: 32
+    AllowCompoundTitle: 0
+    BiomeID: 0
+    CityType: 0
+    POIType: 0
+    ItemType: 0
+    RegionSeed: 
+    ObjectSeed: 
+--- !u!114 &7250114663715075110
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 26b716c41e9b56b4baafaf13a523ba2e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _localLevelOfDetailCalculationType: 0
+  _useLevelOfDetail: 0
+  _useRootLevelOfDetail: 1
+  NetworkObserver: {fileID: 0}
+  _enablePrediction: 1
+  _predictionType: 0
+  _localReconcileCorrectionType: 2
+  _graphicalObject: {fileID: 0}
+  _detachGraphicalObject: 0
+  _enableStateForwarding: 0
+  _networkTransform: {fileID: 0}
+  _ownerInterpolation: 1
+  _ownerSmoothedProperties: 255
+  _adaptiveInterpolation: 3
+  _spectatorSmoothedProperties: 255
+  _spectatorInterpolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  <PrefabId>k__BackingField: 2
+  <SpawnableCollectionId>k__BackingField: 0
+  <AssetPathHash>k__BackingField: 16890314822435253159
+  SceneId: 0
+  SerializedTransformProperties:
+    Position: {x: 0, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 0, y: 0, z: 0}
+    IsValid: 0
+  <IsNested>k__BackingField: 0
+  WasActiveDuringEdit: 0
+  WasActiveDuringEdit_Set1: 1
+  <ComponentIndex>k__BackingField: 0
+  <PredictedSpawn>k__BackingField: {fileID: 0}
+  <PredictedOwner>k__BackingField: {fileID: 0}
+  NetworkBehaviours:
+  - {fileID: 7163688216170662259}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 2119787057571980410}
+  - {fileID: 7824644601122125574}
+  - {fileID: 2150267445961412781}
+  - {fileID: 2419637757703598923}
+  - {fileID: 3332016334047483617}
+  - {fileID: 2898743231479186744}
+  InitializedParentNetworkBehaviour: {fileID: 0}
+  InitializedNestedNetworkObjects: []
+  RuntimeParentNetworkBehaviour: {fileID: 0}
+  RuntimeChildNetworkBehaviours: []
+  _isNetworked: 1
+  _isSpawnable: 1
+  _isGlobal: 0
+  _initializeOrder: 0
+  _preventDespawnOnDisconnect: 0
+  _defaultDespawnType: 0
+  _initializedTimestamp: 0
+--- !u!114 &2119787057571980410
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3d0ebacb7f3bee499ea9651cbb74449, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 3
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  BaseBreathSeconds: 30
+  BreathCapacityTemplateID: 0
+  DrowningDamageTemplateID: 0
+  LavaDamageTemplateID: 0
+  CharacterAttributeDatabase: {fileID: 11400000, guid: 8fe93c66f5bc53c45a7b0f8334be9016, type: 2}
+  HealthResourceTemplateID: -2113468379
+  HealthRegenerationTemplateID: 1880892706
+  ManaResourceTemplateID: 1606168262
+  ManaRegenerationTemplateID: -2144672577
+  StaminaResourceTemplateID: 2142067754
+  StaminaRegenerationTemplateID: -251416119
+  regenTickRate: 1
+  observedResourcePushInterval: 6
+  observedResourceOutOfCombatPushInterval: 12
+  observedResourceSecondaryPushInterval: 30
+--- !u!114 &7824644601122125574
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 284d97b8349b8724788d1bc43d606024, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 4
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  onBuffApplyTriggers: []
+  onBuffRemoveTriggers: []
+--- !u!114 &2150267445961412781
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 5
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  onDamageTriggers: []
+  onDamagedTriggers: []
+  onHealTriggers: []
+  onHealedTriggers: []
+  onKillTriggers: []
+  onKilledTriggers: []
+  onResurrectTriggers: []
+  onResurrectedTriggers: []
+  immortal: 0
+  combatDurationTicks: 600
+--- !u!114 &2419637757703598923
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 6
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  isAggressive: 0
+  onFactionChangeTriggers: []
+  raceTemplateID: -2095018830
+--- !u!114 &3332016334047483617
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1bd75748718f5d345b7ec85b59f4ddf9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 7
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  characterNameplate: {fileID: 847723461160703634}
+  meshRoot: {fileID: 1243052260625837646}
+  npcSeed: 0
+  npcGender: 0
+  IsCharmable: 0
+  MinimumRespawnTime: 30
+  MaximumRespawnTime: 60
+  CorpseDecayDuration: 30
+  EmptyCorpseDecayDuration: 5
+  CorpseInteractionRange: 4
+  LootTable: {fileID: 0}
+  onInteractTriggers: []
+  AttributeBonuses: {fileID: 0}
+  Abilities: []
+--- !u!114 &2898743231479186744
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 8
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  _componentConfiguration: 0
+  _synchronizeParent: 0
+  _packing:
+    Position: 1
+    Rotation: 1
+    Scale: 0
+  _positionPackingBits: 1
+  _positionCompressionScale: 100
+  _useScaledTime: 1
+  _interpolation: 2
+  _extrapolation: 2
+  _enableTeleport: 0
+  _teleportThreshold: 1
+  _clientAuthoritative: 0
+  _sendToOwner: 0
+  _interval: 1
+  _synchronizePosition: 1
+  _positionSensitivity: 0.01
+  _positionSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeRotation: 1
+  _rotationSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+  _synchronizeScale: 1
+  _scaleSensitivity: 0.001
+  _scaleSnapping:
+    X: 0
+    Y: 0
+    Z: 0
+--- !u!114 &3962825829099883798
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c71fd7f855ec523429999fc4e14a1928, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _overrideType: 1
+  _updateHostVisibility: 1
+  _observerConditions:
+  - {fileID: 11400000, guid: a42dd55b9b0e2524f8d7d2d0f621d179, type: 2}
+--- !u!114 &9168136948286660220
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eb1b972667baff74aabba2d7602c53d0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  AbilitySpawner: {fileID: 0}
+  AttackSpeedReductionTemplate: {fileID: 0}
+  CastSpeedReductionTemplate: {fileID: 0}
+  CooldownReductionTemplate: {fileID: 0}
+  ObserverPredictionWindowTicks: 1
+  BloodResourceConversionTemplate: {fileID: 0}
+  ChargedTemplate: {fileID: 0}
+  ChanneledTemplate: {fileID: 0}
+  onAbilityActivateTriggers: []
+  onAbilityCompleteTriggers: []
+--- !u!114 &1880843646148751759
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: caae36f1c31918fb3b93631b89c69b12, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+--- !u!114 &6308388451046359136
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f852b64f675784b4ebdf6e98b0726660, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CooldownController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+--- !u!114 &251157398792487894
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93091dc8efed97c08aae1898cd50ebc3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  bands:
+  - MaximumDistance: 40
+    Interval: 1
+  - MaximumDistance: 80
+    Interval: 2
+  - MaximumDistance: 140
+    Interval: 2
+  intervalScale: 1
+  evaluateInterval: 0.5
+  hysteresis: 0.15
+--- !u!114 &7246315852314852023
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df4fb99d96455b2948ee3a658096492b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPositionHistory
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  maximumRewindMilliseconds: 500
+--- !u!114 &133104273134037835
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
+  Type: 10
+  Visibility: 0
+  Icon: {fileID: 0}
+  Tint: {r: 1, g: 1, b: 1, a: 1}
+  Label: Bank
+  IconSize: 14
+  ClampToEdge: 0
+  Priority: 0
+  ShowOnMinimap: 1
+  ShowOnWorldMap: 1
+  MarkerAnchor: {fileID: 0}
+--- !u!114 &7268034718613146375
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e7330d2c79dca4b428d96b86dd591417, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.TargetController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+  LayerMask:
+    serializedVersion: 2
+    m_Bits: 193
+  onTargetChangeTriggers: []
+  onTargetClearTriggers: []
+--- !u!114 &6609252777704453673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4811273059840484731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d1546cc7a45eb8fb2b12984901c73d94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterAnimationController
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 7250114663715075110}
+  _networkObjectCache: {fileID: 7250114663715075110}
+--- !u!1 &5335545856828808014
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7531567419100135345}
+  m_Layer: 0
+  m_Name: AbilitySpawnPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7531567419100135345
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5335545856828808014}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0.8, z: 0.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1243052260625837646}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &7843950298589712471
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7224747902967457952}
+  m_Layer: 0
+  m_Name: CameraFollowPoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7224747902967457952
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7843950298589712471}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.35, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1243052260625837646}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &5171963433779791815
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1243052260625837646}
+    m_Modifications:
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 0.9855185
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.9855185
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 0.9855185
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5703467943376656102, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+      propertyPath: m_Name
+      value: TestHuman
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+--- !u!4 &264472249019026331 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4930624984645848156, guid: 1d15572bf12df43ab8e7ed6bb68b8857, type: 3}
+  m_PrefabInstance: {fileID: 5171963433779791815}
+  m_PrefabAsset: {fileID: 0}

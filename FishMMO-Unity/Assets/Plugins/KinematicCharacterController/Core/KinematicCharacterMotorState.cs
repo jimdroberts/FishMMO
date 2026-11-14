@@ -111,6 +111,12 @@ namespace KinematicCharacterController
 		/// </summary>
 		public byte ClimbTicks;
 
+		/// <summary>
+		/// FISHMMO EDIT: game-master flight (/gm fly): no gravity, no ground solving and no collisions, moving the way the
+		/// camera looks. Set only by the server; reconciled so the owner flies the same path.
+		/// </summary>
+		public bool IsFlying;
+
 		private uint tick;
 
 		/// <inheritdoc/>

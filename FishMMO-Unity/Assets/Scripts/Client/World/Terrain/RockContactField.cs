@@ -120,11 +120,29 @@ namespace FishMMO.Client
 			public Mesh Mesh;
 			public Bounds Bounds;
 			public bool Built;
+			/// <summary>The renderers whose rocks wear this shape; the slot is freed when the last one goes.</summary>
+			public readonly HashSet<TerrainGpuRenderer> Users = new HashSet<TerrainGpuRenderer>();
+			/// <summary>A freed slot: no rock references it, and the next new shape takes it (<see cref="freeShapes"/>).</summary>
+			public bool Free => Mesh == null;
 		}
 
 		private static readonly List<Shape> shapes = new List<Shape>();
 		private static readonly List<Material> looks = new List<Material>();
 		private static readonly Dictionary<Material, int> lookOf = new Dictionary<Material, int>();
+
+		/*
+		 * Ownership. Shapes and looks are keyed by mesh and material OBJECT, and a world's are new objects every time it
+		 * loads (bundles reloaded), so a slot kept after its world left is never matched again: kept, the registries grew by
+		 * a full set per load until the atlas passed the device's 3D texture limit (2048 deep) on the third login and every
+		 * frame failed. Each slot therefore records the renderers using it and is freed when the last of them is disposed,
+		 * and a freed slot is reused before the lists grow. Indices are stable while in use (a renderer's rock tags carry
+		 * them), so freed slots are never compacted away; they are only ever reused.
+		 */
+		private static readonly Dictionary<TerrainGpuRenderer, List<int>> shapesOf = new Dictionary<TerrainGpuRenderer, List<int>>();
+		private static readonly Dictionary<TerrainGpuRenderer, List<int>> looksOf = new Dictionary<TerrainGpuRenderer, List<int>>();
+		private static readonly Dictionary<int, HashSet<TerrainGpuRenderer>> lookUsers = new Dictionary<int, HashSet<TerrainGpuRenderer>>();
+		private static readonly SortedSet<int> freeShapes = new SortedSet<int>();
+		private static readonly SortedSet<int> freeLooks = new SortedSet<int>();
 
 		/// <summary>The shape whose field is being drawn (−1 none), its next slice and its mesh's buffers, held until its last slice.</summary>
 		private static int bakeShape = -1, bakeSlice;
@@ -218,6 +236,7 @@ namespace FishMMO.Client
 			shapeOf.Clear();
 			looks.Clear();
 			lookOf.Clear();
+			ClearOwnership();
 			renderers.Clear();
 			bakeShape = -1;
 			demand = new float[0];
@@ -229,6 +248,15 @@ namespace FishMMO.Client
 			loadLogged = false;
 			atlasFailed = false;
 			Forget();
+		}
+
+		private static void ClearOwnership()
+		{
+			shapesOf.Clear();
+			looksOf.Clear();
+			lookUsers.Clear();
+			freeShapes.Clear();
+			freeLooks.Clear();
 		}
 
 		/// <summary>Gathers the grid again next time (its buffers new, or the field switched off and its globals cleared).</summary>
@@ -296,17 +324,104 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A renderer that is going (its scene unloading). With the last one gone, every shape and look is forgotten: they
-		/// are keyed by mesh and material object, and the next world's (even the same world loaded again) are new objects,
-		/// so keeping them grew the registries by a full set per load until the atlas passed the 3D texture limit.
+		/// A renderer that is going (its scene unloading): every shape and look only it used is freed for reuse. With the last
+		/// renderer gone everything is dropped, the atlas too, so the next world starts from empty lists.
 		/// </summary>
 		public static void RemoveRenderer(TerrainGpuRenderer renderer)
 		{
-			renderers.Remove(renderer);
-			if (renderers.Count == 0 && (shapes.Count > 0 || looks.Count > 0))
+			if (renderer == null)
 			{
-				ForgetShapes();
+				return;
 			}
+			renderers.Remove(renderer);
+			if (renderers.Count == 0)
+			{
+				if (shapes.Count > 0 || looks.Count > 0)
+				{
+					ForgetShapes();
+				}
+				return;
+			}
+			bool freedAny = false;
+			if (shapesOf.TryGetValue(renderer, out List<int> ownShapes))
+			{
+				shapesOf.Remove(renderer);
+				foreach (int index in ownShapes)
+				{
+					if (index < 0 || index >= shapes.Count)
+					{
+						continue;
+					}
+					Shape shape = shapes[index];
+					if (shape.Users.Remove(renderer) && shape.Users.Count == 0 && !shape.Free)
+					{
+						FreeShape(index);
+						freedAny = true;
+					}
+				}
+			}
+			if (looksOf.TryGetValue(renderer, out List<int> ownLooks))
+			{
+				looksOf.Remove(renderer);
+				foreach (int index in ownLooks)
+				{
+					if (lookUsers.TryGetValue(index, out HashSet<TerrainGpuRenderer> users) && users.Remove(renderer) && users.Count == 0)
+					{
+						FreeLook(index);
+						freedAny = true;
+					}
+				}
+			}
+			if (freedAny)
+			{
+				// What is drawn names freed slots: built again from the renderers that are left.
+				bricksDirty = true;
+				RockFillets.Hide();
+				Forget();
+			}
+		}
+
+		/// <summary>Frees a shape slot: its mesh forgotten, its brick unused until a new shape takes the slot.</summary>
+		private static void FreeShape(int index)
+		{
+			Shape shape = shapes[index];
+			if (shape.Mesh != null && shapeOf.TryGetValue(shape.Mesh, out int at) && at == index)
+			{
+				shapeOf.Remove(shape.Mesh);
+			}
+			if (bakeShape == index)
+			{
+				EndBake();
+				bakeShape = -1;
+			}
+			shape.Mesh = null;
+			shape.Bounds = default;
+			// Nothing to draw: the bake passes over it, and the gather never meets it (no rock carries its tag).
+			shape.Built = true;
+			freeShapes.Add(index);
+		}
+
+		/// <summary>Frees a look slot: its material forgotten, and the fillets' copy of it destroyed.</summary>
+		private static void FreeLook(int index)
+		{
+			lookUsers.Remove(index);
+			Material material = looks[index];
+			if (material != null && lookOf.TryGetValue(material, out int at) && at == index)
+			{
+				lookOf.Remove(material);
+			}
+			looks[index] = null;
+			RockFillets.ForgetLook(index);
+			freeLooks.Add(index);
+		}
+
+		private static void Own(Dictionary<TerrainGpuRenderer, List<int>> owned, TerrainGpuRenderer owner, int index)
+		{
+			if (!owned.TryGetValue(owner, out List<int> list))
+			{
+				owned[owner] = list = new List<int>();
+			}
+			list.Add(index);
 		}
 
 		/// <summary>Drops every shape and look and the atlas holding their fields; the next world registers its own.</summary>
@@ -317,6 +432,7 @@ namespace FishMMO.Client
 			shapeOf.Clear();
 			looks.Clear();
 			lookOf.Clear();
+			ClearOwnership();
 			bakeShape = -1;
 			demand = new float[0];
 			demandEye = new Vector3(float.NaN, float.NaN, float.NaN);
@@ -334,7 +450,10 @@ namespace FishMMO.Client
 				atlasBricksZ = 0;
 			}
 			atlasFailed = false;
-			Shader.SetGlobalTexture(SdfId, dummyAtlas);
+			if (dummyAtlas != null)
+			{
+				Shader.SetGlobalTexture(SdfId, dummyAtlas);
+			}
 			Forget();
 		}
 
@@ -342,7 +461,7 @@ namespace FishMMO.Client
 		/// The shape's brick for a rock model's levels (its field is drawn on a later frame), or −1 when none of its
 		/// meshes can be read. Shapes are shared by mesh across every renderer and model.
 		/// </summary>
-		public static int RegisterShape(TerrainGpuRenderer.PartSource[][] levels, Bounds localBounds)
+		public static int RegisterShape(TerrainGpuRenderer owner, TerrainGpuRenderer.PartSource[][] levels, Bounds localBounds)
 		{
 			Mesh mesh = Source(levels);
 			if (mesh == null)
@@ -351,6 +470,10 @@ namespace FishMMO.Client
 			}
 			if (shapeOf.TryGetValue(mesh, out int existing))
 			{
+				if (owner != null && shapes[existing].Users.Add(owner))
+				{
+					Own(shapesOf, owner, existing);
+				}
 				return existing;
 			}
 			// Padded so a point a crevice width off the surface is still inside the brick.
@@ -361,9 +484,31 @@ namespace FishMMO.Client
 				// The layer the rocks draw on, which the fillets draw on too (camera culling masks).
 				RockLayer = levels[0][0].Template.layer;
 			}
-			int index = shapes.Count;
-			shapes.Add(new Shape { Mesh = mesh, Bounds = localBounds });
+			int index;
+			Shape shape;
+			if (freeShapes.Count > 0)
+			{
+				// A freed slot first: the atlas only grows for shapes that are all in use at once.
+				index = freeShapes.Min;
+				freeShapes.Remove(index);
+				shape = shapes[index];
+				shape.Mesh = mesh;
+				shape.Bounds = localBounds;
+				shape.Built = false;
+				shape.Users.Clear();
+			}
+			else
+			{
+				index = shapes.Count;
+				shape = new Shape { Mesh = mesh, Bounds = localBounds };
+				shapes.Add(shape);
+			}
 			shapeOf[mesh] = index;
+			if (owner != null)
+			{
+				shape.Users.Add(owner);
+				Own(shapesOf, owner, index);
+			}
 			bricksDirty = true;
 			return index;
 		}
@@ -372,23 +517,44 @@ namespace FishMMO.Client
 		/// A rock model's look: its material (the plain one, before the renderer's indirect clone), shared by every model
 		/// that wears it; −1 when it has none. The fillets copy it (<see cref="RockFillets"/>).
 		/// </summary>
-		public static int RegisterLook(Material material)
+		public static int RegisterLook(TerrainGpuRenderer owner, Material material)
 		{
 			if (material == null)
 			{
 				return -1;
 			}
-			if (lookOf.TryGetValue(material, out int existing))
+			int index;
+			if (!lookOf.TryGetValue(material, out index))
 			{
-				return existing;
+				if (freeLooks.Count > 0)
+				{
+					index = freeLooks.Min;
+					freeLooks.Remove(index);
+					looks[index] = material;
+				}
+				else if (looks.Count >= MaxLooks)
+				{
+					return -1;
+				}
+				else
+				{
+					index = looks.Count;
+					looks.Add(material);
+				}
+				lookOf[material] = index;
 			}
-			if (looks.Count >= MaxLooks)
+			if (owner != null)
 			{
-				return -1;
+				if (!lookUsers.TryGetValue(index, out HashSet<TerrainGpuRenderer> users))
+				{
+					lookUsers[index] = users = new HashSet<TerrainGpuRenderer>();
+				}
+				if (users.Add(owner))
+				{
+					Own(looksOf, owner, index);
+				}
 			}
-			lookOf[material] = looks.Count;
-			looks.Add(material);
-			return looks.Count - 1;
+			return index;
 		}
 
 		/// <summary>The looks registered so far, by index.</summary>
@@ -1007,10 +1173,19 @@ namespace FishMMO.Client
 			int n = 0;
 			foreach (Shape s in shapes)
 			{
-				n += s.Built ? 1 : 0;
+				n += s.Built && !s.Free ? 1 : 0;
 			}
 			return n;
 		}
+
+		/// <summary>Shapes in use (slots not freed), for diagnostics and tests.</summary>
+		public static int LiveShapes => shapes.Count - freeShapes.Count;
+
+		/// <summary>Shape slots, freed ones included: what the atlas is sized for.</summary>
+		public static int ShapeSlots => shapes.Count;
+
+		/// <summary>Looks in use (slots not freed).</summary>
+		public static int LiveLooks => looks.Count - freeLooks.Count;
 
 		private static void Release()
 		{

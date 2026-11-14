@@ -205,6 +205,12 @@ namespace FishMMO.Client
 		/// <summary>Label showing how much of the scene has been explored.</summary>
 		private Label exploredLabel;
 
+		/// <summary>The explored count and grid size the readout last showed, so it is rebuilt only on change.</summary>
+		private int shownExploredChunks = -1;
+
+		/// <summary>See <see cref="shownExploredChunks"/>.</summary>
+		private int shownChunkCount = -1;
+
 		/// <summary>Label naming the region under the pointer.</summary>
 		private Label regionLabel;
 
@@ -621,11 +627,14 @@ namespace FishMMO.Client
 		/// Updates the explored-percentage readout.
 		/// </summary>
 		/// <remarks>
-		/// To a tenth of a percent, and floored rather than rounded. Whole numbers were the readout's
-		/// whole problem: over a grid of chunks each worth a bit over one percent, a value that only
-		/// ever moves in ones is indistinguishable from a counter that increments per chunk, which is
-		/// how it was reported. Printing the fraction is only half of that fix — the other half is
-		/// the grain, and <c>FogOfWarDefaults.ChunkSize</c> carries the reasoning.
+		/// Floored rather than rounded, with as many decimals as one chunk is worth. Whole numbers were
+		/// the readout's first problem: over a grid of chunks each worth a bit over one percent, a value
+		/// that only ever moves in ones is indistinguishable from a counter that increments per chunk.
+		/// A fixed tenth was the second: it was chosen for a thousand-metre scene, and on a generated
+		/// 4.6 km world (115 by 115 chunks, each 0.0076%) the tenths digit moved once per thirteen
+		/// chunks — half a kilometre of fresh ground — so the readout looked stuck. The precision is
+		/// now picked from the grid so one chunk moves roughly one unit of the last digit, between
+		/// one and three decimals.
 		/// <para>
 		/// Floored, like the whole-percent version was, because the number is a claim about how much
 		/// of the scene the player has seen: rounding 99.96 up to 100.0 would say they have been
@@ -645,14 +654,48 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (ClientMapSystem.Fog == null)
+			FogOfWarMap fog = ClientMapSystem.Fog;
+			if (fog == null)
 			{
+				shownExploredChunks = -1;
+				shownChunkCount = -1;
 				exploredLabel.text = string.Empty;
 				return;
 			}
 
-			int tenths = Mathf.FloorToInt(ClientMapSystem.Fog.ExploredFraction() * 1000.0f);
-			exploredLabel.text = $"Explored {tenths / 10}.{tenths % 10}%";
+			if (fog.ExploredChunkCount == shownExploredChunks && fog.ChunkCount == shownChunkCount)
+			{
+				return;
+			}
+			shownExploredChunks = fog.ExploredChunkCount;
+			shownChunkCount = fog.ChunkCount;
+
+			exploredLabel.text = FormatExplored(shownExploredChunks, shownChunkCount);
+		}
+
+		/// <summary>
+		/// Formats an explored readout with as many decimals as one chunk of the grid is worth.
+		/// </summary>
+		/// <param name="explored">Chunks explored.</param>
+		/// <param name="total">Chunks in the scene.</param>
+		/// <returns>The readout, e.g. "Explored 0.76%".</returns>
+		/// <remarks>Integer arithmetic throughout, so it floors exactly and never prints a culture's comma.</remarks>
+		public static string FormatExplored(int explored, int total)
+		{
+			if (total <= 0)
+			{
+				return string.Empty;
+			}
+
+			// One chunk is 100/total percent; round(log10(total/100)) decimals puts that near one unit of the last digit.
+			int decimals = Mathf.Clamp(Mathf.RoundToInt(Mathf.Log10(total / 100.0f)), 1, 3);
+			long scale = decimals == 1 ? 10L : decimals == 2 ? 100L : 1000L;
+
+			long scaled = ((long)explored * 100L * scale) / total;
+			long whole = scaled / scale;
+			long fraction = scaled % scale;
+
+			return $"Explored {whole}.{fraction.ToString().PadLeft(decimals, '0')}%";
 		}
 
 		/// <summary>

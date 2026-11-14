@@ -216,6 +216,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			commands.AddRange(BuildGameMasterModerationCommands());
 			commands.AddRange(BuildGameMasterSupportCommands());
 			commands.AddRange(BuildGameMasterWorldCommands());
+			commands.AddRange(BuildGameMasterPresenceCommands());
 
 			commands.Add(new OperatorCommand
 			{

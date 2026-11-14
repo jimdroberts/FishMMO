@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 	/// pack is calmed instead (the water's ice mask reads <see cref="Floes"/>), which is what pack ice does to a sea.
 	/// </para>
 	/// </remarks>
-	public sealed class PackIce : MonoBehaviour
+	public sealed class PackIce : MonoBehaviour, ITickPosed
 	{
 		/// <summary>One floe, for what reads the pack's cover (the water's calm): its centre in the world's x/z and its radius, m.</summary>
 		[Serializable]
@@ -65,11 +65,13 @@ namespace FishMMO.Shared
 		{
 			byScene[gameObject.scene.handle] = this;
 			placedLevel = float.NaN;
+			TickPoser.Add(this);
 			Changed?.Invoke(gameObject.scene);
 		}
 
 		private void OnDisable()
 		{
+			TickPoser.Remove(this);
 			if (byScene.TryGetValue(gameObject.scene.handle, out PackIce current) && current == this)
 			{
 				byScene.Remove(gameObject.scene.handle);
@@ -77,10 +79,22 @@ namespace FishMMO.Shared
 			Changed?.Invoke(gameObject.scene);
 		}
 
+		/// <summary>Without a network (an editor scene played on its own) nothing ticks the pack: it floats from the frame.</summary>
 		private void LateUpdate()
 		{
-			Float(WeatherQuery.CurrentTick);
+			TickPoser.Ensure();
+			if (FishNet.Managing.NetworkManager.Instances.Count == 0)
+			{
+				Float(WeatherQuery.CurrentTick);
+			}
 		}
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// Before every live and replayed tick, at the server tick it runs at (<see cref="TickPoser"/>), so a character is
+		/// simulated against the ice where it lay on that tick, on the server and on every tick its owner replays.
+		/// </remarks>
+		public bool PoseForTick(uint syncTick, double tickDelta) => PlaceAt(LevelAt(syncTick));
 
 		/// <summary>
 		/// Every chunk to the sea's still level at a tick. A pure function of the tick: the same pose on the server and every
@@ -88,10 +102,30 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void Float(uint tick)
 		{
-			float level = LevelAt(tick);
-			if (!float.IsNaN(placedLevel) && Mathf.Abs(level - placedLevel) < 0.002f)
+			if (PlaceAt(LevelAt(tick)))
 			{
-				return;
+				// Automatic transform sync is off: without this the ice is walked on where it was last synced.
+				Physics.SyncTransforms();
+			}
+		}
+
+		/// <summary>The grid the pack's level is placed on, m: a static collider re-placed for nothing costs the physics a re-insert.</summary>
+		private const float LevelStep = 0.002f;
+
+		/// <summary>
+		/// Every chunk to <paramref name="level"/>, snapped to <see cref="LevelStep"/>. True when the chunks moved.
+		/// </summary>
+		/// <remarks>
+		/// Snapped to a fixed grid rather than moved past a 2 mm hysteresis: the hysteresis made the placed level depend on
+		/// where it was placed before, so the server and a client (or a client before and during a replay) could hold the ice
+		/// up to 2 mm apart. On a grid it is a pure function of the tick, and still moves only when the level crosses a step.
+		/// </remarks>
+		private bool PlaceAt(float level)
+		{
+			level = Mathf.Round(level / LevelStep) * LevelStep;
+			if (!float.IsNaN(placedLevel) && level == placedLevel)
+			{
+				return false;
 			}
 			placedLevel = level;
 			for (int i = 0; i < Chunks.Length; i++)
@@ -104,8 +138,7 @@ namespace FishMMO.Shared
 				Vector3 p = chunk.position;
 				chunk.position = new Vector3(p.x, level, p.z);
 			}
-			// Automatic transform sync is off: without this the ice is walked on where it was last synced.
-			Physics.SyncTransforms();
+			return true;
 		}
 
 		/// <summary>The sea's still level under the pack at a tick, world y.</summary>

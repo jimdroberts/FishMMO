@@ -2,8 +2,10 @@
 #if UNITY_SERVER
 using FishNet.Broadcast;
 #endif
+using FishNet.Object.Synchronizing;
 using FishNet.Serializing;
 using FishNet.Transporting;
+using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
@@ -92,6 +94,72 @@ namespace FishMMO.Shared
 		/// Gets or sets whether the character is aggressive (treats others as enemies).
 		/// </summary>
 		public bool IsAggressive { get { return isAggressive; } set { isAggressive = value; } }
+
+		/// <summary>How long after a hit that needed it the aggression toggle may not be turned off.</summary>
+		/// <remarks>
+		/// Without it a player could strike a neutral, turn aggression off, and be beyond the reach of its retaliation (an
+		/// NPC may only harm an enemy or a player whose aggression is on).
+		/// </remarks>
+		public const float AggressionLockSeconds = 10f;
+
+		/// <summary>
+		/// The player's aggression toggle: written only by the server, read by the owner and every observer (and by a player
+		/// who arrives later), so every peer applies the same harm rule (<see cref="FactionHarm"/>) and draws the same
+		/// nameplate.
+		/// </summary>
+		private readonly SyncVar<bool> aggressionEnabled = new SyncVar<bool>(false, new SyncTypeSettings()
+		{
+			SendRate = 0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.Observers,
+			WritePermission = WritePermission.ServerOnly,
+		});
+
+		/// <summary>When, in <see cref="Time.time"/>, this character last harmed a target only its aggression allowed.</summary>
+		private float lastAggressiveHarm = float.NegativeInfinity;
+
+		/// <inheritdoc />
+		public bool AggressionEnabled => aggressionEnabled.Value;
+
+		/// <summary>Raised on every peer when the toggle changes: the character and its new state.</summary>
+		public static event Action<ICharacter, bool> OnAggressionChanged;
+
+		/// <summary>Seconds until the toggle may be turned off (0 when it may now).</summary>
+		public float AggressionLockRemaining => Mathf.Max(0f, lastAggressiveHarm + AggressionLockSeconds - Time.time);
+
+		/// <summary>Notes a hit only this character's aggression allowed (run where the hit is applied).</summary>
+		public void NoteAggressiveHarm()
+		{
+			lastAggressiveHarm = Time.time;
+		}
+
+		/// <summary>
+		/// Server: sets the toggle when the rules allow it. False, with the seconds left, when turning it off is still locked
+		/// by a recent aggressive hit.
+		/// </summary>
+		public bool TrySetAggression(bool enabled, out float lockedSeconds)
+		{
+			lockedSeconds = 0f;
+			if (!IsServerStarted || aggressionEnabled.Value == enabled)
+			{
+				return IsServerStarted;
+			}
+			if (!enabled && AggressionLockRemaining > 0f)
+			{
+				lockedSeconds = AggressionLockRemaining;
+				return false;
+			}
+			aggressionEnabled.Value = enabled;
+			return true;
+		}
+
+		private void OnAggressionSyncChanged(bool previous, bool next, bool asServer)
+		{
+			if (previous != next)
+			{
+				OnAggressionChanged?.Invoke(Character, next);
+			}
+		}
 
 		/// <summary>
 		/// Public accessor for all factions and their standing values.
@@ -276,6 +344,8 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
+			aggressionEnabled.OnChange -= OnAggressionSyncChanged;
+			aggressionEnabled.OnChange += OnAggressionSyncChanged;
 
 			MarkAllFactionsDirty();
 		}
@@ -657,6 +727,12 @@ namespace FishMMO.Shared
 			Neutral.Clear();
 			Hostile.Clear();
 			FactionsAreTemplateDerived = false;
+
+			lastAggressiveHarm = float.NegativeInfinity;
+			if (asServer && aggressionEnabled.Value)
+			{
+				aggressionEnabled.Value = false;
+			}
 
 #if UNITY_SERVER
 			/* The subscription first: it is keyed off the dirty set, and clearing the set without
@@ -1414,6 +1490,29 @@ namespace FishMMO.Shared
 			return FactionAllianceLevel.Neutral;
 		}
 
+		/// <inheritdoc />
+		public FactionAllianceLevel GetDisplayedAllianceLevel(IFactionController otherFactionController)
+		{
+			if (otherFactionController == null)
+			{
+				return FactionAllianceLevel.Neutral;
+			}
+			// Inside an arena the teams decide, whatever anyone's toggle says (as FactionHarm).
+			if (ArenaTeamRegistry.TryResolveAlliance(Character, otherFactionController.Character, out FactionAllianceLevel arenaLevel))
+			{
+				return arenaLevel;
+			}
+			// A player whose aggression is on may be struck by anyone outside their party and guild (FactionHarm), so
+			// everyone but those companions sees them as hostile.
+			if (IsAggressive || otherFactionController.IsAggressive ||
+				(otherFactionController.AggressionEnabled && !ReferenceEquals(otherFactionController, this) &&
+				 !FactionHarm.AreCompanions(Character, otherFactionController.Character)))
+			{
+				return FactionAllianceLevel.Enemy;
+			}
+			return GetAllianceLevel(otherFactionController);
+		}
+
 		/// <summary>
 		/// Gets the color representing the alliance level between this character and another faction controller.
 		/// Green for Ally, Sky Blue for Neutral, Red for Enemy or Aggressive.
@@ -1434,12 +1533,7 @@ namespace FishMMO.Shared
 
 			/* The colours follow the player's colour vision (ColorVision): red against green, the game's
 			 * own pair, is exactly the pair red-green colour blindness cannot tell apart. */
-			if (IsAggressive || otherFactionController.IsAggressive)
-			{
-				return ColorVision.Hostile;
-			}
-
-			FactionAllianceLevel allianceLevel = GetAllianceLevel(otherFactionController);
+			FactionAllianceLevel allianceLevel = GetDisplayedAllianceLevel(otherFactionController);
 
 			switch (allianceLevel)
 			{

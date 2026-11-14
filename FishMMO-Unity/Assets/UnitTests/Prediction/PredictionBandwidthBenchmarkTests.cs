@@ -307,8 +307,14 @@ namespace FishMMO.UnitTests
 			 * where it was rather than raised on an unmeasured guess.
 			 *
 			 * If this floor needs to move, check that it is a real regression first — the message
-			 * below names the usual cause, and it is still the right thing to look at. */
-			AssertSaving(Measure("KinematicCharacterMotorState", "walking", standing, walking), 72.0);
+			 * below names the usual cause, and it is still the right thing to look at.
+			 *
+			 * Lowered from 72% to 65% on 2026-11-13, deliberately: position, rotation and both velocities are now
+			 * LOSSLESS (LosslessFloatDelta) so a reconcile restores the server's state bit for bit. Measured: full 91 B
+			 * (exact rotation, was 83 with the 64-bit packing), walking delta 28 B, about 3 B over the old rounded form,
+			 * mostly the 22-degree turn. The rounded form restored the owner a millimetre or two off and millimetre
+			 * thresholds then decided differently on the replay. */
+			AssertSaving(Measure("KinematicCharacterMotorState", "walking", standing, walking), 65.0);
 
 			KinematicCharacterMotorState jumping = walking;
 			jumping.Position = walking.Position + new Vector3(0.12f, 0.4f, 0.04f);

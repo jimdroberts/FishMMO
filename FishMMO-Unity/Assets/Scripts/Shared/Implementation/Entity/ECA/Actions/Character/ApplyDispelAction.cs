@@ -74,6 +74,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Stripping someone's buffs is hostile; stripping only their debuffs is a cleanse, which anyone may give. So a dispel
+			 * that may take buffs answers to the harm rule (CharacterEvade, FactionHarm) when it lands on another character. */
+			if (IncludeBuffs && !ReferenceEquals(target, initiator) && CharacterEvade.RefusesHostileEffects(target, initiator))
+			{
+				return;
+			}
+
 			if (target.TryGet(out IBuffController defenderBuffController))
 			{
 				/* This event chain's OWN stream, never the shared generator, because this action is

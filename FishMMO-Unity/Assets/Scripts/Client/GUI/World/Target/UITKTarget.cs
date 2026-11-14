@@ -59,6 +59,15 @@ namespace FishMMO.Client
 		/// <summary>Name of a card's target name label element.</summary>
 		private const string NAME_LABEL_NAME = "target-name";
 
+		/// <summary>Name of a card's standing mark element.</summary>
+		private const string MARK_NAME = "target-mark";
+
+		/// <summary>USS modifier classes carrying each standing mark's art (<c>UITarget.uss</c>), indexed by <see cref="NameplateMark"/>.</summary>
+		private static readonly string[] MarkClasses = { null, "target-mark--hostile", "target-mark--neutral", "target-mark--friendly" };
+
+		/// <summary>Seconds between re-reads of the framed characters' standing, the nameplate sweep's cadence.</summary>
+		private const float STANDING_REFRESH_SECONDS = 0.2f;
+
 		/// <summary>Name of a card's target faction badge element.</summary>
 		private const string FACTION_LABEL_NAME = "target-faction";
 
@@ -144,6 +153,8 @@ namespace FishMMO.Client
 			public Label NameLabel;
 			/// <summary>Cached reference to the faction badge element.</summary>
 			public Label FactionLabel;
+			/// <summary>Cached reference to the standing mark element.</summary>
+			public VisualElement MarkElement;
 			/// <summary>Cached reference to the health fill element.</summary>
 			public VisualElement HealthFill;
 			/// <summary>Cached reference to the health bar container element.</summary>
@@ -180,6 +191,8 @@ namespace FishMMO.Client
 			public Color DisplayColor = Color.white;
 			/// <summary>The faction standing badge text, or empty when unknown.</summary>
 			public string DisplayFaction = string.Empty;
+			/// <summary>The standing mark (swords, lozenge, shield), drawn in <see cref="DisplayColor"/>.</summary>
+			public NameplateMark DisplayMark;
 			/// <summary>True when the target has a health resource to show.</summary>
 			public bool HasHealth;
 			/// <summary>The health bar fill fraction.</summary>
@@ -243,6 +256,7 @@ namespace FishMMO.Client
 				Root = panelRoot?.Q(RootName);
 				NameLabel = Root?.Q<Label>(NAME_LABEL_NAME);
 				FactionLabel = Root?.Q<Label>(FACTION_LABEL_NAME);
+				MarkElement = Root?.Q(MARK_NAME);
 				HealthFill = Root?.Q(HEALTH_FILL_NAME);
 				HealthBar = Root?.Q(HEALTH_BAR_NAME);
 				HealthText = Root?.Q<Label>(HEALTH_TEXT_NAME);
@@ -262,6 +276,7 @@ namespace FishMMO.Client
 				DisplayName = string.Empty;
 				DisplayFaction = string.Empty;
 				DisplayColor = Color.white;
+				DisplayMark = NameplateMark.None;
 				HasHealth = false;
 				HealthFraction = 0.0f;
 				HealthValueText = string.Empty;
@@ -286,6 +301,9 @@ namespace FishMMO.Client
 		/// disagree.
 		/// </summary>
 		private readonly TargetCard pinnedCard = new TargetCard(PINNED_CARD_NAME);
+
+		/// <summary>Unscaled time of the next standing re-read; see <see cref="OnTick"/>.</summary>
+		private float nextStandingRefreshTime;
 
 		/// <summary>Detached icons available for reuse by either card.</summary>
 		private readonly List<BuffIcon> iconPool = new List<BuffIcon>();
@@ -445,6 +463,22 @@ namespace FishMMO.Client
 			if (pinnedCard.HasTarget && RefreshHealth(pinnedCard))
 			{
 				ApplyHealthElements(pinnedCard);
+			}
+
+			/* Standing moves while a card is up — the framed player flips aggression, an arena seats
+			 * teams, a faction turns — and a pin can stay up for a whole fight. Re-read at the
+			 * nameplate sweep's cadence so the card's colour and mark never lag the plate's. */
+			if (Time.unscaledTime >= nextStandingRefreshTime)
+			{
+				nextStandingRefreshTime = Time.unscaledTime + STANDING_REFRESH_SECONDS;
+				if (hoverCard.HasTarget && RefreshStanding(hoverCard))
+				{
+					ApplyStandingElements(hoverCard);
+				}
+				if (pinnedCard.HasTarget && RefreshStanding(pinnedCard))
+				{
+					ApplyStandingElements(pinnedCard);
+				}
 			}
 
 			TickBuffFills(hoverCard);
@@ -719,17 +753,7 @@ namespace FishMMO.Client
 			card.Character = character;
 			card.Interactable = interactable;
 
-			card.DisplayColor = Color.white;
-			card.DisplayFaction = string.Empty;
-
-			if (character != null &&
-				Character != null &&
-				Character.TryGet(out IFactionController factionController) &&
-				character.TryGet(out IFactionController targetFactionController))
-			{
-				card.DisplayColor = factionController.GetAllianceLevelColor(targetFactionController);
-				card.DisplayFaction = factionController.GetAllianceLevel(targetFactionController).ToString();
-			}
+			RefreshStanding(card);
 
 			card.DisplayName = interactable != null
 				? interactable.Name
@@ -810,6 +834,62 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Re-reads a card's standing — colour, mark and badge — reporting whether any of it changed.
+		/// </summary>
+		/// <param name="card">The card to refresh.</param>
+		/// <returns>True if anything needs repainting.</returns>
+		/// <remarks>
+		/// Answered by <see cref="ClientNameplateDisplay.Standing"/>, the rule the overhead plates use, so the card and
+		/// the plate over the same character always agree. The badge names the DISPLAYED standing for the same reason: it
+		/// used to name the faction table's answer, so a stranger with aggression on was drawn red under a "Neutral"
+		/// badge. The player's own card carries no badge; its colour and mark already say whether their aggression is on.
+		/// </remarks>
+		private bool RefreshStanding(TargetCard card)
+		{
+			Color color = Color.white;
+			NameplateMark mark = NameplateMark.None;
+			string faction = string.Empty;
+
+			if (card.Character != null && Character != null)
+			{
+				mark = ClientNameplateDisplay.Standing(Character, card.Character, out color);
+
+				if (!ReferenceEquals(card.Character, Character) &&
+					Character.TryGet(out IFactionController factionController) &&
+					card.Character.TryGet(out IFactionController targetFactionController))
+				{
+					faction = FactionBadgeText(factionController.GetDisplayedAllianceLevel(targetFactionController));
+				}
+			}
+
+			if (color == card.DisplayColor && mark == card.DisplayMark && faction == card.DisplayFaction)
+			{
+				return false;
+			}
+
+			card.DisplayColor = color;
+			card.DisplayMark = mark;
+			card.DisplayFaction = faction;
+			return true;
+		}
+
+		/// <summary>The badge text for a standing; constant strings, because the refresh runs five times a second.</summary>
+		private static string FactionBadgeText(FactionAllianceLevel level)
+		{
+			switch (level)
+			{
+				case FactionAllianceLevel.Ally:
+					return "Ally";
+				case FactionAllianceLevel.Neutral:
+					return "Neutral";
+				case FactionAllianceLevel.Enemy:
+					return "Enemy";
+				default:
+					return level.ToString();
+			}
+		}
+
+		/// <summary>
 		/// Re-reads a card's health, reporting whether the displayed numbers changed.
 		/// </summary>
 		/// <param name="card">The card to refresh.</param>
@@ -882,7 +962,34 @@ namespace FishMMO.Client
 			if (card.NameLabel != null)
 			{
 				card.NameLabel.text = card.DisplayName;
+			}
+
+			ApplyStandingElements(card);
+			ApplyHealthElements(card);
+			ApplyBuffElements(card);
+		}
+
+		/// <summary>
+		/// Writes a card's standing — name colour, mark and badge — into its elements.
+		/// </summary>
+		/// <param name="card">The card to paint.</param>
+		private static void ApplyStandingElements(TargetCard card)
+		{
+			if (card.NameLabel != null)
+			{
 				card.NameLabel.style.color = card.DisplayColor;
+			}
+
+			if (card.MarkElement != null)
+			{
+				for (int i = 1; i < MarkClasses.Length; ++i)
+				{
+					card.MarkElement.EnableInClassList(MarkClasses[i], (int)card.DisplayMark == i);
+				}
+				card.MarkElement.style.unityBackgroundImageTintColor = card.DisplayColor;
+				card.MarkElement.style.display = card.DisplayMark != NameplateMark.None
+					? DisplayStyle.Flex
+					: DisplayStyle.None;
 			}
 
 			if (card.FactionLabel != null)
@@ -892,9 +999,6 @@ namespace FishMMO.Client
 					? DisplayStyle.None
 					: DisplayStyle.Flex;
 			}
-
-			ApplyHealthElements(card);
-			ApplyBuffElements(card);
 		}
 
 		/// <summary>
@@ -1266,15 +1370,8 @@ namespace FishMMO.Client
 
 			if (card.Character != null)
 			{
-				Color color = Color.grey;
-				if (Character != null &&
-					Character.TryGet(out IFactionController factionController) &&
-					card.Character.TryGet(out IFactionController targetFactionController))
-				{
-					color = factionController.GetAllianceLevelColor(targetFactionController);
-				}
-
-				ShowCharacterNameplate(card.Character, color);
+				// The card's standing was resolved by the plates' own rule, so the plate keeps the colour the sweep gives it.
+				ShowCharacterNameplate(card.Character, card.DisplayColor);
 			}
 			else if (card.Interactable is Interactable interactable)
 			{

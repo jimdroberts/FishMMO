@@ -20,6 +20,28 @@ namespace FishMMO.Shared.Core
 	}
 
 	/// <summary>
+	/// The standing mark a plate carries in its icon slot when it has no icon of its own: what the viewer is to this
+	/// character, at a glance and without relying on colour alone.
+	/// </summary>
+	/// <remarks>
+	/// The art is the client's (<c>UINameplates.uss</c>, one class per mark); the plate only says which.
+	/// </remarks>
+	public enum NameplateMark : byte
+	{
+		/// <summary>No mark.</summary>
+		None = 0,
+
+		/// <summary>Crossed swords: may be fought (an enemy, or a player with aggression on, the viewer included).</summary>
+		Hostile = 1,
+
+		/// <summary>A lozenge: neither friend nor foe.</summary>
+		Neutral = 2,
+
+		/// <summary>A shield: party, guild, or an arena teammate.</summary>
+		Friendly = 3,
+	}
+
+	/// <summary>
 	/// Where a nameplate's icon sits relative to its rows.
 	/// </summary>
 	public enum NameplateIconPlacement : byte

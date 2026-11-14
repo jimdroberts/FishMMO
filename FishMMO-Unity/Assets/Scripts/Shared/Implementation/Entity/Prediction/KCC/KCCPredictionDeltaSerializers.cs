@@ -56,6 +56,9 @@ namespace FishMMO.Shared
 			// 1/256 remainder, for lag compensation.
 			writer.WriteUInt8Unpacked(value.ViewOffsetTicks);
 			writer.WriteUInt8Unpacked(value.ViewOffsetFraction);
+			// The exact view tick (offset from this input's tick) that supersedes the round-trip claim when present.
+			writer.WriteUInt16Unpacked(value.ViewTickOffset);
+			writer.WriteUInt8Unpacked(value.ViewTickFraction);
 			// Packed yaw/pitch rather than a quaternion — see AimDirectionCompression for why the
 			// wire format has to be one the producer can commit to exactly.
 			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.AimDirection));
@@ -79,6 +82,8 @@ namespace FishMMO.Shared
 				MoveFlags = reader.ReadInt32(),
 				ViewOffsetTicks = reader.ReadUInt8Unpacked(),
 				ViewOffsetFraction = reader.ReadUInt8Unpacked(),
+				ViewTickOffset = reader.ReadUInt16Unpacked(),
+				ViewTickFraction = reader.ReadUInt8Unpacked(),
 				AimDirection = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked()),
 				ActivationFlags = reader.ReadInt32(),
 				QueuedAbilityID = reader.ReadInt64(),
@@ -159,12 +164,19 @@ namespace FishMMO.Shared
 			 * broken WriteDeltaBoolean/ReadDeltaBoolean pair is a standing reminder that a
 			 * primitive whose reader consumes a different number of bytes than its writer emits is
 			 * indistinguishable from a working one until the stream is already misaligned. */
+			/* Both view claims ride one bit (the flags byte is full). Only one of them changes at a time: the client holds the
+			 * round-trip claim at zero once it sends the exact view tick, and the exact tick is resent only when it moves by
+			 * more than a sixteenth of a tick. */
 			if (fullSerialize ||
 				prev.ViewOffsetTicks != next.ViewOffsetTicks ||
-				prev.ViewOffsetFraction != next.ViewOffsetFraction)
+				prev.ViewOffsetFraction != next.ViewOffsetFraction ||
+				prev.ViewTickOffset != next.ViewTickOffset ||
+				prev.ViewTickFraction != next.ViewTickFraction)
 			{
 				writer.WriteUInt8Unpacked(next.ViewOffsetTicks);
 				writer.WriteUInt8Unpacked(next.ViewOffsetFraction);
+				writer.WriteUInt16Unpacked(next.ViewTickOffset);
+				writer.WriteUInt8Unpacked(next.ViewTickFraction);
 				flags |= VIEW_OFFSET_BIT;
 			}
 
@@ -240,6 +252,8 @@ namespace FishMMO.Shared
 			{
 				result.ViewOffsetTicks = reader.ReadUInt8Unpacked();
 				result.ViewOffsetFraction = reader.ReadUInt8Unpacked();
+				result.ViewTickOffset = reader.ReadUInt16Unpacked();
+				result.ViewTickFraction = reader.ReadUInt8Unpacked();
 			}
 
 			if ((flags & AIM_DIRECTION_BIT) != 0)
@@ -566,6 +580,8 @@ namespace FishMMO.Shared
 		private const byte EXT_CLIMB_PHASE_BIT = 1 << 1;
 		/// <summary>Extension flag for ClimbTicks changes.</summary>
 		private const byte EXT_CLIMB_TICKS_BIT = 1 << 2;
+		/// <summary>Extension flag for IsFlying changes.</summary>
+		private const byte EXT_IS_FLYING_BIT = 1 << 3;
 
 		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
@@ -582,7 +598,9 @@ namespace FishMMO.Shared
 			 * basis the movement input is projected onto. The 32-bit form measured 0.43 degrees
 			 * mean and 1.24 degrees worst, which is the same class of owner-versus-server drift the
 			 * aim quantisation was introduced to remove. Four bytes once a second per player. */
-			writer.WriteQuaternion64(value.Rotation);
+			// Exact, like every other field of the full form: a reconcile must restore the server's state bit for bit
+			// (see LosslessFloatDelta). Sixteen bytes once a second per player.
+			LosslessFloatDelta.WriteQuaternion(writer, value.Rotation);
 			writer.WriteVector3(value.BaseVelocity);
 			writer.WriteInt64(value.CurrentPlatformID);
 			writer.WriteBoolean(value.MustUnground);
@@ -599,6 +617,7 @@ namespace FishMMO.Shared
 			writer.WriteUInt16Unpacked(value.Climbable);
 			writer.WriteUInt8Unpacked(value.ClimbPhase);
 			writer.WriteUInt8Unpacked(value.ClimbTicks);
+			writer.WriteBoolean(value.IsFlying);
 		}
 
 		/// <summary>
@@ -609,7 +628,7 @@ namespace FishMMO.Shared
 			return new KinematicCharacterMotorState
 			{
 				Position = reader.ReadVector3(),
-				Rotation = reader.ReadQuaternion64(),
+				Rotation = LosslessFloatDelta.ReadQuaternion(reader),
 				BaseVelocity = reader.ReadVector3(),
 				CurrentPlatformID = reader.ReadInt64(),
 				MustUnground = reader.ReadBoolean(),
@@ -626,6 +645,7 @@ namespace FishMMO.Shared
 				Climbable = reader.ReadUInt16Unpacked(),
 				ClimbPhase = reader.ReadUInt8Unpacked(),
 				ClimbTicks = reader.ReadUInt8Unpacked(),
+				IsFlying = reader.ReadBoolean(),
 			};
 		}
 
@@ -673,13 +693,17 @@ namespace FishMMO.Shared
 			int startLength = writer.Length;
 			writer.WriteUInt16(0);
 
-			if (writer.WriteDeltaVector3(prev.Position, next.Position, fieldOption))
+			/* Lossless: the bit-pattern difference of each changed float (LosslessFloatDelta). FishNet's own vector and
+			 * quaternion deltas round to 1 mm / 1e-4 and drop smaller changes, so a reconcile restored the owner a
+			 * millimetre or two from the server and every threshold the motor decides on (the 5 mm ground probe on a steep
+			 * slope, a climb's arrival checks) could come out differently on the replay. */
+			if (LosslessFloatDelta.WriteVector3(writer, prev.Position, next.Position, fullSerialize))
 				flags |= POSITION_BIT;
 
-			if (writer.WriteDeltaQuaternion(prev.Rotation, next.Rotation, option: fieldOption))
+			if (LosslessFloatDelta.WriteQuaternion(writer, prev.Rotation, next.Rotation, fullSerialize))
 				flags |= ROTATION_BIT;
 
-			if (writer.WriteDeltaVector3(prev.BaseVelocity, next.BaseVelocity, fieldOption))
+			if (LosslessFloatDelta.WriteVector3(writer, prev.BaseVelocity, next.BaseVelocity, fullSerialize))
 				flags |= VELOCITY_BIT;
 
 			if (writer.WriteDeltaInt64(prev.CurrentPlatformID, next.CurrentPlatformID, fieldOption))
@@ -708,7 +732,7 @@ namespace FishMMO.Shared
 			if (CharacterTransientGroundingReportDeltaSerializer.WriteDelta(writer, prev.GroundingStatus, next.GroundingStatus, fieldOption))
 				flags |= GROUNDING_BIT;
 
-			if (writer.WriteDeltaVector3(prev.AttachedRigidbodyVelocity, next.AttachedRigidbodyVelocity, fieldOption))
+			if (LosslessFloatDelta.WriteVector3(writer, prev.AttachedRigidbodyVelocity, next.AttachedRigidbodyVelocity, fullSerialize))
 				flags |= ATTACHED_RB_VEL_BIT;
 
 			if (fullSerialize || prev.IsCrouching != next.IsCrouching)
@@ -761,6 +785,10 @@ namespace FishMMO.Shared
 			{
 				extension |= EXT_CLIMB_TICKS_BIT;
 			}
+			if (fullSerialize || prev.IsFlying != next.IsFlying)
+			{
+				extension |= EXT_IS_FLYING_BIT;
+			}
 			if (extension != 0)
 			{
 				writer.WriteUInt8Unpacked(extension);
@@ -775,6 +803,10 @@ namespace FishMMO.Shared
 				if ((extension & EXT_CLIMB_TICKS_BIT) != 0)
 				{
 					writer.WriteUInt8Unpacked(next.ClimbTicks);
+				}
+				if ((extension & EXT_IS_FLYING_BIT) != 0)
+				{
+					writer.WriteBoolean(next.IsFlying);
 				}
 				flags |= EXTENSION_BIT;
 			}
@@ -815,13 +847,13 @@ namespace FishMMO.Shared
 			KinematicCharacterMotorState result = prev;
 
 			if ((flags & POSITION_BIT) != 0)
-				result.Position = reader.ReadDeltaVector3(prev.Position);
+				result.Position = LosslessFloatDelta.ReadVector3(reader, prev.Position);
 
 			if ((flags & ROTATION_BIT) != 0)
-				result.Rotation = reader.ReadDeltaQuaternion(prev.Rotation);
+				result.Rotation = LosslessFloatDelta.ReadQuaternion(reader, prev.Rotation);
 
 			if ((flags & VELOCITY_BIT) != 0)
-				result.BaseVelocity = reader.ReadDeltaVector3(prev.BaseVelocity);
+				result.BaseVelocity = LosslessFloatDelta.ReadVector3(reader, prev.BaseVelocity);
 
 			if ((flags & PLATFORM_ID_BIT) != 0)
 				result.CurrentPlatformID = reader.ReadDeltaInt64(prev.CurrentPlatformID);
@@ -839,7 +871,7 @@ namespace FishMMO.Shared
 				result.GroundingStatus = CharacterTransientGroundingReportDeltaSerializer.ReadDelta(reader, prev.GroundingStatus);
 
 			if ((flags & ATTACHED_RB_VEL_BIT) != 0)
-				result.AttachedRigidbodyVelocity = reader.ReadDeltaVector3(prev.AttachedRigidbodyVelocity);
+				result.AttachedRigidbodyVelocity = LosslessFloatDelta.ReadVector3(reader, prev.AttachedRigidbodyVelocity);
 
 			if ((flags & IS_CROUCHING_BIT) != 0)
 				result.IsCrouching = reader.ReadBoolean();
@@ -868,6 +900,8 @@ namespace FishMMO.Shared
 					result.ClimbPhase = reader.ReadUInt8Unpacked();
 				if ((extension & EXT_CLIMB_TICKS_BIT) != 0)
 					result.ClimbTicks = reader.ReadUInt8Unpacked();
+				if ((extension & EXT_IS_FLYING_BIT) != 0)
+					result.IsFlying = reader.ReadBoolean();
 			}
 
 			return result;

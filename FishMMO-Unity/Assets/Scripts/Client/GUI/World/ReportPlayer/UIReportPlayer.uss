@@ -119,13 +119,7 @@
     white-space: normal;
 }
 
-.report-description > #unity-text-input {
-    -unity-text-align: upper-left;
-}
-
-.report-description > #unity-text-input .unity-text-element {
-    white-space: normal;
-}
+/* Top-left alignment and wrapping come from .fish-input--multiline in the theme. */
 
 .report-hint {
     white-space: normal;

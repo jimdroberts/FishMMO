@@ -608,7 +608,9 @@ namespace FishMMO.Shared
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
-				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
+				// Logged for the local player's own character only: every observed character takes this path once on
+				// spawn (its state arrives before any replicate), which is expected and would flood the log in a crowd.
+				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged && base.IsOwner)
 				{
 					// Expected until the first replicate arrives — reconcile corrects it.
 					Log.Debug("CooldownController",

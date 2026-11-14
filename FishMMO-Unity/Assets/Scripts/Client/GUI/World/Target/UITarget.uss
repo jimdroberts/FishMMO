@@ -69,6 +69,32 @@
 }
 
 /*
+    The standing mark, the same art the overhead plates draw (UINameplates.uss): crossed swords, lozenge, shield.
+    White with a dark outline; C# tints it with the standing colour and shows it only when there is a mark, so
+    the card and the plate over the character say the same thing in the same shape.
+*/
+.target-mark {
+    display: none;
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.target-mark--hostile {
+    background-image: url("../../Nameplates/Icons/NameplateHostile.png");
+}
+
+.target-mark--neutral {
+    background-image: url("../../Nameplates/Icons/NameplateNeutral.png");
+}
+
+.target-mark--friendly {
+    background-image: url("../../Nameplates/Icons/NameplateFriendly.png");
+}
+
+/*
     Colour is written inline from C# — it carries the target's faction standing,
     which is a per-target fact the stylesheet cannot know.
 */

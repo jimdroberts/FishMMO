@@ -71,7 +71,8 @@ namespace FishMMO.Shared
 			/* An evading NPC cannot be displaced: the same question the damage and debuff paths
 			 * ask (CharacterEvade), so no hostile route stays open during the walk home. Separate
 			 * from the Immortal test below, whose meaning is unchanged. */
-			if (CharacterEvade.RefusesHostileEffects(target))
+			// And a target the harm rule protects from this initiator (FactionHarm): a friend is not knocked about.
+			if (CharacterEvade.RefusesHostileEffects(target, initiator))
 			{
 				return;
 			}

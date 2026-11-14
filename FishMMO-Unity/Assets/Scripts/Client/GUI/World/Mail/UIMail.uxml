@@ -87,7 +87,7 @@
                 <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Subject" />
                 <ui:TextField name="mail-compose-subject" class="fish-input mail-compose__field" />
                 <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Message" />
-                <ui:TextField name="mail-compose-body" class="fish-input mail-compose__body" multiline="true" />
+                <ui:TextField name="mail-compose-body" class="fish-input fish-input--multiline mail-compose__body" multiline="true" />
 
                 <ui:Label class="fish-label fish-label--caption mail-compose__caption" text="Attach item" />
                 <ui:DropdownField name="mail-compose-item" class="fish-dropdown mail-compose__field" />

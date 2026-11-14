@@ -748,10 +748,10 @@ namespace FishMMO.Client
 			// trees (the vegetation twin) never do.
 			if (ContactMode > 0.5f && IsRock(resolved))
 			{
-				model.RockShape = RockContactField.RegisterShape(levels, localBounds);
+				model.RockShape = RockContactField.RegisterShape(this, levels, localBounds);
 				if (model.RockShape >= 0)
 				{
-					model.RockLook = RockContactField.RegisterLook(levels[0].Length > 0 ? levels[0][0].Material : null);
+					model.RockLook = RockContactField.RegisterLook(this, levels[0].Length > 0 ? levels[0][0].Material : null);
 				}
 				if (model.RockShape >= 0 && !anyRock)
 				{
@@ -1828,17 +1828,20 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Merges the pools a part joined for up to <see cref="PoolBudgetMilliseconds"/> (one at least); true once none is left.</summary>
+		/// <remarks>The budget grows while the loading screen covers the world (<see cref="SceneContentLoads.Budget"/>).</remarks>
 		private bool MergePools()
 		{
 			var watch = Stopwatch.StartNew();
+			double budget = SceneContentLoads.Budget(PoolBudgetMilliseconds);
 			bool ready = true;
+			mergeFrame = Time.frameCount;
 			foreach (MeshPool pool in pools.Values)
 			{
 				if (pool.Built == pool.Parts.Count)
 				{
 					continue;
 				}
-				if (mergedThisLayout > 0 && watch.Elapsed.TotalMilliseconds >= PoolBudgetMilliseconds)
+				if (mergedThisLayout > 0 && watch.Elapsed.TotalMilliseconds >= budget)
 				{
 					ready = false;
 					break;
@@ -1848,6 +1851,53 @@ namespace FishMMO.Client
 			}
 			mergedThisLayout = 0;
 			return ready;
+		}
+
+		/// <summary>The frame this renderer last merged pools (a layout ran); −1 never.</summary>
+		private int mergeFrame = -1;
+
+		/// <summary>
+		/// Frames since its last merge a renderer with pools left still counts as merging for the loading screen. A renderer
+		/// no camera lays out any more never finishes its pools, and must not hold the overlay to its deadline.
+		/// </summary>
+		private const int MergeStaleFrames = 4;
+
+		/// <summary>The loading screen's probe of prop pool merging (<see cref="SceneContentLoads.AddWork"/>).</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+		private static void AddSettleProbe()
+		{
+			if (Application.isPlaying)
+			{
+				SceneContentLoads.AddWork("props", () => CountPoolParts(out int built, out int total) && built < total, () => CountPoolParts(out int built, out int total) && total > 0 ? (float)built / total : 1.0f);
+			}
+		}
+
+		/// <summary>
+		/// Pool parts merged and in all, over the live renderers still merging (laid out within <see cref="MergeStaleFrames"/>);
+		/// false when none is.
+		/// </summary>
+		private static bool CountPoolParts(out int built, out int total)
+		{
+			built = 0;
+			total = 0;
+			bool any = false;
+			foreach (TerrainGpuRenderer renderer in Live)
+			{
+				if (renderer.mergeFrame < 0 || Time.frameCount - renderer.mergeFrame > MergeStaleFrames)
+				{
+					continue;
+				}
+				foreach (MeshPool pool in renderer.pools.Values)
+				{
+					if (pool.Built < pool.Parts.Count)
+					{
+						any = true;
+					}
+					built += pool.Built;
+					total += pool.Parts.Count;
+				}
+			}
+			return any;
 		}
 
 		private int mergedThisLayout;

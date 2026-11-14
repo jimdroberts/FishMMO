@@ -375,7 +375,7 @@ namespace FishMMO.UnitTests
 				"a refused debuff is neither applied nor credited toward loot rights");
 
 			string knockback = CodeOnly(Read(ACTIONS + "KnockbackHitAction.cs"));
-			int evade = knockback.IndexOf("CharacterEvade.RefusesHostileEffects(target)", StringComparison.Ordinal);
+			int evade = knockback.IndexOf("CharacterEvade.RefusesHostileEffects(target, initiator)", StringComparison.Ordinal);
 			int impulse = knockback.IndexOf("motor.BaseVelocity = currentVelocity", StringComparison.Ordinal);
 			LogAssert.IsTrue(evade >= 0 && impulse > evade, "an evading NPC is never displaced");
 			LogAssert.IsTrue(knockback.Contains("!defenderDamageController.Immortal"),

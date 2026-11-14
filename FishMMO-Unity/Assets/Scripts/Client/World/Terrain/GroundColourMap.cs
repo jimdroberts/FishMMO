@@ -951,6 +951,11 @@ namespace FishMMO.Client
 		/// <summary>The average colour of a texture, or of one slice of an array (<paramref name="slice"/> ≥ 0).</summary>
 		private static Color Average(Texture texture, int slice)
 		{
+			if (!SyncTextureReadback.Supported)
+			{
+				SyncTextureReadback.WarnSkipped("The ground colour map's layer colours");
+				return new Color(0.5f, 0.5f, 0.5f, 1f);
+			}
 			const int Side = 32;
 			RenderTexture rt = RenderTexture.GetTemporary(Side, Side, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
 			RenderTexture previous = RenderTexture.active;

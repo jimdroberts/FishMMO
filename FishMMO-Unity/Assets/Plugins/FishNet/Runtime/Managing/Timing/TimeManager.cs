@@ -1117,8 +1117,15 @@ namespace FishNet.Managing.Timing
             }
             else
             {
-                NetworkManager.TransportManager.IterateOutgoing(asServer: true);
-                NetworkManager.TransportManager.IterateOutgoing(asServer: false);
+                /* FISHMMO EDIT: a send interval per side (TransportManager.SetSendInterval). On a
+                 * tick that does not flush, everything queued stays in the connection's bundles and goes out with the next
+                 * flush: the same messages, in the same order, in fewer packets. Paths that must flush now (a kick, a
+                 * shutdown) call IterateOutgoing directly and are not affected. */
+                FishNet.Managing.Transporting.TransportManager transportManager = NetworkManager.TransportManager;
+                if (transportManager.ShouldFlushOutgoing(asServer: true, LocalTick))
+                    transportManager.IterateOutgoing(asServer: true, scheduled: true);
+                if (transportManager.ShouldFlushOutgoing(asServer: false, LocalTick))
+                    transportManager.IterateOutgoing(asServer: false);
             }
         }
 

@@ -986,6 +986,10 @@ namespace FishMMO.Client
 		/// <param name="context">Input callback context.</param>
 		private void OnToggleMouseModePerformed(InputAction.CallbackContext context)
 		{
+			/* Tab is this key. While the player is typing, the cursor has to stay free and the
+			 * field has to keep focus; toggling here took the cursor back mid-sentence, the same
+			 * gap the panel toggles closed with TypingIntoField. */
+			if (TypingIntoField) return;
 			PlayerInputController.ToggleMouseMode(!PlayerInputController.MouseMode);
 		}
 
@@ -1006,7 +1010,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Callback for chat input action.
-		/// Activates the chat input field and enables mouse mode if not already active.
+		/// Focuses the chat input field, leaving the cursor as it is (see UITKChat.EnableChatInput).
 		/// </summary>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{

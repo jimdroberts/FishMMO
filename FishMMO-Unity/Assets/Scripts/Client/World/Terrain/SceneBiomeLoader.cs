@@ -105,24 +105,34 @@ namespace FishMMO.Client
 			}
 			SceneHandle handle = scene.handle;
 			idsByScene[handle] = ids;
-			// Spans the listing; each biome then holds the loading screen with a load of its own (Acquire).
-			SceneContentLoads.Load listingLoad = SceneContentLoads.Begin("biomes");
+			/* One load per biome, begun now: the map names them all, so the loading screen knows the whole count before the
+			 * listing completes. Begun after the listing instead, each biome joined a wave already part done and the bar went
+			 * backwards (terrain done at 1 of 2, then 2 of 7). Each spans the listing and then its own template's load. */
+			var loads = new List<SceneContentLoads.Load>(ids.Count);
+			foreach (int id in ids)
+			{
+				loads.Add(SceneContentLoads.Begin("biomes"));
+			}
 			WhenListed(() =>
 			{
-				try
+				// The scene may have unloaded while the locations were being listed.
+				bool wanted = idsByScene.TryGetValue(handle, out List<int> stillWanted) && ReferenceEquals(stillWanted, ids);
+				for (int i = 0; i < ids.Count; i++)
 				{
-					// The scene may have unloaded while the locations were being listed.
-					if (idsByScene.TryGetValue(handle, out List<int> stillWanted) && ReferenceEquals(stillWanted, ids))
+					if (!wanted)
 					{
-						foreach (int id in ids)
-						{
-							Acquire(id);
-						}
+						loads[i].End();
+						continue;
 					}
-				}
-				finally
-				{
-					listingLoad.End();
+					try
+					{
+						Acquire(ids[i], loads[i]);
+					}
+					catch
+					{
+						loads[i].End();
+						throw;
+					}
 				}
 			});
 		}
@@ -186,22 +196,29 @@ namespace FishMMO.Client
 			};
 		}
 
-		private static void Acquire(int id)
+		/// <summary>
+		/// Takes a user of a biome, loading its template if it is not loaded. <paramref name="content"/> is the load begun for
+		/// it when the scene loaded: it follows the template's load, or ends now when there is nothing to wait for (already
+		/// loaded, or no such template). A biome another scene is still loading keeps that scene's load running.
+		/// </summary>
+		private static void Acquire(int id, SceneContentLoads.Load content)
 		{
 			if (loaded.TryGetValue(id, out LoadedBiome biome))
 			{
 				biome.Users++;
+				content.End();
 				return;
 			}
 			if (!locationsByID.TryGetValue(id, out IResourceLocation location))
 			{
+				content.End();
 				if (reportedMissing.Add(id))
 				{
 					Debug.LogWarning($"[Scene biomes] The biome map names biome ID {id}, which no '{Constants.SharedBiomesLabel}' template has.");
 				}
 				return;
 			}
-			biome = new LoadedBiome { Users = 1, Handle = Addressables.LoadAssetAsync<BiomeTemplate>(location), Content = SceneContentLoads.Begin("biomes") };
+			biome = new LoadedBiome { Users = 1, Handle = Addressables.LoadAssetAsync<BiomeTemplate>(location), Content = content };
 			biome.Content.Track(biome.Handle);
 			loaded[id] = biome;
 			biome.Handle.Completed += op =>

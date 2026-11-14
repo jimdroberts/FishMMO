@@ -797,9 +797,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * short-circuited the whole test and fell through to "valid". A missing faction
 			 * controller is not permission to attack. */
 			if (petController.Pet == null ||
-				!petController.Pet.TryGet(out IFactionController petFaction) ||
-				!target.TryGet(out IFactionController targetFaction) ||
-				targetFaction.GetAllianceLevel(petFaction) != FactionAllianceLevel.Enemy)
+				!petController.Pet.TryGet(out IFactionController _) ||
+				!target.TryGet(out IFactionController _) ||
+				// The harm rule, with the pet answering as its owner: an enemy, or anyone while the owner's aggression is on.
+				!FactionHarm.MayHarm(petController.Pet, target, out _))
 			{
 				return false;
 			}

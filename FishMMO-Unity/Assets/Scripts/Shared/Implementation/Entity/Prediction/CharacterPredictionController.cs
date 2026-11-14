@@ -4,6 +4,7 @@ using FishNet.Object.Prediction;
 using FishNet.Transporting;
 using FishNet.Connection;
 using FishNet.Managing.Timing;
+using FishNet.Serializing;
 using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Shared.Core;
@@ -78,6 +79,34 @@ namespace FishMMO.Shared
 		/// The sub-tick remainder of <see cref="CurrentViewOffsetTicks"/>, in 1/256ths of a tick.
 		/// </summary>
 		public byte CurrentViewOffsetFraction { get; private set; }
+
+		/// <summary>The latched input's own tick (the owner's tick domain), which the exact view tick is an offset from.</summary>
+		public uint CurrentViewInputTick { get; private set; }
+
+		/// <summary>The latched exact view tick offset (CharacterReplicateData.ViewTickOffset).</summary>
+		public ushort CurrentViewTickOffset { get; private set; }
+
+		/// <summary>The latched exact view tick fraction; 0 when the client sent none (CharacterReplicateData.ViewTickFraction).</summary>
+		public byte CurrentViewTickFraction { get; private set; }
+
+		/// <summary>Recent exact view claims by input tick (server), so an ability step can rewind to the view of its own input.</summary>
+		private readonly (uint InputTick, ushort Offset, byte Fraction)[] viewClaims = new (uint, ushort, byte)[ViewClaimRing];
+		private const uint ViewClaimRing = 128;
+
+		/// <summary>The exact view claim the caster sent with input <paramref name="inputTick"/>, when it is still held.</summary>
+		public bool TryGetViewClaim(uint inputTick, out ushort offset, out byte fraction)
+		{
+			(uint InputTick, ushort Offset, byte Fraction) claim = viewClaims[inputTick % ViewClaimRing];
+			if (claim.InputTick == inputTick && claim.Fraction != 0)
+			{
+				offset = claim.Offset;
+				fraction = claim.Fraction;
+				return true;
+			}
+			offset = 0;
+			fraction = 0;
+			return false;
+		}
 
 		/// <summary>
 		/// Cached array of <see cref="IPredictableController"/> components, sorted by <see cref="IPredictableController.Order"/>.
@@ -225,6 +254,7 @@ namespace FishMMO.Shared
 			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			ClearViewOffset();
+			ClearQuietReconcileState();
 
 			base.OnStopNetwork();
 		}
@@ -244,6 +274,17 @@ namespace FishMMO.Shared
 		{
 			base.OnOwnershipServer(prevOwner);
 			ClearViewOffset();
+			ClearQuietReconcileState();
+		}
+
+		/// <summary>A new owner (or a pooled reuse) starts with every reconcile sent until it is known to be idle.</summary>
+		private void ClearQuietReconcileState()
+		{
+			inertInputStreak = 0;
+			identicalReconcileSends = 0;
+			lastReconcileLength = -1;
+			lastReconcileSentTick = TimeManager.UNSET_TICK;
+			hasLastQuietData = false;
 		}
 
 		/// <summary>Resets the latched view offset to "nothing to compensate".</summary>
@@ -251,6 +292,10 @@ namespace FishMMO.Shared
 		{
 			CurrentViewOffsetTicks = 0;
 			CurrentViewOffsetFraction = 0;
+			CurrentViewInputTick = 0;
+			CurrentViewTickOffset = 0;
+			CurrentViewTickFraction = 0;
+			Array.Clear(viewClaims, 0, viewClaims.Length);
 		}
 
 		/// <summary>
@@ -424,6 +469,11 @@ namespace FishMMO.Shared
 		{
 			CurrentReplicateTickSnapshot = input.GetTick();
 			CaptureViewOffset(input, state);
+			if (base.IsServerStarted)
+			{
+				// Counted on real input only: a tick that ran default data (an empty queue) is never "known idle".
+				inertInputStreak = state.ContainsCreated() && IsInertInput(input) ? inertInputStreak + 1 : 0;
+			}
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			for (int i = 0; i < controllers.Length; i++)
 			{
@@ -475,6 +525,10 @@ namespace FishMMO.Shared
 
 			CurrentViewOffsetTicks = input.ViewOffsetTicks;
 			CurrentViewOffsetFraction = input.ViewOffsetFraction;
+			CurrentViewInputTick = input.GetTick();
+			CurrentViewTickOffset = input.ViewTickOffset;
+			CurrentViewTickFraction = input.ViewTickFraction;
+			viewClaims[CurrentViewInputTick % ViewClaimRing] = (CurrentViewInputTick, input.ViewTickOffset, input.ViewTickFraction);
 		}
 
 		/// <summary>
@@ -492,14 +546,276 @@ namespace FishMMO.Shared
 			if (base.IsServerStarted && base.IsSpawned)
 			{
 				CharacterReconcileData data = default;
+				// Every tick, sent or not: several controllers do their once-a-tick server work here (observer pushes).
 				for (int i = 0; i < controllers.Length; i++)
 				{
 					controllers[i].OnCreateReconcile(ref data);
+				}
+				uint tick = base.TimeManager.LocalTick;
+				if (!ShouldSendReconcile(data.UnpackFlags, tick,
+						base.NetworkManager.TransportManager.GetSendInterval(base.Owner)))
+				{
+					return;
+				}
+				/* Only a reconcile with an owner goes anywhere (state forwarding is off), so only those are judged and counted:
+				 * an NPC's is written for FishNet's bookkeeping and dropped unsent, and judging it would serialise it every
+				 * tick for nothing. */
+				if (base.Owner.IsValid)
+				{
+					if (IsQuietReconcile(ref data, tick))
+					{
+						QuietReconcilesSkipped++;
+						return;
+					}
+					ReconcilesSent++;
 				}
 				// FishNet decides full vs delta and names the delta's baseline when the reconcile is
 				// actually written, so a tick whose send is skipped does not disturb the delta baseline.
 				Reconcile(data);
 			}
+		}
+
+		#region Quiet reconciles
+		/// <summary>True to skip reconciles that repeat a settled state to an idle owner (see <see cref="ShouldSkipQuietReconcile"/>).</summary>
+		public static bool QuietReconciles = true;
+		/// <summary>Reconciles skipped as quiet since the process started (for the simulate report).</summary>
+		public static long QuietReconcilesSkipped;
+		/// <summary>Reconciles written since the process started (for the simulate report).</summary>
+		public static long ReconcilesSent;
+
+		/// <summary>Ticks of real, inert input the server must have run before a reconcile may be skipped.</summary>
+		internal const int QuietInertTicks = 6;
+		/// <summary>Identical reconciles sent in a row before the next identical one may be skipped: one lost reconcile never leaves the owner without the settled state.</summary>
+		internal const int QuietConfirmations = 3;
+		/// <summary>Even a quiet owner gets a reconcile at least this often, in ticks (1 s at 30 Hz).</summary>
+		internal const uint QuietKeepaliveTicks = 30;
+
+		/// <summary>The state groups <see cref="QuietMissCounts"/> counts. Declared first: static fields initialise in order.</summary>
+		public static readonly string[] QuietMissNames =
+			{ "position", "rotation", "velocity", "motor other", "resources", "ability", "cooldowns", "buffs", "equipment", "attributes", "exposure", "rng" };
+		/// <summary>What changed in an idle owner's reconcile that therefore could not be skipped (index = <see cref="QuietMissNames"/>).</summary>
+		public static readonly long[] QuietMissCounts = new long[QuietMissNames.Length];
+
+		/// <summary>The reconcile last judged for an idle owner, to say what changed in the next one.</summary>
+		private CharacterReconcileData lastQuietData;
+		private bool hasLastQuietData;
+
+		private static void NoteQuietMiss(in CharacterReconcileData now, in CharacterReconcileData before)
+		{
+			KinematicCharacterController.KinematicCharacterMotorState a = now.MotorState, b = before.MotorState;
+			bool position = !a.Position.Equals(b.Position);
+			bool rotation = !a.Rotation.Equals(b.Rotation);
+			bool velocity = !a.BaseVelocity.Equals(b.BaseVelocity) || !a.AttachedRigidbodyVelocity.Equals(b.AttachedRigidbodyVelocity);
+			bool motorOther = a.MustUnground != b.MustUnground || a.MustUngroundTime != b.MustUngroundTime ||
+				a.TimeSinceLastAbleToJump != b.TimeSinceLastAbleToJump || a.TimeSinceJumpRequested != b.TimeSinceJumpRequested ||
+				a.IsCrouching != b.IsCrouching || a.JumpRequested != b.JumpRequested || a.IsSwimming != b.IsSwimming ||
+				a.IsFlying != b.IsFlying || a.ClimbPhase != b.ClimbPhase || a.ClimbTicks != b.ClimbTicks || a.ClimbOutTicks != b.ClimbOutTicks ||
+				a.Climbable != b.Climbable || a.CurrentPlatformID != b.CurrentPlatformID ||
+				a.LastMovementIterationFoundAnyGround != b.LastMovementIterationFoundAnyGround ||
+				a.GroundingStatus.FoundAnyGround != b.GroundingStatus.FoundAnyGround ||
+				a.GroundingStatus.IsStableOnGround != b.GroundingStatus.IsStableOnGround ||
+				!a.GroundingStatus.GroundNormal.Equals(b.GroundingStatus.GroundNormal);
+			Count(0, position);
+			Count(1, rotation);
+			Count(2, velocity);
+			Count(3, motorOther);
+			Count(4, !now.ResourceState.Equals(before.ResourceState));
+			Count(5, now.AbilityID != before.AbilityID || now.RemainingTicks != before.RemainingTicks || now.ChargedHoldTicks != before.ChargedHoldTicks ||
+				now.Seed != before.Seed || now.PackedFlagsAndSlot != before.PackedFlagsAndSlot);
+			Count(6, !SameEntries(now.Cooldowns, before.Cooldowns));
+			Count(7, !SameEntries(now.Buffs, before.Buffs));
+			Count(8, !SameEntries(now.Equipment, before.Equipment));
+			Count(9, !SameEntries(now.Attributes, before.Attributes));
+			Count(10, !SameEntries(now.Exposure, before.Exposure));
+			Count(11, now.RngS0 != before.RngS0 || now.RngS1 != before.RngS1 || now.RngS2 != before.RngS2 || now.RngS3 != before.RngS3);
+
+			static void Count(int group, bool changed)
+			{
+				if (changed)
+				{
+					QuietMissCounts[group]++;
+				}
+			}
+		}
+
+		private static bool SameEntries<T>(T[] a, T[] b)
+		{
+			if (ReferenceEquals(a, b))
+			{
+				return true;
+			}
+			int lengthA = a?.Length ?? 0, lengthB = b?.Length ?? 0;
+			if (lengthA != lengthB)
+			{
+				return false;
+			}
+			EqualityComparer<T> comparer = EqualityComparer<T>.Default;
+			for (int i = 0; i < lengthA; ++i)
+			{
+				if (!comparer.Equals(a[i], b[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>Consecutive server ticks that ran real input with no movement, action or request in it.</summary>
+		private int inertInputStreak;
+		/// <summary>Identical reconciles sent in a row (by their full serialization).</summary>
+		private int identicalReconcileSends;
+		/// <summary>Server tick of the last reconcile written.</summary>
+		private uint lastReconcileSentTick = TimeManager.UNSET_TICK;
+		/// <summary>Full serialization of the last reconcile written while the owner was idle; length -1 when none.</summary>
+		private byte[] lastReconcileBytes = new byte[256];
+		private int lastReconcileLength = -1;
+
+		/// <summary>
+		/// Opts the character input into FishNet's held idle input (FISHMMO EDIT, ReplicateIdle): an owner standing still
+		/// stops sending the same input every tick, and the server repeats it meanwhile. Registered on both sides before any
+		/// replicate runs; the rule is the same on both, which is what makes a held tick identical to the owner's own.
+		/// </summary>
+		[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
+		internal static void RegisterHeldInput()
+		{
+			ReplicateIdle<CharacterReplicateData>.CanHold = data => IsInertInput(data);
+			ReplicateIdle<CharacterReplicateData>.SameInput = (a, b) => SameHeldInput(a, b);
+		}
+
+		/// <summary>
+		/// True when two inputs are identical apart from their tick: every axis, flag, request, view claim and the exact aim.
+		/// </summary>
+		/// <remarks>
+		/// Exact, not approximate: the server runs the held input in place of the owner's, so a repeat has to be the very
+		/// input the owner ran. A camera turned by the smallest step changes the aim, and that input is sent.
+		/// </remarks>
+		internal static bool SameHeldInput(in CharacterReplicateData a, in CharacterReplicateData b)
+		{
+			return a.MoveAxisForward.Equals(b.MoveAxisForward) && a.MoveAxisRight.Equals(b.MoveAxisRight) &&
+				a.MoveFlags == b.MoveFlags &&
+				a.ViewOffsetTicks == b.ViewOffsetTicks && a.ViewOffsetFraction == b.ViewOffsetFraction &&
+				a.ViewTickOffset == b.ViewTickOffset && a.ViewTickFraction == b.ViewTickFraction &&
+				a.AimDirection.x.Equals(b.AimDirection.x) && a.AimDirection.y.Equals(b.AimDirection.y) && a.AimDirection.z.Equals(b.AimDirection.z) &&
+				a.ActivationFlags == b.ActivationFlags && a.QueuedAbilityID == b.QueuedAbilityID &&
+				a.EquipmentRequest == b.EquipmentRequest && a.EquipmentIndex == b.EquipmentIndex;
+		}
+
+		/// <summary>
+		/// An input that moves nothing and asks for nothing: no axes, no move flag, no activation flag, nothing queued, no
+		/// equipment request. The aim may be anything: turning the camera turns the character, and the state then differs.
+		/// </summary>
+		internal static bool IsInertInput(in CharacterReplicateData input)
+		{
+			const int actualData = 1 << (int)KCCMoveFlags.IsActualData;
+			const int actualAbilityData = 1 << (int)AbilityActivationFlags.IsActualData;
+			return input.MoveAxisForward == 0f && input.MoveAxisRight == 0f &&
+				(input.MoveFlags & ~actualData) == 0 &&
+				(input.ActivationFlags & ~actualAbilityData) == 0 &&
+				input.QueuedAbilityID == 0 && input.EquipmentRequest == 0;
+		}
+
+		/// <summary>
+		/// Whether a reconcile may be skipped because it would tell an idle owner nothing new.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A standing player costs a reconcile on every flush tick, each one repeating the last. All of these must hold
+		/// to skip one:
+		/// </para>
+		/// <list type="bullet">
+		/// <item>No one-shot report (Denied, NoSpawn) rides it.</item>
+		/// <item>The server has run <see cref="QuietInertTicks"/> ticks of the owner's real input, all of it inert, so the owner
+		/// predicted the same nothing; a key pressed against a wall is input, and keeps every reconcile flowing.</item>
+		/// <item>Its full serialization is byte for byte the last one sent, and that one was sent
+		/// <see cref="QuietConfirmations"/> times in a row, so even a lost packet left the owner with the settled state.</item>
+		/// <item>The last one sent is less than <see cref="QuietKeepaliveTicks"/> old.</item>
+		/// </list>
+		/// <para>
+		/// Anything that changes the state (regeneration, a buff ticking down, damage, a turn of the camera) makes the bytes
+		/// differ and goes out at once, exactly as before.
+		/// </para>
+		/// </remarks>
+		internal static bool ShouldSkipQuietReconcile(bool oneShotReport, int inertStreak, int identicalSends, bool sameAsLastSent, uint ticksSinceLastSent)
+		{
+			return !oneShotReport &&
+				inertStreak >= QuietInertTicks &&
+				identicalSends >= QuietConfirmations &&
+				sameAsLastSent &&
+				ticksSinceLastSent < QuietKeepaliveTicks;
+		}
+
+		/// <summary>
+		/// Decides <see cref="ShouldSkipQuietReconcile"/> for this tick's reconcile, and records it as sent when it is not skipped.
+		/// </summary>
+		private bool IsQuietReconcile(ref CharacterReconcileData data, uint tick)
+		{
+			int flags = data.UnpackFlags;
+			bool oneShot = flags.IsFlagged(AbilityActivationFlags.Denied) || flags.IsFlagged(AbilityActivationFlags.NoSpawn);
+			if (!QuietReconciles || oneShot || inertInputStreak == 0)
+			{
+				identicalReconcileSends = 0;
+				lastReconcileLength = -1;
+				lastReconcileSentTick = tick;
+				hasLastQuietData = false;
+				return false;
+			}
+
+			PooledWriter writer = WriterPool.Retrieve();
+			writer.WriteCharacterReconcileData(data);
+			ArraySegment<byte> bytes = writer.GetArraySegment();
+			bool same = lastReconcileLength == bytes.Count &&
+				bytes.AsSpan().SequenceEqual(new ReadOnlySpan<byte>(lastReconcileBytes, 0, lastReconcileLength));
+			uint sinceSent = lastReconcileSentTick == TimeManager.UNSET_TICK ? uint.MaxValue : tick - lastReconcileSentTick;
+			if (ShouldSkipQuietReconcile(false, inertInputStreak, identicalReconcileSends, same, sinceSent))
+			{
+				WriterPool.Store(writer);
+				return true;
+			}
+			// An idle owner's reconcile that has to go because the state moved: note what moved (simulate report).
+			if (!same && inertInputStreak >= QuietInertTicks && hasLastQuietData)
+			{
+				NoteQuietMiss(in data, in lastQuietData);
+			}
+			lastQuietData = data;
+			hasLastQuietData = true;
+
+			identicalReconcileSends = same ? identicalReconcileSends + 1 : 1;
+			if (lastReconcileBytes.Length < bytes.Count)
+			{
+				lastReconcileBytes = new byte[Math.Max(bytes.Count, lastReconcileBytes.Length * 2)];
+			}
+			System.Buffer.BlockCopy(bytes.Array, bytes.Offset, lastReconcileBytes, 0, bytes.Count);
+			lastReconcileLength = bytes.Count;
+			lastReconcileSentTick = tick;
+			WriterPool.Store(writer);
+			return false;
+		}
+		#endregion
+
+		/// <summary>
+		/// Whether the server sends this tick's reconcile: on every tick it flushes outgoing data, and on any tick whose
+		/// reconcile carries a one-shot report.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// With a send interval of 2 two reconciles left in each packet and the owner used only the newer: the older was
+		/// 36 bytes of nothing, a third of the owner's own traffic. The one sent is for the tick the packet leaves on, so the
+		/// owner corrects from the same state as before, no later. With an interval of 1 every tick is sent, as before.
+		/// </para>
+		/// <para>
+		/// <b>One-shot reports are never skipped.</b> A reconcile can carry an event that belongs to its own tick and is
+		/// consumed when it is built: an activation the server denied (Denied) and a predicted spawn the server did not make
+		/// (NoSpawn, which only means anything on the tick it describes). Dropping that tick's reconcile would drop the
+		/// report, and the owner would keep a ghost projectile or a cast the server refused.
+		/// </para>
+		/// </remarks>
+		internal static bool ShouldSendReconcile(int abilityFlags, uint tick, byte sendInterval)
+		{
+			if (sendInterval <= 1 || tick % sendInterval == 0)
+			{
+				return true;
+			}
+			return abilityFlags.IsFlagged(AbilityActivationFlags.Denied) || abilityFlags.IsFlagged(AbilityActivationFlags.NoSpawn);
 		}
 
 		/// <summary>

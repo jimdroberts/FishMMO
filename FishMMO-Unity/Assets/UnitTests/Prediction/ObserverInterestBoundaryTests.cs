@@ -97,6 +97,11 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(2, (int)ObserverStreamingEntry.ResolveEffectiveInterval(
 					2, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow, 1, engaged: false),
 				"An overflow interval applies whether or not the LOD agrees the observer is engaged.");
+
+			LogAssert.AreEqual(2, (int)ObserverStreamingEntry.ResolveEffectiveInterval(
+					2, ObserverStreamingEntry.IntervalOrigin.ByteBudget, 1, engaged: true),
+				"Within the engagement radius the byte budget's slowdown still applies: it only ever slows a " +
+				"bystander (never someone the viewer fights or targets), and discarding it left a nearby crowd unbudgeted.");
 		}
 
 		/// <summary>

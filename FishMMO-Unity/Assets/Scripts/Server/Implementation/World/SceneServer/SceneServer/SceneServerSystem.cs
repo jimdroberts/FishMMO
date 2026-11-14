@@ -56,6 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Writes this process's bandwidth to the database once a minute. Null until initialised.</summary>
 		private ServerBandwidthRecorder bandwidthRecorder;
+		private ServerTrafficBreakdown trafficBreakdown;
 
 		/// <summary>
 		/// Maximum pending scene load age in seconds before failing and removing the request.
@@ -147,6 +148,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			"ObserverEngagementRangeCeiling",
 			"ObserverEngagementRangeMargin",
 			"ObserverMaxSendInterval",
+			"ObserverByteBudget",
+			"ObserverUpdateCostBytes",
+			"ObserverIdleCostShare",
 		};
 
 		/// <summary>
@@ -178,7 +182,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"scale={ObserverStreamingPolicy.RangeScaleAtHighDensity} minRange={ObserverStreamingPolicy.MinimumRange}m " +
 				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks " +
 				$"maxSendInterval={ObserverStreamingPolicy.MaxSendInterval} " +
-				$"visibilityBudget(unclassified)={ObserverStreamingPolicy.VisibilityBudget} budgetOverrides={DescribeBudgetOverrides()}");
+				$"visibilityBudget(unclassified)={ObserverStreamingPolicy.VisibilityBudget} budgetOverrides={DescribeBudgetOverrides()} " +
+				$"byteBudget={(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget}B/s update={ObserverStreamingPolicy.UpdateCostBytes}B idle={ObserverStreamingPolicy.IdleCostShare}" : "off")}");
 		}
 
 		/// <summary>
@@ -270,6 +275,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			ApplyObserverStreamingConfiguration();
 			ApplyPlacementConfiguration();
+			ApplyNetworkScheduleConfiguration();
 
 			if (!Server.DataContainerRegistry.TryGet<ISceneServerSystemMainThreadQueueData>(out _))
 			{
@@ -380,6 +386,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			RegisterGameMasterCommands();
 
 			// World clock and weather. See SceneServerSystem.Weather.
+			InitializeNetworkSchedule(characterSystem);
+			InitializeGameMasterPresence(characterSystem);
 			InitializeWeather(characterSystem, characterMappingData);
 
 			// Periodic callbacks
@@ -398,6 +406,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Bandwidth statistics for the Control Panel. See ServerBandwidthRecorder.
 			bandwidthRecorder = ServerBandwidthRecorder.TryStart(Server, ServerType.Scene);
+			// Per-connection traffic by message type, when the configuration asks (TrafficBreakdownSeconds). See ServerTrafficBreakdown.
+			trafficBreakdown = ServerTrafficBreakdown.TryStart(Server);
 
 			_ = Log.Debug("SceneServerSystem", $"Initialized (ServerID={id}, Address={server.Address}:{server.Port}, CharacterCount={characterCount})");
 			return ServerComponentInitializationStatus.Initialized;
@@ -454,6 +464,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			UnregisterAdminCommands();
 			UnregisterGameMasterCommands();
 			DeinitializeWeather();
+			DeinitializeNetworkSchedule();
+			DeinitializeGameMasterPresence();
 
 			// A shutdown that has been carried out must not still be pending in the database, or
 			// an automatic restart stops again immediately. See ClearConsumedShutdownOnTeardown.
@@ -486,6 +498,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Last, so the scene cleanup has the shutdown budget first: a bounded final bandwidth sample.
+			DespawnSimulatedPlayers();
+			trafficBreakdown?.Stop();
+			trafficBreakdown = null;
+			NetworkSendSchedule.Reset(Server?.NetworkWrapper?.NetworkManager, asServer: true);
 			bandwidthRecorder?.Stop();
 			bandwidthRecorder = null;
 		}
@@ -514,6 +530,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			DrainMainThreadQueue(drainAll: false);
 			UpdateWeather(deltaTime);
+			UpdateSimulationRun(deltaTime);
 		}
 
 		/// <summary>

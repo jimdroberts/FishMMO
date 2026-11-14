@@ -34,6 +34,13 @@ namespace FishNet.Transporting
         UNUSED2 = 19,
         StateUpdate = 20,
         // Not used with network traffic statistics.
-        Version = 21
+        Version = 21,
+        /// <summary>
+        /// FISHMMO EDIT: the tick changes here, mid-bundle. Followed by the new tick (uint32 unpacked); every message after it
+        /// in the same bundle belongs to that tick. Written only by a side whose send interval is above 1
+        /// (TransportManager.SetSendInterval); at an interval of 1 it is never sent, so the wire format is FishNet's own.
+        /// 22 = the value proposed upstream (feat/send-interval).
+        /// </summary>
+        TickMarker = 22
     }
 }

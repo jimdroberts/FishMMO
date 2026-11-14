@@ -146,6 +146,11 @@ The creation fee is also **stored** on the controller as `CreationCostCurrencyTe
 `CreationCost`, not only raised, because the guild panel is usually bound after the broadcast
 arrives: it reads the stored values when it binds and listens for changes afterwards.
 
+The message of the day is stored the same way (`InfoGuildID` / `MessageOfTheDay`, cleared on
+leave). The server sends it on every scene connect; the chat panel prints it on the Guild
+channel once per login and again only when the text changes (`GuildMessageOfTheDayGate`), so a
+zone change does not repeat it.
+
 ### Join and leave triggers
 
 `OnGuildJoinTriggers` fire only from the server's **join notice** — the single `GuildAddBroadcast`

@@ -94,7 +94,7 @@ namespace FishMMO.Client
 			// Played out from the server's tick, so the door stands where it does for everyone else.
 			if (switchInteractable.SwitchTarget is ITimedSwitchTarget timed)
 			{
-				timed.SetState(msg.Activated, msg.ChangeTick, msg.ChangeTravel);
+				timed.SetState(msg.Activated, msg.ChangeTick, msg.ChangeTravel, msg.SolidTick);
 				return;
 			}
 

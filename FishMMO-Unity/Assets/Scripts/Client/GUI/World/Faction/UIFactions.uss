@@ -27,6 +27,18 @@
     flex-shrink: 0;
 }
 
+.faction-aggression {
+    flex-shrink: 0;
+    padding: 4px 10px 6px 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--abyss-600);
+}
+
+.faction-aggression__hint {
+    font-size: 11px;
+    white-space: normal;
+}
+
 .faction-scroll {
     flex-grow: 1;
     padding: 6px;

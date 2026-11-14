@@ -3571,6 +3571,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3b50a59a37e74cf58e1f223037219120
+    m_Address: Count Healing Received
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3b5eafe3cb096e85698409cd05d53b44
     m_Address: AncientTree - Shrine
     m_ReadOnly: 0
@@ -6819,6 +6826,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 75bf4587f31f4d3e8a0399810ccd9f50
+    m_Address: Count Damage Dealt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 75c90488d0883f0fd97e81f3150e6b0c
     m_Address: Fortress - Palisade
     m_ReadOnly: 0
@@ -8332,13 +8346,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 9018bf3f57b34f6cab56c1bb65fce964
     m_Address: Sporeling
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 902791299155046c7bc0ee307ad6c041
-    m_Address: LoginBackdrop
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12375,6 +12382,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: dac756f5da03471fa811f2f7ed8691b6
+    m_Address: Count Healing Done
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: daf8d0eb1f0040e0a81c4744abd7e031
     m_Address: Premade Lesser Flame
     m_ReadOnly: 0
@@ -12447,6 +12461,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: dc039dd23ff1763f5b4b76cb73e49875
     m_Address: Chiy Stems
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dc086b43c817e4cadbc5ee1d0104c824
+    m_Address: Simulated Player
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13005,6 +13026,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e3de60721fa74f34aaa93d995981f4e6
+    m_Address: Count Damage Received
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e3e463f1607fe984b9712d60b46738ba
     m_Address: Mock Area Pulse Tick Event
     m_ReadOnly: 0
@@ -13049,6 +13077,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e48c22ecb1287cf4185c17311214bc8a
     m_Address: Punch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e49c53f4f7164813ab93549aa0431d99
+    m_Address: Count Death
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

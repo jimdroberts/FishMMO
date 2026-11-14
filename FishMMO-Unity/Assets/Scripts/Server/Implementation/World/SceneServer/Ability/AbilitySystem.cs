@@ -156,6 +156,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.NetworkWrapper.RegisterBroadcast<AbilityForgetBroadcast>(OnServerAbilityForgetBroadcastReceived, true);
+			Server.NetworkWrapper.RegisterBroadcast<FactionAggressionBroadcast>(OnServerAggressionBroadcastReceived, true);
 
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
@@ -178,6 +179,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityForgetBroadcast>(OnServerAbilityForgetBroadcastReceived);
+			Server.NetworkWrapper.UnregisterBroadcast<FactionAggressionBroadcast>(OnServerAggressionBroadcastReceived);
 
 			if (Server.DataContainerRegistry.TryGet<IAbilitySystemRuntimeData>(out var runtimeData))
 			{
@@ -611,6 +613,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="conn">Network connection of the requesting client.</param>
 		/// <param name="msg">Forget request naming the ability.</param>
 		/// <param name="channel">Network channel used for the broadcast.</param>
+		/// <summary>
+		/// The owner asks to turn aggression on or off (FactionHarm: on, they may harm neutrals and allies, and be harmed by
+		/// anyone). Turning it off is refused for <see cref="FactionController.AggressionLockSeconds"/> after a hit that
+		/// needed it, so a player cannot strike a neutral and then step out of its reach. The answer is the synced state
+		/// itself: a refused request simply leaves it as it was, which the client's toggle shows.
+		/// </summary>
+		public void OnServerAggressionBroadcastReceived(NetworkConnection conn, FactionAggressionBroadcast msg, Channel channel)
+		{
+			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))
+			{
+				return;
+			}
+			if (!request.Character.TryGet(out IFactionController faction) || !(faction is FactionController controller))
+			{
+				return;
+			}
+			if (!controller.TrySetAggression(msg.Enabled, out float lockedSeconds) && lockedSeconds > 0f)
+			{
+				Log.Debug("AbilitySystem", $"{request.Character.CharacterName}: aggression stays on for {lockedSeconds:0.#} s more (a recent hit needed it).");
+			}
+		}
+
 		public void OnServerAbilityForgetBroadcastReceived(NetworkConnection conn, AbilityForgetBroadcast msg, Channel channel)
 		{
 			if (!TryBeginPlayerRequest(conn, out PlayerRequestContext request))

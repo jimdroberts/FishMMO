@@ -78,13 +78,6 @@ MonoBehaviour:
     - Scene_Shared
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: a69e26cb1c4ef6302864dcebfd0d5045
-    m_Address: LoginBackdrop
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Scene_Shared
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: c3f7f35295862928c98a14ef55691e63
     m_Address: InteractableSim
     m_ReadOnly: 0

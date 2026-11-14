@@ -23,6 +23,11 @@
             The rows containers are what the panel files rows into, and what the header count
             badge counts. See UITKFactions.CountRows.
         -->
+        <!-- The aggression toggle: off, abilities harm only enemies; on, neutrals too, and anyone outside your party and guild may harm you. Party and guild are never harmed. -->
+        <ui:VisualElement name="faction-aggression-row" class="faction-aggression">
+            <ui:Toggle name="faction-aggression" label="Aggression" class="fish-toggle faction-aggression__toggle" />
+            <ui:Label name="faction-aggression-hint" text="Off: you can only harm enemies." class="fish-label fish-label--muted faction-aggression__hint" />
+        </ui:VisualElement>
         <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
             <ui:VisualElement name="faction-list" class="faction-list">
                 <ui:VisualElement name="faction-section-ally" class="faction-section faction-section--empty">

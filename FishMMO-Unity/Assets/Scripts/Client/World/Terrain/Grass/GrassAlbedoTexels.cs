@@ -73,6 +73,11 @@ namespace FishMMO.Client
 			{
 				return null;
 			}
+			if (!SyncTextureReadback.Supported)
+			{
+				SyncTextureReadback.WarnSkipped("The grass's terrain colour copy");
+				return null;
+			}
 			int width = Mathf.ClosestPowerOfTwo(Mathf.Clamp(Math.Min(albedo.width, albedo.height), 1, MaxWidth));
 			int layerTexels = PyramidTexels(width, out int mips);
 			var data = new uint[HeaderUints + layers * layerTexels];

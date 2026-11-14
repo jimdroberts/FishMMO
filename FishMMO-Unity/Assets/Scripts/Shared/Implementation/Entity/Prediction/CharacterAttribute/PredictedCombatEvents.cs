@@ -307,6 +307,46 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// How much of a report this client already applied as predictions: the summed amounts of the pending predictions
+		/// the report would settle (same pairing as <see cref="TryConfirm"/>: source, target, kind, damage type, oldest
+		/// first, up to <paramref name="occurrences"/>). Nothing is settled; the display still does that.
+		/// </summary>
+		/// <remarks>
+		/// The caster's predicted hit already moved the target's health bar on this client, so the report's health delta must
+		/// not move it again: the receive seam applies only the part of the report nothing here predicted. Every other
+		/// client holds no predictions for this source and gets 0, so it applies the whole report as before.
+		/// </remarks>
+		/// <returns>The predicted amount the report stands for; 0 when none was predicted.</returns>
+		public static int PendingAmount(ICharacter source, ICharacter target, Kind kind, int occurrences = 1, DamageAttributeTemplate damageAttribute = null)
+		{
+			if (source == null || target == null || pending.Count == 0)
+			{
+				return 0;
+			}
+			int targetObjectId = ResolveObjectId(target);
+			int sourceObjectId = ResolveObjectId(source);
+			if (targetObjectId == 0 || sourceObjectId == 0)
+			{
+				return 0;
+			}
+			int damageTypeId = damageAttribute != null ? damageAttribute.ID : 0;
+			int remaining = occurrences < 1 ? 1 : occurrences;
+			int amount = 0;
+			for (int i = 0; i < pending.Count && remaining > 0; ++i)
+			{
+				if (pending[i].SourceObjectId == sourceObjectId &&
+					pending[i].TargetObjectId == targetObjectId &&
+					pending[i].Kind == kind &&
+					pending[i].DamageTypeId == damageTypeId)
+				{
+					amount += pending[i].Amount;
+					--remaining;
+				}
+			}
+			return amount;
+		}
+
+		/// <summary>
 		/// Rejects predictions the server never confirmed. Call once per frame or tick.
 		/// </summary>
 		/// <param name="now">Current unscaled time, in seconds.</param>

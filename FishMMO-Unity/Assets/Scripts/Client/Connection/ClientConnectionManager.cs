@@ -628,6 +628,11 @@ namespace FishMMO.Client
 			try
 			{
 				Log.Info("ClientConnection", $"StartConnection host={address} port={port} isWorld={isWorldServer} timeout={ConnectionEstablishTimeoutSeconds}s");
+				// Packet compression, when this build has trained tables; installed once, before the first connection.
+				if (!PacketCompression.TryInstall(NetworkManager) && PacketCompression.Available)
+				{
+					Log.Error("ClientConnection", "Packet compression could not be installed; this client cannot talk to servers that compress.");
+				}
 				NetworkManager.ClientManager.StartConnection(address, port);
 			}
 			catch (System.Exception ex)

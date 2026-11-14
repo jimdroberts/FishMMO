@@ -130,6 +130,18 @@
     already gets -- the party rows and the attribute rows both set their own padding for the same
     reason.
 */
+/*
+    Arrival time, when "Show Timestamps" is on in the Options UI tab. Coloured like the rest of
+    its line from C# and dimmed here, so it reads as part of the line without competing with the
+    sender or the message. Sized from C# like the other two halves, and zeroed the same way.
+*/
+.chat-message__time {
+    -unity-text-align: middle-left;
+    opacity: 0.65;
+    margin: 0 4px 0 0;
+    padding: 0;
+}
+
 .chat-message__text {
     -unity-text-align: middle-left;
     white-space: normal;
@@ -157,8 +169,23 @@
     align-items: center;
 }
 
+/*
+    The field takes the row's remaining width and NEVER its text's.
+
+    Unity's default theme gives a TextField flex-shrink: 0, and its glyph element is sized to
+    the text it holds. A long line therefore WIDENED the field. Measured with a 91-character
+    line, the field went from 340 to 402 units and ran past the panel's right edge, which clips
+    it. Unity does scroll the text to follow the caret, but it scrolls against the field's own
+    width, so it kept the caret inside a box the player could no longer see: the end of what
+    they were typing was always off the edge. A zero basis that may shrink, with no
+    content-derived minimum, pins the field to the space the row gives it. The glyph element
+    then overflows inside the field, which is the case Unity's caret-follow scroll handles.
+*/
 .chat-input {
     flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-width: 0;
 }
 
 /*
@@ -170,6 +197,10 @@
 .chat-input > #unity-text-input {
     padding-top: 0;
     padding-bottom: 0;
+    /* The glyph element is wider than this box once a line is long, and it is scrolled left
+       by a translate. Clipping here keeps the scrolled-off start of the line from drawing over
+       the channel selector to the left. */
+    overflow: hidden;
 }
 
 /*

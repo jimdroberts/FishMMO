@@ -59,6 +59,15 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			/* A hit the server already resolved and sent back (AbilityCollisionEventData.IsAuthoritativeEcho) is not
+			 * predicted again. Its result is what the resource stream carries, and that stream is unreliable datagrams, which
+			 * can overtake the reliable hit message: the bar then already held the server's value, and predicting the echo on
+			 * top of it showed the hit twice until the next push. The caster's own prediction is the hit its own trace found;
+			 * a hit only the server's trace found is shown by the server's numbers alone. */
+			if (ApplyDamageAction.IsEchoOnClient(initiator, eventData))
+			{
+				return;
+			}
 
 			if (!TryResolveTargetOrInitiator(initiator, eventData, out ICharacter target))
 			{

@@ -101,6 +101,12 @@ namespace FishMMO.Shared.Core
 		/// <summary>True when <see cref="iconOverride"/> replaces the style's icon, even with null.</summary>
 		private bool hasIconOverride;
 
+		/// <summary>The standing mark, drawn in the icon slot when the plate has no icon.</summary>
+		private NameplateMark mark;
+
+		/// <summary>The colour the mark is drawn in.</summary>
+		private Color markTint = Color.white;
+
 		/// <summary>Bumped by every change to the rows.</summary>
 		public int Revision { get; private set; }
 
@@ -267,6 +273,33 @@ namespace FishMMO.Shared.Core
 			}
 			iconOverride = null;
 			hasIconOverride = false;
+			++styleRevision;
+		}
+
+		/// <summary>The standing mark, drawn in the icon slot when <see cref="Icon"/> is null.</summary>
+		public NameplateMark Mark => mark;
+
+		/// <summary>The colour <see cref="Mark"/> is drawn in.</summary>
+		public Color MarkTint => markTint;
+
+		/// <summary>
+		/// Sets the standing mark and its colour. Written by the client, like <see cref="AllianceTint"/>: standing is the
+		/// viewer's question. Cleared when the plate is disabled.
+		/// </summary>
+		/// <param name="value">The mark, or <see cref="NameplateMark.None"/> for none.</param>
+		/// <param name="tint">The colour to draw it in: the viewer's standing colour, so colour-vision modes apply.</param>
+		public void SetMark(NameplateMark value, Color tint)
+		{
+			if (value == NameplateMark.None)
+			{
+				tint = Color.white;
+			}
+			if (mark == value && markTint == tint)
+			{
+				return;
+			}
+			mark = value;
+			markTint = tint;
 			++styleRevision;
 		}
 
@@ -508,6 +541,7 @@ namespace FishMMO.Shared.Core
 			// A runtime icon is the same kind of state: written by an observer, never rewritten
 			// by the next occupant. The style's icon is part of the prefab and stays.
 			ClearIcon();
+			SetMark(NameplateMark.None, Color.white);
 
 			OnNameplateDisabled?.Invoke(this);
 		}

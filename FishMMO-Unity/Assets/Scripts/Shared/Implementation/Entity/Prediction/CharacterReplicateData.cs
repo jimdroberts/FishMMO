@@ -73,6 +73,33 @@ namespace FishMMO.Shared
 		public byte ViewOffsetFraction;
 
 		/// <summary>
+		/// The EXACT server tick this client was drawing its peers at, as an offset from this input's own tick: the whole
+		/// ticks, low 16 bits (the server unwraps them against its present tick, which is never 65536 ticks away).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Observed characters are drawn on one shared playback clock (FishNet NetworkTransform, FISHMMO EDIT: timed
+		/// playback), so one tick describes every character on screen. Sending it removes every estimate the older claim
+		/// above rested on: the round trip and its jitter, the batching delay, and the server's replicate queue depth. The
+		/// input's own tick is exact on both sides, so input tick + offset is exactly the tick that was on screen when the
+		/// input was made, and the server rewinds there.
+		/// </para>
+		/// <para>
+		/// Meaningful only when <see cref="ViewTickFraction"/> is not 0; until the client has a clock (just connected) it
+		/// sends 0 and the round-trip claim is used instead. The client changes it only when the drawn tick moves by more
+		/// than a sixteenth of a tick, so in steady play it is not resent. Still a claim: the server caps how far back it
+		/// reaches exactly as it capped the old one.
+		/// </para>
+		/// </remarks>
+		public ushort ViewTickOffset;
+
+		/// <summary>
+		/// The sub-tick part of <see cref="ViewTickOffset"/>, encoded 1..255 for 0..1 of a tick (value - 1) / 254; 0 means
+		/// "no exact view tick: use the round-trip claim".
+		/// </summary>
+		public byte ViewTickFraction;
+
+		/// <summary>
 		/// Aim direction for this input frame, as a unit vector.
 		/// </summary>
 		/// <remarks>

@@ -74,6 +74,24 @@ namespace FishNet.Managing.Transporting
         [SerializeField]
         private uint _maximumClientPacketSize = 20480;
         /// <summary>
+        /// FISHMMO EDIT (proposed upstream, feat/send-interval): ticks between flushes of the server's outgoing data. 1 sends
+        /// after every tick. With a larger value, messages written on the ticks in between stay in each connection's bundle
+        /// and leave with the next flush. Each message is still read against the tick it was written on (PacketId.TickMarker).
+        /// </summary>
+        public byte ServerSendInterval => _serverSendInterval;
+        [Tooltip("Ticks between flushes of the server's outgoing data. 1 sends after every tick; larger values send the same messages in fewer, fuller packets.")]
+        [Range(1, byte.MaxValue)]
+        [SerializeField]
+        private byte _serverSendInterval = 1;
+        /// <summary>
+        /// FISHMMO EDIT: ticks between flushes of the client's outgoing data. See <see cref="ServerSendInterval"/>.
+        /// </summary>
+        public byte ClientSendInterval => _clientSendInterval;
+        [Tooltip("Ticks between flushes of the client's outgoing data. 1 sends after every tick; larger values send the same messages in fewer, fuller packets.")]
+        [Range(1, byte.MaxValue)]
+        [SerializeField]
+        private byte _clientSendInterval = 1;
+        /// <summary>
         /// Layer used to modify data before it is sent or received.
         /// </summary>
         [Tooltip("Layer used to modify data before it is sent or received.")]
@@ -355,7 +373,7 @@ namespace FishNet.Managing.Transporting
             for (byte i = 0; i < CHANNEL_COUNT; i++)
             {
                 int mtu = GetLowestMTU(i);
-                _toServerBundles.Add(new(_networkManager, mtu));
+                _toServerBundles.Add(new(_networkManager, mtu, asServer: false)); // FISHMMO EDIT: bundle side, for tick markers.
             }
         }
 
@@ -518,16 +536,121 @@ namespace FishNet.Managing.Transporting
             return _intermediateLayer.HandleOutgoing(src, toServer);
         }
 
+        /* FISHMMO EDIT: send intervals, as proposed upstream (feat/send-interval). The tick flushes each side's outgoing data
+         * on every Nth tick (1 = every tick, FishNet's own behaviour). Set by FishMMO's NetworkSendSchedule; read by
+         * TimeManager.TryIterateData and PacketBundle.Write (tick markers). */
+        /// <summary>
+        /// Sets how many ticks pass between flushes of outgoing data for the server or the client. Values below 1 are treated as 1.
+        /// </summary>
+        /// <param name = "asServer">True to set the server's interval, false the client's.</param>
+        /// <param name = "interval">Ticks between flushes; 1 flushes after every tick.</param>
+        public void SetSendInterval(bool asServer, byte interval)
+        {
+            if (interval < 1)
+                interval = 1;
+
+            if (asServer)
+                _serverSendInterval = interval;
+            else
+                _clientSendInterval = interval;
+        }
+
+        /// <summary>
+        /// Returns the send interval for the server or the client.
+        /// </summary>
+        public byte GetSendInterval(bool asServer) => asServer ? _serverSendInterval : _clientSendInterval;
+
+        /// <summary>
+        /// Returns if outgoing data for the server or the client is flushed on the given tick.
+        /// </summary>
+        internal bool ShouldFlushOutgoing(bool asServer, uint tick)
+        {
+            byte interval = GetSendInterval(asServer);
+            // FISHMMO EDIT: per-connection send interval. Connections with their own interval are checked every tick.
+            if (asServer && ConnectionSendIntervalsUsed)
+                return true;
+            return interval <= 1 || tick % interval == 0;
+        }
+
+        #region FISHMMO EDIT: per-connection send interval.
+        /// <summary>
+        /// True once any connection has been given its own send interval (NetworkConnection.SetSendInterval). From then on
+        /// the server checks every connection on every tick and marks ticks in its bundles. It stays true, so a bundle that
+        /// already spans ticks keeps its markers.
+        /// </summary>
+        internal bool ConnectionSendIntervalsUsed { get; private set; }
+
+        /// <summary>Called when a connection is given its own send interval.</summary>
+        internal void NoteConnectionSendInterval() => ConnectionSendIntervalsUsed = true;
+
+        /// <summary>The interval a connection's unreliable data is flushed at: its own, else the server's.</summary>
+        public byte GetSendInterval(NetworkConnection connection)
+        {
+            return connection != null && connection.SendInterval > 0 ? connection.SendInterval : _serverSendInterval;
+        }
+
+        /// <summary>
+        /// Returns if a connection's outgoing data is flushed on a tick: on its own interval, or on the server's when
+        /// reliable data is waiting (replies are never slowed by a connection's longer interval).
+        /// </summary>
+        internal bool ShouldFlushConnection(NetworkConnection connection, uint tick)
+        {
+            byte server = _serverSendInterval;
+            bool serverDue = server <= 1 || tick % server == 0;
+            byte own = connection.SendInterval;
+            if (own == 0)
+                return serverDue;
+            if (own <= 1 || tick % own == 0)
+                return true;
+            return serverDue && connection.HasReliableDataToSend;
+        }
+
+        /// <summary>Connections passed over by a scheduled flush, kept dirty for a later one.</summary>
+        private readonly List<NetworkConnection> _heldDirtyClients = new();
+        #endregion
+
+        /* FishMMO edit: an observation hook on every message queued for a client, before bundling, so the scene server can
+         * break each connection's outbound traffic down by message type (FishMMO.Server.ServerTrafficBreakdown). Invoked per
+         * recipient, with the message as written (its PacketId first). Null unless a breakdown is running: one branch. */
+        /// <summary>Raised for every message queued for a client: channel, message bytes, recipient. Observation only.</summary>
+        public static Action<byte, ArraySegment<byte>, NetworkConnection> OnServerMessageQueued;
+
+        #region FISHMMO EDIT: packet sampling and a runtime intermediate layer.
+        /// <summary>
+        /// Raised for every packet the server sends (true) or receives (false), as FishNet wrote or will read it: before the
+        /// intermediate layer on the way out, after it on the way in. Observation only; null unless something is sampling.
+        /// </summary>
+        public static Action<ArraySegment<byte>, bool> OnServerPacketObserved;
+
+        /// <summary>
+        /// Sets the intermediate layer from code, after the NetworkManager initializes and before the server or client starts. <paramref name="mtuOverhead"/> is the
+        /// most the layer can add to a packet; it is added to the MTU reserve so a grown packet still fits.
+        /// </summary>
+        /// <returns>False before the NetworkManager initializes, once the server or client has started, or when a layer is already set.</returns>
+        public bool SetIntermediateLayer(IntermediateLayer layer, int mtuOverhead)
+        {
+            if (layer == null || _intermediateLayer != null)
+                return false;
+            if (_networkManager == null || _networkManager.IsClientStarted || _networkManager.IsServerStarted)
+                return false;
+            if (mtuOverhead > 0)
+                SetMTUReserve(GetMTUReserve() + mtuOverhead);
+            _intermediateLayer = layer;
+            _intermediateLayer.InitializeOnce(this);
+            return true;
+        }
+        #endregion
+
         /// <summary>
         /// Sends data to a client.
         /// </summary>
         /// <param name = "channelId">Channel to send on.</param>
         /// <param name = "segment">Data to send.</param>
         /// <param name = "connection">Connection to send to. Use null for all clients.</param>
-        /// <param name = "splitLargeMessages">True to split large packets which exceed MTU and send them in order on the reliable channel.</param>
         internal void SendToClient(byte channelId, ArraySegment<byte> segment, NetworkConnection connection, DataOrderType orderType = DataOrderType.Default)
         {
             channelId = GetFallbackChannelIdAsNeeded(channelId);
+            OnServerMessageQueued?.Invoke(channelId, segment, connection);
 
             if (SendSplitMessage(connection, channelId, segment, orderType) == SPLIT_NOT_REQUIRED_VALUE)
                 connection.SendToClient(channelId, segment, forceNewBuffer: false, orderType);
@@ -676,7 +799,8 @@ namespace FishNet.Managing.Transporting
         /// Processes data to be sent by the socket.
         /// </summary>
         /// <param name = "asServer">True to send data from the local server to clients, false to send from the local client to server.
-        internal void IterateOutgoing(bool asServer)
+        /// <param name = "scheduled">FISHMMO EDIT: true from the tick loop, which honours per-connection send intervals; false (direct calls such as a kick or shutdown) flushes every connection.</param>
+        internal void IterateOutgoing(bool asServer, bool scheduled = false)
         {
             if (asServer && _networkManager.ServerManager.AreAllServersStopped())
                 return;
@@ -697,8 +821,13 @@ namespace FishNet.Managing.Transporting
             {
                 TimeManager tm = _networkManager.TimeManager;
                 uint localTick = tm.LocalTick;
+                /* FISHMMO EDIT: per-connection send interval. SyncTypes are written on the server's own flush ticks as
+                 * before; a scheduled pass on another tick only flushes the connections whose own interval is due. */
+                bool perConnection = scheduled && ConnectionSendIntervalsUsed;
+                bool serverDue = _serverSendInterval <= 1 || localTick % _serverSendInterval == 0;
                 // Write any dirty syncTypes.
-                _networkManager.ServerManager.Objects.WriteDirtySyncTypes();
+                if (!perConnection || serverDue)
+                    _networkManager.ServerManager.Objects.WriteDirtySyncTypes();
 
                 int dirtyCount = _dirtyToClients.Count;
 
@@ -708,6 +837,12 @@ namespace FishNet.Managing.Transporting
                     NetworkConnection conn = _dirtyToClients[z];
                     if (conn == null || !conn.IsValid)
                         continue;
+                    // FISHMMO EDIT: per-connection send interval. Not due: stays dirty, its data leaves with a later flush.
+                    if (perConnection && !conn.Disconnecting && !ShouldFlushConnection(conn, localTick))
+                    {
+                        _heldDirtyClients.Add(conn);
+                        continue;
+                    }
 
                     // Get packets for every channel.
                     for (byte channel = 0; channel < channelCount; channel++)
@@ -725,6 +860,8 @@ namespace FishNet.Managing.Transporting
                                     if (ppb.GetBuffer(i, out ByteBuffer bb))
                                     {
                                         ArraySegment<byte> segment = new(bb.Data, 0, bb.Length);
+                                        // FISHMMO EDIT: packet sampling.
+                                        OnServerPacketObserved?.Invoke(segment, true);
                                         if (HasIntermediateLayer)
                                             segment = ProcessIntermediateOutgoing(segment, false);
                                         #if DEVELOPMENT
@@ -781,6 +918,12 @@ namespace FishNet.Managing.Transporting
                     _dirtyToClients.Clear();
                 else if (dirtyCount > 0)
                     _dirtyToClients.RemoveRange(0, dirtyCount);
+                // FISHMMO EDIT: per-connection send interval. Held connections are still marked dirty, so re-list them here.
+                if (_heldDirtyClients.Count > 0)
+                {
+                    _dirtyToClients.AddRange(_heldDirtyClients);
+                    _heldDirtyClients.Clear();
+                }
             }
 
             // Sends data as client.

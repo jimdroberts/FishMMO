@@ -128,6 +128,21 @@ namespace FishMMO.Client
 		/// </remarks>
 		private FactionRow expandedRow;
 
+		/// <summary>The aggression toggle and the line under it.</summary>
+		private Toggle aggressionToggle;
+		private Label aggressionHint;
+
+		/// <summary>How long a click shows the requested state before the synced one takes over again.</summary>
+		/// <remarks>The server answers by changing the synced state; a refusal is silence, so the request must expire.</remarks>
+		private const float AggressionRequestSeconds = 3f;
+
+		/// <summary>The state the player last asked for, shown until the synced state matches or the request expires.</summary>
+		private bool aggressionRequested;
+		private float aggressionRequestExpires = float.NegativeInfinity;
+
+		/// <summary>What the toggle and line last showed, so a tick that changes nothing writes nothing.</summary>
+		private int aggressionShownKey = int.MinValue;
+
 		/// <summary>
 		/// Queries the faction sections and subscribes to character/client lifecycle events.
 		/// </summary>
@@ -168,6 +183,90 @@ namespace FishMMO.Client
 			 * is a no-op, so this is safe on the first pass. */
 			IPlayerCharacter.OnStopLocalClient -= PlayerCharacter_OnStopLocalClient;
 			IPlayerCharacter.OnStopLocalClient += PlayerCharacter_OnStopLocalClient;
+
+			aggressionToggle = root.Q<Toggle>("faction-aggression");
+			aggressionHint = root.Q<Label>("faction-aggression-hint");
+			aggressionToggle?.RegisterValueChangedCallback(OnAggressionToggled);
+			aggressionShownKey = int.MinValue;
+			ShowAggression();
+		}
+
+		/// <summary>
+		/// The player flipped the toggle: the server is asked, and the toggle keeps showing the request (its line says it is
+		/// waiting) until the synced state matches or <see cref="AggressionRequestSeconds"/> pass, when the synced state is
+		/// shown again: a refusal is undone visibly rather than left claiming something untrue.
+		/// </summary>
+		private void OnAggressionToggled(ChangeEvent<bool> evt)
+		{
+			// The click has already moved the toggle itself: whatever follows rewrites it, even to the state last shown.
+			aggressionShownKey = int.MinValue;
+			FactionController controller = OwnFaction();
+			if (controller == null)
+			{
+				ShowAggression();
+				return;
+			}
+			if (!evt.newValue && controller.AggressionEnabled && controller.AggressionLockRemaining > 0f)
+			{
+				// Locked on: not asked, the line says why and for how long.
+				aggressionRequestExpires = float.NegativeInfinity;
+				ShowAggression();
+				return;
+			}
+			aggressionRequested = evt.newValue;
+			aggressionRequestExpires = Time.unscaledTime + AggressionRequestSeconds;
+			Client.Broadcast(new FactionAggressionBroadcast() { Enabled = evt.newValue }, FishNet.Transporting.Channel.Reliable);
+			ShowAggression();
+		}
+
+		private FactionController OwnFaction()
+		{
+			return Character != null && Character.TryGet(out IFactionController faction) ? faction as FactionController : null;
+		}
+
+		/// <summary>
+		/// The toggle and its line follow the synced state every frame the panel is shown, so neither can lag the other or the
+		/// server, and the lock countdown counts down.
+		/// </summary>
+		protected override void OnTick()
+		{
+			if (Visible)
+			{
+				ShowAggression();
+			}
+		}
+
+		/// <summary>
+		/// Writes the toggle and the line under it, always together, from one state: the pending request while it lasts,
+		/// else the synced toggle (and its lock, while turning it off is refused).
+		/// </summary>
+		private void ShowAggression()
+		{
+			FactionController controller = OwnFaction();
+			bool synced = controller != null && controller.AggressionEnabled;
+			bool pending = controller != null && aggressionRequested != synced && Time.unscaledTime < aggressionRequestExpires;
+			bool on = pending ? aggressionRequested : synced;
+			int lockSeconds = !pending && synced ? Mathf.CeilToInt(controller.AggressionLockRemaining) : 0;
+
+			int key = (controller != null ? 1 : 0) | (on ? 2 : 0) | (pending ? 4 : 0) | (lockSeconds << 3);
+			if (key == aggressionShownKey)
+			{
+				return;
+			}
+			aggressionShownKey = key;
+
+			aggressionToggle?.SetValueWithoutNotify(on);
+			aggressionToggle?.SetEnabled(controller != null);
+			if (aggressionHint != null)
+			{
+				aggressionHint.text = pending
+					? (on ? "Turning on…" : "Turning off…")
+					: lockSeconds > 0
+						? $"On, locked for {lockSeconds} s: you recently harmed a neutral."
+						: on
+							? "On: you can harm neutrals, and anyone outside your party and guild can harm you."
+							: "Off: you can only harm enemies.";
+			}
 		}
 
 		/// <summary>
@@ -282,6 +381,8 @@ namespace FishMMO.Client
 			}
 
 			IFactionController.OnUpdateFaction += FactionController_OnUpdateFaction;
+			aggressionRequestExpires = float.NegativeInfinity;
+			ShowAggression();
 
 			/* Rebuilt from the controller — the model — rather than from whatever this panel was
 			 * told while it was closed. The controller owns the standings as plain data; the rows

@@ -89,11 +89,26 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
+			Restore(character, replay: false);
+			return true;
+		}
 
-			if (Restores == null ||
+		/// <summary>
+		/// Restores the resources again on a reconcile replay of the use tick: the reconcile rolled them back, and the
+		/// charge and cooldown it did not. See <see cref="ConsumableTemplate.ReplayEffect"/>.
+		/// </summary>
+		public override void ReplayEffect(IPlayerCharacter character)
+		{
+			Restore(character, replay: true);
+		}
+
+		/// <summary>Restores each listed resource. On a replay the heal raises no local event (achievements, numbers).</summary>
+		private void Restore(IPlayerCharacter character, bool replay)
+		{
+			if (character == null || Restores == null ||
 				!character.TryGet(out ICharacterAttributeController attributeController))
 			{
-				return true;
+				return;
 			}
 
 			character.TryGet(out ICharacterDamageController damageController);
@@ -112,13 +127,12 @@ namespace FishMMO.Shared
 				 * attribute directly would restore a corpse in silence. */
 				if (damageController != null && health != null && ReferenceEquals(resource, health))
 				{
-					damageController.Heal(character, restoration.Amount);
+					damageController.Heal(character, restoration.Amount, ignoreAchievements: replay);
 					continue;
 				}
 
 				resource.Gain(restoration.Amount);
 			}
-			return true;
 		}
 	}
 }

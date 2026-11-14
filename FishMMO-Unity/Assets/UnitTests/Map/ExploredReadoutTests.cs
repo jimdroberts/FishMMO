@@ -317,6 +317,57 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void TheReadoutPrecision_FollowsTheGrid()
+		{
+			/* A 1000 m scene at 40 m chunks: one chunk is 0.13%, so tenths. */
+			LogAssert.IsTrue(UITKMap.FormatExplored(0, 784) == "Explored 0.0%", UITKMap.FormatExplored(0, 784));
+			LogAssert.IsTrue(UITKMap.FormatExplored(1, 784) == "Explored 0.1%", UITKMap.FormatExplored(1, 784));
+
+			/* The reported case: Moron 2 is 4590 m, 115 by 115 chunks, each 0.0076%. Tenths moved
+			 * once per thirteen chunks and read as stuck; hundredths move every chunk or two. */
+			LogAssert.IsTrue(UITKMap.FormatExplored(0, 13225) == "Explored 0.00%", UITKMap.FormatExplored(0, 13225));
+			LogAssert.IsTrue(UITKMap.FormatExplored(2, 13225) == "Explored 0.01%", UITKMap.FormatExplored(2, 13225));
+			LogAssert.IsTrue(UITKMap.FormatExplored(100, 13225) == "Explored 0.75%", UITKMap.FormatExplored(100, 13225));
+			LogAssert.IsTrue(UITKMap.FormatExplored(13224, 13225) == "Explored 99.99%",
+				"floored: one chunk short of everything never reads 100");
+			LogAssert.IsTrue(UITKMap.FormatExplored(13225, 13225) == "Explored 100.00%", UITKMap.FormatExplored(13225, 13225));
+
+			/* Clamped both ways: a one-chunk interior still prints a decimal, and a huge grid never more than three. */
+			LogAssert.IsTrue(UITKMap.FormatExplored(1, 1) == "Explored 100.0%", UITKMap.FormatExplored(1, 1));
+			LogAssert.IsTrue(UITKMap.FormatExplored(1, 10000000) == "Explored 0.000%", UITKMap.FormatExplored(1, 10000000));
+			LogAssert.IsTrue(UITKMap.FormatExplored(0, 0) == string.Empty, "no grid, no readout");
+		}
+
+		[Test]
+		public void ContinuousExploration_StillSaves_WithinTheCap()
+		{
+			/* The persistence defect: every new chunk pushed the debounced save back, so a player
+			 * who kept travelling never had their map written, and a web tab closed mid-journey
+			 * lost all of it. The debounce still coalesces, but never past the cap. */
+			MethodInfo schedule = typeof(ClientMapSystem).GetMethod("ScheduleSave", BindingFlags.Static | BindingFlags.NonPublic);
+			double debounce = (double)typeof(ClientMapSystem).GetField("SaveDebounce", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+			double cap = (double)typeof(ClientMapSystem).GetField("MaxSaveDelay", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+
+			ClientMapSystem.Flush();
+			ClearSaveDueTime();
+
+			const double start = 1000.0;
+			for (double now = start; now < start + (cap * 3.0); now += debounce * 0.5)
+			{
+				schedule.Invoke(null, new object[] { now });
+				LogAssert.IsTrue(SaveDueTime() <= start + cap,
+					$"a new chunk every {debounce * 0.5:F1}s must not push the save past {cap}s after the first, but it is due at +{SaveDueTime() - start:F1}s");
+			}
+
+			ClientMapSystem.Flush();
+			schedule.Invoke(null, new object[] { start + 500.0 });
+			LogAssert.IsTrue(SaveDueTime() == start + 500.0 + debounce,
+				"a flush starts the cap afresh, so the next change gets the ordinary debounce");
+			ClearSaveDueTime();
+			ClientMapSystem.Flush();
+		}
+
+		[Test]
 		public void TheReadout_ReportsWhateverTheFogSays()
 		{
 			Rect world = WorldRect();

@@ -861,6 +861,8 @@ int32_t wt_server_start_impl(wt_server_s* server)
     settings.IsSet.DatagramReceiveEnabled = TRUE;
     settings.ServerResumptionLevel = QUIC_SERVER_NO_RESUME;
     settings.IsSet.ServerResumptionLevel = TRUE;
+    settings.MaxAckDelayMs = WT_MAX_ACK_DELAY_MS;
+    settings.IsSet.MaxAckDelayMs = TRUE;
 
     /* ── Open configuration with ALPN ── */
     QUIC_BUFFER alpn_buf;

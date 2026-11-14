@@ -368,6 +368,24 @@
                 </ui:VisualElement>
                 <ui:Label text="Sets the size of the message log and the text you type."
                           class="fish-hint options-hint" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Timestamps" class="fish-label options-row-label" />
+                    <ui:Toggle name="chat-timestamps-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Timestamp Format" class="fish-label options-row-label" />
+                    <ui:DropdownField name="chat-timestamp-format-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Show Channel Tags" class="fish-label options-row-label" />
+                    <ui:Toggle name="chat-channel-tags-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Group Repeated Senders" class="fish-label options-row-label" />
+                    <ui:Toggle name="chat-group-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label text="Timestamps use your computer's clock. Channel tags name the channel, e.g. [Tell]. Grouping writes a sender's name once over a run of their lines."
+                          class="fish-hint options-hint" />
 
                 <!--
                     The network statistics overlay: a readout of what the client sends and

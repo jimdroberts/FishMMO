@@ -266,11 +266,36 @@ namespace FishMMO.UnitTests
 			string activation = ReadSource(
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs");
 			LogAssert.IsTrue(
-				activation.Contains("else if (consumable.Cooldown > 0.0f && cachedCooldownController != null)"),
+				activation.Contains("if (state.ContainsReplayed() && consumable.Cooldown > 0.0f && cachedCooldownController != null)"),
 				"FinishConsumable must have a replay branch for the cooldown.");
 			LogAssert.IsTrue(
 				activation.Contains("cachedCooldownController.AddCooldown(consumable.ID, new CooldownInstance("),
 				"And that branch must re-add the cooldown the pre-use reconciles wiped.");
+		}
+
+		/// <summary>
+		/// SOURCE assertion. The same pre-use reconciles roll back the character's RESOURCES, so a potion showed its restore,
+		/// then the old value for about a round trip, then the restore again (57 -> 100 -> 57 -> 100 mana). The replay of the
+		/// use tick must re-apply the effect, and must still start when the predicted use took the last item.
+		/// </summary>
+		[Test]
+		public void ConsumableReplay_ReappliesTheEffect_EvenForTheLastItem()
+		{
+			string activation = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs");
+			LogAssert.IsTrue(activation.Contains("consumable.ReplayEffect(PlayerCharacter);"),
+				"The replay branch of FinishConsumable re-applies the consumable's effect.");
+			LogAssert.IsTrue(activation.Contains("if (item == null && !replayOfPredictedUse)"),
+				"A replayed start of a use this owner predicted is not refused for the item the prediction already took.");
+			LogAssert.IsTrue(activation.Contains("RecordPredictedConsumableStart(useTick, templateID);"),
+				"The owner records the uses it predicts, so the replay can recognise them.");
+			string potion = ReadSource(
+				"Assets/Scripts/Shared/Implementation/Entity/Item/Template/Types/Consumable/ResourceConsumableTemplate.cs");
+			LogAssert.IsTrue(potion.Contains("public override void ReplayEffect(IPlayerCharacter character)") &&
+				potion.Contains("Restore(character, replay: true);"),
+				"A resource potion's replay effect is its restore, with the heal's local events suppressed.");
+			LogAssert.IsTrue(potion.Contains("damageController.Heal(character, restoration.Amount, ignoreAchievements: replay);"),
+				"A replayed heal raises no achievement or local heal event.");
 		}
 
 		// ── F1: death broadcasts the combat clear ────────────────────────────────────

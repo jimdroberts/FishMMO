@@ -170,6 +170,11 @@ namespace FishNet.Component.Transforming
         public class GoalData : IResettable
         {
             public uint ReceivedTick;
+            /// <summary>
+            /// FISHMMO EDIT: the server tick this data describes, kept even for a reliable settle (whose Transforms.Tick is
+            /// cleared). Timed playback reaches this data exactly when the playback clock passes it.
+            /// </summary>
+            public uint PlaybackTick;
             public RateData Rates = new();
             public TransformData Transforms = new();
 
@@ -179,6 +184,7 @@ namespace FishNet.Component.Transforming
             public void ResetState()
             {
                 ReceivedTick = 0;
+                PlaybackTick = 0;
                 Transforms.ResetState();
                 Rates.ResetState();
             }
@@ -645,6 +651,332 @@ namespace FishNet.Component.Transforming
         /// Current GoalData being used.
         /// </summary>
         private GoalData _currentGoalData;
+
+        #region FISHMMO EDIT: compact transforms.
+        /* Two smaller encodings for the unreliable updates observers receive most of.
+         *
+         * Positions (24-bit packing only): an axis is sent as the low 16 bits of its 24-bit value, flagged with both of
+         * its size bits (a combination stock FishNet never writes). The reader restores the high bits from the last value
+         * it holds for that axis, choosing the value nearest to it, which is exact while the object is within 327 m of
+         * what the reader last received. That reference is ANY earlier update, not the previous one, so a lost or
+         * reordered packet costs nothing. The writer only wraps when it has a sent value to measure against and the axis
+         * moved less than WrappedPositionSafeUnits since it, leaving half the range for readers that missed updates; a
+         * teleport, a first send or a huge jump goes out in full as before.
+         *
+         * Rotation (Packed only): a rotation about the up axis alone, which is every upright character, is sent as a
+         * 16-bit heading (0.0055 degrees, finer than the 32-bit quaternion it replaces). Anything tilted sends an escape
+         * value and then the quaternion as before, so nothing is lost. Both peers must agree, so this one is a static
+         * set the same on both. */
+        /// <summary>FISHMMO EDIT: true to send wrapped 16-bit positions where safe (see the region note). Readers always understand them.</summary>
+        public static bool WrappedPositions = true;
+        /// <summary>FISHMMO EDIT: true to send upright rotations as a 16-bit heading. Must be the same on server and clients.</summary>
+        public static bool CompactRotation = true;
+        /// <summary>Largest move, in packed units, from the last sent value that is still wrapped: a quarter of the 16-bit range.</summary>
+        public const int WrappedPositionSafeUnits = 16384;
+        /// <summary>Heading code that announces a full quaternion follows.</summary>
+        public const ushort CompactRotationEscape = ushort.MaxValue;
+        /// <summary>Largest x or z component of a rotation still sent as a heading (about 0.01 degrees of tilt).</summary>
+        public const float CompactRotationTiltTolerance = 1e-4f;
+
+        #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+        /// <summary>True when this send may wrap its positions: 24-bit packing, not childed, and a previous send to measure against.</summary>
+        private bool CanWrapPositions(TransformPackingData packing, TransformData lastSent)
+        {
+            return WrappedPositions && lastSent != null && !lastSent.IsDefault && packing.Position != AutoPackType.Unpacked &&
+                   _positionPackingBits == PositionPackingBits.TwentyFour;
+        }
+
+        /// <summary>Writes the low 16 bits of a scaled position axis when it is close enough to the last sent value; false writes nothing.</summary>
+        public static bool TryWriteWrappedPosition(Writer writer, float compressed, float previousCompressed)
+        {
+            if (Math.Abs(compressed) > POSITION_PACKING_24_MAX_VALUE || Math.Abs(compressed - previousCompressed) >= WrappedPositionSafeUnits)
+                return false;
+            int value = (int)Math.Round(compressed, MidpointRounding.AwayFromZero);
+            writer.WriteUInt16Unpacked((ushort)value);
+            return true;
+        }
+
+        /// <summary>Reads a wrapped position axis against the reader's last value for it.</summary>
+        private float ReadWrappedPosition(PooledReader reader, float reference) => ReadWrappedPosition(reader, reference, GetPositionCompressionScale());
+
+        /// <summary>Restores a wrapped axis: the value with these low 16 bits nearest to <paramref name="reference"/>.</summary>
+        public static float ReadWrappedPosition(Reader reader, float reference, float scale)
+        {
+            ushort low = reader.ReadUInt16Unpacked();
+            int referenceValue = (int)Math.Round(reference * scale, MidpointRounding.AwayFromZero);
+            int value = referenceValue + (short)(ushort)(low - (ushort)referenceValue);
+            return value / scale;
+        }
+        #endif
+
+        /// <summary>Writes a rotation as a 16-bit heading when it is upright, else the escape and a packed quaternion.</summary>
+        public static void WriteCompactRotation(Writer writer, Quaternion rotation)
+        {
+            if (Math.Abs(rotation.x) <= CompactRotationTiltTolerance && Math.Abs(rotation.z) <= CompactRotationTiltTolerance &&
+                (rotation.y != 0f || rotation.w != 0f))
+            {
+                double degrees = 2d * Math.Atan2(rotation.y, rotation.w) * (180d / Math.PI);
+                degrees %= 360d;
+                if (degrees < 0d)
+                    degrees += 360d;
+                int code = (int)Math.Round(degrees / 360d * CompactRotationEscape, MidpointRounding.AwayFromZero);
+                if (code >= CompactRotationEscape)
+                    code = 0;
+                writer.WriteUInt16Unpacked((ushort)code);
+                return;
+            }
+            writer.WriteUInt16Unpacked(CompactRotationEscape);
+            writer.WriteQuaternion32(rotation);
+        }
+
+        /// <summary>Reads a rotation written by <see cref="WriteCompactRotation"/>.</summary>
+        public static Quaternion ReadCompactRotation(Reader reader)
+        {
+            ushort code = reader.ReadUInt16Unpacked();
+            if (code == CompactRotationEscape)
+                return reader.ReadQuaternion32();
+            return Quaternion.Euler(0f, (float)(code * (360d / CompactRotationEscape)), 0f);
+        }
+        #endregion
+
+        #region FISHMMO EDIT: timed playback.
+        /* Observed transforms are drawn at ONE shared point in the past: the newest server tick this client has received
+         * (smoothed), minus Interpolation ticks, or more while the connection has recently been late (PlaybackClock). FishNet's own playback starts when Interpolation goals are queued and then
+         * consumes them at a fixed rate without ever looking at a clock, so each object's delay was whatever it happened to
+         * be when its playback last (re)started: about 3 ticks after spawning, 3 or 4 after a stop-and-go (one more with
+         * batched sends), about 1 after a reliable settle. Lag compensation rewinds every character by one fixed delay, so a
+         * predicted hit on a character that had just started moving missed on the server. Here each goal is reached when the
+         * clock passes its tick, a late or early object is sped up or slowed down back onto the clock, and a far-off one
+         * snaps. Clients only; the server's own playback of client-authoritative data is unchanged. */
+        /// <summary>
+        /// FISHMMO EDIT: true to draw observed transforms on the shared playback clock (see the region note). False restores
+        /// FishNet's queue-count playback.
+        /// </summary>
+        public static bool TimedPlayback = true;
+        /// <summary>The draw tick timed playback is steering to this frame (set before MoveToTarget runs).</summary>
+        private double _timedTarget;
+        /// <summary>True while MoveToTarget runs under timed playback: no queue-count speed-up, and goals wait for their tick.</summary>
+        private bool _timedStepActive;
+        /// <summary>Ticks behind the clock beyond which an object snaps instead of catching up.</summary>
+        private const double TimedSnapTicks = 6d;
+        /// <summary>Queued goals kept under timed playback; older ones are dropped (the object is then far behind and snaps).</summary>
+        private const int TimedMaximumQueue = 32;
+        /// <summary>Most a newly started object is fast-forwarded to reach the clock, in ticks.</summary>
+        private const double TimedMaximumCatchUpTicks = 4d;
+        /// <summary>Speed change per tick of error: an object one tick behind plays at 1.5x until it is back on the clock.</summary>
+        private const float TimedCorrectionGain = 0.5f;
+        private const float TimedMinimumRate = 0.25f;
+        private const float TimedMaximumRate = 3f;
+
+        /// <summary>True when this object is drawn on the shared playback clock: a client's view of data it receives.</summary>
+        private bool IsTimedPlayback => TimedPlayback && !IsServerStarted && IsClientInitialized;
+
+        /// <summary>
+        /// FISHMMO EDIT: the server tick this client draws observed transforms at this frame, or 0 before it has received
+        /// anything. Never newer than <paramref name="minimumDelayTicks"/> behind the newest data, and further behind when
+        /// data has recently arrived late (see PlaybackClock). Lag compensation sends this tick with every input, so the
+        /// server rewinds to exactly what was on screen whatever the delay is.
+        /// </summary>
+        public static double PlaybackDrawTick(TimeManager timeManager, double minimumDelayTicks)
+        {
+            return PlaybackClock.DrawTick(timeManager, minimumDelayTicks);
+        }
+
+        /// <summary>
+        /// The shared playback clock: the newest server tick this client has received, smoothed so it advances steadily
+        /// although data arrives in steps (a send interval above 1 delivers two ticks at once). Computed once per frame.
+        /// </summary>
+        /// <remarks>
+        /// Also the ADAPTIVE DELAY. Data that arrives later than the delay leaves an object with nothing to move toward, so
+        /// it pauses and catches up. The clock records how far behind itself each arrival was and keeps the delay above the
+        /// recent worst: it grows at once when data comes in late and shrinks back slowly (DelayRecoveryTicksPerSecond)
+        /// when the connection is steady, capped at MaximumDelayTicks. A steady connection plays at the minimum delay; a
+        /// jittery one plays a little further behind and does not pause. Safe for hits because the delay in force is part
+        /// of the tick every input claims.
+        /// </remarks>
+        private static class PlaybackClock
+        {
+            /// <summary>Most the delay grows to, in ticks: beyond this the connection is broken, not jittery.</summary>
+            private const double MaximumDelayTicks = 8d;
+            /// <summary>Margin kept above the latest arrival's lateness, in ticks.</summary>
+            private const double DelayMarginTicks = 0.5d;
+            /// <summary>How fast the remembered worst lateness fades once arrivals are steady, ticks per second.</summary>
+            private const double LatenessFadeTicksPerSecond = 0.5d;
+            /// <summary>How fast the delay shrinks toward what the connection needs, ticks per second.</summary>
+            private const double DelayRecoveryTicksPerSecond = 0.5d;
+            private static double _worstLateness;
+            private static double _extraDelay;
+
+            /// <summary>The draw tick: the clock less the larger of the minimum delay and the adaptive one; 0 before any data.</summary>
+            public static double DrawTick(TimeManager timeManager, double minimumDelayTicks)
+            {
+                double reference = Reference(timeManager);
+                if (reference <= 0d)
+                    return 0d;
+                return reference - System.Math.Max(minimumDelayTicks, _extraDelay);
+            }
+
+            /// <summary>How quickly the clock follows the arrival pattern, in seconds.</summary>
+            private const double TimeConstantSeconds = 1d;
+            /// <summary>An arrival this far from the smoothed clock (a stall, a reconnect) resets it instead of being averaged in.</summary>
+            private const double ResyncTicks = 10d;
+            private static int _frame = -1;
+            private static TimeManager _timeManager;
+            private static double _offset;
+            private static bool _hasOffset;
+            private static double _reference;
+            private static double _lastTime;
+
+            /// <summary>The smoothed newest received server tick, or 0 when the client has received nothing yet.</summary>
+            public static double Reference(TimeManager timeManager)
+            {
+                if (timeManager == null)
+                    return 0d;
+                if (_frame == Time.frameCount && ReferenceEquals(_timeManager, timeManager))
+                    return _reference;
+
+                _frame = Time.frameCount;
+                if (!ReferenceEquals(_timeManager, timeManager))
+                {
+                    _timeManager = timeManager;
+                    _hasOffset = false;
+                    _worstLateness = 0d;
+                    _extraDelay = 0d;
+                }
+
+                uint remote = timeManager.LastPacketTick.LastRemoteTick;
+                double tickDelta = timeManager.TickDelta;
+                if (remote == TimeManager.UNSET_TICK || tickDelta <= 0d)
+                {
+                    _hasOffset = false;
+                    _reference = 0d;
+                    return 0d;
+                }
+
+                double now = Time.unscaledTimeAsDouble;
+                double clock = now / tickDelta;
+                double sample = clock - remote;
+                if (!_hasOffset || System.Math.Abs(sample - _offset) > ResyncTicks)
+                {
+                    _offset = sample;
+                    _hasOffset = true;
+                }
+                else
+                {
+                    double elapsed = System.Math.Max(0d, now - _lastTime);
+                    _offset += (sample - _offset) * (1d - System.Math.Exp(-elapsed / TimeConstantSeconds));
+                }
+                double frameSeconds = System.Math.Max(0d, now - _lastTime);
+                _lastTime = now;
+                _reference = clock - _offset;
+
+                /* Staleness, every frame: how far the clock has run past the newest tick received. That is exactly what
+                 * runs an object out of data once it exceeds the delay. Steady batched arrivals peak about a tick past it;
+                 * data that is late keeps growing it until it arrives, and the delay grows with it, so playback slows
+                 * instead of stopping. */
+                double staleness = _reference - remote;
+                if (staleness > _worstLateness)
+                    _worstLateness = staleness;
+                _worstLateness = System.Math.Max(0d, _worstLateness - LatenessFadeTicksPerSecond * frameSeconds);
+                double needed = System.Math.Min(MaximumDelayTicks, _worstLateness + DelayMarginTicks);
+                if (needed > _extraDelay)
+                    _extraDelay = needed;
+                else
+                    _extraDelay = System.Math.Max(needed, _extraDelay - DelayRecoveryTicksPerSecond * frameSeconds);
+                return _reference;
+            }
+        }
+
+        /// <summary>The tick this object is drawn at now: its current goal's tick less the time still to go.</summary>
+        private double TimedDrawnTick(double tickDelta)
+        {
+            GoalData current = _currentGoalData;
+            return current.PlaybackTick - System.Math.Max(0d, current.Rates.TimeRemaining) / tickDelta;
+        }
+
+        /// <summary>The tick at which a goal starts: when the object leaves the previous goal for it.</summary>
+        private static double TimedStartTick(GoalData goal)
+        {
+            uint span = goal.Rates.TickSpan < 1 ? 1u : goal.Rates.TickSpan;
+            return (double)goal.PlaybackTick - span;
+        }
+
+        /// <summary>
+        /// One frame of timed playback: start the next goal when its tick comes, keep a playing object on the clock by
+        /// changing its speed, and snap one that has fallen far behind.
+        /// </summary>
+        private void MoveToTargetTimed(float delta)
+        {
+            if (!DoSettingsAllowSmoothing())
+                return;
+
+            double target = PlaybackClock.DrawTick(_timeManager, _interpolation);
+            if (target <= 0d)
+            {
+                // Nothing received yet: FishNet's own playback until the clock exists.
+                MoveToTarget(delta);
+                return;
+            }
+
+            double tickDelta = _timeManager.TickDelta;
+            _timedTarget = target;
+            _timedStepActive = true;
+            try
+            {
+                if (_currentGoalData == null)
+                {
+                    if (_goalDataQueue.Count == 0)
+                        return;
+                    double start = TimedStartTick(_goalDataQueue.Peek());
+                    if (target < start)
+                        return;
+                    // Its tick has come (or passed): start it, already as far along as the clock says it should be.
+                    SetCurrentGoalData(_goalDataQueue.Dequeue());
+                    double behind = target - start;
+                    if (behind > TimedSnapTicks)
+                    {
+                        SnapTimed(target);
+                        return;
+                    }
+                    MoveToTarget((float)(System.Math.Min(behind, TimedMaximumCatchUpTicks) * tickDelta));
+                    return;
+                }
+
+                double error = target - TimedDrawnTick(tickDelta);
+                if (error > TimedSnapTicks)
+                {
+                    SnapTimed(target);
+                    return;
+                }
+                float rate = Mathf.Clamp(1f + (float)error * TimedCorrectionGain, TimedMinimumRate, TimedMaximumRate);
+                MoveToTarget(delta * rate);
+            }
+            finally
+            {
+                _timedStepActive = false;
+            }
+        }
+
+        /// <summary>Puts a far-behind object straight onto the newest goal at or before the clock; drops the goals in between.</summary>
+        private void SnapTimed(double target)
+        {
+            GoalData latest = null;
+            while (_goalDataQueue.Count > 0 && _goalDataQueue.Peek().PlaybackTick <= target)
+            {
+                if (latest != null)
+                    ResettableObjectCaches<GoalData>.Store(latest);
+                latest = _goalDataQueue.Dequeue();
+            }
+            if (latest != null)
+                SetCurrentGoalData(latest);
+            if (_currentGoalData == null)
+                return;
+            if (_synchronizeParent)
+                SetParent(_currentGoalData.Transforms.ParentBehaviour, _currentGoalData.Rates);
+            SetInstantRates(_currentGoalData.Rates, 1, 0f);
+            SnapProperties(_currentGoalData.Transforms, true);
+        }
+        #endregion
         /// <summary>
         /// True if the transform has changed since it started.
         /// </summary>
@@ -818,7 +1150,11 @@ namespace FishNet.Component.Transforming
             using (_pm_OnUpdate.Auto())
             {
                 float deltaTime = _useScaledTime ? Time.deltaTime : Time.unscaledDeltaTime;
-                MoveToTarget(deltaTime);
+                // FISHMMO EDIT: a client draws what it receives on the shared playback clock.
+                if (IsTimedPlayback)
+                    MoveToTargetTimed(deltaTime);
+                else
+                    MoveToTarget(deltaTime);
             }
         }
 
@@ -1316,6 +1652,11 @@ namespace FishNet.Component.Transforming
             if (_synchronizePosition)
             {
                 AutoPackType localPacking = packing.Position;
+                #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+                // FISHMMO EDIT: compact transforms. What was last sent, read before it is overwritten below.
+                bool wrapPositions = CanWrapPositions(packing, dataToUpdate);
+                Vector3 previousSent = wrapPositions ? dataToUpdate.Position : default;
+                #endif
                 //PositionX
                 if (ChangedContains(changed, ChangedDelta.PositionX))
                 {
@@ -1325,6 +1666,14 @@ namespace FishNet.Component.Transforming
                         dataToUpdate.Position.x = original;
 
                     compressed = original * positionMultiplier;
+                    #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+                    // FISHMMO EDIT: compact transforms.
+                    if (wrapPositions && TryWriteWrappedPosition(writer, compressed, previousSent.x * positionMultiplier))
+                    {
+                        flagsA |= UpdateFlagA.X2 | UpdateFlagA.X4;
+                    }
+                    else
+                    #endif
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.X2;
@@ -1346,6 +1695,14 @@ namespace FishNet.Component.Transforming
                         dataToUpdate.Position.y = original;
 
                     compressed = original * positionMultiplier;
+                    #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+                    // FISHMMO EDIT: compact transforms.
+                    if (wrapPositions && TryWriteWrappedPosition(writer, compressed, previousSent.y * positionMultiplier))
+                    {
+                        flagsA |= UpdateFlagA.Y2 | UpdateFlagA.Y4;
+                    }
+                    else
+                    #endif
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.Y2;
@@ -1367,6 +1724,14 @@ namespace FishNet.Component.Transforming
                         dataToUpdate.Position.z = original;
 
                     compressed = original * positionMultiplier;
+                    #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+                    // FISHMMO EDIT: compact transforms.
+                    if (wrapPositions && TryWriteWrappedPosition(writer, compressed, previousSent.z * positionMultiplier))
+                    {
+                        flagsA |= UpdateFlagA.Z2 | UpdateFlagA.Z4;
+                    }
+                    else
+                    #endif
                     if (localPacking != AutoPackType.Unpacked && Math.Abs(compressed) <= positionMaxValue)
                     {
                         flagsA |= UpdateFlagA.Z2;
@@ -1391,7 +1756,11 @@ namespace FishNet.Component.Transforming
                     flagsA |= UpdateFlagA.Rotation;
                     /* Rotation can always use pack settings even
                      * if childed. Unsual transform scale shouldn't affect rotation. */
-                    writer.WriteQuaternion(t.localRotation, _packing.Rotation);
+                    // FISHMMO EDIT: compact transforms.
+                    if (CompactRotation && _packing.Rotation == AutoPackType.Packed)
+                        WriteCompactRotation(writer, t.localRotation);
+                    else
+                        writer.WriteQuaternion(t.localRotation, _packing.Rotation);
                 }
             }
 
@@ -1518,6 +1887,12 @@ namespace FishNet.Component.Transforming
             int readerRemaining;
             readerRemaining = reader.Remaining;
             //X
+            #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+            // FISHMMO EDIT: compact transforms. Both flags = the low 16 bits of a 24-bit value; see ReadWrappedPosition.
+            if (UpdateFlagAContains(flagsA, UpdateFlagA.X2) && UpdateFlagAContains(flagsA, UpdateFlagA.X4))
+                nextTransformData.Position.x = ReadWrappedPosition(reader, prevTransformData.Position.x);
+            else
+            #endif
             if (UpdateFlagAContains(flagsA, UpdateFlagA.X2))
                 nextTransformData.Position.x = ReadPackedPosition(reader);
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.X4))
@@ -1525,6 +1900,12 @@ namespace FishNet.Component.Transforming
             else
                 nextTransformData.Position.x = prevTransformData.Position.x;
             //Y
+            #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+            // FISHMMO EDIT: compact transforms. Both flags = the low 16 bits of a 24-bit value; see ReadWrappedPosition.
+            if (UpdateFlagAContains(flagsA, UpdateFlagA.Y2) && UpdateFlagAContains(flagsA, UpdateFlagA.Y4))
+                nextTransformData.Position.y = ReadWrappedPosition(reader, prevTransformData.Position.y);
+            else
+            #endif
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Y2))
                 nextTransformData.Position.y = ReadPackedPosition(reader);
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Y4))
@@ -1532,6 +1913,12 @@ namespace FishNet.Component.Transforming
             else
                 nextTransformData.Position.y = prevTransformData.Position.y;
             //Z
+            #if FISHNET_NETWORKTRANSFORM_POSITION_PACKING
+            // FISHMMO EDIT: compact transforms. Both flags = the low 16 bits of a 24-bit value; see ReadWrappedPosition.
+            if (UpdateFlagAContains(flagsA, UpdateFlagA.Z2) && UpdateFlagAContains(flagsA, UpdateFlagA.Z4))
+                nextTransformData.Position.z = ReadWrappedPosition(reader, prevTransformData.Position.z);
+            else
+            #endif
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Z2))
                 nextTransformData.Position.z = ReadPackedPosition(reader);
             else if (UpdateFlagAContains(flagsA, UpdateFlagA.Z4))
@@ -1546,7 +1933,11 @@ namespace FishNet.Component.Transforming
             if (UpdateFlagAContains(flagsA, UpdateFlagA.Rotation))
             {
                 //Always use _packing value even if childed.
-                nextTransformData.Rotation = reader.ReadQuaternion(_packing.Rotation);
+                // FISHMMO EDIT: compact transforms.
+                if (CompactRotation && _packing.Rotation == AutoPackType.Packed)
+                    nextTransformData.Rotation = ReadCompactRotation(reader);
+                else
+                    nextTransformData.Rotation = reader.ReadQuaternion(_packing.Rotation);
                 changedFull |= ChangedFull.Rotation;
             }
             else
@@ -1734,7 +2125,8 @@ namespace FishNet.Component.Transforming
                 float multiplier = 1f;
                 int queueCount = _goalDataQueue.Count;
                 //Increase move rate slightly if over queue count.
-                if (queueCount > _interpolation + 1)
+                // FISHMMO EDIT: not under timed playback, whose caller already sets the speed from the clock.
+                if (queueCount > _interpolation + 1 && !_timedStepActive)
                     multiplier += 0.05f;
 
                 //Rate to update. Changes per property.
@@ -1787,11 +2179,16 @@ namespace FishNet.Component.Transforming
                 {
                     float leftOver = Mathf.Abs(rd.TimeRemaining);
                     //If more in buffer then run next buffer.
-                    if (queueCount > 0)
+                    // FISHMMO EDIT: under timed playback the next goal also waits for its tick.
+                    if (queueCount > 0 && (!_timedStepActive || TimedStartTick(_goalDataQueue.Peek()) <= _timedTarget))
                     {
                         SetCurrentGoalData(_goalDataQueue.Dequeue());
                         if (leftOver > 0f)
                             MoveToTarget(leftOver);
+                    }
+                    // FISHMMO EDIT: a queued goal whose tick has not come yet; hold here until it does.
+                    else if (queueCount > 0)
+                    {
                     }
                     //No more in buffer, see if can extrapolate.
                     else
@@ -2458,6 +2855,8 @@ namespace FishNet.Component.Transforming
             }
 
             _lastReceiveReliable = channel == Channel.Reliable;
+            // FISHMMO EDIT: the tick this data describes, before a reliable settle clears Transforms.Tick.
+            nextGd.PlaybackTick = nextTd.Tick;
             /* If channel is reliable then this is a settled packet.
              * Set tick to UNSET. When this occurs time calculations
              * assume only 1 tick has passed. */
@@ -2470,6 +2869,8 @@ namespace FishNet.Component.Transforming
             nextGd.ReceivedTick = _timeManager.LocalTick;
 
             bool currentDataNull = _currentGoalData == null;
+            // FISHMMO EDIT: a client's received data is queued and reached on the playback clock (MoveToTargetTimed).
+            bool timed = !asServer && IsTimedPlayback;
             /* If extrapolating then immediately break the extrapolation
              * in favor of newest results. This will keep the buffer
              * at 0 until the transform settles but the only other option is
@@ -2480,6 +2881,10 @@ namespace FishNet.Component.Transforming
             if (!currentDataNull && _currentGoalData.Transforms.ExtrapolationState == TransformData.ExtrapolateState.Active)
             {
                 SetCurrentGoalData(nextGd);
+            }
+            else if (timed)
+            {
+                _goalDataQueue.Enqueue(nextGd);
             }
             /* If queue isn't started and its buffered enough
              * to satisfy interpolation then set ready
@@ -2515,7 +2920,13 @@ namespace FishNet.Component.Transforming
              * when connections are unstable results may come in chunks
              * and for a better experience the older parts of the chunks
              * will be dropped. */
-            if (_goalDataQueue.Count > _interpolation + 3)
+            // FISHMMO EDIT: under timed playback only a runaway queue is trimmed (oldest first); the clock catches up or snaps.
+            if (timed)
+            {
+                while (_goalDataQueue.Count > TimedMaximumQueue)
+                    ResettableObjectCaches<GoalData>.Store(_goalDataQueue.Dequeue());
+            }
+            else if (_goalDataQueue.Count > _interpolation + 3)
             {
                 while (_goalDataQueue.Count > _interpolation)
                 {

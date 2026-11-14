@@ -138,6 +138,22 @@
                 </ui:VisualElement>
             </ui:VisualElement>
 
+            <ui:VisualElement class="netstats-rule" />
+
+            <!-- Prediction health over the last minute: corrections over a centimetre, and predicted hits the server rejected. -->
+            <ui:VisualElement name="netstats-sync-row" class="netstats-row">
+                <ui:Label text="Sync" class="netstats-name" />
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-sync-corrections" text="—" class="fish-label netstats-value" />
+                    <ui:Label text="CORR/MIN" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-cell">
+                    <ui:Label name="netstats-sync-hits" text="—" class="fish-label netstats-value" />
+                    <ui:Label text="HITS REJ" class="netstats-total" />
+                </ui:VisualElement>
+                <ui:VisualElement class="netstats-badge-spacer" />
+            </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

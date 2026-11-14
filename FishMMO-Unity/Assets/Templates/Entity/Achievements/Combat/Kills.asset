@@ -12,28 +12,90 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e50ec2665c219da4b99dc8b9b88aa0de, type: 3}
   m_Name: Kills
   m_EditorClassIdentifier: 
-  Icon: {fileID: 0}
+  IconReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Category: 2
   Description: Total number of enemies killed.
   Tiers:
   - Value: 5
-    TierCompleteMessage: Completed the first kill achievement!
-    CompleteSound: {fileID: 0}
+    TierCompleteMessage: Five foes slain.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
     AbilityRewards: []
+    AbilityEventRewards: []
     ItemRewards: []
     BuffRewards: []
     TitleRewards: []
   - Value: 25
-    TierCompleteMessage: Completed the second kill achievement!
-    CompleteSound: {fileID: 0}
+    TierCompleteMessage: Twenty-five foes slain.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
     AbilityRewards: []
+    AbilityEventRewards: []
     ItemRewards: []
     BuffRewards: []
     TitleRewards: []
   - Value: 50
-    TierCompleteMessage: Completed the second kill achievement!
-    CompleteSound: {fileID: 0}
+    TierCompleteMessage: Fifty foes slain.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
     AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 100
+    TierCompleteMessage: A hundred foes slain.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 500
+    TierCompleteMessage: Five hundred foes slain. The wilds grow quiet where you walk.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 1000
+    TierCompleteMessage: A thousand foes slain.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
     ItemRewards: []
     BuffRewards: []
     TitleRewards: []

@@ -17,7 +17,6 @@ MonoBehaviour:
   Conditions: []
   OnConditionsMetActions:
   - rid: 4707556931114369032
-  - rid: 4707556931114369033
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -41,14 +40,6 @@ MonoBehaviour:
           rid: 4707556931114369034
         DamageAttributeTemplate: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a,
           type: 2}
-    - rid: 4707556931114369033
-      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
-      data:
-        TargetSelector:
-          rid: -2
-        StopChainOnFailure: 0
-        FXPrefab: {fileID: 1283335467853853480, guid: 422ac1a06602ba841bd45b8b1c616098,
-          type: 3}
     - rid: 4707556931114369034
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:

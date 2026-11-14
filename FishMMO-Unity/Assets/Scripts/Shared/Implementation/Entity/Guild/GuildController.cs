@@ -106,6 +106,12 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public long CreationCost { get; private set; }
 
+		/// <inheritdoc />
+		public long InfoGuildID { get; private set; }
+
+		/// <inheritdoc />
+		public string MessageOfTheDay { get; private set; } = string.Empty;
+
 		/// <summary>
 		/// Storage for <see cref="Permissions"/>, held as the underlying <see cref="long"/>.
 		/// </summary>
@@ -182,6 +188,10 @@ namespace FishMMO.Shared
 			RankOrder = 0;
 			Permissions = GuildPermissions.None;
 			LeaderRankOrder = 0;
+
+			// The cached text belongs to the guild that was left, as the standing does.
+			InfoGuildID = 0;
+			MessageOfTheDay = string.Empty;
 		}
 
 		/// <summary>
@@ -559,6 +569,8 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public void OnClientGuildInfoBroadcastReceived(GuildInfoBroadcast msg, Channel channel)
 		{
+			InfoGuildID = msg.GuildID;
+			MessageOfTheDay = msg.MessageOfTheDay ?? string.Empty;
 			OnReceiveGuildInfo?.Invoke(msg.GuildID, msg.Name, msg.Notice, msg.MessageOfTheDay);
 		}
 

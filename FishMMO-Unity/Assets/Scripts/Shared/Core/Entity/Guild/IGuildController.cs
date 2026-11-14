@@ -59,6 +59,21 @@ namespace FishMMO.Shared.Core
 		event Action<long, string, string, string> OnReceiveGuildInfo;
 
 		/// <summary>
+		/// The guild the cached descriptive text below belongs to, or 0 when none has arrived.
+		/// </summary>
+		/// <remarks>
+		/// The server sends the text once, a few database round trips after the character spawns,
+		/// and an owner-side panel can bind after that. Kept here, as the creation fee is, so a
+		/// late subscriber reads what it missed instead of waiting for the next edit.
+		/// </remarks>
+		long InfoGuildID { get; }
+
+		/// <summary>
+		/// The guild's message of the day as the server last sent it, or empty.
+		/// </summary>
+		string MessageOfTheDay { get; }
+
+		/// <summary>
 		/// Event triggered when the guild's recent activity log arrives.
 		/// Parameters: entries (newest first).
 		/// </summary>

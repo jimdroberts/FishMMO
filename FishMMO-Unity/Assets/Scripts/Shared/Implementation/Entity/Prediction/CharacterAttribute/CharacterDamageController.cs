@@ -643,6 +643,30 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// The part of a direct damage or heal report this client already applied as its own predictions (0 for periodic
+		/// kinds, which are never predicted, and on every client but the caster's). See
+		/// <see cref="PredictedCombatEvents.PendingAmount"/>.
+		/// </summary>
+		private static int PredictedReportAmount(FishNet.Managing.NetworkManager nm, CombatEventBroadcast msg, CombatEventKind kind, FishNet.Object.NetworkObject targetNob)
+		{
+			if ((kind != CombatEventKind.Damage && kind != CombatEventKind.Heal) || msg.SourceObjectID == 0 ||
+				!nm.ClientManager.Objects.Spawned.TryGetValue(msg.SourceObjectID, out FishNet.Object.NetworkObject sourceNob) ||
+				sourceNob == null || !sourceNob.IsOwner)
+			{
+				return 0;
+			}
+			ICharacter source = sourceNob.GetComponent<ICharacter>();
+			ICharacter target = targetNob.GetComponent<ICharacter>();
+			bool heal = kind == CombatEventKind.Heal;
+			DamageAttributeTemplate damageAttribute = !heal && msg.DamageTemplateID != 0
+				? DamageAttributeTemplate.Get<DamageAttributeTemplate>(msg.DamageTemplateID)
+				: null;
+			return PredictedCombatEvents.PendingAmount(source, target,
+				heal ? PredictedCombatEvents.Kind.Heal : PredictedCombatEvents.Kind.Damage,
+				msg.Occurrences < 1 ? 1 : msg.Occurrences, damageAttribute);
+		}
+
+		/// <summary>
 		/// Applies a server combat report: the victim's health first, then the client-side event the
 		/// UI listens to.
 		/// </summary>
@@ -682,8 +706,17 @@ namespace FishMMO.Shared
 				CharacterAttributeController attributeController = targetNob.GetComponent<CharacterAttributeController>();
 				if (attributeController != null && eventKind.MovesHealth())
 				{
-					attributeController.ApplyObservedHealthDelta(msg.Amount,
-						eventKind == CombatEventKind.Heal || eventKind == CombatEventKind.PeriodicHeal);
+					/* Less what this client already applied. The caster predicts its own direct hits and heals on the
+					 * target's bar (ApplyDamageAction / ApplyHealAction), so the report of the same hit moved the bar a
+					 * second time: 85 -> 82 predicted, -> 79 on the report, back to 82 on the next resource push. The
+					 * pending predictions the report will settle say exactly how much of it is already on the bar; only
+					 * the rest (hits this client did not predict) is applied. Periodic ticks are never predicted. */
+					int unpredicted = msg.Amount - PredictedReportAmount(nm, msg, eventKind, targetNob);
+					if (unpredicted > 0)
+					{
+						attributeController.ApplyObservedHealthDelta(unpredicted,
+							eventKind == CombatEventKind.Heal || eventKind == CombatEventKind.PeriodicHeal);
+					}
 				}
 			}
 
@@ -1349,6 +1382,15 @@ namespace FishMMO.Shared
 			if (Immortal || IsEvading())
 			{
 				ReportRefusal(attacker, damageAttribute);
+				return 0;
+			}
+
+			/* Only who the attacker may harm (FactionHarm): an enemy, or anyone while either side's aggression is on. Every
+			 * damage source passes here, so no ability needs an authored condition to spare its caster's friends — none of
+			 * the shipped ones had one, and every hit landed on neutrals, allies, party and guild alike. Refused as silently
+			 * as a miss: no threat, no combat entry, no number. */
+			if (!FactionHarm.Allows(attacker, Character))
+			{
 				return 0;
 			}
 

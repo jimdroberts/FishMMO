@@ -57,6 +57,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Achievement events
 			IAchievementController.OnUpdateAchievement -= IAchievementController_OnUpdateAchievement;
 			IAchievementController.OnCompleteAchievement -= IAchievementController_HandleAchievementRewards;
+
+			pendingProgress.Clear();
+			completedThisUpdate.Clear();
+			progressFlushElapsed = 0.0f;
 		}
 
 		/// <summary>
@@ -77,12 +81,96 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new AchievementUpdateBroadcast()
+			int templateID = achievement.Template.ID;
+
+			/* A completed tier goes out at once and on its own: the owner's client announces a tier
+			 * rise it sees in a single update (AchievementController.ApplyServerUpdate). Anything of
+			 * this achievement still waiting in the batch is superseded by it. */
+			if (completedThisUpdate.Remove((playerCharacter.ID, templateID)))
 			{
-				TemplateID = achievement.Template.ID,
-				Value = achievement.CurrentValue,
-				Tier = achievement.CurrentTier,
-			});
+				if (pendingProgress.TryGetValue(playerCharacter, out Dictionary<int, Achievement> waiting))
+				{
+					waiting.Remove(templateID);
+				}
+				Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new AchievementUpdateBroadcast()
+				{
+					TemplateID = templateID,
+					Value = achievement.CurrentValue,
+					Tier = achievement.CurrentTier,
+				});
+				return;
+			}
+
+			/* Progress alone waits for the next flush. Damage and healing count on every hit, so an
+			 * update per increment would be a packet per hit to the attacker and another to the
+			 * target; batched, a fight costs one message a second whatever its rate. */
+			if (!pendingProgress.TryGetValue(playerCharacter, out Dictionary<int, Achievement> pending))
+			{
+				pendingProgress.Add(playerCharacter, pending = new Dictionary<int, Achievement>());
+			}
+			pending[templateID] = achievement;
+		}
+
+		/// <summary>Seconds between flushes of batched achievement progress.</summary>
+		private const float ProgressFlushInterval = 1.0f;
+
+		/// <summary>Time since the last progress flush.</summary>
+		private float progressFlushElapsed;
+
+		/// <summary>
+		/// Progress-only updates waiting for the next flush, per character, latest value per achievement.
+		/// </summary>
+		private readonly Dictionary<IPlayerCharacter, Dictionary<int, Achievement>> pendingProgress = new Dictionary<IPlayerCharacter, Dictionary<int, Achievement>>();
+
+		/// <summary>
+		/// (character, template) pairs whose increment just completed a tier. Set by the completion
+		/// event, which <see cref="AchievementController.Increment(AchievementTemplate, uint)"/> raises
+		/// before the update event of the same increment, and consumed by that update.
+		/// </summary>
+		private readonly HashSet<(long, int)> completedThisUpdate = new HashSet<(long, int)>();
+
+		/// <summary>Reused flush buffers.</summary>
+		private readonly List<AchievementUpdateBroadcast> flushBuffer = new List<AchievementUpdateBroadcast>();
+
+		/// <summary>
+		/// Sends each character's batched achievement progress once per <see cref="ProgressFlushInterval"/>.
+		/// </summary>
+		protected override void OnUpdate(float deltaTime)
+		{
+			progressFlushElapsed += deltaTime;
+			if (progressFlushElapsed < ProgressFlushInterval || pendingProgress.Count == 0)
+			{
+				return;
+			}
+			progressFlushElapsed = 0.0f;
+
+			foreach (KeyValuePair<IPlayerCharacter, Dictionary<int, Achievement>> entry in pendingProgress)
+			{
+				IPlayerCharacter character = entry.Key;
+				// A character despawned since: its client is gone or will be told on its next login.
+				if (character == null || (character is UnityEngine.Object unityObject && unityObject == null) ||
+					character.Owner == null || !character.Owner.IsActive || entry.Value.Count == 0)
+				{
+					continue;
+				}
+
+				flushBuffer.Clear();
+				foreach (Achievement achievement in entry.Value.Values)
+				{
+					flushBuffer.Add(new AchievementUpdateBroadcast()
+					{
+						TemplateID = achievement.Template.ID,
+						Value = achievement.CurrentValue,
+						Tier = achievement.CurrentTier,
+					});
+				}
+				Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
+				{
+					Achievements = flushBuffer.ToArray(),
+				});
+			}
+			pendingProgress.Clear();
+			flushBuffer.Clear();
 		}
 
 		/// <summary>
@@ -104,6 +192,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+
+			// The update event that follows sends this achievement at once rather than batching it.
+			completedThisUpdate.Add((playerCharacter.ID, template.ID));
 
 			// Resolve services once for all reward handlers
 			if (Server.Database?.ServiceRegistry == null)

@@ -172,6 +172,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginContextRendering += OnBeginContextRendering;
 			RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
 			Application.quitting += Shutdown;
+			FishMMO.Shared.SceneContentLoads.AddWork("ground detail", SettlingInReach, SettleProgress);
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 #endif
@@ -187,6 +188,7 @@ namespace FishMMO.Client
 			RenderPipelineManager.beginContextRendering -= OnBeginContextRendering;
 			RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
 			Application.quitting -= Shutdown;
+			FishMMO.Shared.SceneContentLoads.RemoveWork("ground detail");
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 #endif
@@ -295,7 +297,7 @@ namespace FishMMO.Client
 					building.Abandon();
 					building = null;
 				}
-				else if (building.Step(DistanceToCamera(bt) <= TerrainDetailInstancing.DetailDistanceOf(bt) ? VisibleBuildBudgetMilliseconds : BuildBudgetMilliseconds))
+				else if (building.Step(FishMMO.Shared.SceneContentLoads.Budget(DistanceToCamera(bt) <= TerrainDetailInstancing.DetailDistanceOf(bt) ? VisibleBuildBudgetMilliseconds : BuildBudgetMilliseconds)))
 				{
 					Finish(building);
 					building = null;
@@ -341,7 +343,7 @@ namespace FishMMO.Client
 						Finish(building);
 						building = null;
 						started = false;
-						spent = (System.Diagnostics.Stopwatch.GetTimestamp() - bakedStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= BakedBudgetMilliseconds;
+						spent = (System.Diagnostics.Stopwatch.GetTimestamp() - bakedStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= FishMMO.Shared.SceneContentLoads.Budget(BakedBudgetMilliseconds);
 					}
 				}
 				if (!started && !spent && summaryTerrains > 0)
@@ -352,6 +354,61 @@ namespace FishMMO.Client
 				}
 			}
 			TerrainInstancingProbe.SyncMs += TerrainInstancingProbe.Now - start;
+		}
+
+		// ── Loading screen ────────────────────────────────────────────
+
+		/// <summary>Terrains for the loading screen's probe, apart from <see cref="active"/> (which <see cref="Sync"/> owns).</summary>
+		private static readonly List<Terrain> settleScratch = new List<Terrain>();
+
+		/// <summary>
+		/// Terrains within reach of the camera that should have GPU detail scatter and how many have it. The loading screen holds the
+		/// world covered until they all do (<see cref="FishMMO.Shared.SceneContentLoads"/>): a biome arriving makes every terrain be taken again,
+		/// and taken in view after the overlay went down, that was the stutter the login screen showed. Terrains beyond reach
+		/// stream in as before.
+		/// </summary>
+		private static void CountInReach(out int inReach, out int done)
+		{
+			inReach = 0;
+			done = 0;
+			if (!enabled || renderer == null || !(Settings ?? defaults).Enabled)
+			{
+				return;
+			}
+			Terrain.GetActiveTerrains(settleScratch);
+			foreach (Terrain t in settleScratch)
+			{
+				if (t == null || !TerrainDetailInstancing.IsDriving(t))
+				{
+					continue;
+				}
+				if (none.TryGetValue(t, out TerrainData seen) && seen == t.terrainData)
+				{
+					continue;
+				}
+				if (DistanceToCamera(t) > TerrainDetailInstancing.DetailDistanceOf(t))
+				{
+					continue;
+				}
+				inReach++;
+				if (taken.ContainsKey(t))
+				{
+					done++;
+				}
+			}
+			settleScratch.Clear();
+		}
+
+		private static bool SettlingInReach()
+		{
+			CountInReach(out int inReach, out int done);
+			return done < inReach;
+		}
+
+		private static float SettleProgress()
+		{
+			CountInReach(out int inReach, out int done);
+			return inReach > 0 ? (float)done / inReach : 1.0f;
 		}
 
 		/// <summary>Metres from the main camera to a terrain's footprint (0 standing on it; far when there is no camera).</summary>

@@ -399,8 +399,20 @@ namespace FishMMO.Shared
 			if (!base.IsServerStarted)
 			{
 				EnsureCoreLink(SimulationSide.Client);
+				/* The owner predicts its own movement against the prop colliders round it, so it keeps the same ones the
+				 * server keeps round it (ServerRadius), whatever the camera does. The camera's own focus (ClientRadius)
+				 * follows Camera.main only: after a teleport or respawn, or with the camera away from the character or
+				 * missing, the owner could walk through a rock the server collides with, and be corrected. */
+				if (base.IsOwner)
+				{
+					PropColliderStreamer.AddFocus(Transform != null ? Transform : transform, PropColliderStreamer.ServerRadius);
+					ownerPropFocus = true;
+				}
 			}
 		}
+
+		/// <summary>True while this client keeps prop colliders round its own character (see OnStartClient).</summary>
+		private bool ownerPropFocus;
 
 		/// <summary>Ends the client's entity for this character.</summary>
 		public override void OnStopClient()
@@ -408,6 +420,11 @@ namespace FishMMO.Shared
 			if (!base.IsServerStarted)
 			{
 				ReleaseCoreLink();
+				if (ownerPropFocus)
+				{
+					PropColliderStreamer.RemoveFocus(Transform != null ? Transform : transform);
+					ownerPropFocus = false;
+				}
 			}
 			base.OnStopClient();
 		}

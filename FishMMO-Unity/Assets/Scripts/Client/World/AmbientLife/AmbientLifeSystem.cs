@@ -346,6 +346,9 @@ namespace FishMMO.Client
 			Release();
 			Unhook();
 			updatedFrame = -1;
+			placeFrame = -1;
+			placeSettled = true;
+			placeLeft = -1;
 			loggedReason = null;
 			countedSeed = 0;
 			Status = "not started";
@@ -365,6 +368,8 @@ namespace FishMMO.Client
 			SceneManager.sceneLoaded += OnSceneLoaded;
 			SceneManager.sceneUnloaded += OnSceneUnloaded;
 			Application.quitting += Shutdown;
+			// The loading screen holds until the animals round the camera are placed, so they are not placed in view.
+			SceneContentLoads.AddWork("wildlife", Placing, PlaceProgress);
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
 			// Scripts recompiled while playing reload in place: the instance buffers must be let go first, or they leak.
@@ -385,6 +390,7 @@ namespace FishMMO.Client
 			SceneManager.sceneLoaded -= OnSceneLoaded;
 			SceneManager.sceneUnloaded -= OnSceneUnloaded;
 			Application.quitting -= Shutdown;
+			SceneContentLoads.RemoveWork("wildlife");
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
 			UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Shutdown;
@@ -583,6 +589,11 @@ namespace FishMMO.Client
 			using (PlaceMarker.Auto())
 			{
 				settled = Place(settings, eye, cellMetres);
+			}
+			if (main)
+			{
+				placeFrame = Time.frameCount;
+				placeSettled = settled;
 			}
 			using (EvaluateMarker.Auto())
 			{
@@ -1028,7 +1039,12 @@ namespace FishMMO.Client
 			return inReach;
 		}
 
-		/// <summary>Decides the cells within reach not decided yet, a few a frame; true once all are.</summary>
+		/// <summary>
+		/// Decides the cells within reach not decided yet, a few a frame (<see cref="CellsPerFrame"/>); true once all are.
+		/// Behind the loading screen (<see cref="SceneContentLoads.Covered"/>) it keeps going for the covered budget's
+		/// milliseconds instead, and counts the cells still to do (<see cref="placeLeft"/>) for the overlay's bar: ten cells a
+		/// frame placed the login world's 528 over 53 frames, and those frames ran in view after the overlay went down.
+		/// </summary>
 		private static bool Place(AmbientLifeSettings settings, Vector3 eye, float cellMetres)
 		{
 			float near = Mathf.Max(Mathf.Max(settings.SoloBirdDistance + 60f, settings.SwarmDistance + 20f), Mathf.Max(settings.BatDistance + 70f, settings.CritterDistance + 12f));
@@ -1036,14 +1052,14 @@ namespace FishMMO.Client
 			int nearRange = Mathf.CeilToInt(near / cellMetres), farRange = Mathf.CeilToInt(far / cellMetres);
 			int cx = Mathf.FloorToInt(eye.x / cellMetres), cz = Mathf.FloorToInt(eye.z / cellMetres);
 			int budget = CellsPerFrame;
+			bool covered = SceneContentLoads.Covered;
+			double limit = SceneContentLoads.Budget(0.0);
+			long started = System.Diagnostics.Stopwatch.GetTimestamp();
+			bool spent = false;
+			int left = 0;
 			bool settled = true;
 			foreach (Vector2Int offset in OffsetsWithin(farRange))
 			{
-				if (budget <= 0)
-				{
-					settled = false;
-					break;
-				}
 				int x = cx + offset.x, z = cz + offset.y;
 				bool wantNear = Mathf.Abs(offset.x) <= nearRange && Mathf.Abs(offset.y) <= nearRange;
 				long key = AmbientPerchIndex.Key(x, z);
@@ -1054,6 +1070,22 @@ namespace FishMMO.Client
 				}
 				if (!world.Overlaps(x * cellMetres, z * cellMetres, cellMetres))
 				{
+					continue;
+				}
+				// The frame's share is gone once its cells are, or (covered) its milliseconds are, checked after the cells.
+				if (!spent && budget <= 0)
+				{
+					spent = !covered || (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000.0 / System.Diagnostics.Stopwatch.Frequency >= limit;
+				}
+				if (spent)
+				{
+					settled = false;
+					if (!covered)
+					{
+						break;
+					}
+					// Covered: the rest are only counted, for the bar.
+					left++;
 					continue;
 				}
 				if (cell == null)
@@ -1094,8 +1126,29 @@ namespace FishMMO.Client
 					cells.Remove(key);
 				}
 			}
+			placeLeft = covered ? left : -1;
 			return settled;
 		}
+
+		// ── Loading screen ────────────────────────────────────────────
+
+		/// <summary>The frame <see cref="Place"/> last ran for the main camera; −1 never.</summary>
+		private static int placeFrame = -1;
+		/// <summary>Whether that run had decided every cell in reach.</summary>
+		private static bool placeSettled = true;
+		/// <summary>Cells still to decide after that run, counted only while covered; −1 when not counted.</summary>
+		private static int placeLeft = -1;
+
+		/// <summary>
+		/// Frames since <see cref="Place"/> last ran that it still counts as placing. Idle (switched off, no terrain, the
+		/// camera under water) or no main camera rendering, it never finishes, and must not hold the overlay to its deadline.
+		/// </summary>
+		private const int PlaceStaleFrames = 4;
+
+		/// <summary>The loading screen's probe (<see cref="SceneContentLoads.AddWork"/>): cells round the camera still to place.</summary>
+		private static bool Placing() => placeFrame >= 0 && Time.frameCount - placeFrame <= PlaceStaleFrames && !placeSettled;
+
+		private static float PlaceProgress() => placeLeft < 0 ? -1f : cells.Count + placeLeft > 0 ? (float)cells.Count / (cells.Count + placeLeft) : 1f;
 
 		private static readonly List<long> scratchKeys = new List<long>();
 
@@ -1385,7 +1438,7 @@ namespace FishMMO.Client
 				return;
 			}
 			UpdateFrame(camera);
-			if (camera.cameraType == CameraType.Game)
+			if (camera.cameraType == CameraType.Game && DrawCheck.Enabled)
 			{
 				DrawCheck.Watch(byKind);
 			}
@@ -1557,6 +1610,25 @@ namespace FishMMO.Client
 		private static class DrawCheck
 		{
 			private const float Seconds = 5f;
+			private static int enabled = -1;
+
+			/// <summary>
+			/// Only in the editor and development builds, or when the page asks (?ambientDrawCheck=1 in its address): it logs
+			/// every few seconds, which is noise in a release build once the blink it was written for is fixed. Read once.
+			/// </summary>
+			public static bool Enabled
+			{
+				get
+				{
+					if (enabled < 0)
+					{
+						string url = Application.absoluteURL ?? string.Empty;
+						enabled = Debug.isDebugBuild || url.IndexOf("ambientDrawCheck=1", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0;
+					}
+					return enabled == 1;
+				}
+			}
+
 			private static int[] least = new int[0];
 			private static int[] most = new int[0];
 			private static int frame = -1;

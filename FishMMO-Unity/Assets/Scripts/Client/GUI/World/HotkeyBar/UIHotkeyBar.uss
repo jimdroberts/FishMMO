@@ -131,6 +131,17 @@
 }
 
 /* Key-map label in the lower-right corner. */
+.hotkey-slot__amount {
+    position: absolute;
+    right: 3px;
+    top: 1px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: upper-right;
+    color: var(--abyss-100);
+    text-shadow: 0 1px 1px var(--edge-dark);
+}
+
 .hotkey-slot__label {
     position: absolute;
     right: 2px;

@@ -112,6 +112,9 @@ namespace FishMMO.Client
 			/// <summary>The optional icon. Always the box's first child; hidden when there is none.</summary>
 			public VisualElement Icon;
 
+			/// <summary>The mark USS class on <see cref="Icon"/>, or null: the art of a standing mark comes from USS.</summary>
+			public string MarkClass;
+
 			/// <summary>The column the rows stack in.</summary>
 			public VisualElement Body;
 
@@ -460,6 +463,7 @@ namespace FishMMO.Client
 			// Dropped rather than left for the next push, so a pooled binding holds no sprite alive.
 			binding.Icon.style.backgroundImage = StyleKeyword.Null;
 			binding.Icon.style.display = DisplayStyle.None;
+			SetMarkClass(binding, null);
 
 			/* Hidden on release and on rent. A pooled binding that came back displayed would flash
 			 * the previous plate's rows at the previous plate's position for one frame. */
@@ -611,7 +615,7 @@ namespace FishMMO.Client
 				 * worth drawing — a marker over something with no name — so only a plate with
 				 * neither is dropped. The icon is only looked up when there are no rows. */
 				int visibleRows = CountVisibleRows(plate);
-				if (visibleRows == 0 && ResolveIcon(plate) == null)
+				if (visibleRows == 0 && ResolveIcon(plate) == null && ResolveMark(plate) == NameplateMark.None)
 				{
 					SetDisplayed(binding, false);
 					continue;
@@ -766,7 +770,7 @@ namespace FishMMO.Client
 				ApplyRows(binding, plate, in style, fontSize, scale, visibleRows, showGuild, showTitles);
 
 				// Content matters here too: the gap beside the icon exists only while there are rows.
-				ApplyIcon(binding, ResolveIcon(plate), in style, plate.AllianceTint, fontSize, scale, visibleRows);
+				ApplyIcon(binding, ResolveIcon(plate), ResolveMark(plate), plate.MarkTint, in style, plate.AllianceTint, fontSize, scale, visibleRows);
 			}
 
 			binding.PushedFontSize = fontSize;
@@ -926,6 +930,46 @@ namespace FishMMO.Client
 			return showIcons ? plate.Icon : null;
 		}
 
+		/// <summary>The standing mark a plate is drawn with, or None when it has none or the player turned icons off.</summary>
+		private NameplateMark ResolveMark(Nameplate plate)
+		{
+			return showIcons ? plate.Mark : NameplateMark.None;
+		}
+
+		/// <summary>USS class carrying each mark's art (<c>UINameplates.uss</c>).</summary>
+		private static string MarkClassName(NameplateMark mark)
+		{
+			switch (mark)
+			{
+				case NameplateMark.Hostile:
+					return "nameplate-icon--hostile";
+				case NameplateMark.Neutral:
+					return "nameplate-icon--neutral";
+				case NameplateMark.Friendly:
+					return "nameplate-icon--friendly";
+				default:
+					return null;
+			}
+		}
+
+		/// <summary>Swaps the icon's mark class, touching the class list only on a change.</summary>
+		private static void SetMarkClass(PlateBinding binding, string markClass)
+		{
+			if (string.Equals(binding.MarkClass, markClass))
+			{
+				return;
+			}
+			if (binding.MarkClass != null)
+			{
+				binding.Icon.RemoveFromClassList(binding.MarkClass);
+			}
+			if (markClass != null)
+			{
+				binding.Icon.AddToClassList(markClass);
+			}
+			binding.MarkClass = markClass;
+		}
+
 		/// <summary>
 		/// Writes the plate's icon: its sprite, size, tint, and where it sits against the rows.
 		/// </summary>
@@ -942,13 +986,14 @@ namespace FishMMO.Client
 		/// size zero in the style is sized to the name row, so it tracks
 		/// <see cref="NameplateStyle.LineHeight"/> and the player's scale like the text does.
 		/// </remarks>
-		private static void ApplyIcon(PlateBinding binding, Sprite icon, in NameplateStyle style, Color allianceTint, float fontSize, float scale, int visibleRows)
+		private static void ApplyIcon(PlateBinding binding, Sprite icon, NameplateMark mark, Color markTint, in NameplateStyle style, Color allianceTint, float fontSize, float scale, int visibleRows)
 		{
 			VisualElement element = binding.Icon;
-			if (icon == null)
+			if (icon == null && mark == NameplateMark.None)
 			{
 				element.style.display = DisplayStyle.None;
 				element.style.backgroundImage = StyleKeyword.Null;
+				SetMarkClass(binding, null);
 				return;
 			}
 
@@ -958,8 +1003,20 @@ namespace FishMMO.Client
 			size = Mathf.Max(1.0f, size);
 
 			element.style.display = DisplayStyle.Flex;
-			element.style.backgroundImage = new StyleBackground(icon);
-			element.style.unityBackgroundImageTintColor = style.ResolveIconTint(allianceTint);
+			if (icon != null)
+			{
+				// An icon of the plate's own (a boss's skull) outranks the standing mark.
+				SetMarkClass(binding, null);
+				element.style.backgroundImage = new StyleBackground(icon);
+				element.style.unityBackgroundImageTintColor = style.ResolveIconTint(allianceTint);
+			}
+			else
+			{
+				// The mark's art is the USS class's background; the inline image must be cleared for it to show.
+				SetMarkClass(binding, MarkClassName(mark));
+				element.style.backgroundImage = StyleKeyword.Null;
+				element.style.unityBackgroundImageTintColor = markTint;
+			}
 			element.style.width = size;
 			element.style.height = size;
 

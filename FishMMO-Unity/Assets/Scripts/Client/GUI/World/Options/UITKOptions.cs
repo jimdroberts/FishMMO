@@ -163,6 +163,10 @@ namespace FishMMO.Client
 		private const string COLOR_FILTER_STRENGTH_SLIDER_NAME = "colorfilter-strength-slider";
 		private const string COLOR_FILTER_STRENGTH_VALUE_NAME = "colorfilter-strength-value";
 		private const string CHAT_FONT_VALUE_NAME = "chat-font-value";
+		private const string CHAT_TIMESTAMPS_NAME = "chat-timestamps-toggle";
+		private const string CHAT_TIMESTAMP_FORMAT_NAME = "chat-timestamp-format-dropdown";
+		private const string CHAT_CHANNEL_TAGS_NAME = "chat-channel-tags-toggle";
+		private const string CHAT_GROUP_NAME = "chat-group-toggle";
 		private const string NETSTATS_ENABLED_NAME = "netstats-enabled-toggle";
 		private const string NETSTATS_GRAPH_NAME = "netstats-graph-toggle";
 		private const string HOTBAR_SECTION_NAME = "options-hotbar-section";
@@ -505,6 +509,10 @@ namespace FishMMO.Client
 		private Label uiScaleValueLabel;
 		private Slider chatFontSlider;
 		private Label chatFontValueLabel;
+		private Toggle chatTimestampsToggle;
+		private DropdownField chatTimestampFormatDropdown;
+		private Toggle chatChannelTagsToggle;
+		private Toggle chatGroupToggle;
 		private DropdownField colorVisionDropdown;
 		private Toggle colorFilterToggle;
 		private Slider colorFilterStrengthSlider;
@@ -700,6 +708,10 @@ namespace FishMMO.Client
 			colorFilterStrengthSlider = Root.Q<Slider>(COLOR_FILTER_STRENGTH_SLIDER_NAME);
 			colorFilterStrengthValueLabel = Root.Q<Label>(COLOR_FILTER_STRENGTH_VALUE_NAME);
 			chatFontValueLabel = Root.Q<Label>(CHAT_FONT_VALUE_NAME);
+			chatTimestampsToggle = Root.Q<Toggle>(CHAT_TIMESTAMPS_NAME);
+			chatTimestampFormatDropdown = Root.Q<DropdownField>(CHAT_TIMESTAMP_FORMAT_NAME);
+			chatChannelTagsToggle = Root.Q<Toggle>(CHAT_CHANNEL_TAGS_NAME);
+			chatGroupToggle = Root.Q<Toggle>(CHAT_GROUP_NAME);
 			netStatsEnabledToggle = Root.Q<Toggle>(NETSTATS_ENABLED_NAME);
 			netStatsGraphToggle = Root.Q<Toggle>(NETSTATS_GRAPH_NAME);
 			hotbarSection = Root.Q<VisualElement>(HOTBAR_SECTION_NAME);
@@ -2481,6 +2493,8 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void InitializeChatSettings()
 		{
+			InitializeChatFormatSettings();
+
 			if (chatFontSlider == null)
 			{
 				return;
@@ -2509,6 +2523,60 @@ namespace FishMMO.Client
 					chatFontSlider.SetValueWithoutNotify(value);
 				}
 			});
+		}
+
+		/// <summary>
+		/// Binds the chat line-format rows (timestamps, their format, channel tags, grouping) to
+		/// <see cref="ClientChatSettings"/>. The chat panel re-renders its log on each change, so
+		/// the lines already on screen take the new format.
+		/// </summary>
+		/// <remarks>
+		/// The format dropdown is greyed while timestamps are off, as the traffic graph row is
+		/// while the network overlay is off: it has nothing to format.
+		/// </remarks>
+		private void InitializeChatFormatSettings()
+		{
+			if (chatTimestampFormatDropdown != null)
+			{
+				chatTimestampFormatDropdown.choices = new List<string>(ClientChatSettings.TimestampFormatLabels);
+				chatTimestampFormatDropdown.SetValueWithoutNotify(
+					ClientChatSettings.TimestampFormatLabels[(int)ClientChatSettings.Format]);
+				chatTimestampFormatDropdown.SetEnabled(ClientChatSettings.ShowTimestamps);
+				chatTimestampFormatDropdown.RegisterValueChangedCallback((evt) =>
+				{
+					// The index, not the label, for the reason the crosshair style dropdown gives.
+					int index = chatTimestampFormatDropdown.index;
+					if (index < 0 || index >= ClientChatSettings.TimestampFormatLabels.Length)
+					{
+						return;
+					}
+					ClientChatSettings.SetFormat((ClientChatSettings.TimestampFormat)index);
+				});
+			}
+
+			if (chatTimestampsToggle != null)
+			{
+				chatTimestampsToggle.SetValueWithoutNotify(ClientChatSettings.ShowTimestamps);
+				chatTimestampsToggle.RegisterValueChangedCallback((evt) =>
+				{
+					ClientChatSettings.SetShowTimestamps(evt.newValue);
+					chatTimestampFormatDropdown?.SetEnabled(evt.newValue);
+				});
+			}
+
+			if (chatChannelTagsToggle != null)
+			{
+				chatChannelTagsToggle.SetValueWithoutNotify(ClientChatSettings.ShowChannelTags);
+				chatChannelTagsToggle.RegisterValueChangedCallback((evt) =>
+					ClientChatSettings.SetShowChannelTags(evt.newValue));
+			}
+
+			if (chatGroupToggle != null)
+			{
+				chatGroupToggle.SetValueWithoutNotify(ClientChatSettings.GroupMessages);
+				chatGroupToggle.RegisterValueChangedCallback((evt) =>
+					ClientChatSettings.SetGroupMessages(evt.newValue));
+			}
 		}
 
 		// ── Colour vision ───────────────────────────────────────────

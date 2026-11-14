@@ -130,7 +130,24 @@ namespace FishMMO.Shared.WorldDesign
 
 			List<TerrainArrayBakeReport> baked = TerrainArrayBaker.BakeScene(scene, false);
 			notes.Add($"Terrain arrays: {baked?.Count ?? 0} report(s).");
+			/* The grass, scatter and ground colour bake again, now the arrays exist. The cut bakes them when its terrain is
+			 * finished, before any arrays: its colour copies and ground colour came out empty, and the client fell back to
+			 * reading the arrays back from the GPU, which WebGPU cannot do (no ground colour, no grass). */
+			var terrains = new List<Terrain>();
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				terrains.AddRange(root.GetComponentsInChildren<Terrain>(true));
+			}
+			var bakeNotes = new List<string>();
+			SceneTerrainEvents.RaiseFinished(scene, terrains, bakeNotes);
+			foreach (string note in bakeNotes)
+			{
+				notes.Add($"Terrain details: {note}");
+			}
+			EditorSceneManager.MarkSceneDirty(scene);
 			EditorSceneManager.SaveScene(scene);
+
+			ClientOnly(scene, notes);
 
 			BootWithLogin(notes);
 			ClearOldBackdrop(notes);
@@ -225,6 +242,7 @@ namespace FishMMO.Shared.WorldDesign
 			EditorUtility.SetDirty(settings);
 
 			StripGameplay(scene, notes);
+			StripNavMesh(scene, notes);
 
 			GameObject rig = scene.GetRootGameObjects().FirstOrDefault(g => g.name == RigName);
 			if (rig != null && !rerig)
@@ -279,6 +297,48 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			notes.Add($"Stripped {removed} gameplay object(s) (networked, spawners, nodes, teleporters, harness).");
+		}
+
+		/// <summary>The scene's NavMesh surfaces: only a scene server walks a NavMesh, and none hosts this scene.</summary>
+		private static void StripNavMesh(Scene scene, List<string> notes)
+		{
+			int removed = 0;
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				foreach (Unity.AI.Navigation.NavMeshSurface surface in root.GetComponentsInChildren<Unity.AI.Navigation.NavMeshSurface>(true))
+				{
+					UnityEngine.Object.DestroyImmediate(surface);
+					removed++;
+				}
+			}
+			if (removed > 0)
+			{
+				notes.Add($"Removed {removed} NavMesh surface(s).");
+			}
+		}
+
+		/// <summary>
+		/// Keeps every part of the backdrop out of a server build: no NavMesh in the scene server's catalogue or on disk,
+		/// and the scene, its atlas entry and its content in client groups (the Addressables rules know backdrops, so a
+		/// later re-sort keeps them there).
+		/// </summary>
+		private static void ClientOnly(Scene scene, List<string> notes)
+		{
+			SceneNavMeshCatalogueEditor.Remove(SceneName);
+			string navMesh = $"{Path.GetDirectoryName(scene.path)?.Replace('\\', '/')}/{WorldEditorAssets.Sanitize(SceneName)} Terrain/{WorldEditorAssets.Sanitize(SceneName)} NavMesh.asset";
+			var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+			if (File.Exists(navMesh))
+			{
+				string guid = AssetDatabase.AssetPathToGUID(navMesh);
+				if (settings != null && !string.IsNullOrEmpty(guid))
+				{
+					settings.RemoveAssetEntry(guid);
+				}
+				AssetDatabase.DeleteAsset(navMesh);
+				notes.Add($"Deleted the NavMesh '{navMesh}' (no server hosts the backdrop).");
+			}
+			int moved = AddressablesDashboard.MoveClientBackdropEntries(settings, notes);
+			notes.Add(moved > 0 ? $"Addressables: {moved} backdrop entr{(moved == 1 ? "y" : "ies")} made client-only." : "Addressables: the backdrop is already client-only.");
 		}
 
 		private static void PlaceRig(Scene scene, List<string> notes)

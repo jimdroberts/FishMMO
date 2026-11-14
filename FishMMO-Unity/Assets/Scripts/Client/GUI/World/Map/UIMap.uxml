@@ -82,7 +82,7 @@
 
                         <ui:VisualElement name="map-note-editor" class="map-note-editor">
                             <ui:TextField name="map-note-title" class="fish-input map-note-field" placeholder-text="Title" />
-                            <ui:TextField name="map-note-text" class="fish-input map-note-field map-note-field--body" placeholder-text="Note" multiline="true" />
+                            <ui:TextField name="map-note-text" class="fish-input fish-input--multiline map-note-field map-note-field--body" placeholder-text="Note" multiline="true" />
                             <ui:VisualElement name="map-note-colors" class="map-note-colors" />
                             <ui:Button name="map-note-add" class="fish-button fish-button--primary map-note-add" text="PIN NOTE" />
                             <ui:Label name="map-note-hint" class="fish-hint map-note-hint" text="" />

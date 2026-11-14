@@ -42,9 +42,25 @@ namespace FishMMO.UnitTests
 			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs"));
 
-			LogAssert.IsTrue(controller.Contains("if (cachedTargetController != null && PlayerCharacter != null)"),
+			LogAssert.IsTrue(controller.Contains("if (cachedTargetController != null && PlayerCharacter != null && validatedAbility.Template.RequiresTarget)"),
 				"the target/range pre-filter must read the target controller only for a player; " +
 				"an NPC's Current is the previous cast's stale trace");
+		}
+
+		/// <summary>
+		/// Lesser Fireball (no required target, 30 m reach) could only be cast at a creature: aiming at the ground made the
+		/// terrain tile the "target", and the pre-filter measured the reach to that tile's origin, its far corner.
+		/// </summary>
+		[Test]
+		public void TargetRangePreFilter_OnlyForTargetedAbilities_MeasuredToTheHitPoint()
+		{
+			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
+				"Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs"));
+
+			LogAssert.IsTrue(controller.Contains("(Character.Transform.position - current.HitPosition).sqrMagnitude"),
+				"the reach is measured to the point the ray hit");
+			LogAssert.IsFalse(controller.Contains("(Character.Transform.position - target.position).sqrMagnitude"),
+				"never to the hit object's origin (a terrain tile's is its corner)");
 		}
 
 		[Test]

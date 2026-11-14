@@ -213,6 +213,20 @@ namespace FishNet.Object
         /// Last tick read for a replicate.
         /// </summary>
         private uint _lastReadReplicateTick = TimeManager.UNSET_TICK;
+        #region FISHMMO EDIT: batched replicates and held idle input.
+        /// <summary>Owner: a send was due on a tick its side does not flush on, so it is written with the next flush.</summary>
+        private bool _replicateSendPending;
+        /// <summary>Owner: the tick its replicate was last written (keepalive of a held input).</summary>
+        private uint _lastReplicateWriteTick = TimeManager.UNSET_TICK;
+        /// <summary>Server: repeating the owner's last input because the owner stopped sending a repeat (ReplicateIdle).</summary>
+        private bool _replicateHolding;
+        /// <summary>Server: the tick number the last held input was run on.</summary>
+        private uint _lastHeldReplicateTick = TimeManager.UNSET_TICK;
+        /// <summary>Server: the tick of the last real or held input run.</summary>
+        private uint _lastCreatedRunTick = TimeManager.UNSET_TICK;
+        /// <summary>Server: default data has run since <see cref = "_lastCreatedRunTick"/> (the stream broke).</summary>
+        private bool _defaultRunSinceCreated;
+        #endregion
         /// <summary>
         /// Last tick read for a reconcile. This is only set on the client.
         /// </summary>
@@ -355,6 +369,13 @@ namespace FishNet.Object
             _lastOrderedReplicatedTick = TimeManager.UNSET_TICK;
             _lastReplicateReadRemoteTick = TimeManager.UNSET_TICK;
             _lastReadReplicateTick = TimeManager.UNSET_TICK;
+            // FISHMMO EDIT: batched replicates and held idle input.
+            _replicateSendPending = false;
+            _lastReplicateWriteTick = TimeManager.UNSET_TICK;
+            _replicateHolding = false;
+            _lastHeldReplicateTick = TimeManager.UNSET_TICK;
+            _lastCreatedRunTick = TimeManager.UNSET_TICK;
+            _defaultRunSinceCreated = false;
 
             ClearReplicateCache();
         }
@@ -634,7 +655,14 @@ namespace FishNet.Object
 
             // Check to reset resends.
             bool isDefault = isDefaultDel.Invoke(dataContainer.Data);
-            bool resetResends = !isDefault || HasServerRigidbodyTransformChanged(updateLastValues: true);
+            /* FISHMMO EDIT: held idle input. A repeat of the previous input that the server may hold (ReplicateIdle) does not
+             * restart the resends, so the owner stops sending it once they run out, like default data; the server repeats it
+             * meanwhile. A keepalive resend every ReplicateIdle.KeepaliveTicks covers a server that lost the last ones. */
+            bool isRepeat = !isDefault && replicatesHistory.Count >= 2 && ReplicateIdle<T>.IsRepeat(replicatesHistory[replicatesHistory.Count - 2].Data, dataContainer.Data);
+            bool resetResends = (!isDefault && !isRepeat) || HasServerRigidbodyTransformChanged(updateLastValues: true);
+            if (isRepeat && !resetResends && _remainingReplicateResends <= 0 && !_replicateSendPending &&
+                (_lastReplicateWriteTick == TimeManager.UNSET_TICK || dataTick - _lastReplicateWriteTick >= ReplicateIdle.KeepaliveTicks))
+                _remainingReplicateResends = 1;
 
             byte redundancyCount = PredictionManager.RedundancyCount;
 
@@ -649,11 +677,26 @@ namespace FishNet.Object
             bool sendData = _remainingReplicateResends > 0;
             if (sendData)
             {
+                _remainingReplicateResends--;
+                _replicateSendPending = true;
+            }
+            /* FISHMMO EDIT: batched replicates. A client that flushes every N ticks used to write one replicate per tick, each
+             * carrying the last RedundancyCount inputs, so one packet held N messages repeating each other's inputs. It now
+             * writes once, on the tick the packet leaves, carrying RedundancyCount + N - 1 inputs: the ticks since the last
+             * flush plus the same redundancy, so every input still travels in as many packets as before. */
+            if (_replicateSendPending)
+            {
                 /* If not server then send to server.
                  * If server then send to clients. */
                 bool toServer = !IsServerStarted;
-                Replicate_SendAuthoritative(toServer, methodHash, redundancyCount, replicatesHistory, dataTick, dataContainer.Channel, GetDeltaSerializeOption());
-                _remainingReplicateResends--;
+                byte interval = toServer ? NetworkManager.TransportManager.GetSendInterval(asServer: false) : (byte)1;
+                if (interval <= 1 || NetworkManager.TransportManager.ShouldFlushOutgoing(asServer: false, TimeManager.LocalTick))
+                {
+                    int pastInputs = redundancyCount + Math.Max(0, interval - 1);
+                    Replicate_SendAuthoritative(toServer, methodHash, pastInputs, replicatesHistory, dataTick, dataContainer.Channel, GetDeltaSerializeOption());
+                    _replicateSendPending = false;
+                    _lastReplicateWriteTick = dataTick;
+                }
             }
 
             SetReplicateTick(dataTick, createdReplicate: true);
@@ -695,6 +738,21 @@ namespace FishNet.Object
                 return;
             }
 
+            // FISHMMO EDIT: held idle input. While holding, the held input and real input are lined up by tick number.
+            if (_replicateHolding && isServerStarted)
+            {
+                if (ReplicateHeld())
+                    return;
+            }
+            /* FISHMMO EDIT: held idle input. Input arrived, but not for the next tick: the owner skipped the ticks between
+             * because they repeated a holdable input. Hold through them so the arrival runs on its own number. */
+            if (isServerStarted && !_replicateHolding && replicatesQueue.Count > 0 && LastRunIsHoldable() &&
+                (int)(replicatesQueue.Peek().Data.GetTick() - (_lastCreatedRunTick + 1)) > 0)
+            {
+                if (TryStartHolding())
+                    return;
+            }
+
             int count = replicatesQueue.Count;
             /* If count is 0 then data must be set default
              * and as predicted. */
@@ -703,7 +761,9 @@ namespace FishNet.Object
                 if (HasServerRigidbodyTransformChanged(updateLastValues: true))
                     _remainingReconcileResends = predictionManager.RedundancyCount;
 
-                ReplicateDefaultData();
+                // FISHMMO EDIT: held idle input. The owner stopped sending a repeat of its last input: run it again instead.
+                if (!(isServerStarted && TryStartHolding()))
+                    ReplicateDefaultData();
             }
             //Not predicted, is user created.
             else
@@ -766,6 +826,65 @@ namespace FishNet.Object
                 }
             }
 
+            /* FISHMMO EDIT: held idle input. True when the last input run (real or held) may be held: holding starts and this
+             * tick runs it. */
+            bool LastRunIsHoldable()
+            {
+                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0)
+                    return false;
+                ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
+                return last.IsCreated && ReplicateIdle<T>.CanHold(last.Data);
+            }
+
+            bool TryStartHolding()
+            {
+                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0)
+                    return false;
+                ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
+                if (!last.IsCreated || !ReplicateIdle<T>.CanHold(last.Data))
+                    return false;
+                _replicateHolding = true;
+                _lastHeldReplicateTick = last.Data.GetTick();
+                return ReplicateHeld();
+            }
+
+            /* FISHMMO EDIT: held idle input. One holding tick (ReplicateHoldPlanner): drops queued repeats of the held input,
+             * runs a real input that is due or late (holding ends), or runs the held input again on the next tick number.
+             * False when there is nothing to hold any more. */
+            bool ReplicateHeld()
+            {
+                if (replicatesHistory.Count == 0)
+                {
+                    _replicateHolding = false;
+                    return false;
+                }
+                T held = replicatesHistory[replicatesHistory.Count - 1].Data;
+                uint maximumWait = (uint)predictionManager.StateInterpolation + NetworkManager.TransportManager.GetSendInterval(asServer: false);
+                while (true)
+                {
+                    bool hasHead = replicatesQueue.TryPeek(out ReplicateDataContainer<T> head);
+                    uint headTick = hasHead ? head.Data.GetTick() : 0;
+                    bool headIsRepeat = hasHead && ReplicateIdle<T>.IsRepeat(held, head.Data);
+                    ReplicateHoldAction action = ReplicateHoldPlanner.Next(hasHead, headTick, headIsRepeat, _lastHeldReplicateTick + 1, maximumWait, out uint runTick);
+                    if (action == ReplicateHoldAction.DropHead)
+                    {
+                        replicatesQueue.Dequeue().Dispose();
+                        continue;
+                    }
+                    _remainingReconcileResends = predictionManager.RedundancyCount;
+                    if (action == ReplicateHoldAction.RunHead)
+                    {
+                        _replicateHolding = false;
+                        _replicateCurrentStartTick = TimeManager.UNSET_TICK;
+                        ReplicateData(replicatesQueue.Dequeue(), ReplicateState.Ticked | ReplicateState.Created);
+                        return true;
+                    }
+                    _lastHeldReplicateTick = runTick;
+                    ReplicateData(new ReplicateDataContainer<T>(held, Channel.Unreliable, runTick, isCreated: true), ReplicateState.Ticked | ReplicateState.Created);
+                    return true;
+                }
+            }
+
             //Performs a replicate using default data.
             void ReplicateDefaultData()
             {
@@ -790,6 +909,16 @@ namespace FishNet.Object
                 uint tick = data.Data.GetTick();
 
                 SetReplicateTick(tick, state.ContainsCreated());
+                // FISHMMO EDIT: held idle input. Where the run stream stands, for lining arriving input up with it.
+                if (state.ContainsCreated())
+                {
+                    _lastCreatedRunTick = tick;
+                    _defaultRunSinceCreated = false;
+                }
+                else
+                {
+                    _defaultRunSinceCreated = true;
+                }
 
                 //Server always adds.
                 if (IsServerStarted)
@@ -1093,7 +1222,8 @@ namespace FishNet.Object
             //If from a client that is not clientHost do some safety checks.
             if (!fromServer && !Owner.IsLocalClient)
             {
-                if (readReplicates.Count > pm.RedundancyCount)
+                // FISHMMO EDIT: batched replicates. A client flushing every N ticks writes RedundancyCount + N - 1 inputs.
+                if (readReplicates.Count > pm.RedundancyCount + Math.Max(0, NetworkManager.TransportManager.GetSendInterval(asServer: false) - 1))
                 {
                     sender.Kick(reader, KickReason.ExploitAttempt, LoggingType.Common, $"Connection {sender.ToString()} sent too many past replicates. Connection will be kicked immediately.");
                     return;
@@ -1243,8 +1373,27 @@ namespace FishNet.Object
              * to do this since clients implement the queue delay
              * by holding reconcile x ticks rather than not running received
              * x ticks. */
-            if ((isServer || isAppendedOrder) && startQueueCount == 0 && replicatesQueue.Count > 0)
+            /* FISHMMO EDIT: held idle input. Not while holding: the held ticks already keep the numbering continuous, and the
+             * hold lines the arriving input up with it (ReplicateHoldPlanner). */
+            if ((isServer || isAppendedOrder) && startQueueCount == 0 && replicatesQueue.Count > 0 && !_replicateHolding && !ContinuesRunStream(replicatesQueue, replicatesHistory))
                 _replicateCurrentStartTick = _networkObjectCache.TimeManager.LocalTick + pm.StateInterpolation;
+        }
+
+        /// <summary>
+        /// FISHMMO EDIT: held idle input. True when input arriving into an empty queue continues the run stream, so the start
+        /// delay (which rebuilds the buffer after the stream broke) would only insert default ticks: it is the very next tick
+        /// with nothing defaulted since, or the last input run may be held (the gap is lined up by holding).
+        /// </summary>
+        private bool ContinuesRunStream<T>(BasicQueue<ReplicateDataContainer<T>> replicatesQueue, RingBuffer<ReplicateDataContainer<T>> replicatesHistory) where T : IReplicateData, new()
+        {
+            if (!ReplicateIdle<T>.Enabled || !IsServerStarted || replicatesQueue.Count == 0 || _lastCreatedRunTick == TimeManager.UNSET_TICK)
+                return false;
+            if (!_defaultRunSinceCreated && replicatesQueue.Peek().Data.GetTick() == _lastCreatedRunTick + 1)
+                return true;
+            if (replicatesHistory.Count == 0)
+                return false;
+            ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
+            return last.IsCreated && ReplicateIdle<T>.CanHold(last.Data);
         }
 
         /// <summary>

@@ -538,6 +538,24 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Makes the list an observer's payload just carried (still in <see cref="observedBuffBuffer"/>) the observed push's
+		/// baseline, when nothing has been pushed yet. A character that spawned already carrying buffs (loaded with them)
+		/// had them marked changed before anyone observed it, so its first tick broadcast the whole strip to observers who had
+		/// just received it in the payload. Later observers get their own payload; the push's deltas and full strips are
+		/// right for all of them.
+		/// </summary>
+		private void SeedObservedBuffBaseline()
+		{
+			if (!base.IsServerStarted || hasObservedBuffBaseline || base.NetworkObject == null ||
+				!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+			AdoptObservedBuffBaseline(ObservedBuffStatement.WholeStrip(observedBuffBuffer.ToArray()));
+			observedBuffsDirty = false;
+		}
+
+		/// <summary>
 		/// Builds and pushes the server-filtered observer buff list, if it changed this tick.
 		/// </summary>
 		/// <remarks>
@@ -2236,6 +2254,7 @@ namespace FishMMO.Shared
 				{
 					observedBuffBuffer[i].WriteTo(writer);
 				}
+				SeedObservedBuffBaseline();
 			}
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - buffBlockStart),
@@ -2632,7 +2651,9 @@ namespace FishMMO.Shared
 
 			if (replicateReferenceTick == TimeManager.UNSET_TICK)
 			{
-				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged)
+				// Logged for the local player's own character only: every observed character takes this path once on
+				// spawn (its state arrives before any replicate), which is expected and would flood the log in a crowd.
+				if (!hasSeenFirstReplicate && !resolveAuthoritativeWarningLogged && base.IsOwner)
 				{
 					// Expected until the first replicate arrives — reconcile corrects it.
 					Log.Debug("BuffController",

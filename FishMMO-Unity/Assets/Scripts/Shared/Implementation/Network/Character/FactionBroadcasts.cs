@@ -148,4 +148,15 @@ namespace FishMMO.Shared
 		/// <summary>List of faction updates to apply to the target character.</summary>
 		public FactionUpdateBroadcast[] Factions;
 	}
+
+	/// <summary>
+	/// Client-to-server: the owner asks to turn their aggression on or off. On, they may harm neutral and allied targets
+	/// (and anyone may harm them); off, only enemies. The server decides, and the answer is the controller's synced state
+	/// (<see cref="FactionController.AggressionEnabled"/>), never this message echoed back.
+	/// </summary>
+	public struct FactionAggressionBroadcast : IBroadcast
+	{
+		/// <summary>The state asked for.</summary>
+		public bool Enabled;
+	}
 }

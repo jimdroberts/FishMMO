@@ -64,7 +64,37 @@ namespace FishMMO.Client
 			{
 				ApplyView();
 			}
+			ReleaseCollisionIfLeaving();
 		}
+
+		/// <summary>
+		/// Once a game world loads beside this one (entering the game), this world's colliders are switched off.
+		/// </summary>
+		/// <remarks>
+		/// A client loads world scenes without a local physics scene, so every loaded scene's colliders share the default
+		/// one, which is the one the player's motor queries. The backdrop is unloaded asynchronously on entering the game;
+		/// until that finishes, its terrain colliders would be solid ground the server's copy of the world does not have,
+		/// under a character the server places elsewhere, and any overlap would be predicted against them and corrected.
+		/// Nothing here needs them once the login screen is gone.
+		/// </remarks>
+		private void ReleaseCollisionIfLeaving()
+		{
+			Scene own = gameObject.scene;
+			if (collisionReleased || !own.IsValid() || !own.isLoaded || !AnotherWorldLoaded(own))
+			{
+				return;
+			}
+			collisionReleased = true;
+			foreach (GameObject root in own.GetRootGameObjects())
+			{
+				foreach (Collider collider in root.GetComponentsInChildren<Collider>(true))
+				{
+					collider.enabled = false;
+				}
+			}
+		}
+
+		private bool collisionReleased;
 
 		/// <summary>Puts the camera at the login view.</summary>
 		public void ApplyView()

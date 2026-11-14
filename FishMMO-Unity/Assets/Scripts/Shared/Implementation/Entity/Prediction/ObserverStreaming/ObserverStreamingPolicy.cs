@@ -351,6 +351,136 @@ namespace FishMMO.Shared
 		/// <summary>Ticks between scheduling passes. 15 is half a second at 30 Hz.</summary>
 		public static uint RescheduleIntervalTicks { get; set; } = 15;
 
+		// ── Byte budget ─────────────────────────────────────────────
+
+		/// <summary>
+		/// Bytes per second each viewer may spend on observed characters' unreliable updates (their transforms); 0 = no byte
+		/// budget (counts and intervals alone, as before). See <see cref="FitByteBudget"/>.
+		/// </summary>
+		public static int ByteBudget { get; set; } = 0;
+
+		/// <summary>
+		/// Estimated bytes one unreliable update of an observed character costs its viewer. Read the real figure off the
+		/// scene server's traffic breakdown (the NetworkTransform rows' average size) and set it here.
+		/// </summary>
+		public static int UpdateCostBytes { get; set; } = 16;
+
+		/// <summary>
+		/// Share of a full update's cost charged for a character that has not moved since the last pass: a still transform
+		/// sends nothing after it settles, so charging it in full would hide crowds of idle characters for no saving.
+		/// </summary>
+		public static float IdleCostShare { get; set; } = 0.1f;
+
+		/// <summary>One observed character in a viewer's byte budget, in priority order.</summary>
+		public struct BudgetSlot
+		{
+			/// <summary>The interval the relevance rules gave it (1 = every tick).</summary>
+			public byte DesiredInterval;
+			/// <summary>Never dropped: party in reach, the viewer's target, an active fight.</summary>
+			public bool Pinned;
+			/// <summary>Within the viewer's engagement reach: kept at its desired interval (lag compensation's fidelity).</summary>
+			public bool Engaged;
+			/// <summary>Moved since the last pass (charged in full; a still one at <see cref="IdleCostShare"/>).</summary>
+			public bool Moving;
+			/// <summary>The viewer already observes it: it keeps its place against a budget widened by the hysteresis.</summary>
+			public bool CurrentlyVisible;
+			/// <summary>Out: inside the budget (else the viewer stops observing it).</summary>
+			public bool Admitted;
+			/// <summary>Out: the interval to send at.</summary>
+			public byte Interval;
+		}
+
+		/// <summary>Bytes per second one observed character costs at <paramref name="interval"/>.</summary>
+		public static float UpdateCostPerSecond(byte interval, bool moving, int tickRate)
+		{
+			float perSecond = UpdateCostBytes * (float)tickRate / Math.Max(1, (int)interval);
+			return moving ? perSecond : perSecond * IdleCostShare;
+		}
+
+		/// <summary>
+		/// Fits one viewer's observed characters (in priority order) into <paramref name="budgetBytesPerSecond"/>: who stays
+		/// visible, then how often each is sent. Returns the bytes per second it plans to spend.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Visibility before fidelity.</b> First every character is charged at the slowest interval allowed
+		/// (<paramref name="slowestInterval"/>), in priority order, so as many as possible stay visible; then the budget left
+		/// over upgrades them, still in priority order, to the interval the relevance rules wanted. A greedy single pass would
+		/// give the first few full rate and drop everyone else.
+		/// </para>
+		/// <para>
+		/// <b>What is never cut.</b> Pinned characters are always admitted. Engaged characters are always admitted at their
+		/// desired interval and charged first: lag compensation rewinds to the pose the viewer saw, so a character the viewer
+		/// can hit is never slowed by the budget.
+		/// </para>
+		/// <para>
+		/// <b>Hysteresis.</b> A character the viewer already sees is measured against the budget widened by
+		/// <see cref="VisibilityBudgetHysteresis"/>, so one at the edge does not flicker in and out from pass to pass.
+		/// </para>
+		/// </remarks>
+		public static float FitByteBudget(List<BudgetSlot> slots, int budgetBytesPerSecond, int tickRate, byte slowestInterval)
+		{
+			byte slowest = (byte)Math.Max(1, (int)slowestInterval);
+			float spent = 0f;
+			float widened = budgetBytesPerSecond * (1f + Mathf.Max(0f, VisibilityBudgetHysteresis));
+			// Engaged first: charged at their desired interval, never cut.
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				BudgetSlot slot = slots[i];
+				if (!slot.Engaged)
+				{
+					continue;
+				}
+				byte desired = (byte)Math.Max(1, (int)slot.DesiredInterval);
+				slot.Admitted = true;
+				slot.Interval = desired;
+				spent += UpdateCostPerSecond(desired, slot.Moving, tickRate);
+				slots[i] = slot;
+			}
+			// Visibility: everyone else at the slowest interval, in priority order.
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				BudgetSlot slot = slots[i];
+				if (slot.Engaged)
+				{
+					continue;
+				}
+				byte floor = (byte)Math.Max(slowest, (int)slot.DesiredInterval);
+				float cost = UpdateCostPerSecond(floor, slot.Moving, tickRate);
+				float limit = slot.CurrentlyVisible ? widened : budgetBytesPerSecond;
+				if (slot.Pinned || spent + cost <= limit)
+				{
+					slot.Admitted = true;
+					slot.Interval = floor;
+					spent += cost;
+				}
+				else
+				{
+					slot.Admitted = false;
+					slot.Interval = floor;
+				}
+				slots[i] = slot;
+			}
+			// Fidelity: upgrade toward the desired interval with what is left, in priority order.
+			for (int i = 0; i < slots.Count; ++i)
+			{
+				BudgetSlot slot = slots[i];
+				if (slot.Engaged || !slot.Admitted || slot.DesiredInterval >= slot.Interval)
+				{
+					continue;
+				}
+				byte desired = (byte)Math.Max(1, (int)slot.DesiredInterval);
+				float extra = UpdateCostPerSecond(desired, slot.Moving, tickRate) - UpdateCostPerSecond(slot.Interval, slot.Moving, tickRate);
+				if (spent + extra <= budgetBytesPerSecond)
+				{
+					slot.Interval = desired;
+					spent += extra;
+					slots[i] = slot;
+				}
+			}
+			return spent;
+		}
+
 		/// <summary>
 		/// Relevance of an observed character to a viewer. Higher is more relevant.
 		/// </summary>
@@ -519,6 +649,9 @@ namespace FishMMO.Shared
 				case "ObserverRescheduleTicks": return TryInt(value, v => RescheduleIntervalTicks = (uint)Math.Max(1, v));
 				case "ObserverLodBands": return TryParseLodBands(value);
 				case "ObserverVisibilityBudgets": return TryParseVisibilityBudgets(value);
+				case "ObserverByteBudget": return TryInt(value, v => ByteBudget = Math.Max(0, v));
+				case "ObserverUpdateCostBytes": return TryInt(value, v => UpdateCostBytes = Math.Max(1, v));
+				case "ObserverIdleCostShare": return TryFloat(value, v => IdleCostShare = Mathf.Clamp01(v));
 				default: return false;
 			}
 		}

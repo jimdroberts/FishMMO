@@ -488,8 +488,10 @@ namespace FishMMO.UnitTests
 				"An absolute is idempotent: applying it after one delta, two deltas or none gives the same value.");
 
 			string source = ReadSource(DamagePath);
-			LogAssert.IsTrue(source.Contains("attributeController.ApplyObservedHealthDelta(msg.Amount,"),
-				"the report must move the bar at the receive seam, not only draw a number");
+			LogAssert.IsTrue(source.Contains("int unpredicted = msg.Amount - PredictedReportAmount(nm, msg, eventKind, targetNob);") &&
+				source.Contains("attributeController.ApplyObservedHealthDelta(unpredicted,"),
+				"the report must move the bar at the receive seam, not only draw a number (less what this client " +
+				"already applied as its own prediction, or the caster's view of the target took the hit twice)");
 			LogAssert.IsTrue(source.Contains("if (!targetNob.IsOwner)"),
 				"and never for the owner, whose own reconcile is authoritative every tick");
 		}

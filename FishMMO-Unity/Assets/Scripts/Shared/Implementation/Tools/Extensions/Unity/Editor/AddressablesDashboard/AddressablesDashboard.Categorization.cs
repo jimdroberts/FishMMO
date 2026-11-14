@@ -189,6 +189,12 @@ namespace FishMMO.Shared
 				};
 			}
 
+			// ── A world only the client draws (the login screen's backdrop): all of it client-side ──
+			if (WorldDesign.ClientBackdropScenes.Owns(normalized))
+			{
+				return CategorizeBackdropAsset(normalized, runtimeKey);
+			}
+
 			// ── Plugins ──
 			if (normalized.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase))
 			{

@@ -12,7 +12,77 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e50ec2665c219da4b99dc8b9b88aa0de, type: 3}
   m_Name: Damage Received
   m_EditorClassIdentifier: 
-  Icon: {fileID: 0}
+  IconReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Category: 2
   Description: Total damage received.
-  Tiers: []
+  Tiers:
+  - Value: 1000
+    TierCompleteMessage: A thousand points of harm taken, and still standing.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 10000
+    TierCompleteMessage: Ten thousand points of harm taken.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 50000
+    TierCompleteMessage: Fifty thousand points of harm taken. Scarred, but unbowed.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 250000
+    TierCompleteMessage: A quarter of a million points of harm taken.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 1000000
+    TierCompleteMessage: A million points of harm taken. Iron would have broken first.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []

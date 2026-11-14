@@ -36,5 +36,5 @@ MonoBehaviour:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
-        FXPrefab: {fileID: 1283335467853853480, guid: 422ac1a06602ba841bd45b8b1c616098,
+        FXPrefab: {fileID: 1283335467853853480, guid: cb25fb39d2ec2b646b6b18059ae87bce,
           type: 3}

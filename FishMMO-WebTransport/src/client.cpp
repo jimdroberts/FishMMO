@@ -224,6 +224,8 @@ int32_t wt_client_connect_impl(
     settings.IsSet.PeerBidiStreamCount = TRUE;
     settings.PeerUnidiStreamCount = WT_MAX_STREAMS;
     settings.IsSet.PeerUnidiStreamCount = TRUE;
+    settings.MaxAckDelayMs = WT_MAX_ACK_DELAY_MS;
+    settings.IsSet.MaxAckDelayMs = TRUE;
 
     /* ── Open configuration with ALPN ── */
     QUIC_BUFFER alpn_buf;

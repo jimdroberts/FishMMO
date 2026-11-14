@@ -197,6 +197,18 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public uint PreRedirectElapsedTicks;
 
+		/// <summary>The caster's input tick this object's step zero belongs to: its spawn tick, or for a fork the source's step.</summary>
+		private uint viewStepBase;
+
+		/// <summary>
+		/// The caster's input tick this step pairs with: the owner sweeps step k on its tick spawn + k, against what it drew on
+		/// that tick, so the server rewinds step k to the view the caster claimed with THAT input (LagCompensationTick), never to
+		/// whichever input it happened to process last. They differ whenever the replicate queue ran dry or doubled up for a
+		/// tick, which input arriving two ticks at a time makes common, and a frame hitch that runs two ticks in one frame
+		/// draws both at the same pose.
+		/// </summary>
+		public uint StepInputTick => unchecked(viewStepBase + PreRedirectElapsedTicks + ElapsedTicks);
+
 		/// <summary>
 		/// Immutable snapshot of the ability data captured at spawn time.
 		/// Used as a fallback when the live <see cref="Ability"/> reference becomes null
@@ -823,7 +835,7 @@ namespace FishMMO.Shared
 			 * connection whose tick bookkeeping is not established, in which case the query runs
 			 * uncompensated — the behaviour this call site had before. On a client there is nothing
 			 * to rewind and nothing that should be: its world is already the one it aimed in. */
-			if (isServer && LagCompensationTick.TryResolve(Caster, timeManager, out RewindTarget rewindTarget))
+			if (isServer && LagCompensationTick.TryResolve(Caster, timeManager, StepInputTick, out RewindTarget rewindTarget))
 			{
 				/* The caster is excluded — it fires from where it is, not where it was. The query is
 				 * run eagerly inside the scope and the results are dispatched after it closes, so no
@@ -1997,6 +2009,7 @@ namespace FishMMO.Shared
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new DeterministicRNG(seed);
 			abilityObject.SpawnTick = spawnTick;
+			abilityObject.viewStepBase = spawnTick;
 			abilityObject.SpawnSeed = seed;
 			abilityObject.ElapsedTicks = 0;
 			abilityObject.PreRedirectElapsedTicks = 0;
@@ -2151,6 +2164,8 @@ namespace FishMMO.Shared
 			abilityObject.RemainingLifeTime = source.RemainingLifeTime;
 			abilityObject.RNG = new DeterministicRNG(CreateChildSeed(seed, abilityObjectID));
 			abilityObject.SpawnTick = source.SpawnTick;
+			// The child's step zero is the source's current step: its first step pairs with the caster's next input.
+			abilityObject.viewStepBase = source.StepInputTick;
 			abilityObject.SpawnSeed = source.SpawnSeed;
 			// A child's own pose, not the parent's: multiply/split actions place children at offsets
 			// and rotations of their own, and the closed-form trajectory must start from there.

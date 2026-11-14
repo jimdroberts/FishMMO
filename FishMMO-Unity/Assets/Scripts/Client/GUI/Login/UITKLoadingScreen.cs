@@ -38,14 +38,20 @@ namespace FishMMO.Client
 		private const string LOADING_RETURN_BUTTON_NAME = "loading-return-btn";
 
 		/// <summary>
-		/// How long the overlay may hold the screen before the escape hatch is offered.
+		/// How long the overlay may go without advancing (<see cref="NoteAdvance"/>) before the escape hatch is offered.
 		/// </summary>
 		/// <remarks>
-		/// Longer than any honest transition. A world entry is three round trips and an
+		/// <b>A stall, not a duration.</b> The clock used to run from the moment the overlay came up, so a slow load that was
+		/// working (biomes downloading on the web, grass being built behind the overlay) was told it was "taking longer than it
+		/// should" while the bar was visibly moving. It now restarts whenever the bar rises within a stage or a new stage
+		/// begins, so only a transition that has stopped moving offers the way out.
+		/// <para>
+		/// Longer than any honest pause. A world entry is three round trips and an
 		/// Addressable preload; a scene load on a cold disk is seconds. A reconnect backoff can
 		/// legitimately run for minutes, but that case raises <see cref="UITKReconnectDisplay"/>
 		/// on top of this panel with a Cancel button of its own, so the player is not stuck
 		/// there — this is the backstop for when nothing else is on screen.
+		/// </para>
 		/// <para>
 		/// Deliberately generous rather than tight: offering a way out is harmless, but offering
 		/// it during a slow-but-working load invites the player to abandon a login that was about
@@ -54,12 +60,45 @@ namespace FishMMO.Client
 		/// </remarks>
 		private const float EscapeHatchDelaySeconds = 45.0f;
 
+		/// <summary>Unscaled time the overlay last advanced: came up, began a new stage, or rose within one.</summary>
+		private float lastAdvanceUnscaled = -1.0f;
+		/// <summary>The highest progress the bar has shown in the current stage (reset when a new stage begins).</summary>
+		private float stageBestProgress;
+		/// <summary>Hints shown during this showing: a stage counts as new once, so a hint flipping back and forth is not progress.</summary>
+		private readonly System.Collections.Generic.HashSet<string> stagesSeen = new System.Collections.Generic.HashSet<string>();
+		/// <summary>The rise in progress that counts as an advance (half a percent): a bar re-reporting one value is not moving.</summary>
+		private const float AdvanceStep = 0.005f;
+
+		/// <summary>
+		/// The bar's share for the Addressable batches and the FishNet scene load: what they report fills 0 to this. The
+		/// scene's own content follows them on the same bar, so a stage never starts again from 0 (the bar ran to 100% for the
+		/// scene and then fell back to 0 for its biomes).
+		/// </summary>
+		private const float SceneStageEnd = 0.6f;
+		/// <summary>Where the content loads (terrain, biomes, rivers) end on the bar; preparing grass, scatter and props fills the rest.</summary>
+		private const float ContentLoadsEnd = 0.9f;
+		/// <summary>The bar as shown in this showing: it only rises (reset when the overlay comes up).</summary>
+		private float displayedProgress;
+
+		/// <summary>Restarts the escape hatch's stall clock.</summary>
+		private void NoteAdvance()
+		{
+			this.lastAdvanceUnscaled = Time.unscaledTime;
+		}
+
 		/// <summary>
 		/// Longest world entry waits on <see cref="SceneContentLoads"/> once the character exists, before letting the
 		/// player in with whatever has arrived. A slow web download of the terrain arrays is honest and is the case this
 		/// wait exists for; a load whose owner never ends it must not hold the overlay for ever.
 		/// </summary>
 		private const float SceneContentTimeoutSeconds = 120.0f;
+
+		/// <summary>
+		/// Frames the content stage must be idle (nothing loading, nothing being prepared) before the overlay lets go. A load
+		/// that ends hands on to work that starts on a later frame (a biome registers; the grass takes its terrains again on the
+		/// next render), and a scene's loaders register from Start and sceneLoaded, so a single idle frame is not the end.
+		/// </summary>
+		private const int ContentSettleFrames = 8;
 
 		/// <summary>
 		/// Cache containing details for world scenes, including transition images.
@@ -175,6 +214,8 @@ namespace FishMMO.Client
 			base.OnDestroying();
 
 			AddressableLoadProcessor.OnProgressUpdate -= OnProgressUpdate;
+			// Builders must not keep their covered budget once nothing covers the world.
+			SceneContentLoads.Covered = false;
 		}
 
 		/// <summary>
@@ -275,6 +316,13 @@ namespace FishMMO.Client
 		private bool sceneContentHold;
 		/// <summary>Unscaled time <see cref="sceneContentHold"/> was set.</summary>
 		private float sceneContentHoldSince;
+		/// <summary>Consecutive frames of the hold with nothing loading or being prepared (<see cref="ContentSettleFrames"/>).</summary>
+		private int contentIdleFrames;
+		/// <summary>
+		/// True once the content stage of this showing has settled and let go: the next refresh with no driver hides rather
+		/// than holding again. Cleared whenever a driver runs (a new stage of the transition) and on <see cref="Hide(bool)"/>.
+		/// </summary>
+		private bool contentSettled;
 
 		/// <summary>
 		/// Shows the overlay while any driver is active and hides it only once every driver
@@ -293,7 +341,20 @@ namespace FishMMO.Client
 		/// </param>
 		private void RefreshVisibility(bool forceRefresh = false)
 		{
-			bool shouldShow = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive || sceneContentHold;
+			bool driving = addressableLoadActive || sceneTransitionActive || reconnectPendingActive || worldEntryActive;
+			if (driving)
+			{
+				contentSettled = false;
+			}
+			else if (Visible && Document != null && !sceneContentHold && !contentSettled)
+			{
+				/* Every driver is done, but what they loaded may still be fetching its own content (a world scene's terrain,
+				 * biomes and rivers) and building from it (grass, scatter, prop pools). The login screen's world comes up from
+				 * the boot preload and the overlay went down over it while all of that was still arriving, so the login panel
+				 * stuttered under the player's hands. Hold until it has settled; only ever keeps a showing overlay up. */
+				BeginContentHold();
+			}
+			bool shouldShow = driving || sceneContentHold;
 
 			if (shouldShow && (forceRefresh || !Visible))
 			{
@@ -350,6 +411,10 @@ namespace FishMMO.Client
 			{
 				this.overlayShownAtUnscaled = Time.unscaledTime;
 				this.escapeHatchOffered = false;
+				this.stageBestProgress = 0.0f;
+				this.stagesSeen.Clear();
+				this.displayedProgress = 0.0f;
+				NoteAdvance();
 			}
 
 			SetProgress(0.0f);
@@ -404,6 +469,7 @@ namespace FishMMO.Client
 			LoginNotice.Pump();
 
 			TickSceneContentHold();
+			ReportSceneContent();
 
 			/* Client null means boot: the overlay is covering the initial Addressable load, there
 			 * is no session to quit and no login panel to return to yet. Offering the button there
@@ -413,7 +479,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			if (Time.unscaledTime - this.overlayShownAtUnscaled < EscapeHatchDelaySeconds)
+			if (Time.unscaledTime - this.lastAdvanceUnscaled < EscapeHatchDelaySeconds)
 			{
 				return;
 			}
@@ -447,7 +513,7 @@ namespace FishMMO.Client
 			if (loadingStuck != null)
 			{
 				loadingStuck.text = this.escapeHatchOffered
-					? "This is taking longer than it should."
+					? "Loading has stopped making progress."
 					: string.Empty;
 			}
 
@@ -526,7 +592,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		public void FinishWorldEntry()
 		{
-			if (!Visible || Document == null || (SceneContentLoads.Pending == 0 && !sceneTransitionActive))
+			if (!Visible || Document == null)
 			{
 				Hide();
 				return;
@@ -534,14 +600,28 @@ namespace FishMMO.Client
 			addressableLoadActive = false;
 			reconnectPendingActive = false;
 			worldEntryActive = false;
-			sceneContentHold = true;
-			sceneContentHoldSince = Time.unscaledTime;
+			// Kept up by the running scene load as well (sceneTransitionActive), which the hold's deadline may clear.
+			BeginContentHold();
 			TickSceneContentHold();
 		}
 
+		/// <summary>Starts the content stage: the overlay stays up until the scene content has loaded and been prepared.</summary>
+		private void BeginContentHold()
+		{
+			if (sceneContentHold)
+			{
+				return;
+			}
+			sceneContentHold = true;
+			sceneContentHoldSince = Time.unscaledTime;
+			contentIdleFrames = 0;
+			SceneContentLoads.Covered = true;
+		}
+
 		/// <summary>
-		/// While <see cref="sceneContentHold"/> is set: reports the scene content's progress, and lets go once the world
-		/// scene has loaded and its content has all arrived, or <see cref="SceneContentTimeoutSeconds"/> has passed.
+		/// While <see cref="sceneContentHold"/> is set: lets go once the world scene has loaded and its content has all
+		/// arrived and been prepared (<see cref="SceneContentLoads.Busy"/>) for <see cref="ContentSettleFrames"/> frames in a
+		/// row, or <see cref="SceneContentTimeoutSeconds"/> has passed.
 		/// </summary>
 		private void TickSceneContentHold()
 		{
@@ -549,25 +629,54 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			bool waiting = SceneContentLoads.Pending > 0 || sceneTransitionActive;
+			bool waiting = sceneTransitionActive || SceneContentLoads.Busy;
+			contentIdleFrames = waiting ? 0 : contentIdleFrames + 1;
 			if (waiting && Time.unscaledTime - sceneContentHoldSince >= SceneContentTimeoutSeconds)
 			{
-				Debug.LogWarning($"[Loading] Entered the world after {SceneContentTimeoutSeconds:0} s with {(sceneTransitionActive ? "the scene still loading" : "scene content still loading")}: {SceneContentLoads.Describe()}.");
+				Debug.LogWarning($"[Loading] Let the overlay go after {SceneContentTimeoutSeconds:0} s with {(sceneTransitionActive ? "the scene still loading" : "scene content still loading")}: {SceneContentLoads.Describe()}.");
 				sceneTransitionActive = false;
 			}
-			else if (waiting)
+			else if (waiting || contentIdleFrames < ContentSettleFrames)
 			{
-				// The scene load reports its own progress (OnSceneProgressUpdate); the content's follows it.
-				if (SceneContentLoads.Pending > 0)
-				{
-					SetProgress(SceneContentLoads.Progress);
-					SetHint($"Loading {SceneContentLoads.FirstPending}");
-				}
 				return;
 			}
 			sceneContentHold = false;
+			contentSettled = true;
+			SceneContentLoads.Covered = false;
 			RefreshVisibility();
 		}
+
+		/// <summary>
+		/// Puts the content stage's progress on the bar while the overlay is up and scene content is loading or being
+		/// prepared. The scene load and the Addressable batch report their own progress while they run; once they reach the
+		/// end, the content they started (terrain, biomes and what is built from them) is the rest of the wait, and the bar
+		/// sat on 100% through it.
+		/// </summary>
+		private void ReportSceneContent()
+		{
+			if (!Visible || addressableLoadActive || sceneLoadReporting)
+			{
+				return;
+			}
+			if (!SceneContentLoads.TryDescribe(out string hint, out float progress))
+			{
+				return;
+			}
+			// The hint first: a new stage resets the stage's best progress, which the bar is then measured against.
+			SetHint(hint);
+			if (SceneContentLoads.Pending > 0)
+			{
+				SetProgress(progress, SceneStageEnd, ContentLoadsEnd);
+			}
+			else
+			{
+				// Preparing: a probe with no progress holds the bar at the start of the preparing share.
+				SetProgress(Mathf.Max(0.0f, progress), ContentLoadsEnd, 1.0f);
+			}
+		}
+
+		/// <summary>True between a FishNet scene load's start and end: its own percentage owns the bar.</summary>
+		private bool sceneLoadReporting;
 
 		/// <summary>
 		/// Hides the loading screen and clears the driver flags.
@@ -604,6 +713,9 @@ namespace FishMMO.Client
 			reconnectPendingActive = false;
 			worldEntryActive = false;
 			sceneContentHold = false;
+			contentSettled = false;
+			sceneLoadReporting = false;
+			SceneContentLoads.Covered = false;
 
 			// The status line explains one specific wait; it must not survive into the next
 			// one, which is usually an ordinary scene load with nothing to explain.
@@ -758,6 +870,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void SetHint(string text)
 		{
+			if (!string.IsNullOrWhiteSpace(text) && this.stagesSeen.Add(text))
+			{
+				// A new stage of the transition (another scene, the next biome): progress, and its bar starts again.
+				this.stageBestProgress = 0.0f;
+				NoteAdvance();
+			}
 			if (loadingHint == null)
 			{
 				return;
@@ -770,13 +888,29 @@ namespace FishMMO.Client
 		/// Sets the progress bar fill width to the supplied normalised progress.
 		/// </summary>
 		/// <param name="progress">The progress in the range 0-1.</param>
-		private void SetProgress(float progress)
+		private void SetProgress(float progress) => SetProgress(progress, 0.0f, SceneStageEnd);
+
+		/// <summary>
+		/// Puts a stage's progress on the bar within its share (<paramref name="from"/> to <paramref name="to"/>). The bar only
+		/// rises in a showing: a reading below what is shown (a wave widening as loads join, one stage handing over to the
+		/// next) holds it where it is. The escape hatch's stall clock reads the stage's own progress, so a stage climbing
+		/// beneath a held bar still counts as moving.
+		/// </summary>
+		private void SetProgress(float progress, float from, float to)
 		{
 			float clamped = Mathf.Clamp01(progress);
+			if (clamped >= this.stageBestProgress + AdvanceStep)
+			{
+				this.stageBestProgress = clamped;
+				NoteAdvance();
+			}
+
+			float shown = Mathf.Max(this.displayedProgress, Mathf.Lerp(from, to, clamped));
+			this.displayedProgress = shown;
 
 			if (loadingProgressFill != null)
 			{
-				loadingProgressFill.style.width = Length.Percent(clamped * 100.0f);
+				loadingProgressFill.style.width = Length.Percent(shown * 100.0f);
 			}
 
 			if (loadingProgressText != null)
@@ -784,7 +918,7 @@ namespace FishMMO.Client
 				/* Rounded down, not to nearest. Showing "100%" while the bar is still moving is
 				 * the one reading a loading screen must never give — a player who sees it and
 				 * then waits assumes the client has hung. */
-				loadingProgressText.text = $"{Mathf.FloorToInt(clamped * 100.0f)}%";
+				loadingProgressText.text = $"{Mathf.FloorToInt(shown * 100.0f)}%";
 			}
 		}
 
@@ -796,6 +930,7 @@ namespace FishMMO.Client
 		private void OnSceneStartLoad(SceneLoadStartEventArgs startEvent)
 		{
 			sceneTransitionActive = true;
+			sceneLoadReporting = true;
 			RefreshVisibility();
 
 			SceneLookupData[] lookupData = startEvent.QueueData.SceneLoadData.SceneLookupDatas;
@@ -845,6 +980,7 @@ namespace FishMMO.Client
 		private void OnSceneEndLoad(SceneLoadEndEventArgs endEvent)
 		{
 			sceneTransitionActive = false;
+			sceneLoadReporting = false;
 			RefreshVisibility();
 		}
 

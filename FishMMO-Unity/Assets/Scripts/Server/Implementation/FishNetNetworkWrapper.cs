@@ -48,6 +48,8 @@ namespace FishMMO.Server.Implementation
 		{
 			if (NetworkManager.ServerManager != null)
 			{
+				// Packet compression, when this build has trained tables (every peer of a build agrees). See PacketCompression.
+				FishMMO.Shared.PacketCompression.TryInstall(NetworkManager);
 				NetworkManager.ServerManager.StartConnection();
 				if (coroutineHost != null)
 				{

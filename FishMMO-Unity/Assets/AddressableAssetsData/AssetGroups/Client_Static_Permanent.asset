@@ -698,6 +698,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 902791299155046c7bc0ee307ad6c041
+    m_Address: LoginBackdrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 921bf8281157c524ab5d40a5ba633989
     m_Address: BiomeTexture_UnderwaterCanyon_1A2666
     m_ReadOnly: 0

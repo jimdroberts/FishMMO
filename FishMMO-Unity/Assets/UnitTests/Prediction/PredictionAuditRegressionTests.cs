@@ -1946,6 +1946,9 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(widened > budget, "The hysteresis must actually widen the budget.");
 
 			SeedRanks(clientId: 12, count: widened + 5);
+			// The rank rule alone: the minimum time in view (pinned separately below) is switched off for this one.
+			uint minimumVisible = ObserverStreamingRegistry.MinimumVisibleTicks;
+			ObserverStreamingRegistry.MinimumVisibleTicks = 0;
 			try
 			{
 				LogAssert.IsTrue(Budget(12, RankObjectId(budget), currentlyVisible: true),
@@ -1954,6 +1957,31 @@ namespace FishMMO.UnitTests
 					"...but the same rank is not admitted from outside.");
 				LogAssert.IsFalse(Budget(12, RankObjectId(widened), currentlyVisible: true),
 					"Past the widened boundary even a visible character is dropped.");
+			}
+			finally
+			{
+				ObserverStreamingRegistry.MinimumVisibleTicks = minimumVisible;
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// A character the budget let in stays in view for its minimum time even when it falls past the boundary, so a crowd
+		/// wandering across the budget's edge does not spawn and despawn its members over and over; one never admitted is
+		/// not let in by it.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_KeepsAJustAdmittedCharacterForItsMinimumTime()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			SeedRanks(clientId: 14, count: widened + 5);
+			try
+			{
+				LogAssert.IsTrue(Budget(14, RankObjectId(widened), currentlyVisible: true),
+					"Just in view: held past the widened boundary for its minimum time.");
+				LogAssert.IsFalse(Budget(14, RankObjectId(widened), currentlyVisible: false),
+					"Not in view: the hold does not admit anyone.");
 			}
 			finally
 			{
@@ -2094,6 +2122,65 @@ namespace FishMMO.UnitTests
 				.GetValue(null)).Clear();
 			((Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
 				.GetField("pinnedByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, Dictionary<int, uint>>)typeof(ObserverStreamingRegistry)
+				.GetField("visibleSinceByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, Dictionary<int, uint>>)typeof(ObserverStreamingRegistry)
+				.GetField("hiddenSinceByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("engagedByClientId", Priv).GetValue(null)).Clear();
+		}
+
+		/// <summary>
+		/// The mirror of the minimum time in view: a character the budget took out stays out for its minimum time even if the
+		/// budget would have it back, so a crowd at the edge does not come and go every few seconds, each return a full spawn.
+		/// A pinned character, or one within the viewer's engagement range, comes back at once.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_KeepsAnEvictedCharacterOutForItsMinimumTime()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			SeedRanks(clientId: 15, count: widened + 5);
+			uint minimumVisible = ObserverStreamingRegistry.MinimumVisibleTicks;
+			ObserverStreamingRegistry.MinimumVisibleTicks = 0;
+			int objectId = RankObjectId(widened);
+			try
+			{
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Past the widened boundary: taken out of view.");
+				RegistryRanks(15)[objectId] = 0;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: false), "Back inside the budget at once, but held out for its minimum time.");
+
+				RegistryPins(15).Add(objectId);
+				LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "A pinned character (party, target, a fight) comes back at once.");
+				RegistryPins(15).Remove(objectId);
+
+				RegistryRanks(15)[objectId] = widened;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Evicted again.");
+				RegistryRanks(15)[objectId] = 0;
+				var engaged = (Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry).GetField("engagedByClientId", Priv).GetValue(null);
+				engaged[15] = new HashSet<int> { objectId };
+				LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "One within the engagement range comes back at once.");
+
+				engaged.Clear();
+				RegistryRanks(15)[objectId] = widened;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Evicted once more.");
+				RegistryRanks(15)[objectId] = 0;
+				uint minimumHidden = ObserverStreamingRegistry.MinimumHiddenTicks;
+				ObserverStreamingRegistry.MinimumHiddenTicks = 0;
+				try
+				{
+					LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "With no minimum it comes back as soon as the budget allows.");
+				}
+				finally
+				{
+					ObserverStreamingRegistry.MinimumHiddenTicks = minimumHidden;
+				}
+			}
+			finally
+			{
+				ObserverStreamingRegistry.MinimumVisibleTicks = minimumVisible;
+				ClearRegistryRanks();
+			}
 		}
 
 		private static bool Budget(int clientId, int objectId, bool currentlyVisible)
@@ -2829,6 +2916,67 @@ namespace FishMMO.UnitTests
 				});
 				LogAssert.AreEqual((byte)3, controller.CurrentViewOffsetTicks,
 					"A replay carries the tick's actual input and must still update the latch.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// With a send interval of 2 only the reconcile of the tick a packet leaves on is sent (the owner used only the newer
+		/// of the two anyway), but a reconcile carrying a one-shot report (Denied, NoSpawn) always goes, or the report is lost.
+		/// </summary>
+		[Test]
+		public void Reconciles_AreSentOnFlushTicks_AndAlwaysWithAOneShotReport()
+		{
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(0, 7, 1), "interval 1: every tick");
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(0, 8, 2), "interval 2: the flush tick");
+			LogAssert.IsFalse(CharacterPredictionController.ShouldSendReconcile(0, 7, 2), "interval 2: not the tick between");
+
+			int noSpawn = 0;
+			noSpawn.EnableBit(AbilityActivationFlags.NoSpawn);
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(noSpawn, 7, 2), "a NoSpawn report goes on any tick");
+			int denied = 0;
+			denied.EnableBit(AbilityActivationFlags.Denied);
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(denied, 7, 2), "so does a denial");
+		}
+
+		/// <summary>
+		/// Each exact view claim is kept by the input tick it came with, so an ability object's step rewinds to the view the
+		/// caster had on THAT input (AbilityObject.StepInputTick), not to whichever input the server ran last. They differed
+		/// whenever the replicate queue ran dry or doubled up for a tick, and the fireball then hit on the client and missed on
+		/// the server now and then.
+		/// </summary>
+		[Test]
+		public void ViewClaims_AreKeptPerInputTick()
+		{
+			GameObject go = new GameObject("viewClaims");
+			try
+			{
+				CharacterPredictionController controller = go.AddComponent<CharacterPredictionController>();
+				MethodInfo capture = typeof(CharacterPredictionController).GetMethod("CaptureViewOffset", Any);
+				LogAssert.IsNotNull(capture);
+
+				for (uint tick = 100; tick < 110; ++tick)
+				{
+					CharacterReplicateData input = default;
+					input.ViewTickOffset = (ushort)(60000 + tick);
+					input.ViewTickFraction = (byte)(1 + tick % 200);
+					input.SetTick(tick);
+					capture.Invoke(controller, new object[] { input, ReplicateState.Ticked | ReplicateState.Created });
+				}
+				// An empty-queue tick (no Created) must not record anything.
+				CharacterReplicateData empty = default;
+				empty.SetTick(110);
+				capture.Invoke(controller, new object[] { empty, ReplicateState.Ticked });
+
+				LogAssert.IsTrue(controller.TryGetViewClaim(103, out ushort offset, out byte fraction), "an earlier input's claim is still held");
+				LogAssert.AreEqual((ushort)60103, offset, "with its own offset");
+				LogAssert.AreEqual((byte)104, fraction, "and its own fraction");
+				LogAssert.IsTrue(controller.TryGetViewClaim(109, out offset, out _) && offset == 60109, "the latest one too");
+				LogAssert.IsFalse(controller.TryGetViewClaim(110, out _, out _), "an input never received has no claim");
+				LogAssert.AreEqual(109u, controller.CurrentViewInputTick, "the latch still names the latest input run");
 			}
 			finally
 			{

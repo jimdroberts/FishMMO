@@ -749,7 +749,29 @@ namespace FishMMO.Shared
 		/// <param name="writer">The network writer to serialize attribute data into.</param>
 		public override void WritePayload(NetworkConnection conn, Writer writer)
 		{
-			WritePayload(writer, PayloadVisibility.IsOwner(this, conn));
+			bool ownerShape = PayloadVisibility.IsOwner(this, conn);
+			WritePayload(writer, ownerShape);
+			if (!ownerShape)
+			{
+				SeedObservedAttributeBaseline();
+				SeedObservedResourceBaseline();
+			}
+		}
+
+		/// <summary>
+		/// Makes the sheet an observer's payload just carried the baseline of the observed-attribute push, when there is none
+		/// yet. The payload is the full sheet (values and modifiers) as it stands now, so every observer present at spawn
+		/// already holds what the first push would have repeated in full; later observers get a payload of their own, and the
+		/// entries the push sends are absolute values, so a diff from this baseline is right for all of them.
+		/// </summary>
+		private void SeedObservedAttributeBaseline()
+		{
+			if (!base.IsServerStarted || lastPushedAttributes != null)
+			{
+				return;
+			}
+			AttributeReconcileEntry[] current = CreateAttributeSnapshot();
+			lastPushedAttributes = current == null || current.Length == 0 ? System.Array.Empty<AttributeReconcileEntry>() : current;
 		}
 
 		/// <summary>
@@ -880,6 +902,7 @@ namespace FishMMO.Shared
 			base.ResetState(asServer);
 
 			payloadResourceCurrentValues.Clear();
+			presentedResourceValues.Clear();
 			ResetBreath();
 
 			/* The observer push baselines belong to the previous occupant of a pooled object. Left
@@ -2333,7 +2356,49 @@ namespace FishMMO.Shared
 			else
 			{
 				Regenerate(tick);
+				PresentResourcesIfStale();
 			}
+		}
+
+		/// <summary>The resource values the owner's displays were last told, by template id (see PresentResourcesIfStale).</summary>
+		private readonly Dictionary<int, float> presentedResourceValues = new Dictionary<int, float>();
+
+		/// <summary>
+		/// Owner, end of each live tick: tells the displays about any resource whose value changed without telling them.
+		/// </summary>
+		/// <remarks>
+		/// A reconcile restores resources without a notification (SetCurrentValue(value, false)) and a replay runs regeneration
+		/// with notifications suppressed and then discarded, so when the last change to a value arrived that way, the bars
+		/// (which only listen for OnAttributeUpdated) kept the number before it: stamina regenerated to 100 while the bar stayed
+		/// at 99. Health and mana the same. One comparison per resource per tick; a notification only when the value moved.
+		/// </remarks>
+		private void PresentResourcesIfStale()
+		{
+			if (base.IsServerStarted || !base.IsOwner)
+			{
+				return;
+			}
+			PresentIfStale(HealthResourceTemplateID);
+			PresentIfStale(ManaResourceTemplateID);
+			PresentIfStale(StaminaResourceTemplateID);
+		}
+
+		private void PresentIfStale(int resourceTemplateID)
+		{
+			if (resourceTemplateID == 0 ||
+				!resourceAttributes.TryGetValue(resourceTemplateID, out CharacterResourceAttribute resource))
+			{
+				return;
+			}
+			float current = resource.CurrentValue;
+			if (presentedResourceValues.TryGetValue(resourceTemplateID, out float presented) && presented == current)
+			{
+				return;
+			}
+			presentedResourceValues[resourceTemplateID] = current;
+			BeginPropagation();
+			EnqueueNotification(resource);
+			EndPropagation();
 		}
 
 		/// <summary>
@@ -2602,9 +2667,9 @@ namespace FishMMO.Shared
 		/// before any comparison work is done.
 		/// </para>
 		/// <para>
-		/// The first push for a character sends the full sheet. The payload already gave every
-		/// observer that sheet, so this is redundant with it for anyone present at spawn — but it
-		/// costs one message once, and it is what makes the diff's baseline true rather than assumed.
+		/// The first observer payload seeds the baseline (<see cref="SeedObservedAttributeBaseline"/>): it carried the
+		/// full sheet, so a full first push only repeated it (181 bytes per character per observer, measured). A full set is
+		/// still sent when there is no baseline (nobody observed the spawn) or the sheet's shape changed.
 		/// </para>
 		/// </remarks>
 		private void MaybePushObservedAttributes()
@@ -2697,12 +2762,7 @@ namespace FishMMO.Shared
 
 			uint tick = base.TimeManager.LocalTick;
 
-			CharacterAttributeResourceState state = GetResourceState();
-
-			/* Observers do not simulate regeneration, so the regen tick is noise to them — and it
-			 * advances constantly, which would defeat the change gate below and turn this back into
-			 * a per-interval stream. */
-			state.NextRegenTick = 0u;
+			CharacterAttributeResourceState state = GetObservedResourceState();
 
 			/* Change gate plus one delayed confirmation.
 			 *
@@ -2800,18 +2860,7 @@ namespace FishMMO.Shared
 				++observedResourceSequence;
 			}
 
-			CharacterResourcesBroadcast message = new CharacterResourcesBroadcast
-			{
-				Sequence = observedResourceSequence,
-				CharacterObjectID = base.NetworkObject.ObjectId,
-				// Whole units: the same precision the change gate compares at. See the broadcast type.
-				Health = Mathf.RoundToInt(state.Health),
-				MaxHealth = state.MaxHealth,
-				Mana = Mathf.RoundToInt(state.Mana),
-				MaxMana = state.MaxMana,
-				Stamina = Mathf.RoundToInt(state.Stamina),
-				MaxStamina = state.MaxStamina,
-			};
+			CharacterResourcesBroadcast message = ObservedResourcesMessage(state, observedResourceSequence, base.NetworkObject.ObjectId);
 
 			/* Which fields actually differ from what the observers were last GIVEN. The comparison is
 			 * against the previous MESSAGE, so it is against exactly the whole-unit numbers a
@@ -2876,6 +2925,53 @@ namespace FishMMO.Shared
 			 * them keeps the next comparison honest without a second copy of the omission rule. */
 			lastSentObservedResources = message;
 			hasSentObservedResources = true;
+		}
+
+		/// <summary>The resource state observers are sent: the server's, without the regeneration tick.</summary>
+		private CharacterAttributeResourceState GetObservedResourceState()
+		{
+			CharacterAttributeResourceState state = GetResourceState();
+			/* Observers do not simulate regeneration, so the regen tick is noise to them — and it
+			 * advances constantly, which would defeat the change gate and turn the push back into a
+			 * per-interval stream. */
+			state.NextRegenTick = 0u;
+			return state;
+		}
+
+		/// <summary>The resource message for a state, in whole units: the same precision the change gate compares at.</summary>
+		private static CharacterResourcesBroadcast ObservedResourcesMessage(in CharacterAttributeResourceState state, ushort sequence, int objectId)
+		{
+			return new CharacterResourcesBroadcast
+			{
+				Sequence = sequence,
+				CharacterObjectID = objectId,
+				Health = Mathf.RoundToInt(state.Health),
+				MaxHealth = state.MaxHealth,
+				Mana = Mathf.RoundToInt(state.Mana),
+				MaxMana = state.MaxMana,
+				Stamina = Mathf.RoundToInt(state.Stamina),
+				MaxStamina = state.MaxStamina,
+			};
+		}
+
+		/// <summary>
+		/// Makes the resources an observer's payload just carried the observed push's baseline, when nothing has been
+		/// pushed yet. Without it the first tick pushed every field and a reliable confirmation repeated them half a second
+		/// later: two messages per spawned character per observer, both already in the payload. Later observers get their
+		/// own payload, and every push carries absolute values, so the first real change is right for all of them.
+		/// </summary>
+		private void SeedObservedResourceBaseline()
+		{
+			if (!base.IsServerStarted || resourcePushScheduler.HasPushed || base.NetworkObject == null ||
+				!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+			CharacterAttributeResourceState state = GetObservedResourceState();
+			resourcePushScheduler.Adopt(state);
+			lastSentObservedResources = ObservedResourcesMessage(state, observedResourceSequence, base.NetworkObject.ObjectId);
+			hasSentObservedResources = true;
+			observedResourceMaximaResends = 0;
 		}
 
 		/// <summary>True once this client has registered the shared broadcast handler.</summary>

@@ -365,6 +365,18 @@ namespace FishMMO.Client
 		/// </remarks>
 		public const string ChatFontSizeKey = "Chat.FontSize";
 
+		/// <summary>Configuration key for whether every chat line starts with the time it arrived.</summary>
+		public const string ChatShowTimestampsKey = "Chat.ShowTimestamps";
+
+		/// <summary>Configuration key for the chat timestamp format, a <c>ClientChatSettings.TimestampFormat</c> index.</summary>
+		public const string ChatTimestampFormatKey = "Chat.TimestampFormat";
+
+		/// <summary>Configuration key for whether a chat line names its channel, e.g. <c>[Tell]</c>.</summary>
+		public const string ChatShowChannelTagsKey = "Chat.ShowChannelTags";
+
+		/// <summary>Configuration key for whether consecutive lines from one sender share one name.</summary>
+		public const string ChatGroupMessagesKey = "Chat.GroupMessages";
+
 		// ── Map ─────────────────────────────────────────────────────
 
 		/// <summary>Configuration key for the minimap's zoom, as the view's half-extent in metres.</summary>

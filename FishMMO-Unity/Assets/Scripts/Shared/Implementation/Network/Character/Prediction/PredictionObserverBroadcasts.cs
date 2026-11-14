@@ -1171,6 +1171,38 @@ namespace FishMMO.Shared
 	/// the spawn payload, exactly as it does for death.
 	/// </para>
 	/// </remarks>
+	public struct CharacterMovementModeBroadcast : IBroadcast
+	{
+		/// <summary>NetworkObject id of the character.</summary>
+		public int CharacterObjectID;
+
+		/// <summary>The movement mode, <see cref="MovementModeBits"/>.</summary>
+		public byte Mode;
+	}
+
+	/// <summary>Bits of <see cref="CharacterMovementModeBroadcast.Mode"/>.</summary>
+	public static class MovementModeBits
+	{
+		public const byte Swimming = 1;
+		public const byte Climbing = 2;
+		public const byte Flying = 4;
+		/// <summary>
+		/// Not a movement mode: hidden by <c>/gm invis</c> (<see cref="GameMasterInvisibility"/>). Only the owner and staff
+		/// observe a hidden character, so only they hear it, and they draw the model half see-through.
+		/// </summary>
+		public const byte Hidden = 8;
+	}
+
+	/// <summary>
+	/// Tells observers a character's movement mode changed (and again every few seconds while one is active): swimming,
+	/// climbing, flying.
+	/// </summary>
+	/// <remarks>
+	/// Observers receive a character's position and rotation (NetworkTransform) and nothing of its motor, so they used to
+	/// guess the mode from where the body was: a climb only once the feet were off the floor and close to a climbable's
+	/// line, so the first steps up a ladder and the step off at its top showed standing, and a fall past a ladder showed
+	/// climbing. One byte when it changes is the truth instead.
+	/// </remarks>
 	public struct CharacterCombatStateBroadcast : IBroadcast
 	{
 		/// <summary>NetworkObject id of the character whose combat state changed.</summary>

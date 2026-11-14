@@ -169,6 +169,14 @@ namespace FishMMO.Shared
 		private int consumableSlot = -1;
 
 		/// <summary>
+		/// Consumable uses this owner predicted, by the tick they started on (template id). A reconcile replay of that tick
+		/// must start the use again even though the predicted use already took the item's charge or removed the item (the
+		/// reconcile restores resources, not the inventory), or the replay never reaches the finish that re-applies the
+		/// effect. Owner-side only; pruned as ticks fall out of any replay window.
+		/// </summary>
+		private readonly Dictionary<uint, int> predictedConsumableStarts = new Dictionary<uint, int>();
+
+		/// <summary>
 		/// RNG for ability-specific randomization (server-side).
 		/// </summary>
 		private DeterministicRNG abilitySeedGenerator;
@@ -459,6 +467,7 @@ namespace FishMMO.Shared
 
 			// Ensure no stale slot locks remain after state reset.
 			consumableSlot = -1;
+			predictedConsumableStarts.Clear();
 
 			// Reset observer prediction sentinel.
 			// Dispose is a no-op on CharacterReconcileData (struct, no unmanaged resources),

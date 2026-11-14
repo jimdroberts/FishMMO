@@ -467,6 +467,8 @@ namespace FishNet.Connection
             StoreSplitReader();
 
             ServerConnectionTick = 0;
+            // FISHMMO EDIT: per-connection send interval.
+            SendInterval = 0;
             PacketTick.Reset();
             LocalTick.Reset();
             TransportIndex = -1;

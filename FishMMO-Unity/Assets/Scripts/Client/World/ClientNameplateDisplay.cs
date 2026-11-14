@@ -298,15 +298,26 @@ namespace FishMMO.Client
 					playerNameRange,
 					showOwnName);
 
-				if (visible && !isOwner)
+				if (visible)
 				{
 					/* Refreshed every sweep rather than only on the way up, because standing
 					 * changes while a plate is already up: a faction turns on the player, a guild
-					 * mate logs in, an arena assigns teams. The plate ignores a write that does not
-					 * change the colour, so a settled world pays a comparison. The owner's own
-					 * plate is left uncoloured — a player's standing with themselves is not a fact
-					 * about anything, and colouring it would tell them nothing. */
-					plate.AllianceTint = AllianceColor(character);
+					 * mate logs in, an arena assigns teams, a player flips aggression. The plate
+					 * ignores a write that does not change the colour, so a settled world pays a
+					 * comparison. One rule (Standing) for the plate and the target frame, so the
+					 * two can never disagree. The mark says the same as the colour in shape
+					 * (swords, lozenge, shield), so it reads without colour. */
+					NameplateMark mark = Standing(localCharacter, character, out Color tint);
+					plate.AllianceTint = tint;
+					plate.SetMark(mark, tint);
+
+					/* Re-applied every sweep, not only where the row is written: the local player
+					 * joining or leaving a guild changes every OTHER plate's answer, and a colour
+					 * vision change has to reach the rows already drawn. */
+					if (isPlayer)
+					{
+						ApplyGuildRowColor(character);
+					}
 				}
 
 				if (visible == wasVisible)
@@ -330,16 +341,93 @@ namespace FishMMO.Client
 			return (target.position - origin.position).sqrMagnitude;
 		}
 
-		/// <summary>The faction standing colour the target frame would give this character, or white.</summary>
-		private Color AllianceColor(ICharacter character)
+		/// <summary>
+		/// The standing colour and mark a viewer gives a character: one rule for the overhead plate and both target cards.
+		/// </summary>
+		/// <param name="viewer">The local player.</param>
+		/// <param name="character">The character being drawn.</param>
+		/// <param name="tint">The standing colour; white when either side has no faction.</param>
+		/// <returns>The mark to draw, or None.</returns>
+		/// <remarks>
+		/// The player's OWN standing is how a stranger sees them: red with crossed swords while their aggression is on
+		/// (anyone outside their party and guild may fight them), the neutral colour and no mark while it is off.
+		/// Their own PET acts under them (FactionHarm.Principal), so it is red with crossed swords while their aggression
+		/// is on — it may be fought too — and otherwise carries the friendly shield: it is on their side.
+		/// Everyone else is the viewer's displayed standing toward them.
+		/// </remarks>
+		public static NameplateMark Standing(ICharacter viewer, ICharacter character, out Color tint)
 		{
-			if (localCharacter != null &&
-				localCharacter.TryGet(out IFactionController ownFaction) &&
-				character.TryGet(out IFactionController theirFaction))
+			tint = Color.white;
+			if (viewer == null || character == null || !viewer.TryGet(out IFactionController ownFaction))
 			{
-				return ownFaction.GetAllianceLevelColor(theirFaction);
+				return NameplateMark.None;
 			}
-			return Color.white;
+			if (viewer.TryGet(out IPetController pets) && pets.Pet != null && ReferenceEquals(pets.Pet, character))
+			{
+				bool aggressive = ownFaction.AggressionEnabled;
+				tint = aggressive ? ColorVision.Hostile : ColorVision.Friendly;
+				return aggressive ? NameplateMark.Hostile : NameplateMark.Friendly;
+			}
+			if (ReferenceEquals(viewer, character))
+			{
+				bool aggressive = ownFaction.AggressionEnabled;
+				tint = aggressive ? ColorVision.Hostile : ColorVision.Neutral;
+				return aggressive ? NameplateMark.Hostile : NameplateMark.None;
+			}
+			if (!character.TryGet(out IFactionController theirFaction))
+			{
+				return NameplateMark.None;
+			}
+			tint = ownFaction.GetAllianceLevelColor(theirFaction);
+			return MarkFor(ownFaction.GetDisplayedAllianceLevel(theirFaction));
+		}
+
+		/// <summary>
+		/// Colours a player's guild row: the friendly colour when they are in the local player's guild (the local
+		/// player's own row included), the style's grey otherwise.
+		/// </summary>
+		/// <param name="character">The player whose plate to colour; pets are left alone, their row names an owner.</param>
+		/// <remarks>Rewriting a row with the values it already has is a no-op on the plate, so the sweep can call this freely.</remarks>
+		public static void ApplyGuildRowColor(ICharacter character)
+		{
+			Nameplate plate = character?.CharacterNameplate;
+			if (plate == null ||
+				!(character is IPlayerCharacter) ||
+				!plate.TryGetLine(NameplateSlot.GuildName, out NameplateLine guildLine))
+			{
+				return;
+			}
+
+			if (SameGuild(instance?.localCharacter, character))
+			{
+				plate.SetLine(NameplateSlot.GuildName, guildLine.Text, ColorVision.Friendly);
+			}
+			else
+			{
+				plate.SetLine(NameplateSlot.GuildName, guildLine.Text);
+			}
+		}
+
+		/// <summary>Whether two characters belong to the same guild; no guild (ID 0) is nobody's guild.</summary>
+		public static bool SameGuild(ICharacter a, ICharacter b)
+		{
+			return a != null && b != null &&
+				a.TryGet(out IGuildController guild) && b.TryGet(out IGuildController otherGuild) &&
+				guild.ID != 0 && guild.ID == otherGuild.ID;
+		}
+
+		/// <summary>The mark for a displayed standing.</summary>
+		public static NameplateMark MarkFor(FactionAllianceLevel level)
+		{
+			switch (level)
+			{
+				case FactionAllianceLevel.Enemy:
+					return NameplateMark.Hostile;
+				case FactionAllianceLevel.Ally:
+					return NameplateMark.Friendly;
+				default:
+					return NameplateMark.Neutral;
+			}
 		}
 	}
 }

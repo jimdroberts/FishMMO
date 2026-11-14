@@ -200,6 +200,18 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Records <paramref name="state"/> as already delivered, without a push: an observer's spawn payload just carried
+		/// it. Nothing is pending (no confirmation of a send that never happened) and no rate limit is in force, so the
+		/// first real change still goes out on the tick it happens.
+		/// </summary>
+		public void Adopt(in CharacterAttributeResourceState state)
+		{
+			this = default;
+			LastPushed = state;
+			HasPushed = true;
+		}
+
+		/// <summary>
 		/// Drops the outstanding rate limit so the next CHANGE is sent on the tick it happens.
 		/// </summary>
 		/// <remarks>

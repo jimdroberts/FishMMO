@@ -134,12 +134,150 @@ namespace FishMMO.Shared
 		}
 
 
+		/// <summary>The movement mode last told to observers.</summary>
+		private byte publishedMovementMode;
+
+		/// <inheritdoc/>
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+			// A pooled character starts in the default mode; its previous occupant's is not what anyone was told.
+			publishedMovementMode = 0;
+		}
+
+		/// <summary>
+		/// Server: a connection that starts seeing this character is told its movement mode as it is now, so a swimmer,
+		/// climber or flyer is drawn right from the first frame (it used to be repeated every two seconds to everyone for
+		/// this). The default mode needs no message. Anyone already observing learns a change from
+		/// <see cref="PublishMovementMode"/>, which may repeat it to this one once.
+		/// </summary>
+		public override void OnSpawnServer(NetworkConnection connection)
+		{
+			base.OnSpawnServer(connection);
+			if (connection == null || base.NetworkObject == null || base.NetworkManager == null || CharacterController == null)
+			{
+				return;
+			}
+			byte mode = CurrentMovementMode();
+			if (mode == 0)
+			{
+				return;
+			}
+			base.NetworkManager.ServerManager.Broadcast(connection, new CharacterMovementModeBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Mode = mode,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>The movement mode bits as they are now.</summary>
+		private byte CurrentMovementMode()
+		{
+			return (byte)((CharacterController.IsSwimming ? MovementModeBits.Swimming : 0) |
+				(CharacterController.IsClimbing ? MovementModeBits.Climbing : 0) |
+				(CharacterController.IsFlying ? MovementModeBits.Flying : 0) |
+				(GameMasterInvisibility.IsHidden(base.NetworkObject) ? MovementModeBits.Hidden : 0));
+		}
+
+		/// <summary>Server: tells this character's observers its movement mode when it changes (CharacterMovementModeBroadcast).</summary>
+		private void PublishMovementMode()
+		{
+			if (!base.IsServerStarted || base.NetworkObject == null || CharacterController == null)
+			{
+				return;
+			}
+			byte mode = CurrentMovementMode();
+			if (mode == publishedMovementMode)
+			{
+				return;
+			}
+			publishedMovementMode = mode;
+			base.NetworkManager.ServerManager.Broadcast(base.NetworkObject, new CharacterMovementModeBroadcast
+			{
+				CharacterObjectID = base.NetworkObject.ObjectId,
+				Mode = mode,
+			}, true, Channel.Reliable);
+		}
+
 #if !UNITY_SERVER
 		/// <summary>
 		/// Called when the client starts. Sets up camera following and ignored colliders for the owner.
 		/// </summary>
+		/// <summary>The client manager the movement-mode handler is registered with (once per manager).</summary>
+		private static FishNet.Managing.NetworkManager movementModeRegisteredFor;
+
+		private static void RegisterMovementModeBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (networkManager == null || ReferenceEquals(movementModeRegisteredFor, networkManager))
+			{
+				return;
+			}
+			movementModeRegisteredFor = networkManager;
+			networkManager.ClientManager.RegisterBroadcast<CharacterMovementModeBroadcast>(OnMovementModeBroadcast);
+		}
+
+		/// <summary>
+		/// A character's movement mode, for its animation (the owner animates from its own motor), and whether it is hidden
+		/// (<see cref="MovementModeBits.Hidden"/>: drawn faded, the owner's own character included).
+		/// </summary>
+		private static void OnMovementModeBroadcast(CharacterMovementModeBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted ||
+				!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CharacterObjectID, out NetworkObject nob) ||
+				nob == null)
+			{
+				return;
+			}
+			if (nob.TryGetComponent(out CharacterAnimationController animation))
+			{
+				animation.SetFaded((msg.Mode & MovementModeBits.Hidden) != 0);
+				if (!nob.IsOwner)
+				{
+					animation.SetObservedMovementMode(msg.Mode);
+				}
+			}
+		}
+
+		/// <summary>The client time manager whose ticks sync collider transforms first (once per manager).</summary>
+		private static FishNet.Managing.Timing.TimeManager colliderSyncFor;
+
+		/// <summary>
+		/// Before every client tick, the physics world takes the transforms as drawn this frame.
+		/// </summary>
+		/// <remarks>
+		/// Automatic transform sync is off, and NetworkTransform moves observed characters in the frame's update, BEFORE the
+		/// ticks run (TimeManager update order BeforeTick). Their colliders only followed at a reconcile (which arrives every
+		/// other tick when the server sends every second tick) or the previous tick's physics step, so on the other ticks a
+		/// predicted projectile swept a character where it had been drawn a frame or more earlier, while the view tick the
+		/// input claims is this frame's: the server rewound to where the client drew it and missed by that much.
+		/// </remarks>
+		private static void SyncCollidersBeforeTick()
+		{
+			Physics.SyncTransforms();
+		}
+
+		private static void RegisterColliderSync(FishNet.Managing.Timing.TimeManager timeManager)
+		{
+			if (timeManager == null || ReferenceEquals(colliderSyncFor, timeManager))
+			{
+				return;
+			}
+			if (!ReferenceEquals(colliderSyncFor, null))
+			{
+				colliderSyncFor.OnPreTick -= SyncCollidersBeforeTick;
+			}
+			colliderSyncFor = timeManager;
+			timeManager.OnPreTick += SyncCollidersBeforeTick;
+		}
+
 		public override void OnStartClient()
 		{
+			RegisterMovementModeBroadcast(base.NetworkManager);
+			if (!base.IsServerStarted)
+			{
+				RegisterColliderSync(base.TimeManager);
+			}
 			base.OnStartClient();
 
 			/* Re-assert the motor's physics scene PER SPAWN, not per pooled instance.
@@ -257,6 +395,44 @@ namespace FishMMO.Shared
 		}
 
 
+		/// <summary>The last exact view offset sent, in ticks; resent only when the drawn tick moves by more than a sixteenth.</summary>
+		private double lastViewTickOffset = double.NaN;
+
+		/// <summary>
+		/// The exact server tick this client draws its peers at (NetworkTransform's shared playback clock, adaptive delay
+		/// included), as an offset from this input's tick: whole ticks (low 16 bits) and an encoded fraction. False before
+		/// the clock exists.
+		/// </summary>
+		private bool ResolveViewTick(out ushort wholeLow, out byte fraction)
+		{
+			wholeLow = 0;
+			fraction = 0;
+			FishNet.Managing.Timing.TimeManager timeManager = base.TimeManager;
+			if (timeManager == null)
+			{
+				return false;
+			}
+			double drawn = FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(timeManager, LagCompensationTick.SpectatorInterpolationTicks);
+			if (drawn <= 0d)
+			{
+				lastViewTickOffset = double.NaN;
+				return false;
+			}
+			// FishNet stamps this tick's input with LocalTick (NetworkBehaviour.Replicate_Authoritative), and the server
+			// reads that tick back exactly, so input tick + offset is the drawn tick on both sides.
+			double offset = drawn - timeManager.LocalTick;
+			if (!double.IsNaN(lastViewTickOffset) && System.Math.Abs(offset - lastViewTickOffset) < ViewTickResendTicks)
+			{
+				offset = lastViewTickOffset;
+			}
+			lastViewTickOffset = offset;
+			LagCompensationTick.EncodeViewTick(offset, out wholeLow, out fraction);
+			return true;
+		}
+
+		/// <summary>How far the drawn tick may move before the exact claim is resent, in ticks (2 ms at 30 Hz).</summary>
+		private const double ViewTickResendTicks = 1d / 16d;
+
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
 			/* Both early exits below leave a default-initialised input on the wire, whose aim is
@@ -296,6 +472,13 @@ namespace FishMMO.Shared
 			input.MoveAxisRight = MoveAxisCompression.Quantize(kccInput.MoveAxisRight);
 			input.MoveFlags = kccInput.MoveFlags;
 			ResolveViewOffset(out input.ViewOffsetTicks, out input.ViewOffsetFraction);
+			/* The exact tick on screen, which supersedes the round-trip estimate above. Once it is available the estimate is
+			 * held at zero so the two never both change on the wire. */
+			if (ResolveViewTick(out input.ViewTickOffset, out input.ViewTickFraction))
+			{
+				input.ViewOffsetTicks = 0;
+				input.ViewOffsetFraction = 0;
+			}
 			/* The aim ORIGIN is deliberately not carried. It used to travel as CameraPosition,
 			 * taken from this client verbatim and never checked against the character, which let a
 			 * modified client choose the point the server raycast for victims from. Every peer now
@@ -507,7 +690,18 @@ namespace FishMMO.Shared
 			}
 
 			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
+
+			// The owner's latest prediction for this tick (first pass or replay), for measuring the server's correction of it.
+			if (base.IsOwner && !base.IsServerStarted)
+			{
+				uint tick = kccInput.GetTick();
+				predictedPositions[tick % PredictedPositionRing] = (tick, Motor.TransientPosition);
+			}
 		}
+
+		/// <summary>The owner's predicted position per input tick, for <see cref="PredictionHealth"/>.</summary>
+		private readonly (uint Tick, Vector3 Position)[] predictedPositions = new (uint, Vector3)[PredictedPositionRing];
+		private const uint PredictedPositionRing = 128;
 
 		/// <summary>
 		/// True when this character has a health resource and it has been reduced to zero.
@@ -531,6 +725,8 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
+			// Once a server tick, outside the replicate: observers learn the movement mode from here.
+			PublishMovementMode();
 			KinematicCharacterMotorState motorState = CharacterController.GetState();
 			motorState.CurrentPlatformID = currentPlatform != null ? currentPlatform.ID : 0;
 			reconcileData.MotorState = motorState;
@@ -556,6 +752,17 @@ namespace FishMMO.Shared
 			if (!base.IsOwner && !ObserverSyncMode.ObserversConsumeReconcile(base.NetworkObject))
 			{
 				return;
+			}
+
+			// How far the server's state for this tick is from what this owner had predicted for it: the correction.
+			if (base.IsOwner && !base.IsServerStarted)
+			{
+				uint tick = rd.GetTick();
+				(uint Tick, Vector3 Position) predicted = predictedPositions[tick % PredictedPositionRing];
+				if (predicted.Tick == tick)
+				{
+					PredictionHealth.NoteCorrection(Vector3.Distance(predicted.Position, rd.MotorState.Position));
+				}
 			}
 
 			CharacterController.ApplyState(rd.MotorState);

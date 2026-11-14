@@ -172,6 +172,15 @@ namespace FishMMO.Shared
 		internal static System.Func<ICharacter, (byte ticks, byte fraction)?> ClaimOverride;
 
 		public static bool TryResolve(ICharacter caster, TimeManager timeManager, out RewindTarget target)
+			=> TryResolve(caster, timeManager, TimeManager.UNSET_TICK, out target);
+
+		/// <summary>
+		/// <see cref="TryResolve(ICharacter, TimeManager, out RewindTarget)"/> for a query that belongs to one of the caster's
+		/// input ticks rather than to the input just run: an ability object's step (AbilityObject.StepInputTick). The view
+		/// is the one the caster claimed with that input; until that input has been run (the queue ran dry), the latest
+		/// claim's offset applied to it.
+		/// </summary>
+		public static bool TryResolve(ICharacter caster, TimeManager timeManager, uint stepInputTick, out RewindTarget target)
 		{
 			target = RewindTarget.None;
 
@@ -238,6 +247,26 @@ namespace FishMMO.Shared
 			byte claimedFraction = 0;
 			if (nob.TryGetComponent(out CharacterPredictionController predictionController))
 			{
+				/* The exact claim first: the tick the client was drawing, as an offset from the running input's own tick.
+				 * It already contains everything the estimate below has to add up (round trip, batching, the client's
+				 * playback delay) and needs no queue term: the input's tick pins the moment exactly. */
+				if (predictionController.CurrentViewTickFraction != 0)
+				{
+					uint inputTick = predictionController.CurrentViewInputTick;
+					ushort offset = predictionController.CurrentViewTickOffset;
+					byte fraction = predictionController.CurrentViewTickFraction;
+					if (stepInputTick != TimeManager.UNSET_TICK)
+					{
+						inputTick = stepInputTick;
+						if (predictionController.TryGetViewClaim(stepInputTick, out ushort stepOffset, out byte stepFraction))
+						{
+							offset = stepOffset;
+							fraction = stepFraction;
+						}
+					}
+					return ResolveExactViewTick(anchorTick, inputTick, offset, fraction,
+						ResolveReplicateQueueTicks(nob), out target);
+				}
 				claimedTicks = predictionController.CurrentViewOffsetTicks;
 				claimedFraction = predictionController.CurrentViewOffsetFraction;
 			}
@@ -247,6 +276,82 @@ namespace FishMMO.Shared
 			 * the PredictionManager and can differ per deployment. */
 			return ResolveAnchor(anchorTick, claimedTicks, claimedFraction,
 				ResolveReplicateQueueTicks(nob), out target);
+		}
+
+		/// <summary>
+		/// Encodes a view tick offset (drawn server tick minus the input's tick) for the wire: whole ticks as their low 16
+		/// bits, and the fraction as 1..255 for [0, 1) so that 0 can mean "none". The client half of
+		/// <see cref="ResolveExactViewTick"/>.
+		/// </summary>
+		public static void EncodeViewTick(double offsetTicks, out ushort wholeLow, out byte fraction)
+		{
+			double whole = System.Math.Floor(offsetTicks);
+			int code = 1 + (int)System.Math.Round((offsetTicks - whole) * 254d);
+			if (code > 255)
+			{
+				// A fraction that rounds up to a whole tick is the next whole tick.
+				whole += 1d;
+				code = 1;
+			}
+			wholeLow = unchecked((ushort)(long)whole);
+			fraction = (byte)code;
+		}
+
+		/// <summary>
+		/// The server half of the exact claim, as a pure function: the drawn tick is the input's tick plus the offset. The
+		/// offset carries only its low 16 bits, so the drawn tick is unwrapped as the one nearest at or before
+		/// <paramref name="anchorTick"/> (it is never 65536 ticks old). Capped like the estimate it replaces: never newer
+		/// than the anchor, never further back than <see cref="MaximumCompensationTicks"/> plus the queue depth.
+		/// </summary>
+		/// <param name="anchorTick">The server tick the query runs on.</param>
+		/// <param name="inputTick">The running input's own tick (the owner's tick domain).</param>
+		/// <param name="offsetWholeLow">The offset's whole ticks, low 16 bits.</param>
+		/// <param name="fractionCode">The offset's fraction, 1..255 for [0, 1).</param>
+		/// <param name="queueTicks">The replicate queue depth, which only widens the cap here.</param>
+		/// <param name="target">The rewind target, or <see cref="RewindTarget.None"/>.</param>
+		/// <returns>True when there is anything to compensate.</returns>
+		internal static bool ResolveExactViewTick(uint anchorTick, uint inputTick, ushort offsetWholeLow, byte fractionCode,
+			uint queueTicks, out RewindTarget target)
+		{
+			target = RewindTarget.None;
+			if (fractionCode == 0 || anchorTick == TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+			// Drawn tick = input tick + whole + fraction. Its low 16 bits, then how far before the anchor that lands.
+			ushort drawnWholeLow = unchecked((ushort)(inputTick + offsetWholeLow));
+			uint behind = unchecked((ushort)((ushort)anchorTick - drawnWholeLow));
+			if (behind >= 32768u)
+			{
+				// The unwrap landed in the second half: the claim is AHEAD of the anchor, not 30000 ticks behind it.
+				return false;
+			}
+			float fraction = (fractionCode - 1) / 254f;
+
+			// drawn = anchor - behind + fraction = (anchor - behind + 1) - (1 - fraction): RewindTarget counts its fraction back.
+			uint cap = MaximumCompensationTicks + queueTicks;
+			if (behind > cap + 1u)
+			{
+				behind = cap + 1u;
+				fraction = 0f;
+			}
+			if (behind == 0u)
+			{
+				// At or after the anchor (a claim from the future): nothing to rewind.
+				return false;
+			}
+			uint newerTick = anchorTick - behind + 1u;
+			float back = fraction > 0f ? 1f - fraction : 0f;
+			if (back <= 0f)
+			{
+				newerTick = anchorTick - behind;
+			}
+			if (newerTick >= anchorTick || newerTick == 0u)
+			{
+				return false;
+			}
+			target = new RewindTarget(newerTick, back);
+			return true;
 		}
 
 		/// <summary>

@@ -617,13 +617,6 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: c2b6c2e4950580591946e74a632feb56
-    m_Address: Assets/Scenes/WorldScene/Moron/LoginBackdrop Terrain/LoginBackdrop NavMesh.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Server_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: c2da67465d50a8ed8b0a146bc785ce23
     m_Address: Assets/Prefabs/Server/SceneServer/InteractableSystem.asset
     m_ReadOnly: 0

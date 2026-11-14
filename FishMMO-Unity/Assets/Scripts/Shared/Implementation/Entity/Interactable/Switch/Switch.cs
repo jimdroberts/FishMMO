@@ -1,5 +1,7 @@
 using FishMMO.Shared.Core;
+using FishMMO.Logging;
 using FishNet.Connection;
+using FishNet.Object;
 using FishNet.Serializing;
 using UnityEngine;
 
@@ -66,6 +68,68 @@ namespace FishMMO.Shared
 			}
 		}
 
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+
+			if (SwitchTarget is ITimedSwitchTarget timed)
+			{
+				timed.SolidDecided -= OnTargetSolidDecided;
+				timed.SolidDecided += OnTargetSolidDecided;
+			}
+		}
+
+		public override void OnStopServer()
+		{
+			base.OnStopServer();
+
+			if (SwitchTarget is ITimedSwitchTarget timed)
+			{
+				timed.SolidDecided -= OnTargetSolidDecided;
+			}
+		}
+
+		/// <summary>The server found the target's resting place clear and made it solid: every observer turns it solid on the same tick.</summary>
+		private void OnTargetSolidDecided(ITimedSwitchTarget timed)
+		{
+			BroadcastState(this, timed);
+		}
+
+		/// <summary>
+		/// Tells the observers of the switch's NetworkObject the target's state (server only): world state, so sent to
+		/// everyone who can see the switch, not to whoever threw it.
+		/// </summary>
+		/// <remarks>
+		/// The NetworkObject that owns the switch, not one on the switch's own GameObject. A generated door's switch is
+		/// on Door N/Leaf/Panel and its NetworkObject on Door N: looked up with GetComponent (2026-11-13) no broadcast was
+		/// ever sent, the server opened the door (its leaf no longer solid) while every client kept it shut and solid,
+		/// walking in was corrected through a closed door, and the next press closed it again unseen.
+		/// </remarks>
+		public static void BroadcastState(IInteractable interactable, ISwitchTarget switchTarget)
+		{
+			if (interactable == null || switchTarget == null)
+			{
+				return;
+			}
+			NetworkObject switchObject = interactable is NetworkBehaviour behaviour && behaviour.NetworkObject != null
+				? behaviour.NetworkObject
+				: interactable.GameObject.GetComponentInParent<NetworkObject>();
+			if (switchObject == null)
+			{
+				Log.Warning("Switch", $"'{interactable.Name}' has no NetworkObject above it; its new state reached no client.");
+				return;
+			}
+			ITimedSwitchTarget timed = switchTarget as ITimedSwitchTarget;
+			switchObject.Broadcast(new SwitchStateBroadcast()
+			{
+				InteractableID = interactable.ID,
+				Activated = switchTarget.IsActivated,
+				ChangeTick = timed != null ? timed.ChangeTick : 0u,
+				ChangeTravel = timed != null ? timed.ChangeTravel : 0f,
+				SolidTick = timed != null ? timed.SolidTick : 0u,
+			});
+		}
+
 		public override bool CanInteract(IPlayerCharacter character)
 		{
 			if (SwitchTarget == null ||
@@ -102,6 +166,8 @@ namespace FishMMO.Shared
 			ITimedSwitchTarget timed = SwitchTarget as ITimedSwitchTarget;
 			writer.WriteUInt32(timed != null ? timed.ChangeTick : 0u);
 			writer.WriteSingle(timed != null ? timed.ChangeTravel : 0f);
+			// And whether the server has made its resting pose solid yet (held passable while someone stands in it).
+			writer.WriteUInt32(timed != null ? timed.SolidTick : 0u);
 		}
 
 		/// <summary>
@@ -114,6 +180,7 @@ namespace FishMMO.Shared
 			bool activated = reader.ReadBoolean();
 			uint changeTick = reader.ReadUInt32();
 			float changeTravel = reader.ReadSingle();
+			uint solidTick = reader.ReadUInt32();
 			if (SwitchTarget == null)
 			{
 				return;
@@ -121,7 +188,7 @@ namespace FishMMO.Shared
 			// Worked out from the tick the change began at: settled if that was long ago, partway if not.
 			if (SwitchTarget is ITimedSwitchTarget timed)
 			{
-				timed.SetState(activated, changeTick, changeTravel);
+				timed.SetState(activated, changeTick, changeTravel, solidTick);
 				return;
 			}
 

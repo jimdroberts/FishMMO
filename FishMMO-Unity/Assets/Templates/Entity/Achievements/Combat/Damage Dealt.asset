@@ -20,4 +20,69 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Category: 2
   Description: Total damage dealt.
-  Tiers: []
+  Tiers:
+  - Value: 1000
+    TierCompleteMessage: A thousand points of harm dealt. Your blade is blooded.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 10000
+    TierCompleteMessage: Ten thousand points of harm dealt.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 50000
+    TierCompleteMessage: Fifty thousand points of harm dealt. Your foes have learned your name.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 250000
+    TierCompleteMessage: A quarter of a million points of harm dealt.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
+  - Value: 1000000
+    TierCompleteMessage: A million points of harm dealt. Bards sing of your arm.
+    CompleteSoundReference:
+      m_AssetGUID: 
+      m_SubObjectName: 
+      m_SubObjectType: 
+      m_SubObjectGUID: 
+      m_EditorAssetChanged: 0
+    AbilityRewards: []
+    AbilityEventRewards: []
+    ItemRewards: []
+    BuffRewards: []
+    TitleRewards: []
