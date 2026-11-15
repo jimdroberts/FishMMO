@@ -53,6 +53,12 @@ namespace FishMMO.Shared
 
 		/// <summary>Something failed on the server. Nothing was changed.</summary>
 		Failed = 11,
+
+		/// <summary>The price changed since the panel showed it. Nothing was bought.</summary>
+		PriceChanged = 12,
+
+		/// <summary>The requester is too far from the plot's deed post.</summary>
+		TooFar = 13,
 	}
 
 	/// <summary>
@@ -262,5 +268,111 @@ namespace FishMMO.Shared
 	{
 		/// <summary>The entry to give up.</summary>
 		public long VaultID;
+	}
+
+	/// <summary>
+	/// How the player asking about a plot stands with it.
+	/// </summary>
+	public enum PlotRelation : byte
+	{
+		/// <summary>A passer-by.</summary>
+		None = 0,
+
+		/// <summary>The owner.</summary>
+		Owner = 1,
+
+		/// <summary>Somebody the owner has let in.</summary>
+		Guest = 2,
+	}
+
+	/// <summary>
+	/// Everything the plot panel shows about one plot, sent to the player who asked.
+	/// </summary>
+	/// <remarks>
+	/// Sent in answer to walking up to a deed post (<see cref="OpenPlotPanelAction"/>) or to
+	/// <see cref="HousingPlotInfoRequestBroadcast"/>. Rent dates are sent to the owner only: when
+	/// somebody else's house falls due is nobody else's business.
+	/// </remarks>
+	public struct HousingPlotInfoBroadcast : IBroadcast
+	{
+		/// <summary>The plot described.</summary>
+		public long PlotID;
+
+		/// <summary>Where the plot is in its lifecycle (<see cref="PlotState"/>).</summary>
+		public byte State;
+
+		/// <summary>What claiming it costs; the claim request must quote this.</summary>
+		public long Price;
+
+		/// <summary>Footprint width (X) in metres.</summary>
+		public float Width;
+
+		/// <summary>Footprint depth (Z) in metres.</summary>
+		public float Depth;
+
+		/// <summary>The owner's name, or empty for unowned land or a guild.</summary>
+		public string OwnerName;
+
+		/// <summary>How the asking player stands with this plot.</summary>
+		public PlotRelation Relation;
+
+		/// <summary>What the asking player may do here (<see cref="PlotPermission"/>).</summary>
+		public int Permissions;
+
+		/// <summary>The currency attribute prices are paid in, or 0 when none is set.</summary>
+		public int CurrencyTemplateID;
+
+		/// <summary>Rent per period; zero when the server charges none.</summary>
+		public long RentPerPeriod;
+
+		/// <summary>Length of a rent period in hours.</summary>
+		public float RentPeriodHours;
+
+		/// <summary>Grace after a missed payment before the land is taken back, in hours.</summary>
+		public float RentGraceHours;
+
+		/// <summary>Seconds until rent falls due; owner only, negative when overdue, 0 when none.</summary>
+		public double RentDueInSeconds;
+
+		/// <summary>Seconds since the first missed payment; owner only, 0 when paid up.</summary>
+		public double UnpaidForSeconds;
+
+		/// <summary>True when the asking player already owns land somewhere (one house each).</summary>
+		public bool OwnsLand;
+	}
+
+	/// <summary>
+	/// Asks the server to describe a plot again, after an action changed it.
+	/// </summary>
+	public struct HousingPlotInfoRequestBroadcast : IBroadcast
+	{
+		/// <summary>The plot to describe.</summary>
+		public long PlotID;
+	}
+
+	/// <summary>
+	/// Asks to buy a plot at the price the panel showed.
+	/// </summary>
+	/// <remarks>
+	/// The quoted price is checked against the plot's own before anything is charged, so a price
+	/// changed under an open panel is refused (<see cref="HousingResult.PriceChanged"/>) rather than
+	/// charged.
+	/// </remarks>
+	public struct HousingClaimBroadcast : IBroadcast
+	{
+		/// <summary>The plot to buy.</summary>
+		public long PlotID;
+
+		/// <summary>The price the player agreed to.</summary>
+		public long QuotedPrice;
+	}
+
+	/// <summary>
+	/// The owner gives their land up. Whatever stands on it goes to their vault.
+	/// </summary>
+	public struct HousingReleaseBroadcast : IBroadcast
+	{
+		/// <summary>The plot to give up.</summary>
+		public long PlotID;
 	}
 }

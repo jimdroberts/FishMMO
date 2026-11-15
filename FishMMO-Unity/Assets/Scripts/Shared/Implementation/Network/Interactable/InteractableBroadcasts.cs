@@ -88,6 +88,11 @@ namespace FishMMO.Shared
 		Busy,
 		/// <summary>The craft was accepted but could not be recorded, so nothing was granted.</summary>
 		PersistFailed,
+		/// <summary>
+		/// An effect does not work on that kind of ability: an ordinary effect on a summon spell, or a
+		/// summon effect on anything else. See <see cref="AbilityEvent.IsCompatibleWith"/>.
+		/// </summary>
+		IncompatibleEvents,
 	}
 
 	/// <summary>

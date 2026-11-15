@@ -158,6 +158,26 @@ namespace FishMMO.Shared
 		public float ShoulderMinDistance = 1.25f;
 		/// <summary>Farthest the wheel takes the view from the shoulder.</summary>
 		public float ShoulderMaxDistance = 4f;
+		/// <summary>
+		/// True to look past the LEFT shoulder: <see cref="ShoulderOffset"/>'s sideways part is mirrored. Changing it
+		/// slides the view across rather than jumping (<see cref="ShoulderSwapSharpness"/>).
+		/// </summary>
+		public bool ShoulderLeft = false;
+		/// <summary>How quickly the view slides to the other shoulder (higher = snappier).</summary>
+		public float ShoulderSwapSharpness = 12f;
+
+		/// <summary>
+		/// The farthest the shoulder pivot may sit from the follow point, metres, whatever the player configures.
+		/// </summary>
+		/// <remarks>
+		/// A view bound, not an aim one: the shot no longer depends on where the shoulder is
+		/// (<see cref="ShoulderDisplacement"/>). Kept so a hand-edited settings file cannot put the view a body's width
+		/// away from the character, where the follow point's own obstruction cast would no longer protect it.
+		/// </remarks>
+		public const float MaxShoulderReach = 1f;
+
+		/// <summary>The sideways sign the view is easing toward: +1 right shoulder, -1 left.</summary>
+		private float shoulderSide = 1f;
 
 		[Header("First Person")]
 		/// <summary>
@@ -199,6 +219,17 @@ namespace FishMMO.Shared
 		/// The target camera distance (zoom).
 		/// </summary>
 		public float TargetDistance { get; set; }
+
+		/// <summary>
+		/// How far the view's pivot was moved off the follow point by the shoulder this update: zero in third and first
+		/// person.
+		/// </summary>
+		/// <remarks>
+		/// The crosshair's ray passes through the pivot, so over the shoulder it runs this far beside the character. The
+		/// owner's aim takes it back out of the launch line (KCCPlayer.ResolveOwnerAim), so a projectile leaves the
+		/// character exactly as it does in third person, and only the view sits off to the side.
+		/// </remarks>
+		public Vector3 ShoulderDisplacement { get; private set; }
 
 		/// <summary>
 		/// True if camera distance is currently obstructed.
@@ -276,6 +307,8 @@ namespace FishMMO.Shared
 
 			distanceIsObstructed = false;
 			currentFollowPosition = Vector3.zero;
+			shoulderSide = ShoulderLeft ? -1f : 1f;
+			ShoulderDisplacement = Vector3.zero;
 		}
 
 		/// <summary>
@@ -357,8 +390,15 @@ namespace FishMMO.Shared
 
 			PhysicsScene physicsScene = ResolvePhysicsScene();
 
+			// The view slides to the other shoulder rather than jumping a body's width.
+			float side = ShoulderLeft ? -1f : 1f;
+			shoulderSide = Style == KCCCameraStyle.OverShoulder
+				? Mathf.Lerp(shoulderSide, side, 1f - Mathf.Exp(-ShoulderSwapSharpness * deltaTime))
+				: side;
+
 			// Where the view turns about this frame: the follow point, the shoulder, or the eye.
 			Vector3 pivot = ResolvePivot(physicsScene);
+			ShoulderDisplacement = Style == KCCCameraStyle.OverShoulder ? pivot - currentFollowPosition : Vector3.zero;
 
 			if (Style == KCCCameraStyle.FirstPerson)
 			{
@@ -472,7 +512,9 @@ namespace FishMMO.Shared
 					}
 				case KCCCameraStyle.OverShoulder:
 					{
-						Vector3 offset = Transform.right * ShoulderOffset.x + FollowTransform.up * ShoulderOffset.y;
+						Vector3 offset = Vector3.ClampMagnitude(
+							Transform.right * (ShoulderOffset.x * shoulderSide) + FollowTransform.up * ShoulderOffset.y,
+							MaxShoulderReach);
 						float length = offset.magnitude;
 						if (length < 1e-4f)
 						{

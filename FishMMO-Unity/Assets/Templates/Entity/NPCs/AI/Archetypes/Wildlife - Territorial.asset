@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b15d1b8236d4cf0b5b3f74d99b9a983b, type: 3}
+  m_Name: Wildlife - Territorial
+  m_EditorClassIdentifier: 
+  Description: 'Wild territorial animal: never hunts or flees, charges whatever comes too close or hits it, then goes back.'
+  InitialState: {fileID: 11400000, guid: 8c7b67da34d8e69bd97e839391902102, type: 2}
+  AttackingState: {fileID: 11400000, guid: 817ca41b5f860ddc791230f60cf37f92, type: 2}
+  IdleState: {fileID: 11400000, guid: a147728b9035421915a6cfa441838351, type: 2}
+  WanderState: {fileID: 11400000, guid: 8c7b67da34d8e69bd97e839391902102, type: 2}
+  PatrolState: {fileID: 11400000, guid: 7c8337299754b7fd04e54964b911ae42, type: 2}
+  ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
+  RetreatState: {fileID: 0}
+  DeadState: {fileID: 0}
+  Personality: {fileID: 11400000, guid: bb0ae43dffda32580c997677cd023680, type: 2}
+  AbilityRotation: {fileID: 0}
+  BehaviorTree: {fileID: 0}
+  AimProfile: {fileID: 0}
+  AggressionDamageWeight: 1
+  AggressionHealingWeight: 0.6
+  AggressionHitBonus: 5
+  AggressionDecayRate: 3
+  AggressionStaleTimeout: 30
+  AggressionVarietyChance: 0.15
+  Shelter:
+    Enabled: 0
+    ShelterFrom: 318
+    MinimumExposure: 0.5
+    MinimumSeverity: 0.35
+    SearchRadius: 45
+    MinimumShelterStrength: 0.5
+    CheckInterval: 6
+    ShelterState: {fileID: 0}
+  Swim:
+    CanSwim: 0
+    Mode: 0
+    SwimSkill: 0.5
+    BreathSeconds: 20
+    Courage: 0.5
+    ShorePatience: 20
+  CanClimb: 1
+  LodSettings: {fileID: 11400000, guid: cd98f591a3445c5a50a6e478001853a1, type: 2}
+  EnemySweepRate: 1
+  AvoidancePriority: 75

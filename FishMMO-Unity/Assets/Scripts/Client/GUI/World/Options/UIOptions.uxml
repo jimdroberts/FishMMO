@@ -143,6 +143,54 @@
                     <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
                     <ui:Slider name="look-sensitivity-slider" low-value="0.05" high-value="20" show-input-field="true" class="fish-slider options-row-field" />
                 </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Invert Horizontal Look" class="fish-label options-row-label" />
+                    <ui:Toggle name="camera-invert-x-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Invert Vertical Look" class="fish-label options-row-label" />
+                    <ui:Toggle name="camera-invert-y-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Field of View" class="fish-label options-row-label" />
+                    <ui:Slider name="camera-fov-slider" low-value="50" high-value="90" class="options-row-field" />
+                    <ui:Label name="camera-fov-value" text="60°" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Max Zoom Distance" class="fish-label options-row-label" />
+                    <ui:Slider name="camera-max-zoom-slider" low-value="2" high-value="20" class="options-row-field" />
+                    <ui:Label name="camera-max-zoom-value" text="10 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Zoom Step" class="fish-label options-row-label" />
+                    <ui:Slider name="camera-zoom-step-slider" low-value="0.1" high-value="2" class="options-row-field" />
+                    <ui:Label name="camera-zoom-step-value" text="0.5 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+
+                <ui:Label text="OVER SHOULDER" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Shoulder" class="fish-label options-row-label" />
+                    <ui:DropdownField name="shoulder-side-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Side Distance" class="fish-label options-row-label" />
+                    <ui:Slider name="shoulder-offset-slider" low-value="0.2" high-value="0.9" class="options-row-field" />
+                    <ui:Label name="shoulder-offset-value" text="0.55 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Height" class="fish-label options-row-label" />
+                    <ui:Slider name="shoulder-height-slider" low-value="-0.3" high-value="0.6" class="options-row-field" />
+                    <ui:Label name="shoulder-height-value" text="0.20 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Max Zoom Distance" class="fish-label options-row-label" />
+                    <ui:Slider name="shoulder-max-zoom-slider" low-value="2" high-value="8" class="options-row-field" />
+                    <ui:Label name="shoulder-max-zoom-value" text="4.0 m" class="fish-hint options-row-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row options-row--action">
+                    <ui:Button name="options-reset-camera-btn" text="Reset Camera"
+                               class="fish-button options-reset-btn" />
+                </ui:VisualElement>
 
                 <!--
                     Crosshair. Colour is deliberately NOT here: it is a themed colour, edited in

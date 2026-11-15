@@ -75,5 +75,12 @@
 		/// Cleared when the body is despawned or the player reconnects to it.
 		/// </summary>
 		IsCombatLogged,
+		/// <summary>
+		/// Character is rooted: its feet are held. It cannot walk, run, jump or be carried by its own ability rush, but it
+		/// can still turn, aim and cast (unlike <see cref="IsFrozen"/>, which takes everything). Set by a
+		/// <see cref="StateBuffTemplate"/>; read through <see cref="CharacterIncapacitation.IsRooted"/>. Appended: the
+		/// flags are a bit index, and earlier values are persisted.
+		/// </summary>
+		IsRooted,
 	}
 }

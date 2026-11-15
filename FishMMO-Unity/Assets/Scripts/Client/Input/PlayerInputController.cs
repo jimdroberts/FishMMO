@@ -332,6 +332,7 @@ namespace FishMMO.Client
 			Controls.Player.PinTarget.performed += OnPinTargetPerformed;
 			Controls.Player.CarriedLight.performed += OnCarriedLightPerformed;
 			Controls.Player.ToggleFirstPerson.performed += OnToggleFirstPersonPerformed;
+			Controls.Player.SwapShoulder.performed += OnSwapShoulderPerformed;
 			Controls.Player.ToggleMouseMode.performed += OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed += OnCancelPerformed;
 			Controls.Player.CloseLastUI.performed += OnCloseLastUIPerformed;
@@ -384,6 +385,7 @@ namespace FishMMO.Client
 			Controls.Player.PinTarget.performed -= OnPinTargetPerformed;
 			Controls.Player.CarriedLight.performed -= OnCarriedLightPerformed;
 			Controls.Player.ToggleFirstPerson.performed -= OnToggleFirstPersonPerformed;
+			Controls.Player.SwapShoulder.performed -= OnSwapShoulderPerformed;
 			Controls.Player.ToggleMouseMode.performed -= OnToggleMouseModePerformed;
 			Controls.Player.Cancel.performed -= OnCancelPerformed;
 			Controls.Player.CloseLastUI.performed -= OnCloseLastUIPerformed;
@@ -1066,6 +1068,15 @@ namespace FishMMO.Client
 		{
 			if (!CanUpdateInput()) return;
 			ClientCameraSettings.ToggleFirstPerson();
+		}
+
+		/// <summary>
+		/// Moves the over-the-shoulder view to the other shoulder; saved, so the Options panel shows it.
+		/// </summary>
+		private void OnSwapShoulderPerformed(InputAction.CallbackContext context)
+		{
+			if (!CanUpdateInput()) return;
+			ClientCameraSettings.SwapShoulder();
 		}
 
 		/// <summary>

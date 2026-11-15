@@ -1074,6 +1074,9 @@ namespace FishMMO.Shared
 				CombatRelevant = engagedWith ||
 					(targeted && ObserverStreamingPolicy.TargetMeansCombat(observed.InCombat,
 						viewer.Character != null && observed.Character != null &&
+						// Prey and territorial wildlife may be hunted but never come for anyone: hovering a deer is no fight.
+						WildlifeRules.RoleOf(observed.Character) is WildlifeRole wild &&
+						(wild == WildlifeRole.None || wild == WildlifeRole.Predator) &&
 						FactionHarm.MayHarm(viewer.Character, observed.Character, out _))),
 			});
 		}

@@ -854,7 +854,13 @@ namespace FishMMO.Client
 			{
 				mark = ClientNameplateDisplay.Standing(Character, card.Character, out color);
 
-				if (!ReferenceEquals(card.Character, Character) &&
+				WildlifeRole wild = WildlifeRules.RoleOf(card.Character);
+				if (wild != WildlifeRole.None)
+				{
+					// Not a faction: a wild animal, which anyone may hunt.
+					faction = wild == WildlifeRole.Predator ? "Predator" : "Wildlife";
+				}
+				else if (!ReferenceEquals(card.Character, Character) &&
 					Character.TryGet(out IFactionController factionController) &&
 					card.Character.TryGet(out IFactionController targetFactionController))
 				{

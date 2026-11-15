@@ -44,5 +44,11 @@ namespace FishMMO.Shared
 		/// <see cref="ClassifiedDistanceCondition"/>.
 		/// </remarks>
 		Titan = 5,
+
+		/// <summary>
+		/// Wild animals (NPC.Wildlife): their own range and per-viewer budget, so a herd of deer never pushes monsters or
+		/// players off a viewer's screen.
+		/// </summary>
+		Wildlife = 6,
 	}
 }

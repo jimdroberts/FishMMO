@@ -68,6 +68,9 @@ namespace FishMMO.Client
 		/// <summary>Name prefix of the button that moves a priority row up; the slot index follows.</summary>
 		private const string PRIORITY_UP_PREFIX = "pet-priority-up-";
 
+		/// <summary>Name prefix of the button that moves a priority row down; the slot index follows.</summary>
+		private const string PRIORITY_DOWN_PREFIX = "pet-priority-down-";
+
 		/// <summary>Settings key the attack priority is kept under between sessions.</summary>
 		private const string PRIORITY_SETTING_KEY = "PetAttackPriority";
 
@@ -79,6 +82,9 @@ namespace FishMMO.Client
 
 		/// <summary>One move-up button per priority slot, first slot first.</summary>
 		private readonly Button[] priorityUpButtons = new Button[PetAttackPriority.StepCount];
+
+		/// <summary>One move-down button per priority slot, first slot first.</summary>
+		private readonly Button[] priorityDownButtons = new Button[PetAttackPriority.StepCount];
 
 		/// <summary>The order in force, packed; see <see cref="PetAttackPriority"/>.</summary>
 		private int attackPriority = PetAttackPriority.Default;
@@ -204,6 +210,11 @@ namespace FishMMO.Client
 				if (priorityUpButtons[i] != null)
 				{
 					priorityUpButtons[i].clicked += () => OnPriorityMoveUp(slot);
+				}
+				priorityDownButtons[i] = root.Q<Button>(PRIORITY_DOWN_PREFIX + i);
+				if (priorityDownButtons[i] != null)
+				{
+					priorityDownButtons[i].clicked += () => OnPriorityMoveDown(slot);
 				}
 			}
 			attackPriority = LoadStoredPriority();
@@ -335,9 +346,15 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Renders the attack priority rows from the order in force: first slot on top, and the
-		/// top row's move-up button disabled since there is nowhere for it to go.
+		/// Renders the attack priority rows from the order in force, first slot on top.
 		/// </summary>
+		/// <remarks>
+		/// Every row can be moved. The first row used to carry only a move-up button, permanently
+		/// greyed out because there is nowhere above it to go — a row with no working control. Each
+		/// row now has a move-down as well, and the one direction a row cannot go (up on the first,
+		/// down on the last) is hidden rather than shown dead; hidden by visibility, so the arrows
+		/// stay lined up in one column.
+		/// </remarks>
 		private void ApplyPriorityRows()
 		{
 			if (!PetAttackPriority.TryDecode(attackPriority, priorityOrder))
@@ -351,7 +368,8 @@ namespace FishMMO.Client
 				{
 					priorityLabels[i].text = (i + 1) + ". " + PetAttackPriority.Describe(priorityOrder[i]);
 				}
-				priorityUpButtons[i]?.SetEnabled(i > 0);
+				SetMoveButton(priorityUpButtons[i], i > 0);
+				SetMoveButton(priorityDownButtons[i], i < PetAttackPriority.StepCount - 1);
 			}
 		}
 
@@ -680,6 +698,28 @@ namespace FishMMO.Client
 			StorePriority(attackPriority);
 			ApplyPriorityRows();
 			RequestPriority(attackPriority);
+		}
+
+		/// <summary>
+		/// Moves the step in <paramref name="slot"/> one place later; see <see cref="OnPriorityMoveUp"/>.
+		/// </summary>
+		public void OnPriorityMoveDown(int slot)
+		{
+			attackPriority = PetAttackPriority.MoveDown(attackPriority, slot);
+			StorePriority(attackPriority);
+			ApplyPriorityRows();
+			RequestPriority(attackPriority);
+		}
+
+		/// <summary>Shows a move button that can act, and hides one that cannot.</summary>
+		private static void SetMoveButton(Button button, bool usable)
+		{
+			if (button == null)
+			{
+				return;
+			}
+			button.SetEnabled(usable);
+			button.style.visibility = usable ? Visibility.Visible : Visibility.Hidden;
 		}
 
 		/// <summary>Asks the server to adopt <paramref name="priority"/> for the current pet.</summary>

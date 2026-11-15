@@ -121,6 +121,49 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Appends every beneficial buff an ability applies: the buffs whose
+		/// <see cref="ClassifyBuff"/> reads as a buff and not as harm.
+		/// </summary>
+		/// <remarks>
+		/// What lets a support caster ask "does this friend already have it?" rather than recasting
+		/// a buff on someone already wearing it. Reads the ability's own events, so a buff crafted
+		/// onto an ability counts as well as one it ships with. Only the conditions-met branch: the
+		/// other branch is what happens when the cast does not apply.
+		/// </remarks>
+		/// <param name="ability">The ability to read.</param>
+		/// <param name="into">The list to append to; templates already in it are not added again.</param>
+		public static void CollectBeneficialBuffs(Ability ability, List<BaseBuffTemplate> into)
+		{
+			if (ability == null || into == null)
+			{
+				return;
+			}
+
+			foreach (AbilityEvent abilityEvent in ability.AbilityEvents.Values)
+			{
+				List<BaseAction> actions = abilityEvent?.OnConditionsMetActions;
+				if (actions == null)
+				{
+					continue;
+				}
+
+				for (int i = 0; i < actions.Count; ++i)
+				{
+					if (!(actions[i] is ApplyBuffAction buffAction) || buffAction.BuffTemplate == null)
+					{
+						continue;
+					}
+
+					AIAbilityIntent intent = ClassifyBuff(buffAction.BuffTemplate);
+					if (intent.HasAny(AIAbilityIntent.Buff) && !intent.IsOffensive() && !into.Contains(buffAction.BuffTemplate))
+					{
+						into.Add(buffAction.BuffTemplate);
+					}
+				}
+			}
+		}
+
+		/// <summary>
 		/// Walks a template's whole ECA graph and accumulates intent.
 		/// </summary>
 		/// <param name="template">The template to analyse.</param>

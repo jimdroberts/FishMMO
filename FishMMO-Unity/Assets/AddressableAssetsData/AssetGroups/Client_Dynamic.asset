@@ -33,6 +33,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 04a1aa8f9f6f5505688c9efb9636d074
+    m_Address: Root Burst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 04ed7a34aa994931846659bf442703ef
     m_Address: UISceneChannel
     m_ReadOnly: 0
@@ -81,6 +88,27 @@ MonoBehaviour:
     m_Address: UIMap
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 11761f4fecaa1edde9c03e32bb3f2c25
+    m_Address: Haste Ankles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 136e765e89867c7569387e269f43411f
+    m_Address: Teleport Out
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 14f2b39e9ee2084a9aedb8eddd8dd1f7
+    m_Address: Root Ankles
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 15553dc04431984c1af40a8688a5552b
@@ -303,6 +331,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 486eb18e7e1f41133abec6cd04f018b9
+    m_Address: Shockwave
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 49ed7a90de89b5080a405e508557e655
     m_Address: UIInventory
     m_ReadOnly: 0
@@ -451,6 +486,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6f1c50c9e8e86f6d59ae4275ef236a19
+    m_Address: Heal Burst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6fb3851da6a6f5948ab6892bee8ba920
     m_Address: HumanoidStandTurn
     m_ReadOnly: 0
@@ -494,6 +536,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7d40ba888f0c352ba8f48f332a22eb35
+    m_Address: Teleport In
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7e1228fea737c4a8193d866b24ac727d
     m_Address: UICharacterSheet
     m_ReadOnly: 0
@@ -504,6 +553,13 @@ MonoBehaviour:
     m_Address: UIChatChannelPicker
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 7ea1406d931ae9fde8cf87eb53cc3a81
+    m_Address: Heal Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 826021c4fa63bc380b9162b7e4405054
@@ -522,6 +578,13 @@ MonoBehaviour:
     m_Address: UILoot
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 889cefb301d034537be7ca341120b704
+    m_Address: Haste Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 8b01aa1f798aac746829f5af9f4dd017
@@ -602,6 +665,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a5dab4d9c09d28e72b315f83721e35e0
+    m_Address: Root Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a825e8eb181e4a8c9abae7331fa4863b
     m_Address: UINPCDialogue
     m_ReadOnly: 0
@@ -664,6 +734,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b91c3236118f14c928b1157eff72017b
+    m_Address: Heal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: bb141fc9a700c9c4ca7e6dadb8acf24b
     m_Address: HumanoidWalkTurnSharp
     m_ReadOnly: 0
@@ -711,6 +788,13 @@ MonoBehaviour:
     m_Address: UIMail
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: c4acd928d2fbcc2bcb0f09c9cd9b1044
+    m_Address: Armor Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: c72135a9becd8d3b4bc2d01b9fc2ec1d
@@ -903,6 +987,13 @@ MonoBehaviour:
     m_Address: UIAchievements
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ef38041b162e1ee4dab8acc274e21509
+    m_Address: Fire Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: f01212daf51b019a78dd9d80a5e0b813

@@ -46,5 +46,31 @@ namespace FishMMO.Shared
 				character.IsFlagged(CharacterFlags.IsStunned) ||
 				character.IsFlagged(CharacterFlags.IsMesmerized);
 		}
+
+		/// <summary>
+		/// Returns true when the character's feet are held (<see cref="CharacterFlags.IsRooted"/>): it may turn and act, but
+		/// not move under its own power.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="IsIncapacitated"/> on purpose: a root is not incapacitation, and every gate that asks
+		/// that question (casting, item use, knockback) must keep its answer.
+		/// </remarks>
+		public static bool IsRooted(ICharacter character)
+		{
+			return character != null && character.IsFlagged(CharacterFlags.IsRooted);
+		}
+
+		/// <summary>
+		/// What a root takes from a tick of movement input: both move axes and the jump, sprint and ascend flags. The facing
+		/// (the camera rotation) is left alone, so a rooted character still turns to aim.
+		/// </summary>
+		public static void RootInput(ref float moveAxisForward, ref float moveAxisRight, ref int moveFlags)
+		{
+			moveAxisForward = 0f;
+			moveAxisRight = 0f;
+			moveFlags.DisableBit(KCCMoveFlags.Jump);
+			moveFlags.DisableBit(KCCMoveFlags.Sprint);
+			moveFlags.DisableBit(KCCMoveFlags.Ascend);
+		}
 	}
 }

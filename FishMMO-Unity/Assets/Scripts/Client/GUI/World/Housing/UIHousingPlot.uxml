@@ -1,0 +1,61 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIHousingPlot.uxml   —   FishMMO Housing Plot Panel          ║
+    ║                                                              ║
+    ║  Opens when a player interacts with a plot's deed post.       ║
+    ║  Shows the plot (size, price, rent, owner) and the actions    ║
+    ║  this player may take: buy it, finish building, give it up.   ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIHousingPlot.uss  — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*     Visual theme class  (FishMMO-Theme.uss)        ║
+    ║    plot-*     Layout class        (UIHousingPlot.uss)        ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="../../FishMMO-Theme.uss" />
+    <Style src="UIHousingPlot.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel plot-panel">
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header plot-header">
+            <ui:Label name="header-title" class="fish-panel__title plot-header__title" text="PLOT" />
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="plot-body" class="fish-panel__body plot-body">
+            <ui:VisualElement class="plot-row">
+                <ui:Label class="fish-label fish-label--secondary plot-row__key" text="Size" />
+                <ui:Label name="plot-size" class="fish-label plot-row__value" text="16 × 16 m" />
+            </ui:VisualElement>
+            <ui:VisualElement name="plot-owner-row" class="plot-row">
+                <ui:Label class="fish-label fish-label--secondary plot-row__key" text="Owner" />
+                <ui:Label name="plot-owner" class="fish-label plot-row__value" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement name="plot-price-row" class="plot-row">
+                <ui:Label class="fish-label fish-label--secondary plot-row__key" text="Price" />
+                <ui:Label name="plot-price" class="fish-label fish-label--numeric plot-row__value" text="" />
+            </ui:VisualElement>
+            <ui:VisualElement class="plot-row">
+                <ui:Label class="fish-label fish-label--secondary plot-row__key" text="Rent" />
+                <ui:Label name="plot-rent" class="fish-label plot-row__value" text="" />
+            </ui:VisualElement>
+            <ui:Label name="plot-status" class="fish-label plot-status" text="" />
+            <ui:Label name="plot-message" class="fish-label fish-label--accent plot-message" text="" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer plot-footer">
+            <ui:Button name="plot-release" class="fish-button fish-button--danger plot-footer__button" text="Give up land" />
+            <ui:Button name="plot-finish" class="fish-button plot-footer__button" text="Finish building" />
+            <ui:Button name="plot-buy" class="fish-button fish-button--primary plot-footer__button" text="Buy" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

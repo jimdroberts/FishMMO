@@ -147,6 +147,8 @@ namespace FishMMO.UnitTests
 				"a craft the character cannot afford must say so");
 			LogAssert.IsTrue(body.Contains("AbilityCraftFailure.InvalidEvents"),
 				"events that cannot be combined must say so");
+			LogAssert.IsTrue(body.Contains("AbilityCraftFailure.IncompatibleEvents"),
+				"an effect that does not work on that kind of ability must say so");
 			LogAssert.IsTrue(body.Contains("SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.None"),
 				"a successful craft must be answered too, or the submit lock is released by timeout");
 		}

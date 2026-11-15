@@ -42,6 +42,12 @@ namespace FishMMO.Shared.WorldDesign
 		public SceneHeightField Field;
 		/// <summary>The previous cut's records (before a re-cut cleared its folder), for carrying unlock indices over.</summary>
 		public readonly List<PointOfInterestRecord> Previous = new List<PointOfInterestRecord>();
+
+		/// <summary>
+		/// The housing lots laid with this cut (<see cref="HousingPlotStage"/>): planned in the paint right after the
+		/// sites, built at the end of <see cref="Place"/>. Null where nothing asked for them (regenerating POIs alone).
+		/// </summary>
+		public HousingPlotStage Housing;
 		/// <summary>
 		/// The previous plan's path slices: still right after a Regenerate POIs, which keeps the palette (a cut's paint sets
 		/// them afresh).
@@ -70,6 +76,8 @@ namespace FishMMO.Shared.WorldDesign
 		public static PointOfInterestStage ForCut(SceneGenerationRequest request, string terrainFolder)
 		{
 			var stage = new PointOfInterestStage(request, terrainFolder, false);
+			// Read now, like the sites: a re-cut clears the terrain folder the housing manifest is kept in.
+			stage.Housing = HousingPlotStage.ForCut(request, terrainFolder);
 			ScenePointsOfInterest old = AssetDatabase.LoadAssetAtPath<ScenePointsOfInterest>(AssetPath(terrainFolder, request.SceneName));
 			if (old != null)
 			{
@@ -109,6 +117,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			var stage = new PointOfInterestStage(request, terrainFolder, true) { Plan = PointOfInterestPlan.FromAsset(asset) };
 			stage.ResolveTemplates();
+			stage.Housing = HousingPlotStage.ForRepaint(request, terrainFolder);
 			return stage;
 		}
 
@@ -1006,6 +1015,15 @@ namespace FishMMO.Shared.WorldDesign
 			try
 			{
 				ScenePointsOfInterest placed = PlaceSites(scene, tiles, terrains, water, notes, wrote);
+				// The housing lots, on the ground the sites and their ways left (planned and levelled in the paint).
+				try
+				{
+					Housing?.Build(scene, notes, wrote);
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[Points of interest] Housing plots for '{scene.name}' threw, the scene is still fine: {ex}");
+				}
 				ScenePropEdits edits = ScenePropEdits.Active;
 				if (edits != null)
 				{

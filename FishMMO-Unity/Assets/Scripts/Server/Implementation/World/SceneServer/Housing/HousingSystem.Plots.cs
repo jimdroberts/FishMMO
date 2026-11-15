@@ -1,4 +1,5 @@
 ﻿using System;
+using FishNet.Connection;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -343,6 +344,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			PlotFoundation.Registry.OnSceneGainedFoundations += Registry_OnSceneGainedFoundations;
 			PlotFoundation.Registry.OnClaimRequested += Registry_OnClaimRequested;
+			PlotFoundation.Registry.OnPanelRequested += Registry_OnPanelRequested;
 
 			/* Scenes already loaded before this system initialised still need resolving. The event
 			 * only fires on the transition from no foundations to some, so a scene that finished
@@ -360,6 +362,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			PlotFoundation.Registry.OnSceneGainedFoundations -= Registry_OnSceneGainedFoundations;
 			PlotFoundation.Registry.OnClaimRequested -= Registry_OnClaimRequested;
+			PlotFoundation.Registry.OnPanelRequested -= Registry_OnPanelRequested;
 			resolvedScenes.Clear();
 			pendingScenes.Clear();
 			sceneResolveRetryAt.Clear();
@@ -625,14 +628,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void Registry_OnClaimRequested(IPlayerCharacter player, IPlotFoundation foundation)
 		{
+			RequestClaim(null, player, foundation);
+		}
+
+		/// <summary>
+		/// Starts a claim, answering <paramref name="conn"/> (when given) with the outcome.
+		/// </summary>
+		/// <returns>
+		/// The refusal, or <see cref="HousingResult.Success"/> when the claim was accepted and its
+		/// answer will follow once the database has replied.
+		/// </returns>
+		private HousingResult RequestClaim(NetworkConnection conn, IPlayerCharacter player, IPlotFoundation foundation)
+		{
 			if (player == null || foundation == null)
 			{
-				return;
+				return HousingResult.UnknownPlot;
 			}
 
 			if (!IsHousingEnabled)
 			{
-				return;
+				return HousingResult.Disabled;
 			}
 
 			/* Only player ownership is offered here. Guild-owned land needs a guild treasury to buy
@@ -640,13 +655,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * member personally for land they do not own — see the plan in #121. */
 			if (!AllowsPlayerOwnership)
 			{
-				return;
+				return HousingResult.Disabled;
 			}
 
 			if (foundation.PlotID <= 0)
 			{
 				Log.Warning("HousingSystem", $"CharID={player.ID} tried to claim an unresolved plot ('{foundation.PlotKey}').");
-				return;
+				return HousingResult.UnknownPlot;
 			}
 
 			/* Checked here as well as in the UPDATE's WHERE clause. This copy can be stale — the plot
@@ -654,7 +669,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * a round trip, not the decision. The database's answer is the one that counts. */
 			if (!foundation.State.IsClaimable())
 			{
-				return;
+				return HousingResult.AlreadyClaimed;
 			}
 
 			/* The plot was resolved for the world server hosting this scene, and the player is
@@ -666,34 +681,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Warning("HousingSystem",
 					$"CharID={player.ID} (world {player.WorldServerID}) tried to claim plot {foundation.PlotID}, which belongs to world {worldServerID}.");
-				return;
+				return HousingResult.UnknownPlot;
 			}
 
 			if (currencyTemplate == null)
 			{
 				Log.Error("HousingSystem", "Claim refused: currencyTemplate is not assigned, so land has no price.");
-				return;
+				return HousingResult.Failed;
 			}
 
 			PlotOwner owner = PlotOwner.ForCharacter(player.ID);
 			if (!owner.IsAllowedBy(OwnershipMode))
 			{
-				return;
+				return HousingResult.Disabled;
 			}
 
 			long price = foundation.Price;
 			if (price > 0 && !CharacterCurrency.CanAfford(player, currencyTemplate, price))
 			{
-				return;
+				return HousingResult.CannotAfford;
 			}
 
 			long plotID = foundation.PlotID;
 			long characterID = player.ID;
 
-			if (!TryEnqueueAsyncWork(() => ClaimPlotAsync(player, foundation, plotID, characterID, price), characterID))
+			if (!TryEnqueueAsyncWork(() => ClaimPlotAsync(conn, player, foundation, plotID, characterID, price), characterID))
 			{
 				Log.Warning("HousingSystem", $"Could not enqueue plot claim for CharID={characterID}.");
+				return HousingResult.Failed;
 			}
+			return HousingResult.Success;
 		}
 
 		/// <summary>
@@ -715,7 +732,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// the plot is released back, pinned to this owner so a release cannot evict whoever claimed
 		/// it next.</para>
 		/// </remarks>
-		private async Task ClaimPlotAsync(IPlayerCharacter player, IPlotFoundation foundation, long plotID, long characterID, long price)
+		private async Task ClaimPlotAsync(NetworkConnection conn, IPlayerCharacter player, IPlotFoundation foundation, long plotID, long characterID, long price)
 		{
 			/* Restarted whole, and only for a transient fault. A unit of work does not retry inside
 			 * itself — Postgres aborts the transaction, so the only sound retry is a fresh one — and a
@@ -727,6 +744,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			if (attempt != ClaimAttempt.Claimed)
 			{
+				if (conn != null)
+				{
+					SendHousingResultOnMainThread(conn, plotID, attempt switch
+					{
+						ClaimAttempt.Refused => HousingResult.AlreadyClaimed,
+						ClaimAttempt.RefusedOwnsLand => HousingResult.AlreadyOwnsLand,
+						_ => HousingResult.Failed,
+					});
+				}
 				return;
 			}
 
@@ -742,6 +768,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					ForgetPlotContents(plotID);
 					ApplyClaimedState(foundation, PlotOwner.ForCharacter(characterID));
+					AnswerClaim(conn, player, foundation, plotID, HousingResult.Success);
 				}))
 				{
 					Log.Warning("HousingSystem", $"Could not apply the claim of plot {plotID} locally; the plot sync corrects its owner, and its placement cache the next time the scene resolves.");
@@ -753,7 +780,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (!TryEnqueueHousingMainThread(() =>
 			{
 				ForgetPlotContents(plotID);
-				CompletePlotPurchase(player, foundation, plotID, characterID, price);
+				bool paid = CompletePlotPurchase(player, foundation, plotID, characterID, price);
+				AnswerClaim(conn, player, foundation, plotID, paid ? HousingResult.Success : HousingResult.CannotAfford);
 			}))
 			{
 				Log.Error("HousingSystem",
@@ -781,6 +809,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Faulted = 2,
 			/// <summary>A fault a fresh transaction may get past. Nothing changed.</summary>
 			TransientFault = 3,
+			/// <summary>The character already owns land (the one-house index fired). Nothing changed.</summary>
+			RefusedOwnsLand = 4,
 		}
 
 		/// <summary>
@@ -839,7 +869,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				if (claim.ErrorCode == DatabaseErrorCodes.UniqueViolation)
 				{
 					Log.Debug("HousingSystem", $"CharID={characterID} already owns a plot and cannot claim {plotID}.");
-					return ClaimAttempt.Refused;
+					return ClaimAttempt.RefusedOwnsLand;
 				}
 
 				Log.Error("HousingSystem", $"Claim of plot {plotID} for CharID={characterID} errored: [{claim.ErrorCode}] {claim.ErrorMessage}");
@@ -888,7 +918,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Charges for a plot that has already been claimed, releasing it if the charge fails.
 		/// </summary>
-		private void CompletePlotPurchase(IPlayerCharacter player, IPlotFoundation foundation, long plotID, long characterID, long price)
+		private bool CompletePlotPurchase(IPlayerCharacter player, IPlotFoundation foundation, long plotID, long characterID, long price)
 		{
 			if (CharacterCurrency.TrySpend(player, currencyTemplate, price, () => TryPersistCurrency(player)))
 			{
@@ -899,7 +929,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				 * preceded its deduction would be returned by escrow reconciliation and hand back
 				 * money that was never taken — see the invariant in #148. */
 				RecordLandPurchase(characterID, price);
-				return;
+				return true;
 			}
 
 			Log.Warning("HousingSystem", $"CharID={characterID} could not pay {price} for plot {plotID}; releasing it.");
@@ -914,6 +944,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					await ReleaseClaimAsync(plotService, plotID, characterID);
 				}
 			}, characterID);
+			return false;
 		}
 
 		/// <summary>

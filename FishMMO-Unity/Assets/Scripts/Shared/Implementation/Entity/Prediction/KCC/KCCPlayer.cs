@@ -547,6 +547,15 @@ namespace FishMMO.Shared
 				out float apexDistance,
 				out Vector3 launchPoint);
 			aimDirection = AimDirectionCompression.Quantize(aim);
+			/* Over the shoulder the crosshair's ray runs beside the character, through the shoulder pivot, and a line
+			 * started there put the projectile out at the view's side, not at the character (Jim, 2026-11-15). The
+			 * shoulder's displacement is taken back out, so the line starts where third person's ray would pass and runs
+			 * to the same point under the crosshair: the projectile leaves the character in every style, and still lands
+			 * on what the crosshair is on. */
+			if (CharacterCamera != null)
+			{
+				launchPoint -= CharacterCamera.ShoulderDisplacement;
+			}
 			// Against the QUANTISED aim, which is the one the server rebuilds the line from.
 			launch = AimConvergence.EncodeLaunch(eye, launchPoint, aimDirection, apexDistance);
 			headingOffset = AimConvergence.EncodeHeadingOffset(
@@ -834,6 +843,16 @@ namespace FishMMO.Shared
 					CarryOnBlankTick(kccInput.GetTick());
 				}
 				return;
+			}
+
+			/* ROOTED: the feet are held, nothing else. No walking, running, jumping or rising, and a charge in progress
+			 * stops; the character still turns, aims and casts. Predicted on both peers for the reason the incapacitation
+			 * gate above is: StateBuffTemplate sets IsRooted wherever buffs are simulated, the server and the owner. */
+			if (!controlsSuppressed && CharacterController.Character != null &&
+				CharacterIncapacitation.IsRooted(CharacterController.Character))
+			{
+				CharacterIncapacitation.RootInput(ref kccInput.MoveAxisForward, ref kccInput.MoveAxisRight, ref kccInput.MoveFlags);
+				CharacterController.EndMotion();
 			}
 
 			CharacterController.SetInputs(ref kccInput, controlsSuppressed);

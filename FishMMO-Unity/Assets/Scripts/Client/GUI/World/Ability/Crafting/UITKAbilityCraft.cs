@@ -352,6 +352,11 @@ namespace FishMMO.Client
 
 			List<ICachedObject> templates = AbilityEvent.Get<AbilityEvent>(abilityController.KnownAbilityEvents);
 
+			/* Only effects that work on the chosen base ability: summon effects on a summon spell,
+			 * everything else on everything else. The server refuses the rest, so offering one
+			 * would only produce a craft that cannot succeed. */
+			templates.RemoveAll(t => t is AbilityEvent abilityEvent && !abilityEvent.IsCompatibleWith(selectedMain));
+
 			/* Anything already in another slot is not offered again. An ability holds one entry per
 			 * event, and the server refuses a duplicate outright, so offering it would only produce
 			 * a craft that cannot succeed. */
@@ -373,7 +378,9 @@ namespace FishMMO.Client
 
 			if (templates.Count == 0)
 			{
-				SetStatus("You know no other effects to add.");
+				SetStatus(selectedMain is PetAbilityTemplate
+					? "You know no other summon effects to add."
+					: "You know no other effects to add.");
 				return;
 			}
 
@@ -860,6 +867,8 @@ namespace FishMMO.Client
 					return "Still handling your last request; try again.";
 				case AbilityCraftFailure.PersistFailed:
 					return "The craft could not be saved; nothing was charged.";
+				case AbilityCraftFailure.IncompatibleEvents:
+					return "One of those effects does not work on that kind of ability.";
 				default:
 					return "The crafter refused that craft.";
 			}

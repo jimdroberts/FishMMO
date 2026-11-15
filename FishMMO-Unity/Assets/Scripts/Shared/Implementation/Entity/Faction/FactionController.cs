@@ -1519,9 +1519,22 @@ namespace FishMMO.Shared
 				return arenaLevel;
 			}
 
+			/* A pet answers as its owner (FactionHarm.Principal), as it does for who may harm whom.
+			 * A pet and its owner share no party or guild of their own, so they used to read as
+			 * neutral — or as enemies whenever the owner's aggression was on — and an ally-only
+			 * heal cast by a pet bounced off the owner it was meant for. Its owner, and its owner's
+			 * other pets, are its own side; the party and guild it belongs to are its owner's. */
+			ICharacter side = FactionHarm.Principal(Character);
+			ICharacter otherSide = FactionHarm.Principal(otherFactionController.Character);
+			if (side != null && ReferenceEquals(side, otherSide))
+			{
+				return FactionAllianceLevel.Ally;
+			}
+
 			// Same party?
-			if (Character.TryGet(out IPartyController partyController) &&
-				otherFactionController.Character.TryGet(out IPartyController otherPartyController) &&
+			if (side != null && otherSide != null &&
+				side.TryGet(out IPartyController partyController) &&
+				otherSide.TryGet(out IPartyController otherPartyController) &&
 				partyController.ID != 0 &&
 				partyController.ID == otherPartyController.ID)
 			{
@@ -1529,8 +1542,9 @@ namespace FishMMO.Shared
 			}
 
 			// Same guild?
-			if (Character.TryGet(out IGuildController guildController) &&
-				otherFactionController.Character.TryGet(out IGuildController otherGuildController) &&
+			if (side != null && otherSide != null &&
+				side.TryGet(out IGuildController guildController) &&
+				otherSide.TryGet(out IGuildController otherGuildController) &&
 				guildController.ID != 0 &&
 				guildController.ID == otherGuildController.ID)
 			{

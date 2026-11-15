@@ -77,6 +77,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// </remarks>
 		public static void AssignSceneId(NetworkObject networkObject, PointOfInterestSiteContext context, int salt)
 		{
+			AssignSceneId(networkObject, PointOfInterestPlanner.Mix(unchecked((uint)context.Record.Id * 0x9E3779B1u ^ (uint)salt)));
+		}
+
+		/// <summary>
+		/// <see cref="AssignSceneId(NetworkObject, PointOfInterestSiteContext, int)"/> for an object that is not part of a
+		/// site (a housing plot): <paramref name="low"/> is the caller's own stable hash.
+		/// </summary>
+		public static void AssignSceneId(NetworkObject networkObject, uint low)
+		{
 			if (networkObject == null || networkObject.IsSceneObject)
 			{
 				return;
@@ -94,7 +103,6 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			ulong high = (ulong)StableHash.FNV32(scene.path ?? scene.name ?? string.Empty) << 32;
-			uint low = PointOfInterestPlanner.Mix(unchecked((uint)context.Record.Id * 0x9E3779B1u ^ (uint)salt));
 			ulong id = high | low;
 			while (id == NetworkObject.UNSET_SCENEID_VALUE || used.Contains(id))
 			{

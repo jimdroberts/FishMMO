@@ -688,6 +688,12 @@ namespace FishMMO.Shared
 		private const byte EXT_CLIMB_TICKS_BIT = 1 << 2;
 		/// <summary>Extension flag for IsFlying changes.</summary>
 		private const byte EXT_IS_FLYING_BIT = 1 << 3;
+		/// <summary>Extension flag for MotionTicks changes (an ability rush).</summary>
+		private const byte EXT_MOTION_TICKS_BIT = 1 << 4;
+		/// <summary>Extension flag for MotionSpeed changes.</summary>
+		private const byte EXT_MOTION_SPEED_BIT = 1 << 5;
+		/// <summary>Extension flag for MotionYaw changes.</summary>
+		private const byte EXT_MOTION_YAW_BIT = 1 << 6;
 
 		/// <summary>
 		/// Custom full serializer: writes all fields of <see cref="KinematicCharacterMotorState"/>.
@@ -724,6 +730,9 @@ namespace FishMMO.Shared
 			writer.WriteUInt8Unpacked(value.ClimbPhase);
 			writer.WriteUInt8Unpacked(value.ClimbTicks);
 			writer.WriteBoolean(value.IsFlying);
+			writer.WriteUInt8Unpacked(value.MotionTicks);
+			writer.WriteUInt16Unpacked(value.MotionSpeed);
+			writer.WriteUInt16Unpacked(value.MotionYaw);
 		}
 
 		/// <summary>
@@ -752,6 +761,9 @@ namespace FishMMO.Shared
 				ClimbPhase = reader.ReadUInt8Unpacked(),
 				ClimbTicks = reader.ReadUInt8Unpacked(),
 				IsFlying = reader.ReadBoolean(),
+				MotionTicks = reader.ReadUInt8Unpacked(),
+				MotionSpeed = reader.ReadUInt16Unpacked(),
+				MotionYaw = reader.ReadUInt16Unpacked(),
 			};
 		}
 
@@ -895,6 +907,18 @@ namespace FishMMO.Shared
 			{
 				extension |= EXT_IS_FLYING_BIT;
 			}
+			if (fullSerialize || prev.MotionTicks != next.MotionTicks)
+			{
+				extension |= EXT_MOTION_TICKS_BIT;
+			}
+			if (fullSerialize || prev.MotionSpeed != next.MotionSpeed)
+			{
+				extension |= EXT_MOTION_SPEED_BIT;
+			}
+			if (fullSerialize || prev.MotionYaw != next.MotionYaw)
+			{
+				extension |= EXT_MOTION_YAW_BIT;
+			}
 			if (extension != 0)
 			{
 				writer.WriteUInt8Unpacked(extension);
@@ -913,6 +937,18 @@ namespace FishMMO.Shared
 				if ((extension & EXT_IS_FLYING_BIT) != 0)
 				{
 					writer.WriteBoolean(next.IsFlying);
+				}
+				if ((extension & EXT_MOTION_TICKS_BIT) != 0)
+				{
+					writer.WriteUInt8Unpacked(next.MotionTicks);
+				}
+				if ((extension & EXT_MOTION_SPEED_BIT) != 0)
+				{
+					writer.WriteUInt16Unpacked(next.MotionSpeed);
+				}
+				if ((extension & EXT_MOTION_YAW_BIT) != 0)
+				{
+					writer.WriteUInt16Unpacked(next.MotionYaw);
 				}
 				flags |= EXTENSION_BIT;
 			}
@@ -1008,6 +1044,12 @@ namespace FishMMO.Shared
 					result.ClimbTicks = reader.ReadUInt8Unpacked();
 				if ((extension & EXT_IS_FLYING_BIT) != 0)
 					result.IsFlying = reader.ReadBoolean();
+				if ((extension & EXT_MOTION_TICKS_BIT) != 0)
+					result.MotionTicks = reader.ReadUInt8Unpacked();
+				if ((extension & EXT_MOTION_SPEED_BIT) != 0)
+					result.MotionSpeed = reader.ReadUInt16Unpacked();
+				if ((extension & EXT_MOTION_YAW_BIT) != 0)
+					result.MotionYaw = reader.ReadUInt16Unpacked();
 			}
 
 			return result;

@@ -46,7 +46,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Event invoked when a pet ability is summoned.
 		/// </summary>
-		public static Action<PetAbilityTemplate, IPlayerCharacter> OnPetSummon;
+		/// <remarks>
+		/// Carries the cast <see cref="Ability"/>, not only its <see cref="PetAbilityTemplate"/>: the
+		/// effects a player crafted onto the summon live on the ability, and the template alone
+		/// dropped every one of them before the pet system saw the cast.
+		/// </remarks>
+		public static Action<Ability, IPlayerCharacter> OnPetSummon;
 
 		/// <summary>
 		/// The container ID for grouping spawned ability objects.
@@ -114,6 +119,12 @@ namespace FishMMO.Shared
 		/// Number of hits this object can perform before being destroyed.
 		/// </summary>
 		public int HitCount;
+		/// <summary>
+		/// The charge stage the cast that made this object was released at (<see cref="Ability.ChargeStage"/>), from 1; 0
+		/// when the ability is not a staged charge, or on an observer's copy, which never learns it (it applies nothing).
+		/// </summary>
+		[NonSerialized]
+		public byte ChargeStage;
 		/// <summary>
 		/// Remaining lifetime in seconds before the object is destroyed.
 		/// </summary>
@@ -633,6 +644,10 @@ namespace FishMMO.Shared
 			/// <summary>The object the effect belongs to; null when the event gave <see cref="Position"/> itself (a target, a hit point).</summary>
 			public AbilityObject Anchor;
 			public Vector3 Position;
+			/// <summary>The effect's size in metres (<see cref="PlayFXAction.Size"/>); 0 keeps the prefab's scale.</summary>
+			public float Size;
+			/// <summary>Metres above an anchored effect's drawn position (<see cref="PlayFXAction.HeightOffset"/>); <see cref="Position"/> already includes it.</summary>
+			public float HeightOffset;
 		}
 
 		/// <summary>The effects this root's spawn chain asked for and has not played yet; null for none.</summary>
@@ -661,7 +676,7 @@ namespace FishMMO.Shared
 		/// Held on the ROOT, whichever member the effect belongs to: the members of one cast are shown together.
 		/// </para>
 		/// </remarks>
-		internal static bool TryHoldSpawnEffect(GameObject prefab, Scene scene, AbilityObject anchor, Vector3 position)
+		internal static bool TryHoldSpawnEffect(GameObject prefab, Scene scene, AbilityObject anchor, Vector3 position, float size = 0f, float heightOffset = 0f)
 		{
 			AbilityObject holder = spawnEffectHolder;
 			if (holder == null || prefab == null || holder.isServer)
@@ -669,7 +684,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 			holder.heldSpawnEffects ??= new List<HeldSpawnEffect>(2);
-			holder.heldSpawnEffects.Add(new HeldSpawnEffect { Prefab = prefab, Scene = scene, Anchor = anchor, Position = position });
+			holder.heldSpawnEffects.Add(new HeldSpawnEffect { Prefab = prefab, Scene = scene, Anchor = anchor, Position = position, Size = size, HeightOffset = heightOffset });
 			return true;
 		}
 
@@ -703,11 +718,11 @@ namespace FishMMO.Shared
 				HeldSpawnEffect held = heldSpawnEffects[i];
 				if (held.Anchor == null)
 				{
-					PlayFXAction.SpawnFX(held.Prefab, held.Position, held.Scene);
+					PlayFXAction.SpawnFX(held.Prefab, held.Position, held.Scene, held.Size);
 				}
 				else if (!held.Anchor.destroyed)
 				{
-					PlayFXAction.SpawnFX(held.Prefab, held.Anchor.SpawnEffectAnchor(), held.Scene);
+					PlayFXAction.SpawnFX(held.Prefab, held.Anchor.SpawnEffectAnchor() + Vector3.up * held.HeightOffset, held.Scene, held.Size);
 				}
 			}
 			heldSpawnEffects.Clear();
@@ -3177,6 +3192,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = ability;
 			abilityObject.Caster = caster;
 			abilityObject.HitCount = ability.Template.HitCount;
+			abilityObject.ChargeStage = ability.ChargeStage;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new DeterministicRNG(seed);
 			abilityObject.SpawnTick = spawnTick;
@@ -3347,6 +3363,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = source.Ability;
 			abilityObject.Caster = source.Caster;
 			abilityObject.HitCount = source.HitCount;
+			abilityObject.ChargeStage = source.ChargeStage;
 			abilityObject.RemainingLifeTime = source.RemainingLifeTime;
 			abilityObject.RNG = new DeterministicRNG(CreateChildSeed(seed, abilityObjectID));
 			abilityObject.SpawnTick = source.SpawnTick;
@@ -3450,11 +3467,11 @@ namespace FishMMO.Shared
 			}
 
 			// Pet abilities are only supported for player characters.
-			if (template is PetAbilityTemplate petAbilityTemplate)
+			if (template is PetAbilityTemplate)
 			{
 				if (caster is IPlayerCharacter petOwner)
 				{
-					OnPetSummon?.Invoke(petAbilityTemplate, petOwner);
+					OnPetSummon?.Invoke(ability, petOwner);
 				}
 				return null;
 			}

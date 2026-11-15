@@ -147,9 +147,14 @@
     flex-grow: 1;
 }
 
+/*
+    Move-up and move-down. The direction a row cannot go (up on the first row, down on the
+    last) is hidden rather than greyed, with visibility so the arrows stay in one column.
+*/
 .pet-priority__up {
     width: 24px;
     height: 18px;
     font-size: 9px;
+    margin-left: 2px;
     flex-shrink: 0;
 }

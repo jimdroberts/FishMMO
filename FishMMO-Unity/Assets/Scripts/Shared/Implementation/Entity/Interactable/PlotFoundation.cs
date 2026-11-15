@@ -173,6 +173,24 @@ namespace FishMMO.Shared
 			{
 				OnClaimRequested?.Invoke(player, foundation);
 			}
+
+			/// <summary>
+			/// Raised when a player walks up to a plot's deed post and asks what it is.
+			/// </summary>
+			/// <remarks>
+			/// The interaction no longer buys anything by itself. It asks the server to describe the
+			/// plot — price, owner, rent, what this player may do — and the client's plot panel is
+			/// where a purchase is confirmed, against the price the panel showed.
+			/// </remarks>
+			public static event Action<IPlayerCharacter, IPlotFoundation> OnPanelRequested;
+
+			/// <summary>
+			/// Raises <see cref="OnPanelRequested"/>.
+			/// </summary>
+			public static void RequestPanel(IPlayerCharacter player, IPlotFoundation foundation)
+			{
+				OnPanelRequested?.Invoke(player, foundation);
+			}
 		}
 
 		/// <summary>
@@ -217,6 +235,42 @@ namespace FishMMO.Shared
 		[Tooltip("Height of the plot volume in metres, measured upward from the foundation.")]
 		[SerializeField]
 		private float height = DefaultHeight;
+
+		/// <summary>
+		/// Where the middle of the plot is, measured from this object, in world axes (metres).
+		/// </summary>
+		/// <remarks>
+		/// The object is the plot's deed post, which stands at the street edge of the lot so a player
+		/// can walk up to it: interaction range is measured from the object, and a pivot in the
+		/// middle of a 32 m lot would mean walking to the middle of it before anything answered.
+		/// The volume stays axis-aligned (see <see cref="Bounds"/>), so this is a plain offset, not a
+		/// local-space one. Zero keeps the old meaning: the object marks the middle of the plot.
+		/// </remarks>
+		[Tooltip("Offset from this object (the deed post) to the middle of the plot's base, in world axes. Y moves the volume's floor (negative: below the post).")]
+		[SerializeField]
+		private Vector3 centreOffset = Vector3.zero;
+
+		/// <summary>
+		/// The offset from this object to the middle of the plot's base. Its Y lets the volume start a
+		/// little below the post, so a lot whose ground dips under the post's height still holds
+		/// whoever stands in the dip.
+		/// </summary>
+		public Vector3 CentreOffset => centreOffset;
+
+#if UNITY_EDITOR
+		/// <summary>
+		/// Writes the authored fields. Editor only: the scene cut lays plots by script.
+		/// </summary>
+		public void EditorConfigure(string key, long plotPrice, Vector2 size, float volumeHeight, Vector3 offset)
+		{
+			plotKey = key;
+			price = plotPrice;
+			dimensions = size;
+			height = volumeHeight;
+			centreOffset = offset;
+			canonicalPlotKey = null;
+		}
+#endif
 
 		/// <summary>
 		/// Footprint used when none is authored, in metres.
@@ -305,7 +359,7 @@ namespace FishMMO.Shared
 			{
 				Vector2 size = Dimensions;
 				float volumeHeight = Height;
-				Vector3 origin = transform.position;
+				Vector3 origin = transform.position + CentreOffset;
 
 				return new Bounds(
 					new Vector3(origin.x, origin.y + (volumeHeight * 0.5f), origin.z),
@@ -352,6 +406,35 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc />
 		public PlotState State => (PlotState)plotState.Value;
+
+		/// <summary>
+		/// Raised on every process when the plot's lifecycle state changes, so its look can follow.
+		/// </summary>
+		public event Action<PlotState> OnStateChanged;
+
+		/// <inheritdoc />
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+			plotState.OnChange += PlotState_OnChange;
+			OnStateChanged?.Invoke(State);
+		}
+
+		/// <inheritdoc />
+		public override void OnStopClient()
+		{
+			base.OnStopClient();
+			plotState.OnChange -= PlotState_OnChange;
+		}
+
+		private void PlotState_OnChange(int previous, int next, bool asServer)
+		{
+			if (asServer)
+			{
+				return;
+			}
+			OnStateChanged?.Invoke((PlotState)next);
+		}
 
 		/// <summary>
 		/// Who the owner has let in, and what they may do. Server-side only.

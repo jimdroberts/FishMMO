@@ -150,6 +150,10 @@ namespace FishMMO.Shared
 			if (ChargedTemplate != null && ability.HasAbilityEvent(ChargedTemplate.ID))
 				return true;
 
+			// A staged charge is held to choose its stage (AbilityTemplate.ChargeStages).
+			if (ability.IsStagedCharge)
+				return true;
+
 			return false;
 		}
 
@@ -197,10 +201,8 @@ namespace FishMMO.Shared
 				hasLastCastTick = false;
 				// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
 				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
-				float activationTimeSec = newAbility.ActivationTime
-					* CalculateSpeedReduction(GetActivationAttributeTemplate(newAbility))
-					* WeatherScaling(newAbility, activationData.GetTick(), WeatherAbilityTarget.ActivationTime);
-				remainingTicks = (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
+				remainingTicks = ComputeActivationTicks(newAbility, activationData.GetTick());
+				newAbility.ChargeStage = 0;
 				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
@@ -367,8 +369,47 @@ namespace FishMMO.Shared
 			}
 			chargedHoldTicks = 0;
 
+			// A staged charge held to the end fires at its last stage, by itself.
+			validatedAbility.ChargeStage = validatedAbility.IsStagedCharge ? validatedAbility.Template.ChargeStages : (byte)0;
+
 			// Activation complete — spawn the ability and finish
 			FinishAbility(validatedAbility, activationData, state);
+		}
+
+		/// <summary>
+		/// The cast's length in ticks: its activation time, scaled by the activation-speed attribute and the weather, rounded
+		/// up. The one formula the cast start and a staged charge's release both use.
+		/// </summary>
+		private uint ComputeActivationTicks(Ability ability, uint inputTick)
+		{
+			// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+			// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+			float activationTimeSec = ability.ActivationTime
+				* CalculateSpeedReduction(GetActivationAttributeTemplate(ability))
+				* WeatherScaling(ability, inputTick, WeatherAbilityTarget.ActivationTime);
+			return (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
+		}
+
+		/// <summary>
+		/// The stage a staged charge released with <paramref name="remainingTicks"/> of <paramref name="totalTicks"/> left
+		/// has reached, from 1. The stages before the last divide the charge evenly; the last is only the full charge.
+		/// With three: under half is 1, from half is 2, complete is 3.
+		/// </summary>
+		/// <remarks>Pure and integer-only, so every peer (and every replay) names the same stage.</remarks>
+		public static byte ResolveChargeStage(uint remainingTicks, uint totalTicks, int stages)
+		{
+			if (stages <= 1)
+			{
+				return 1;
+			}
+			if (totalTicks == 0u || remainingTicks == 0u)
+			{
+				return (byte)Mathf.Min(stages, byte.MaxValue);
+			}
+			uint elapsed = remainingTicks >= totalTicks ? 0u : totalTicks - remainingTicks;
+			// floor(elapsed / total × (stages - 1)), in integers.
+			long stage = 1L + (long)elapsed * (stages - 1) / totalTicks;
+			return (byte)Mathf.Clamp((int)stage, 1, stages - 1);
 		}
 
 		/// <summary>
@@ -506,6 +547,19 @@ namespace FishMMO.Shared
 					* CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility))
 					* WeatherScaling(validatedAbility, activationData.GetTick(), WeatherAbilityTarget.ActivationTime);
 				OnUpdate?.Invoke(validatedAbility.Name, remainingTicks * tickDelta, totalTime);
+			}
+
+			/* A STAGED CHARGE fires on release, at the stage reached, where any other held cast released early is cancelled
+			 * (below). Tested on this tick's input alone, so a tap released before its cast even began (the input never
+			 * carried IsHeld) fires at stage 1 on its first tick. Both peers reach the same stage: it is a pure function of
+			 * the countdown, which is reconciled, and the cast's own length. */
+			if (validatedAbility.IsStagedCharge &&
+				!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+			{
+				uint totalTicks = ComputeActivationTicks(validatedAbility, activationData.GetTick());
+				validatedAbility.ChargeStage = ResolveChargeStage(remainingTicks, totalTicks, validatedAbility.Template.ChargeStages);
+				FinishAbility(validatedAbility, activationData, state);
+				return;
 			}
 
 			// Handle held ability updates

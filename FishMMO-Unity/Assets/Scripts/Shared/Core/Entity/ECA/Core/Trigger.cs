@@ -627,6 +627,16 @@ namespace FishMMO.Shared.Core
 			return true;
 		}
 
+		/// <summary>
+		/// Whether this trigger does something even with both action lists empty.
+		/// </summary>
+		/// <remarks>
+		/// A subclass whose effect is authored as data rather than as actions (an ability effect
+		/// that teaches a summoned pet abilities) overrides this, so the editor's "no observable
+		/// effect" warning does not fire on a trigger that has one.
+		/// </remarks>
+		protected virtual bool HasEffectWithoutActions => false;
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// Designer-invoked re-run of <see cref="OnValidate"/>. Unity normally only calls
@@ -664,7 +674,7 @@ namespace FishMMO.Shared.Core
 
 			bool noMet = OnConditionsMetActions == null || OnConditionsMetActions.Count == 0;
 			bool noNotMet = OnConditionsNotMetActions == null || OnConditionsNotMetActions.Count == 0;
-			if (noMet && noNotMet)
+			if (noMet && noNotMet && !HasEffectWithoutActions)
 			{
 				Debug.LogWarning(
 					$"[Trigger] '{name}': both OnConditionsMetActions and OnConditionsNotMetActions are empty. " +

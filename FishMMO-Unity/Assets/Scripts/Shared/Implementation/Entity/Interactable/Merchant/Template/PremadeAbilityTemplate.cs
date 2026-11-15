@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// The recipe is held to the crafting rules — at most <see cref="AbilityTemplate.AdditionalEventSlots"/>
-	/// events and at most one type override — so a premade ability can never be something a
+	/// events, each one that works on the base ability, and at most one type override — so a premade ability can never be something a
 	/// player could not have built. <see cref="Validate"/> is the single statement of those rules;
 	/// the server runs it before selling and the inspector runs it on edit.
 	/// </para>
@@ -120,6 +120,11 @@ namespace FishMMO.Shared
 					if (abilityEvent == null)
 					{
 						reason = $"event slot {i} is empty.";
+						return false;
+					}
+					if (!abilityEvent.IsCompatibleWith(Ability))
+					{
+						reason = $"'{abilityEvent.Name}' does not work on '{Ability.Name}'.";
 						return false;
 					}
 					if (seen.Add(abilityEvent.ID))

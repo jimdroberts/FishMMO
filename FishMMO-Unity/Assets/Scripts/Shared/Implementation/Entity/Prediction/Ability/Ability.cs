@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine;
+using FishMMO.Logging;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -120,6 +121,17 @@ namespace FishMMO.Shared
 		public AbilityTemplate Template { get; private set; }
 
 		/// <summary>
+		/// The stage the last cast of a staged charge (<see cref="AbilityTemplate.ChargeStages"/>) was released at, from 1;
+		/// 0 for any other ability. Set by <see cref="AbilityController"/> immediately before the cast fires, on the server and
+		/// the owner alike (and again when a replay re-fires it), and copied onto the objects it spawns.
+		/// </summary>
+		[NonSerialized]
+		public byte ChargeStage;
+
+		/// <summary>True when this ability is held to charge through stages (<see cref="AbilityTemplate.ChargeStages"/>).</summary>
+		public bool IsStagedCharge => Template != null && Template.ChargeStages > 1;
+
+		/// <summary>
 		/// Gets the icon sprite from the ability template.
 		/// </summary>
 		public Sprite Icon { get { return Template?.Icon; } }
@@ -180,6 +192,12 @@ namespace FishMMO.Shared
 		/// All OnDestroy events, indexed by event ID.
 		/// </summary>
 		public SortedDictionary<int, AbilityOnDestroyEvent> OnDestroyEvents = new SortedDictionary<int, AbilityOnDestroyEvent>();
+
+		/// <summary>
+		/// All OnSummon events, indexed by event ID. Only a summon spell holds any
+		/// (<see cref="AbilityEvent.IsCompatibleWith"/>); the pet system runs them when the pet arrives.
+		/// </summary>
+		public SortedDictionary<int, AbilityOnSummonEvent> OnSummonEvents = new SortedDictionary<int, AbilityOnSummonEvent>();
 
 		/// <summary>
 		/// Cache of all active ability objects, organized as a dictionary mapping container IDs to dictionaries of ability object IDs and their corresponding <see cref="AbilityObject"/> instances.
@@ -281,6 +299,10 @@ namespace FishMMO.Shared
 			AddEvents(Template.OnPreSpawnEvents);
 			AddEvents(Template.OnSpawnEvents);
 			AddEvents(Template.OnDestroyEvents);
+			if (Template is PetAbilityTemplate petAbilityTemplate)
+			{
+				AddEvents(petAbilityTemplate.OnSummonEvents);
+			}
 
 			// Add any additional events provided in the constructor (e.g., from crafting).
 			if (abilityEvents != null)
@@ -290,7 +312,13 @@ namespace FishMMO.Shared
 					AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(eventId);
 					if (abilityEvent != null)
 					{
-						AddEvent(abilityEvent);
+						/* Crafting refuses an effect the ability cannot use, so one arriving here is
+						 * a row written before that rule existed. It is left out rather than folded
+						 * into the ability's numbers, the same on every peer that builds it. */
+						if (!AddEvent(abilityEvent) && !abilityEvent.IsCompatibleWith(Template))
+						{
+							Log.Warning("Ability", $"Ability {abilityID} ('{Template.Name}') holds effect '{abilityEvent.Name}', which does not work on that kind of ability. It is ignored.");
+						}
 					}
 					else
 					{
@@ -312,10 +340,21 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Adds a single ability event to the appropriate event dictionaries and applies its stat modifiers.
 		/// </summary>
+		/// <remarks>
+		/// Refuses an effect that does not work on this ability's template
+		/// (<see cref="AbilityEvent.IsCompatibleWith"/>), so that no route — template, craft,
+		/// database row or wire — can attach one and change the ability's numbers with it.
+		/// </remarks>
 		/// <param name="abilityEvent">The ability event to add.</param>
-		public void AddEvent(AbilityEvent abilityEvent)
+		/// <returns>True when the event was added; false when it was null, already present, or incompatible.</returns>
+		public bool AddEvent(AbilityEvent abilityEvent)
 		{
-			if (abilityEvent == null || AbilityEvents.ContainsKey(abilityEvent.ID)) return;
+			if (abilityEvent == null ||
+				AbilityEvents.ContainsKey(abilityEvent.ID) ||
+				!abilityEvent.IsCompatibleWith(Template))
+			{
+				return false;
+			}
 
 			AbilityEvents.Add(abilityEvent.ID, abilityEvent);
 			MarkChanged();
@@ -341,7 +380,11 @@ namespace FishMMO.Shared
 				case AbilityOnDestroyEvent destroyEvent:
 					OnDestroyEvents[destroyEvent.ID] = destroyEvent;
 					break;
+				case AbilityOnSummonEvent summonEvent:
+					OnSummonEvents[summonEvent.ID] = summonEvent;
+					break;
 			}
+			return true;
 		}
 
 		/// <summary>
@@ -535,6 +578,7 @@ namespace FishMMO.Shared
 				OnPreSpawnEvents.Remove(eventID);
 				OnSpawnEvents.Remove(eventID);
 				OnDestroyEvents.Remove(eventID);
+				OnSummonEvents.Remove(eventID);
 
 				ActivationTime -= abilityEvent.ActivationTime;
 				LifeTime -= abilityEvent.LifeTime;

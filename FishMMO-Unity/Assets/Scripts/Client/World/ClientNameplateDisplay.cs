@@ -374,6 +374,15 @@ namespace FishMMO.Client
 				tint = aggressive ? ColorVision.Hostile : ColorVision.Neutral;
 				return aggressive ? NameplateMark.Hostile : NameplateMark.None;
 			}
+			/* Wildlife is outside the factions (WildlifeRules): a predator will go for anyone, so it reads hostile; prey and
+			 * territorial animals read neutral, though anyone may hunt them. */
+			WildlifeRole wild = WildlifeRules.RoleOf(character);
+			if (wild != WildlifeRole.None)
+			{
+				bool hunts = wild == WildlifeRole.Predator;
+				tint = hunts ? ColorVision.Hostile : ColorVision.Neutral;
+				return hunts ? NameplateMark.Hostile : NameplateMark.None;
+			}
 			if (!character.TryGet(out IFactionController theirFaction))
 			{
 				return NameplateMark.None;

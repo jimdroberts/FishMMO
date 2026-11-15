@@ -661,6 +661,16 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
+				// Wildlife spawners from the biome map and the sites just placed; the spawn-table bake takes them to the server.
+				try
+				{
+					WildlifeSpawnerCut.Place(scene, result.BiomeMap, result.HasWater ? result.SeaLevelY : (float?)null, result.Notes);
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[Scene generator] Wildlife spawners for '{request.SceneName}' threw, the scene is still fine: {ex}");
+				}
+
 				SceneLookArrayBaker.Bake(scene, terrainFolder, result.Wrote);
 				clock.Lap("World systems and dressing");
 				if (!EditorSceneManager.SaveScene(scene, scenePath))
@@ -1094,6 +1104,17 @@ namespace FishMMO.Shared.WorldDesign
 			 * flattened (and a shaper's holes cut) now, so the splat paints the ground they leave, and everything placed
 			 * below keeps out of their footprints. A repaint's stage carries the stored plan and plans nothing. */
 			poi?.PlanSites(scene, plan, terrains, field, water, result.Notes);
+			/* The housing lots, on the same ground: levelled now and reserved, so the scatter below keeps trees and
+			 * rocks off them (HousingPlotStage). Before the keep-outs are read, or they would not be in them. */
+			try
+			{
+				poi?.Housing?.Plan(poi, plan, terrains, field, water, result.Notes);
+			}
+			catch (Exception ex)
+			{
+				result.Notes.Add($"Housing plots could not be planned: {ex.Message}");
+				Debug.LogException(ex);
+			}
 			Func<float, float, bool> keptOut = poi?.Excludes;
 			// Details keep off the sites and a road's width only: a trail's own grass is thinned by the shaders.
 			Func<float, float, bool> detailKeptOut = poi?.DetailExcludes;

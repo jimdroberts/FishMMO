@@ -88,6 +88,9 @@ namespace FishMMO.UnitTests
 				IsSwimming = rng.Next(2) == 0,
 				IsFlying = rng.Next(4) == 0,
 				ClimbTicks = (byte)rng.Next(256),
+				MotionTicks = (byte)(rng.Next(3) == 0 ? rng.Next(1, 20) : 0),
+				MotionSpeed = (ushort)rng.Next(65536),
+				MotionYaw = (ushort)rng.Next(65536),
 			};
 		}
 
@@ -104,6 +107,9 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(expected.IsSwimming, actual.IsSwimming, $"{label}: swimming");
 			LogAssert.AreEqual(expected.IsFlying, actual.IsFlying, $"{label}: flying");
 			LogAssert.AreEqual(expected.ClimbTicks, actual.ClimbTicks, $"{label}: climb ticks");
+			LogAssert.AreEqual(expected.MotionTicks, actual.MotionTicks, $"{label}: rush ticks");
+			LogAssert.AreEqual(expected.MotionSpeed, actual.MotionSpeed, $"{label}: rush speed");
+			LogAssert.AreEqual(expected.MotionYaw, actual.MotionYaw, $"{label}: rush heading");
 		}
 	}
 }

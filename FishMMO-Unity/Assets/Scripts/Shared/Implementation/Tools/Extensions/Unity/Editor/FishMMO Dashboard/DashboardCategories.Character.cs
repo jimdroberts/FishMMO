@@ -45,6 +45,7 @@ namespace FishMMO.Shared
 					("On Hit Event", typeof(AbilityOnHitEvent)),
 					("On Pre Spawn Event", typeof(AbilityOnPreSpawnEvent)),
 					("On Spawn Event", typeof(AbilityOnSpawnEvent)),
+					("On Summon Event", typeof(AbilityOnSummonEvent)),
 					("On Tick Event", typeof(AbilityOnTickEvent)),
 				},
 			});

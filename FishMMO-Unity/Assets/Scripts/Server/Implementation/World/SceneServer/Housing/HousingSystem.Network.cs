@@ -39,6 +39,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			VaultRequest = 8,
 			VaultRetrieve = 9,
 			VaultForfeit = 10,
+			PlotInfo = 11,
+			Claim = 12,
+			Release = 13,
 		}
 
 		[Header("Request Protection")]
@@ -95,6 +98,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultRequestBroadcast>(OnServerHousingVaultRequest, true);
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultRetrieveBroadcast>(OnServerHousingVaultRetrieve, true);
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit, true);
+			RegisterPanelBroadcasts();
 		}
 
 		/// <summary>
@@ -121,6 +125,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultRequestBroadcast>(OnServerHousingVaultRequest);
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultRetrieveBroadcast>(OnServerHousingVaultRetrieve);
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit);
+			UnregisterPanelBroadcasts();
 		}
 
 		/// <summary>

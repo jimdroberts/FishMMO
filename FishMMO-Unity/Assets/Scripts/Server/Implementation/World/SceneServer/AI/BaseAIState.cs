@@ -305,9 +305,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					continue;
 				}
 
-				// Check faction alliance and only add enemies.
-				if (def.TryGet(out IFactionController defenderFactionController) &&
-					defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy)
+				/* Wildlife searches by its own rules (WildlifeRules.Notices): a predator for anything but its pack, prey for
+				 * anything it must flee, a territorial animal for anything that comes too close. Everyone else, by faction
+				 * alliance: an ordinary monster does not hunt deer, though it fights back if one hits it. */
+				bool noticed = WildlifeRules.Notices(controller.Character, def, out bool wildSearcher);
+				if (!wildSearcher)
+				{
+					noticed = def.TryGet(out IFactionController defenderFactionController) &&
+						defenderFactionController.GetAllianceLevel(ourFactionController) == FactionAllianceLevel.Enemy;
+				}
+				if (noticed)
 				{
 					bool lineOfSight = HasLineOfSight(controller, def);
 

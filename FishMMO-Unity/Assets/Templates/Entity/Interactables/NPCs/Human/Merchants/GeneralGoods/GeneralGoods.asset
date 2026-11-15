@@ -25,10 +25,43 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7d912d81ccd28a041aeb98853a79cccb, type: 2}
   - {fileID: 11400000, guid: f455d8a612b6da645b9a5f066502307b, type: 2}
   - {fileID: 11400000, guid: 070a580671acc704ba34689f4865bcf4, type: 2}
+  - {fileID: 11400000, guid: 1b17c65be22a859d99a262f205bd4fe6, type: 2}
+  - {fileID: 11400000, guid: aeee3e86eb8f5ad95be44992b5474827, type: 2}
+  - {fileID: 11400000, guid: 3084353bad778b1efa99a5b5857f5755, type: 2}
+  - {fileID: 11400000, guid: 612185d56997e87a59b14faa979ce4ab, type: 2}
+  - {fileID: 11400000, guid: 0e7d03aeac7f38170a80cb927beec86b, type: 2}
+  - {fileID: 11400000, guid: ff065188da65398cb9929c75b75588aa, type: 2}
+  - {fileID: 11400000, guid: 1ad7c76953ec88efc99a0d75389e806e, type: 2}
+  - {fileID: 11400000, guid: 6062cc72f1e4cd8b2a7641b524b206f0, type: 2}
+  - {fileID: 11400000, guid: 7b3e78d6498a829e6a7bbce264023bd1, type: 2}
+  - {fileID: 11400000, guid: 9a9b094c06e82ccbcba5e9ede61814de, type: 2}
+  - {fileID: 11400000, guid: cc0f288e48244759b878525188940057, type: 2}
   AbilityEvents:
   - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   - {fileID: 11400000, guid: b1b0ada2796be4c4ca8c95734c884fc2, type: 2}
   - {fileID: 11400000, guid: e6d97319903785e4f8bbdbaa2ba21412, type: 2}
+  - {fileID: 11400000, guid: 3d8a1fdf0b5d768cfb52789919b179bb, type: 2}
+  - {fileID: 11400000, guid: 4d764d835014f315a9f75e65183373cd, type: 2}
+  - {fileID: 11400000, guid: f445318038775b5b8aaf646aff099120, type: 2}
+  - {fileID: 11400000, guid: 15833d9f1cd3850e3803535e949f959f, type: 2}
+  - {fileID: 11400000, guid: 77fa70920c05a75a4aaf3621804f5460, type: 2}
+  - {fileID: 11400000, guid: 9cb3e9628092ed8369fef0a82d3501fa, type: 2}
+  - {fileID: 11400000, guid: 691e8ad3358408aa1a87c6328700481d, type: 2}
+  - {fileID: 11400000, guid: bbe761655d0f44a0594db0e3504450e3, type: 2}
+  - {fileID: 11400000, guid: 236cdd409f1bdcdd681e6295025a214b, type: 2}
+  - {fileID: 11400000, guid: 460b4bd7c17f9ebc9b5c99c9ef23319c, type: 2}
+  - {fileID: 11400000, guid: 1962a8e0369c088c3a3872c34c339cd7, type: 2}
+  - {fileID: 11400000, guid: 082b76845110160e7910f9be8643e698, type: 2}
+  - {fileID: 11400000, guid: e3f0cc8fe741bf5e1b1e58253f7af84a, type: 2}
+  - {fileID: 11400000, guid: b558c8e8b85002ca0abd0f795f88816d, type: 2}
+  - {fileID: 11400000, guid: d30c8a87da6a468beb728a1702286dc7, type: 2}
+  - {fileID: 11400000, guid: 5fc1ea969af13c17889c6101fa0a095b, type: 2}
+  - {fileID: 11400000, guid: cb75fdc031d97dea9be5624ccb816c96, type: 2}
+  - {fileID: 11400000, guid: 13d3ba719d21f25db9cf74b44b0b020a, type: 2}
+  - {fileID: 11400000, guid: 20cde656ffcb574b3b149f44c6fdca94, type: 2}
+  - {fileID: 11400000, guid: 498679763cec1ec0da2ab0a72deccc39, type: 2}
+  - {fileID: 11400000, guid: 451e102f1a4a410682d7c931e8275676, type: 2}
+  - {fileID: 11400000, guid: e0a21b8ec6aa4174af8f6f2472d0e1e3, type: 2}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
   - {fileID: 11400000, guid: 0ec11e24101f9ddd1a002b65004cb524, type: 2}
@@ -42,3 +75,15 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 82ab480977a62c6e1a003b21c5d4044f, type: 2}
   PremadeAbilities:
   - {fileID: 11400000, guid: daf8d0eb1f0040e0a81c4744abd7e031, type: 2}
+  - {fileID: 11400000, guid: 070dc57ee72b6bbbb9b7dfb6be0b208a, type: 2}
+  - {fileID: 11400000, guid: a54aa9a0a1e7b8dffa62af9f90b230e4, type: 2}
+  - {fileID: 11400000, guid: f22b14cdcc91d29298c8bd337ac78882, type: 2}
+  - {fileID: 11400000, guid: fecf632ce28f46fac88ac42bfc09a64f, type: 2}
+  - {fileID: 11400000, guid: 0c5ba1085c127029aa24c6584318c14d, type: 2}
+  - {fileID: 11400000, guid: 9d66ca4cd4f98a1f799461805290a7d7, type: 2}
+  - {fileID: 11400000, guid: 1d280028a4727c988bf51ca9843b1ee3, type: 2}
+  - {fileID: 11400000, guid: dedf722032bfb1e308c1b75e61fcfbed, type: 2}
+  - {fileID: 11400000, guid: c647bb6c002bed488a45eee46cdfc270, type: 2}
+  - {fileID: 11400000, guid: 2e0ce5d688dc85030b72228051d87212, type: 2}
+  BuysItems: 0
+  SellPriceMultiplier: 0.25

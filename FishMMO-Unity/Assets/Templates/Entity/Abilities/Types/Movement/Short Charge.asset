@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Short Charge
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Hold to charge, release to rush and strike the first foe in your path. A tap rushes 3 m (4 damage), half a charge 6 m (7), a full charge 9 m (10).
+  ActivationTime: 1
+  LifeTime: 0.6
+  Speed: 0
+  Cooldown: 6
+  WeatherModifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713116592799819
+  AbilityObjectPrefab: {fileID: 7477845698768692465, guid: 75aff5bd1b61f1c48b1950fa4b07dc9c, type: 3}
+  AbilitySpawnTarget: 3
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 3
+  ChargeStages: 3
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: d30c8a87da6a468beb728a1702286dc7, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: 5fc1ea969af13c17889c6101fa0a095b, type: 2}
+  - {fileID: 11400000, guid: cb75fdc031d97dea9be5624ccb816c96, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents:
+  - {fileID: 11400000, guid: b558c8e8b85002ca0abd0f795f88816d, type: 2}
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713116592799819
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
+        RequiredAmount: 12

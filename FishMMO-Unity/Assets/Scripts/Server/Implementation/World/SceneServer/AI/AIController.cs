@@ -44,6 +44,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		public ICharacter Character { get; private set; }
 
+		/// <summary>Metres per second at a walk: the species' own for wildlife, else the shared NPC walk.</summary>
+		public float WalkSpeed => Character is NPC npc && npc.Wildlife != null ? npc.Wildlife.WalkSpeed : Constants.Character.WalkSpeed;
+
+		/// <summary>Metres per second at a run (fleeing, hunting, charging): the species' own for wildlife, else the shared NPC run.</summary>
+		public float RunSpeed => Character is NPC npc && npc.Wildlife != null ? npc.Wildlife.RunSpeed : Constants.Character.RunSpeed;
+
 		/// <summary>
 		/// True once <see cref="InitializeOnce(ICharacter)"/> has bound this brain to its character.
 		/// </summary>
@@ -1032,6 +1038,39 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public ICharacter CachedHealTarget;
 
 		/// <summary>
+		/// The friend this NPC is currently healing or buffing, or on its way to: while set, the
+		/// aim (<see cref="UpdateAim"/>) points at it instead of at <see cref="Target"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The aim used to follow <see cref="Target"/> alone, and <see cref="Target"/> means "the
+		/// thing I am fighting" everywhere in the AI. A support cast that launches along the aim —
+		/// a healing mote, which spawns with the aim rotation — therefore flew at the enemy however
+		/// far the body had turned toward the ally, and a heal that spares enemies healed nobody.
+		/// </para>
+		/// <para>
+		/// Set by whoever starts the support (<see cref="PetSupport"/>,
+		/// <see cref="HealerAttackingState"/>) and held for the length of the cast, then cleared
+		/// by <see cref="PetSupport.EndSupportAim"/> on the first tick nothing is being cast.
+		/// </para>
+		/// </remarks>
+		[System.NonSerialized]
+		public ICharacter SupportTarget;
+
+		/// <summary>
+		/// Seconds until a pet rescans for friends to heal or buff. See <see cref="PetSupport"/>.
+		/// </summary>
+		[System.NonSerialized]
+		public float PetSupportScanTimer;
+
+		/// <summary>
+		/// The friends a pet's last support scan found near it, besides its owner and itself.
+		/// Re-validated on every use; refilled when <see cref="PetSupportScanTimer"/> runs out.
+		/// </summary>
+		[System.NonSerialized]
+		public readonly List<ICharacter> PetSupportAllies = new List<ICharacter>();
+
+		/// <summary>
 		/// Seconds elapsed during the AI tick currently executing.
 		/// </summary>
 		/// <remarks>
@@ -1110,6 +1149,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// The separation velocity computed on the last brain tick, applied by <see cref="StepAgent"/>.
 		/// </summary>
 		private Vector3 separationVelocity;
+
+		/// <summary>
+		/// How quickly a knockback bleeds off, metres per second per second. An 8 m/s shove slides about 1.3 m over a
+		/// third of a second.
+		/// </summary>
+		[Tooltip("How quickly a knockback bleeds off, m/s per second. 8 m/s at 24 slides ~1.3 m over ~0.33 s.")]
+		public float KnockbackDeceleration = 24f;
+
+		/// <summary>The fastest a knockback may push, metres per second, however many land at once.</summary>
+		public const float MAX_KNOCKBACK_SPEED = 20f;
+
+		/// <summary>
+		/// The push still to be applied, set by <see cref="ApplyKnockback"/> and bled off by <see cref="StepAgent"/>.
+		/// While it is non-zero the NPC is staggered: it neither walks nor turns under its own power.
+		/// </summary>
+		private Vector3 knockbackVelocity;
+
+		/// <summary>True while a knockback is still moving this NPC.</summary>
+		public bool IsKnockedBack => knockbackVelocity != Vector3.zero;
 
 		/// <summary>
 		/// Seconds between attempts to put an agent that has left the NavMesh back on it.
@@ -1389,7 +1447,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			ApplyArchetypeTuning();
-			Agent.speed = Constants.Character.WalkSpeed;
+			Agent.speed = WalkSpeed;
 
 			/* The agent simulates; the tick moves the transform. See StepAgent.
 			 *
@@ -1694,6 +1752,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			WasAttackingLastTick = false;
 			AllyScanTimer = 0f;
 			CachedHealTarget = null;
+			SupportTarget = null;
+			PetSupportScanTimer = 0f;
+			PetSupportAllies.Clear();
 			LastAiDeltaTime = 0f;
 			StateDeltaTime = 0f;
 			Kite.Clear();
@@ -1701,6 +1762,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			TargetClosingSpeed = 0f;
 			MaxOffensiveReach = 0f;
 			separationVelocity = Vector3.zero;
+			knockbackVelocity = Vector3.zero;
 			offMeshReseatTimer = 0f;
 			offMeshWarned = false;
 			stateClock = default;
@@ -2949,6 +3011,37 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		}
 
 		/// <summary>
+		/// Points <see cref="AimRotation"/> at the centre of <see cref="SupportTarget"/>.
+		/// </summary>
+		/// <remarks>
+		/// Exact, with no lead and no scatter: the aim profile models an NPC trying to hit someone
+		/// who does not want to be hit, and a friend standing still for a heal is not that. Leaves
+		/// the enemy tracking (<see cref="AimLock"/>, target velocity) untouched, so the fight
+		/// resumes where it was when the support cast ends.
+		/// </remarks>
+		/// <returns>False when the support target is gone, which also clears it.</returns>
+		private bool TryAimAtSupportTarget()
+		{
+			Transform supportTransform = SupportTarget.Transform;
+			if (supportTransform == null)
+			{
+				SupportTarget = null;
+				return false;
+			}
+
+			Vector3 aimPoint = AIAimSolver.ResolveAimPoint(
+				supportTransform.position,
+				SupportTarget.Collider,
+				AIAimPoint.Center);
+
+			if (AIAimSolver.TryComposeAim(AimOrigin, aimPoint, Quaternion.identity, out Vector3 direction))
+			{
+				AimRotation = Quaternion.LookRotation(direction);
+			}
+			return true;
+		}
+
+		/// <summary>
 		/// Recomputes <see cref="AimRotation"/> for the current tick.
 		/// </summary>
 		/// <remarks>
@@ -2972,6 +3065,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="deltaTime">Seconds elapsed since the previous network tick.</param>
 		private void UpdateAim(float deltaTime)
 		{
+			// A heal or buff in progress aims at the friend it is for, not at the enemy.
+			if (SupportTarget != null && TryAimAtSupportTarget())
+			{
+				return;
+			}
+
 			if (Target == null)
 			{
 				/* No target, no aim. Body facing is the honest answer, and it is what the melee path
@@ -3358,7 +3457,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (newState is BaseAttackingState attackingState)
 			{
 				// Set agent speed to run speed for attacking.
-				Agent.speed = Constants.Character.RunSpeed;
+				Agent.speed = RunSpeed;
 
 				if (targets != null)
 				{
@@ -3379,7 +3478,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			else
 			{
 				// Set agent speed to walk speed for non-attacking states.
-				Agent.speed = Constants.Character.WalkSpeed;
+				Agent.speed = WalkSpeed;
 			}
 			CurrentState?.Enter(this);
 		}
@@ -3704,9 +3803,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			Vector3 velocity = Agent.velocity;
+			/* Rooted (CharacterFlags.IsRooted, a debuff): the feet are held. The NPC neither walks nor turns under its own
+			 * power, though it still fights from where it stands; the agent keeps its path and resumes it when the root
+			 * ends. A shove still moves it, as it does a rooted player: a root holds only what the character does itself. */
+			if (CharacterIncapacitation.IsRooted(Character))
+			{
+				velocity = Vector3.zero;
+			}
+			/* A knockback staggers: the NPC's own walk (and with it its turning, below) is set aside while the push
+			 * lasts, so it is driven back rather than walking against the shove. The agent keeps its path and resumes
+			 * it from wherever the push left it. */
+			Vector3 push = Vector3.zero;
+			if (knockbackVelocity != Vector3.zero)
+			{
+				velocity = Vector3.zero;
+				push = knockbackVelocity;
+				knockbackVelocity = DecayKnockback(knockbackVelocity, KnockbackDeceleration, tickDelta);
+			}
 			// Separation moves the body but never turns it: an NPC nudged sideways keeps facing
 			// where it was going.
-			Vector3 step = ResolveTickStep(velocity + separationVelocity, tickDelta);
+			Vector3 step = ResolveTickStep(velocity + separationVelocity + push, tickDelta);
 
 			/* Re-seat the simulation on the transform even when the step is zero: anything that
 			 * moved the transform directly (a platform, a scripted placement) would otherwise
@@ -3770,6 +3886,62 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public static Vector3 ResolveTickStep(Vector3 velocity, float tickDelta)
 		{
 			return velocity * tickDelta;
+		}
+
+		/// <summary>
+		/// One tick of a knockback bleeding off: its speed falls by <paramref name="deceleration"/> × <paramref name="tickDelta"/>,
+		/// its direction unchanged, and it ends at zero rather than reversing.
+		/// </summary>
+		/// <remarks>Pure, so the slide a given shove produces can be pinned without an agent.</remarks>
+		public static Vector3 DecayKnockback(Vector3 velocity, float deceleration, float tickDelta)
+		{
+			float speed = velocity.magnitude;
+			// No deceleration would slide forever: treat it as a push that lasts the one tick it was applied for.
+			if (deceleration <= 0f || speed <= 1e-4f)
+			{
+				return Vector3.zero;
+			}
+			float next = speed - deceleration * Mathf.Max(0f, tickDelta);
+			if (next <= 1e-3f)
+			{
+				return Vector3.zero;
+			}
+			return velocity * (next / speed);
+		}
+
+		/// <inheritdoc />
+		public bool BlinkTo(Vector3 position, Quaternion facing)
+		{
+			if (!IsRunning)
+			{
+				return false;
+			}
+			knockbackVelocity = Vector3.zero;
+			bool placed = WarpTo(position);
+			Vector3 heading = facing * Vector3.forward;
+			heading.y = 0f;
+			if (heading.sqrMagnitude > 1e-6f && Character?.Transform != null)
+			{
+				Character.Transform.rotation = Quaternion.LookRotation(heading, Vector3.up);
+			}
+			return placed;
+		}
+
+		/// <inheritdoc />
+		public void ApplyKnockback(Vector3 velocity)
+		{
+			velocity.y = 0f;
+			if (!IsRunning || velocity.sqrMagnitude < 1e-6f || !AgentIsUsable())
+			{
+				return;
+			}
+			/* Not while climbing a ladder or rope: the link walk owns the body there, and a push stored for later would
+			 * fire as a lurch the moment it stepped off. */
+			if (Agent.isOnOffMeshLink || linkActive)
+			{
+				return;
+			}
+			knockbackVelocity = Vector3.ClampMagnitude(knockbackVelocity + velocity, MAX_KNOCKBACK_SPEED);
 		}
 
 		/// <summary>
@@ -3902,10 +4074,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		{
 			// A body that has stopped is not walking home; nothing it was evading for remains.
 			leashEvade = false;
+			// Nor sliding from a shove it took on its way down.
+			knockbackVelocity = Vector3.zero;
 			// Nor left hanging on a ladder: off the link at its nearer end.
 			AbandonOffMeshLink();
 			Target = null;
 			LookTarget = null;
+			SupportTarget = null;
 			ClearPath();
 			Stop();
 			AggressionState?.Clear();

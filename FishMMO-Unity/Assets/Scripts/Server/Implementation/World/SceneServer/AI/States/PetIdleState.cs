@@ -111,6 +111,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
+			// A heal or buff under way: hold still until it goes off.
+			controller.Character.TryGet(out IAbilityController abilityController);
+			if (PetSupport.IsCasting(abilityController))
+			{
+				controller.Stop();
+				if (abilityController.IsActivating && abilityController.RemainingActivationTime <= 0f)
+				{
+					abilityController.Release();
+				}
+				return;
+			}
+			PetSupport.EndSupportAim(controller);
+
 			// An explicit attack order (or a stance-driven engage from a previous tick) left a
 			// live target behind; go fight it.
 			if (TryEngageExistingTarget(controller))
@@ -119,6 +132,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			if (TryStanceEngagement(controller, deltaTime))
+			{
+				return;
+			}
+
+			// Out of a fight, the pet still looks after its owner, then itself and its friends.
+			if (abilityController != null && TrySupport(controller, abilityController, pet))
 			{
 				return;
 			}
@@ -133,6 +152,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			FollowOwner(controller, pet, deltaTime);
+		}
+
+		/// <summary>
+		/// Heals or buffs whoever needs it, owner first (<see cref="PetSupport"/>). A pet told to
+		/// stay casts only on someone already in reach; it does not walk off its spot to do it.
+		/// </summary>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="abilityController">The pet's ability controller.</param>
+		/// <param name="pet">The pet.</param>
+		/// <returns>True when the pet is casting or walking for a friend this tick.</returns>
+		private bool TrySupport(AIController controller, IAbilityController abilityController, Pet pet)
+		{
+			bool mayMove = pet.MovementOrder != PetMovementOrder.Stay;
+			switch (PetSupport.Plan(controller, EnemyLayers, mayMove, out PetSupport.Choice choice))
+			{
+				case PetSupport.Step.Cast:
+					PetSupport.BeginCast(controller, choice);
+					if (PetSupport.Activate(controller, abilityController, choice.Ability))
+					{
+						return true;
+					}
+					PetSupport.EndSupportAim(controller);
+					return false;
+
+				case PetSupport.Step.Moving:
+					return true;
+
+				default:
+					return false;
+			}
 		}
 
 		/// <summary>

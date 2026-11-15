@@ -313,6 +313,30 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(5f, bounds.min.y, 0.0001f, "the plot should rest on the foundation, not straddle it");
 		}
 
+		/// <summary>
+		/// A generated plot's object is its deed post at the lot's front edge; the volume sits behind
+		/// it, at the authored offset, still resting on the post's height.
+		/// </summary>
+		[Test]
+		public void Bounds_FollowTheCentreOffset_FromADeedPost()
+		{
+			GameObject go = new GameObject("Deed Post");
+			created.Add(go);
+			go.transform.position = new Vector3(100f, 4f, 50f);
+			go.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+			PlotFoundation foundation = go.AddComponent<PlotFoundation>();
+			foundation.EditorConfigure("lot_88_50", 1500, new Vector2(24f, 24f), 12f, new Vector3(-11f, 3f, 0f));
+
+			Bounds bounds = foundation.Bounds;
+			Assert.AreEqual(new Vector3(89f, 13f, 50f), bounds.center, "the offset is in world axes; the post's turn does not rotate it");
+			Assert.AreEqual(new Vector3(24f, 12f, 24f), bounds.size);
+			Assert.AreEqual(7f, bounds.min.y, 0.0001f, "the offset's Y moves the volume's floor");
+			Assert.IsTrue(foundation.Contains(new Vector3(80f, 8f, 55f)));
+			Assert.IsFalse(foundation.Contains(new Vector3(80f, 5f, 55f)), "below the raised floor");
+			Assert.IsFalse(foundation.Contains(new Vector3(102f, 8f, 50f)), "the ground in front of the post is the lane, not the plot");
+			Assert.AreEqual("lot_88_50", foundation.PlotKey);
+		}
+
 		[Test]
 		public void Contains_AcceptsAPointInsideThePlot()
 		{

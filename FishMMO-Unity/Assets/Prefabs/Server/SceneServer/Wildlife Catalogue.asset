@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b4d81cc839d94d3b81309c3daf68cdf7, type: 3}
+  m_Name: Wildlife Catalogue
+  m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.Spawner.WildlifeCatalogue
+  Species:
+  - {fileID: -4468559157413045786, guid: f0126e7e2491fef5fa70d4ee4ed413bc, type: 3}
+  - {fileID: -4468559157413045786, guid: 6ffd6e853b3f749a0bcb12084547883c, type: 3}
+  - {fileID: -4468559157413045786, guid: 3762c468afe7fd3e8bd77675ec6189ba, type: 3}
+  - {fileID: -4468559157413045786, guid: e2cabf180689b73989cd2cd9482dc1c8, type: 3}
+  - {fileID: -4468559157413045786, guid: f1b02b8fa3f9478b681ea51b69ac86a7, type: 3}
+  - {fileID: -4468559157413045786, guid: bd9feef207c6fcc1c9f5c5e9c689c5ab, type: 3}
+  CellMetres: 256
+  MaxSpawnersPerScene: 240
+  CaveDenChance: 0.35
+  SettlementClearance: 60

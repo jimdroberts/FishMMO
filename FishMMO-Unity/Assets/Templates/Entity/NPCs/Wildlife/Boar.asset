@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Boar
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WildlifeTemplate
+  Role: 3
+  WalkSpeed: 1.2
+  RunSpeed: 7
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 300
+  Body:
+    Length: 1
+    Depth: 0.5
+    Width: 0.42
+    LegLength: 0.32
+    LegThickness: 0.08
+    NeckLength: 0.12
+    NeckRaise: 10
+    HeadLength: 0.4
+    HeadSize: 0.26
+    EarSize: 0.1
+    Horns: 3
+    HornSize: 0.14
+    TailLength: 0.18
+    TailRaise: 15
+    Back: {r: 0.3, g: 0.25, b: 0.21, a: 1}
+    Belly: {r: 0.38, g: 0.32, b: 0.27, a: 1}
+    Accent: {r: 0.15, g: 0.12, b: 0.11, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 115
+  GroupsPerKm2: 0.45
+  GroupMin: 2
+  GroupMax: 4
+  DenKinds: 
+  DensInCaveMouths: 0
+  RespawnMinSeconds: 180
+  RespawnMaxSeconds: 420

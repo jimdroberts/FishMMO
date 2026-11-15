@@ -203,8 +203,32 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <param name="networkManager">The server's network manager.</param>
 		/// <param name="scheduler">The scheduler that drives respawns.</param>
 		/// <param name="siblings">The scene instance's spawners by table index; may include this one.</param>
+		/// <summary>Source of <see cref="WildlifePackId"/>: one number per spawner for the server's lifetime, never 0.</summary>
+		private static int nextWildlifePackId;
+
+		/// <summary>
+		/// The pack every wild animal this spawner produces belongs to (<see cref="NPC.PackId"/>): predators of one spawner
+		/// never harm each other, while two spawners' packs fight it out. Independent of the combat <see cref="Pack"/>, which
+		/// a spawner may leave disabled.
+		/// </summary>
+		public int WildlifePackId { get; }
+
+		/// <summary>The pack id of one species from this spawner: never 0, distinct per spawner and per species.</summary>
+		public int WildlifePackFor(int prefabId)
+		{
+			int id = unchecked((WildlifePackId * 65599) ^ (prefabId + 1)) & int.MaxValue;
+			return id != 0 ? id : 1;
+		}
+
+		/// <summary>Wildlife spawners keep one combat pack per species (herd or hunting pack), by prefab id.</summary>
+		private readonly Dictionary<int, NPCGroup> wildlifePacks = new Dictionary<int, NPCGroup>();
 		public SpawnerRuntime(SpawnerDefinition definition, Scene scene, NetworkManager networkManager, SpawnerScheduler scheduler, IReadOnlyList<SpawnerRuntime> siblings = null)
 		{
+			WildlifePackId = System.Threading.Interlocked.Increment(ref nextWildlifePackId) & int.MaxValue;
+			if (WildlifePackId == 0)
+			{
+				WildlifePackId = System.Threading.Interlocked.Increment(ref nextWildlifePackId) & int.MaxValue;
+			}
 			Definition = definition ?? throw new ArgumentNullException(nameof(definition));
 			Scene = scene;
 			NetworkManager = networkManager;
@@ -374,6 +398,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * members still standing, and stops the pack being ticked for a spawner that is gone. */
 			pack?.Dissolve();
 			pack = null;
+			foreach (NPCGroup speciesPack in wildlifePacks.Values)
+			{
+				speciesPack?.Dissolve();
+			}
+			wildlifePacks.Clear();
 
 			spawned.Clear();
 			settingsBySpawned.Clear();
@@ -405,12 +434,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				return null;
 			}
 
+			NPCGroupRole role = settings is NPCSpawnableSettings npcSettings ? npcSettings.PackRole : NPCGroupRole.None;
+
+			/* Wildlife: a pack per species. A big area holds deer and wolves together; one shared group would have the wolves
+			 * answer a deer's alarm and the deer join the wolves' hunts. */
+			if (brain.Character is NPC wild && wild.Wildlife != null && settings != null && settings.NetworkObject != null)
+			{
+				int key = settings.NetworkObject.PrefabId;
+				if (!wildlifePacks.TryGetValue(key, out NPCGroup speciesPack) || speciesPack == null || speciesPack.Released)
+				{
+					speciesPack = new NPCGroup(packSettings);
+					wildlifePacks[key] = speciesPack;
+				}
+				return speciesPack.AddMember(brain, role) ? speciesPack : null;
+			}
+
 			if (pack == null || pack.Released)
 			{
 				pack = new NPCGroup(packSettings);
 			}
 
-			NPCGroupRole role = settings is NPCSpawnableSettings npcSettings ? npcSettings.PackRole : NPCGroupRole.None;
 			return pack.AddMember(brain, role) ? pack : null;
 		}
 
@@ -1108,7 +1151,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				return ReportOnce(SpawnOutcome.Misconfigured, spawnIndex, $"spawnable {spawnIndex} has no network object.");
 			}
 
-			Vector3 spawnPosition = ResolveSpawnPosition(spawnableSettings);
+			Vector3 spawnPosition;
+			WildlifeTemplate species = SpeciesOf(spawnableSettings);
+			if (species != null)
+			{
+				// Its own ground only, and beside its herd while the herd has room (see ResolveWildlifePosition).
+				if (!ResolveWildlifePosition(spawnableSettings, species, out spawnPosition))
+				{
+					return SpawnOutcome.NothingEligible;
+				}
+			}
+			else
+			{
+				spawnPosition = ResolveSpawnPosition(spawnableSettings);
+			}
 
 			NetworkObject prefab = NetworkManager.SpawnablePrefabs.GetObject(true, spawnableSettings.NetworkObject.PrefabId);
 			if (prefab == null)
@@ -1157,6 +1213,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				if (nobSpawnable != null)
 				{
 					nobSpawnable.Spawner = this;
+				}
+				// Before the spawn, so the harm rule knows the pack from the first tick. One pack per species: a forest's
+				// wolves and deer share a spawner and must still be hunter and hunted.
+				if (nob.TryGetComponent(out NPC wildNpc) && wildNpc.Wildlife != null)
+				{
+					wildNpc.PackId = WildlifePackFor(spawnableSettings.NetworkObject.PrefabId);
 				}
 
 				NetworkManager.ServerManager.Spawn(nob, null, Scene);
@@ -1316,6 +1378,133 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		private string SceneLabel()
 		{
 			return Scene.IsValid() ? $"{Scene.name} (handle {Scene.handle})" : "no scene";
+		}
+
+		/// <summary>Metres within which spawned members of one species count as one herd.</summary>
+		public const float HerdRadius = 40f;
+
+		/// <summary>How far from its herd-mate a new member appears, metres.</summary>
+		public const float HerdSpread = 10f;
+
+		/// <summary>Random points tried for ground the species lives on before the spawn waits for the next check.</summary>
+		public const int HabitatTries = 8;
+
+		/// <summary>The scene's biome map, looked up once; null when it has none (no habitat check then).</summary>
+		private FishMMO.Shared.Biomes.SceneBiomeMap biomeMap;
+		private bool biomeMapResolved;
+
+		/// <summary>The species an entry spawns, or null when it is not wildlife (read from its prefab, cached).</summary>
+		private readonly Dictionary<SpawnableSettings, WildlifeTemplate> speciesBySettings = new Dictionary<SpawnableSettings, WildlifeTemplate>();
+
+		private WildlifeTemplate SpeciesOf(SpawnableSettings settings)
+		{
+			if (settings == null || settings.NetworkObject == null)
+			{
+				return null;
+			}
+			if (!speciesBySettings.TryGetValue(settings, out WildlifeTemplate species))
+			{
+				species = settings.NetworkObject.TryGetComponent(out NPC npc) ? npc.Wildlife : null;
+				speciesBySettings[settings] = species;
+			}
+			return species;
+		}
+
+		/// <summary>
+		/// Where a wild animal appears. Beside a living member of its species from this spawner whose herd (members within
+		/// <see cref="HerdRadius"/>) is below the species' largest group, so herds and packs stay together in an area hundreds of
+		/// metres wide; otherwise a random point of the area whose ground is one of its habitats (<see cref="WildlifePlanner.Lives"/>),
+		/// so a mixed area never puts a species on ground it does not live on. False when no such point was found this time.
+		/// </summary>
+		private bool ResolveWildlifePosition(SpawnableSettings settings, WildlifeTemplate species, out Vector3 position)
+		{
+			position = Definition.Position;
+			PhysicsScene physics = Scene.GetPhysicsScene();
+
+			if (TryFindHerdAnchor(settings, species, out Vector3 anchor))
+			{
+				Vector2 offset = new Vector2(DeterministicRNG.Shared.Range(-1f, 1f), DeterministicRNG.Shared.Range(-1f, 1f)) * HerdSpread;
+				Vector3 origin = anchor + new Vector3(offset.x, 20f, offset.y);
+				if (physics.IsValid() &&
+					physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, 40f, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+				{
+					position = hit.point;
+					position.y += settings.YOffset;
+					return true;
+				}
+				position = anchor;
+				return true;
+			}
+
+			for (int attempt = 0; attempt < HabitatTries; ++attempt)
+			{
+				Vector3 candidate = ResolveSpawnPosition(settings);
+				if (LivesAt(species, candidate))
+				{
+					position = candidate;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>A living member of the species from this spawner whose herd still has room, if there is one.</summary>
+		private bool TryFindHerdAnchor(SpawnableSettings settings, WildlifeTemplate species, out Vector3 anchor)
+		{
+			anchor = default;
+			int largest = Mathf.Max(1, species.GroupMax);
+			float radiusSqr = HerdRadius * HerdRadius;
+			foreach (KeyValuePair<long, ISpawnable> pair in spawned)
+			{
+				if (!IsLivingMember(pair.Key, pair.Value, settings, out Vector3 at))
+				{
+					continue;
+				}
+				int herd = 0;
+				foreach (KeyValuePair<long, ISpawnable> other in spawned)
+				{
+					if (IsLivingMember(other.Key, other.Value, settings, out Vector3 otherAt) && (otherAt - at).sqrMagnitude <= radiusSqr)
+					{
+						herd++;
+					}
+				}
+				if (herd < largest)
+				{
+					anchor = at;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private bool IsLivingMember(long key, ISpawnable spawnable, SpawnableSettings settings, out Vector3 position)
+		{
+			position = default;
+			if (!(spawnable is NPC npc) || npc == null || npc.IsFlagged(CharacterFlags.IsDead) ||
+				!settingsBySpawned.TryGetValue(key, out SpawnableSettings own) || !ReferenceEquals(own, settings))
+			{
+				return false;
+			}
+			position = npc.Transform.position;
+			return true;
+		}
+
+		/// <summary>True when the ground at <paramref name="position"/> is one of the species' habitats (always, without a biome map).</summary>
+		private bool LivesAt(WildlifeTemplate species, Vector3 position)
+		{
+			if (!biomeMapResolved)
+			{
+				biomeMapResolved = true;
+				biomeMap = WorldSceneSettings.TryGetForScene(Scene, out WorldSceneSettings settings) ? settings.BiomeMap : null;
+			}
+			if (biomeMap == null || !biomeMap.Contains(position))
+			{
+				return biomeMap == null;
+			}
+			FishMMO.Shared.Biomes.BiomeHabitat habitat = FishMMO.Shared.Biomes.BiomeRegistry.TryGetByID(biomeMap.IDAt(position), out FishMMO.Shared.Biomes.BiomeTemplate biome) && biome != null
+				? biome.LiveHabitat
+				: FishMMO.Shared.Biomes.BiomeHabitat.None;
+			return WildlifePlanner.Lives(species, habitat);
 		}
 
 		/// <summary>

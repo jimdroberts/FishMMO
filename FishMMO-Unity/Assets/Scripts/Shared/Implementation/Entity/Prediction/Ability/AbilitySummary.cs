@@ -180,6 +180,12 @@ namespace FishMMO.Shared
 							{
 								continue;
 							}
+							/* An effect that does not work on this base ability is one Ability.AddEvent
+							 * refuses and the crafter will not accept, so it must not move the preview. */
+							if (!abilityEvent.IsCompatibleWith(template))
+							{
+								continue;
+							}
 							summary.CraftedEvents.Add(abilityEvent);
 							summary.Stats.Add(abilityEvent.ActivationTime, abilityEvent.LifeTime, abilityEvent.Speed, abilityEvent.Cooldown);
 							summary.CraftPrice += abilityEvent.Price;
@@ -307,6 +313,10 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Gathers every event a template ships with, in execution order.</summary>
+		/// <remarks>
+		/// Only the ones that work on it: <see cref="Ability"/> leaves the rest out, so a summon
+		/// spell with a stray On Hit effect must not advertise that effect's cooldown.
+		/// </remarks>
 		private static void CollectTemplateEvents(AbilityTemplate template, List<AbilityEvent> into)
 		{
 			AppendEvents(template.OnPreSpawnEvents, into);
@@ -314,6 +324,11 @@ namespace FishMMO.Shared
 			AppendEvents(template.OnTickEvents, into);
 			AppendEvents(template.OnHitEvents, into);
 			AppendEvents(template.OnDestroyEvents, into);
+			if (template is PetAbilityTemplate petAbilityTemplate)
+			{
+				AppendEvents(petAbilityTemplate.OnSummonEvents, into);
+			}
+			into.RemoveAll(abilityEvent => !abilityEvent.IsCompatibleWith(template));
 		}
 
 		/// <summary>Appends the non-null events of one list, skipping duplicates.</summary>
@@ -373,6 +388,12 @@ namespace FishMMO.Shared
 		{
 			AppendRequirements(Template.ActivationConditions);
 
+			// What the summoned pet knows from the spell itself, ahead of what its effects add.
+			if (Template is PetAbilityTemplate petAbilityTemplate)
+			{
+				PetAbilityTemplate.AppendPetAbilityDescriptions(petAbilityTemplate.PetAbilities, Effects);
+			}
+
 			foreach (AbilityEvent abilityEvent in TemplateEvents)
 			{
 				AppendEventDescriptions(abilityEvent);
@@ -398,16 +419,25 @@ namespace FishMMO.Shared
 				Targeting.Add(targeting);
 			}
 
-			if (abilityEvent.OnConditionsMetActions == null)
+			if (abilityEvent.OnConditionsMetActions != null)
 			{
-				return;
-			}
-			foreach (BaseAction action in abilityEvent.OnConditionsMetActions)
-			{
-				string effect = action?.GetTooltipContribution();
-				if (!string.IsNullOrWhiteSpace(effect) && !Effects.Contains(effect))
+				foreach (BaseAction action in abilityEvent.OnConditionsMetActions)
 				{
-					Effects.Add(effect);
+					string effect = action?.GetTooltipContribution();
+					if (!string.IsNullOrWhiteSpace(effect) && !Effects.Contains(effect))
+					{
+						Effects.Add(effect);
+					}
+				}
+			}
+
+			List<string> extra = new List<string>();
+			abilityEvent.AppendEffectDescriptions(extra);
+			for (int i = 0; i < extra.Count; ++i)
+			{
+				if (!string.IsNullOrWhiteSpace(extra[i]) && !Effects.Contains(extra[i]))
+				{
+					Effects.Add(extra[i]);
 				}
 			}
 		}
@@ -562,6 +592,7 @@ namespace FishMMO.Shared
 				case AbilityOnTickEvent _: return "each tick";
 				case AbilityOnHitEvent _: return "on hit";
 				case AbilityOnDestroyEvent _: return "on expire";
+				case AbilityOnSummonEvent _: return "on summon";
 				default: return "effect";
 			}
 		}

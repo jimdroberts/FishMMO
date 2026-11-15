@@ -44,6 +44,14 @@ namespace FishMMO.Shared
 			{
 				return arenaLevel == FactionAllianceLevel.Enemy;
 			}
+			/* Wildlife is outside the faction system: anyone may harm it and it may harm anyone, except a pack its own
+			 * members. Before the companion test: a wild animal has no party or guild. */
+			WildlifeRole attackerWild = WildlifeRules.RoleOf(attackerSide);
+			WildlifeRole defenderWild = WildlifeRules.RoleOf(defenderSide);
+			if (WildlifeRules.Decides(attackerWild, defenderWild))
+			{
+				return WildlifeRules.MayHarm(attackerWild, WildlifeRules.PackOf(attackerSide), defenderWild, WildlifeRules.PackOf(defenderSide));
+			}
 			// Party, guild, and an owner with its own pet: never, toggle or not.
 			if (SharesSide(attackerSide, defenderSide))
 			{

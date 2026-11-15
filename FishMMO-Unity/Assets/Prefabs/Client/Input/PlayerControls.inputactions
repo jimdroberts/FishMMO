@@ -78,6 +78,15 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "SwapShoulder",
+                    "type": "Button",
+                    "id": "e6be26f3-68e4-48cb-8b94-0f47ca34f6b4",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Cancel",
                     "type": "Button",
                     "id": "f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1a0",
@@ -555,6 +564,17 @@
                     "processors": "",
                     "groups": "Keyboard&Mouse",
                     "action": "ToggleFirstPerson",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "5e114ee1-c520-460f-8edf-cd65e5a99205",
+                    "path": "",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse",
+                    "action": "SwapShoulder",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

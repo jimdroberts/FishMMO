@@ -311,8 +311,10 @@ namespace FishMMO.Shared
 		/// The farthest from the eye a launch line may start, metres.
 		/// </summary>
 		/// <remarks>
-		/// The camera's line passes the eye at the shoulder's offset (half a metre and a little up) plus however far the
-		/// drawn body trails the simulated one. A metre covers every camera this game has, and is the whole of what a
+		/// The line starts where the third-person camera's ray passes the eye: the follow point's offset from the eye plus
+		/// however far the drawn body trails the simulated one. Over the shoulder the shoulder's own displacement is taken
+		/// out first (KCCPlayer.ResolveOwnerAim), so the projectile leaves the character, not the view's side. A metre
+		/// covers every camera this game has, and is the whole of what a
 		/// modified client can gain by lying: its projectile starts within a metre of where its eye is, and the path
 		/// from the eye to the line is still checked for cover (AbilityObject.ResolveSpawnPose).
 		/// </remarks>

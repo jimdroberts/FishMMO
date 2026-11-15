@@ -66,6 +66,44 @@ namespace FishMMO.Shared
 		public Sprite Icon { get { return this.icon; } }
 
 		/// <summary>
+		/// Whether this effect does anything on an ability built from <paramref name="template"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The one statement of which effects go on which abilities. Crafting, premade offers, the
+		/// craft window and <see cref="Ability.AddEvent"/> all ask it, so an effect the server
+		/// refuses is one the window never offers and a stale database row can never smuggle in.
+		/// </para>
+		/// <para>
+		/// The default refuses summon spells. A <see cref="PetAbilityTemplate"/> spawns no ability
+		/// object, so the tick, hit, spawn and destroy phases these effects run in never happen on
+		/// one. Crafting one onto a summon used to be accepted all the same, and all it did was
+		/// fold the effect's cast time, cooldown and cost into the spell: a player paid for a
+		/// fireball and got a slower summon, or found a negative cast-time effect made a faster one.
+		/// <see cref="AbilityOnSummonEvent"/> is the effect that belongs on a summon, and inverts this.
+		/// </para>
+		/// </remarks>
+		/// <param name="template">The base ability the effect would be added to.</param>
+		/// <returns>True when the effect can be part of that ability.</returns>
+		public virtual bool IsCompatibleWith(AbilityTemplate template)
+		{
+			return template != null && !(template is PetAbilityTemplate);
+		}
+
+		/// <summary>
+		/// Effect lines this event contributes beyond the wording of its own actions.
+		/// </summary>
+		/// <remarks>
+		/// For effects whose result is data rather than an action, such as the abilities an
+		/// <see cref="AbilityOnSummonEvent"/> teaches the pet. Shared by this event's own tooltip
+		/// and by <see cref="AbilitySummary"/>, so the effect reads the same in both.
+		/// </remarks>
+		/// <param name="into">The list to append to.</param>
+		public virtual void AppendEffectDescriptions(List<string> into)
+		{
+		}
+
+		/// <summary>
 		/// Describes what this effect is and what adding it to an ability would do.
 		/// </summary>
 		/// <remarks>
@@ -94,21 +132,26 @@ namespace FishMMO.Shared
 				content.AddEffect(targeting, TooltipPriority.Targeting + 1);
 			}
 
+			List<string> effects = new List<string>();
 			if (OnConditionsMetActions != null)
 			{
-				int order = 1;
 				foreach (BaseAction action in OnConditionsMetActions)
 				{
 					string effect = action?.GetTooltipContribution();
-					if (string.IsNullOrWhiteSpace(effect))
+					if (!string.IsNullOrWhiteSpace(effect))
 					{
-						continue;
+						effects.Add(effect);
 					}
-					if (order == 1)
-					{
-						content.AddHeader("Effects", TooltipPriority.Effects);
-					}
-					content.AddEffect(effect, TooltipPriority.Effects + order++);
+				}
+			}
+			AppendEffectDescriptions(effects);
+
+			if (effects.Count > 0)
+			{
+				content.AddHeader("Effects", TooltipPriority.Effects);
+				for (int i = 0; i < effects.Count; ++i)
+				{
+					content.AddEffect(effects[i], TooltipPriority.Effects + 1 + i);
 				}
 			}
 

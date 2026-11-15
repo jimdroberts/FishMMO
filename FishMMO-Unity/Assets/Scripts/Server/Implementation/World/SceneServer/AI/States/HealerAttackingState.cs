@@ -176,6 +176,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (HandleActivationInProgress(controller, abilityController))
 				return;
 
+			// Nothing is being cast: a heal that had the aim on an ally hands it back.
+			PetSupport.EndSupportAim(controller);
+
 			float distance = Mathf.Sqrt(controller.GetSqrDistanceToTarget());
 
 			/* Panic first: a healer pinned in melee heals nobody. Checked before the heal scan so
@@ -188,8 +191,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
-			// --- Healing priority ---
-			if (controller.AttackCooldownTimer <= 0f)
+			/* --- Healing priority ---
+			 * Not for a pet: a pet heals its owner before anyone, which is PetSupport's order, and
+			 * the shared attack below runs it. This scan would heal whoever was most wounded. */
+			if (controller.OwningPet == null && controller.AttackCooldownTimer <= 0f)
 			{
 				ICharacter injuredAlly = GetInjuredAlly(controller);
 				if (injuredAlly != null && TryHeal(controller, abilityController, injuredAlly))
@@ -220,6 +225,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				ally.Transform.position);
 
 			controller.LookTarget = ally.Transform;
+
+			/* The aim, too. It follows the enemy otherwise, and a heal that launches along the aim
+			 * flew at the enemy however far the body had turned. Handed back by EndSupportAim. */
+			controller.SupportTarget = ally;
 
 			// Reach, not Range: a heal that does not travel has a Range of zero.
 			float healReach = controller.ResolveAbilityReach(healAbility);

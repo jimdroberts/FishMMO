@@ -86,5 +86,23 @@ namespace FishMMO.Shared.Core
 		/// <param name="threatPoints">Flat threat added, only while the NPC already has a threat table.</param>
 		/// <param name="resourceSpent">Resource the cast spent, weighted by the NPC's own resource weight.</param>
 		void ApplyAreaThreat(ICharacter caster, float threatPoints, int resourceSpent);
+		/// <summary>
+		/// Shoves this NPC across the ground: <paramref name="velocity"/> (metres per second, horizontal) is added to its
+		/// body and bled off over a fraction of a second, during which it does not walk under its own power.
+		/// </summary>
+		/// <remarks>
+		/// Moves the NavMesh agent, so the push follows the walkable ground and stops at walls and edges like a walk would.
+		/// The caller (<c>KnockbackHitAction</c>) has already asked the harm rule, the evade and the incapacitation gates.
+		/// </remarks>
+		/// <param name="velocity">The push, metres per second. Only the horizontal part is used.</param>
+		void ApplyKnockback(Vector3 velocity);
+		/// <summary>
+		/// Moves this NPC to <paramref name="position"/> at once (a blink), onto the nearest point of the NavMesh, facing
+		/// <paramref name="facing"/>. Any knockback in progress ends.
+		/// </summary>
+		/// <param name="position">Where to land.</param>
+		/// <param name="facing">The rotation to land with; only its heading is used.</param>
+		/// <returns>True when the NPC was placed on the NavMesh.</returns>
+		bool BlinkTo(Vector3 position, Quaternion facing);
 	}
 }

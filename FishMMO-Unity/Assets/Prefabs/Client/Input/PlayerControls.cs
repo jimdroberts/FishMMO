@@ -173,6 +173,16 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                     ""priority"": 0
                 },
                 {
+                    ""name"": ""SwapShoulder"",
+                    ""type"": ""Button"",
+                    ""id"": ""e6be26f3-68e4-48cb-8b94-0f47ca34f6b4"",
+                    ""expectedControlType"": ""Button"",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
+                },
+                {
                     ""name"": ""Cancel"",
                     ""type"": ""Button"",
                     ""id"": ""f5f2d5f0-b1a0-4a0b-9f4a-e2b2d5f0b1a0"",
@@ -680,6 +690,17 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": ""Keyboard&Mouse"",
                     ""action"": ""ToggleFirstPerson"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""5e114ee1-c520-460f-8edf-cd65e5a99205"",
+                    ""path"": """",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": ""Keyboard&Mouse"",
+                    ""action"": ""SwapShoulder"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 },
@@ -1452,6 +1473,7 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         m_Player_Interact = m_Player.FindAction("Interact", throwIfNotFound: true);
         m_Player_ToggleMouseMode = m_Player.FindAction("ToggleMouseMode", throwIfNotFound: true);
         m_Player_ToggleFirstPerson = m_Player.FindAction("ToggleFirstPerson", throwIfNotFound: true);
+        m_Player_SwapShoulder = m_Player.FindAction("SwapShoulder", throwIfNotFound: true);
         m_Player_Cancel = m_Player.FindAction("Cancel", throwIfNotFound: true);
         m_Player_CloseLastUI = m_Player.FindAction("CloseLastUI", throwIfNotFound: true);
         m_Player_Chat = m_Player.FindAction("Chat", throwIfNotFound: true);
@@ -1581,6 +1603,7 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
     private readonly InputAction m_Player_Interact;
     private readonly InputAction m_Player_ToggleMouseMode;
     private readonly InputAction m_Player_ToggleFirstPerson;
+    private readonly InputAction m_Player_SwapShoulder;
     private readonly InputAction m_Player_Cancel;
     private readonly InputAction m_Player_CloseLastUI;
     private readonly InputAction m_Player_Chat;
@@ -1654,6 +1677,10 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "Player/ToggleFirstPerson".
         /// </summary>
         public InputAction @ToggleFirstPerson => m_Wrapper.m_Player_ToggleFirstPerson;
+        /// <summary>
+        /// Provides access to the underlying input action "Player/SwapShoulder".
+        /// </summary>
+        public InputAction @SwapShoulder => m_Wrapper.m_Player_SwapShoulder;
         /// <summary>
         /// Provides access to the underlying input action "Player/Cancel".
         /// </summary>
@@ -1824,6 +1851,9 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @ToggleFirstPerson.started += instance.OnToggleFirstPerson;
             @ToggleFirstPerson.performed += instance.OnToggleFirstPerson;
             @ToggleFirstPerson.canceled += instance.OnToggleFirstPerson;
+            @SwapShoulder.started += instance.OnSwapShoulder;
+            @SwapShoulder.performed += instance.OnSwapShoulder;
+            @SwapShoulder.canceled += instance.OnSwapShoulder;
             @Cancel.started += instance.OnCancel;
             @Cancel.performed += instance.OnCancel;
             @Cancel.canceled += instance.OnCancel;
@@ -1949,6 +1979,9 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
             @ToggleFirstPerson.started -= instance.OnToggleFirstPerson;
             @ToggleFirstPerson.performed -= instance.OnToggleFirstPerson;
             @ToggleFirstPerson.canceled -= instance.OnToggleFirstPerson;
+            @SwapShoulder.started -= instance.OnSwapShoulder;
+            @SwapShoulder.performed -= instance.OnSwapShoulder;
+            @SwapShoulder.canceled -= instance.OnSwapShoulder;
             @Cancel.started -= instance.OnCancel;
             @Cancel.performed -= instance.OnCancel;
             @Cancel.canceled -= instance.OnCancel;
@@ -2347,6 +2380,13 @@ public partial class @PlayerControls: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnToggleFirstPerson(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "SwapShoulder" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnSwapShoulder(InputAction.CallbackContext context);
         /// <summary>
         /// Method invoked when associated input action "Cancel" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
         /// </summary>

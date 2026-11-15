@@ -6,31 +6,167 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
+	/// Which way a knockback pushes its victim.
+	/// </summary>
+	/// <remarks>Serialized by value on authored actions: append only, never reorder.</remarks>
+	public enum KnockbackDirection : byte
+	{
+		/// <summary>
+		/// Decided by the shape of the attack (<see cref="KnockbackHitAction.ResolveOrigin"/>): a blast pushes away from
+		/// its centre, a projectile along its flight, a melee swing away from the swinger.
+		/// </summary>
+		Auto = 0,
+		/// <summary>Along the ability object's heading: the way a projectile or a hitscan line was travelling.</summary>
+		Heading = 1,
+		/// <summary>Radially away from the centre of the effect: the blast, the impact point, or the caster of a self-centred area.</summary>
+		AwayFromCentre = 2,
+		/// <summary>Radially away from the caster.</summary>
+		AwayFromCaster = 3,
+	}
+
+	/// <summary>
 	/// Action that applies a knockback force to a target character, pushing them away from the source.
-	/// Uses the KCC motor's velocity system for collision-aware knockback instead of direct
-	/// Transform.position manipulation, which would bypass prediction, reconciliation and collision
-	/// detection.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Direction follows the attack</b> (<see cref="Direction"/>, <see cref="ResolveOrigin"/>). An area of effect is a
+	/// blast radius and pushes everyone it catches away from its centre; a projectile pushes along its own flight, so a
+	/// victim facing the shot is driven backwards; a melee swing pushes away from the one swinging. It used to push along
+	/// the ability object's forward in every case, which sent everyone in a blast the same way, and did nothing at all for
+	/// an ability with no object (a self-centred area), because there was no forward to read.
+	/// </para>
+	/// <para>
+	/// <b>Who moves.</b> A player is moved through its KCC motor (a velocity impulse the motor resolves against collision,
+	/// prediction and reconciliation). An NPC — monsters and wildlife alike — is moved through its server brain
+	/// (<see cref="INPCBrain.ApplyKnockback"/>), which slides the NavMesh agent, so it can be shoved along the ground
+	/// but never through a wall or off the mesh. Both are horizontal for an NPC; a player keeps the full direction.
+	/// </para>
 	/// <para>
 	/// The displacement is SERVER ONLY — see the note in <see cref="Execute"/> for why this is the
 	/// one feedback action that did not move to <c>EcaAuthority.MayPredict</c>. The victim's own
-	/// client receives it through the reconcile, and the attacker's client plays a cosmetic flinch
-	/// (<see cref="PlayPredictedReaction"/>) in the meantime.
+	/// client receives it through the reconcile (or the NPC's transform stream), and the attacker's client plays a
+	/// cosmetic flinch (<see cref="PlayPredictedReaction"/>) in the meantime.
 	/// </para>
-	/// </summary>
+	/// </remarks>
 	[Serializable]
 	public class KnockbackHitAction : BaseAction
 	{
 		/// <summary>
 		/// The value provider that determines the initial knockback force applied to the target.
 		/// </summary>
-		[Tooltip("The value provider that determines the initial knockback force.")]
+		[Tooltip("The value provider that determines the initial knockback force (metres per second of push).")]
 		[SerializeReference, SubclassSelector]
 		public IFloatValueProvider ForceValue;
 
 		/// <summary>
+		/// Which way the victim is pushed. <see cref="KnockbackDirection.Auto"/> decides from the attack's shape.
+		/// </summary>
+		[Tooltip("Which way the victim is pushed. Auto: area = away from the blast centre, projectile = along its flight, melee = away from the caster.")]
+		public KnockbackDirection Direction = KnockbackDirection.Auto;
+
+		/// <summary>
+		/// Where a knockback's direction is measured from, once <see cref="Direction"/> has been applied to the attack.
+		/// </summary>
+		internal enum KnockbackOrigin : byte
+		{
+			/// <summary>The ability object's forward.</summary>
+			Heading = 0,
+			/// <summary>Away from the ability object's position (a blast's centre, a placed volume).</summary>
+			AbilityObject = 1,
+			/// <summary>Away from where the parent hit landed (a projectile whose hit fans out over an area).</summary>
+			Impact = 2,
+			/// <summary>Away from the caster.</summary>
+			Caster = 3,
+		}
+
+		/// <summary>
+		/// The attack-shape rule, as a pure function of what the event carries.
+		/// </summary>
+		/// <param name="mode">The authored <see cref="Direction"/>.</param>
+		/// <param name="hasAbilityObject">An ability object is on the event (false for a self-cast, which has none).</param>
+		/// <param name="isSplash">The hit came from an area query around the object (<see cref="AbilityApplyAreaAction"/>).</param>
+		/// <param name="fannedOut">
+		/// The victim was chosen by the event's own selector rather than being the body the object struck — an area
+		/// selector on a projectile's hit event.
+		/// </param>
+		/// <param name="spawnTarget">How the ability's object was placed.</param>
+		/// <returns>What the direction is measured from.</returns>
+		internal static KnockbackOrigin ResolveOrigin(KnockbackDirection mode, bool hasAbilityObject, bool isSplash, bool fannedOut, AbilitySpawnTarget spawnTarget)
+		{
+			switch (mode)
+			{
+				case KnockbackDirection.AwayFromCaster:
+					return KnockbackOrigin.Caster;
+				case KnockbackDirection.Heading:
+					return hasAbilityObject ? KnockbackOrigin.Heading : KnockbackOrigin.Caster;
+				case KnockbackDirection.AwayFromCentre:
+					return CentreOf(hasAbilityObject, isSplash, fannedOut);
+			}
+
+			// Auto.
+			if (!hasAbilityObject || isSplash || fannedOut)
+			{
+				// Every area: a self-centred one (no object), a blast around the object, an area off an impact.
+				return CentreOf(hasAbilityObject, isSplash, fannedOut);
+			}
+			switch (spawnTarget)
+			{
+				case AbilitySpawnTarget.Forward:
+					// A melee volume in front of the caster: the swing pushes away from the swinger, not from the
+					// middle of the volume, which would pull a victim standing in its near half towards them.
+					return KnockbackOrigin.Caster;
+				case AbilitySpawnTarget.Self:
+				case AbilitySpawnTarget.PointBlank:
+				case AbilitySpawnTarget.Target:
+					// A volume placed where it acts (a trap, a ground effect): its own centre.
+					return KnockbackOrigin.AbilityObject;
+				default:
+					// Launched (Spawner, SpawnerWithCameraRotation, Camera): a projectile or a hitscan line.
+					return KnockbackOrigin.Heading;
+			}
+		}
+
+		private static KnockbackOrigin CentreOf(bool hasAbilityObject, bool isSplash, bool fannedOut)
+		{
+			if (!hasAbilityObject)
+			{
+				return KnockbackOrigin.Caster;
+			}
+			if (fannedOut && !isSplash)
+			{
+				return KnockbackOrigin.Impact;
+			}
+			return KnockbackOrigin.AbilityObject;
+		}
+
+		/// <summary>
+		/// The push direction for a victim at <paramref name="victim"/>: the heading as is, or radially (across the ground)
+		/// away from <paramref name="centre"/>, falling back to <paramref name="fallbackForward"/> when the victim stands on
+		/// the centre itself.
+		/// </summary>
+		internal static Vector3 ResolveDirection(KnockbackOrigin origin, Vector3 heading, Vector3 centre, Vector3 victim, Vector3 fallbackForward)
+		{
+			if (origin == KnockbackOrigin.Heading)
+			{
+				return heading.sqrMagnitude > 1e-8f ? heading.normalized : Flat(fallbackForward);
+			}
+			Vector3 away = victim - centre;
+			away.y = 0f;
+			if (away.sqrMagnitude < 1e-4f)
+			{
+				return Flat(fallbackForward);
+			}
+			return away.normalized;
+		}
+
+		private static Vector3 Flat(Vector3 v)
+		{
+			v.y = 0f;
+			return v.sqrMagnitude > 1e-8f ? v.normalized : Vector3.forward;
+		}
+
+		/// <summary>
 		/// Applies a knockback effect to the target character if they are not immortal.
-		/// Knockback is applied as a single-tick velocity impulse through the KCC motor,
-		/// ensuring deterministic prediction, server reconciliation, and collision awareness.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>
 		/// <param name="eventData">The event data containing the target and ability information.</param>
@@ -58,12 +194,19 @@ namespace FishMMO.Shared
 			{
 				if (EcaAuthority.MayPredict(initiator, eventData))
 				{
-					PlayPredictedReaction(eventData);
+					PlayPredictedReaction(initiator, eventData);
 				}
 				return;
 			}
 
 			if (!TryResolveTarget(eventData, out ICharacter target))
+			{
+				return;
+			}
+
+			/* Never the caster. A self-centred area includes its caster in the query, and the harm rule allows harming
+			 * oneself, so without this a war stomp launched the stomper. */
+			if (initiator != null && ReferenceEquals(target, initiator))
 			{
 				return;
 			}
@@ -77,55 +220,115 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (target is BaseCharacter character &&
-				character.TryGet(out ICharacterDamageController defenderDamageController) &&
-				!defenderDamageController.Immortal)
+			if (!(target is BaseCharacter character) ||
+				!character.TryGet(out ICharacterDamageController defenderDamageController) ||
+				defenderDamageController.Immortal)
 			{
-				/* A victim whose motor will not run this tick is not knocked back at all, rather than
-				 * knocked back later.
-				 *
-				 * KCCPlayer.OnReplicate returns before Motor.UpdatePhase1/2 for an incapacitated or
-				 * dead character, and BaseVelocity is motor state that survives in the reconcile —
-				 * so an impulse written here was not lost, it was STORED, and the whole of it fired
-				 * as one lurch on the tick the stun ended or the character was revived. The
-				 * ForceUnground timer went with it. Refusing is the honest reading of "this
-				 * character cannot be moved right now": crowd control that pins somebody in place
-				 * should not also be charging up the hit that lands when it breaks.
-				 *
-				 * Tested on the replicated HEALTH value rather than CharacterFlags.IsDead, matching
-				 * KCCPlayer's own gate — flags ride the spawn payload and are never re-synced. */
-				if (CharacterIncapacitation.IsIncapacitated(character) ||
-					!defenderDamageController.IsAlive)
+				return;
+			}
+
+			/* A victim whose motor will not run this tick is not knocked back at all, rather than
+			 * knocked back later.
+			 *
+			 * KCCPlayer.OnReplicate returns before Motor.UpdatePhase1/2 for an incapacitated or
+			 * dead character, and BaseVelocity is motor state that survives in the reconcile —
+			 * so an impulse written here was not lost, it was STORED, and the whole of it fired
+			 * as one lurch on the tick the stun ended or the character was revived. The
+			 * ForceUnground timer went with it. Refusing is the honest reading of "this
+			 * character cannot be moved right now": crowd control that pins somebody in place
+			 * should not also be charging up the hit that lands when it breaks.
+			 *
+			 * Tested on the replicated HEALTH value rather than CharacterFlags.IsDead, matching
+			 * KCCPlayer's own gate — flags ride the spawn payload and are never re-synced. */
+			if (CharacterIncapacitation.IsIncapacitated(character) || !defenderDamageController.IsAlive)
+			{
+				return;
+			}
+
+			if (!TryResolvePush(initiator, eventData, target, out Vector3 knockbackDirection))
+			{
+				return;
+			}
+
+			if (character is IPlayerCharacter playerCharacter &&
+				playerCharacter.CharacterController?.Motor != null)
+			{
+				// Apply knockback as a velocity impulse through the KCC motor.
+				// This respects collision geometry, prediction/reconciliation,
+				// and is deterministic across client and server.
+				var motor = playerCharacter.CharacterController.Motor;
+				motor.ForceUnground();
+				Vector3 currentVelocity = motor.Velocity;
+				// Remove velocity opposing the knockback direction so the
+				// impulse doesn't fight the character's own momentum.
+				Vector3 lateralVelocity = Vector3.ProjectOnPlane(currentVelocity, motor.CharacterUp);
+				float opposingComponent = Vector3.Dot(lateralVelocity, knockbackDirection);
+				if (opposingComponent < 0f)
 				{
-					return;
+					currentVelocity -= opposingComponent * knockbackDirection;
 				}
-
-				if (eventData.TryGet(out AbilityCollisionEventData abilityEventData) && abilityEventData.AbilityObject != null)
+				currentVelocity += knockbackDirection * force;
+				motor.BaseVelocity = currentVelocity;
+			}
+			else if (character.TryGet(out INPCBrain brain))
+			{
+				/* Monsters, wildlife and pets: the brain slides the NavMesh agent, which keeps the push on the walkable
+				 * ground. Only the horizontal part survives that, so it is handed over flat and at full strength. */
+				Vector3 flat = knockbackDirection;
+				flat.y = 0f;
+				if (flat.sqrMagnitude > 1e-6f)
 				{
-					Vector3 knockbackDirection = abilityEventData.AbilityObject.Transform.forward;
-
-					// Apply knockback as a velocity impulse through the KCC motor.
-					// This respects collision geometry, prediction/reconciliation,
-					// and is deterministic across client and server.
-					if (character is IPlayerCharacter playerCharacter &&
-						playerCharacter.CharacterController?.Motor != null)
-					{
-						var motor = playerCharacter.CharacterController.Motor;
-						motor.ForceUnground();
-						Vector3 currentVelocity = motor.Velocity;
-						// Remove velocity opposing the knockback direction so the
-						// impulse doesn't fight the character's own momentum.
-						Vector3 lateralVelocity = Vector3.ProjectOnPlane(currentVelocity, motor.CharacterUp);
-						float opposingComponent = Vector3.Dot(lateralVelocity, knockbackDirection);
-						if (opposingComponent < 0f)
-						{
-							currentVelocity -= opposingComponent * knockbackDirection;
-						}
-						currentVelocity += knockbackDirection * force;
-						motor.BaseVelocity = currentVelocity;
-					}
+					brain.ApplyKnockback(flat.normalized * force);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Resolves which way <paramref name="target"/> is pushed by the attack this event describes.
+		/// </summary>
+		/// <returns>False when the event carries no ability hit at all, so there is no attack to take a direction from.</returns>
+		private bool TryResolvePush(ICharacter initiator, EventData eventData, ICharacter target, out Vector3 direction)
+		{
+			direction = Vector3.zero;
+			if (target?.Transform == null || !eventData.TryGet(out AbilityCollisionEventData hit))
+			{
+				return false;
+			}
+
+			AbilityObject abilityObject = hit.AbilityObject;
+			bool hasObject = abilityObject != null && abilityObject.Transform != null;
+			/* A fork carries its parent's hit as a sub-payload, so the hit's own target is the body the object struck
+			 * and this event's target is the one the selector chose. They differ only when a selector fanned out. */
+			bool fannedOut = hasObject && !ReferenceEquals(eventData.TargetCharacter, hit.TargetCharacter);
+			AbilitySpawnTarget spawnTarget = hasObject && abilityObject.Ability?.Template != null
+				? abilityObject.Ability.Template.AbilitySpawnTarget
+				: AbilitySpawnTarget.Self;
+
+			KnockbackOrigin origin = ResolveOrigin(Direction, hasObject, hit.IsSplash, fannedOut, spawnTarget);
+
+			Vector3 casterPosition = initiator?.Transform != null ? initiator.Transform.position : target.Transform.position;
+			Vector3 casterForward = initiator?.Transform != null ? initiator.Transform.forward : Vector3.forward;
+			Vector3 heading = hasObject ? abilityObject.Transform.forward : casterForward;
+
+			Vector3 centre;
+			switch (origin)
+			{
+				case KnockbackOrigin.AbilityObject:
+					centre = abilityObject.Transform.position;
+					break;
+				case KnockbackOrigin.Impact:
+					centre = hit.HasHitPoint ? hit.HitPoint : abilityObject.Transform.position;
+					break;
+				case KnockbackOrigin.Caster:
+					centre = casterPosition;
+					break;
+				default:
+					centre = casterPosition;
+					break;
+			}
+
+			direction = ResolveDirection(origin, heading, centre, target.Transform.position, hasObject ? heading : casterForward);
+			return true;
 		}
 
 		/// <summary>
@@ -140,32 +343,28 @@ namespace FishMMO.Shared
 		/// <para>
 		/// Suppressed on a replayed tick: a reconcile replays every tick since the correction, and
 		/// restarting the flinch on each of them would make the model jitter for the length of the
-		/// replay rather than lean once.
+		/// replay rather than lean once. Leans the way the authoritative branch will push, so the two agree.
 		/// </para>
 		/// </remarks>
-		private static void PlayPredictedReaction(EventData eventData)
+		private void PlayPredictedReaction(ICharacter initiator, EventData eventData)
 		{
 			if (IsReplayTick(eventData))
 			{
 				return;
 			}
 
-			if (!TryResolveTarget(eventData, out ICharacter target) || target == null)
+			if (!TryResolveTarget(eventData, out ICharacter target) || target == null ||
+				(initiator != null && ReferenceEquals(target, initiator)))
 			{
 				return;
 			}
 
-			/* The ability object's forward is the impact direction the authoritative branch uses
-			 * below, so the predicted lean points the same way the real displacement will. Without
-			 * one there is no direction to lean along and nothing is played. */
-			if (!eventData.TryGet(out AbilityCollisionEventData abilityEventData) ||
-				abilityEventData.AbilityObject == null)
+			if (!TryResolvePush(initiator, eventData, target, out Vector3 direction))
 			{
 				return;
 			}
 
-			CharacterHitReaction.PlayOn(target, abilityEventData.AbilityObject.Transform.forward);
+			CharacterHitReaction.PlayOn(target, direction);
 		}
-
 	}
 }

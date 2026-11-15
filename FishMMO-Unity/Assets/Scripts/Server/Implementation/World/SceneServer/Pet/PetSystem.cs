@@ -932,6 +932,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="broadcastTarget">Network connection that should receive the PetAddBroadcast.</param>
 		/// <param name="persistedAttributes">Attribute values restored from the database; null when summoned fresh.</param>
 		/// <param name="persistedBuffs">Buffs restored from the database; null when summoned fresh.</param>
+		/// <param name="summoningAbility">
+		/// The cast that summoned the pet, carrying the effects the player crafted onto it; null when
+		/// the pet is restored from the database.
+		/// </param>
 		/// <returns>True if the pet was successfully spawned; false if the pooled object had no Pet component.</returns>
 		private bool SpawnAndInitializePet(
 			IPlayerCharacter owner,
@@ -942,7 +946,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			List<int> abilities,
 			NetworkConnection broadcastTarget,
 			List<PetPersistedAttribute> persistedAttributes = null,
-			List<PetPersistedBuff> persistedBuffs = null)
+			List<PetPersistedBuff> persistedBuffs = null,
+			Ability summoningAbility = null)
 		{
 			// Despawn any existing pet before assigning the new one to prevent ghost pets.
 			if (petController.Pet != null &&
@@ -974,8 +979,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pet.AttackPriority = petController.AttackPriority;
 
 			/* Build the ability list before the spawn: Pet.OnStartServer teaches whatever is in
-			 * PetAbilityIDs, and OnStartServer runs inside ServerManager.Spawn below. */
-			pet.PetAbilityIDs = BuildPetAbilityIDs(petAbilityTemplate, abilities);
+			 * PetAbilityIDs, and OnStartServer runs inside ServerManager.Spawn below. The summoning
+			 * ability adds what its On Summon effects teach. */
+			pet.PetAbilityIDs = petAbilityTemplate != null
+				? petAbilityTemplate.BuildPetAbilityIDs(summoningAbility, abilities)
+				: (abilities != null ? new List<int>(abilities) : new List<int>());
 
 			/* Restored health and buffs, staged for the same reason and applied at the same
 			 * moment. Both are serialised into the spawn payload by their own controllers, and
@@ -1070,7 +1078,51 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * actions still fire there. */
 			InvokePetTriggers(owner, petController.OnPetSummonTriggers, pet);
 
+			// The summon spell's own On Summon effects, as the player crafted it.
+			InvokeSummonEvents(owner, summoningAbility, pet);
+
 			return true;
+		}
+
+		/// <summary>
+		/// Runs the On Summon effects of the ability that summoned a pet, on the server, now that the
+		/// pet is spawned.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The event's target is the pet, so an action with no selector of its own (a buff, a heal)
+		/// lands on the pet, and an <see cref="InitiatorTargetSelector"/> reaches the summoner. Run
+		/// after the spawn for the same reason the summon triggers are: an action that changes the
+		/// pet's state needs a spawned object to replicate from.
+		/// </para>
+		/// <para>
+		/// The abilities those effects teach are not taught here. They were merged into
+		/// <see cref="Pet.PetAbilityIDs"/> before the spawn, which is when the pet learns.
+		/// </para>
+		/// <para>
+		/// A restore passes no ability and runs nothing: the pet comes back with the abilities,
+		/// health and buffs it was saved with, and re-running the effects would apply them twice.
+		/// </para>
+		/// </remarks>
+		/// <param name="owner">The summoner, and the event's initiator.</param>
+		/// <param name="summoningAbility">The cast that summoned the pet, or null.</param>
+		/// <param name="pet">The pet that arrived.</param>
+		private static void InvokeSummonEvents(ICharacter owner, Ability summoningAbility, Pet pet)
+		{
+			if (owner == null ||
+				pet == null ||
+				summoningAbility == null ||
+				summoningAbility.OnSummonEvents.Count < 1)
+			{
+				return;
+			}
+
+			foreach (AbilityOnSummonEvent summonEvent in summoningAbility.OnSummonEvents.Values)
+			{
+				PetEventData eventData = new PetEventData(owner, pet);
+				eventData.SetTarget(pet.GameObject);
+				summonEvent.Execute(eventData);
+			}
 		}
 
 		/// <summary>
@@ -1488,8 +1540,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Handles pet summoning via ability, spawning the pet at a random position within the bounding box.
 		/// </summary>
-		private void AbilityObject_OnPetSummon(PetAbilityTemplate petAbilityTemplate, IPlayerCharacter caster)
+		private void AbilityObject_OnPetSummon(Ability ability, IPlayerCharacter caster)
 		{
+			PetAbilityTemplate petAbilityTemplate = ability?.Template as PetAbilityTemplate;
 			if (petAbilityTemplate == null || caster == null)
 			{
 				return;
@@ -1530,34 +1583,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			NetworkObject nob = Server.NetworkWrapper.NetworkManager.GetPooledInstantiated(petAbilityTemplate.PetPrefab.PrefabId, petAbilityTemplate.PetPrefab.SpawnableCollectionId, ObjectPoolRetrieveOption.Unset, null, spawnPosition, caster.Transform.rotation, null, true);
-			SpawnAndInitializePet(caster, petController, petAbilityTemplate, nob, spawnPosition, null, caster.Owner);
-		}
-
-		/// <summary>
-		/// Merges the abilities restored from the database with the ones the summoning spell
-		/// grants, into the list <see cref="Pet.OnStartServer"/> will learn from.
-		/// </summary>
-		/// <param name="petAbilityTemplate">The summoning spell's pet template.</param>
-		/// <param name="persisted">Ability template IDs restored from the database, or null on a fresh summon.</param>
-		/// <returns>A new list of ability template IDs, never null.</returns>
-		private static List<int> BuildPetAbilityIDs(PetAbilityTemplate petAbilityTemplate, List<int> persisted)
-		{
-			List<int> result = persisted != null ? new List<int>(persisted) : new List<int>();
-
-			if (petAbilityTemplate?.PetAbilities != null)
-			{
-				for (int i = 0; i < petAbilityTemplate.PetAbilities.Count; ++i)
-				{
-					AbilityTemplate template = petAbilityTemplate.PetAbilities[i];
-					if (template == null || result.Contains(template.ID))
-					{
-						continue;
-					}
-					result.Add(template.ID);
-				}
-			}
-
-			return result;
+			SpawnAndInitializePet(caster, petController, petAbilityTemplate, nob, spawnPosition, null, caster.Owner,
+				summoningAbility: ability);
 		}
 
 		/// <summary>

@@ -168,7 +168,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public override void Enter(AIController controller)
 		{
 			// Allow the agent to run
-			controller.Agent.speed = Constants.Character.RunSpeed;
+			controller.Agent.speed = controller.RunSpeed;
 			controller.AttackCooldownTimer = 0f;
 			controller.Kite.Reset(KiteBudgetSeconds);
 		}
@@ -181,7 +181,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public override void Exit(AIController controller)
 		{
 			// Return to walk speed
-			controller.Agent.speed = Constants.Character.WalkSpeed;
+			controller.Agent.speed = controller.WalkSpeed;
 
 			/* A transition into a combat sub-state (orbit, flank, kite) is not a disengage.
 			 * Clearing the target here is what previously broke every variety roll: the sub-state
@@ -651,6 +651,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			if (HandleActivationInProgress(controller, abilityController))
 				return;
 
+			// Nothing is being cast: a heal or buff that had the aim on a friend hands it back.
+			PetSupport.EndSupportAim(controller);
+
+			// A pet looks after its owner, and then its friends, before it attacks anything.
+			if (TrySupportAsPet(controller, abilityController))
+				return;
+
 			float distance = Mathf.Sqrt(controller.GetSqrDistanceToTarget());
 
 			// Occasionally step into a positioning sub-state instead of attacking flat-footed.
@@ -675,6 +682,45 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			AICombatPlan plan = AICombatDecision.Plan(context);
 
 			ExecutePlan(controller, abilityController, targetCharacter, plan, context, chosenAbility);
+		}
+
+		/// <summary>
+		/// A pet's heals and buffs, ahead of its attack: on its owner first, then on itself and its
+		/// friends. See <see cref="PetSupport"/>.
+		/// </summary>
+		/// <remarks>
+		/// In the shared state rather than in a pet subclass, for the same reason the pet leash is:
+		/// a pet may run any archetype's attacking state, and its spells may come from its summon
+		/// spell rather than its archetype. Paced by the same attack timer as the rotation, so
+		/// supporting does not double the pet's casting rate.
+		/// </remarks>
+		/// <param name="controller">The AI controller.</param>
+		/// <param name="abilityController">The NPC's ability controller.</param>
+		/// <returns>True when the pet is casting or walking for a friend this tick.</returns>
+		protected bool TrySupportAsPet(AIController controller, IAbilityController abilityController)
+		{
+			if (controller.OwningPet == null || controller.AttackCooldownTimer > 0f)
+			{
+				return false;
+			}
+
+			switch (PetSupport.Plan(controller, EnemyLayers, true, out PetSupport.Choice choice))
+			{
+				case PetSupport.Step.Cast:
+					PetSupport.BeginCast(controller, choice);
+					if (ActivateAbility(controller, abilityController, choice.Ability))
+					{
+						return true;
+					}
+					PetSupport.EndSupportAim(controller);
+					return false;
+
+				case PetSupport.Step.Moving:
+					return true;
+
+				default:
+					return false;
+			}
 		}
 
 		/// <summary>
@@ -778,8 +824,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			bool kiting = plan.Intent == AICombatIntent.BackAway || plan.Intent == AICombatIntent.EmergencyRetreat;
 			controller.Kite.Tick(kiting, controller.StateDeltaTime, KiteBudgetSeconds, KiteRecoverySeconds);
 			controller.Agent.speed = kiting
-				? Constants.Character.RunSpeed * Mathf.Clamp(KiteSpeedMultiplier, 0.1f, 1f)
-				: Constants.Character.RunSpeed;
+				? controller.RunSpeed * Mathf.Clamp(KiteSpeedMultiplier, 0.1f, 1f)
+				: controller.RunSpeed;
 
 			switch (plan.Intent)
 			{

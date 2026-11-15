@@ -74,6 +74,33 @@ namespace FishMMO.Client
 		/// <summary>Where the view is taken from. Stored as the value of KCCCameraStyle (ClientCameraSettings.Style).</summary>
 		public const string CameraStyleKey = "Camera Style";
 
+		/// <summary>The camera's vertical field of view, degrees (ClientCameraSettings.FieldOfView).</summary>
+		public const string CameraFieldOfViewKey = "Camera.FieldOfView";
+
+		/// <summary>Farthest the wheel takes the third-person view, metres (ClientCameraSettings.MaxZoom).</summary>
+		public const string CameraMaxZoomKey = "Camera.MaxZoom";
+
+		/// <summary>Metres one notch of the wheel moves the view (ClientCameraSettings.ZoomStep).</summary>
+		public const string CameraZoomStepKey = "Camera.ZoomStep";
+
+		/// <summary>Whether sideways look input is reversed.</summary>
+		public const string CameraInvertXKey = "Camera.InvertX";
+
+		/// <summary>Whether vertical look input is reversed.</summary>
+		public const string CameraInvertYKey = "Camera.InvertY";
+
+		/// <summary>Which shoulder the over-the-shoulder view looks past: 0 right, 1 left.</summary>
+		public const string ShoulderSideKey = "Camera.Shoulder.Side";
+
+		/// <summary>How far to the side of the character the over-the-shoulder view sits, metres.</summary>
+		public const string ShoulderOffsetKey = "Camera.Shoulder.Offset";
+
+		/// <summary>How far above the follow point the over-the-shoulder view sits, metres.</summary>
+		public const string ShoulderHeightKey = "Camera.Shoulder.Height";
+
+		/// <summary>Farthest the wheel takes the over-the-shoulder view, metres.</summary>
+		public const string ShoulderMaxZoomKey = "Camera.Shoulder.MaxZoom";
+
 		/// <summary>Texture filtering. Stored as the ordinal of ClientDisplaySettings.AnisotropicOption.</summary>
 		public const string AnisotropicFilteringKey = "Anisotropic Filtering";
 		/// <summary>Edge smoothing mode. Stored as the ordinal of ClientCameraSettings.AntialiasingOption.</summary>

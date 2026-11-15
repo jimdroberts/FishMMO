@@ -112,6 +112,19 @@ namespace FishMMO.Shared
 			return Encode(order[0], order[1], order[2]);
 		}
 
+		/// <summary>
+		/// Swaps the step at <paramref name="slot"/> with the one after it, so it is tried one
+		/// place later. The last slot and an invalid slot leave the order as it is.
+		/// </summary>
+		public static int MoveDown(int packed, int slot)
+		{
+			if (slot < 0 || slot >= StepCount - 1)
+			{
+				return Normalize(packed);
+			}
+			return MoveUp(packed, slot + 1);
+		}
+
 		/// <summary>The player-facing name of a step.</summary>
 		public static string Describe(PetAttackTarget target)
 		{

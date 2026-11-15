@@ -41,6 +41,22 @@ namespace FishMMO.Shared
 		public AbilityType Type;
 
 		/// <summary>
+		/// A charge-up the player chooses the length of: 0 or 1 for an ordinary cast, 2 or more for that many stages.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The hotkey is held (<see cref="AbilityController.RequiresHeld"/>) and the cast's <see cref="BaseAbilityTemplate.ActivationTime"/>
+		/// is the full charge. Releasing early FIRES rather than cancels, at the stage reached: with three stages, before
+		/// half the charge is stage 1, from half is stage 2, and the full charge (which fires by itself) is stage 3. Each
+		/// stage evenly divides the time before the last. The stage reaches the ability's events through
+		/// <see cref="Ability.ChargeStage"/> and <see cref="AbilityObject.ChargeStage"/>
+		/// (<see cref="ChargeStageValue"/>, <see cref="CasterRushAction"/>).
+		/// </para>
+		/// </remarks>
+		[Tooltip("0/1 = an ordinary cast. 2+ = hold to charge through this many stages; releasing early fires at the stage reached (ActivationTime is the full charge).")]
+		public byte ChargeStages;
+
+		/// <summary>
 		/// Forces this ability's AI intent instead of deriving it from the action graph.
 		/// </summary>
 		/// <remarks>
@@ -113,6 +129,10 @@ namespace FishMMO.Shared
 			AppendEventIDs(OnPreSpawnEvents, eventIDs);
 			AppendEventIDs(OnSpawnEvents, eventIDs);
 			AppendEventIDs(OnDestroyEvents, eventIDs);
+			if (this is PetAbilityTemplate petAbilityTemplate)
+			{
+				AppendEventIDs(petAbilityTemplate.OnSummonEvents, eventIDs);
+			}
 
 			cachedAllEventIDs = new List<int>(eventIDs);
 			return cachedAllEventIDs;
@@ -121,7 +141,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Clears cached event ID data when the template is edited in the inspector.
 		/// </summary>
-		private void OnValidate()
+		/// <remarks>Virtual so a subclass can add its own checks; an override must call this.</remarks>
+		protected virtual void OnValidate()
 		{
 			cachedAllEventIDs = null;
 		}

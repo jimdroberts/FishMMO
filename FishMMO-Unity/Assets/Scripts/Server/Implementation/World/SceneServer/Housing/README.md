@@ -18,6 +18,7 @@ database answer comes back through the main-thread queue:
 | `HousingSystem.Vault.cs` | Where a house goes when its owner loses the land |
 | `HousingSystem.Sync.cs` | Keeping plots consistent across channels |
 | `HousingSystem.Network.cs` | The client-facing broadcasts and the ingress guard |
+| `HousingSystem.Panel.cs` | The plot panel: describing a plot, buying at a quoted price, giving land up |
 | `HousingSystemMainThreadQueueData.cs` | The concrete main-thread action queue container |
 | `PlotTaxRouting.cs` | Pure: which path a due plot takes (held here, offline batch, reclaim, defer) |
 | `PlotSyncWindow.cs` | Pure: where each `plot_updates` poll starts, and when it may move on |
@@ -36,8 +37,8 @@ session in the editor.
 
 Housing is **off by default**. `HousingOwnershipMode.Neither` means a server that has not asked
 for housing carries none of its persistent world state, recurring tax, or destruction of unpaid
-plots. The `HousingSystem.asset` listed in `SceneServer.unity` is left at `Neither`; turning
-housing on is a change to that asset.
+plots. The `HousingSystem.asset` listed in `SceneServer.unity` was switched to `Player` with a rent
+of 50 every 7 days on 2026-11-15, to test generated plots; `Neither` turns it all off again.
 
 A scene whose plots cannot be resolved yet is retried on a timer, never every frame: 30 s after a
 database failure, 5 s after the async worker refused the work, 1 s while the scene still waits for
@@ -45,15 +46,44 @@ its instance details.
 
 ## The wire
 
-Ten broadcasts, all registered `requireAuthentication: true`:
+Thirteen client requests, all registered `requireAuthentication: true`:
 `HousingBeginBuildingBroadcast`, `HousingEndBuildingBroadcast`, `HousingFinishBuildingBroadcast`,
 `HousingPlaceStructureBroadcast`, `HousingRemoveStructureBroadcast`, `HousingGrantAccessBroadcast`,
 `HousingRevokeAccessBroadcast`, `HousingVaultRequestBroadcast`, `HousingVaultRetrieveBroadcast`,
-`HousingVaultForfeitBroadcast`.
+`HousingVaultForfeitBroadcast`, and the plot panel's `HousingPlotInfoRequestBroadcast`,
+`HousingClaimBroadcast` and `HousingReleaseBroadcast`.
 
-Claiming is **not** among them. A plot is bought by interacting with its foundation, through the
-ECA action `ClaimPlotAction` -- so the same interaction pipeline that fronts merchants and
-dialogue fronts land purchase, and the client needs no housing-specific request to buy.
+**Interacting with a plot does not buy it** (2026-11-15). Generated plots carry the `Plot Interact`
+trigger, whose `OpenPlotPanelAction` asks the server to describe the plot
+(`PlotFoundation.Registry.OnPanelRequested`); the server answers with `HousingPlotInfoBroadcast`
+(price, size, owner name, rent, and — to the owner only — when rent falls due and how long it has
+been unpaid), and the client's `UITKHousingPlot` panel shows it. Buying is `HousingClaimBroadcast`
+carrying the price the panel showed: refused with `PriceChanged` if that is no longer the price,
+`TooFar` away from the deed post, and otherwise the same claim-then-charge path as before, now
+answered with a `HousingResultBroadcast` (`AlreadyClaimed`, `AlreadyOwnsLand`, `CannotAfford`,
+`Success`). `HousingReleaseBroadcast` gives land up through the same one-transaction release the
+reclamation uses (`TryReleaseIntoVaultAsync`): contents to the vault, guest list cleared, the plot
+`Empty` when nothing stood on it and `Abandoned` when something did. The older `ClaimPlotAction`
+still works for a hand-placed foundation that wants instant purchase, with no answer sent.
+
+## Generated plots
+
+The scene cut lays plots itself (`HousingPlotStage`, `HousingPlotPlanner`, in the world tools):
+districts of 6–24 lots on a lane beside every **City** (one) and **Capital** (two), and groups of
+1–3 countryside lots well away from every point of interest. Lots are 16, 24 or 32 m squares,
+priced by size (capital ×1.5, countryside ×0.8). The plot object is the lot's **deed post** at its
+street edge: the only collider, and where interaction range is measured from. The plot volume sits
+behind it at `PlotFoundation.CentreOffset`; nothing about it collides. `PlotFoundationVisual`
+draws stakes and rope (empty), a scaffold (building), a stone footing (occupied) or bare stakes and
+a leaning post (abandoned), client only.
+
+Plot keys are `lot_<x>_<z>` (the lot's rounded centre). The cut writes the lots to the scene's
+`ScenePlotManifest` (`<terrain folder>/<scene>_HousingPlots.asset`) and reads it back before a
+re-cut clears the folder: every stored lot is laid again at the same centre and floor, first, and a
+settlement or countryside cell that already has lots gets no more. **Owned land never moves.**
+For a scene that is already cut, `Dashboard → Maintenance → World → Place housing plots` (or
+`-executeMethod FishMMO.Shared.WorldDesign.HousingPlotTool.PlaceBatch -housingScene <path>`) lays
+plots on ground that is already flat and clear, keeping any stored lots; save the scene after.
 
 ## What identifies a plot
 
@@ -263,8 +293,8 @@ same house would be open in one channel and shut in the next.
 
 ## Not yet built
 
-- **No client UI.** The broadcasts and the server handlers exist; nothing draws a housing panel, a
-  guest list, or a vault window yet.
+- **Guest list and vault windows.** The plot panel buys, finishes building and gives land up; the
+  access and vault broadcasts have no window yet.
 - **Structures are not spawned.** Placements are validated, persisted and read back, but no prefab
   is instantiated from `PlotStructureTemplate.Prefab` — a plot's contents exist in the database and
   in the server's placement cache, not yet in the world.
@@ -272,5 +302,5 @@ same house would be open in one channel and shut in the next.
   items nor carried, so there is nowhere to hand one back to. `RetrieveFromVault` answers `Failed`
   without charging until there is.
 - **Guild land is deferred, not taxed**, and has no vault. Both wait on a guild treasury.
-- **No voluntary release.** `IPlotService.ReleaseAsync` supports it; nothing calls it except the
-  failed-purchase and reclamation paths.
+- **No paying rent ahead.** Rent is taken from the owner's purse when it falls due; nothing lets
+  them prepay periods.

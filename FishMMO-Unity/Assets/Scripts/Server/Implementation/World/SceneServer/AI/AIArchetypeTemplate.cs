@@ -102,6 +102,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[Tooltip("Whether and how this archetype's NPCs swim, and how much they will risk in the water for a target. Off by default: they stay on land.")]
 		public AISwimSettings Swim = new AISwimSettings();
 
+		[Header("Pet Support")]
+		[Tooltip("How a pet with this archetype uses the heals and buffs it knows. Its owner always comes first. Ignored for anything that is not a pet.")]
+		public AIPetSupportSettings PetSupport = new AIPetSupportSettings();
+
 		[Header("Climbing")]
 		[Tooltip("Whether this archetype's NPCs climb ladders, rope ladders and ropes (a cave's shafts, a mine's levels): their paths may take the NavMesh's climb links. On by default; untick it for beasts that cannot.")]
 		public bool CanClimb = true;

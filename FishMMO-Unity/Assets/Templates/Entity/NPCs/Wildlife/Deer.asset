@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Deer
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WildlifeTemplate
+  Role: 1
+  WalkSpeed: 1.4
+  RunSpeed: 10
+  FleeLegMetres: 16
+  SafeMetres: 45
+  CorpseSeconds: 300
+  Body:
+    Length: 1.25
+    Depth: 0.45
+    Width: 0.36
+    LegLength: 0.62
+    LegThickness: 0.07
+    NeckLength: 0.5
+    NeckRaise: 55
+    HeadLength: 0.34
+    HeadSize: 0.17
+    EarSize: 0.14
+    Horns: 1
+    HornSize: 0.4
+    TailLength: 0.12
+    TailRaise: 35
+    Back: {r: 0.52, g: 0.36, b: 0.22, a: 1}
+    Belly: {r: 0.84, g: 0.76, b: 0.62, a: 1}
+    Accent: {r: 0.16, g: 0.13, b: 0.11, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 59
+  GroupsPerKm2: 0.9
+  GroupMin: 2
+  GroupMax: 5
+  DenKinds: 
+  DensInCaveMouths: 0
+  RespawnMinSeconds: 180
+  RespawnMaxSeconds: 420

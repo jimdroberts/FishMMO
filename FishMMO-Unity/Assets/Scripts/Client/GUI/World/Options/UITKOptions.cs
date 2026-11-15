@@ -96,6 +96,22 @@ namespace FishMMO.Client
 		private const string BRIGHTNESS_VALUE_NAME = "brightness-value";
 		private const string LOOK_SENSITIVITY_SLIDER_NAME = "look-sensitivity-slider";
 		private const string CAMERA_STYLE_DROPDOWN_NAME = "camera-style-dropdown";
+		private const string CAMERA_INVERT_X_NAME = "camera-invert-x-toggle";
+		private const string CAMERA_INVERT_Y_NAME = "camera-invert-y-toggle";
+		private const string CAMERA_FOV_SLIDER_NAME = "camera-fov-slider";
+		private const string CAMERA_FOV_VALUE_NAME = "camera-fov-value";
+		private const string CAMERA_MAX_ZOOM_SLIDER_NAME = "camera-max-zoom-slider";
+		private const string CAMERA_MAX_ZOOM_VALUE_NAME = "camera-max-zoom-value";
+		private const string CAMERA_ZOOM_STEP_SLIDER_NAME = "camera-zoom-step-slider";
+		private const string CAMERA_ZOOM_STEP_VALUE_NAME = "camera-zoom-step-value";
+		private const string SHOULDER_SIDE_DROPDOWN_NAME = "shoulder-side-dropdown";
+		private const string SHOULDER_OFFSET_SLIDER_NAME = "shoulder-offset-slider";
+		private const string SHOULDER_OFFSET_VALUE_NAME = "shoulder-offset-value";
+		private const string SHOULDER_HEIGHT_SLIDER_NAME = "shoulder-height-slider";
+		private const string SHOULDER_HEIGHT_VALUE_NAME = "shoulder-height-value";
+		private const string SHOULDER_MAX_ZOOM_SLIDER_NAME = "shoulder-max-zoom-slider";
+		private const string SHOULDER_MAX_ZOOM_VALUE_NAME = "shoulder-max-zoom-value";
+		private const string RESET_CAMERA_NAME = "options-reset-camera-btn";
 		private const string RESOLUTION_DROPDOWN_NAME = "resolution-dropdown";
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
@@ -331,6 +347,7 @@ namespace FishMMO.Client
 			{ "Interact", "Interact" },
 			{ "ToggleMouseMode", "Mouse Mode" },
 			{ "ToggleFirstPerson", "First Person" },
+			{ "SwapShoulder", "Swap Shoulder" },
 			{ "Cancel", "Cancel" },
 			{ "CloseLastUI", "Close UI" },
 			{ "Chat", "Chat" },
@@ -443,6 +460,21 @@ namespace FishMMO.Client
 		private Slider brightnessSlider;
 		private Slider lookSensitivitySlider;
 		private DropdownField cameraStyleDropdown;
+		private Toggle cameraInvertXToggle;
+		private Toggle cameraInvertYToggle;
+		private Slider cameraFovSlider;
+		private Label cameraFovValueLabel;
+		private Slider cameraMaxZoomSlider;
+		private Label cameraMaxZoomValueLabel;
+		private Slider cameraZoomStepSlider;
+		private Label cameraZoomStepValueLabel;
+		private DropdownField shoulderSideDropdown;
+		private Slider shoulderOffsetSlider;
+		private Label shoulderOffsetValueLabel;
+		private Slider shoulderHeightSlider;
+		private Label shoulderHeightValueLabel;
+		private Slider shoulderMaxZoomSlider;
+		private Label shoulderMaxZoomValueLabel;
 		private Label brightnessValueLabel;
 		private DropdownField resolutionDropdown;
 		private DropdownField refreshRateDropdown;
@@ -647,6 +679,21 @@ namespace FishMMO.Client
 			brightnessValueLabel = Root.Q<Label>(BRIGHTNESS_VALUE_NAME);
 			lookSensitivitySlider = Root.Q<Slider>(LOOK_SENSITIVITY_SLIDER_NAME);
 			cameraStyleDropdown = Root.Q<DropdownField>(CAMERA_STYLE_DROPDOWN_NAME);
+			cameraInvertXToggle = Root.Q<Toggle>(CAMERA_INVERT_X_NAME);
+			cameraInvertYToggle = Root.Q<Toggle>(CAMERA_INVERT_Y_NAME);
+			cameraFovSlider = Root.Q<Slider>(CAMERA_FOV_SLIDER_NAME);
+			cameraFovValueLabel = Root.Q<Label>(CAMERA_FOV_VALUE_NAME);
+			cameraMaxZoomSlider = Root.Q<Slider>(CAMERA_MAX_ZOOM_SLIDER_NAME);
+			cameraMaxZoomValueLabel = Root.Q<Label>(CAMERA_MAX_ZOOM_VALUE_NAME);
+			cameraZoomStepSlider = Root.Q<Slider>(CAMERA_ZOOM_STEP_SLIDER_NAME);
+			cameraZoomStepValueLabel = Root.Q<Label>(CAMERA_ZOOM_STEP_VALUE_NAME);
+			shoulderSideDropdown = Root.Q<DropdownField>(SHOULDER_SIDE_DROPDOWN_NAME);
+			shoulderOffsetSlider = Root.Q<Slider>(SHOULDER_OFFSET_SLIDER_NAME);
+			shoulderOffsetValueLabel = Root.Q<Label>(SHOULDER_OFFSET_VALUE_NAME);
+			shoulderHeightSlider = Root.Q<Slider>(SHOULDER_HEIGHT_SLIDER_NAME);
+			shoulderHeightValueLabel = Root.Q<Label>(SHOULDER_HEIGHT_VALUE_NAME);
+			shoulderMaxZoomSlider = Root.Q<Slider>(SHOULDER_MAX_ZOOM_SLIDER_NAME);
+			shoulderMaxZoomValueLabel = Root.Q<Label>(SHOULDER_MAX_ZOOM_VALUE_NAME);
 			resolutionDropdown = Root.Q<DropdownField>(RESOLUTION_DROPDOWN_NAME);
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
@@ -737,6 +784,7 @@ namespace FishMMO.Client
 			InitializeVisualRows();
 			InitializeLookSensitivity();
 			InitializeCameraStyle();
+			InitializeCameraView();
 			InitializeFrameRateLimit();
 			InitializeVSync();
 			InitializeAudioSettings();
@@ -766,6 +814,7 @@ namespace FishMMO.Client
 			Bind(screenRevertButton, OnScreenRevert);
 			Bind(screenKeepButton, OnScreenKeep);
 			Bind(Root.Q<Button>(RESET_AUDIO_NAME), ResetAudio);
+			Bind(Root.Q<Button>(RESET_CAMERA_NAME), ResetCamera);
 			Bind(resetColorsButton, ResetColors);
 			Bind(Root.Q<Button>(RESET_CONTROLS_NAME), ResetAllBindings);
 			Bind(Root.Q<Button>(RESET_LAYOUT_NAME), ResetPanelPositions);
@@ -885,6 +934,7 @@ namespace FishMMO.Client
 		public override void OnDestroying()
 		{
 			ClientCameraSettings.OnStyleChanged -= ShowCameraStyle;
+			ClientCameraSettings.OnShoulderChanged -= ShowShoulderSide;
 			CancelActiveRebind();
 			FlushThemeReload();
 			ClientSettings.Flush();
@@ -1709,6 +1759,149 @@ namespace FishMMO.Client
 			if (index >= 0)
 			{
 				cameraStyleDropdown.SetValueWithoutNotify(ClientCameraSettings.StyleLabels[index]);
+			}
+		}
+
+		/// <summary>
+		/// Binds the view rows: inversion, field of view, zoom limit and step, and the over-the-shoulder group.
+		/// </summary>
+		/// <remarks>
+		/// Each control writes through ClientCameraSettings, which clamps, saves and puts the value on the camera at once,
+		/// so a slider dragged with the panel open moves the view behind it. The shoulder dropdown also listens for the
+		/// Swap Shoulder key, so the panel shows what the key did.
+		/// </remarks>
+		private void InitializeCameraView()
+		{
+			ClientCameraSettings.LoadSavedView();
+
+			if (cameraInvertXToggle != null)
+			{
+				cameraInvertXToggle.SetValueWithoutNotify(ClientCameraSettings.InvertX);
+				cameraInvertXToggle.RegisterValueChangedCallback((evt) => ClientCameraSettings.SetInvertX(evt.newValue));
+			}
+			if (cameraInvertYToggle != null)
+			{
+				cameraInvertYToggle.SetValueWithoutNotify(ClientCameraSettings.InvertY);
+				cameraInvertYToggle.RegisterValueChangedCallback((evt) => ClientCameraSettings.SetInvertY(evt.newValue));
+			}
+
+			BindCameraSlider(cameraFovSlider, cameraFovValueLabel,
+				ClientCameraSettings.MinimumFieldOfView, ClientCameraSettings.MaximumFieldOfView,
+				() => ClientCameraSettings.FieldOfView, v => Mathf.Round(v), ClientCameraSettings.SetFieldOfView, UpdateDegreeLabel);
+			BindCameraSlider(cameraMaxZoomSlider, cameraMaxZoomValueLabel,
+				ClientCameraSettings.MinimumMaxZoom, ClientCameraSettings.MaximumMaxZoom,
+				() => ClientCameraSettings.MaxZoom, v => Mathf.Round(v * 2f) / 2f, ClientCameraSettings.SetMaxZoom, UpdateFineMetreLabel);
+			BindCameraSlider(cameraZoomStepSlider, cameraZoomStepValueLabel,
+				ClientCameraSettings.MinimumZoomStep, ClientCameraSettings.MaximumZoomStep,
+				() => ClientCameraSettings.ZoomStep, v => Mathf.Round(v * 20f) / 20f, ClientCameraSettings.SetZoomStep, UpdateCentimetreLabel);
+
+			if (shoulderSideDropdown != null)
+			{
+				shoulderSideDropdown.choices = new List<string>(ClientCameraSettings.ShoulderSideLabels);
+				ShowShoulderSide(ClientCameraSettings.ShoulderLeft);
+				shoulderSideDropdown.RegisterValueChangedCallback((evt) =>
+				{
+					int index = shoulderSideDropdown.index;
+					if (index < 0 || index >= ClientCameraSettings.ShoulderSideLabels.Length)
+					{
+						return;
+					}
+					ClientCameraSettings.SetShoulderLeft(index == 1);
+				});
+				ClientCameraSettings.OnShoulderChanged -= ShowShoulderSide;
+				ClientCameraSettings.OnShoulderChanged += ShowShoulderSide;
+			}
+
+			BindCameraSlider(shoulderOffsetSlider, shoulderOffsetValueLabel,
+				ClientCameraSettings.MinimumShoulderOffset, ClientCameraSettings.MaximumShoulderOffset,
+				() => ClientCameraSettings.ShoulderOffset, v => Mathf.Round(v * 20f) / 20f, ClientCameraSettings.SetShoulderOffset, UpdateCentimetreLabel);
+			BindCameraSlider(shoulderHeightSlider, shoulderHeightValueLabel,
+				ClientCameraSettings.MinimumShoulderHeight, ClientCameraSettings.MaximumShoulderHeight,
+				() => ClientCameraSettings.ShoulderHeight, v => Mathf.Round(v * 20f) / 20f, ClientCameraSettings.SetShoulderHeight, UpdateCentimetreLabel);
+			BindCameraSlider(shoulderMaxZoomSlider, shoulderMaxZoomValueLabel,
+				ClientCameraSettings.MinimumShoulderMaxZoom, ClientCameraSettings.MaximumShoulderMaxZoom,
+				() => ClientCameraSettings.ShoulderMaxZoom, v => Mathf.Round(v * 4f) / 4f, ClientCameraSettings.SetShoulderMaxZoom, UpdateFineMetreLabel);
+		}
+
+		/// <summary>
+		/// Binds one camera slider: its range, the value in effect, and a change handler that snaps the value to the
+		/// slider's step, applies it, and shows it.
+		/// </summary>
+		private static void BindCameraSlider(Slider slider, Label valueLabel, float low, float high, System.Func<float> current,
+			System.Func<float, float> snap, System.Action<float> apply, System.Action<Label, float> show)
+		{
+			if (slider == null)
+			{
+				return;
+			}
+			slider.lowValue = low;
+			slider.highValue = high;
+			float value = current();
+			slider.SetValueWithoutNotify(value);
+			show(valueLabel, value);
+			slider.RegisterValueChangedCallback((evt) =>
+			{
+				float snapped = Mathf.Clamp(snap(evt.newValue), low, high);
+				apply(snapped);
+				show(valueLabel, snapped);
+			});
+		}
+
+		/// <summary>Shows the shoulder in effect, without raising the dropdown's own change.</summary>
+		private void ShowShoulderSide(bool left)
+		{
+			if (shoulderSideDropdown != null)
+			{
+				shoulderSideDropdown.SetValueWithoutNotify(ClientCameraSettings.ShoulderSideLabels[left ? 1 : 0]);
+			}
+		}
+
+		/// <summary>Puts every camera view setting back to its default and shows it.</summary>
+		private void ResetCamera()
+		{
+			ClientCameraSettings.ResetView();
+			cameraInvertXToggle?.SetValueWithoutNotify(ClientCameraSettings.InvertX);
+			cameraInvertYToggle?.SetValueWithoutNotify(ClientCameraSettings.InvertY);
+			ShowShoulderSide(ClientCameraSettings.ShoulderLeft);
+			ShowSlider(cameraFovSlider, cameraFovValueLabel, ClientCameraSettings.FieldOfView, UpdateDegreeLabel);
+			ShowSlider(cameraMaxZoomSlider, cameraMaxZoomValueLabel, ClientCameraSettings.MaxZoom, UpdateFineMetreLabel);
+			ShowSlider(cameraZoomStepSlider, cameraZoomStepValueLabel, ClientCameraSettings.ZoomStep, UpdateCentimetreLabel);
+			ShowSlider(shoulderOffsetSlider, shoulderOffsetValueLabel, ClientCameraSettings.ShoulderOffset, UpdateCentimetreLabel);
+			ShowSlider(shoulderHeightSlider, shoulderHeightValueLabel, ClientCameraSettings.ShoulderHeight, UpdateCentimetreLabel);
+			ShowSlider(shoulderMaxZoomSlider, shoulderMaxZoomValueLabel, ClientCameraSettings.ShoulderMaxZoom, UpdateFineMetreLabel);
+		}
+
+		/// <summary>Sets a slider and its value label without raising the slider's change.</summary>
+		private static void ShowSlider(Slider slider, Label valueLabel, float value, System.Action<Label, float> show)
+		{
+			slider?.SetValueWithoutNotify(value);
+			show(valueLabel, value);
+		}
+
+		/// <summary>Writes whole degrees into a label.</summary>
+		private static void UpdateDegreeLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = $"{Mathf.RoundToInt(value)}°";
+			}
+		}
+
+		/// <summary>Writes metres to one decimal into a label.</summary>
+		private static void UpdateFineMetreLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = value.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " m";
+			}
+		}
+
+		/// <summary>Writes metres to two decimals into a label: the shoulder offsets and the zoom step are fractions of a metre.</summary>
+		private static void UpdateCentimetreLabel(Label label, float value)
+		{
+			if (label != null)
+			{
+				label.text = value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + " m";
 			}
 		}
 

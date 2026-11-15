@@ -66,6 +66,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <param name="plotService">The plot service the sweep is already using.</param>
 		/// <param name="plot">The plot as the sweep read it; the release is pinned to its owner.</param>
+		/// <param name="releasedState">
+		/// What the land becomes: <see cref="PlotState.Abandoned"/> for a reclamation, or for an owner
+		/// giving up a plot with something on it; <see cref="PlotState.Empty"/> for one given up bare.
+		/// </param>
 		/// <returns>True when this call took the plot back.</returns>
 		/// <remarks>
 		/// <para>One transaction, because the three writes must not be able to land apart. This used
@@ -80,7 +84,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// owns a container — so its structures are demolished inside the same transaction, and that
 		/// is said out loud rather than done quietly.</para>
 		/// </remarks>
-		private async Task<bool> TryReleaseIntoVaultAsync(IPlotService plotService, PlotData plot)
+		private async Task<bool> TryReleaseIntoVaultAsync(IPlotService plotService, PlotData plot, PlotState releasedState = PlotState.Abandoned)
 		{
 			if (!TryGetDbService(out IUnitOfWorkService unitOfWorkService) ||
 				!TryGetDbService(out IPlotVaultService vaultService) ||
@@ -111,7 +115,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				plot.ID,
 				plot.OwnerCharacterID,
 				plot.OwnerGuildID,
-				(int)PlotState.Abandoned);
+				(int)releasedState);
 
 			if (!released.IsSuccess)
 			{

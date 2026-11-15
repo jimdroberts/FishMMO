@@ -117,6 +117,8 @@ namespace FishMMO.Client
 			 * is the point where one exists. */
 			ApplySavedAntialiasing();
 			ApplyStyle(LoadSavedStyle());
+			LoadSavedView();
+			ApplyView();
 
 			if (ApplyLookSensitivity(sensitivity))
 			{
@@ -259,6 +261,223 @@ namespace FishMMO.Client
 				OnStyleChanged?.Invoke(style);
 			}
 			return camera != null;
+		}
+
+		// ── View: field of view, zoom, inversion, shoulder ─────────
+
+		/// <summary>Vertical field of view when nothing has been chosen: what ClientPreboot's camera is authored with.</summary>
+		public const float DefaultFieldOfView = 60f;
+		/// <summary>Narrowest field of view offered, degrees (vertical).</summary>
+		public const float MinimumFieldOfView = 50f;
+		/// <summary>Widest field of view offered, degrees (vertical; about 121 across at 16:9).</summary>
+		public const float MaximumFieldOfView = 90f;
+
+		/// <summary>Farthest the third-person view zooms out when nothing has been chosen: the authored camera's.</summary>
+		public const float DefaultMaxZoom = 10f;
+		/// <summary>Lowest the third-person zoom limit may be set.</summary>
+		public const float MinimumMaxZoom = 2f;
+		/// <summary>Highest the third-person zoom limit may be set: double the authored one.</summary>
+		public const float MaximumMaxZoom = 20f;
+
+		/// <summary>Metres one notch of the wheel moves the view when nothing has been chosen: the authored camera's.</summary>
+		public const float DefaultZoomStep = 0.5f;
+		/// <summary>Smallest zoom step offered.</summary>
+		public const float MinimumZoomStep = 0.1f;
+		/// <summary>Largest zoom step offered.</summary>
+		public const float MaximumZoomStep = 2f;
+
+		/// <summary>Sideways distance of the over-the-shoulder view when nothing has been chosen.</summary>
+		public const float DefaultShoulderOffset = 0.55f;
+		/// <summary>Least sideways distance offered: any less is third person with a nearer camera.</summary>
+		public const float MinimumShoulderOffset = 0.2f;
+		/// <summary>Most sideways distance offered. The pivot is also held to <see cref="KCCCamera.MaxShoulderReach"/>.</summary>
+		public const float MaximumShoulderOffset = 0.9f;
+
+		/// <summary>Height of the over-the-shoulder view above the follow point when nothing has been chosen.</summary>
+		public const float DefaultShoulderHeight = 0.2f;
+		/// <summary>Lowest the over-the-shoulder view may sit, below the follow point.</summary>
+		public const float MinimumShoulderHeight = -0.3f;
+		/// <summary>Highest the over-the-shoulder view may sit.</summary>
+		public const float MaximumShoulderHeight = 0.6f;
+
+		/// <summary>Farthest the over-the-shoulder view zooms out when nothing has been chosen: the authored camera's.</summary>
+		public const float DefaultShoulderMaxZoom = 4f;
+		/// <summary>Lowest the over-the-shoulder zoom limit may be set.</summary>
+		public const float MinimumShoulderMaxZoom = 2f;
+		/// <summary>Highest the over-the-shoulder zoom limit may be set: double the authored one.</summary>
+		public const float MaximumShoulderMaxZoom = 8f;
+
+		/// <summary>Labels for the shoulder dropdown: index 0 is the right shoulder, 1 the left, as stored.</summary>
+		public static readonly string[] ShoulderSideLabels = { "Right", "Left" };
+
+		/// <summary>Vertical field of view, degrees.</summary>
+		public static float FieldOfView { get; private set; } = DefaultFieldOfView;
+		/// <summary>Farthest the wheel takes the third-person view, metres.</summary>
+		public static float MaxZoom { get; private set; } = DefaultMaxZoom;
+		/// <summary>Metres one notch of the wheel moves the view.</summary>
+		public static float ZoomStep { get; private set; } = DefaultZoomStep;
+		/// <summary>Sideways look input reversed.</summary>
+		public static bool InvertX { get; private set; }
+		/// <summary>Vertical look input reversed.</summary>
+		public static bool InvertY { get; private set; }
+		/// <summary>The over-the-shoulder view looks past the left shoulder.</summary>
+		public static bool ShoulderLeft { get; private set; }
+		/// <summary>How far to the side of the character the over-the-shoulder view sits, metres.</summary>
+		public static float ShoulderOffset { get; private set; } = DefaultShoulderOffset;
+		/// <summary>How far above the follow point the over-the-shoulder view sits, metres.</summary>
+		public static float ShoulderHeight { get; private set; } = DefaultShoulderHeight;
+		/// <summary>Farthest the wheel takes the over-the-shoulder view, metres.</summary>
+		public static float ShoulderMaxZoom { get; private set; } = DefaultShoulderMaxZoom;
+
+		/// <summary>Raised when the shoulder changes, so the Options panel shows what the Swap Shoulder key did.</summary>
+		public static event System.Action<bool> OnShoulderChanged;
+
+		/// <summary>
+		/// Reads every view setting from the file, clamped: the file is the player's to edit, and an out-of-range zoom or
+		/// field of view would otherwise reach the camera as it stands.
+		/// </summary>
+		public static void LoadSavedView()
+		{
+			FieldOfView = ClientSettings.GetFloat(ClientSettings.CameraFieldOfViewKey, DefaultFieldOfView, MinimumFieldOfView, MaximumFieldOfView);
+			MaxZoom = ClientSettings.GetFloat(ClientSettings.CameraMaxZoomKey, DefaultMaxZoom, MinimumMaxZoom, MaximumMaxZoom);
+			ZoomStep = ClientSettings.GetFloat(ClientSettings.CameraZoomStepKey, DefaultZoomStep, MinimumZoomStep, MaximumZoomStep);
+			InvertX = ClientSettings.GetBool(ClientSettings.CameraInvertXKey, false);
+			InvertY = ClientSettings.GetBool(ClientSettings.CameraInvertYKey, false);
+			ShoulderLeft = ClientSettings.GetInt(ClientSettings.ShoulderSideKey, 0) == 1;
+			ShoulderOffset = ClientSettings.GetFloat(ClientSettings.ShoulderOffsetKey, DefaultShoulderOffset, MinimumShoulderOffset, MaximumShoulderOffset);
+			ShoulderHeight = ClientSettings.GetFloat(ClientSettings.ShoulderHeightKey, DefaultShoulderHeight, MinimumShoulderHeight, MaximumShoulderHeight);
+			ShoulderMaxZoom = ClientSettings.GetFloat(ClientSettings.ShoulderMaxZoomKey, DefaultShoulderMaxZoom, MinimumShoulderMaxZoom, MaximumShoulderMaxZoom);
+		}
+
+		/// <summary>
+		/// Puts every view setting onto the camera, if there is one yet.
+		/// </summary>
+		/// <remarks>
+		/// Plain fields on the camera. The zoom limits need no more than that: the camera clamps its zoom to the limit
+		/// every update, so lowering the limit below the current zoom eases the view in rather than jumping it.
+		/// </remarks>
+		/// <returns><c>true</c> if a camera received them.</returns>
+		public static bool ApplyView()
+		{
+			Camera main = Camera.main;
+			if (main == null)
+			{
+				return false;
+			}
+			main.fieldOfView = FieldOfView;
+
+			KCCCamera camera = main.GetComponent<KCCCamera>();
+			if (camera == null)
+			{
+				return false;
+			}
+			camera.MaxDistance = MaxZoom;
+			camera.DistanceMovementSpeed = ZoomStep;
+			camera.InvertX = InvertX;
+			camera.InvertY = InvertY;
+			camera.ShoulderLeft = ShoulderLeft;
+			camera.ShoulderOffset = new Vector2(ShoulderOffset, ShoulderHeight);
+			camera.ShoulderMaxDistance = ShoulderMaxZoom;
+			return true;
+		}
+
+		/// <summary>Saves and applies the field of view.</summary>
+		public static void SetFieldOfView(float value)
+		{
+			FieldOfView = Save(ClientSettings.CameraFieldOfViewKey, value, DefaultFieldOfView, MinimumFieldOfView, MaximumFieldOfView);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies the third-person zoom limit.</summary>
+		public static void SetMaxZoom(float value)
+		{
+			MaxZoom = Save(ClientSettings.CameraMaxZoomKey, value, DefaultMaxZoom, MinimumMaxZoom, MaximumMaxZoom);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies the zoom step.</summary>
+		public static void SetZoomStep(float value)
+		{
+			ZoomStep = Save(ClientSettings.CameraZoomStepKey, value, DefaultZoomStep, MinimumZoomStep, MaximumZoomStep);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies sideways look inversion.</summary>
+		public static void SetInvertX(bool value)
+		{
+			InvertX = value;
+			ClientSettings.Set(ClientSettings.CameraInvertXKey, value);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies vertical look inversion.</summary>
+		public static void SetInvertY(bool value)
+		{
+			InvertY = value;
+			ClientSettings.Set(ClientSettings.CameraInvertYKey, value);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies which shoulder the view looks past.</summary>
+		public static void SetShoulderLeft(bool left)
+		{
+			bool changed = left != ShoulderLeft;
+			ShoulderLeft = left;
+			ClientSettings.Set(ClientSettings.ShoulderSideKey, left ? 1 : 0);
+			ApplyView();
+			if (changed)
+			{
+				OnShoulderChanged?.Invoke(left);
+			}
+		}
+
+		/// <summary>The Swap Shoulder key: the view slides to the other shoulder. Saved, so the next session keeps it.</summary>
+		public static void SwapShoulder()
+		{
+			SetShoulderLeft(!ShoulderLeft);
+		}
+
+		/// <summary>Saves and applies the over-the-shoulder view's sideways distance.</summary>
+		public static void SetShoulderOffset(float value)
+		{
+			ShoulderOffset = Save(ClientSettings.ShoulderOffsetKey, value, DefaultShoulderOffset, MinimumShoulderOffset, MaximumShoulderOffset);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies the over-the-shoulder view's height.</summary>
+		public static void SetShoulderHeight(float value)
+		{
+			ShoulderHeight = Save(ClientSettings.ShoulderHeightKey, value, DefaultShoulderHeight, MinimumShoulderHeight, MaximumShoulderHeight);
+			ApplyView();
+		}
+
+		/// <summary>Saves and applies the over-the-shoulder zoom limit.</summary>
+		public static void SetShoulderMaxZoom(float value)
+		{
+			ShoulderMaxZoom = Save(ClientSettings.ShoulderMaxZoomKey, value, DefaultShoulderMaxZoom, MinimumShoulderMaxZoom, MaximumShoulderMaxZoom);
+			ApplyView();
+		}
+
+		/// <summary>Puts every view setting back to its default, saved and applied.</summary>
+		public static void ResetView()
+		{
+			SetFieldOfView(DefaultFieldOfView);
+			SetMaxZoom(DefaultMaxZoom);
+			SetZoomStep(DefaultZoomStep);
+			SetInvertX(false);
+			SetInvertY(false);
+			SetShoulderLeft(false);
+			SetShoulderOffset(DefaultShoulderOffset);
+			SetShoulderHeight(DefaultShoulderHeight);
+			SetShoulderMaxZoom(DefaultShoulderMaxZoom);
+		}
+
+		/// <summary>Clamps a value (a non-number becomes the default), saves it, and returns what was saved.</summary>
+		private static float Save(string key, float value, float fallback, float minimum, float maximum)
+		{
+			float clamped = float.IsNaN(value) || float.IsInfinity(value) ? fallback : Mathf.Clamp(value, minimum, maximum);
+			ClientSettings.Set(key, clamped);
+			return clamped;
 		}
 
 		/// <summary>

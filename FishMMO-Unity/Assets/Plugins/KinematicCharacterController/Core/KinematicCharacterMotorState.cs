@@ -117,6 +117,19 @@ namespace KinematicCharacterController
 		/// </summary>
 		public bool IsFlying;
 
+		/// <summary>
+		/// FISHMMO EDIT: an ability-driven rush (a charge): ticks left in which the character is driven along
+		/// <see cref="MotionYaw"/> at <see cref="MotionSpeed"/> instead of by its input. Zero when not rushing. Reconciled so
+		/// the owner rushes the same path the server does, and a replay from inside a rush continues it.
+		/// </summary>
+		public byte MotionTicks;
+
+		/// <summary>FISHMMO EDIT: the rush's speed, centimetres per second (quantised, so both peers drive the same value).</summary>
+		public ushort MotionSpeed;
+
+		/// <summary>FISHMMO EDIT: the rush's heading, degrees about world up scaled to 0..65535.</summary>
+		public ushort MotionYaw;
+
 		private uint tick;
 
 		/// <inheritdoc/>

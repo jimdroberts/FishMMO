@@ -1,0 +1,94 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIHousingPlot.uss
+    Housing Plot Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset (matched on width, so a
+    16:9 window is 675 units tall: the panel stays well under it).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+.plot-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 380px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.plot-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.plot-header__title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.plot-body {
+    flex-direction: column;
+    padding: 12px;
+    flex-shrink: 0;
+}
+
+.plot-row {
+    flex-direction: row;
+    align-items: center;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.plot-row__key {
+    width: 90px;
+    flex-shrink: 0;
+    -unity-text-align: middle-left;
+}
+
+.plot-row__value {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+/* Wrapping lines: the rent standing and the server's last answer. */
+.plot-status,
+.plot-message {
+    margin-top: 8px;
+    white-space: normal;
+    -unity-text-align: upper-left;
+    flex-shrink: 0;
+}
+
+.plot-footer {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.plot-footer__button {
+    margin-left: 8px;
+    min-width: 96px;
+    height: 28px;
+}
+
+.plot-hidden {
+    display: none;
+}

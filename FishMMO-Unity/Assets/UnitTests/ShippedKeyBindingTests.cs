@@ -316,6 +316,23 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// The shoulder swap ships unbound, with a row the player can bind.
+		/// </summary>
+		/// <remarks>
+		/// The swap is also on the Options panel's camera settings, so it needs no key of its own
+		/// out of the box; it ships unbound rather than taking a key from something else, and keeps
+		/// its empty binding so the key-binding list still has a row for it.
+		/// </remarks>
+		[Test]
+		public void SwapShoulder_ShipsUnboundWithARow()
+		{
+			LogAssert.AreEqual(0, PathsFor("SwapShoulder").Count,
+				"the shoulder swap ships unbound.");
+			LogAssert.IsTrue(PlayerActionNames().Contains("SwapShoulder"),
+				"but it must keep its (empty) binding, or the Options panel has no row to bind it from.");
+		}
+
+		/// <summary>
 		/// ~ cancels and closes beside Escape, and does nothing else.
 		/// </summary>
 		/// <remarks>

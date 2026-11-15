@@ -232,6 +232,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 						AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(id);
 						if (abilityEvent != null)
 						{
+							/* An effect the base ability cannot use: a hit or spawn effect on a summon
+							 * spell (which spawns no ability object), or a summon effect on anything
+							 * else. Accepting one charged the player for an effect that did nothing but
+							 * shift the ability's cast time, cooldown and cost. */
+							if (!abilityEvent.IsCompatibleWith(mainAbility))
+							{
+								Log.Debug("InteractableSystem",
+									$"AbilityCraft: rejected event {id} ('{abilityEvent.Name}') on template {mainAbility.ID} ('{mainAbility.Name}'), which it does not work on.");
+								SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.IncompatibleEvents);
+								return;
+							}
 							price += abilityEvent.Price;
 							continue;
 						}

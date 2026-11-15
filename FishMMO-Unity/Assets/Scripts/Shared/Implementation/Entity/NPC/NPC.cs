@@ -241,6 +241,20 @@ namespace FishMMO.Shared
 		/// </summary>
 		public ISpawnOwner Spawner { get; set; }
 
+		/// <summary>
+		/// The species, when this NPC is wildlife: outside the faction system, harmable by anyone (see
+		/// <see cref="WildlifeRules"/>). Null for every other NPC.
+		/// </summary>
+		[Header("Wildlife")]
+		[Tooltip("Set for wild animals: their role and speeds. Wildlife ignores factions; anyone may harm it.")]
+		public WildlifeTemplate Wildlife;
+
+		/// <summary>
+		/// Server: the pack this NPC belongs to (its spawner's group), 0 for none. Predators of one pack never harm each other
+		/// (<see cref="WildlifeRules.MayHarm(WildlifeRole, int, WildlifeRole, int)"/>); different packs fight it out.
+		/// </summary>
+		public int PackId { get; set; }
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// Keeps the respawn range orderable in the inspector.
@@ -375,6 +389,7 @@ namespace FishMMO.Shared
 			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = 0f;
 			OnCorpseExpired = null;
+			PackId = 0;
 
 			// Give the brain back, if the corpse path is what took it away.
 			if (aiDisabledByCorpse)
@@ -554,7 +569,8 @@ namespace FishMMO.Shared
 
 			// Enter corpse state -- stay spawned so clients see the death animation.
 			isCorpse = true;
-			corpseDecayTimer = CorpseDecayDuration;
+			// Wildlife lies for its species' time, loot or not, so it can be skinned and the like.
+			corpseDecayTimer = Wildlife != null ? Wildlife.CorpseSeconds : CorpseDecayDuration;
 			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
 			StartCorpseDecay();
@@ -755,7 +771,7 @@ namespace FishMMO.Shared
 			 * shortening at the moment of removal would leave a still-full corpse on the short
 			 * timer. Both halves of that happen inside one broadcast handler, so no tick can
 			 * observe the gap. */
-			if (!corpseDecayShortened && !HasLoot)
+			if (!corpseDecayShortened && !HasLoot && Wildlife == null)
 			{
 				corpseDecayShortened = true;
 
@@ -919,12 +935,22 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public bool ExecuteOnInteract(EventData eventData)
 		{
-			if (onInteractTriggers == null || onInteractTriggers.Count < 1)
+			/* A wild animal's carcass is worked rather than looted: skinning, butchering and the like, as professions arrive.
+			 * They subscribe here; the carcass lies for its species' time (WildlifeTemplate.CorpseSeconds) to give them the
+			 * chance. */
+			bool worked = false;
+			if (Wildlife != null && IsFlagged(CharacterFlags.IsDead) && OnWildlifeCarcassWorked != null)
 			{
-				return false;
+				OnWildlifeCarcassWorked(this, eventData);
+				worked = true;
 			}
 
-			bool fired = false;
+			if (onInteractTriggers == null || onInteractTriggers.Count < 1)
+			{
+				return worked;
+			}
+
+			bool fired = worked;
 			for (int i = 0; i < onInteractTriggers.Count; ++i)
 			{
 				Trigger trigger = onInteractTriggers[i];
@@ -943,7 +969,13 @@ namespace FishMMO.Shared
 		/// The interaction title. Empty while alive, so a living NPC is not advertised as
 		/// interactable and its world label is left to the naming components.
 		/// </summary>
-		public virtual string Title => IsFlagged(CharacterFlags.IsDead) ? "Corpse" : string.Empty;
+		public virtual string Title => IsFlagged(CharacterFlags.IsDead) ? (Wildlife != null ? "Carcass" : "Corpse") : string.Empty;
+
+		/// <summary>
+		/// Server: a player interacted with a wild animal's carcass. The hook professions (skinning, butchering) attach to: the
+		/// carcass and the interaction's event data (its initiator is the player).
+		/// </summary>
+		public static event Action<NPC, EventData> OnWildlifeCarcassWorked;
 
 		/// <summary>
 		/// The colour of the corpse title in the world UI.

@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Fox
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WildlifeTemplate
+  Role: 2
+  WalkSpeed: 1.3
+  RunSpeed: 8
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 300
+  Body:
+    Length: 0.65
+    Depth: 0.22
+    Width: 0.18
+    LegLength: 0.25
+    LegThickness: 0.045
+    NeckLength: 0.16
+    NeckRaise: 35
+    HeadLength: 0.22
+    HeadSize: 0.12
+    EarSize: 0.09
+    Horns: 0
+    HornSize: 0
+    TailLength: 0.42
+    TailRaise: 70
+    Back: {r: 0.78, g: 0.38, b: 0.14, a: 1}
+    Belly: {r: 0.92, g: 0.88, b: 0.8, a: 1}
+    Accent: {r: 0.1, g: 0.08, b: 0.07, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 4155
+  GroupsPerKm2: 0.5
+  GroupMin: 1
+  GroupMax: 2
+  DenKinds: 
+  DensInCaveMouths: 0
+  RespawnMinSeconds: 180
+  RespawnMaxSeconds: 420

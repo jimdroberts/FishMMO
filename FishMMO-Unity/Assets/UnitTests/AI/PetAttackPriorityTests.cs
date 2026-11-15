@@ -78,6 +78,44 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		[Test]
+		public void MoveDownSwapsWithTheNextSlotAndTheBottomStaysPut()
+		{
+			int start = PetAttackPriority.Default;
+			PetAttackTarget[] order = new PetAttackTarget[PetAttackPriority.StepCount];
+
+			PetAttackPriority.TryDecode(PetAttackPriority.MoveDown(start, 0), order);
+			LogAssert.IsTrue(order[0] == PetAttackTarget.Current && order[1] == PetAttackTarget.Pinned && order[2] == PetAttackTarget.HighestThreat,
+				"the first step can be moved: down one puts it second");
+
+			LogAssert.IsTrue(PetAttackPriority.MoveDown(start, PetAttackPriority.StepCount - 1) == start, "the last step has nowhere to go");
+			LogAssert.IsTrue(PetAttackPriority.MoveDown(start, -1) == start, "an out-of-range slot changes nothing");
+			LogAssert.IsTrue(PetAttackPriority.MoveDown(0, 0) == PetAttackPriority.MoveDown(PetAttackPriority.Default, 0),
+				"moving within an invalid order starts from the default");
+			LogAssert.IsTrue(PetAttackPriority.MoveUp(PetAttackPriority.MoveDown(start, 1), 2) == start,
+				"down then back up is where it started");
+		}
+
+		[Test]
+		public void EveryPriorityRowHasAWorkingControl()
+		{
+			/* The first row used to carry only a move-up arrow, greyed out for good: a row the player
+			 * could not move. Every row has both arrows; the direction a row cannot go is hidden. */
+			string uxml = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UIPetControl.uxml"));
+			for (int i = 0; i < PetAttackPriority.StepCount; ++i)
+			{
+				LogAssert.IsTrue(uxml.Contains($"name=\"pet-priority-up-{i}\"") && uxml.Contains($"name=\"pet-priority-down-{i}\""),
+					$"row {i} must have both arrows");
+			}
+
+			string panel = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
+			LogAssert.IsTrue(panel.Contains("priorityDownButtons[i].clicked += () => OnPriorityMoveDown(slot);") &&
+				panel.Contains("attackPriority = PetAttackPriority.MoveDown(attackPriority, slot);") &&
+				panel.Contains("SetMoveButton(priorityUpButtons[i], i > 0);") &&
+				panel.Contains("SetMoveButton(priorityDownButtons[i], i < PetAttackPriority.StepCount - 1);"),
+				"the down arrow must reorder, and each row must show only the arrows that can act");
+		}
+
+		[Test]
 		public void ThePriorityFlowsFromPanelToServerAndBack()
 		{
 			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Shared/Implementation/Entity/NPC/Pet/PetController.cs"));

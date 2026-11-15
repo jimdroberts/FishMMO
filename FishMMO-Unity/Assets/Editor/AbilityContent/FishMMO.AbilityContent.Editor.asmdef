@@ -1,0 +1,22 @@
+{
+    "name": "FishMMO.AbilityContent.Editor",
+    "rootNamespace": "FishMMO.AbilityContent",
+    "references": [
+        "FishMMO.Shared",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager",
+        "FishMMO.Shared.Tools.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

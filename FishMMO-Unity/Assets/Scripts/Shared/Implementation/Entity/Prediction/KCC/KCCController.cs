@@ -248,6 +248,10 @@ namespace FishMMO.Shared
 		private readonly List<int> climbCandidates = new List<int>(4);
 		// Set by SetInputs each tick: the controls are taken away (stunned, frozen, mesmerised, dead), so a climber lets go.
 		private bool controlsSuppressedThisTick;
+		// An ability rush (a charge), reconciled through MotionTicks, MotionSpeed and MotionYaw: see BeginMotion.
+		private byte motionTicks;
+		private ushort motionSpeed;
+		private ushort motionYaw;
 
 		// The water at the character this tick: sampled before the motor moves, from the synced clock.
 		private WaterSample water = WaterSample.Dry;
@@ -263,6 +267,102 @@ namespace FishMMO.Shared
 
 		/// <summary>Whether the character is in game-master flight now (/gm fly): no gravity, ground or collisions.</summary>
 		public bool IsFlying => isFlying;
+
+		/// <summary>True while an ability rush (<see cref="BeginMotion"/>) is driving the character.</summary>
+		public bool HasMotion => motionTicks > 0;
+
+		/// <summary>
+		/// Starts an ability rush: for <paramref name="durationSeconds"/> the character is driven across the ground along
+		/// <paramref name="direction"/> fast enough to cover <paramref name="distance"/>, facing it, whatever its input says.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Predicted.</b> Called from the ability step, which runs after this character's movement step in the same tick,
+		/// on the server and on the owner alike (and again on a replayed tick: the ability re-applies it). The rush is then
+		/// motor state, reconciled through <c>MotionTicks</c>/<c>MotionSpeed</c>/<c>MotionYaw</c>, so a correction from inside
+		/// it continues it rather than dropping it.
+		/// </para>
+		/// <para>
+		/// Speed and heading are quantised here (centimetres per second; 1/65536 of a turn), so the values both peers drive
+		/// are the values the wire carries. A rush ends early when something stops it (<see cref="TickMotion"/>), and never
+		/// starts while climbing, swimming or flying.
+		/// </para>
+		/// </remarks>
+		/// <param name="direction">The way to rush; only its horizontal part is used.</param>
+		/// <param name="distance">How far, metres.</param>
+		/// <param name="durationSeconds">Over how long.</param>
+		/// <param name="tickDelta">Seconds per network tick.</param>
+		/// <returns>True when the rush started.</returns>
+		public bool BeginMotion(Vector3 direction, float distance, float durationSeconds, float tickDelta)
+		{
+			direction.y = 0f;
+			if (direction.sqrMagnitude < 1e-6f || distance <= 0f || tickDelta <= 0f || climb.IsClimbing || isSwimming || isFlying)
+			{
+				return false;
+			}
+			int ticks = Mathf.Clamp((int)System.Math.Ceiling(System.Math.Max(durationSeconds, tickDelta) / (double)tickDelta), 1, 255);
+			motionTicks = (byte)ticks;
+			motionSpeed = QuantizeMotionSpeed(distance / (ticks * tickDelta));
+			motionYaw = QuantizeMotionYaw(direction);
+			return true;
+		}
+
+		/// <summary>Ends an ability rush now (it struck something).</summary>
+		public void EndMotion()
+		{
+			if (motionTicks == 0)
+			{
+				return;
+			}
+			motionTicks = 0;
+			SettleAfterMotion();
+		}
+
+		/// <summary>
+		/// Moves the character to <paramref name="destination"/> at once: an ability blink. Called from the ability step on
+		/// the server and the owner (and again on a replayed tick), so both place it identically; any rush ends.
+		/// </summary>
+		public void TeleportTo(Vector3 destination)
+		{
+			motionTicks = 0;
+			Motor.SetPosition(destination);
+			ResetGroundProbe();
+		}
+
+		/// <summary>
+		/// <see cref="TeleportTo(Vector3)"/>, also turning the character to <paramref name="rotation"/> (a blink that lands
+		/// facing what it struck). Server-side callers reach the owner through the next reconcile.
+		/// </summary>
+		public void TeleportTo(Vector3 destination, Quaternion rotation)
+		{
+			motionTicks = 0;
+			Motor.SetPositionAndRotation(destination, rotation);
+			ResetGroundProbe();
+		}
+
+		/// <summary>A rush speed in metres per second as the wire carries it: whole centimetres per second.</summary>
+		public static ushort QuantizeMotionSpeed(float metresPerSecond)
+		{
+			return (ushort)Mathf.Clamp(Mathf.RoundToInt(metresPerSecond * 100f), 1, ushort.MaxValue);
+		}
+
+		/// <summary>A heading as the wire carries it: 1/65536 of a turn about world up.</summary>
+		public static ushort QuantizeMotionYaw(Vector3 direction)
+		{
+			float degrees = Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg;
+			if (degrees < 0f)
+			{
+				degrees += 360f;
+			}
+			return (ushort)(Mathf.RoundToInt(degrees / 360f * 65536f) & 0xFFFF);
+		}
+
+		/// <summary>The unit horizontal heading a quantised yaw names.</summary>
+		public static Vector3 MotionDirectionOf(ushort yaw)
+		{
+			float radians = yaw / 65536f * 2f * Mathf.PI;
+			return new Vector3(Mathf.Sin(radians), 0f, Mathf.Cos(radians));
+		}
 
 		/// <summary>Flying speed, metres per second; sprint multiplies it by <see cref="FlySprintMultiplier"/>.</summary>
 		public float FlySpeed = 12f;
@@ -290,6 +390,7 @@ namespace FishMMO.Shared
 				}
 				isSwimming = false;
 				climbOutTicks = 0;
+				motionTicks = 0;
 				if (isCrouching)
 				{
 					isCrouching = false;
@@ -507,6 +608,9 @@ namespace FishMMO.Shared
 			timeSinceLastAbleToJump = state.TimeSinceLastAbleToJump;
 			timeSinceJumpRequested = state.TimeSinceJumpRequested;
 			climbOutTicks = state.ClimbOutTicks;
+			motionTicks = state.MotionTicks;
+			motionSpeed = state.MotionSpeed;
+			motionYaw = state.MotionYaw;
 			// The motor's ground solving follows the swim and climb state: it is off for either, and they are what is reconciled.
 			bool wasSolvingGround = !isSwimming && !climb.IsClimbing && !isFlying;
 			isFlying = state.IsFlying;
@@ -625,6 +729,9 @@ namespace FishMMO.Shared
 			baseState.ClimbPhase = climb.IsClimbing ? (byte)climb.Phase : (byte)0;
 			baseState.ClimbTicks = climb.Ticks;
 			baseState.IsFlying = isFlying;
+			baseState.MotionTicks = motionTicks;
+			baseState.MotionSpeed = motionSpeed;
+			baseState.MotionYaw = motionYaw;
 
 			return baseState;
 		}
@@ -702,6 +809,8 @@ namespace FishMMO.Shared
 				 * hands are what these take away. Both peers reach this on the same tick (KCCPlayer.OnReplicate), so the drop
 				 * is predicted like the rest. */
 				controlsSuppressedThisTick = true;
+				// Nor does a stunned charger keep charging.
+				EndMotion();
 				return;
 			}
 			controlsSuppressedThisTick = false;
@@ -1093,7 +1202,14 @@ namespace FishMMO.Shared
 
 						bool hasHeading = false;
 						Quaternion heading = Quaternion.identity;
-						if (lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
+						if (motionTicks > 0)
+						{
+							// A rush faces where it is going, at once: the camera does not turn a charging character.
+							heading = Quaternion.LookRotation(MotionDirectionOf(motionYaw), Vector3.up);
+							hasHeading = true;
+							currentRotation = heading;
+						}
+						else if (lookInputVector.sqrMagnitude > 0f && OrientationSharpness > 0f)
 						{
 							float targetRotationY = Mathf.Atan2(lookInputVector.x, lookInputVector.z) * Mathf.Rad2Deg;
 
@@ -1200,6 +1316,13 @@ namespace FishMMO.Shared
 							break;
 						}
 
+						// An ability rush drives the character instead of its input (BeginMotion).
+						if (motionTicks > 0)
+						{
+							UpdateMotionMovement(ref currentVelocity, deltaTime);
+							break;
+						}
+
 						// Ground movement
 						if (Motor.GroundingStatus.IsStableOnGround)
 						{
@@ -1224,6 +1347,62 @@ namespace FishMMO.Shared
 						break;
 					}
 			}
+		}
+
+		/// <summary>
+		/// One tick of an ability rush: along the rush heading at the rush speed, following the ground's slope when standing
+		/// on it, and keeping gravity when not, so a charge off a ledge still falls.
+		/// </summary>
+		private void UpdateMotionMovement(ref Vector3 currentVelocity, float deltaTime)
+		{
+			Vector3 direction = MotionDirectionOf(motionYaw);
+			float speed = motionSpeed / 100f;
+			if (Motor.GroundingStatus.IsStableOnGround)
+			{
+				currentVelocity = Motor.GetDirectionTangentToSurface(direction, Motor.GroundingStatus.GroundNormal) * speed;
+			}
+			else
+			{
+				float vertical = Vector3.Dot(currentVelocity, Motor.CharacterUp);
+				currentVelocity = direction * speed + Motor.CharacterUp * vertical + Constants.Character.Gravity * deltaTime;
+			}
+		}
+
+		/// <summary>
+		/// Counts a rush down after the motor has moved, and ends it early when something stopped it: the motor's solved
+		/// velocity across the ground fell below half the rush speed (a wall, a body). Pure motor state on both peers.
+		/// </summary>
+		private void TickMotion()
+		{
+			if (motionTicks == 0)
+			{
+				return;
+			}
+			if (climb.IsClimbing || isSwimming || isFlying)
+			{
+				motionTicks = 0;
+				return;
+			}
+			--motionTicks;
+			Vector3 across = Vector3.ProjectOnPlane(Motor.BaseVelocity, Motor.CharacterUp);
+			if (across.magnitude < 0.5f * (motionSpeed / 100f))
+			{
+				motionTicks = 0;
+			}
+			if (motionTicks == 0)
+			{
+				SettleAfterMotion();
+			}
+		}
+
+		/// <summary>A rush that has ended leaves no more than a run's worth of speed behind, so the character does not sail on.</summary>
+		private void SettleAfterMotion()
+		{
+			Vector3 up = Motor.CharacterUp;
+			Vector3 velocity = Motor.BaseVelocity;
+			Vector3 vertical = Vector3.Project(velocity, up);
+			Vector3 across = Vector3.ClampMagnitude(velocity - vertical, Constants.Character.RunSpeed);
+			Motor.BaseVelocity = across + vertical;
 		}
 
 		/// <summary>
@@ -1643,6 +1822,8 @@ namespace FishMMO.Shared
 		{
 			// The wait before taking hold again runs down while not climbing (swimming or not): reconciled, so a replay counts alike.
 			ClimbingRules.TickCooldown(ref climb);
+			// An ability rush counts down (and stops when blocked) on every peer that simulates the motor.
+			TickMotion();
 
 			switch (CurrentCharacterState)
 			{

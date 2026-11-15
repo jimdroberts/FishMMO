@@ -953,39 +953,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// A bone by the avatar's own map of it (its human description), not by <see cref="Animator.GetBoneTransform"/>:
 		/// that answers null until the Animator is initialised, which one with no controller and no graph yet is not.
+		/// Shared with everything else that rides a bone (<see cref="HumanoidBones"/>).
 		/// </summary>
 		private Transform Bone(HumanBodyBones bone)
 		{
-			string human = HumanTrait.BoneName[(int)bone];
-			foreach (HumanBone mapped in animator.avatar.humanDescription.human)
-			{
-				if (mapped.humanName == human)
-				{
-					Transform found = Named(shown, mapped.boneName);
-					if (found != null)
-					{
-						return found;
-					}
-				}
-			}
-			return animator.isInitialized ? animator.GetBoneTransform(bone) : null;
-		}
-
-		private static Transform Named(Transform parent, string name)
-		{
-			if (parent.name == name)
-			{
-				return parent;
-			}
-			for (int i = 0; i < parent.childCount; i++)
-			{
-				Transform found = Named(parent.GetChild(i), name);
-				if (found != null)
-				{
-					return found;
-				}
-			}
-			return null;
+			return HumanoidBones.Find(animator, shown, bone);
 		}
 
 		/// <summary>

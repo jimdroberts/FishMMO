@@ -315,6 +315,71 @@ namespace FishMMO.UnitTests.AI
 			}
 		}
 
+		[Test]
+		public void PetAbilityTemplates_BundleOnlyEffectsThatWorkOnASummon()
+		{
+			/* A summon spawns no ability object, so a bundled hit, tick, spawn or destroy effect
+			 * never runs; Ability leaves it out, and it only misleads whoever reads the asset. */
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				foreach (AbilityEvent abilityEvent in BundledEvents(template))
+				{
+					Assert.IsTrue(abilityEvent.IsCompatibleWith(template),
+						$"'{template.name}' bundles '{abilityEvent.name}', which does nothing on a summon spell.");
+				}
+				if (template.OnSummonEvents == null)
+				{
+					continue;
+				}
+				for (int i = 0; i < template.OnSummonEvents.Count; i++)
+				{
+					Assert.IsNotNull(template.OnSummonEvents[i], $"'{template.name}'.OnSummonEvents[{i}] is null.");
+				}
+			}
+		}
+
+		[Test]
+		public void PetsAreNeverTaughtToSummon()
+		{
+			/* Only a player's cast reaches the pet system, so a pet that knows a summon spell spends
+			 * its resources on nothing. BuildPetAbilityIDs skips one; the asset should not ask. */
+			foreach (PetAbilityTemplate template in LoadPetAbilityTemplates())
+			{
+				AssertTeachesNoSummon(template.name, template.PetAbilities);
+			}
+			foreach (string guid in AssetDatabase.FindAssets("t:AbilityOnSummonEvent"))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				AbilityOnSummonEvent summonEvent = AssetDatabase.LoadAssetAtPath<AbilityOnSummonEvent>(ProjectFiles.Path(path));
+				if (summonEvent != null)
+				{
+					AssertTeachesNoSummon(summonEvent.name, summonEvent.PetAbilities);
+				}
+			}
+		}
+
+		private static void AssertTeachesNoSummon(string owner, List<AbilityTemplate> taught)
+		{
+			if (taught == null)
+			{
+				return;
+			}
+			for (int i = 0; i < taught.Count; i++)
+			{
+				Assert.IsFalse(taught[i] is PetAbilityTemplate,
+					$"'{owner}' teaches a pet '{taught[i]?.name}', which is a summon spell.");
+			}
+		}
+
+		private static IEnumerable<AbilityEvent> BundledEvents(AbilityTemplate t)
+		{
+			if (t.OnHitEvents != null) foreach (AbilityEvent e in t.OnHitEvents) if (e != null) yield return e;
+			if (t.OnTickEvents != null) foreach (AbilityEvent e in t.OnTickEvents) if (e != null) yield return e;
+			if (t.OnSpawnEvents != null) foreach (AbilityEvent e in t.OnSpawnEvents) if (e != null) yield return e;
+			if (t.OnDestroyEvents != null) foreach (AbilityEvent e in t.OnDestroyEvents) if (e != null) yield return e;
+			if (t.OnPreSpawnEvents != null) foreach (AbilityEvent e in t.OnPreSpawnEvents) if (e != null) yield return e;
+		}
+
 		/// <summary>
 		/// Every pet summoning template in the project.
 		/// </summary>

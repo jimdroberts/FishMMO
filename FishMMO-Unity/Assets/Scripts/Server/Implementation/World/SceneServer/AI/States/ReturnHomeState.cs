@@ -56,7 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			controller.LookTarget = null;
 
 			// Set agent speed to run speed for quick return.
-			controller.Agent.speed = Constants.Character.RunSpeed;
+			controller.Agent.speed = controller.RunSpeed;
 
 			controller.Resume();
 
@@ -86,7 +86,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		public override void Exit(AIController controller)
 		{
 			// Reset agent speed to walk speed after returning home.
-			controller.Agent.speed = Constants.Character.WalkSpeed;
+			controller.Agent.speed = controller.WalkSpeed;
 		}
 
 		/// <summary>

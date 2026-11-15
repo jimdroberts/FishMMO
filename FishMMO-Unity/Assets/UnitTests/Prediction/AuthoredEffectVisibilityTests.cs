@@ -649,7 +649,7 @@ namespace FishMMO.UnitTests
 				"Nothing plays a held effect for a copy no spawn path released: it would be lost.");
 
 			string action = ReadSource("Assets/Scripts/Shared/Implementation/Entity/ECA/Actions/PlayFXAction.cs");
-			StringAssert.Contains("if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition))", action,
+			StringAssert.Contains("if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition, Size, HeightOffset))", action,
 				"PlayFXAction plays a spawn chain's effect the moment the object is created again.");
 		}
 

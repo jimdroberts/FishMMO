@@ -610,7 +610,7 @@ namespace FishMMO.Shared
 			bool motorOther = a.MustUnground != b.MustUnground || a.MustUngroundTime != b.MustUngroundTime ||
 				a.TimeSinceLastAbleToJump != b.TimeSinceLastAbleToJump || a.TimeSinceJumpRequested != b.TimeSinceJumpRequested ||
 				a.IsCrouching != b.IsCrouching || a.JumpRequested != b.JumpRequested || a.IsSwimming != b.IsSwimming ||
-				a.IsFlying != b.IsFlying || a.ClimbPhase != b.ClimbPhase || a.ClimbTicks != b.ClimbTicks || a.ClimbOutTicks != b.ClimbOutTicks ||
+				a.IsFlying != b.IsFlying || a.MotionTicks != b.MotionTicks || a.MotionSpeed != b.MotionSpeed || a.MotionYaw != b.MotionYaw || a.ClimbPhase != b.ClimbPhase || a.ClimbTicks != b.ClimbTicks || a.ClimbOutTicks != b.ClimbOutTicks ||
 				a.Climbable != b.Climbable || a.CurrentPlatformID != b.CurrentPlatformID ||
 				a.LastMovementIterationFoundAnyGround != b.LastMovementIterationFoundAnyGround ||
 				a.GroundingStatus.FoundAnyGround != b.GroundingStatus.FoundAnyGround ||

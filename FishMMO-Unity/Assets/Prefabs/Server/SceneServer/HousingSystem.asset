@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 04fe331fd7b7497428e04153a130f31c, type: 3}
   m_Name: HousingSystem
   m_EditorClassIdentifier: FishMMO.Server::FishMMO.Server.Implementation.World.SceneServer.HousingSystem
-  ownershipMode: 0
+  ownershipMode: 1
   currencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e, type: 2}
-  taxPerPeriod: 0
+  taxPerPeriod: 50
   taxPeriodDays: 7
   taxGraceDays: 14
   taxSweepIntervalSeconds: 300

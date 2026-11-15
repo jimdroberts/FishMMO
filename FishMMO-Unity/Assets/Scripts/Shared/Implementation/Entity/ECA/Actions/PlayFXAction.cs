@@ -19,6 +19,24 @@ namespace FishMMO.Shared
 		public GameObject FXPrefab;
 
 		/// <summary>
+		/// The effect's size in metres, or 0 to play it at the prefab's own scale.
+		/// </summary>
+		/// <remarks>
+		/// Ability effects are authored to fit a one-metre cube (<see cref="ParticleAdjuster"/>, "Scale Particle System to
+		/// Fit Cube"), and play in the Hierarchy scaling mode, so the instance's scale is its size: an area effect of radius
+		/// r sets this to 2r and fills exactly the volume it acts on.
+		/// </remarks>
+		[Tooltip("The effect's size in metres (FX are authored to a 1 m cube). 0 keeps the prefab's own scale. An area effect of radius r uses 2r.")]
+		public float Size = 0f;
+
+		/// <summary>
+		/// Metres above the resolved position to play the effect. A target's or caster's position is its feet, so a burst
+		/// meant to wrap the body lifts by about a metre; a ground ring keeps 0.
+		/// </summary>
+		[Tooltip("Metres above the resolved position. A character's position is its feet: ~1 wraps the body, 0 keeps a ground ring on the ground.")]
+		public float HeightOffset = 0f;
+
+		/// <summary>
 		/// Purely presentational: particles and nothing else.
 		/// </summary>
 		/// <remarks>
@@ -218,6 +236,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			spawnPosition.y += HeightOffset;
 			Scene scene = ResolveSpawnScene(initiator, eventData);
 
 			/* An effect a SPAWN chain plays is drawn with the object it belongs to, not the moment the object is created:
@@ -228,12 +247,12 @@ namespace FishMMO.Shared
 			{
 				AbilityObject.TryResolveFrom(eventData, out anchor);
 			}
-			if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition))
+			if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition, Size, HeightOffset))
 			{
 				return;
 			}
 
-			SpawnFX(FXPrefab, spawnPosition, scene);
+			SpawnFX(FXPrefab, spawnPosition, scene, Size);
 		}
 
 		/// <summary>
@@ -242,13 +261,14 @@ namespace FishMMO.Shared
 		/// <param name="prefab">The FX prefab to play.</param>
 		/// <param name="position">Where to play it.</param>
 		/// <param name="scene">The scene it belongs in, from <see cref="ResolveSpawnScene"/>.</param>
+		/// <param name="size">The effect's size in metres (see <see cref="Size"/>); 0 or less keeps the prefab's scale.</param>
 		/// <returns>The instance, already bounded by its own lifetime, or null if there was no prefab.</returns>
 		/// <remarks>
 		/// Separate from <see cref="Execute"/> so the two promises the action makes about the instance —
 		/// the scene it lands in, and that it ends — are assertable without a peer, an event or a
 		/// NetworkManager. Everything the spawn needs is passed in; nothing here reads the event.
 		/// </remarks>
-		internal static GameObject SpawnFX(GameObject prefab, Vector3 position, Scene scene)
+		internal static GameObject SpawnFX(GameObject prefab, Vector3 position, Scene scene, float size = 0f)
 		{
 			if (prefab == null)
 			{
@@ -256,6 +276,10 @@ namespace FishMMO.Shared
 			}
 
 			GameObject instance = UnityEngine.Object.Instantiate(prefab, position, Quaternion.identity);
+			if (size > 0f)
+			{
+				instance.transform.localScale = Vector3.one * size;
+			}
 
 			/* Not the active scene, which a bare Instantiate would have used: see ResolveSpawnScene. */
 			if (scene.IsValid() && scene.isLoaded && instance.scene != scene)

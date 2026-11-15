@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Lesser Heal
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Hurls a mote of healing light that restores 12 health to the friend it strikes. An enemy it strikes is spared.
+  ActivationTime: 1
+  LifeTime: 2.5
+  Speed: 14
+  Cooldown: 2.5
+  WeatherModifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713116592799804
+  AbilityObjectPrefab: {fileID: 2721495037741311843, guid: ac0af8cc12d1ecacc8ae9fca0b6f5efd, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 4
+  ChargeStages: 0
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: 3d8a1fdf0b5d768cfb52789919b179bb, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents:
+  - {fileID: 11400000, guid: f445318038775b5b8aaf646aff099120, type: 2}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713116592799804
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 8
