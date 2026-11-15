@@ -16,7 +16,7 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 4295713116592799811
+  - rid: 4295713116978937923
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -31,7 +31,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116592799811
+    - rid: 4295713116978937923
       type: {class: CasterRushAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

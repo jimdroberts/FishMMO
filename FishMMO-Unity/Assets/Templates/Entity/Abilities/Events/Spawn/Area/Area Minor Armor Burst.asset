@@ -16,8 +16,8 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 4295713116592799792
-  - rid: 4295713116592799793
+  - rid: 4295713116978937904
+  - rid: 4295713116978937905
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -32,7 +32,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116592799792
+    - rid: 4295713116978937904
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -41,24 +41,24 @@ MonoBehaviour:
         FXPrefab: {fileID: 7217397580262009821, guid: c4acd928d2fbcc2bcb0f09c9cd9b1044, type: 3}
         Size: 20
         HeightOffset: 0
-    - rid: 4295713116592799793
+    - rid: 4295713116978937905
       type: {class: AbilityApplyAreaAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
           rid: -2
         StopChainOnFailure: 0
         RadiusValue:
-          rid: 4295713116592799794
+          rid: 4295713116978937906
         MaxHitsValue:
-          rid: 4295713116592799795
+          rid: 4295713116978937907
         TargetLayerMask:
           serializedVersion: 2
           m_Bits: 4294967295
-    - rid: 4295713116592799794
+    - rid: 4295713116978937906
       type: {class: ConstantFloatValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 10
-    - rid: 4295713116592799795
+    - rid: 4295713116978937907
       type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Amount: 5

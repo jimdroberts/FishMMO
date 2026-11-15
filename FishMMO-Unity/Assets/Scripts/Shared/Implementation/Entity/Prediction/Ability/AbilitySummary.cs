@@ -342,21 +342,10 @@ namespace FishMMO.Shared
 			for (int i = 0; i < source.Count; ++i)
 			{
 				T abilityEvent = source[i];
-				if (abilityEvent == null)
-				{
-					continue;
-				}
-
-				bool seen = false;
-				for (int j = 0; j < into.Count; ++j)
-				{
-					if (into[j].ID == abilityEvent.ID)
-					{
-						seen = true;
-						break;
-					}
-				}
-				if (!seen)
+				/* Contains, not a bare ID match: an event that has not been through the cache has
+				 * ID zero, and matching on zero alone took a template's second such event for a
+				 * duplicate of its first and dropped it from the summary. */
+				if (abilityEvent != null && !Contains(into, abilityEvent))
 				{
 					into.Add(abilityEvent);
 				}

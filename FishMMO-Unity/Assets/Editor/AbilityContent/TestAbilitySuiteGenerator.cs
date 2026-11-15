@@ -148,6 +148,8 @@ namespace FishMMO.AbilityContent
 				GenerateMovementAndControl(prefabs, abilities, allEvents);
 				// The Blink On Hit components, Shadowstep and Blink Bolt (TestAbilitySuiteGenerator.BlinkOnHit.cs).
 				GenerateBlinkOnHit(abilities, allEvents);
+				// Dispel Magic and Self Dispel Magic (TestAbilitySuiteGenerator.Dispel.cs).
+				GenerateDispel(abilities, allEvents);
 				List<PremadeAbilityTemplate> premades = GeneratePremades(abilities);
 				WireHasteAnkles(fx);
 				WireMerchant(abilities, allEvents, premades);

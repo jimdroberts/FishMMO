@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Shadowstep
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Hurls an arcane bolt. The first thing it strikes takes 4 damage, and you step out of the air at its back.
+  ActivationTime: 0.5
+  LifeTime: 1.25
+  Speed: 20
+  Cooldown: 12
+  WeatherModifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713116978937968
+  AbilityObjectPrefab: {fileID: 8089488340802066002, guid: a5039dcd272ea8462978d1e3f4ec8b55, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 0
+  HitCount: 1
+  Type: 4
+  ChargeStages: 0
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: 90cbe209cbcdb2104885511a96999a4c, type: 2}
+  - {fileID: 11400000, guid: 7de06e3083185b670ad403c9e846135d, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents:
+  - {fileID: 11400000, guid: 81862c176174c73c7896a64186fb7ed7, type: 2}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713116978937968
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 12

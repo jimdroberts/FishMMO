@@ -43,6 +43,27 @@ namespace FishMMO.Shared
 		public override bool ReappliesOnReplay => true;
 
 		/// <summary>
+		/// What the dispel removes, in the words a tooltip uses: "Removes up to 2 buffs".
+		/// </summary>
+		/// <remarks>
+		/// Without this a dispel contributed nothing, and an ability whose only effect is a dispel
+		/// showed a tooltip with no effect on it at all.
+		/// </remarks>
+		public override string GetTooltipContribution()
+		{
+			string what = IncludeBuffs && IncludeDebuffs ? "buffs or debuffs"
+				: IncludeBuffs ? "buffs"
+				: IncludeDebuffs ? "debuffs"
+				: null;
+			if (what == null)
+			{
+				return null;
+			}
+			string amount = AmountToRemoveValue?.Describe();
+			return amount == null ? $"Removes {what}" : $"Removes up to {amount} {what}";
+		}
+
+		/// <summary>
 		/// Removes a computed number of buffs and/or debuffs from the target character.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>

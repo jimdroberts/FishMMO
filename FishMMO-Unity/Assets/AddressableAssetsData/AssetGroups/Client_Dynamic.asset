@@ -599,6 +599,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8f0ea7076a8d06d92a1194710c646633
+    m_Address: Arcane Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9014e7791cfc4c03a71b2e6ae2607c13
     m_Address: UIWorldQueueDisplay
     m_ReadOnly: 0
@@ -920,6 +927,13 @@ MonoBehaviour:
     m_Address: UICharacterSelect
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: db6e1d6fd39fb8cb393aee5b3fdb06a9
+    m_Address: Dispel Burst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: df5d88ae5f0c0e5e5a130c3e809523d0

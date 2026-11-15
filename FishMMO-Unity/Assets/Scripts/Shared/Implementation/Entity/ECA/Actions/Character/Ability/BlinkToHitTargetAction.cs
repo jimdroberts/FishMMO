@@ -185,9 +185,6 @@ namespace FishMMO.Shared
 		public static Vector3 ResolveDestination(PhysicsScene physics, Vector3 targetFeet, float targetHeight, Vector3 forward,
 			BlinkPlacement placement, float distance, float radius, float height, int layers)
 		{
-			// Room enough that the caster does not land against (or in) the target: two bodies' width.
-			float needed = Mathf.Min(distance, radius * 2f + 0.1f);
-
 			if (placement == BlinkPlacement.Above)
 			{
 				Vector3 over = targetFeet + Vector3.up * (targetHeight + Mathf.Max(0.1f, distance * 0.25f));
@@ -197,8 +194,15 @@ namespace FishMMO.Shared
 				{
 					return over;
 				}
-				placement = BlinkPlacement.Behind; // no headroom: the nearest thing to a drop from above is a step behind
+				/* No headroom: the nearest thing to a drop from above is a step behind. Above's distance is the gap over the
+				 * head, not a distance out from the body, so the ground placement takes a body-and-a-half of its own. */
+				placement = BlinkPlacement.Behind;
+				distance = Mathf.Max(distance, StandOffDistance(radius));
 			}
+
+			// Room enough that the caster does not land against (or in) the target: two bodies' width. A hair of tolerance,
+			// so a landing measured at exactly the asked distance is not refused for its last bit of float.
+			float needed = Mathf.Min(distance, radius * 2f + 0.1f) - 0.01f;
 
 			Vector3 best = targetFeet;
 			float bestRoom = -1f;
@@ -220,6 +224,12 @@ namespace FishMMO.Shared
 				}
 			}
 			return best;
+		}
+
+		/// <summary>How far out from a target a ground landing stands when nothing says otherwise: clear of both bodies.</summary>
+		public static float StandOffDistance(float radius)
+		{
+			return radius * 2f + 0.6f;
 		}
 
 		private static System.Collections.Generic.IEnumerable<BlinkPlacement> Candidates(BlinkPlacement wanted)

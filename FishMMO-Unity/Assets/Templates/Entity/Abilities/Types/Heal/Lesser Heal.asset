@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713116592799804
+  - rid: 4295713116978937916
   AbilityObjectPrefab: {fileID: 2721495037741311843, guid: ac0af8cc12d1ecacc8ae9fca0b6f5efd, type: 3}
   AbilitySpawnTarget: 6
   RequiresTarget: 0
@@ -48,7 +48,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116592799804
+    - rid: 4295713116978937916
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

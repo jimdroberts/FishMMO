@@ -1639,6 +1639,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 19f606d30a068563bab95e8547577f25
+    m_Address: Blink Bolt Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1a0c12cd5bba2306c8651ff1386eb73b
     m_Address: TreeVillage - Taiga Lodge
     m_ReadOnly: 0
@@ -2033,6 +2040,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1ffcfa9058a540339d8e35a0f253d631
     m_Address: Rock Tortoise
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 202dfadbe2d54389af9f0c35fc62046b
+    m_Address: Plot Interact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3454,6 +3468,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 379e67903e6e4df5180158d1f6f12ec6
     m_Address: Star-stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 37a92ffb555d7b9f898787772eac2173
+    m_Address: Premade Shadowstep
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4999,6 +5020,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5238d0894799cf76eaddd348c1419646
+    m_Address: Blink On Hit - Right
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5286009ee3224a96a9188580ad80eea9
     m_Address: Wyvern
     m_ReadOnly: 0
@@ -5785,6 +5813,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 5e9cc0505b46056e99098a946dbcfeb9
     m_Address: Grape Cluster Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5ea525e7e53ac38568dcf46085512b46
+    m_Address: Blink On Hit - Above
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6679,13 +6714,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 202dfadbe2d54389af9f0c35fc62046b
-    m_Address: Plot Interact
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 6f65fd31ee0b84eb913a1631ae865bab
     m_Address: Dungeon Entrance Interact
     m_ReadOnly: 0
@@ -7462,6 +7490,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7de06e3083185b670ad403c9e846135d
+    m_Address: Blink On Hit - Behind
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7de2a958593c5df5e8fb43cccdfeb88f
     m_Address: RitualSite - Stones (Small)
     m_ReadOnly: 0
@@ -7616,6 +7651,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 803102b27c5f4fd0a09a927046c6ef60
+    m_Address: Dispel Magic
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8056196aa1ba4f2f8e10f6616eacd914
     m_Address: Waypoint
     m_ReadOnly: 0
@@ -7665,8 +7707,22 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 813c1dd938336ad8e901c4aa0611dfc0
+    m_Address: Blink Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 816e3595c36fd92f88a9be66c52e877a
     m_Address: CliffPalace - Alcove (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 81862c176174c73c7896a64186fb7ed7
+    m_Address: Arcane Impact FX Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8617,6 +8673,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 90cbe209cbcdb2104885511a96999a4c
+    m_Address: Shadowstep Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 90db04a2353c8d556be61881ea36bdbc
     m_Address: Breath-ice
     m_ReadOnly: 0
@@ -9067,6 +9130,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 975a64b1aba0600e8bf6c3be86b7a1c3
     m_Address: DungeonEntrance - Barrow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 975a655b2770ad8d1b9718df1c5f05a4
+    m_Address: Self Dispel Magic
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9624,6 +9694,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a19dc73201d04012a57a689c8b238ba2
+    m_Address: Dispel Magic Purge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a1c3d447793ee003ea801164ebd7be62
     m_Address: SignalBeacon - Watch Fire
     m_ReadOnly: 0
@@ -9708,6 +9785,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a4008eb9f2545c2a3a4b493c3a1c9807
+    m_Address: Blink On Hit - Left
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a4b4b6ee3c3a727c9890dc69a0410e0b
     m_Address: Gesho Node
     m_ReadOnly: 0
@@ -9724,6 +9808,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a4feab97120d46c0886fcef063185855
     m_Address: Unicorn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a5039dcd272ea8462978d1e3f4ec8b55
+    m_Address: Arcane Bolt Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10228,6 +10319,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ac6af2bfbd278c1eb9c87d0edc9a3297
     m_Address: Tower - Ruined Watchtower
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ac780f30a18e80f8e8ea4593d87dcc93
+    m_Address: Premade Blink Bolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11066,6 +11164,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: bc81cadbd08025be7a01d33c3e9d1922
+    m_Address: Shadowstep
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: bc9db3124a055c7fea1fcd0a9d8396c2
     m_Address: Pyramid - Smooth-sided (Small)
     m_ReadOnly: 0
@@ -11817,6 +11922,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ca1064cf8e824b3459408462685297c2
     m_Address: Bloodroot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: cad422de54e94ab6bed0b584ebf94119
+    m_Address: Dispel Magic Cleanse
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12662,6 +12774,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: d9c3035ef31caf82a966d9bc86b3814b
+    m_Address: Self Dispel Magic Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: d9eaf27c8871e8b12a5dded3ab3d891f
     m_Address: SunkenShrine - Drowned
     m_ReadOnly: 0
@@ -13126,6 +13245,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e0ec1c9ecdb3e94c3912cee525a13a2b
     m_Address: Mesquite Pods
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e0eded752fbd1a6a2b1ff5b2e810fcb2
+    m_Address: Blink On Hit - In Front
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

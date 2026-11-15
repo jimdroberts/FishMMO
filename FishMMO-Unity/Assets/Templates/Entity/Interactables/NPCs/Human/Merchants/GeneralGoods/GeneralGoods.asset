@@ -36,6 +36,10 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7b3e78d6498a829e6a7bbce264023bd1, type: 2}
   - {fileID: 11400000, guid: 9a9b094c06e82ccbcba5e9ede61814de, type: 2}
   - {fileID: 11400000, guid: cc0f288e48244759b878525188940057, type: 2}
+  - {fileID: 11400000, guid: 803102b27c5f4fd0a09a927046c6ef60, type: 2}
+  - {fileID: 11400000, guid: bc81cadbd08025be7a01d33c3e9d1922, type: 2}
+  - {fileID: 11400000, guid: 813c1dd938336ad8e901c4aa0611dfc0, type: 2}
+  - {fileID: 11400000, guid: 975a655b2770ad8d1b9718df1c5f05a4, type: 2}
   AbilityEvents:
   - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   - {fileID: 11400000, guid: b1b0ada2796be4c4ca8c95734c884fc2, type: 2}
@@ -62,6 +66,17 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 498679763cec1ec0da2ab0a72deccc39, type: 2}
   - {fileID: 11400000, guid: 451e102f1a4a410682d7c931e8275676, type: 2}
   - {fileID: 11400000, guid: e0a21b8ec6aa4174af8f6f2472d0e1e3, type: 2}
+  - {fileID: 11400000, guid: e0eded752fbd1a6a2b1ff5b2e810fcb2, type: 2}
+  - {fileID: 11400000, guid: 7de06e3083185b670ad403c9e846135d, type: 2}
+  - {fileID: 11400000, guid: a4008eb9f2545c2a3a4b493c3a1c9807, type: 2}
+  - {fileID: 11400000, guid: 5238d0894799cf76eaddd348c1419646, type: 2}
+  - {fileID: 11400000, guid: 5ea525e7e53ac38568dcf46085512b46, type: 2}
+  - {fileID: 11400000, guid: 90cbe209cbcdb2104885511a96999a4c, type: 2}
+  - {fileID: 11400000, guid: 19f606d30a068563bab95e8547577f25, type: 2}
+  - {fileID: 11400000, guid: 81862c176174c73c7896a64186fb7ed7, type: 2}
+  - {fileID: 11400000, guid: a19dc73201d04012a57a689c8b238ba2, type: 2}
+  - {fileID: 11400000, guid: cad422de54e94ab6bed0b584ebf94119, type: 2}
+  - {fileID: 11400000, guid: d9c3035ef31caf82a966d9bc86b3814b, type: 2}
   Items:
   - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
   - {fileID: 11400000, guid: 0ec11e24101f9ddd1a002b65004cb524, type: 2}
@@ -85,5 +100,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: dedf722032bfb1e308c1b75e61fcfbed, type: 2}
   - {fileID: 11400000, guid: c647bb6c002bed488a45eee46cdfc270, type: 2}
   - {fileID: 11400000, guid: 2e0ce5d688dc85030b72228051d87212, type: 2}
+  - {fileID: 11400000, guid: 37a92ffb555d7b9f898787772eac2173, type: 2}
+  - {fileID: 11400000, guid: ac780f30a18e80f8e8ea4593d87dcc93, type: 2}
   BuysItems: 0
   SellPriceMultiplier: 0.25
