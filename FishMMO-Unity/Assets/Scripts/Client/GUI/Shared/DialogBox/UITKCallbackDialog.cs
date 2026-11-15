@@ -260,12 +260,15 @@ namespace FishMMO.Client
 				return;
 			}
 
+			if (CancelKey.Matches(evt))
+			{
+				evt.StopPropagation();
+				CancelRequest();
+				return;
+			}
+
 			switch (evt.keyCode)
 			{
-				case UnityEngine.KeyCode.Escape:
-					evt.StopPropagation();
-					CancelRequest();
-					return;
 				case UnityEngine.KeyCode.Return:
 				case UnityEngine.KeyCode.KeypadEnter:
 					evt.StopPropagation();

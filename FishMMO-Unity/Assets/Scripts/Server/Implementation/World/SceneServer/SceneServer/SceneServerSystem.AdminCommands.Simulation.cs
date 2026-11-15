@@ -57,6 +57,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public TransportTrafficSnapshot TrafficAtStart;
 			/// <summary>Reconciles written and skipped as quiet, and player-ticks at the idle send interval, at the start.</summary>
 			public long ReconcilesAtStart, QuietAtStart, PlayerTicksAtStart, IdleTicksAtStart;
+			/// <summary>Hit claims granted and refused, and casts held or cancelled for missing input, when the window opened.</summary>
+			public long HitClaimsGrantedAtStart, HitClaimsRefusedAtStart, HitClaimsAgreedAtStart, TickGuardRefusedAtStart, BlankCastTicksAtStart, BlankCastCancelsAtStart;
 			/// <summary>Per state group, idle owners' reconciles that changed (CharacterPredictionController.QuietMissCounts) at the start.</summary>
 			public long[] QuietMissAtStart;
 			/// <summary>Process CPU time at the window's start; null where it cannot be read.</summary>
@@ -280,6 +282,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				TransportTraffic.Capture(out run.TrafficAtStart);
 				run.ReconcilesAtStart = CharacterPredictionController.ReconcilesSent;
 				run.QuietAtStart = CharacterPredictionController.QuietReconcilesSkipped;
+				run.HitClaimsGrantedAtStart = AbilityController.HitClaimsGranted;
+				run.HitClaimsAgreedAtStart = AbilityController.HitClaimsAgreed;
+				run.TickGuardRefusedAtStart = FishNet.Object.Prediction.ReplicateTickGuard.Refused;
+				run.HitClaimsRefusedAtStart = AbilityController.HitClaimsRefused;
+				run.BlankCastTicksAtStart = AbilityController.BlankCastTicks;
+				run.BlankCastCancelsAtStart = AbilityController.BlankCastCancels;
 				run.PlayerTicksAtStart = scheduledPlayerTicks;
 				run.IdleTicksAtStart = idleIntervalPlayerTicks;
 				run.QuietMissAtStart = (long[])CharacterPredictionController.QuietMissCounts.Clone();
@@ -446,6 +454,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			long appRecvMessages = end.AppRecvMessages - run.TrafficAtStart.AppRecvMessages;
 			long reconcilesSent = CharacterPredictionController.ReconcilesSent - run.ReconcilesAtStart;
 			long quietSkipped = CharacterPredictionController.QuietReconcilesSkipped - run.QuietAtStart;
+			long claimsGranted = AbilityController.HitClaimsGranted - run.HitClaimsGrantedAtStart;
+			long claimsRefused = AbilityController.HitClaimsRefused - run.HitClaimsRefusedAtStart;
+			long claimsAgreed = AbilityController.HitClaimsAgreed - run.HitClaimsAgreedAtStart;
+			long tickGuardRefused = FishNet.Object.Prediction.ReplicateTickGuard.Refused - run.TickGuardRefusedAtStart;
+			long blankCastTicks = AbilityController.BlankCastTicks - run.BlankCastTicksAtStart;
+			long blankCastCancels = AbilityController.BlankCastCancels - run.BlankCastCancelsAtStart;
 			long playerTicks = scheduledPlayerTicks - run.PlayerTicksAtStart;
 			long idleTicks = idleIntervalPlayerTicks - run.IdleTicksAtStart;
 			var summary = new List<string>();
@@ -470,6 +484,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Reconciles: {reconcilesSent / seconds / players:0.0}/s per player sent, {quietSkipped / seconds / players:0.0}/s skipped as quiet; " +
 					$"players on the idle send interval {(playerTicks > 0 ? 100.0 * idleTicks / playerTicks : 0):0}% of the time.",
 				$"Idle players' reconciles that changed anyway, by what changed: {DescribeQuietMisses(run.QuietMissAtStart)}.",
+				// Granted = a hit the owner saw that the server's own rewound sweep had not made; refused = outside what it could have seen.
+				$"Hit claims: {claimsAgreed} agreed (the server had made the hit), {claimsGranted} granted, {claimsRefused} refused; inputs refused by the tick guard {tickGuardRefused}; casts held for late input on {blankCastTicks} tick(s), {blankCastCancels} cancelled for input that never came.",
 				$"Byte budget {(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget} B/s per viewer" : "off")}; last pass left out {ObserverStreamingRegistry.LastPassByteEvicted}, slowed {ObserverStreamingRegistry.LastPassByteSlowed}.",
 			};
 			lines.AddRange(compressionSummary);

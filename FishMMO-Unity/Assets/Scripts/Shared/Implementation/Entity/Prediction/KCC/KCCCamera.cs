@@ -1,14 +1,47 @@
 ﻿using System;
 using System.Collections.Generic;
+using KinematicCharacterController;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Third-person camera controller for character following, orbiting, zoom, and obstruction handling.
-	/// Supports smooth movement, rotation, and framing adjustments.
+	/// Where the player's camera sits relative to their character.
 	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// Stored as a player setting (ClientCameraSettings), so the values are ours and never reordered: a saved file keeps
+	/// its meaning across releases. The order the Options dropdown shows them in is separate.
+	/// </para>
+	/// <para>
+	/// The character faces the camera's heading in every style (OrientationMethod.TowardsCamera); the styles differ only
+	/// in where the view is taken from. Where the shots go is the same rule in all three: from the character's eye to the
+	/// point under the crosshair (<see cref="AimConvergence"/>), which is what lets the view sit off the character's
+	/// line at all.
+	/// </para>
+	/// </remarks>
+	public enum KCCCameraStyle : byte
+	{
+		/// <summary>Centred behind the character, orbiting and zooming freely. The original camera.</summary>
+		ThirdPerson = 0,
+
+		/// <summary>Close behind and to the right of the character, looking past their shoulder.</summary>
+		OverShoulder = 1,
+
+		/// <summary>At the character's eyes.</summary>
+		FirstPerson = 2,
+	}
+
+	/// <summary>
+	/// The player's camera: follows, orbits, zooms and keeps out of walls, in one of three styles
+	/// (<see cref="KCCCameraStyle"/>): third person, over the shoulder, or first person.
+	/// </summary>
+	/// <remarks>
+	/// The camera decides only what the player sees. Where shots go is worked out from it each tick in
+	/// KCCPlayer.PopulateInput (<see cref="AimConvergence"/>), which is what keeps them on the crosshair when the view is
+	/// off the character's line.
+	/// </remarks>
 	public class KCCCamera : MonoBehaviour
 	{
 		[Header("Framing")]
@@ -108,6 +141,47 @@ namespace FishMMO.Shared
 		/// </summary>
 		public List<Collider> IgnoredColliders = new List<Collider>();
 
+		[Header("Over Shoulder")]
+		/// <summary>
+		/// Where the view pivots in <see cref="KCCCameraStyle.OverShoulder"/>, from the follow point: metres to the
+		/// camera's right (x) and up (y).
+		/// </summary>
+		/// <remarks>
+		/// The pivot is moved out sideways before the camera is pulled back from it, and that sideways move is itself
+		/// cast against the world (<see cref="ResolvePivot"/>): a shoulder against a wall brings the view in towards the
+		/// character instead of putting it through the wall.
+		/// </remarks>
+		public Vector2 ShoulderOffset = new Vector2(0.55f, 0.2f);
+		/// <summary>Distance behind the shoulder when the style is first taken.</summary>
+		public float ShoulderDefaultDistance = 2.5f;
+		/// <summary>Closest the wheel brings the view to the shoulder.</summary>
+		public float ShoulderMinDistance = 1.25f;
+		/// <summary>Farthest the wheel takes the view from the shoulder.</summary>
+		public float ShoulderMaxDistance = 4f;
+
+		[Header("First Person")]
+		/// <summary>
+		/// Eye height above the character's feet when no motor has been given (<see cref="EyeMotor"/>). With one, the
+		/// eye is the one shots are aimed from (<see cref="CharacterAimOrigin"/>), so the view and the aim share it.
+		/// </summary>
+		public float FallbackEyeHeight = 1.6f;
+
+		/// <summary>
+		/// The style in effect. Set through <see cref="SetStyle"/>, which keeps each style's own zoom.
+		/// </summary>
+		public KCCCameraStyle Style { get; private set; } = KCCCameraStyle.ThirdPerson;
+
+		/// <summary>
+		/// The motor of the character being followed, for its eye height in first person. Optional: without it the
+		/// eye is <see cref="FallbackEyeHeight"/> above the feet.
+		/// </summary>
+		public KinematicCharacterMotor EyeMotor { get; set; }
+
+		/// <summary>The third-person zoom, kept while another style is in use so returning to it restores the framing.</summary>
+		private float thirdPersonDistance = -1f;
+		/// <summary>The over-the-shoulder zoom, kept the same way.</summary>
+		private float shoulderDistance = -1f;
+
 		/// <summary>
 		/// The camera's transform.
 		/// </summary>
@@ -189,7 +263,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ResetMotionState()
 		{
-			currentDistance = DefaultDistance;
+			/* The style survives (it is the player's setting, applied once at boot), but the zoom each style
+			 * remembered belonged to the session that just ended. */
+			thirdPersonDistance = -1f;
+			shoulderDistance = -1f;
+			currentDistance = StyleDefaultDistance(Style);
 			TargetDistance = currentDistance;
 
 			targetVerticalAngle = 0f;
@@ -236,6 +314,7 @@ namespace FishMMO.Shared
 		public void ReleaseFollowTarget()
 		{
 			FollowTransform = null;
+			EyeMotor = null;
 
 			/* Cleared rather than kept: these were the departed character's own colliders, and the
 			 * next character contributes its own on bind. Holding them would keep a list of
@@ -276,12 +355,136 @@ namespace FishMMO.Shared
 			// Handle the smooth follow position
 			UpdateFollowPosition(deltaTime);
 
+			PhysicsScene physicsScene = ResolvePhysicsScene();
+
+			// Where the view turns about this frame: the follow point, the shoulder, or the eye.
+			Vector3 pivot = ResolvePivot(physicsScene);
+
+			if (Style == KCCCameraStyle.FirstPerson)
+			{
+				/* At the eye there is no boom to obstruct. The distance is dropped at once rather than eased, so the view
+				 * never passes through the character's own head on the way in; leaving first person eases back out from
+				 * zero as any zoom does. */
+				currentDistance = 0f;
+				distanceIsObstructed = false;
+				Transform.position = pivot;
+				return;
+			}
+
 			// Handle obstructions
-			HandleObstructions(deltaTime);
+			HandleObstructions(physicsScene, pivot, deltaTime);
 
 			// Calculate the final camera position, including framing adjustments
-			Vector3 targetPosition = CalculateTargetPosition(targetRotation);
+			Vector3 targetPosition = CalculateTargetPosition(pivot, targetRotation);
 			Transform.position = targetPosition;
+		}
+
+		/// <summary>
+		/// Changes where the view is taken from, keeping the zoom each style was left at.
+		/// </summary>
+		/// <remarks>
+		/// Safe before a character has claimed the camera: the style is held and used from the first update. The view's
+		/// heading and pitch are untouched, so switching never turns the player.
+		/// </remarks>
+		/// <param name="style">The style to use. An undefined value is taken as <see cref="KCCCameraStyle.ThirdPerson"/>.</param>
+		public void SetStyle(KCCCameraStyle style)
+		{
+			if (!Enum.IsDefined(typeof(KCCCameraStyle), style))
+			{
+				style = KCCCameraStyle.ThirdPerson;
+			}
+			if (style == Style)
+			{
+				return;
+			}
+
+			switch (Style)
+			{
+				case KCCCameraStyle.ThirdPerson:
+					thirdPersonDistance = TargetDistance;
+					break;
+				case KCCCameraStyle.OverShoulder:
+					shoulderDistance = TargetDistance;
+					break;
+			}
+
+			Style = style;
+
+			float remembered = style == KCCCameraStyle.ThirdPerson ? thirdPersonDistance
+				: style == KCCCameraStyle.OverShoulder ? shoulderDistance
+				: 0f;
+			TargetDistance = Mathf.Clamp(remembered >= 0f ? remembered : StyleDefaultDistance(style), ActiveMinDistance, ActiveMaxDistance);
+		}
+
+		/// <summary>The distance a style starts at.</summary>
+		private float StyleDefaultDistance(KCCCameraStyle style)
+		{
+			switch (style)
+			{
+				case KCCCameraStyle.OverShoulder:
+					return ShoulderDefaultDistance;
+				case KCCCameraStyle.FirstPerson:
+					return 0f;
+				default:
+					return DefaultDistance;
+			}
+		}
+
+		/// <summary>The closest the wheel may bring the view, in the current style.</summary>
+		public float ActiveMinDistance => Style == KCCCameraStyle.OverShoulder ? ShoulderMinDistance
+			: Style == KCCCameraStyle.FirstPerson ? 0f
+			: MinDistance;
+
+		/// <summary>The farthest the wheel may take the view, in the current style.</summary>
+		public float ActiveMaxDistance => Style == KCCCameraStyle.OverShoulder ? Mathf.Max(ShoulderMinDistance, ShoulderMaxDistance)
+			: Style == KCCCameraStyle.FirstPerson ? 0f
+			: MaxDistance;
+
+		/// <summary>
+		/// The point the view turns about this frame, and is pulled back from.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Third person:</b> the follow point.
+		/// </para>
+		/// <para>
+		/// <b>Over the shoulder:</b> the follow point moved by <see cref="ShoulderOffset"/>, to the view's right and up
+		/// the character. The move is cast first: pulling the camera back from a shoulder that is already inside a wall
+		/// would start the boom's own cast inside it, and a cast that starts inside a collider does not report it.
+		/// </para>
+		/// <para>
+		/// <b>First person:</b> the eye, measured up from the character's feet as drawn (the follow point's parent, the
+		/// smoothed mesh root) by the same height shots are aimed from, so the view moves as smoothly as the body and
+		/// sits where the aim begins.
+		/// </para>
+		/// </remarks>
+		private Vector3 ResolvePivot(PhysicsScene physicsScene)
+		{
+			switch (Style)
+			{
+				case KCCCameraStyle.FirstPerson:
+					{
+						Transform feet = FollowTransform.parent;
+						float eyeHeight = EyeMotor != null ? CharacterAimOrigin.EyeHeight(EyeMotor) : FallbackEyeHeight;
+						return feet != null
+							? feet.position + FollowTransform.up * eyeHeight
+							: currentFollowPosition;
+					}
+				case KCCCameraStyle.OverShoulder:
+					{
+						Vector3 offset = Transform.right * ShoulderOffset.x + FollowTransform.up * ShoulderOffset.y;
+						float length = offset.magnitude;
+						if (length < 1e-4f)
+						{
+							return currentFollowPosition;
+						}
+						Vector3 direction = offset / length;
+						float clear = NearestObstruction(physicsScene, currentFollowPosition, direction, length);
+						return currentFollowPosition + direction * Mathf.Min(length, clear);
+					}
+				default:
+					return currentFollowPosition;
+			}
 		}
 
 		/// <summary>
@@ -332,7 +535,7 @@ namespace FishMMO.Shared
 			}
 
 			TargetDistance += zoomInput * DistanceMovementSpeed;
-			TargetDistance = Mathf.Clamp(TargetDistance, MinDistance, MaxDistance);
+			TargetDistance = Mathf.Clamp(TargetDistance, ActiveMinDistance, ActiveMaxDistance);
 		}
 
 		/// <summary>
@@ -369,15 +572,36 @@ namespace FishMMO.Shared
 		/// backwards along <c>Transform.forward</c> and that is the ray to test.
 		/// </para>
 		/// </remarks>
+		/// <param name="physicsScene">The physics scene the character lives in (<see cref="ResolvePhysicsScene"/>).</param>
+		/// <param name="pivot">Where the boom starts: the follow point, or the shoulder (<see cref="ResolvePivot"/>).</param>
 		/// <param name="deltaTime">Frame time.</param>
-		private void HandleObstructions(float deltaTime)
+		private void HandleObstructions(PhysicsScene physicsScene, Vector3 pivot, float deltaTime)
 		{
-			RaycastHit closestHit = new RaycastHit();
-			closestHit.distance = Mathf.Infinity;
+			float closest = NearestObstruction(physicsScene, pivot, -Transform.forward, TargetDistance);
 
-			Vector3 playerToCameraDir = -Transform.forward;
+			// Handle obstruction results
+			if (closest < Mathf.Infinity)
+			{
+				distanceIsObstructed = true;
+				currentDistance = Mathf.Lerp(currentDistance, closest, 1 - Mathf.Exp(-ObstructionSharpness * deltaTime));
+			}
+			else
+			{
+				distanceIsObstructed = false;
+				currentDistance = Mathf.Lerp(currentDistance, TargetDistance, 1 - Mathf.Exp(-DistanceMovementSharpness * deltaTime));
+			}
+		}
 
-			PhysicsScene physicsScene = ResolvePhysicsScene();
+		/// <summary>
+		/// How far a sphere of <see cref="ObstructionCheckRadius"/> travels from <paramref name="origin"/> before it
+		/// touches something that is not the character's own; infinity when nothing is in reach.
+		/// </summary>
+		private float NearestObstruction(PhysicsScene physicsScene, Vector3 origin, Vector3 direction, float maxDistance)
+		{
+			if (maxDistance <= 0f)
+			{
+				return Mathf.Infinity;
+			}
 
 			/* A non-allocating query that comes back full has already discarded results in broadphase
 			 * order, and the one it discarded may be the closest — which is the only entry this method
@@ -385,33 +609,22 @@ namespace FishMMO.Shared
 			int obstructionCount;
 			while (true)
 			{
-				obstructionCount = physicsScene.SphereCast(currentFollowPosition, ObstructionCheckRadius, playerToCameraDir, obstructions, TargetDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
+				obstructionCount = physicsScene.SphereCast(origin, ObstructionCheckRadius, direction, obstructions, maxDistance, ObstructionLayers, QueryTriggerInteraction.Ignore);
 				if (!TargetOrdering.TryGrowQueryBuffer(ref obstructions, obstructionCount))
 				{
 					break;
 				}
 			}
 
-			// Check for the closest obstruction
+			float closest = Mathf.Infinity;
 			for (int i = 0; i < obstructionCount; i++)
 			{
-				if (!IsColliderIgnored(obstructions[i].collider) && obstructions[i].distance < closestHit.distance && obstructions[i].distance > 0)
+				if (!IsColliderIgnored(obstructions[i].collider) && obstructions[i].distance < closest && obstructions[i].distance > 0)
 				{
-					closestHit = obstructions[i];
+					closest = obstructions[i].distance;
 				}
 			}
-
-			// Handle obstruction results
-			if (closestHit.distance < Mathf.Infinity)
-			{
-				distanceIsObstructed = true;
-				currentDistance = Mathf.Lerp(currentDistance, closestHit.distance, 1 - Mathf.Exp(-ObstructionSharpness * deltaTime));
-			}
-			else
-			{
-				distanceIsObstructed = false;
-				currentDistance = Mathf.Lerp(currentDistance, TargetDistance, 1 - Mathf.Exp(-DistanceMovementSharpness * deltaTime));
-			}
+			return closest;
 		}
 
 		/// <summary>
@@ -461,12 +674,17 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Calculates the final camera position, including framing adjustments.
 		/// </summary>
+		/// <remarks>
+		/// <see cref="FollowPointFraming"/> is third person's own: over the shoulder the offset is
+		/// <see cref="ShoulderOffset"/>, applied to the pivot, where it is cast against the world.
+		/// </remarks>
+		/// <param name="pivot">The point the boom starts from (<see cref="ResolvePivot"/>).</param>
 		/// <param name="targetRotation">Target camera rotation.</param>
 		/// <returns>Final camera position vector.</returns>
-		private Vector3 CalculateTargetPosition(Quaternion targetRotation)
+		private Vector3 CalculateTargetPosition(Vector3 pivot, Quaternion targetRotation)
 		{
-			Vector3 targetPosition = currentFollowPosition - (targetRotation * Vector3.forward * currentDistance);
-			if (TargetDistance > 0.0f)
+			Vector3 targetPosition = pivot - (targetRotation * Vector3.forward * currentDistance);
+			if (Style == KCCCameraStyle.ThirdPerson && TargetDistance > 0.0f)
 			{
 				targetPosition += Transform.right * FollowPointFraming.x;
 				targetPosition += Transform.up * FollowPointFraming.y;

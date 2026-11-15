@@ -26,6 +26,9 @@ namespace FishMMO.Shared
 		[SerializeReference, SubclassSelector]
 		public IIntValueProvider AmountValue;
 
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
 		/// <summary>
 		/// Executes the action, consuming the specified resource from the target character.
 		/// Prefer <see cref="TryExecute"/> for fail-fast chains (set <see cref="BaseAction.StopChainOnFailure"/>

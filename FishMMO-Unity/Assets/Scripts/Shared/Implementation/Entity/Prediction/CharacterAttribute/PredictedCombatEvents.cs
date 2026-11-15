@@ -79,6 +79,10 @@ namespace FishMMO.Shared
 			public int DamageTypeId;
 			public int Amount;
 			public float PredictedAt;
+			/// <summary>The target's count of health values received from the server when this was predicted (see <see cref="OnPredictionUndone"/>).</summary>
+			public int HealthPushStamp;
+			/// <summary>How far this prediction actually moved the target's health bar (clamped at 0 and the maximum).</summary>
+			public int MovedHealth;
 		}
 
 		private static readonly List<Pending> pending = new List<Pending>();
@@ -99,6 +103,22 @@ namespace FishMMO.Shared
 		/// one that greys out reads as "that did not land".
 		/// </summary>
 		public static event Action<long> OnPredictionRejected;
+
+		/// <summary>
+		/// Raised when a prediction is given up (the server never confirmed it, or refused it): the target's object id, the
+		/// amount this client moved its health by, the kind, and the target's health-push count when it was predicted.
+		/// </summary>
+		/// <remarks>
+		/// The label was greyed out and the BAR was left where the prediction put it. A hit the server absorbed with a
+		/// shield, evaded or refused changes nothing there, so nothing was ever sent to put the bar back, and the caster
+		/// watched a target sit at a health it did not have until something else moved it. The listener
+		/// (CharacterDamageController) undoes the amount, unless the server has sent that target's health since, in which
+		/// case the bar is already the server's.
+		/// </remarks>
+		public static event Action<int, int, Kind, int> OnPredictionUndone;
+
+		/// <summary>Reads a target's health-push count when a prediction is made; set by CharacterDamageController.</summary>
+		public static Func<ICharacter, int> HealthPushStampOf;
 
 		/// <summary>
 		/// Raised when the server's report confirmed a predicted number. Nothing needs redrawing — the
@@ -128,7 +148,7 @@ namespace FishMMO.Shared
 		/// <param name="kind">Damage or heal.</param>
 		/// <param name="damageAttribute">Damage type, for colouring. Null for heals and typeless damage.</param>
 		/// <param name="now">Current unscaled time, in seconds.</param>
-		public static void Predict(ICharacter source, ICharacter target, int amount, Kind kind, DamageAttributeTemplate damageAttribute, float now)
+		public static void Predict(ICharacter source, ICharacter target, int amount, Kind kind, DamageAttributeTemplate damageAttribute, float now, int movedHealth = -1)
 		{
 			if (target == null || amount <= 0)
 			{
@@ -137,7 +157,7 @@ namespace FishMMO.Shared
 
 			int targetObjectId = ResolveObjectId(target);
 			int sourceObjectId = ResolveObjectId(source);
-			if (targetObjectId == 0 || sourceObjectId == 0)
+			if (targetObjectId < 0 || sourceObjectId < 0)
 			{
 				/* No network identity to match a report against, so this could never be confirmed
 				 * and would always end up greyed out. Better to draw nothing than to draw a number
@@ -156,6 +176,8 @@ namespace FishMMO.Shared
 				DamageTypeId = damageAttribute != null ? damageAttribute.ID : 0,
 				Amount = amount,
 				PredictedAt = now,
+				HealthPushStamp = HealthPushStampOf != null ? HealthPushStampOf(target) : 0,
+				MovedHealth = movedHealth >= 0 ? movedHealth : amount,
 			});
 
 			OnPredicted?.Invoke(id, target, amount, kind, damageAttribute);
@@ -257,7 +279,7 @@ namespace FishMMO.Shared
 
 			int targetObjectId = ResolveObjectId(target);
 			int sourceObjectId = ResolveObjectId(source);
-			if (targetObjectId == 0 || sourceObjectId == 0)
+			if (targetObjectId < 0 || sourceObjectId < 0)
 			{
 				return 0;
 			}
@@ -286,11 +308,13 @@ namespace FishMMO.Shared
 					pending[i].Kind == kind &&
 					pending[i].DamageTypeId == damageTypeId)
 				{
-					long id = pending[i].Id;
+					Pending settledEntry = pending[i];
+					long id = settledEntry.Id;
 					pending.RemoveAt(i);
 					if (refusal)
 					{
 						OnPredictionRefused?.Invoke(id, reason);
+						OnPredictionUndone?.Invoke(settledEntry.TargetObjectId, settledEntry.MovedHealth, settledEntry.Kind, settledEntry.HealthPushStamp);
 					}
 					else
 					{
@@ -325,7 +349,7 @@ namespace FishMMO.Shared
 			}
 			int targetObjectId = ResolveObjectId(target);
 			int sourceObjectId = ResolveObjectId(source);
-			if (targetObjectId == 0 || sourceObjectId == 0)
+			if (targetObjectId < 0 || sourceObjectId < 0)
 			{
 				return 0;
 			}
@@ -359,9 +383,11 @@ namespace FishMMO.Shared
 					continue;
 				}
 
-				long id = pending[i].Id;
+				Pending rejected = pending[i];
+				long id = rejected.Id;
 				pending.RemoveAt(i);
 				OnPredictionRejected?.Invoke(id);
+				OnPredictionUndone?.Invoke(rejected.TargetObjectId, rejected.MovedHealth, rejected.Kind, rejected.HealthPushStamp);
 			}
 		}
 
@@ -379,10 +405,35 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>Network object id for a character, or 0 when it has no network identity.</summary>
+		/// <summary>The target's current health on this peer, or NaN when it has none.</summary>
+		public static float CurrentHealth(ICharacter target)
+		{
+			if (target != null && target.TryGet(out ICharacterAttributeController attributes) &&
+				attributes.TryGetHealthAttribute(out CharacterResourceAttribute health))
+			{
+				return health.CurrentValue;
+			}
+			return float.NaN;
+		}
+
+		/// <summary>
+		/// How far a prediction moved a bar, from its value before and after: what undoing it must put back. The amount the
+		/// prediction asked for is not it: damage of 50 on a target at 10 moves the bar 10, and a heal of 20 on one at 95 of
+		/// 100 moves it 5, so undoing the amount left the bar 40 above or 15 below the server's.
+		/// </summary>
+		public static int HealthMoved(float before, float after)
+		{
+			if (float.IsNaN(before) || float.IsNaN(after))
+			{
+				return -1;
+			}
+			return Math.Max(0, (int)Math.Round(Math.Abs(before - after)));
+		}
+
 		private static int ResolveObjectId(ICharacter character)
 		{
 			FishNet.Object.NetworkObject networkObject = character?.NetworkObject;
-			return networkObject != null ? networkObject.ObjectId : 0;
+			return networkObject != null ? networkObject.ObjectId : -1;
 		}
 	}
 }

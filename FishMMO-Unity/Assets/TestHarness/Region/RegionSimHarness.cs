@@ -44,7 +44,7 @@ namespace FishMMO.TestHarness
 		public CharacterAttributeTemplate BoostedAttribute;
 
 		[Tooltip("Tugboat listen port — nothing connects.")]
-		public ushort Port = 7799;
+		public ushort Port = 8799;
 
 		[Tooltip("Walker speed, metres per second.")]
 		public float WalkSpeed = 6f;

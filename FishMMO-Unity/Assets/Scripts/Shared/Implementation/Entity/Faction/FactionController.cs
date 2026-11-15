@@ -95,12 +95,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public bool IsAggressive { get { return isAggressive; } set { isAggressive = value; } }
 
-		/// <summary>How long after a hit that needed it the aggression toggle may not be turned off.</summary>
+		/// <summary>
+		/// How long the aggression toggle stays locked on after the character, with aggression on, hits or kills anything, or
+		/// is hit by anything. Every such hit starts the full time again.
+		/// </summary>
 		/// <remarks>
 		/// Without it a player could strike a neutral, turn aggression off, and be beyond the reach of its retaliation (an
-		/// NPC may only harm an enemy or a player whose aggression is on).
+		/// NPC may only harm an enemy or a player whose aggression is on), or start a fight with aggression on and drop it the
+		/// moment the fight turned.
 		/// </remarks>
-		public const float AggressionLockSeconds = 10f;
+		public const float AggressionLockSeconds = 300f;
+
+		/// <summary>Attack casts refused at one character (only aggression would have let them land) that turn aggression on.</summary>
+		public const int AutoAggressionAttacks = 3;
+
+		/// <summary>Seconds within which the <see cref="AutoAggressionAttacks"/> casts must fall.</summary>
+		public const float AutoAggressionWindowSeconds = 10f;
+
+		/// <summary>
+		/// How far the server's lock may run ahead of what the owner was last sent before it is sent again: a lock refreshed by
+		/// every hit of a long fight is sent at most this often, not per hit. The owner's countdown is at most this short.
+		/// </summary>
+		public const float AggressionLockSyncSlackSeconds = 5f;
 
 		/// <summary>
 		/// The player's aggression toggle: written only by the server, read by the owner and every observer (and by a player
@@ -115,8 +131,23 @@ namespace FishMMO.Shared
 			WritePermission = WritePermission.ServerOnly,
 		});
 
-		/// <summary>When, in <see cref="Time.time"/>, this character last harmed a target only its aggression allowed.</summary>
+		/// <summary>When, in <see cref="Time.time"/>, this character last refreshed its aggression lock (see <see cref="RefreshAggressionLock"/>).</summary>
 		private float lastAggressiveHarm = float.NegativeInfinity;
+
+		/// <summary>
+		/// The server's lock end as a tick, for the owner's countdown: a hit TAKEN refreshes the lock too, and only the server
+		/// sees those. Owner-only, and sent only when it moved by <see cref="AggressionLockSyncSlackSeconds"/> or more.
+		/// </summary>
+		private readonly SyncVar<uint> aggressionLockedUntilTick = new SyncVar<uint>(0u, new SyncTypeSettings()
+		{
+			SendRate = 0f,
+			Channel = Channel.Reliable,
+			ReadPermission = ReadPermission.OwnerOnly,
+			WritePermission = WritePermission.ServerOnly,
+		});
+
+		/// <summary>Server: refused attack casts counting toward turning aggression on (see <see cref="NoteRefusedAttack"/>).</summary>
+		private AggressionProvocation provocation;
 
 		/// <inheritdoc />
 		public bool AggressionEnabled => aggressionEnabled.Value;
@@ -125,12 +156,62 @@ namespace FishMMO.Shared
 		public static event Action<ICharacter, bool> OnAggressionChanged;
 
 		/// <summary>Seconds until the toggle may be turned off (0 when it may now).</summary>
-		public float AggressionLockRemaining => Mathf.Max(0f, lastAggressiveHarm + AggressionLockSeconds - Time.time);
+		/// <remarks>
+		/// The server's own clock on the server. On the owner, the later of its own prediction (its hits) and the server's
+		/// last word (which also counts hits it took).
+		/// </remarks>
+		public float AggressionLockRemaining
+		{
+			get
+			{
+				float local = Mathf.Max(0f, lastAggressiveHarm + AggressionLockSeconds - Time.time);
+				if (IsServerStarted || base.TimeManager == null)
+				{
+					return local;
+				}
+				uint until = aggressionLockedUntilTick.Value;
+				int left = until == 0u ? 0 : (int)(until - base.TimeManager.Tick);
+				return left > 0 ? Mathf.Max(local, (float)base.TimeManager.TicksToTime((uint)left)) : local;
+			}
+		}
 
-		/// <summary>Notes a hit only this character's aggression allowed (run where the hit is applied).</summary>
-		public void NoteAggressiveHarm()
+		/// <summary>
+		/// Restarts the full <see cref="AggressionLockSeconds"/>: this character, with aggression on, hit or killed something
+		/// or was hit (run where the hit is applied; see <see cref="FactionHarm.Allows"/>).
+		/// </summary>
+		public void RefreshAggressionLock()
 		{
 			lastAggressiveHarm = Time.time;
+			if (!IsServerStarted || base.TimeManager == null)
+			{
+				return;
+			}
+			uint until = base.TimeManager.Tick + base.TimeManager.TimeToTicks(AggressionLockSeconds, FishNet.Managing.Timing.TickRounding.RoundUp);
+			uint synced = aggressionLockedUntilTick.Value;
+			uint slack = base.TimeManager.TimeToTicks(AggressionLockSyncSlackSeconds, FishNet.Managing.Timing.TickRounding.RoundUp);
+			if (synced == 0u || (int)(until - synced) >= (int)slack)
+			{
+				aggressionLockedUntilTick.Value = until;
+			}
+		}
+
+		/// <summary>
+		/// Server: an attack cast of this player's was refused at <paramref name="target"/>, and only aggression would have
+		/// let it land. <see cref="AutoAggressionAttacks"/> different casts at the same character within
+		/// <see cref="AutoAggressionWindowSeconds"/> turn aggression on: attacking a neutral on purpose is choosing to fight it.
+		/// </summary>
+		/// <param name="target">The character the cast struck (its principal, for a pet).</param>
+		/// <param name="castKey">Identifies the cast, so the projectiles or ticks of one cast count once.</param>
+		public void NoteRefusedAttack(ICharacter target, long castKey)
+		{
+			if (!IsServerStarted || target == null || aggressionEnabled.Value)
+			{
+				return;
+			}
+			if (provocation.Note(target.ID, castKey, Time.time, AutoAggressionAttacks, AutoAggressionWindowSeconds))
+			{
+				TrySetAggression(true, out _);
+			}
 		}
 
 		/// <summary>
@@ -729,6 +810,11 @@ namespace FishMMO.Shared
 			FactionsAreTemplateDerived = false;
 
 			lastAggressiveHarm = float.NegativeInfinity;
+			provocation = default;
+			if (asServer && aggressionLockedUntilTick.Value != 0u)
+			{
+				aggressionLockedUntilTick.Value = 0u;
+			}
 			if (asServer && aggressionEnabled.Value)
 			{
 				aggressionEnabled.Value = false;

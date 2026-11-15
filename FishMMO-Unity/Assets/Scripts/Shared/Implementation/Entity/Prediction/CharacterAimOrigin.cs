@@ -95,8 +95,18 @@ namespace FishMMO.Shared
 			 * replicate the transform can still hold the previous tick's value. Reading the
 			 * transform would make the origin lag the simulation by a tick on the owner while
 			 * matching it on the server. */
-			float height = motor.Capsule != null ? motor.Capsule.height : FallbackEyeHeight;
-			return motor.TransientPosition + motor.CharacterUp * Mathf.Max(0f, height - EyeInsetFromTop);
+			return motor.TransientPosition + motor.CharacterUp * EyeHeight(motor);
+		}
+
+		/// <summary>
+		/// How far above the character's feet the eye is: the top of the capsule less a small inset, so it follows a
+		/// crouch. The one definition, shared by the aim origin above and the first-person camera (KCCCamera), so the
+		/// view in first person is taken from exactly where shots start.
+		/// </summary>
+		public static float EyeHeight(KinematicCharacterMotor motor)
+		{
+			float height = motor != null && motor.Capsule != null ? motor.Capsule.height : FallbackEyeHeight;
+			return Mathf.Max(0f, height - EyeInsetFromTop);
 		}
 	}
 }

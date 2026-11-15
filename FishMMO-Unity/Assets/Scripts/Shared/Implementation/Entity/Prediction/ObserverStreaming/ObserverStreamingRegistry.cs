@@ -106,13 +106,13 @@ namespace FishMMO.Shared
 		private static readonly Dictionary<int, HashSet<int>> byteEvictedByClientId = new Dictionary<int, HashSet<int>>();
 
 		/// <summary>
-		/// Viewers who, on the last pass, had a target, fought someone, or had a character in combat within their engagement
-		/// range. The adaptive send interval keeps these at the full flush rate; see <c>NetworkSendSchedule</c>.
+		/// Viewers who, on the last pass, targeted something they could fight, fought someone, or had a character in combat
+		/// within their engagement range. The adaptive send interval keeps these at the full flush rate; see <c>NetworkSendSchedule</c>.
 		/// </summary>
 		private static readonly HashSet<int> nearCombatClientIds = new HashSet<int>();
 
 		/// <summary>
-		/// True when the viewer's last pass found it near combat: a target selected, a fight it is part of, or a character
+		/// True when the viewer's last pass found it near combat: a target it may harm, a fight it is part of, or a character
 		/// in combat within its engagement range. Refreshed every pass (<see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/>).
 		/// </summary>
 		public static bool IsViewerNearCombat(int clientId) => nearCombatClientIds.Contains(clientId);
@@ -183,6 +183,12 @@ namespace FishMMO.Shared
 			/// is never budgeted at all.
 			/// </summary>
 			public bool Fighting;
+			/// <summary>
+			/// A fight the viewer is in or could start now: fighting it in either direction, or its target when the viewer
+			/// may harm it (<see cref="FactionHarm.MayHarm"/>) or it is in combat. Unlike <see cref="Fighting"/>, a friendly
+			/// character merely under the crosshair does not count. Read by <see cref="IsNearCombat"/>.
+			/// </summary>
+			public bool CombatRelevant;
 		}
 
 		/// <summary>Number of objects currently registered — characters and budgeted statics alike.</summary>
@@ -930,7 +936,7 @@ namespace FishMMO.Shared
 						engagedNow.Add(candidates[c].Entry.NetworkObject.ObjectId);
 					}
 				}
-				if (IsNearCombat(viewerTargetId, viewer.InCombat, candidates))
+				if (IsNearCombat(viewer.InCombat, candidates))
 				{
 					nearCombatClientIds.Add(viewerConnection.ClientId);
 				}
@@ -940,19 +946,25 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// A viewer is near combat when it has a target, is in combat itself, or any candidate is fighting it or is in combat
-		/// within the engagement range (a fight it could be drawn into or is watching from striking distance).
+		/// A viewer is near combat when it is in combat itself, any candidate is fighting it, its target is one it may harm
+		/// or one already fighting, or a character in combat is within the engagement range (a fight it could be drawn into
+		/// or is watching from striking distance).
 		/// </summary>
-		private static bool IsNearCombat(long viewerTargetId, bool viewerInCombat, List<Candidate> viewerCandidates)
+		/// <remarks>
+		/// Not merely "has a target". The target is whatever character is under the crosshair (TargetController reports
+		/// the hovered one), so in a crowd a player walking through town always had one, and the idle send interval never
+		/// engaged: the 11-15 simulate run measured 0% of player ticks on it, against 91% the run before.
+		/// </remarks>
+		private static bool IsNearCombat(bool viewerInCombat, List<Candidate> viewerCandidates)
 		{
-			if (viewerTargetId != 0 || viewerInCombat)
+			if (viewerInCombat)
 			{
 				return true;
 			}
 			for (int i = 0; i < viewerCandidates.Count; ++i)
 			{
 				Candidate candidate = viewerCandidates[i];
-				if (candidate.Fighting || (candidate.Engaged && candidate.Entry.InCombat))
+				if (candidate.CombatRelevant || (candidate.Engaged && candidate.Entry.InCombat))
 				{
 					return true;
 				}
@@ -1039,10 +1051,11 @@ namespace FishMMO.Shared
 			 * Previously implicit (hover targeting reaches 50 m at most), it has to be
 			 * explicit now that the id can be client-reported: a forged or stale id naming
 			 * something across the map must not hold a budget slot. */
+			bool targeted = viewerTargetId != 0 &&
+				observed.NetworkObject.ObjectId == viewerTargetId &&
+				distance <= ObserverStreamingPolicy.EngagementRangeCeiling;
 			bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
-				(viewerTargetId != 0 &&
-				 observed.NetworkObject.ObjectId == viewerTargetId &&
-				 distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
+				targeted ||
 				engagedWith;
 			if (pinned)
 			{
@@ -1057,9 +1070,11 @@ namespace FishMMO.Shared
 				Distance = distance,
 				Pinned = pinned,
 				Engaged = distance <= engagementRange,
-				Fighting = engagedWith ||
-					(viewerTargetId != 0 && observed.NetworkObject.ObjectId == viewerTargetId &&
-					 distance <= ObserverStreamingPolicy.EngagementRangeCeiling),
+				Fighting = engagedWith || targeted,
+				CombatRelevant = engagedWith ||
+					(targeted && ObserverStreamingPolicy.TargetMeansCombat(observed.InCombat,
+						viewer.Character != null && observed.Character != null &&
+						FactionHarm.MayHarm(viewer.Character, observed.Character, out _))),
 			});
 		}
 

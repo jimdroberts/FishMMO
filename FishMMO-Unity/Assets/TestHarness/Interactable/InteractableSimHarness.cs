@@ -45,7 +45,7 @@ namespace FishMMO.TestHarness
 		public GameObject PlayerPrefab;
 
 		[Tooltip("Tugboat listen port — nothing connects.")]
-		public ushort Port = 7798;
+		public ushort Port = 8798;
 
 		[Tooltip("Seconds between scripted interaction attempts.")]
 		public float StepInterval = 0.35f;

@@ -134,6 +134,28 @@ namespace FishMMO.Shared
 		/// <param name="exclude">Character to leave in place — normally the caster.</param>
 		public static RewindScope Rewind(Scene scene, RewindTarget target, ICharacter exclude = null)
 		{
+			return Rewind(scene, target, exclude, default, float.PositiveInfinity);
+		}
+
+		/// <summary>
+		/// How far a character can have been from where it stands now at any moment a rewind may reach back to, metres:
+		/// the margin a bounded rewind adds round its query so nobody who could have been in it is left out.
+		/// </summary>
+		public const float RewindReach = 20f;
+
+		/// <summary>
+		/// <see cref="Rewind(Scene, RewindTarget, ICharacter)"/>, for a query that only looks within
+		/// <paramref name="radius"/> of <paramref name="center"/>: only the characters standing within that radius plus
+		/// <see cref="RewindReach"/> are moved.
+		/// </summary>
+		/// <remarks>
+		/// Every step of every player-cast object rewound EVERY character in the scene and synced physics twice, to test a
+		/// segment a few decimetres long. A character farther away than it could have travelled in the rewind window
+		/// cannot be in the query at either position, so it is left where it stands; and when nobody is near, nothing is
+		/// moved and nothing is synced at all.
+		/// </remarks>
+		public static RewindScope Rewind(Scene scene, RewindTarget target, ICharacter exclude, Vector3 center, float radius)
+		{
 			if (scopeOpen)
 			{
 				/* A nested rewind would capture already-displaced positions as the restore target
@@ -150,6 +172,9 @@ namespace FishMMO.Shared
 
 			Transform excludeTransform = exclude?.Transform;
 			rewound.Clear();
+			bool bounded = !float.IsInfinity(radius) && !float.IsNaN(radius);
+			float reach = bounded ? radius + RewindReach : 0f;
+			float reachSqr = reach * reach;
 
 			/* A throw part-way through leaves everything displaced SO FAR stranded in the past with no
 			 * scope to restore it — the characters simply stay where they were half a second ago, for
@@ -161,6 +186,10 @@ namespace FishMMO.Shared
 				{
 					CharacterPositionHistory history = list[i];
 					if (history == null || history.transform == excludeTransform)
+					{
+						continue;
+					}
+					if (bounded && (history.transform.position - center).sqrMagnitude > reachSqr)
 					{
 						continue;
 					}

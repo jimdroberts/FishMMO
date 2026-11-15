@@ -26,6 +26,9 @@ namespace FishMMO.Shared
 			return amount == null ? "Heals the target" : $"Heals {amount}";
 		}
 
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
 		/// <summary>
 		/// Restores health to the target character using the computed value.
 		/// </summary>
@@ -76,6 +79,7 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
+				float healthBefore = PredictedCombatEvents.CurrentHealth(target);
 				int applied = defenderDamageController.Heal(initiator, amount);
 
 				/* The healer's own number, drawn now. See MayDrawPredictedNumber for the three guards.
@@ -84,7 +88,8 @@ namespace FishMMO.Shared
 				if (applied > 0 && MayDrawPredictedNumber(initiator, eventData))
 				{
 					PredictedCombatEvents.Predict(initiator, target, applied, PredictedCombatEvents.Kind.Heal,
-						null, UnityEngine.Time.unscaledTime);
+						null, UnityEngine.Time.unscaledTime,
+						movedHealth: PredictedCombatEvents.HealthMoved(healthBefore, PredictedCombatEvents.CurrentHealth(target)));
 				}
 			}
 		}

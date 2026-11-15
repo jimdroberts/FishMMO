@@ -451,6 +451,7 @@ namespace FishMMO.Shared
 				{
 					controllers[i].PopulateInput(ref input);
 				}
+				KeepIdleViewClaim(ref input);
 			}
 			Replicate(input);
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
@@ -680,7 +681,87 @@ namespace FishMMO.Shared
 		{
 			ReplicateIdle<CharacterReplicateData>.CanHold = data => IsInertInput(data);
 			ReplicateIdle<CharacterReplicateData>.SameInput = (a, b) => SameHeldInput(a, b);
+			ReplicateIdle<CharacterReplicateData>.CanHoldNow = behaviour => !(behaviour is CharacterPredictionController controller && controller.CastInProgress);
 		}
+
+		/// <summary>The view claim of the last input this owner built, for <see cref="KeepIdleViewClaim"/>.</summary>
+		private ushort lastViewTickOffset;
+		private byte lastViewTickFraction;
+		private byte lastViewOffsetTicks;
+		private byte lastViewOffsetFraction;
+		private bool hasLastViewClaim;
+
+		/// <summary>
+		/// Owner: while nothing can use the view claim, the input keeps the last one, so an idle input repeats.
+		/// </summary>
+		/// <remarks>
+		/// The claim (the tick this client was drawing) carries the frame's lateness past the tick boundary, which changes
+		/// from frame to frame at any frame rate that does not divide the tick rate (75, 144, 165, uncapped), and the timing's
+		/// small clock adjustments move it too. An idle player's input then changed every few ticks, so it was sent every
+		/// tick and the server never saw the two repeats it holds on. The claim is only read to rewind other characters for
+		/// this character's hits: with no cast in progress and nothing of its in flight there is nothing to rewind for, and
+		/// the input that starts a cast carries a fresh claim.
+		/// </remarks>
+		private void KeepIdleViewClaim(ref CharacterReplicateData input)
+		{
+			bool claimUnused = IsInertInput(input) && !CastInProgress && !HasLiveAbilityObjects;
+			if (claimUnused && hasLastViewClaim)
+			{
+				input.ViewTickOffset = lastViewTickOffset;
+				input.ViewTickFraction = lastViewTickFraction;
+				input.ViewOffsetTicks = lastViewOffsetTicks;
+				input.ViewOffsetFraction = lastViewOffsetFraction;
+				return;
+			}
+			lastViewTickOffset = input.ViewTickOffset;
+			lastViewTickFraction = input.ViewTickFraction;
+			lastViewOffsetTicks = input.ViewOffsetTicks;
+			lastViewOffsetFraction = input.ViewOffsetFraction;
+			hasLastViewClaim = true;
+		}
+
+		/// <summary>True while this character has an ability object of its own in the world (a projectile in flight).</summary>
+		private bool HasLiveAbilityObjects
+		{
+			get
+			{
+				if (!castSourceResolved)
+				{
+					castSourceResolved = true;
+					castSource = GetComponent<AbilityController>();
+				}
+				return castSource != null && castSource.HasLiveObjects;
+			}
+		}
+
+		/// <summary>
+		/// True while this character's ability controller has a cast in progress: its input is then never held, on either
+		/// side (<see cref="ReplicateIdle{T}.CanHoldNow"/>).
+		/// </summary>
+		/// <remarks>
+		/// An input sent during a cast reads as inert (no keys, nothing queued), but repeating it is not harmless: every
+		/// tick that runs counts the cast. Read from the STATE each peer already has, not sent: the owner asks its own
+		/// predicted controller and keeps sending every tick of a cast; the server asks its own and, when a tick's input
+		/// has not arrived, runs a blank tick, which the cast waits out (AbilityController.FreezesOnBlankTick). Where the
+		/// two disagree for a moment it is safe in both directions: an owner that believes it is still casting only sends
+		/// more, and a server still on a cast the owner has finished gets that cast's last inputs before the owner goes
+		/// quiet.
+		/// </remarks>
+		internal bool CastInProgress
+		{
+			get
+			{
+				if (!castSourceResolved)
+				{
+					castSourceResolved = true;
+					castSource = GetComponent<AbilityController>();
+				}
+				return castSource != null && castSource.IsActivating;
+			}
+		}
+
+		private AbilityController castSource;
+		private bool castSourceResolved;
 
 		/// <summary>
 		/// True when two inputs are identical apart from their tick: every axis, flag, request, view claim and the exact aim.
@@ -696,8 +777,11 @@ namespace FishMMO.Shared
 				a.ViewOffsetTicks == b.ViewOffsetTicks && a.ViewOffsetFraction == b.ViewOffsetFraction &&
 				a.ViewTickOffset == b.ViewTickOffset && a.ViewTickFraction == b.ViewTickFraction &&
 				a.AimDirection.x.Equals(b.AimDirection.x) && a.AimDirection.y.Equals(b.AimDirection.y) && a.AimDirection.z.Equals(b.AimDirection.z) &&
+				a.HeadingOffset == b.HeadingOffset && a.ConvergenceDistance == b.ConvergenceDistance &&
+				a.AimOriginRight == b.AimOriginRight && a.AimOriginUp == b.AimOriginUp &&
 				a.ActivationFlags == b.ActivationFlags && a.QueuedAbilityID == b.QueuedAbilityID &&
-				a.EquipmentRequest == b.EquipmentRequest && a.EquipmentIndex == b.EquipmentIndex;
+				a.EquipmentRequest == b.EquipmentRequest && a.EquipmentIndex == b.EquipmentIndex &&
+				a.HitClaimVictim == b.HitClaimVictim && a.HitClaimSpawnAge == b.HitClaimSpawnAge && a.HitClaimObject == b.HitClaimObject;
 		}
 
 		/// <summary>
@@ -711,7 +795,9 @@ namespace FishMMO.Shared
 			return input.MoveAxisForward == 0f && input.MoveAxisRight == 0f &&
 				(input.MoveFlags & ~actualData) == 0 &&
 				(input.ActivationFlags & ~actualAbilityData) == 0 &&
-				input.QueuedAbilityID == 0 && input.EquipmentRequest == 0;
+				input.QueuedAbilityID == 0 && input.EquipmentRequest == 0 &&
+				// One-shot requests: an input carrying one asks for something, and must never be run again as a repeat.
+				input.ConvergenceDistance == 0 && input.HitClaimVictim == 0;
 		}
 
 		/// <summary>

@@ -32,6 +32,17 @@ namespace FishNet.Object.Prediction
 
         /// <summary>True when <paramref name = "current"/> repeats <paramref name = "previous"/> and may be held.</summary>
         public static bool IsRepeat(T previous, T current) => Enabled && CanHold(current) && SameInput(previous, current);
+
+        /// <summary>
+        /// Optional. False while the behaviour's own STATE means its input must not be held, however the input reads: an
+        /// input that asks for nothing can still not be safe to repeat (something in progress counts every tick it runs).
+        /// Asked on both sides, each of its own state: the owner then keeps sending every tick, and the server runs default
+        /// data for a tick whose input has not arrived instead of repeating the last one. Null means always.
+        /// </summary>
+        public static Func<NetworkBehaviour, bool> CanHoldNow;
+
+        /// <summary>True when <paramref name = "behaviour"/>'s state allows its input to be held now (<see cref = "CanHoldNow"/>).</summary>
+        public static bool MayHoldNow(NetworkBehaviour behaviour) => CanHoldNow == null || CanHoldNow(behaviour);
     }
 
     /// <summary>
@@ -41,6 +52,31 @@ namespace FishNet.Object.Prediction
     {
         /// <summary>Ticks between keepalive sends of a held input, so a server that lost the last ones still learns it.</summary>
         public static uint KeepaliveTicks = 30;
+
+        /// <summary>
+        /// Ticks from the last write to the next keepalive: 1, 2, 4, 8, 16 for the first ones after the input last changed,
+        /// then <see cref = "KeepaliveTicks"/>. The early ones cover the loss of every packet that carried the input the owner
+        /// went quiet on; the first follows the resends at once, so the input before the last one travels in as many packets
+        /// as it did when every tick was sent.
+        /// </summary>
+        /// <param name = "keepalivesSinceChange">Keepalives already written since the input last changed.</param>
+        public static uint KeepaliveInterval(int keepalivesSinceChange)
+        {
+            if (keepalivesSinceChange < 0)
+                keepalivesSinceChange = 0;
+            uint early = keepalivesSinceChange >= 16 ? uint.MaxValue : 1u << keepalivesSinceChange;
+            return early < KeepaliveTicks ? early : KeepaliveTicks;
+        }
+
+        /// <summary>
+        /// Ticks to wait before running input that arrived into an empty queue, so that <paramref name = "stateInterpolation"/>
+        /// inputs are still queued behind the first one run: none when that many already arrived with it.
+        /// </summary>
+        public static uint StartDelay(int stateInterpolation, int queued)
+        {
+            int missing = stateInterpolation - (queued - 1);
+            return missing > 0 ? (uint)missing : 0u;
+        }
     }
 
     /// <summary>What the server does on one tick while it is holding an owner's input.</summary>

@@ -26,6 +26,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public event Action<ICharacter, int, int> OnConsumableUsed;
 
+		/// <summary>Server: a consumable use ended without consuming; the character and the slot it was using.</summary>
+		public event Action<ICharacter, int> OnConsumableUseCancelled;
+
+		/// <summary>True once the use in progress has consumed its charge (FinishConsumable), until it ends.</summary>
+		private bool consumableUseCompleted;
+
 		/// <summary>
 		/// Fired when a consumable has changed the inventory row that held it: the stack was
 		/// reduced, or the item was used up and its slot emptied.
@@ -188,6 +194,7 @@ namespace FishMMO.Shared
 			{
 				//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
 				currentAbilityID = newAbility.ID;
+				hasLastCastTick = false;
 				// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
 				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
 				float activationTimeSec = newAbility.ActivationTime
@@ -318,6 +325,11 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			if (!AccountMissedCastTicks(activationData.GetTick()))
+			{
+				return;
+			}
+
 			if (remainingTicks > 0)
 			{
 				UpdateActivation(activationData, state, validatedAbility, deltaTime);
@@ -340,7 +352,9 @@ namespace FishMMO.Shared
 				// ComputeMaxHoldTicks) to prevent clients from holding charged abilities
 				// indefinitely. Track hold ticks separately since remainingTicks is already 0
 				// when the ability finished charging.
-				chargedHoldTicks++;
+				// One for this tick, and any ticks of the hold whose inputs never arrived (counted by number, as the countdown is).
+				chargedHoldTicks += 1u + missedHoldTicks;
+				missedHoldTicks = 0u;
 				uint maxHoldTicks = ComputeMaxHoldTicks(validatedAbility.ActivationTime, (float)base.TimeManager.TickDelta);
 				if (chargedHoldTicks >= maxHoldTicks)
 				{
@@ -400,6 +414,70 @@ namespace FishMMO.Shared
 			uint ticks = (uint)(int)Math.Ceiling(capSeconds / (double)tickDelta);
 			return ticks < 1u ? 1u : ticks;
 		}
+
+		/// <summary>The tick number of the last input a running cast was counted on, and whether there is one.</summary>
+		private uint lastCastTick;
+		private bool hasLastCastTick;
+
+		/// <summary>
+		/// The most ticks of a cast that are made up for inputs that never arrived. Enough for a burst of loss that takes
+		/// every packet an input travelled in; small, because the tick is the owner's own counter and making up more would
+		/// let a counter stepped forward shorten a cast by as much.
+		/// </summary>
+		internal const uint MaximumMissedCastTicks = 6;
+
+		/// <summary>
+		/// Counts a running cast in TICK NUMBERS, not in how many inputs happened to be run: the ticks between the last
+		/// input counted and this one are taken off first. False when this number was already counted.
+		/// </summary>
+		/// <remarks>
+		/// The owner counts a cast down once a tick. The server counted it once per input RUN, which is the same thing only
+		/// while every input arrives once: an input lost on the way (every packet it travelled in) left the server a tick
+		/// behind for the rest of the cast, finishing on a later input than the owner did, with that input's aim and
+		/// without the launch line the owner sent on its own last tick. Counted by number, both finish on the same input
+		/// whatever went missing before it. A number at or below the last one counted (an input run a second time) counts
+		/// nothing.
+		/// </remarks>
+		private bool AccountMissedCastTicks(uint inputTick)
+		{
+			missedHoldTicks = 0u;
+			if (!hasLastCastTick)
+			{
+				hasLastCastTick = true;
+				lastCastTick = inputTick;
+				missedTicksBudget = MaximumMissedCastTicks;
+				return true;
+			}
+			int delta = unchecked((int)(inputTick - lastCastTick));
+			if (delta <= 0)
+			{
+				return false;
+			}
+			lastCastTick = inputTick;
+			uint missed = (uint)(delta - 1);
+			/* A budget for the CAST, not a limit per input: the tick is the owner's own counter, and a modified client that
+			 * stamped every input a few ticks past the last took that many ticks off its cast each time (a three second
+			 * cast finished in under half a second). An honest one loses a handful of inputs in a cast at most. */
+			if (missed > missedTicksBudget)
+			{
+				missed = missedTicksBudget;
+			}
+			missedTicksBudget -= missed;
+			if (missed > 0u)
+			{
+				uint taken = remainingTicks < missed ? remainingTicks : missed;
+				remainingTicks -= taken;
+				// Whatever the countdown had no room for falls in the hold that follows it (a charged ability at full charge).
+				missedHoldTicks = missed - taken;
+			}
+			return true;
+		}
+
+		/// <summary>The made-up ticks a cast may still take (see <see cref="AccountMissedCastTicks"/>).</summary>
+		private uint missedTicksBudget;
+
+		/// <summary>Made-up ticks of the last input that fell past the countdown, into a charged hold.</summary>
+		private uint missedHoldTicks;
 
 		/// <summary>
 		/// Updates an ability that is still activating (remainingTicks > 0). Handles UI updates,
@@ -485,8 +563,15 @@ namespace FishMMO.Shared
 																			replicatedAimDirection,
 																			ability.Range);
 
+					/* Told to observers BEFORE the spawn, not after it. The spawn runs the ability's spawn chain, and a hitscan or
+					 * area action in it publishes its hits as it resolves them (AbilityObject.PublishActionHit): sent ahead of the
+					 * activation on the same ordered channel, each reached observers before the copy it belonged to existed, and
+					 * was dropped. The activation needs nothing from the spawned object. */
+					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick(), isChannelTick);
+
 					AbilityObject spawned = AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
-						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick());
+						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick(),
+						pose: null, launch: replicatedLaunch);
 
 					/* The server resolved no object where the owner may well have.
 					 *
@@ -524,7 +609,6 @@ namespace FishMMO.Shared
 					 * Safe to send while forwarding is still on: an observer receiving both paths
 					 * spawns once, because AbilityContainerAllocator treats a matching seed+tick as
 					 * a duplicate and replaces it rather than adding a second object. */
-					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick(), isChannelTick);
 				}
 				else if (base.IsServerStarted && !warnedMissingTargetController)
 				{
@@ -535,6 +619,17 @@ namespace FishMMO.Shared
 					Log.Warning("AbilityController",
 						$"'{gameObject.name}' has no ITargetController; its abilities will never spawn objects.");
 				}
+			}
+			else if (ability.Template != null && ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+			{
+				/* A replayed tick makes no object, but a self-cast ability has none: its effect is on the caster, the
+				 * correction has just taken it back, and this is the tick that puts it back (RunSelfTargetEffects). */
+				AbilityObject.RunSelfTargetEffects(ability, Character, currentSeed, activationData.GetPredictionTick(), isReplay: true);
+			}
+			else if (ability.Template != null)
+			{
+				// Any other ability: what its spawn chain did to the caster (RunSpawnEffectsOnReplay).
+				AbilityObject.RunSpawnEffectsOnReplay(ability, Character, AbilitySpawner, currentSeed, activationData.GetPredictionTick());
 			}
 
 			// Always advance seed regardless of replay state, which path was taken,
@@ -611,7 +706,7 @@ namespace FishMMO.Shared
 
 			// The pose the server spawned with — see AbilitySpawnPose for why it travels.
 			AbilitySpawnPose pose = AbilityObject.ResolveSpawnPose(Character, ability, AbilitySpawner, targetInfo,
-				replicatedAimOrigin, replicatedAimDirection);
+				replicatedAimOrigin, replicatedAimDirection, replicatedLaunch);
 
 			/* To observers only.
 			 *
@@ -774,13 +869,125 @@ namespace FishMMO.Shared
 			// A second handler beside the nameplate's (FishNet keeps a list per broadcast): the caster's body acts it out.
 			networkManager.ClientManager.RegisterBroadcast<CharacterCastBroadcast>(OnCastAnimationBroadcast);
 			OnObservedActivationCatchUp += OnCastAnimationCatchUp;
+			// Observed casts are acted out when the playback clock reaches them (DrainObservedCasts), every frame.
+			observedCastClock = networkManager.TimeManager;
+			if (observedCastClock != null)
+			{
+				observedCastClock.OnUpdate += DrainObservedCasts;
+			}
+			/* The queue is static and the client keeps one NetworkManager across servers: a cast still waiting when the
+			 * client left a scene server stayed at the head, and on the next server (whose tick counter is unrelated) held
+			 * every later cast behind it until that counter passed the stale tick. */
+			networkManager.ClientManager.OnClientConnectionState += OnObservedCastConnectionState;
 			activationBroadcastRegistered = true;
 		}
 
 		/// <summary>A cast another character began or ended: its body swings, casts, guards or rolls (<see cref="AnimateObservedCast"/>).</summary>
 		private static void OnCastAnimationBroadcast(CharacterCastBroadcast msg, Channel channel)
 		{
+			if (DefersObservedCast(msg))
+			{
+				pendingObservedCasts.Enqueue(msg);
+				return;
+			}
 			AnimateObservedCast(msg, live: true);
+		}
+
+		/// <summary>Casts the server has reported that the playback clock has not reached yet, oldest first.</summary>
+		private static readonly Queue<CharacterCastBroadcast> pendingObservedCasts = new Queue<CharacterCastBroadcast>();
+
+		/// <summary>The client's time manager, for the playback clock; null before the handlers are registered.</summary>
+		private static FishNet.Managing.Timing.TimeManager observedCastClock;
+
+		/// <summary>
+		/// True when an observed cast has to wait for the playback clock: the caster is DRAWN a few ticks in the past, on
+		/// the clock every observed character shares (NetworkTransform.PlaybackDrawTick), and acting the cast out as its
+		/// message arrived raised the hand before the body got there, ahead of the projectile that now appears on that
+		/// clock too. Order is kept: nothing overtakes a cast that is still waiting.
+		/// </summary>
+		private static bool DefersObservedCast(CharacterCastBroadcast msg)
+		{
+			if (!AbilityObject.ObservedPlayback || observedCastClock == null || msg.ServerTick == 0u ||
+				!FishNet.Component.Transforming.NetworkTransform.TimedPlayback)
+			{
+				return false;
+			}
+			double drawTick = FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(observedCastClock, LagCompensationTick.SpectatorInterpolationTicks);
+			if (drawTick <= 0d)
+			{
+				// No clock to wait on: nothing may be left waiting for one either.
+				FlushObservedCasts();
+				return false;
+			}
+			if (!ObservedCastIsNear(msg.ServerTick, drawTick, observedCastClock.TickRate))
+			{
+				return false;
+			}
+			if (pendingObservedCasts.Count > 0)
+			{
+				return true;
+			}
+			return msg.ServerTick > drawTick;
+		}
+
+		/// <summary>
+		/// True when a cast written on <paramref name="serverTick"/> is close enough ahead of the playback clock to be worth
+		/// waiting for: the clock runs a few ticks behind the newest data, never seconds. A tick further ahead than
+		/// <see cref="MaximumObservedCastWaitSeconds"/> is not from this clock at all (it was written by another server,
+		/// whose counter is unrelated), and waiting on it would hold every cast behind it for as long as the two counters
+		/// differ.
+		/// </summary>
+		internal static bool ObservedCastIsNear(uint serverTick, double drawTick, int tickRate)
+		{
+			return serverTick - drawTick <= MaximumObservedCastWaitSeconds * System.Math.Max(1, tickRate);
+		}
+
+		/// <summary>The longest an observed cast waits for the playback clock, seconds.</summary>
+		internal const double MaximumObservedCastWaitSeconds = 2d;
+
+		/// <summary>Drops every observed cast still waiting: the connection they were written on is gone.</summary>
+		private static void ClearObservedCasts()
+		{
+			pendingObservedCasts.Clear();
+		}
+
+		/// <summary>Acts out every observed cast still waiting, in order, without the clock.</summary>
+		private static void FlushObservedCasts()
+		{
+			while (pendingObservedCasts.Count > 0)
+			{
+				AnimateObservedCast(pendingObservedCasts.Dequeue(), live: true);
+			}
+		}
+
+		/// <summary>The client's connection changed state: casts waiting from the old one belong to a clock that no longer runs.</summary>
+		private static void OnObservedCastConnectionState(FishNet.Transporting.ClientConnectionStateArgs args)
+		{
+			ClearObservedCasts();
+		}
+
+		/// <summary>Every frame: acts out the observed casts the playback clock has reached.</summary>
+		private static void DrainObservedCasts()
+		{
+			if (pendingObservedCasts.Count == 0 || observedCastClock == null)
+			{
+				return;
+			}
+			double drawTick = FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(observedCastClock, LagCompensationTick.SpectatorInterpolationTicks);
+			if (drawTick <= 0d)
+			{
+				return;
+			}
+			while (pendingObservedCasts.Count > 0)
+			{
+				uint headTick = pendingObservedCasts.Peek().ServerTick;
+				// Reached, or not this clock's to reach (see ObservedCastIsNear): either way it does not wait.
+				if (headTick > drawTick && ObservedCastIsNear(headTick, drawTick, observedCastClock.TickRate))
+				{
+					break;
+				}
+				AnimateObservedCast(pendingObservedCasts.Dequeue(), live: true);
+			}
 		}
 
 		/// <summary>A cast already running when this client began watching its caster: only a held guard is still worth showing.</summary>
@@ -923,9 +1130,14 @@ namespace FishMMO.Shared
 			 * to the caster's own client — which predicted the same deflection and receives this
 			 * message like everybody else — is a no-op instead of a second mirror that would send
 			 * the object straight back at the defender. */
+			/* The server tick this message was written on: when what it reports happened. A copy that runs on the
+			 * playback clock applies it when the clock gets there (AbilityObject, Presentation); the owner's own copy and
+			 * any copy off the clock apply it now, as before. */
+			uint eventTick = ObservedEventTick(nm);
+
 			if (msg.Deflected)
 			{
-				abilityObject.ApplyObservedDeflection(AimDirectionCompression.Decode(msg.PackedDeflectHeading));
+				abilityObject.ApplyObservedDeflection(AimDirectionCompression.Decode(msg.PackedDeflectHeading), eventTick);
 				return;
 			}
 
@@ -967,7 +1179,7 @@ namespace FishMMO.Shared
 				 * below. */
 				if (msg.Blocked)
 				{
-					abilityObject.ApplyObservedBlock(hitCharacter);
+					abilityObject.ApplyObservedBlock(hitCharacter, eventTick);
 				}
 				/* An impact a hitscan or area ACTION resolved takes the undeduped path.
 				 *
@@ -977,12 +1189,12 @@ namespace FishMMO.Shared
 				 * observers only. */
 				else if (msg.DirectImpact)
 				{
-					abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal);
+					abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal, eventTick);
 					return;
 				}
 				else
 				{
-					abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal);
+					abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal, eventTick);
 				}
 			}
 
@@ -996,8 +1208,49 @@ namespace FishMMO.Shared
 			 * or the local lifetime got there first). */
 			if (msg.Ended)
 			{
-				abilityObject.DestroyAbilityObjectInternal();
+				abilityObject.EndObserved(eventTick);
 			}
+		}
+
+		/// <summary>
+		/// The server tick the message being handled was written on (FishNet reads every message against it, and a tick
+		/// marker keeps it right when two ticks share a packet): when the event it reports happened. Zero when unknown.
+		/// </summary>
+		private static uint ObservedEventTick(FishNet.Managing.NetworkManager networkManager)
+		{
+			FishNet.Managing.Timing.TimeManager timeManager = networkManager != null ? networkManager.TimeManager : null;
+			if (timeManager == null)
+			{
+				return 0u;
+			}
+			uint tick = timeManager.LastPacketTick.LastRemoteTick;
+			return tick == FishNet.Managing.Timing.TimeManager.UNSET_TICK ? 0u : tick;
+		}
+
+		/// <summary>
+		/// Puts every member of a freshly reproduced cast on the playback clock, its leg starting on
+		/// <paramref name="serverStartTick"/> (AbilityObject.BeginObservedPlayback).
+		/// </summary>
+		/// <returns>False when there is no clock to run on; the caller then catches the cast up by estimate, as before.</returns>
+		private static bool BeginObservedPlayback(Ability ability, AbilityObject root, uint serverStartTick, bool lateJoin = false)
+		{
+			if (root == null || !root.BeginObservedPlayback(serverStartTick, lateJoin))
+			{
+				return false;
+			}
+			Dictionary<int, AbilityObject> container = null;
+			ability?.Objects?.TryGetValue(root.ContainerID, out container);
+			if (container != null)
+			{
+				foreach (AbilityObject member in container.Values)
+				{
+					if (member != null && !ReferenceEquals(member, root))
+					{
+						member.BeginObservedPlayback(serverStartTick, lateJoin);
+					}
+				}
+			}
+			return true;
 		}
 
 		/// <summary>
@@ -1033,8 +1286,10 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// The redirect states its own tick; a copy on the playback clock turns when the clock reaches it.
 			abilityObject.ApplyObservedRedirect(AimDirectionCompression.Decode(msg.PackedHeading),
-				ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick));
+				ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick),
+				msg.ServerTick != 0u ? msg.ServerTick : ObservedEventTick(nm));
 		}
 
 		/// <summary>
@@ -1154,7 +1409,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			abilityObject.DestroyAbilityObjectInternal();
+			abilityObject.EndObserved(ObservedEventTick(nm));
 		}
 
 		/// <summary>
@@ -1261,7 +1516,13 @@ namespace FishMMO.Shared
 			/* See ComputeObserverFastForwardTicks: zero for a fresh message, positive only for a
 			 * late one. Applied to the whole container rather than the returned root — see
 			 * CatchUpSpawnedContainer. */
-			CatchUpSpawnedContainer(ability, spawned, consumeTicks: 0u, fastForwardTicks: fastForward);
+			/* On the clock observed characters are drawn on, where there is one: the copy then appears as the drawn
+			 * caster releases it and meets the drawn victim where the server's met the real one. Without a clock (no
+			 * data yet, timed playback off) it is advanced by the estimated transit, as it always was. */
+			if (!BeginObservedPlayback(ability, spawned, msg.ServerTick))
+			{
+				CatchUpSpawnedContainer(ability, spawned, consumeTicks: 0u, fastForwardTicks: fastForward);
+			}
 		}
 
 		/// <summary>
@@ -1673,6 +1934,7 @@ namespace FishMMO.Shared
 			// Cancel() would see consumableSlot set but currentAbilityID == NO_ABILITY,
 			// leaving the controller in an inconsistent state.
 			currentAbilityID = templateID;
+			hasLastCastTick = false;
 			replicatedFlags.EnableBit(AbilityActivationFlags.IsConsumable);
 			// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
 			// between x86 and ARM that Mathf.CeilToInt is susceptible to.
@@ -1725,6 +1987,11 @@ namespace FishMMO.Shared
 
 			// NOTE: Interrupt is already handled by ProcessInterrupt in Replicate()
 			// before this method is called. No duplicate check needed here.
+
+			if (!AccountMissedCastTicks(activationData.GetTick()))
+			{
+				return;
+			}
 
 			if (remainingTicks > 0)
 			{
@@ -1823,6 +2090,7 @@ namespace FishMMO.Shared
 					int slot = consumableSlot;
 					if (consumable.Invoke(PlayerCharacter, item, activationData.GetTick()))
 					{
+						consumableUseCompleted = true;
 						bool destroyed = !item.IsStackable || item.Stackable.Amount < 1;
 
 						// If the item was fully consumed, clean up the inventory slot.
@@ -2066,7 +2334,11 @@ namespace FishMMO.Shared
 					float abilityRange = validatedAbility.Range;
 					if (abilityRange > 0f)
 					{
-						float distSqr = (Character.Transform.position - current.HitPosition).sqrMagnitude;
+						/* From the EYE, which is where the cast's own trace measures its reach from on both peers
+						 * (ResolveTargetAndSpawn). Measured from the feet, a target at chest height read up to 40 cm
+						 * farther than it is, and a melee ability well inside its range was refused here and never
+						 * sent. */
+						float distSqr = (CharacterAimOrigin.Resolve(Character) - current.HitPosition).sqrMagnitude;
 						if (distSqr > abilityRange * abilityRange)
 						{
 							return false;
@@ -2119,6 +2391,16 @@ namespace FishMMO.Shared
 				BroadcastCastState(state, started: false, referenceID: currentAbilityID,
 					isConsumable: replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable));
 			}
+
+			/* Server: a use that ends without consuming (stunned, killed, cancelled, refused on re-validation). The owner may have
+			 * predicted the finish already and taken the charge, and nothing else would ever give it back: the inventory is
+			 * not part of the reconcile. The inventory system sends the slot as the server holds it (OnConsumableUseCancelled). */
+			if (base.IsServerStarted && consumableSlot >= 0 && !consumableUseCompleted &&
+				replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+			{
+				OnConsumableUseCancelled?.Invoke(Character, consumableSlot);
+			}
+			consumableUseCompleted = false;
 
 			// Unlock the consumable slot before resetting state.
 			if (consumableSlot >= 0 &&
@@ -2427,6 +2709,8 @@ namespace FishMMO.Shared
 
 			//Log.Debug("Activating " + referenceID);
 			queuedAbilityID = referenceID;
+			// The id queued is an ability's: whatever kind an earlier press left behind does not apply to it.
+			localInputFlags.DisableBit(AbilityActivationFlags.IsConsumable);
 			if (isHeld)
 			{
 				localInputFlags.EnableBit(AbilityActivationFlags.IsHeld);

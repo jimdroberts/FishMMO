@@ -95,6 +95,7 @@ namespace FishMMO.Client
 		private const string BRIGHTNESS_SLIDER_NAME = "brightness-slider";
 		private const string BRIGHTNESS_VALUE_NAME = "brightness-value";
 		private const string LOOK_SENSITIVITY_SLIDER_NAME = "look-sensitivity-slider";
+		private const string CAMERA_STYLE_DROPDOWN_NAME = "camera-style-dropdown";
 		private const string RESOLUTION_DROPDOWN_NAME = "resolution-dropdown";
 		private const string REFRESHRATE_DROPDOWN_NAME = "refreshrate-dropdown";
 		private const string FULLSCREEN_DROPDOWN_NAME = "fullscreen-dropdown";
@@ -200,7 +201,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// A backstop, not the primary way out. The Input System suppresses the events it matches,
 		/// so a rebind that could neither be completed nor cancelled would eat the player's input
-		/// for as long as it listened. Escape cancels it and a second press on the listening row
+		/// for as long as it listened. Escape or ~ cancels it and a second press on the listening row
 		/// cancels it; this covers the case where a device stops reporting entirely.
 		/// </remarks>
 		private const float RebindTimeoutSeconds = 10.0f;
@@ -214,16 +215,17 @@ namespace FishMMO.Client
 		/// Controls that an interactive rebind must never select.
 		/// </summary>
 		/// <remarks>
-		/// <para><b>Escape</b> and <b>Backspace</b> are the rebind prompt's own two controls, and
-		/// neither can be bound to anything. Escape cancels the rebind and leaves the binding as it
-		/// was; Backspace clears the binding, leaving the row unbound. Both have to be unbindable
-		/// for that to be true everywhere — a prompt whose cancel key means something else on one
-		/// row out of forty is worse than having no cancel key at all. Escape is additionally the
-		/// client's universal "close this": bound to something else, a player who opens a panel
+		/// <para><b>Escape</b>, <b>~</b> and <b>Backspace</b> are the rebind prompt's own controls,
+		/// and none can be bound to anything. Escape or ~ cancels the rebind and leaves the binding
+		/// as it was; Backspace clears the binding, leaving the row unbound. All have to be
+		/// unbindable for that to be true everywhere — a prompt whose cancel key means something
+		/// else on one row out of forty is worse than having no cancel key at all. Escape and ~ are
+		/// additionally the client's universal "close this" (<see cref="CancelKey"/>; ~ because a
+		/// browser keeps Escape for itself): bound to something else, a player who opens a panel
 		/// they cannot otherwise dismiss has no way out.</para>
 		///
-		/// <para>Both stay reachable per row through the row's own reset button, which restores the
-		/// binding the game shipped with — that is how an action moved off Escape gets back.</para>
+		/// <para>They stay reachable per row through the row's own reset button, which restores the
+		/// binding the game shipped with — that is how an action moved off Escape or ~ gets back.</para>
 		///
 		/// <para><b>The left mouse button</b> is what operates this panel, and excluding it is not
 		/// cosmetic. <c>PerformInteractiveRebinding</c> enables event suppression by default: an
@@ -255,7 +257,8 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static readonly string[] ExcludedRebindControls =
 		{
-			"<Keyboard>/escape",
+			CancelKey.EscapeControlPath,
+			CancelKey.BackquoteControlPath,
 			"<Keyboard>/backspace",
 			"<Keyboard>/anyKey",
 
@@ -273,16 +276,18 @@ namespace FishMMO.Client
 		/// Sets of actions that are allowed to share a control with one another.
 		/// </summary>
 		/// <remarks>
-		/// Escape drives three actions at once by design — <c>Cancel</c> interrupts a cast,
-		/// <c>CloseLastUI</c> closes the top panel and <c>Menu</c> opens the menu when neither of
-		/// the first two had anything to do. That is a deliberate chain, not a mistake, and flagging
-		/// it as a conflict would mark three rows red in a fresh install and teach the player to
-		/// ignore the warning that matters.
+		/// Escape and ~ each drive two actions at once by design — <c>Cancel</c> interrupts a cast
+		/// and <c>CloseLastUI</c> closes the top panel. That is deliberate, not a mistake, and flagging
+		/// it as a conflict would mark two rows red in a fresh install and teach the player to
+		/// ignore the warning that matters. <c>Menu</c> used to be a third member; it moved to F1
+		/// because a browser keeps Escape for itself (releasing the cursor, leaving fullscreen), so
+		/// on web the first press never reached the game. Escape still closes the menu, as the top
+		/// panel, through <c>CloseLastUI</c>.
 		/// <para>
 		/// The exemption covers the <b>shipped</b> bindings only — see
 		/// <see cref="SharesBindingByDesign"/>. Duplicates the player creates are never allowed,
-		/// and that has to hold for these three actions as well: two of them dragged onto the same
-		/// key by hand is an ordinary collision, not the designed chain.
+		/// and that has to hold for these actions as well: the two of them dragged onto the same
+		/// key by hand is an ordinary collision, not the designed pair.
 		/// </para>
 		/// <para>
 		/// Membership is by action name because that is what survives a rebind: the control changes,
@@ -291,7 +296,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static readonly string[][] SharedBindingGroups =
 		{
-			new[] { "Cancel", "CloseLastUI", "Menu" },
+			new[] { "Cancel", "CloseLastUI" },
 		};
 
 		/// <summary>
@@ -437,6 +442,7 @@ namespace FishMMO.Client
 		private Toggle vsyncToggle;
 		private Slider brightnessSlider;
 		private Slider lookSensitivitySlider;
+		private DropdownField cameraStyleDropdown;
 		private Label brightnessValueLabel;
 		private DropdownField resolutionDropdown;
 		private DropdownField refreshRateDropdown;
@@ -640,6 +646,7 @@ namespace FishMMO.Client
 			brightnessSlider = Root.Q<Slider>(BRIGHTNESS_SLIDER_NAME);
 			brightnessValueLabel = Root.Q<Label>(BRIGHTNESS_VALUE_NAME);
 			lookSensitivitySlider = Root.Q<Slider>(LOOK_SENSITIVITY_SLIDER_NAME);
+			cameraStyleDropdown = Root.Q<DropdownField>(CAMERA_STYLE_DROPDOWN_NAME);
 			resolutionDropdown = Root.Q<DropdownField>(RESOLUTION_DROPDOWN_NAME);
 			refreshRateDropdown = Root.Q<DropdownField>(REFRESHRATE_DROPDOWN_NAME);
 			fullscreenDropdown = Root.Q<DropdownField>(FULLSCREEN_DROPDOWN_NAME);
@@ -729,6 +736,7 @@ namespace FishMMO.Client
 			InitializeClouds();
 			InitializeVisualRows();
 			InitializeLookSensitivity();
+			InitializeCameraStyle();
 			InitializeFrameRateLimit();
 			InitializeVSync();
 			InitializeAudioSettings();
@@ -876,13 +884,14 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			ClientCameraSettings.OnStyleChanged -= ShowCameraStyle;
 			CancelActiveRebind();
 			FlushThemeReload();
 			ClientSettings.Flush();
 		}
 
 		/// <summary>
-		/// True while a rebind is listening, so Escape cancels it instead of closing this panel.
+		/// True while a rebind is listening, so Escape or ~ cancels it instead of closing this panel.
 		/// </summary>
 		/// <remarks>
 		/// Escape is not suppressed by <c>RebindingOperation</c> — see <see cref="BeginRebind"/> —
@@ -1656,6 +1665,52 @@ namespace FishMMO.Client
 			"SMAA (Balanced)",
 			"TAA (Temporal)",
 		};
+
+		/// <summary>
+		/// Binds the camera style dropdown: First Person, Third Person, Over Shoulder.
+		/// </summary>
+		/// <remarks>
+		/// Applied as it is chosen. The first-person key changes the same setting, so the dropdown also follows
+		/// <see cref="ClientCameraSettings.OnStyleChanged"/> to show what the key did.
+		/// </remarks>
+		private void InitializeCameraStyle()
+		{
+			if (cameraStyleDropdown == null)
+			{
+				Log.Error("UITKOptions", "Camera style dropdown is missing.");
+				return;
+			}
+
+			cameraStyleDropdown.choices = new List<string>(ClientCameraSettings.StyleLabels);
+			ShowCameraStyle(ClientCameraSettings.LoadSavedStyle());
+
+			cameraStyleDropdown.RegisterValueChangedCallback((evt) =>
+			{
+				int index = cameraStyleDropdown.index;
+				if (index < 0 || index >= ClientCameraSettings.StyleOrder.Length)
+				{
+					return;
+				}
+				ClientCameraSettings.SetStyle(ClientCameraSettings.StyleOrder[index]);
+			});
+
+			ClientCameraSettings.OnStyleChanged -= ShowCameraStyle;
+			ClientCameraSettings.OnStyleChanged += ShowCameraStyle;
+		}
+
+		/// <summary>Shows a style in the dropdown without raising its change callback (see InitializeBrightness).</summary>
+		private void ShowCameraStyle(KCCCameraStyle style)
+		{
+			if (cameraStyleDropdown == null)
+			{
+				return;
+			}
+			int index = System.Array.IndexOf(ClientCameraSettings.StyleOrder, style);
+			if (index >= 0)
+			{
+				cameraStyleDropdown.SetValueWithoutNotify(ClientCameraSettings.StyleLabels[index]);
+			}
+		}
 
 		/// <summary>
 		/// Binds the look sensitivity slider.
@@ -3317,7 +3372,7 @@ namespace FishMMO.Client
 		/// The device's name for a key is whatever the operating system reports for it, and for
 		/// keys that do not type a character that is the character they send: Escape came back as
 		/// the ESC control character, which the UI font draws as a hollow box, so every row bound
-		/// to Escape — Cancel, Close Last UI, Menu — showed a square. Space comes back as a space
+		/// to Escape — Cancel, Close Last UI — showed a square. Space comes back as a space
 		/// and printed a blank button. A name with no visible character in it is not a name, so
 		/// those fall through to the layout's word for the key.
 		/// </remarks>
@@ -3409,7 +3464,7 @@ namespace FishMMO.Client
 				operation = action.PerformInteractiveRebinding(bindingIndex)
 					.WithTimeout(RebindTimeoutSeconds)
 
-					/* No cancel control, deliberately — Escape is polled instead, in
+					/* No cancel control, deliberately — Escape and ~ are polled instead, in
 					 * PollRebindKeys. An empty string clears the one PerformInteractiveRebinding
 					 * arms by itself for actions whose expected control type is not "Button", so
 					 * every row behaves the same way whatever it is bound to.
@@ -3461,8 +3516,8 @@ namespace FishMMO.Client
 				bindButton.AddToClassList("options-bind-btn--listening");
 				bindButton.text = "Press a key…";
 				SetControlsStatus(gamepadRow
-					? "Listening for a gamepad control.  Escape cancels  ·  Backspace clears this binding."
-					: "Listening for a key.  Escape cancels  ·  Backspace clears this binding.");
+					? "Listening for a gamepad control.  Esc or ~ cancels  ·  Backspace clears this binding."
+					: "Listening for a key.  Esc or ~ cancels  ·  Backspace clears this binding.");
 
 				operation.Start();
 			}
@@ -3623,9 +3678,10 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Escape first: cancelling and clearing are mutually exclusive, and a player holding
-			 * both wants out rather than an unbound row. */
-			if (keyboard.escapeKey.wasPressedThisFrame)
+			/* Cancel first: cancelling and clearing are mutually exclusive, and a player holding
+			 * both wants out rather than an unbound row. ~ as well as Escape, which a browser keeps
+			 * for itself (CancelKey). */
+			if (keyboard.escapeKey.wasPressedThisFrame || keyboard.backquoteKey.wasPressedThisFrame)
 			{
 				CancelActiveRebind();
 				return;
@@ -3778,10 +3834,10 @@ namespace FishMMO.Client
 		/// </returns>
 		/// <remarks>
 		/// The override check is what keeps "duplicates are not allowed" true. The exemption exists
-		/// for one authored arrangement — Escape driving Cancel, CloseLastUI and Menu — and applies
-		/// only while those bindings are still the authored ones. The moment a player moves two of
-		/// them onto a key of their own choosing, that is an ordinary collision: the chain those
-		/// three form depends on the order the client subscribes to them, which is not something a
+		/// for one authored arrangement — Escape and ~ driving Cancel and CloseLastUI — and applies
+		/// only while those bindings are still the authored ones. The moment a player moves them
+		/// onto a key of their own choosing, that is an ordinary collision: the pair depends on
+		/// the order the client subscribes to them, which is not something a
 		/// settings screen should be silently extending to arbitrary keys.
 		/// <para>
 		/// <c>overridePath</c> is null when a binding has no override at all, and an empty string

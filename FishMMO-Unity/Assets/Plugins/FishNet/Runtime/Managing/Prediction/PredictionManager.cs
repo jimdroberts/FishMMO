@@ -479,6 +479,14 @@ namespace FishNet.Managing.Predicting
             _clientReconcileThrottler.ResetState();
             _lastOrderedReadReconcileTick = 0;
 
+            /* FISHMMO EDIT: states still queued from the connection that ended belong to its clock. On the next connection
+             * LocalTick starts again from 0, so the head of the queue could never be reconciled (its client tick is ahead of
+             * every tick the new connection runs) and blocked every correction behind it until RemoveExcessiveStates had
+             * pushed it out a dozen states later; the queue then stayed that deep. */
+            while (_reconcileStates.Count > 0)
+                DisposeOfStatePacket(_reconcileStates.Dequeue());
+            _stateLookups.Clear();
+
             //If state is started.
             if (obj.ConnectionState == LocalConnectionState.Started)
                 SubscribeToTimeManager(subscribe: true, asServer: false);
@@ -750,6 +758,19 @@ namespace FishNet.Managing.Predicting
         }
 
         /// <summary>
+        /// FISHMMO EDIT: returns the tick of the client a state update is for.
+        /// </summary>
+        /// <param name = "remoteTick">Tick of the last input run for the client.</param>
+        /// <param name = "estimatedTick">That tick carried forward by the server ticks since.</param>
+        /// <param name = "ticksSinceReplicate">Server ticks since an input was last run for the client.</param>
+        /// <param name = "inputExpected">True if the last input run was not default, so the client is still sending.</param>
+        /// <param name = "maximumLateTicks">How long input may be late before the client is taken to have stopped sending.</param>
+        internal static uint GetStateClientTick(uint remoteTick, uint estimatedTick, uint ticksSinceReplicate, bool inputExpected, uint maximumLateTicks)
+        {
+            return inputExpected && ticksSinceReplicate <= maximumLateTicks ? remoteTick : estimatedTick;
+        }
+
+        /// <summary>
         /// Sends written states for clients.
         /// </summary>
         internal void SendStateUpdate()
@@ -767,7 +788,29 @@ namespace FishNet.Managing.Predicting
                 // If client has performed a replicate recently.
                 if (!nc.ReplicateTick.IsUnset)
                 {
-                    lastReplicateTick = nc.ReplicateTick.Value();
+                    /* FISHMMO EDIT: on a tick the connection's queue was empty, the tick of the last input the server RAN, when
+                     * its input is only late; the estimate (that tick carried forward by the server ticks since) when the
+                     * client has stopped sending.
+                     *
+                     * The two are the same on every tick that runs one of the connection's inputs. On a tick that ran none the
+                     * estimate still answers one tick later than before, which is right for a client that stopped sending: it
+                     * only stops once its input is default, and the default data the server runs in its place IS the client's
+                     * next tick. It is wrong when the input is late. The state then says "this is where you were at your NEXT
+                     * tick" about a state that input has not reached; the owner rolls back to it and replays one input fewer,
+                     * and is pulled back a tick of its own movement for every such tick (the queue's start delay adds
+                     * StateInterpolation more of them), then snaps forward when the late inputs are run and stamped with their
+                     * own ticks.
+                     *
+                     * Which it is can be told from the last input run. A client whose input turns default sends that default
+                     * input before it goes quiet (RedundancyCount sends from the last input that was not default, so this
+                     * needs a count above 1). A queue that runs dry straight after input that was NOT default therefore ran dry
+                     * because input is late, and the true tick is used: the newest state the server has is still the one for
+                     * the last input it ran, the owner keeps its prediction, and is confirmed input by input as they arrive.
+                     * For a second at most (TickRate ticks): past that the client replays more than it is worth, and the
+                     * estimate takes over. */
+                    TimeManager timeManager = _networkManager.TimeManager;
+                    bool inputExpected = RedundancyCount > 1 && nc.LastInputReplicateLocalTick >= nc.ReplicateTick.LocalTick;
+                    lastReplicateTick = GetStateClientTick(nc.ReplicateTick.RemoteTick, nc.ReplicateTick.Value(), nc.ReplicateTick.LocalTickDifference(timeManager), inputExpected, timeManager.TickRate);
                 }
                 /* If not then use what is estimated to be the clients
                  * current tick along with desired interpolation.
@@ -861,6 +904,12 @@ namespace FishNet.Managing.Predicting
                 if (_stateLookups.TryGetValue(clientTick, out StatePacket sp1))
                 {
                     sp1.AddData(segment, channel);
+                    /* FISHMMO EDIT: the data read last wins (Reconcile_Reader_Remote keeps the newest), so the packet is for
+                     * the newest server tick, not the first. Kept at the first, the state of a later server tick was
+                     * replayed against what the server had posed for an earlier one: a rider whose input was late was put on
+                     * a ship's deck several ticks further along than the ship was. */
+                    if (lastRemoteTick > sp1.ServerTick)
+                        sp1.ServerTick = lastRemoteTick;
                 }
                 else
                 {

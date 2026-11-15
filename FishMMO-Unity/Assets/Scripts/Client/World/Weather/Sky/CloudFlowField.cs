@@ -68,6 +68,22 @@ namespace FishMMO.Client
 		/// </summary>
 		private static Texture3D placeholderField;
 
+		/// <summary>Binds <see cref="placeholderField"/> as <c>_FishCloudFlowField</c>, making it on first use.</summary>
+		private static void BindPlaceholderField()
+		{
+			if (placeholderField == null)
+			{
+				placeholderField = new Texture3D(1, 1, 1, TextureFormat.RGBAHalf, false)
+				{
+					name = "Cloud flow field placeholder",
+					hideFlags = HideFlags.DontSave,
+				};
+				placeholderField.SetPixel(0, 0, 0, Color.clear);
+				placeholderField.Apply(false, true);
+			}
+			Shader.SetGlobalTexture(FieldId, placeholderField);
+		}
+
 		private static void BindIfUnset(int id)
 		{
 			if (Shader.GetGlobalTexture(id) == null)
@@ -602,17 +618,7 @@ namespace FishMMO.Client
 			}
 			else
 			{
-				if (placeholderField == null)
-				{
-					placeholderField = new Texture3D(1, 1, 1, field != null ? field.format : TextureFormat.RGBAHalf, false)
-					{
-						name = "Cloud flow field placeholder",
-						hideFlags = HideFlags.DontSave,
-					};
-					placeholderField.SetPixel(0, 0, 0, Color.clear);
-					placeholderField.Apply(false, true);
-				}
-				Shader.SetGlobalTexture(FieldId, placeholderField);
+				BindPlaceholderField();
 			}
 			// w: 1 the rock is there, 2 the flow is too. The shader reads neither below what it needs.
 			float state = fieldReady ? 2f : (rockReady ? 1f : 0f);
@@ -699,6 +705,9 @@ namespace FishMMO.Client
 			{
 				if (Application.isPlaying) Object.Destroy(field); else Object.DestroyImmediate(field);
 				field = null;
+				// Not left naming the destroyed field: anything still dispatching reads the stand-in (the rect below says
+				// there is no flow), not an unset texture.
+				BindPlaceholderField();
 			}
 			if (rockTexture != null)
 			{

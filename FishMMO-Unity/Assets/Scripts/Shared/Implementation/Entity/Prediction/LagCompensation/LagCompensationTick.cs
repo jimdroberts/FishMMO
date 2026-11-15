@@ -181,6 +181,15 @@ namespace FishMMO.Shared
 		/// claim's offset applied to it.
 		/// </summary>
 		public static bool TryResolve(ICharacter caster, TimeManager timeManager, uint stepInputTick, out RewindTarget target)
+			=> TryResolve(caster, timeManager, stepInputTick, out target, TimeManager.UNSET_TICK);
+
+		/// <summary>
+		/// <see cref="TryResolve(ICharacter, TimeManager, uint, out RewindTarget)"/> for a moment that is already in the
+		/// past: <paramref name="estimateAnchorTick"/> is the server tick the thing being checked happened on (a sweep a
+		/// claim refers to). It only matters when the caster has no exact view claim and the rewind is counted back from an
+		/// anchor: counted from NOW, the pose resolved was newer than the sweep by however long ago the sweep was.
+		/// </summary>
+		public static bool TryResolve(ICharacter caster, TimeManager timeManager, uint stepInputTick, out RewindTarget target, uint estimateAnchorTick)
 		{
 			target = RewindTarget.None;
 
@@ -274,7 +283,7 @@ namespace FishMMO.Shared
 			/* The server's own replicate queue, which the client cannot see and so cannot include,
 			 * is added by ResolveAnchor. Read live rather than assumed: the setting is authored on
 			 * the PredictionManager and can differ per deployment. */
-			return ResolveAnchor(anchorTick, claimedTicks, claimedFraction,
+			return ResolveAnchor(estimateAnchorTick != TimeManager.UNSET_TICK ? estimateAnchorTick : anchorTick, claimedTicks, claimedFraction,
 				ResolveReplicateQueueTicks(nob), out target);
 		}
 

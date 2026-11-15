@@ -282,6 +282,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		private int inputReleasedOnFrame = -1;
 
+		/// <summary>
+		/// True when the cursor was free as the chat input took focus, so sending a line leaves it
+		/// free; false sends the player back to aim mode. Set in <see cref="OnInputFocusIn"/>.
+		/// </summary>
+		private bool typingStartedInMouseMode;
+
 		/// <summary>Frame on which the chat key gave the input field focus.</summary>
 		/// <remarks>
 		/// The mirror of <see cref="inputReleasedOnFrame"/>, for the opposite direction, and the
@@ -293,9 +299,9 @@ namespace FishMMO.Client
 		/// one frame, which looks exactly like the key being dead. "/" has no such problem because
 		/// it produces no Return event, which is why one worked and the other did not.
 		///
-		/// Stamping the frame lets the Return case tell "the Enter that opened this" from "an Enter
-		/// the player typed", rather than depending on whether the poll ran before or after the
-		/// event was dispatched.
+		/// Enter is now the Chat action's alone (<see cref="OnChatKey"/>) and the field only swallows
+		/// it, so one press is one event; the stamp tells OnChatKey and the cursor claim which frame
+		/// the field was opened on.
 		/// </remarks>
 		private int inputFocusedOnFrame = -1;
 
@@ -312,6 +318,12 @@ namespace FishMMO.Client
 
 		/// <summary>True within <see cref="SameKeypressFrames"/> of <paramref name="frame"/>.</summary>
 		private static bool IsSameKeypress(int frame) => frame >= 0 && Time.frameCount - frame <= SameKeypressFrames;
+
+		/// <summary>
+		/// True from the chat key focusing the input until its focus-in arrives, so the focus-in does not record the
+		/// cursor state the key itself just changed; see <see cref="OnInputFocusIn"/>.
+		/// </summary>
+		private bool focusingFromChatKey;
 
 		/// <summary>
 		/// Channels a player can actually send on, in selector order. Tell is excluded because it
@@ -475,6 +487,7 @@ namespace FishMMO.Client
 				inputField.maxLength = MAX_LENGTH;
 				inputField.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
 				inputField.RegisterCallback<FocusOutEvent>(OnInputFocusOut);
+				inputField.RegisterCallback<FocusInEvent>(OnInputFocusIn);
 			}
 
 			if (scrollView != null)
@@ -839,23 +852,29 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Which mode to go back to when the line is sent or abandoned: the one the player was in before this key. */
+			typingStartedInMouseMode = PlayerInputController.MouseMode;
+			focusingFromChatKey = true;
+			inputReleasedOnFrame = -1;
+
 			inputField.Focus();
 			inputFocusedOnFrame = Time.frameCount;
 
-			/* The cursor is left exactly as it was. Typing needs keyboard focus, not a cursor, and the camera and movement
-			 * already stand still while a text field has focus (PlayerInputController.CanUpdateInput). Freeing it here was
-			 * what broke chat in the browser: freeing the cursor exits pointer lock, and taking it back after the line is
-			 * sent is refused outside a click, so every chat line cost the player a click to get the mouse back. */
+			/* Chat is typed in mouse mode: the cursor is freed, so the player can also click the channel selector, the
+			 * tabs or a name in the window. The claim is taken here, not only in UpdateCursorRelease, because
+			 * PlayerInputController.HandleAutoDismiss may run before this panel's next tick and would capture the cursor
+			 * straight back. Sending or Escape returns to aim mode when that is where the player came from. */
+			ReleasesCursor = true;
+			PlayerInputController.MouseMode = true;
 		}
 
 		/// <summary>
-		/// Keeps the panel's cursor claim at what the scene authored. Typing does not claim the cursor.
+		/// Keeps the cursor released for exactly as long as the player is typing.
 		/// </summary>
 		/// <remarks>
-		/// Typing used to claim it for as long as the input had focus, because Enter freed the cursor to type and
-		/// <c>PlayerInputController.HandleAutoDismiss</c> would otherwise take it back mid-sentence. Enter no longer frees it
-		/// (see <see cref="EnableChatInput"/>): a player looking around keeps the locked cursor while typing, and one who was
-		/// already using the cursor keeps it free, so there is nothing to hold.
+		/// <c>PlayerInputController.HandleAutoDismiss</c> re-captures the cursor whenever no visible panel claims it via
+		/// <c>ReleasesCursor</c>. Chat is always visible and must not hold the cursor during play, so it claims it only while
+		/// the input has focus (and in the frames right after the chat key focused it, before the focus has registered).
 		/// </remarks>
 		private void UpdateCursorRelease()
 		{
@@ -865,10 +884,67 @@ namespace FishMMO.Client
 				authoredReleasesCursor = ReleasesCursor;
 			}
 
-			bool wanted = authoredReleasesCursor;
+			bool wanted = authoredReleasesCursor || IsInputFocused || IsSameKeypress(inputFocusedOnFrame);
 			if (ReleasesCursor != wanted)
 			{
 				ReleasesCursor = wanted;
+			}
+		}
+
+		/// <summary>
+		/// The Chat action (Enter or '/'): opens chat, or, with Enter while the player is typing, sends the line.
+		/// </summary>
+		/// <remarks>
+		/// One action decides both, so one press is one event: it opens or it sends, never both. Before, opening was the
+		/// action's and sending was UI Toolkit's KeyDownEvent, two input systems that see a press at different times. In
+		/// the browser UI Toolkit's copy of the Enter that opened chat could land frames later and send an empty line,
+		/// so Enter freed the cursor and took it straight back. '/' while typing is a character and does nothing here.
+		/// </remarks>
+		/// <param name="enter">True when the press was Enter rather than '/'.</param>
+		public void OnChatKey(bool enter)
+		{
+			if (IsInputFocused)
+			{
+				if (enter && inputFocusedOnFrame != Time.frameCount)
+				{
+					SubmitAndRelease();
+				}
+				return;
+			}
+			EnableChatInput();
+		}
+
+		/// <summary>
+		/// Sends what was typed, leaves the field and puts the cursor back as it was before typing.
+		/// </summary>
+		/// <remarks>
+		/// Sending has to release the field for the same reason Escape does. A focused text field is what
+		/// UIManager.InputControlHasFocus gates ALL player input on (movement, hotkeys and interaction alike), so a field
+		/// that kept focus after Enter left the player unable to move until they hit Escape or clicked the world. Chat
+		/// opened from aim mode returns to aim mode; a player who had freed the cursor and clicked into the field keeps
+		/// it. In the browser the capture is asked for during the key press, which is the user gesture a pointer lock needs.
+		/// </remarks>
+		private void SubmitAndRelease()
+		{
+			if (inputField == null)
+			{
+				return;
+			}
+			OnSubmit(inputField.value);
+			inputReleasedOnFrame = Time.frameCount;
+			ReleaseInputFocus();
+			RestoreModeAfterTyping();
+		}
+
+		/// <summary>
+		/// Puts the cursor back the way it was before the player started typing: captured again when they came from aim
+		/// mode, left free when they were already using the mouse.
+		/// </summary>
+		private void RestoreModeAfterTyping()
+		{
+			if (!typingStartedInMouseMode)
+			{
+				PlayerInputController.EnterAimMode();
 			}
 		}
 
@@ -899,6 +975,26 @@ namespace FishMMO.Client
 			}
 
 			inputField.Blur();
+		}
+
+		/// <summary>
+		/// Leaves the chat input, keeping what was typed, and returns the player to aim mode.
+		/// </summary>
+		/// <returns>False, doing nothing, when the chat input did not have focus.</returns>
+		/// <remarks>
+		/// The mouse-mode key (Tab) calls this while the player is typing; see
+		/// <c>PlayerInputController.OnToggleMouseModePerformed</c>. The line is kept so Enter picks
+		/// it up again; Escape is the key that abandons it.
+		/// </remarks>
+		public bool LeaveInputToAimMode()
+		{
+			if (!IsInputFocused)
+			{
+				return false;
+			}
+			ReleaseInputFocus();
+			PlayerInputController.EnterAimMode();
+			return true;
 		}
 
 		/// <summary>
@@ -955,13 +1051,27 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Tab is the mouse-mode key in the world, and it means nothing to a chat line. Left
-			 * alone, the text field's own handler moves focus to the next element on Tab. The
-			 * player lost the line mid-sentence and the remaining keys went to the game, which
-			 * was the other half of "chat loses focus at random". Swallowed here in the
-			 * trickle-down phase, before it reaches the inner text element. The keyCode None
-			 * twin carrying only the '\t' character is swallowed with it. */
+			/* Tab is the mouse-mode key, and in chat it leaves the field for aim mode — but that
+			 * is done by the mouse-mode action (LeaveInputToAimMode), not here, so the two cannot
+			 * race. What this stops is the text field's own handling: left alone it moves focus to
+			 * the next element and inserts nothing useful. Swallowed in the trickle-down phase,
+			 * before it reaches the inner text element. The keyCode None twin carrying only the
+			 * '\t' character is swallowed with it. */
 			if (evt.keyCode == KeyCode.Tab || evt.character == '\t')
+			{
+				evt.StopPropagation();
+				inputField.focusController?.IgnoreEvent(evt);
+				return;
+			}
+
+			/* Enter arrives as two key-down events: the key (keyCode Return, handled below) and a twin carrying only the
+			 * character ('\n' or '\r', keyCode None). Left alone, the twin reaches the inner text element, and a
+			 * single-line field takes a newline character to mean "done": it moves focus off the text onto the field
+			 * itself (KeyboardTextEditorEventHandler.OnKeyDown, MoveFocusToCompositeRoot). The field still counts as
+			 * focused, so the game stays paused, but nothing typed goes in. In the browser the twin of the Enter that
+			 * opened chat lands after the field took focus, so Enter opened chat and typing went nowhere. Every Enter is
+			 * handled by the Return case, so the twin is never wanted. */
+			if (evt.keyCode == KeyCode.None && (evt.character == '\n' || evt.character == '\r'))
 			{
 				evt.StopPropagation();
 				inputField.focusController?.IgnoreEvent(evt);
@@ -971,24 +1081,18 @@ namespace FishMMO.Client
 			switch (evt.keyCode)
 			{
 				case KeyCode.Return:
-				case KeyCode.KeypadEnter:
-					/* The Enter that opened this field is not a send. Swallowed rather than
-					 * submitted, or opening chat with Enter immediately closes it again. */
-					if (IsSameKeypress(inputFocusedOnFrame))
-					{
-						evt.StopPropagation();
-						break;
-					}
+					/* Enter is the Chat action's (PlayerInputController.OnChatPerformed → OnChatKey), which both
+					 * opens chat and sends the line. Only swallowed here, so the text field does not act on it too.
+					 * Handling it here as well made one press two events from two input systems: in the browser
+					 * UI Toolkit's copy of the Enter that opened chat can arrive frames after the game's, and it
+					 * was taken for a second press — an empty send that put the player straight back in aim mode. */
+					evt.StopPropagation();
+					break;
 
-					OnSubmit(inputField.value);
-					/* Sending has to release the field for the same reason Escape does. A focused
-					 * text field is what UIManager.InputControlHasFocus gates ALL player input on
-					 * — movement, hotkeys and interaction alike — so a field that keeps focus
-					 * after Enter leaves the player unable to move or press E until they think to
-					 * hit Escape or click the world. Escape was given this treatment and Enter was
-					 * not, which is why sending one chat line silently disabled the game. */
-					inputReleasedOnFrame = Time.frameCount;
-					ReleaseInputFocus();
+				case KeyCode.KeypadEnter:
+					/* The keypad Enter is not bound to the Chat action, so it cannot open chat and arrives only
+					 * here: it sends. */
+					SubmitAndRelease();
 					evt.StopPropagation();
 					break;
 
@@ -1000,6 +1104,7 @@ namespace FishMMO.Client
 					inputField.value = "";
 					ResetInputHistoryCursor();
 					ReleaseInputFocus();
+					RestoreModeAfterTyping();
 					evt.StopPropagation();
 					break;
 
@@ -1016,11 +1121,31 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Notes whether the cursor was free when the player started typing; see the Enter case
+		/// of <see cref="OnInputKeyDown"/>.
+		/// </summary>
+		/// <remarks>
+		/// The chat key records it itself before it frees the cursor (<see cref="EnableChatInput"/>), so its own focus-in
+		/// is skipped: depending on dispatch it can arrive after the cursor was freed and would read mouse mode. Every
+		/// other route into the field (a click, which needs a free cursor) is recorded here.
+		/// </remarks>
+		private void OnInputFocusIn(FocusInEvent evt)
+		{
+			if (focusingFromChatKey)
+			{
+				focusingFromChatKey = false;
+				return;
+			}
+			typingStartedInMouseMode = PlayerInputController.MouseMode;
+		}
+
+		/// <summary>
 		/// Releases the cursor claim as soon as the field loses focus by any route.
 		/// </summary>
 		/// <param name="evt">The focus-out event.</param>
 		private void OnInputFocusOut(FocusOutEvent evt)
 		{
+			focusingFromChatKey = false;
 			ResetInputHistoryCursor();
 			ReleasesCursor = authoredCursorCaptured && authoredReleasesCursor;
 		}

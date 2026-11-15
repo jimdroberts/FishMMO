@@ -38,6 +38,9 @@ namespace FishMMO.Shared
 				: $"Applies {BuffTemplate.Name} ({stacks} stacks)";
 		}
 
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
 		/// <summary>
 		/// Applies the specified buff to the target character, stacking it the computed number of times.
 		/// </summary>
@@ -130,6 +133,9 @@ namespace FishMMO.Shared
 				authoritativeTick = buffController.GetCurrentDomainTick();
 			}
 
+			// Whether this prediction CREATES the buff on the target, or refreshes one the target already has (see below).
+			bool hadBuff = buffController.Buffs != null && buffController.Buffs.ContainsKey(BuffTemplate.ID);
+
 			for (int i = 0; i < stacks; ++i)
 			{
 				/* The initiator is snapshotted onto the buff so periodic effects have somebody to
@@ -144,6 +150,15 @@ namespace FishMMO.Shared
 				{
 					buffController.ApplyAuthoritative(BuffTemplate, authoritativeTick, initiator);
 				}
+			}
+
+			/* A caster's client predicting on somebody else: provisional until the server names it (MarkPredictedByCaster). Only
+			 * a buff this prediction CREATED: one the target already carried is the server's, confirmed, and a refresh of it is
+			 * a timing change the server pushes nothing about, so marking it let the sweep take a debuff the server still has
+			 * off the caster's screen. */
+			if (!hadBuff && !isPredictionPath && !EcaAuthority.IsServer(initiator, eventData) && buffController is BuffController predictedOn)
+			{
+				predictedOn.MarkPredictedByCaster(BuffTemplate.ID);
 			}
 
 			/* Debuffing something is participating in killing it, so it earns loot rights the same

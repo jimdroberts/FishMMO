@@ -70,6 +70,9 @@ namespace FishMMO.Shared
 			return type == null ? $"Deals {amount} damage" : $"Deals {amount} {type}{suffix}";
 		}
 
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
 		/// <summary>
 		/// Applies damage to the target character using the computed value and attribute template.
 		/// Runs on the server and on the client that owns the initiator — see the note on the class.
@@ -124,6 +127,7 @@ namespace FishMMO.Shared
 
 			if (target.TryGet(out ICharacterDamageController defenderDamageController))
 			{
+				float healthBefore = PredictedCombatEvents.CurrentHealth(target);
 				int applied = defenderDamageController.Damage(initiator, amount, DamageAttributeTemplate);
 
 				/* The caster's own floating number, drawn now rather than on the server's report.
@@ -139,7 +143,8 @@ namespace FishMMO.Shared
 				if (applied > 0 && MayDrawPredictedNumber(initiator, eventData))
 				{
 					PredictedCombatEvents.Predict(initiator, target, applied, PredictedCombatEvents.Kind.Damage,
-						DamageAttributeTemplate, UnityEngine.Time.unscaledTime);
+						DamageAttributeTemplate, UnityEngine.Time.unscaledTime,
+						movedHealth: PredictedCombatEvents.HealthMoved(healthBefore, PredictedCombatEvents.CurrentHealth(target)));
 				}
 			}
 		}

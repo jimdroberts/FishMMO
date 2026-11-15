@@ -197,6 +197,17 @@ namespace FishMMO.Client
 				return;
 			}
 
+			/* Escape, or ~ outside the form's text fields — a password may contain ~ or `. */
+			if (CancelKey.Matches(evt))
+			{
+				if (binding.Cancel != null)
+				{
+					evt.StopPropagation();
+					binding.Cancel.Invoke();
+				}
+				return;
+			}
+
 			switch (evt.keyCode)
 			{
 				case KeyCode.Return:
@@ -206,13 +217,6 @@ namespace FishMMO.Client
 					{
 						evt.StopPropagation();
 						binding.Submit.Invoke();
-					}
-					return;
-				case KeyCode.Escape:
-					if (binding.Cancel != null)
-					{
-						evt.StopPropagation();
-						binding.Cancel.Invoke();
 					}
 					return;
 			}

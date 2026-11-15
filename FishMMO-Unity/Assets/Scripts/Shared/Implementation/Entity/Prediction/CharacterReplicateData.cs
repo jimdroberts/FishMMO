@@ -119,6 +119,93 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public Vector3 AimDirection;
 
+		/// <summary>
+		/// The yaw from <see cref="AimDirection"/>'s heading to the body's, in quarter degrees about world up
+		/// (<see cref="AimConvergence.BodyHeading"/>). Movement and facing are taken from the aim turned by this; shots from
+		/// the aim itself.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Needed because the shot and the body look at the crosshair's point from different places and with different
+		/// limits: the shot from the eye, converging from 2 m; the body from where it is drawn, converging from 6 m so the
+		/// crosshair crossing near objects cannot snap it round. One aim cannot carry both.
+		/// </para>
+		/// <para>
+		/// Zero for an NPC, and near zero for a camera on the character's line (third and first person). Read through
+		/// <see cref="AimConvergence.DecodeHeadingOffset"/>, which holds it to <see cref="AimConvergence.MaxHeadingOffsetDegrees"/>
+		/// whatever was sent. On the wire it has a flag bit of its own and is written only on a tick it changes: quarter
+		/// degrees is far finer than a facing can be seen to differ by, and coarse enough that it holds still while the
+		/// aim sweeps.
+		/// </para>
+		/// </remarks>
+		public short HeadingOffset;
+
+		/// <summary>
+		/// How far along <see cref="AimDirection"/> from the eye the point under the crosshair is, log-coded in one byte
+		/// (<see cref="AimConvergence.EncodeDistance"/>); zero for "not given". With <see cref="AimOriginRight"/> and
+		/// <see cref="AimOriginUp"/> it states the LAUNCH LINE: the line through the crosshair a projectile is simulated on.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A projectile is simulated along the line the player aims down, the camera's ray through the crosshair, and only
+		/// DRAWN leaving the hand, wand or staff (AbilityObject, Presentation). The server cannot take that line from a
+		/// camera it does not have, and must not take an arbitrary one from a client, so it is rebuilt from three small
+		/// numbers and the eye the server derives itself: the line runs from a point beside the eye (these two offsets,
+		/// held to <see cref="AimConvergence.MaxOriginOffset"/>) to the point this distance along the aim. Both peers
+		/// rebuild the same line from the same input, so they fly the same projectile to the last bit, and it follows the
+		/// crosshair at every range: a shot led ahead of a moving target passes where the crosshair was put, not below it.
+		/// </para>
+		/// <para>
+		/// It used to leave the hand as the simulation had it, turned toward the crosshair's point. That is exact with the
+		/// crosshair ON the target and low by most of the hand's drop below the eye everywhere short of it, which is where
+		/// a led shot has to land; and a hand that follows a cast animation exists on no server at all.
+		/// </para>
+		/// <para>
+		/// <b>One-shot.</b> Sent only on a tick that may spawn (the owner knows its own cast is about to finish), absent on
+		/// every other, and absent means zero on the wire, never "the same as last tick". Zero is always safe: both peers
+		/// then launch along the aim from the eye, exactly as each other (and as an NPC, which has no camera, always does).
+		/// </para>
+		/// </remarks>
+		public byte ConvergenceDistance;
+
+		/// <summary>
+		/// Where the launch line starts, beside the eye: centimetres to the aim's right. See <see cref="ConvergenceDistance"/>.
+		/// </summary>
+		public sbyte AimOriginRight;
+
+		/// <summary>Where the launch line starts, beside the eye: centimetres up, across the aim.</summary>
+		public sbyte AimOriginUp;
+
+		// ── Hit claim ──
+
+		/// <summary>
+		/// The character the owner's own copy of one of its ability objects hit, as that character's network object id
+		/// plus one; zero on every tick without a claim.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner resolves its hits against other characters where it DRAWS them, and the server resolves the same
+		/// sweep against where its history says they were drawn. The two agree to the centimetre on a steady connection,
+		/// and can disagree by more when the owner's view was not the one the history reproduces: a character drawn along
+		/// the straight line between two position updates while it turned, or held still while its next update was late.
+		/// No rewind can recover that, because the server cannot know what a client drew.
+		/// </para>
+		/// <para>
+		/// So the owner says what it saw. A claim names the object (by the age of its cast and its index in the cast) and
+		/// the victim; the server checks that the object exists, has not already hit that character, and passed within a
+		/// speed-scaled tolerance of where its own history puts the victim (AbilityObject.TryApplyClaimedHit), and applies
+		/// the hit itself. A claim the server already agrees with is a no-op. One-shot, like
+		/// <see cref="ConvergenceDistance"/>.
+		/// </para>
+		/// </remarks>
+		public int HitClaimVictim;
+
+		/// <summary>How many input ticks ago the claimed object's cast spawned it: this input's tick less the cast's spawn tick.</summary>
+		public ushort HitClaimSpawnAge;
+
+		/// <summary>The claimed object's index within its cast (0 for the cast's own object, above for forks and children).</summary>
+		public byte HitClaimObject;
+
 		// ── Ability input ──
 
 		/// <summary>

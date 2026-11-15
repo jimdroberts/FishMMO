@@ -189,9 +189,11 @@ namespace FishMMO.Shared
 				 * spawn chain and then expiring one tick later.
 				 *
 				 * The whole CONTAINER, not the returned root — see CatchUpSpawnedContainer. */
+				// On the playback clock the leg's age comes from the clock; only the earlier legs' lifetime is charged here.
+				bool onPlaybackClock = BeginObservedPlayback(ability, spawned, entry.ServerStartTick, lateJoin: true);
 				CatchUpSpawnedContainer(ability, spawned,
 					entry.LifeElapsedBeforeStartTicks,
-					ComputeObserverCatchUpTicks(timeManager, entry.ServerStartTick));
+					onPlaybackClock ? 0u : ComputeObserverCatchUpTicks(timeManager, entry.ServerStartTick));
 			}
 
 			pendingInFlightObjects.Clear();

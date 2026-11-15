@@ -327,6 +327,8 @@ namespace FishMMO.Shared
 				if (CharacterCamera != null)
 				{
 					CharacterCamera.SetFollowTransform(CharacterController.CameraFollowPoint);
+					// First person sits at the eye shots are aimed from (CharacterAimOrigin.EyeHeight).
+					CharacterCamera.EyeMotor = Motor;
 					CharacterCamera.IgnoredColliders.Clear();
 					CharacterCamera.IgnoredColliders.AddRange(CharacterController.GetComponentsInChildren<Collider>());
 				}
@@ -489,12 +491,238 @@ namespace FishMMO.Shared
 			 * while the server and every observer simulate the decoded one — the ability system is
 			 * deterministic, so that divergence showed up as a slightly different shot on every
 			 * cast. See AimDirectionCompression. */
-			input.AimDirection = AimDirectionCompression.Quantize(kccInput.CameraRotation * Vector3.forward);
+			/* Not the camera's forward but the line from the eye to whatever the crosshair is on, so the shot lands
+			 * under the crosshair whatever the camera's offset from the eye (see AimConvergence: camera, character and
+			 * shot form a V whose point is the target). The body's heading toward that point travels beside it as a yaw
+			 * offset, which is what movement and facing are taken from in OnReplicate. The offset is measured from the
+			 * QUANTISED aim, so the one the owner predicts with is the one the server decodes. */
+			ResolveOwnerAim(kccInput.CameraPosition, kccInput.CameraRotation, out _, out input.AimDirection, out input.HeadingOffset,
+				out AimConvergence.AimLaunch launch);
+			// For the ability controller, which populates after this (Order 100) and sends it only on a tick that may spawn.
+			OwnerLaunch = launch;
 		}
+
+		/// <summary>
+		/// The launch line for the camera as it stood when this tick's input was built: what the ability controller sends
+		/// (<see cref="CharacterReplicateData.ConvergenceDistance"/> and the origin offsets) on a tick that may spawn a
+		/// projectile. Owner only; not given before the first input.
+		/// </summary>
+		public AimConvergence.AimLaunch OwnerLaunch { get; private set; }
+
+		/// <summary>
+		/// The owner's aim from a camera pose: the eye the next tick's shots leave from, the quantised direction from it to
+		/// the point under the crosshair, and the body's heading offset (<see cref="AimConvergence"/>).
+		/// </summary>
+		/// <remarks>
+		/// The one definition of "where the shot goes", used by the input (<see cref="PopulateInput"/>) and by the target
+		/// the crosshair highlights (TargetController.Update). Both trace the same line, so the target shown under the
+		/// crosshair is the one the cast's own trace finds: over the shoulder the camera can see past a corner the eye
+		/// cannot, and a highlight taken along the camera's ray would offer a target the shot can never reach.
+		/// </remarks>
+		/// <param name="cameraPosition">The camera.</param>
+		/// <param name="cameraRotation">The camera's rotation.</param>
+		/// <param name="eye">The eye at the start of the next tick (<see cref="TickAimOrigin"/> once it runs).</param>
+		/// <param name="aimDirection">The quantised aim, exactly as the wire carries it.</param>
+		/// <param name="headingOffset">The body's heading offset from the aim, as the wire carries it.</param>
+		/// <param name="launch">The launch line: the crosshair's own line, as the wire carries it (AimConvergence.LaunchLine).</param>
+		public void ResolveOwnerAim(Vector3 cameraPosition, Quaternion cameraRotation, out Vector3 eye, out Vector3 aimDirection, out short headingOffset,
+			out AimConvergence.AimLaunch launch)
+		{
+			Vector3 cameraForward = cameraRotation * Vector3.forward;
+			eye = CharacterAimOrigin.Resolve(Motor, transform);
+			// Where the character is drawn: the camera is laid out around this, not around the simulated eye.
+			Vector3 drawn = CharacterCamera != null && CharacterCamera.FollowTransform != null
+				? CharacterCamera.FollowTransform.position
+				: eye;
+			Vector3 aim = AimConvergence.Resolve(
+				Motor.PhysicsScene,
+				cameraPosition,
+				cameraForward,
+				eye,
+				drawn,
+				ResolveAimLayers(),
+				CharacterCamera != null ? CharacterCamera.IgnoredColliders : null,
+				ref aimHits,
+				out Vector3 bodyHeading,
+				out float apexDistance,
+				out Vector3 launchPoint);
+			aimDirection = AimDirectionCompression.Quantize(aim);
+			// Against the QUANTISED aim, which is the one the server rebuilds the line from.
+			launch = AimConvergence.EncodeLaunch(eye, launchPoint, aimDirection, apexDistance);
+			headingOffset = AimConvergence.EncodeHeadingOffset(
+				AimConvergence.HeadingOffsetDegrees(aimDirection, bodyHeading));
+		}
+
+		/// <summary>
+		/// Server: a tick with no input from the owner. The body does nothing of its own, but what it STANDS on still
+		/// moves, and the body goes with it.
+		/// </summary>
+		/// <remarks>
+		/// The carry is part of the motor step, and the step is skipped on such a tick, so a rider whose input was late
+		/// stayed where it was in the world while the deck (posed from the server's clock every tick) moved on: 13 cm
+		/// behind per missing tick at 4 m/s, never made up, with the owner (which carried itself on every tick) corrected
+		/// by that distance and everyone else watching the rider slide aft. Carried rigidly here: the same velocity and
+		/// turn the step would have conveyed, and only to a body standing on the deck, which is the step's own rule.
+		/// </remarks>
+		private void CarryOnBlankTick(uint tick)
+		{
+			if (!base.IsServerStarted || Motor == null || base.TimeManager == null || !Motor.GroundingStatus.IsStableOnGround)
+			{
+				return;
+			}
+			float deltaTime = (float)base.TimeManager.TickDelta;
+			Vector3 velocity;
+			float turn = 0f;
+			if (currentPlatform != null)
+			{
+				velocity = currentPlatform.LastCompletedTickVelocity;
+			}
+			else
+			{
+				uint waterTick = FishMMO.Shared.Weather.WeatherExposureTick.Resolve(this, tick);
+				if (!FloatingBoats.TryGetCarry(gameObject.scene, waterTick, base.TimeManager.TickDelta, transform.position, deltaTime,
+						out velocity, out turn, out _))
+				{
+					return;
+				}
+			}
+			if (velocity.sqrMagnitude < 1e-10f && turn == 0f)
+			{
+				return;
+			}
+			// Once per server tick, shared with the step's own carry (see the ship branch of OnReplicate).
+			uint carryTick = FishMMO.Shared.Weather.WeatherExposureTick.Resolve(this, tick);
+			if (hasLastServerCarryTick && lastServerCarryTick == carryTick)
+			{
+				return;
+			}
+			lastServerCarryTick = carryTick;
+			hasLastServerCarryTick = true;
+
+			Quaternion rotation = Motor.TransientRotation;
+			if (turn != 0f && !float.IsNaN(turn) && !float.IsInfinity(turn))
+			{
+				rotation = Quaternion.AngleAxis(turn, Vector3.up) * rotation;
+			}
+			Motor.SetPositionAndRotation(Motor.TransientPosition + ClearCarry(velocity * deltaTime), rotation);
+		}
+
+		/// <summary>Server: the water tick the rider was last carried on (once a tick, whichever path carried it).</summary>
+		private uint lastServerCarryTick;
+		private bool hasLastServerCarryTick;
+
+		private static RaycastHit[] carryHits = new RaycastHit[TargetOrdering.QueryBufferSize(0)];
+
+		/// <summary>
+		/// How much of <paramref name="displacement"/> the body can be carried before it meets something that is not the deck
+		/// it stands on.
+		/// </summary>
+		/// <remarks>
+		/// The step carries the body through the motor, which collides; a blank tick moves it directly. A deck sliding past
+		/// a quay, a bridge or an overhang put the rider into it, and the next real step's overlap resolution pushed it out,
+		/// possibly on the far side. The deck itself (everything under the root of the collider the body stands on) moves
+		/// with the rider and is not in the way.
+		/// </remarks>
+		private Vector3 ClearCarry(Vector3 displacement)
+		{
+			float distance = displacement.magnitude;
+			CapsuleCollider capsule = Motor.Capsule;
+			if (distance < 1e-5f || capsule == null)
+			{
+				return displacement;
+			}
+			const float Skin = 0.02f;
+			Vector3 direction = displacement / distance;
+			Transform capsuleTransform = capsule.transform;
+			Vector3 scale = capsuleTransform.lossyScale;
+			float radius = Mathf.Max(0.01f, capsule.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z)) - Skin);
+			float half = Mathf.Max(0f, capsule.height * Mathf.Abs(scale.y) * 0.5f - radius);
+			Vector3 up = Motor.CharacterUp;
+			// Lifted by the skin so the floor it stands on is not met at once.
+			Vector3 centre = Motor.TransientPosition + Motor.TransientRotation * capsule.center + up * Skin;
+			Vector3 bottom = centre - up * half;
+			Vector3 top = centre + up * half;
+
+			Collider ground = Motor.GroundingStatus.GroundCollider;
+			Transform deck = ground != null ? ground.transform.root : null;
+			int count;
+			while (true)
+			{
+				count = Motor.PhysicsScene.CapsuleCast(bottom, top, radius, direction, carryHits, distance + Skin,
+					Motor.CollidableLayers, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref carryHits, count))
+				{
+					break;
+				}
+			}
+			float allowed = distance;
+			for (int i = 0; i < count; ++i)
+			{
+				RaycastHit hit = carryHits[i];
+				Collider struck = hit.collider;
+				if (struck == null || hit.distance <= 0f || struck.transform.IsChildOf(transform) ||
+					(deck != null && struck.transform.IsChildOf(deck)))
+				{
+					continue;
+				}
+				allowed = Mathf.Min(allowed, Mathf.Max(0f, hit.distance - Skin));
+			}
+			return direction * allowed;
+		}
+
+		/// <summary>Hit buffer for the crosshair trace (<see cref="AimConvergence.Resolve"/>), grown as needed.</summary>
+		private RaycastHit[] aimHits = new RaycastHit[TargetOrdering.QueryBufferSize(0)];
+
+		/// <summary>The character's target controller, for the layers its cast-time trace sees; resolved once.</summary>
+		private TargetController aimTargetController;
+		private bool aimTargetControllerResolved;
+
+		/// <summary>
+		/// What the crosshair can rest on: the layers of the trace the cast itself makes from the eye along the aim
+		/// (AbilityController.ResolveTargetAndSpawn via TargetController.UpdateTarget). Using the same layers is what
+		/// makes the server's trace end on the very surface the owner converged on.
+		/// </summary>
+		private int ResolveAimLayers()
+		{
+			if (!aimTargetControllerResolved)
+			{
+				aimTargetControllerResolved = true;
+				aimTargetController = GetComponent<TargetController>();
+			}
+			return aimTargetController != null ? aimTargetController.LayerMask.value : Physics.DefaultRaycastLayers;
+		}
+
+		/// <summary>
+		/// The eye at the START of the tick last simulated (before this tick's move): the point shots of that tick are
+		/// fired from (AbilityController reads it, Order 100, after the motor has moved).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The start of the tick because that is the only eye the owner knows when it builds the input. The aim is
+		/// converged from it (<see cref="AimConvergence"/>: eye to the crosshair's point), so the shot reaches that point
+		/// only if it is fired from the same eye. Fired from the eye after the move instead, as it used to be, the shot ran
+		/// parallel to the converged line, displaced by the tick's movement: about 20 cm sideways for a running strafe.
+		/// </para>
+		/// <para>
+		/// Recorded first thing, before any early return, on every pass including replays: the server, the owner and every
+		/// replay reach the same motor state at the start of a tick, so they read the same eye.
+		/// </para>
+		/// </remarks>
+		public Vector3 TickAimOrigin { get; private set; }
+
+		/// <summary>The input tick <see cref="TickAimOrigin"/> belongs to; <see cref="NoTickAimOrigin"/> before the first.</summary>
+		public uint TickAimOriginTick { get; private set; } = NoTickAimOrigin;
+
+		/// <summary>No tick recorded yet: never a real input tick, so a reader can tell a stale origin from a current one.</summary>
+		public const uint NoTickAimOrigin = uint.MaxValue;
 
 		/// <inheritdoc/>
 		public void OnReplicate(ref CharacterReplicateData input, ReplicateState state, Channel channel)
 		{
+			Vector3 tickStartEye = CharacterAimOrigin.Resolve(Motor, transform);
+			TickAimOrigin = tickStartEye;
+			TickAimOriginTick = input.GetTick();
+
 			TryResolvePendingPlatform();
 
 			bool controlsSuppressed = false;
@@ -550,10 +778,12 @@ namespace FishMMO.Shared
 				}
 			}
 
+			/* The "camera" the motor steers by is the aim turned onto the body's heading (HeadingOffset): toward the same
+			 * point as the shot, but from where the character is drawn and never nearer than 6 m (AimConvergence). */
 			KCCInputReplicateData kccInput = new KCCInputReplicateData(
 				input.MoveAxisForward, input.MoveAxisRight, input.MoveFlags,
-				CharacterAimOrigin.Resolve(Motor, transform),
-				AimDirectionCompression.ToRotation(input.AimDirection));
+				tickStartEye,
+				AimConvergence.MovementRotation(AimDirectionCompression.ToRotation(input.AimDirection), input.HeadingOffset));
 			kccInput.SetTick(input.GetTick());
 
 			// Observer prediction must run BEFORE the IsActualData gate.
@@ -596,6 +826,13 @@ namespace FishMMO.Shared
 
 			if (!kccInput.MoveFlags.IsFlagged(KCCMoveFlags.IsActualData))
 			{
+				/* Only a tick the server RAN WITHOUT INPUT (default data, which is never Created). A created input without
+				 * the data flag is the owner's own (built before its handler was bound): the owner does not carry on it, so
+				 * neither may the server. */
+				if (!state.ContainsCreated())
+				{
+					CarryOnBlankTick(kccInput.GetTick());
+				}
 				return;
 			}
 
@@ -641,6 +878,18 @@ namespace FishMMO.Shared
 				 * so a rider keeps its bearing on the deck as well as its place through a bend and the swing at anchor. */
 				FloatingBoats.TryGetCarry(gameObject.scene, CharacterController.WaterTick, base.TimeManager.TickDelta,
 					transform.position, deltaTime, out platformVelocity, out platformTurn, out ship);
+				/* Once per tick on the server, whose water tick is its own clock: a second input run in the same tick (a
+				 * queue being drained) reads the same pose change, and the rider was carried twice by one tick of the deck. */
+				if (base.IsServerStarted)
+				{
+					if (hasLastServerCarryTick && lastServerCarryTick == CharacterController.WaterTick)
+					{
+						platformVelocity = Vector3.zero;
+						platformTurn = 0f;
+					}
+					lastServerCarryTick = CharacterController.WaterTick;
+					hasLastServerCarryTick = true;
+				}
 			}
 			// The latest simulated tick's ship, for the owner's camera, which turns with it (a replay runs up to the latest tick).
 			ShipAboard = ship;
@@ -797,6 +1046,8 @@ namespace FishMMO.Shared
 
 			lastCreatedData.Dispose();
 			hasLastCreatedData = false;
+			TickAimOrigin = Vector3.zero;
+			TickAimOriginTick = NoTickAimOrigin;
 			currentPlatform = null;
 			pendingPlatformID = 0;
 			ShipAboard = default;
@@ -843,14 +1094,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Updates the camera with scroll and look input, using the current tick delta.
+		/// Updates the camera with scroll and look input, over <paramref name="deltaTime"/> seconds.
 		/// </summary>
+		/// <remarks>
+		/// The time is the caller's FRAME time. This is called once a frame, and it used to hand the camera the length of a
+		/// tick whatever the frame took, so everything the camera eases (the zoom, a boom let out after an obstruction) ran
+		/// nearly five times too fast at 144 frames a second and at the authored speed only at 30. The caller passes it
+		/// in because no file of the prediction path reads a wall clock itself.
+		/// </remarks>
+		/// <param name="deltaTime">Seconds since the camera was last updated.</param>
 		/// <param name="scrollInput">Scroll/zoom input.</param>
 		/// <param name="lookInputVector">Look input vector.</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void UpdateCamera(float scrollInput, Vector3 lookInputVector)
+		public void UpdateCamera(float deltaTime, float scrollInput, Vector3 lookInputVector)
 		{
-			CharacterCamera.UpdateWithInput((float)base.TimeManager.TickDelta, scrollInput, lookInputVector);
+			CharacterCamera.UpdateWithInput(deltaTime, scrollInput, lookInputVector);
 		}
 
 		/// <summary>

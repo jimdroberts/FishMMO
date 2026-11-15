@@ -108,6 +108,39 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// States the modifier this buff has accrued so far, from <see cref="Buff.CumulativeTickMultiplier"/> as it stands.
+		/// </summary>
+		/// <remarks>
+		/// For a correction (BuffController.RestoreFromReconcile). It set the running total back to the server's but left
+		/// the modifier at what this client had predicted, one step ahead; the attribute correction that follows then
+		/// measured its remainder against that stale modifier, and the replayed tick wrote the same value it already
+		/// held, changing nothing. The attribute sat one step behind until the server confirmed the tick.
+		/// </remarks>
+		public void RestateAccruedModifier(Buff buff, ICharacter target)
+		{
+			if (buff == null || target == null || TickAttributes == null) return;
+			if (!target.TryGet(out ICharacterAttributeController attributeController)) return;
+
+			for (int i = 0; i < TickAttributes.Count; i++)
+			{
+				BuffAttributeTemplate tickAttribute = TickAttributes[i];
+				if (tickAttribute?.Template == null) continue;
+
+				ModifierSource source = ModifierSource.Buff(ID, i);
+				int modifier = tickAttribute.Value * buff.CumulativeTickMultiplier;
+
+				if (attributeController.TryGetAttribute(tickAttribute.Template.ID, out CharacterAttribute characterAttribute))
+				{
+					characterAttribute.SetSource(source, modifier);
+				}
+				else if (attributeController.TryGetResourceAttribute(tickAttribute.Template.ID, out CharacterResourceAttribute characterResourceAttribute))
+				{
+					characterResourceAttribute.SetSource(source, modifier);
+				}
+			}
+		}
+
+		/// <summary>
 		/// Called each tick. Adds attribute modifiers scaled by (1 + Stacks) and increments TickCount.
 		/// </summary>
 		/// <param name="buff">The buff instance.</param>

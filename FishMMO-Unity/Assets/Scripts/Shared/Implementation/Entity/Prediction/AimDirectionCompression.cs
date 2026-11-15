@@ -172,9 +172,21 @@ namespace FishMMO.Shared
 				direction = FallbackDirection;
 			}
 
-			Vector3 up = Mathf.Abs(Vector3.Dot(direction.normalized, Vector3.up)) > 0.9995f
-				? Vector3.forward
-				: Vector3.up;
+			Vector3 unit = direction.normalized;
+			Vector3 up = Vector3.up;
+			if (Mathf.Abs(Vector3.Dot(unit, Vector3.up)) > 0.9995f)
+			{
+				/* Close to vertical, where world up is no reference. The direction still has a heading (its part on the
+				 * ground plane, however short), and the rotation keeps it: looking down, "up" on the screen is that
+				 * heading; looking up, it is its opposite. A fixed world axis here made the rotation's right-hand side a
+				 * fixed world direction, so a swimmer or flyer looking straight down strafed along that axis whichever way
+				 * the camera faced. Continuous with the world-up answer at the threshold. Only an exactly vertical
+				 * direction has no heading at all, and takes the fixed axis as before. */
+				Vector3 planar = Vector3.ProjectOnPlane(unit, Vector3.up);
+				up = planar.sqrMagnitude > 1e-12f
+					? (unit.y < 0f ? planar.normalized : -planar.normalized)
+					: Vector3.forward;
+			}
 
 			return Quaternion.LookRotation(direction, up);
 		}

@@ -180,6 +180,7 @@ namespace FishMMO.Shared
 
 						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(
 							initiator, targetCharacter, abilityObject, hitBuffer[i].Point, hitBuffer[i].Normal, abilityObject.RNG);
+						collisionEvent.IsSplash = true;
 						if (tickToPropagate != null)
 						{
 							collisionEvent.Add(tickToPropagate);

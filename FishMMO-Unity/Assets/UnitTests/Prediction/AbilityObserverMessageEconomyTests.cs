@@ -591,9 +591,10 @@ namespace FishMMO.UnitTests
 		{
 			string objectSource = ReadSource(ObjectPath);
 
-			int block = objectSource.IndexOf("DamageMitigation.TryBlockAtVolume", StringComparison.Ordinal);
+			// The swept hit's gate (ApplyHit). A claim against an ended object asks the shield too, but tells nobody: the object is gone.
+			int block = objectSource.IndexOf("DamageMitigation.TryBlockAtVolume(hitCharacter, localPoint, mutate: isServer)", StringComparison.Ordinal);
 			LogAssert.IsTrue(block >= 0, "The shield gate must still exist.");
-			string blockBody = objectSource.Substring(block, Math.Min(1600, objectSource.Length - block));
+			string blockBody = objectSource.Substring(block, Math.Min(2600, objectSource.Length - block));
 			LogAssert.IsTrue(blockBody.Contains("blocked: true, ended: true"),
 				"A block states both facts on the hit message.");
 			LogAssert.IsTrue(blockBody.Contains("notifyObservers: false"),

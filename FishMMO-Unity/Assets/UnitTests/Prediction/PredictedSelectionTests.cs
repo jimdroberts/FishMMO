@@ -256,7 +256,12 @@ namespace FishMMO.UnitTests
 				"Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityObject.cs");
 			int self = source.IndexOf("if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)", StringComparison.Ordinal);
 			LogAssert.IsTrue(self > 0, "The self-target branch must exist.");
-			string branch = source.Substring(self, 700);
+			string branch = source.Substring(self, 300);
+			LogAssert.IsTrue(branch.Contains("RunSelfTargetEffects(ability, caster, seed, spawnTick, isReplay: false)"),
+				"The self-target branch must run the ability's effects (RunSelfTargetEffects).");
+			int effects = source.IndexOf("internal static void RunSelfTargetEffects(", StringComparison.Ordinal);
+			LogAssert.IsTrue(effects > 0, "RunSelfTargetEffects must exist: it is the whole of what a self-target ability does.");
+			branch = source.Substring(effects, 900);
 			LogAssert.IsTrue(branch.Contains("ResolvesHitsOnThisPeer(isServer, casterIsOwner)"),
 				"The self-target dispatch must use the same predicate a swept projectile hit uses, " +
 				"so a self-buff lands on the caster's screen at the tick they cast it.");

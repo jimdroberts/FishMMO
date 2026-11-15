@@ -3428,6 +3428,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				abilities.OnConsumableItemChanged -= Ability_OnConsumableItemChanged;
 				abilities.OnConsumableItemChanged += Ability_OnConsumableItemChanged;
+				if (abilities is AbilityController concreteAbilities)
+				{
+					concreteAbilities.OnConsumableUseCancelled -= Ability_OnConsumableUseCancelled;
+					concreteAbilities.OnConsumableUseCancelled += Ability_OnConsumableUseCancelled;
+				}
 			}
 		}
 
@@ -3464,6 +3469,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (character.TryGet(out IAbilityController abilities))
 			{
 				abilities.OnConsumableItemChanged -= Ability_OnConsumableItemChanged;
+				if (abilities is AbilityController concreteAbilities)
+				{
+					concreteAbilities.OnConsumableUseCancelled -= Ability_OnConsumableUseCancelled;
+				}
 			}
 			if (character.ID > 0)
 			{
@@ -4327,6 +4336,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				batch.AddItemWrite(BuildItemData(playerCharacter.ID, item, ItemContainerType.Inventory));
 			}
 			EnqueueItemBatch(batch);
+
+			/* And the owner is told the slot as the server now has it. The owner predicts the use and changes its own copy,
+			 * but a use whose finish it only ran inside a correction's replay (where nothing is consumed) left it a charge
+			 * too many, and nothing else carries the inventory to it. */
+			SendConsumableSlot(playerCharacter, slot);
+		}
+
+		/// <summary>Server: a consumable use ended without consuming; the owner may have taken the charge already, so the slot is sent as the server holds it.</summary>
+		private void Ability_OnConsumableUseCancelled(ICharacter character, int slot)
+		{
+			if (character is IPlayerCharacter playerCharacter)
+			{
+				SendConsumableSlot(playerCharacter, slot);
+			}
+		}
+
+		/// <summary>Sends the owner one inventory slot as the server holds it: the item, or that it is empty.</summary>
+		private void SendConsumableSlot(IPlayerCharacter character, int slot)
+		{
+			if (character?.Owner == null || slot < 0 || !character.TryGet(out IInventoryController inventory))
+			{
+				return;
+			}
+			if (inventory.TryGetItem(slot, out Item item) && item != null && item.Template != null)
+			{
+				item.Slot = slot;
+				BroadcastSlots(character, InventoryType.Inventory, new[] { item });
+			}
+			else
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, new InventoryRemoveItemBroadcast()
+				{
+					Slot = slot,
+				}, true, Channel.Reliable);
+			}
 		}
 
 		#endregion

@@ -47,6 +47,12 @@ namespace FishMMO.Shared
 		public bool IsAuthoritativeEcho { get; }
 
 		/// <summary>
+		/// True for a victim of an area blast (AbilityApplyAreaAction) rather than the character the ability struck. A refused
+		/// splash hit never counts toward turning aggression on: a neutral beside the enemy was not attacked.
+		/// </summary>
+		public bool IsSplash { get; set; }
+
+		/// <summary>
 		/// Initializes event data for a hit with no single impact point — a self-target dispatch or
 		/// an area effect, where the whole overlap resolves at once.
 		/// </summary>

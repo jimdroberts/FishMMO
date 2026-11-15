@@ -70,20 +70,99 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// <see cref="MayHarm"/>, recording a hit only the attacker's toggle allowed (so the toggle stays locked on for a
-		/// while). The call every hostile route makes once it is about to apply the effect.
+		/// <see cref="MayHarm"/>, with its consequences for the aggression toggle. The call every hostile route makes once it is
+		/// about to apply the effect.
 		/// </summary>
+		/// <remarks>
+		/// Allowed: each side whose aggression is on has its lock restarted (<see cref="FactionController.RefreshAggressionLock"/>)
+		/// — the attacker for hitting or killing anything, the defender for being hit by anything. Refused: when only the
+		/// attacker's aggression would have let it land and it is the character an attack cast actually struck (not area
+		/// splash), it counts toward turning that player's aggression on (<see cref="FactionController.NoteRefusedAttack"/>).
+		/// </remarks>
 		public static bool Allows(ICharacter attacker, ICharacter defender)
 		{
-			if (!MayHarm(attacker, defender, out ICharacter aggressor))
+			if (!MayHarm(attacker, defender, out _))
 			{
+				NoteRefusal(attacker, defender);
 				return false;
 			}
-			if (aggressor != null && aggressor.TryGet(out IFactionController faction) && faction is FactionController controller)
+			if (attacker == null || defender == null || ReferenceEquals(attacker, defender) || attacker.ID == defender.ID)
 			{
-				controller.NoteAggressiveHarm();
+				return true;
 			}
+			ICharacter attackerSide = Principal(attacker);
+			ICharacter defenderSide = Principal(defender);
+			if (ReferenceEquals(attackerSide, defenderSide))
+			{
+				return true;
+			}
+			RefreshLockIfAggressive(attackerSide);
+			RefreshLockIfAggressive(defenderSide);
 			return true;
+		}
+
+		private static void RefreshLockIfAggressive(ICharacter side)
+		{
+			if (side.TryGet(out IFactionController faction) && faction is FactionController controller && controller.AggressionEnabled)
+			{
+				controller.RefreshAggressionLock();
+			}
+		}
+
+		/// <summary>The attack cast whose hit is being applied, if any: see <see cref="BeginAttack"/>.</summary>
+		public struct AttackScope
+		{
+			internal bool Active;
+			internal long CastKey;
+			internal ICharacter Target;
+			internal bool Splash;
+		}
+
+		private static AttackScope currentAttack;
+
+		/// <summary>
+		/// Marks the effects applied until <see cref="EndAttack"/> as one hit of the cast <paramref name="castKey"/> on
+		/// <paramref name="target"/>, so a refusal among them can be counted per cast. Returns the scope it replaced, for
+		/// <see cref="EndAttack"/> (hits can nest).
+		/// </summary>
+		/// <param name="castKey">Identifies the cast (its projectiles and pulses share it).</param>
+		/// <param name="target">The character the cast struck.</param>
+		/// <param name="splash">True for an area blast's victims, which are never counted: a neutral beside the enemy is not a target.</param>
+		public static AttackScope BeginAttack(long castKey, ICharacter target, bool splash)
+		{
+			AttackScope previous = currentAttack;
+			currentAttack = new AttackScope { Active = true, CastKey = castKey, Target = target, Splash = splash };
+			return previous;
+		}
+
+		/// <summary>Ends the scope <see cref="BeginAttack"/> opened, restoring the one it returned.</summary>
+		public static void EndAttack(AttackScope previous)
+		{
+			currentAttack = previous;
+		}
+
+		private static void NoteRefusal(ICharacter attacker, ICharacter defender)
+		{
+			AttackScope attack = currentAttack;
+			if (!attack.Active || attack.Splash || attacker == null || defender == null || !ReferenceEquals(defender, attack.Target))
+			{
+				return;
+			}
+			ICharacter attackerSide = Principal(attacker);
+			ICharacter defenderSide = Principal(defender);
+			if (!(attackerSide is IPlayerCharacter) || ReferenceEquals(attackerSide, defenderSide))
+			{
+				return;
+			}
+			// Refused for want of aggression only: an arena match, or a companion, refuses whatever the toggle says.
+			if (ArenaTeamRegistry.TryResolveAlliance(attackerSide, defenderSide, out _) || SharesSide(attackerSide, defenderSide))
+			{
+				return;
+			}
+			if (attackerSide.TryGet(out IFactionController faction) && faction is FactionController controller)
+			{
+				controller.NoteRefusedAttack(defenderSide, attack.CastKey);
+			}
 		}
 
 		/// <summary>
@@ -119,6 +198,57 @@ namespace FishMMO.Shared
 		public static ICharacter Principal(ICharacter character)
 		{
 			return character is Pet pet && pet.PetOwner != null ? pet.PetOwner : character;
+		}
+	}
+
+	/// <summary>
+	/// Counts attack casts refused at one character, toward turning aggression on: the same target, different casts, within
+	/// a window. Pure, so it is tested on its own.
+	/// </summary>
+	public struct AggressionProvocation
+	{
+		private long targetId;
+		private long lastCastKey;
+		private int count;
+		// The times of the last three different casts, newest first.
+		private float t0, t1, t2;
+		private bool any;
+
+		/// <summary>
+		/// Notes one refused hit. True when it completes <paramref name="needed"/> (at most 3) different casts at the same
+		/// target, the oldest of them no more than <paramref name="windowSeconds"/> ago; the count then starts again.
+		/// Another target starts the count again too.
+		/// </summary>
+		public bool Note(long target, long castKey, float now, int needed, float windowSeconds)
+		{
+			if (any && target == targetId && castKey == lastCastKey)
+			{
+				// Another projectile or pulse of a cast already counted.
+				return false;
+			}
+			if (!any || target != targetId)
+			{
+				this = default;
+				any = true;
+				targetId = target;
+			}
+			lastCastKey = castKey;
+			t2 = t1;
+			t1 = t0;
+			t0 = now;
+			count = count < 3 ? count + 1 : 3;
+			int n = needed < 1 ? 1 : needed > 3 ? 3 : needed;
+			if (count < n)
+			{
+				return false;
+			}
+			float oldest = n == 1 ? t0 : n == 2 ? t1 : t2;
+			if (now - oldest > windowSeconds)
+			{
+				return false;
+			}
+			this = default;
+			return true;
 		}
 	}
 }

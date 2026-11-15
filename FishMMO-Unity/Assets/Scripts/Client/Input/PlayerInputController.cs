@@ -142,6 +142,20 @@ namespace FishMMO.Client
 		/// <summary>Clears the forced-mouse-mode flag.</summary>
 		public static void ResetForcedMouseMode() => ForcedMouseMode = false;
 
+		/// <summary>
+		/// Captures the cursor for aim mode and clears any forced release, whatever the current state.
+		/// </summary>
+		/// <remarks>
+		/// For the player saying "back to the game" — leaving chat with Tab or by sending a line —
+		/// where toggling would be wrong: the cursor may already be captured, since opening chat
+		/// does not free it.
+		/// </remarks>
+		public static void EnterAimMode()
+		{
+			ForcedMouseMode = false;
+			MouseMode = false;
+		}
+
 		/// <summary>Toggles mouse mode. Pass true to force the new state.</summary>
 		public static void ToggleMouseMode(bool forceMouseMode = false)
 		{
@@ -284,6 +298,7 @@ namespace FishMMO.Client
 			}
 
 			ClientCarriedLightSettings.End();
+			BindCameraToTicks(unbind: true);
 			UnsubscribeFromInputActions();
 		}
 
@@ -442,6 +457,7 @@ namespace FishMMO.Client
 		{
 			if (Character != null && Character.KCCPlayer != null)
 				Character.KCCPlayer.OnHandleCharacterInput -= KCCPlayer_OnHandleCharacterInput;
+			BindCameraToTicks(unbind: true);
 			UnsubscribeFromInputActions();
 		}
 
@@ -526,8 +542,27 @@ namespace FishMMO.Client
 				return;
 			}
 
+			HandleBrowserCursorRelease();
 			HandleRightClickContextMenu();
 			HandleAutoDismiss();
+		}
+
+		/// <summary>
+		/// Frees the cursor when the browser has already freed it (web builds only).
+		/// </summary>
+		/// <remarks>
+		/// A browser releases a pointer lock on Escape, and on a switch of tab or window, and no page
+		/// can stop it. Without this the game still believed the cursor was captured. The release is
+		/// forced so <see cref="HandleAutoDismiss"/> does not capture it straight back: the player
+		/// takes it again with the mouse-mode key or the close key (~ or Escape), as from any other
+		/// deliberate release.
+		/// </remarks>
+		private static void HandleBrowserCursorRelease()
+		{
+			if (WebGLPointerLockGuard.ConsumeBrowserRelease() && !PlayerInputController.MouseMode)
+			{
+				PlayerInputController.ToggleMouseMode(true);
+			}
 		}
 
 		/// <summary>
@@ -536,12 +571,79 @@ namespace FishMMO.Client
 		/// </summary>
 		private void LateUpdate()
 		{
-			if (Character.KCCPlayer.CharacterCamera == null || ArenaSpectatorCamera.Active)
+			BindCameraToTicks();
+			UpdateCameraOncePerFrame();
+		}
+
+		/// <summary>The time manager whose pre-tick moves the camera on frames that tick; null when none is bound.</summary>
+		private FishNet.Managing.Timing.TimeManager cameraTimeManager;
+
+		/// <summary>The frame the camera was last moved in, so it moves once a frame however many paths ask.</summary>
+		private int cameraUpdatedFrame = -1;
+
+		/// <summary>
+		/// Moves the camera at most once a frame: before the first tick on a frame that ticks, in LateUpdate otherwise.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why before the tick.</b> A frame runs: TimeManager.OnUpdate (every drawn transform moves to this frame: other
+		/// characters by NetworkTransform, this one by its smoother) → the ticks (the input is built: the aim is traced
+		/// along the camera, and the view tick claimed is this frame's) → LateUpdate. Moved in LateUpdate alone, the camera
+		/// the input traced along was the PREVIOUS frame's, paired with this frame's targets and this frame's claim: a
+		/// target that moved in between was hit where it was not drawn under the crosshair, by its speed times a frame
+		/// (10 cm at 6 m/s and 60 fps). Moved at the pre-tick, after every drawn transform and with this frame's mouse
+		/// already read, the camera, the colliders and the claim in the input are all the frame about to be shown.
+		/// </para>
+		/// <para>
+		/// The pose is the one LateUpdate would have produced: nothing that positions the view moves between the pre-tick
+		/// and LateUpdate (the smoother puts the body back where it was before the tick, at OnPostTick). Once a frame,
+		/// because the look input is this frame's mouse movement and must be applied once; several ticks in one frame are
+		/// several pre-ticks.
+		/// </para>
+		/// </remarks>
+		private void UpdateCameraOncePerFrame()
+		{
+			if (Character == null || Character.KCCPlayer == null ||
+				Character.KCCPlayer.CharacterCamera == null || ArenaSpectatorCamera.Active)
 			{
 				return;
 			}
+			if (cameraUpdatedFrame == Time.frameCount)
+			{
+				return;
+			}
+			cameraUpdatedFrame = Time.frameCount;
 
 			HandleCameraInput();
+		}
+
+		/// <summary>Before a tick: the camera for this frame, so the input traces along the view about to be shown.</summary>
+		private void OnPreTickMoveCamera()
+		{
+			UpdateCameraOncePerFrame();
+		}
+
+		/// <summary>
+		/// Subscribes the camera to the character's time manager, once it has one; with <paramref name="unbind"/>, lets go.
+		/// </summary>
+		private void BindCameraToTicks(bool unbind = false)
+		{
+			FishNet.Managing.Timing.TimeManager timeManager = unbind || Character == null || Character.KCCPlayer == null
+				? null
+				: Character.KCCPlayer.TimeManager;
+			if (ReferenceEquals(timeManager, cameraTimeManager))
+			{
+				return;
+			}
+			if (cameraTimeManager != null)
+			{
+				cameraTimeManager.OnPreTick -= OnPreTickMoveCamera;
+			}
+			cameraTimeManager = timeManager;
+			if (cameraTimeManager != null)
+			{
+				cameraTimeManager.OnPreTick += OnPreTickMoveCamera;
+			}
 		}
 
 		/// <summary>
@@ -592,7 +694,7 @@ namespace FishMMO.Client
 
 			if (CanUpdateInput())
 			{
-				Character.KCCPlayer.UpdateCamera(-mouseScrollInput, LookDegrees());
+				Character.KCCPlayer.UpdateCamera(Time.unscaledDeltaTime, -mouseScrollInput, LookDegrees());
 
 				/* Only when it actually changes.
 				 *
@@ -613,7 +715,7 @@ namespace FishMMO.Client
 				lookInput = Vector2.zero;
 				stickLookInput = Vector2.zero;
 				mouseScrollInput = 0f;
-				Character.KCCPlayer.UpdateCamera(0.0f, Vector3.zero);
+				Character.KCCPlayer.UpdateCamera(Time.unscaledDeltaTime, 0.0f, Vector3.zero);
 			}
 		}
 
@@ -954,12 +1056,16 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for toggling first-person camera mode.
+		/// Callback for toggling first-person camera mode: into first person, or back to the camera style in use before.
 		/// </summary>
+		/// <remarks>
+		/// A style change rather than a zoom to zero, so first person is the same view however it was reached (this key or
+		/// the Options panel), and the panel shows what the key did (ClientCameraSettings.OnStyleChanged).
+		/// </remarks>
 		private void OnToggleFirstPersonPerformed(InputAction.CallbackContext context)
 		{
 			if (!CanUpdateInput()) return;
-			Character.KCCPlayer.CharacterCamera.TargetDistance = (Character.KCCPlayer.CharacterCamera.TargetDistance == 0f) ? Character.KCCPlayer.CharacterCamera.DefaultDistance : 0f;
+			ClientCameraSettings.ToggleFirstPerson();
 		}
 
 		/// <summary>
@@ -968,6 +1074,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnCancelPerformed(InputAction.CallbackContext context)
 		{
+			if (IsTypedCharacter(context)) return;
 			if (Character.TryGet(out IAbilityController abilityController))
 			{
 				abilityController.Interrupt(Character);
@@ -986,10 +1093,22 @@ namespace FishMMO.Client
 		/// <param name="context">Input callback context.</param>
 		private void OnToggleMouseModePerformed(InputAction.CallbackContext context)
 		{
-			/* Tab is this key. While the player is typing, the cursor has to stay free and the
-			 * field has to keep focus; toggling here took the cursor back mid-sentence, the same
-			 * gap the panel toggles closed with TypingIntoField. */
-			if (TypingIntoField) return;
+			/* Tab is this key. In the chat input it means "back to the game": leave the field
+			 * (the line is kept) and capture the cursor, so the player can stop typing and aim in
+			 * one press. Done here rather than in the chat's own key handler because this callback
+			 * and UI Toolkit's dispatch run in no fixed order — had chat released the field first,
+			 * this would see no field focused and toggle straight back to mouse mode.
+			 *
+			 * Any other text field keeps Tab inert: toggling there took the cursor back
+			 * mid-sentence, the same gap the panel toggles closed with TypingIntoField. */
+			if (TypingIntoField)
+			{
+				if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+				{
+					chat.LeaveInputToAimMode();
+				}
+				return;
+			}
 			PlayerInputController.ToggleMouseMode(!PlayerInputController.MouseMode);
 		}
 
@@ -999,6 +1118,7 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnCloseLastUIPerformed(InputAction.CallbackContext context)
 		{
+			if (IsTypedCharacter(context)) return;
 			if (!UIManager.CloseNext())
 			{
 				if (PlayerInputController.MouseMode)
@@ -1009,14 +1129,14 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for chat input action.
-		/// Focuses the chat input field, leaving the cursor as it is (see UITKChat.EnableChatInput).
+		/// Callback for chat input action (Enter or '/'): opens chat in mouse mode, or with Enter while typing sends the line
+		/// (see UITKChat.OnChatKey).
 		/// </summary>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
 			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
 			{
-				chat.EnableChatInput();
+				chat.OnChatKey(context.control is UnityEngine.InputSystem.Controls.KeyControl key && key.keyCode == Key.Enter);
 			}
 		}
 
@@ -1051,6 +1171,21 @@ namespace FishMMO.Client
 		/// symptoms are one bug.
 		/// </remarks>
 		private static bool TypingIntoField => UIManager.InputControlHasFocus();
+
+		/// <summary>
+		/// True when Cancel or CloseLastUI was fired by the ~ key while the player is typing.
+		/// </summary>
+		/// <remarks>
+		/// Both actions are bound to Escape and ~ (see <see cref="CancelKey"/>). ~ and ` are characters
+		/// a chat line or a password may contain, so while a text field has focus the key types and
+		/// does nothing else: a cast is not interrupted and no panel closes. Escape keeps working there.
+		/// </remarks>
+		private static bool IsTypedCharacter(InputAction.CallbackContext context)
+		{
+			return TypingIntoField &&
+				   context.control is UnityEngine.InputSystem.Controls.KeyControl key &&
+				   key.keyCode == Key.Backquote;
+		}
 
 
 		private void OnInventoryPerformed(InputAction.CallbackContext context)
@@ -1182,16 +1317,16 @@ namespace FishMMO.Client
 			UIManager.ToggleVisibility("UIOptions");
 		}
 
+		/// <summary>
+		/// Callback for the menu key (F1). Opens or closes the game menu.
+		/// </summary>
+		/// <remarks>
+		/// Not Escape: a browser keeps Escape for itself — it releases the cursor and leaves
+		/// fullscreen, and the game usually never sees the press — so on web the menu could not be
+		/// reached from it. Escape still closes the menu, as the top panel, through CloseLastUI.
+		/// </remarks>
 		private void OnMenuPerformed(InputAction.CallbackContext context)
 		{
-			/* Escape is bound to CloseLastUI as well as Menu, and CloseLastUI is handled first.
-			 * If it already closed a panel, this press is spent — toggling here would see the
-			 * menu closed and immediately reopen it, so Escape could never close the menu. */
-			if (UIManager.ClosedThisFrame)
-			{
-				return;
-			}
-
 			UIManager.ToggleVisibility("UIMenu");
 		}
 

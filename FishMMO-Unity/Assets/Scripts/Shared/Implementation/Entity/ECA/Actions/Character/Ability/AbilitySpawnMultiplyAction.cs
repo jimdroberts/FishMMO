@@ -81,6 +81,12 @@ namespace FishMMO.Shared
 			for (int i = 0; i < spawnCount; ++i)
 			{
 				GameObject go = UnityEngine.Object.Instantiate(initialObject.gameObject);
+				// Into the scene the cast is in. A bare Instantiate lands in the ACTIVE scene, where this copy would sweep and
+				// rewind another scene's colliders (AbilityObject.Spawn moves its instances for the same reason).
+				if (go.scene != initialObject.gameObject.scene)
+				{
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, initialObject.gameObject.scene);
+				}
 				go.SetActive(false);
 
 				var abilityObject = go.GetComponent<AbilityObject>();

@@ -187,6 +187,9 @@ namespace FishMMO.Shared.Core
 				return;
 			}
 
+			// A replayed tick putting a self-cast effect back: only the actions that restore corrected state run again.
+			bool reapplyOnly = eventData.TryGet(out TickEventData tickData) && tickData.ReapplyOnly;
+
 			for (int i = 0; i < actions.Count; ++i)
 			{
 				BaseAction action = actions[i];
@@ -200,7 +203,19 @@ namespace FishMMO.Shared.Core
 					continue;
 				}
 
-				if (action.TargetSelector == null)
+				if (reapplyOnly && !action.ReappliesOnReplay)
+				{
+					/* A step that could have stopped the chain (a failed requirement) is not re-run, so it cannot stop it
+					 * again: the rest is not re-applied either. That under-applies on replay for such a chain (it is put
+					 * right by the next correction), and never applies something the first run stopped short of. */
+					if (action is IAbortableAction && action.StopChainOnFailure)
+					{
+						return;
+					}
+					continue;
+				}
+
+				if (action.TargetSelector == null || eventData.TryGet(out SingleTargetEventData _))
 				{
 					if (!RunOne(action, eventData.Initiator, eventData))
 					{
@@ -214,6 +229,14 @@ namespace FishMMO.Shared.Core
 				{
 					if (target == null)
 					{
+						continue;
+					}
+					/* Putting a self-cast effect back on replay touches the caster alone. The correction set back the
+					 * CASTER's state; what this client predicted on anybody else (a bar it moved) was not set back, and
+					 * applying it again would count it twice. */
+					if (reapplyOnly && (eventData.Initiator == null || target != eventData.Initiator.GameObject))
+					{
+						any = true;
 						continue;
 					}
 					any = true;
@@ -465,11 +488,21 @@ namespace FishMMO.Shared.Core
 				return;
 			}
 
-			if (TargetSelector == null)
+			bool reapplyOnly = eventData.TryGet(out TickEventData reapplyTick) && reapplyTick.ReapplyOnly;
+			GameObject initiatorObject = eventData.Initiator != null ? eventData.Initiator.GameObject : null;
+
+			if (TargetSelector == null || eventData.TryGet(out SingleTargetEventData _))
 			{
 				// Intentional fallback: act on the event's existing Target (or initiator
 				// for events with no target). This is the common path for OnHit / region /
 				// dialogue triggers whose caller already resolved the target.
+				/* Putting a self-cast effect back on a replayed tick (TickEventData.ReapplyOnly) touches the caster alone: the
+				 * correction set back the CASTER's state, and what this client predicted on anybody else (a bar it moved, a
+				 * debuff it showed) was not set back, so doing it again counted it twice. */
+				if (reapplyOnly && eventData.Target != null && eventData.Target != initiatorObject)
+				{
+					return;
+				}
 				ExecuteForTarget(eventData);
 				RaiseOnExecuted(eventData);
 				return;
@@ -483,11 +516,17 @@ namespace FishMMO.Shared.Core
 					continue;
 				}
 				any = true;
+				// The same rule for a selector on the trigger, which is where every authored area and multi-target self cast picks.
+				if (reapplyOnly && target != initiatorObject)
+				{
+					continue;
+				}
 				EventData scoped = eventData.Fork(target);
 				ExecuteForTarget(scoped);
 			}
 
-			if (!any)
+			// Nothing is re-run for presentation on a replayed tick.
+			if (!any && !reapplyOnly)
 			{
 				/* A peer that is not allowed to SELECT still gets the authored presentation.
 				 *

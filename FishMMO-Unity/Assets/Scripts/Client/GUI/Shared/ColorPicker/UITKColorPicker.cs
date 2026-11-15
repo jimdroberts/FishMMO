@@ -524,12 +524,15 @@ namespace FishMMO.Client
 				return;
 			}
 
+			if (CancelKey.Matches(evt))
+			{
+				evt.StopPropagation();
+				Hide();
+				return;
+			}
+
 			switch (evt.keyCode)
 			{
-				case KeyCode.Escape:
-					evt.StopPropagation();
-					Hide();
-					return;
 				case KeyCode.Return:
 				case KeyCode.KeypadEnter:
 					/* Only when the caret is in the hex field. Enter anywhere else in the picker

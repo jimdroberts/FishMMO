@@ -97,6 +97,10 @@ namespace FishMMO.Shared
 			IsHoldingBreath = false;
 		}
 
+		/// <summary>Server: the tick the last drowning or lava pulse was dealt on.</summary>
+		private uint lastPulseTick;
+		private bool hasLastPulseTick;
+
 		private void ApplyBreathState(float seconds)
 		{
 			breath = Mathf.Max(0f, seconds);
@@ -117,7 +121,8 @@ namespace FishMMO.Shared
 		/// so the owner's bar runs smoothly. The damage is the server's alone, as death is: health reaches the owner on
 		/// the reconcile.
 		/// </remarks>
-		private void StepBreath()
+		/// <param name="step">False on a tick number already stepped: the damage pulse still runs (it is on the server's own clock), the breath does not move.</param>
+		private void StepBreath(bool step = true)
 		{
 			if (Character == null || base.TimeManager == null)
 			{
@@ -141,13 +146,23 @@ namespace FishMMO.Shared
 			IsHoldingBreath = holding;
 
 			float max = MaxBreathSeconds;
-			breath = BreathRules.Step(BreathSeconds, max, holding, (float)base.TimeManager.TickDelta);
+			if (step)
+			{
+				breath = BreathRules.Step(BreathSeconds, max, holding, (float)base.TimeManager.TickDelta);
+			}
 
 			if (!base.IsServerStarted || !BreathRules.IsPulseTick(base.TimeManager.Tick, base.TimeManager.TickDelta) ||
 				!Character.TryGet(out ICharacterDamageController damage) || !damage.IsAlive)
 			{
 				return;
 			}
+			// Once per server tick: two of the owner's inputs run in one tick (a queue being drained) both see the pulse.
+			if (hasLastPulseTick && lastPulseTick == base.TimeManager.Tick)
+			{
+				return;
+			}
+			lastPulseTick = base.TimeManager.Tick;
+			hasLastPulseTick = true;
 			if (holding && breath <= 0f && TryGetHealthAttribute(out CharacterResourceAttribute health))
 			{
 				damage.Damage(null, BreathRules.DrowningDamage(health.FinalValue), ResolveDamage(DrowningDamageTemplateID, DefaultDrowningDamageID), ignoreAchievements: false, periodic: true);

@@ -33,13 +33,22 @@
       </div>
       <div id="unity-warning"> </div>
       <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        <!-- New tabs, so following a link never navigates away from a running game. -->
+        <nav id="fishmmo-footer-links">
+          <a href="https://fishmmo.com" target="_blank" rel="noopener">Website</a>
+          <a href="https://panel.fishmmo.com" target="_blank" rel="noopener">Control Panel</a>
+          <a href="https://discord.gg/9JQEYjkSNk" target="_blank" rel="noopener">Discord</a>
+        </nav>
 #if SHOW_DIAGNOSTICS
         <img id="diagnostics-icon" src="TemplateData/webmemd-icon.png">
 #endif
-        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
         <a id="fishmmo-licenses-link" href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">Licenses</a>
+        <div id="unity-fullscreen-button" title="Full screen" role="button" aria-label="Full screen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+          </svg>
+        </div>
       </div>
     </div>
     <script>
@@ -144,11 +153,8 @@
         canvas.after(diagnostics_icon);
 #endif
 
-      } else {
-        // Desktop style: Render the game canvas container in a window that can be maximized to fullscreen:
-        fullscreenContainer.style.width = "{{{ WIDTH }}}px";
-        fullscreenContainer.style.height = "{{{ HEIGHT }}}px";
       }
+      // Desktop: the stylesheet makes the game fill the window above the footer; the full screen button fills the screen.
 
 #if BACKGROUND_FILENAME
       canvas.style.background = "url('" + buildUrl + "/{{{ BACKGROUND_FILENAME.replace(/'/g, '%27') }}}') center / cover";

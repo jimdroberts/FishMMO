@@ -117,6 +117,15 @@ namespace FishMMO.Shared
 		/// <returns>True when a position was resolved.</returns>
 		internal static bool TryResolveSpawnPosition(ICharacter initiator, EventData eventData, out Vector3 position)
 		{
+			return TryResolveSpawnPosition(initiator, eventData, out position, out _);
+		}
+
+		/// <summary>
+		/// <see cref="TryResolveSpawnPosition(ICharacter, EventData, out Vector3)"/>, also saying which origin the
+		/// position came from.
+		/// </summary>
+		internal static bool TryResolveSpawnPosition(ICharacter initiator, EventData eventData, out Vector3 position, out FXOrigin origin)
+		{
 			position = Vector3.zero;
 
 			CollisionEventData collision = null;
@@ -131,7 +140,8 @@ namespace FishMMO.Shared
 
 			/* HasHitPoint, not merely "a collision payload is present". An area effect resolves a
 			 * whole overlap at once and carries no single contact, which is why the flag exists. */
-			switch (ChooseOrigin(collision != null && collision.HasHitPoint, targetObject != null, hasAbilityObject, hasInitiator))
+			origin = ChooseOrigin(collision != null && collision.HasHitPoint, targetObject != null, hasAbilityObject, hasInitiator);
+			switch (origin)
 			{
 				case FXOrigin.CollisionPoint:
 					position = collision.HitPoint;
@@ -198,7 +208,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!TryResolveSpawnPosition(initiator, eventData, out Vector3 spawnPosition))
+			if (!TryResolveSpawnPosition(initiator, eventData, out Vector3 spawnPosition, out FXOrigin origin))
 			{
 				/* Debug, not Warning. The only way to get here is an event with no collision point,
 				 * no target, no ability object and no initiator transform — a malformed authoring
@@ -208,7 +218,22 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			SpawnFX(FXPrefab, spawnPosition, ResolveSpawnScene(initiator, eventData));
+			Scene scene = ResolveSpawnScene(initiator, eventData);
+
+			/* An effect a SPAWN chain plays is drawn with the object it belongs to, not the moment the object is created:
+			 * at the caster's spawner as this client draws it, and on an observer when the playback clock reaches the
+			 * cast (AbilityObject.TryHoldSpawnEffect). Outside a spawn chain nothing is held and it plays now. */
+			AbilityObject anchor = null;
+			if (origin == FXOrigin.AbilityObject)
+			{
+				AbilityObject.TryResolveFrom(eventData, out anchor);
+			}
+			if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition))
+			{
+				return;
+			}
+
+			SpawnFX(FXPrefab, spawnPosition, scene);
 		}
 
 		/// <summary>

@@ -287,6 +287,9 @@ namespace FishMMO.Client
 			private static readonly int ShadeFarBaseId = Shader.PropertyToID("_FishShadeFarBase");
 			private static readonly int ShapeTexId = Shader.PropertyToID("_FishCloudShape");
 			private static readonly int DetailTexId = Shader.PropertyToID("_FishCloudDetail");
+			// The air's flow round the high ground (CloudFlowField), read by FishFogLayer.hlsl's flow lookup.
+			private static readonly int FlowFieldId = Shader.PropertyToID("_FishCloudFlowField");
+			private static readonly int FlowRectId = Shader.PropertyToID("_FishCloudFlowRect");
 
 			// The falls' mist (FishVolumetricFog.compute's FallMist): the arrays, and x count, y whether the
 			// weather's layer is drawn here too, z how far the billows have risen.
@@ -630,6 +633,15 @@ namespace FishMMO.Client
 				compute.SetTexture(scatterKernel, ShapeTexId, structured ? shape : FlatShape());
 				compute.SetTexture(scatterKernel, DetailTexId, eddies ? detail : FlatShape());
 				compute.SetTexture(scatterKernel, TerrainId, terrain != null ? terrain : Texture2D.blackTexture);
+				/* The flow field, handed to the kernel like the rest rather than left to the global. The global is
+				 * only there while the sky's CloudFlowField is: before the sky starts, and after it is disposed (a
+				 * scene change, the sky turned off), it is unset or names a destroyed texture, while the falls' mist
+				 * keeps this pass running: "Property (_FishCloudFlowField) at kernel index (0) is not set". Without a
+				 * field the rect goes to zero, so the stand-in is never read. */
+				Texture flow = Shader.GetGlobalTexture(FlowFieldId);
+				bool flowing = flow != null && flow.dimension == TextureDimension.Tex3D;
+				compute.SetTexture(scatterKernel, FlowFieldId, flowing ? flow : FlatShape());
+				compute.SetVector(FlowRectId, flowing ? Shader.GetGlobalVector(FlowRectId) : Vector4.zero);
 				Texture shadeNear = Shader.GetGlobalTexture(ShadeNearId);
 				Texture shadeFar = Shader.GetGlobalTexture(ShadeFarId);
 				compute.SetTexture(scatterKernel, ShadeNearId, shadeNear != null ? shadeNear : Texture2D.blackTexture);

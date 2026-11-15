@@ -615,8 +615,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="channel">Network channel used for the broadcast.</param>
 		/// <summary>
 		/// The owner asks to turn aggression on or off (FactionHarm: on, they may harm neutrals and allies, and be harmed by
-		/// anyone). Turning it off is refused for <see cref="FactionController.AggressionLockSeconds"/> after a hit that
-		/// needed it, so a player cannot strike a neutral and then step out of its reach. The answer is the synced state
+		/// anyone). Turning it off is refused for <see cref="FactionController.AggressionLockSeconds"/> after any hit or kill
+		/// made or taken with it on, so a player cannot strike a neutral and then step out of its reach. The answer is the synced state
 		/// itself: a refused request simply leaves it as it was, which the client's toggle shows.
 		/// </summary>
 		public void OnServerAggressionBroadcastReceived(NetworkConnection conn, FactionAggressionBroadcast msg, Channel channel)
@@ -631,7 +631,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			if (!controller.TrySetAggression(msg.Enabled, out float lockedSeconds) && lockedSeconds > 0f)
 			{
-				Log.Debug("AbilitySystem", $"{request.Character.CharacterName}: aggression stays on for {lockedSeconds:0.#} s more (a recent hit needed it).");
+				Log.Debug("AbilitySystem", $"{request.Character.CharacterName}: aggression stays on for {lockedSeconds:0.#} s more (fought recently).");
 			}
 		}
 

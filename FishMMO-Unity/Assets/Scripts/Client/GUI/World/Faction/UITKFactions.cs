@@ -262,7 +262,7 @@ namespace FishMMO.Client
 				aggressionHint.text = pending
 					? (on ? "Turning on…" : "Turning off…")
 					: lockSeconds > 0
-						? $"On, locked for {lockSeconds} s: you recently harmed a neutral."
+						? $"On, locked for {lockSeconds / 60}:{lockSeconds % 60:00}: you fought recently."
 						: on
 							? "On: you can harm neutrals, and anyone outside your party and guild can harm you."
 							: "Off: you can only harm enemies.";

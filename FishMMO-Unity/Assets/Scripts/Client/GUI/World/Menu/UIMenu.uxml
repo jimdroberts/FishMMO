@@ -21,7 +21,7 @@
             </ui:VisualElement>
 
             <ui:VisualElement name="panel-footer" class="fish-panel__footer menu-footer">
-                <ui:Label name="menu-hint" text="Esc closes this menu" class="fish-hint menu-hint" />
+                <ui:Label name="menu-hint" text="F1, ~ or Esc closes this menu" class="fish-hint menu-hint" />
             </ui:VisualElement>
 
         </ui:VisualElement>

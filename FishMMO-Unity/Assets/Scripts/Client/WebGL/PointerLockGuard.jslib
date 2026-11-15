@@ -20,9 +20,17 @@ mergeInto(LibraryManager.library, {
         ChromeOS; where it is refused (NotSupportedError: Chrome on Linux) the lock is taken
         again without it, and not asked for again; browsers that do not know the option (Firefox)
         ignore it and lock as before.
+
+        Finally, it tells the game when the BROWSER takes the lock away. Escape always releases a
+        pointer lock (and leaves fullscreen), and no page can cancel that: preventDefault on the
+        keydown does nothing, and the browser often does not deliver the key at all. Switching
+        tab or window drops the lock as well. Unity's runtime does not report any of it, so the
+        game went on believing the cursor was captured. lostCallback (a wasm function-table index
+        for a static [MonoPInvokeCallback] method taking no arguments) is called when the lock
+        ends while the game still wanted it, i.e. not through exitPointerLock.
     */
-    FishMMOInstallPointerLockGuard__sig: 'v',
-    FishMMOInstallPointerLockGuard: function () {
+    FishMMOInstallPointerLockGuard__sig: 'vp',
+    FishMMOInstallPointerLockGuard: function (lostCallback) {
         if (typeof Element === 'undefined' || !Element.prototype.requestPointerLock ||
             Element.prototype.requestPointerLock.__fishmmoGuard) {
             return;
@@ -32,6 +40,8 @@ mergeInto(LibraryManager.library, {
         var pending = null;
         // False once a browser has refused raw movement, so it is not asked for again.
         var rawMovement = true;
+        // True from a lock request until the game frees the cursor (exitPointerLock).
+        var wanted = false;
 
         function cancel() {
             if (pending) {
@@ -53,6 +63,7 @@ mergeInto(LibraryManager.library, {
         }
 
         function guarded(options) {
+            wanted = true;
             var element = this;
             var raw = options === undefined && rawMovement;
             var asked = raw ? { unadjustedMovement: true } : options;
@@ -93,6 +104,7 @@ mergeInto(LibraryManager.library, {
         if (document.exitPointerLock) {
             var exit = document.exitPointerLock;
             var guardedExit = function () {
+                wanted = false;
                 cancel();
                 return exit.apply(document, arguments);
             };
@@ -100,6 +112,23 @@ mergeInto(LibraryManager.library, {
             if (canvas && Object.prototype.hasOwnProperty.call(canvas, 'exitPointerLock')) {
                 canvas.exitPointerLock = guardedExit;
             }
+        }
+
+        if (lostCallback) {
+            document.addEventListener('pointerlockchange', function () {
+                if (document.pointerLockElement || !wanted) {
+                    return;
+                }
+                // The browser ended it. The game is told and frees the cursor itself, so nothing
+                // is retried; the player's next capture is the game's ordinary request.
+                wanted = false;
+                cancel();
+                try {
+                    {{{ makeDynCall('v', 'lostCallback') }}}();
+                } catch (e) {
+                    console.warn('FishMMO: pointer-lock-lost callback threw: ' + e);
+                }
+            });
         }
     }
 });

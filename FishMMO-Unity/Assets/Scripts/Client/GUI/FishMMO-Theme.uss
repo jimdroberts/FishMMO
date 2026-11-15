@@ -1286,10 +1286,39 @@ TextField.fish-input > #unity-text-input:hover {
     border-color: var(--abyss-300);
 }
 
+/*
+    Focus: a bright border and a lifted surface, so a field that is taking keystrokes reads as
+    such at a glance — the only cue there was before was a border that did not show.
+
+    Both selectors are needed. A TextField delegates focus to its inner #unity-text-input, so the
+    element holding :focus is that child, not the .fish-input the old rule named; the outer form is
+    kept for a field that is focused directly.
+*/
 .fish-input:focus > #unity-text-input,
-TextField.fish-input:focus > #unity-text-input {
-    border-color: var(--brand-500);
-    border-top-color: var(--brand-500);
+TextField.fish-input:focus > #unity-text-input,
+.fish-input > #unity-text-input:focus,
+TextField.fish-input > #unity-text-input:focus {
+    background-color: var(--abyss-800);
+    border-color: var(--brand-300);
+    border-top-color: var(--brand-300);
+    border-bottom-color: var(--brand-300);
+}
+
+/*
+    The caret and the selection. UI Toolkit reads both from custom properties on the field itself
+    (the element carrying .unity-base-text-field), and the project's panel theme is Unity's default
+    runtime theme, which is light: its caret is drawn in its own dark text colour, and on these
+    near-black fields that is invisible — there was no sign at all of where typing would land.
+
+    Two classes, to outrank Unity's single-class rule whatever order the sheets load in. Every
+    TextField in a panel gets the caret, .fish-input or not, since none of them sit on a light
+    surface. Literal colours (--brand-300, and --brand-400 at 45%) rather than var(): these are
+    read in code as typed colours, not through the style resolver that substitutes variables.
+*/
+.fish-input.unity-base-text-field,
+TextField.unity-base-text-field {
+    --unity-cursor-color: rgb(88, 179, 241);
+    --unity-selection-color: rgba(42, 151, 220, 0.45);
 }
 
 .fish-input:disabled > #unity-text-input,

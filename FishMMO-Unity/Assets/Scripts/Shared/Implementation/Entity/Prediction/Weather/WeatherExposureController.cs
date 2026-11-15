@@ -216,10 +216,26 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			/* Once per weather tick on the server, whose weather tick is its own clock: when it runs two of the owner's inputs
+			 * in one tick (draining a queue left deep by a stall) both read the same tick, and the step ran twice. The owner
+			 * maps each input to its own weather tick, so a replay repeats steps on purpose and is not limited. */
+			if (base.IsServerStarted)
+			{
+				if (hasLastServerStepTick && weatherTick == lastServerStepTick)
+				{
+					return;
+				}
+				lastServerStepTick = weatherTick;
+				hasLastServerStepTick = true;
+			}
 
 			float seconds = (float)(interval * tickDelta);
 			Step(weatherTick, seconds, input.GetPredictionTick());
 		}
+
+		/// <summary>Server: the weather tick the last step ran on.</summary>
+		private uint lastServerStepTick;
+		private bool hasLastServerStepTick;
 
 		/// <summary>
 		/// One exposure step: what the weather is doing here, what that drives each state to, and
@@ -481,7 +497,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			RestoreFromReconcile(rd.Exposure);
+			// An empty buff list travels as null (BuffController.CreateReconcileSnapshot): it is still the server's list, empty.
+			RestoreFromReconcile(rd.Exposure, rd.Buffs ?? System.Array.Empty<BuffReconcileEntry>());
 		}
 
 		/// <summary>Takes the server's levels as the truth, and re-derives which buffs are held.</summary>
@@ -494,6 +511,39 @@ namespace FishMMO.Shared
 		/// state exactly.
 		/// </remarks>
 		public void RestoreFromReconcile(ExposureReconcileEntry[] entries)
+		{
+			RestoreFromReconcile(entries, null);
+		}
+
+		/// <summary>True when the server's buff list for the corrected tick has <paramref name="templateID"/> on.</summary>
+		private static bool ServerHasBuff(BuffReconcileEntry[] serverBuffs, int templateID)
+		{
+			if (serverBuffs == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < serverBuffs.Length; ++i)
+			{
+				if (serverBuffs[i].TemplateID == templateID)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// <see cref="RestoreFromReconcile(ExposureReconcileEntry[])"/>, with the server's buffs for the same tick: they say
+		/// which side of a hysteresis band a state or a recipe was on, which the levels alone cannot.
+		/// </summary>
+		/// <remarks>
+		/// Inside the band (between release and apply) "held" depends on which way the level was travelling. The server's
+		/// answer is in the same correction: the buff is on its list or it is not. Without it a state in the band kept
+		/// whatever this client last believed, and every recipe was read as NOT held, so a buff the server was holding by
+		/// its release margin was taken off by the owner at its next sample, put back by the next correction, and taken
+		/// off again by the replay: an icon and an effect flickering once a second.
+		/// </remarks>
+		public void RestoreFromReconcile(ExposureReconcileEntry[] entries, BuffReconcileEntry[] serverBuffs)
 		{
 			if (entries == null)
 			{
@@ -523,6 +573,18 @@ namespace FishMMO.Shared
 				{
 					held.Remove(entry.TemplateID);
 				}
+				else if (serverBuffs != null && template.Buff != null)
+				{
+					// In the band: held exactly when the server has the buff on.
+					if (ServerHasBuff(serverBuffs, template.Buff.ID))
+					{
+						held.Add(entry.TemplateID);
+					}
+					else
+					{
+						held.Remove(entry.TemplateID);
+					}
+				}
 			}
 
 			/* And the recipes, from the levels that have just landed. Nothing about a recipe is sent,
@@ -533,6 +595,19 @@ namespace FishMMO.Shared
 			 * that should be on is applied again on the very next step, whereas one wrongly believed
 			 * held would never be applied again at all. */
 			recipesHeld.Clear();
+			// Held, where the server says so: a recipe whose buff is on the server's list was holding there.
+			if (serverBuffs != null)
+			{
+				List<WeatherExposureRecipe> recipes = EnsureRecipes();
+				for (int i = 0; i < recipes.Count; ++i)
+				{
+					WeatherExposureRecipe recipe = recipes[i];
+					if (recipe != null && recipe.Buff != null && ServerHasBuff(serverBuffs, recipe.Buff.ID))
+					{
+						recipesHeld.Add(recipe.ID);
+					}
+				}
+			}
 			EvaluateRecipes();
 
 			snapshotDirty = true;

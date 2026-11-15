@@ -133,6 +133,70 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// The lock: 5 minutes, restarted by any hit or kill made with aggression on and by any hit taken with it on; the owner
+		/// learns the server's lock (hits taken are seen only there) through an owner-only SyncVar.
+		/// </summary>
+		[Test]
+		public void AggressionLockIsFiveMinutesRestartedByHitsMadeOrTaken()
+		{
+			LogAssert.AreEqual(300f, FactionController.AggressionLockSeconds, "the lock is five minutes");
+			string harm = Read("Shared/Implementation/Entity/Faction/FactionHarm.cs");
+			int allows = harm.IndexOf("public static bool Allows(", System.StringComparison.Ordinal);
+			int end = harm.IndexOf("private static void RefreshLockIfAggressive", allows, System.StringComparison.Ordinal);
+			string body = harm.Substring(allows, end - allows);
+			LogAssert.IsTrue(body.Contains("RefreshLockIfAggressive(attackerSide)") && body.Contains("RefreshLockIfAggressive(defenderSide)"),
+				"an allowed hit restarts the lock of each side whose aggression is on, attacker and defender");
+			LogAssert.IsTrue(body.Contains("NoteRefusal(attacker, defender)"), "a refused hit is offered to the auto-aggression count");
+			string controller = Read("Shared/Implementation/Entity/Faction/FactionController.cs");
+			LogAssert.IsTrue(controller.Contains("ReadPermission = ReadPermission.OwnerOnly"), "the lock end is sent to the owner only");
+		}
+
+		/// <summary>Three different casts at the same character within 10 s turn aggression on; projectiles of one cast count once.</summary>
+		[Test]
+		public void ThreeRefusedCastsAtOneTargetWithinTheWindowProvoke()
+		{
+			AggressionProvocation p = default;
+			LogAssert.IsFalse(p.Note(7, 100, 0f, 3, 10f), "first cast");
+			LogAssert.IsFalse(p.Note(7, 100, 0.1f, 3, 10f), "a second projectile of the same cast does not count");
+			LogAssert.IsFalse(p.Note(7, 200, 4f, 3, 10f), "second cast");
+			LogAssert.IsTrue(p.Note(7, 300, 9f, 3, 10f), "third cast within 10 s provokes");
+			LogAssert.IsFalse(p.Note(7, 400, 9.5f, 3, 10f), "the count starts again after provoking");
+		}
+
+		[Test]
+		public void RefusedCastsOutsideTheWindowOrAtAnotherTargetDoNotProvoke()
+		{
+			AggressionProvocation p = default;
+			p.Note(7, 1, 0f, 3, 10f);
+			p.Note(7, 2, 5f, 3, 10f);
+			LogAssert.IsFalse(p.Note(7, 3, 11f, 3, 10f), "the oldest of the three is 11 s old");
+			LogAssert.IsTrue(p.Note(7, 4, 14f, 3, 10f), "the window slides: casts at 5, 11 and 14 s provoke");
+
+			AggressionProvocation q = default;
+			q.Note(7, 1, 0f, 3, 10f);
+			q.Note(7, 2, 1f, 3, 10f);
+			LogAssert.IsFalse(q.Note(8, 3, 2f, 3, 10f), "a different target starts the count again");
+			LogAssert.IsFalse(q.Note(7, 4, 3f, 3, 10f), "and returning to the first starts again too");
+		}
+
+		/// <summary>Only the struck character of a cast counts (never area splash), and only for want of aggression.</summary>
+		[Test]
+		public void OnlyAStruckNonCompanionCountsTowardAutoAggression()
+		{
+			string harm = Read("Shared/Implementation/Entity/Faction/FactionHarm.cs");
+			int start = harm.IndexOf("private static void NoteRefusal(", System.StringComparison.Ordinal);
+			string body = harm.Substring(start, harm.IndexOf("public static bool AreCompanions", start, System.StringComparison.Ordinal) - start);
+			LogAssert.IsTrue(body.Contains("attack.Splash") && body.Contains("ReferenceEquals(defender, attack.Target)"),
+				"splash victims and characters other than the one struck are not counted");
+			LogAssert.IsTrue(body.Contains("SharesSide(attackerSide, defenderSide)") && body.Contains("ArenaTeamRegistry.TryResolveAlliance"),
+				"companions and arena matches refuse whatever the toggle says, so they never count");
+			LogAssert.IsTrue(Read("Shared/Implementation/Entity/ECA/Actions/Character/Ability/AbilityApplyAreaAction.cs").Contains("collisionEvent.IsSplash = true"),
+				"area blasts mark their victims as splash");
+			LogAssert.IsTrue(Read("Shared/Implementation/Entity/Prediction/Ability/Template/Events/AbilityOnHitEvent.cs").Contains("FactionHarm.BeginAttack("),
+				"every ability hit runs inside an attack scope");
+		}
+
+		/// <summary>
 		/// A hit the server resolved and sent back was predicted again on the caster; the target's health had often already
 		/// arrived (unreliable datagrams overtake the reliable hit message), so the bar showed the hit twice.
 		/// </summary>

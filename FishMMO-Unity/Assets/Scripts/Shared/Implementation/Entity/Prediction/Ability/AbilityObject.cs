@@ -209,6 +209,989 @@ namespace FishMMO.Shared
 		/// </summary>
 		public uint StepInputTick => unchecked(viewStepBase + PreRedirectElapsedTicks + ElapsedTicks);
 
+		#region Hit claims
+		/// <summary>One step's sweep, as the server ran it: the segment, and the caster's input tick the step paired with.</summary>
+		private struct RecordedSweep
+		{
+			public uint StepInputTick;
+			/// <summary>The server tick the step was swept on: where an estimated (not exact) view claim is counted back from.</summary>
+			public uint ServerTick;
+			public Vector3 From;
+			public Vector3 To;
+			public bool Valid;
+		}
+
+		/// <summary>How many of its latest sweeps a server object keeps for checking claims against.</summary>
+		private const int RecordedSweepCount = 12;
+
+		/// <summary>
+		/// How many steps before the claiming input a claimed hit may have happened on. One is the rule (the owner hits on
+		/// a tick and says so with the next input); the rest covers a claim that queued behind another and a server whose
+		/// input queue ran dry for a tick, which leaves this object a step ahead of the inputs.
+		/// </summary>
+		internal const uint ClaimStepWindow = 8;
+
+		/// <summary>The server's latest sweeps, newest overwriting oldest; null until the first, and on every client.</summary>
+		private RecordedSweep[] recordedSweeps;
+		private int recordedSweepNext;
+
+		private void RecordSweep(Vector3 from, Vector3 to)
+		{
+			recordedSweeps ??= new RecordedSweep[RecordedSweepCount];
+			recordedSweeps[recordedSweepNext] = new RecordedSweep
+			{
+				StepInputTick = StepInputTick,
+				ServerTick = timeManager != null ? timeManager.LocalTick : 0u,
+				From = from,
+				To = to,
+				Valid = true,
+			};
+			recordedSweepNext = (recordedSweepNext + 1) % RecordedSweepCount;
+		}
+
+		/// <summary>
+		/// Server: the step just recorded ended at <paramref name="point"/> (the hit that stopped or turned the object), so
+		/// the record ends there too. The whole step is recorded before it is swept; left whole, the part beyond the wall
+		/// that ended the object was still a path a claim could be measured against, and reached a victim behind the wall.
+		/// </summary>
+		private void TruncateLastSweep(Vector3 point)
+		{
+			if (recordedSweeps == null)
+			{
+				return;
+			}
+			int last = (recordedSweepNext + RecordedSweepCount - 1) % RecordedSweepCount;
+			if (!recordedSweeps[last].Valid)
+			{
+				return;
+			}
+			recordedSweeps[last].To = ClosestPointOnSegment(recordedSweeps[last].From, recordedSweeps[last].To, point);
+		}
+
+		private static Vector3 ClosestPointOnSegment(Vector3 from, Vector3 to, Vector3 point)
+		{
+			Vector3 along = to - from;
+			float lengthSqr = along.sqrMagnitude;
+			if (lengthSqr < 1e-10f)
+			{
+				return from;
+			}
+			return from + along * Mathf.Clamp01(Vector3.Dot(point - from, along) / lengthSqr);
+		}
+
+		/// <summary>
+		/// True when something that is not a character stands between <paramref name="from"/> and <paramref name="to"/> on
+		/// the layers this object collides with: scenery. The cover test of the spawn pose, for any two points.
+		/// </summary>
+		private static bool SceneryBetween(PhysicsScene physicsScene, Vector3 from, Vector3 to, int mask)
+		{
+			Vector3 span = to - from;
+			float distance = span.magnitude;
+			if (distance < 1e-3f || mask == 0)
+			{
+				return false;
+			}
+			Vector3 direction = span / distance;
+			int count;
+			while (true)
+			{
+				count = physicsScene.Raycast(from, direction, coverHits, distance, mask, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref coverHits, count))
+				{
+					break;
+				}
+			}
+			for (int i = 0; i < count; ++i)
+			{
+				Collider struck = coverHits[i].collider;
+				/* Not a moving body (a ship's hull, a lift, a platform): it is read where it stands NOW, against a victim pose
+				 * up to half a second old, so on a moving deck the deck itself came between them and refused an honest claim. */
+				if (struck == null || struck.attachedRigidbody != null)
+				{
+					continue;
+				}
+				TargetOrdering.ResolveHitRoot(struck, out ICharacter hitCharacter);
+				if (hitCharacter == null)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The caster's ability controller, for queueing a claim; resolved on first use.</summary>
+		private AbilityController casterController;
+
+		/// <summary>Owner: queues a claim for a character this copy just hit (AbilityController.QueueHitClaim).</summary>
+		private void NoteOwnerHit(ICharacter hitCharacter)
+		{
+			NetworkObject victimNob = hitCharacter.NetworkObject;
+			NetworkObject casterNob = Caster?.NetworkObject;
+			if (victimNob == null || casterNob == null || !victimNob.IsSpawned || ID < 0 || ID > byte.MaxValue)
+			{
+				return;
+			}
+			if (casterController == null)
+			{
+				casterController = casterNob.GetComponent<AbilityController>();
+			}
+			casterController?.QueueHitClaim(SpawnTick, (byte)ID, victimNob.ObjectId, Ability != null ? Ability.ID : 0);
+		}
+
+		/// <summary>
+		/// Server: applies a hit the owner claims, if this object could have made it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Accepted when the victim is not one this object already hit (the server agreed on its own: nothing to do) and
+		/// one of this object's recent sweeps passed within <see cref="HitClaimGeometry.Tolerance"/> of where the position
+		/// history puts the victim for the view the caster claimed on that step. The history, not the live transform: the
+		/// claim is about what the owner saw then.
+		/// </para>
+		/// <para>
+		/// An accepted claim goes through <see cref="ApplyHit"/> like a swept hit, so deflection, blocking, the observers'
+		/// message, the OnHit chain and the hit count all behave as they do for one. Nothing here trusts the claim for
+		/// more than the choice of victim among those the sweep nearly touched.
+		/// </para>
+		/// </remarks>
+		/// <param name="victim">The character claimed.</param>
+		/// <param name="claimInputTick">The tick of the input that carried the claim.</param>
+		/// <returns>True when the hit was applied.</returns>
+		internal bool TryApplyClaimedHit(ICharacter victim, uint claimInputTick)
+		{
+			if (!isServer || destroyed || Caster == null || ReferenceEquals(victim, Caster))
+			{
+				return false;
+			}
+			if (!TryValidateClaim(victim, claimInputTick, Caster, timeManager, out Vector3 point, out Vector3 normal, out Vector3 localPoint))
+			{
+				return false;
+			}
+			ApplyHit(victim, victim.GameObject, point, normal, localPoint);
+			return true;
+		}
+
+		/// <summary>The ability, caster and clock of an object that ended within the claim grace; null otherwise.</summary>
+		private Ability endedAbility;
+		private ICharacter endedCaster;
+		private TimeManager endedTimeManager;
+		/// <summary>True when the hit that ended this object was on a character: it had no hit left for a claim to grant.</summary>
+		private bool endedOnCharacter;
+		/// <summary>The server tick this object ended on, for an object kept answerable to a claim.</summary>
+		internal uint EndedOnTick { get; private set; }
+
+		/// <summary>True for an object that has ended but can still answer a hit claim (DestroyAbilityObjectInternal).</summary>
+		internal bool AnswersClaimsAfterEnding => destroyed && endedAbility != null && endedCaster != null;
+
+		/// <summary>
+		/// Server: applies a hit the owner claims against an object that has already ENDED, within its grace.
+		/// </summary>
+		/// <remarks>
+		/// The same check as for a live object. What is granted is the OnHit chain on the victim (the damage the owner
+		/// saw); the object is not brought back, and nothing is told to observers about it, who watched it end where the
+		/// server ended it. Once only: the victim joins the hit set, and the object answers no second claim.
+		/// </remarks>
+		internal bool TryApplyEndedClaim(ICharacter victim, uint claimInputTick)
+		{
+			if (!isServer || !AnswersClaimsAfterEnding || ReferenceEquals(victim, endedCaster))
+			{
+				return false;
+			}
+			if (!TryValidateClaim(victim, claimInputTick, endedCaster, endedTimeManager, out Vector3 point, out Vector3 normal, out Vector3 localPoint))
+			{
+				return false;
+			}
+
+			// One answer per body, whatever it is: a second claim must not be offered to the same parry or shield again.
+			hitTargets ??= new HashSet<GameObject>();
+			hitTargets.Add(victim.GameObject);
+
+			/* The victim's own defences, exactly as a swept hit meets them (ApplyHit): a parry first, then a raised shield.
+			 * This path ran the hit effects directly, so a hit claimed against a projectile that had already ended went
+			 * straight through both. The object is gone, so there is nothing to turn or to stop: the defence is spent (a
+			 * hit did reach it) and the claim is simply not granted. */
+			Transform headingTransform = Transform != null ? Transform : transform;
+			if (DamageMitigation.TryDeflect(victim, headingTransform.forward, normal, mutate: true, out _) ||
+				DamageMitigation.TryBlockAtVolume(victim, localPoint, mutate: true))
+			{
+				// Answered: a defence met it, and an ended object answers one claim only.
+				endedAbility = null;
+				endedCaster = null;
+				endedTimeManager = null;
+				return false;
+			}
+
+			// The chain reads the ability, the caster and the clock off the object: lent back for the call, then let go for good.
+			Ability ability = endedAbility;
+			ICharacter caster = endedCaster;
+			TimeManager clock = endedTimeManager;
+			endedAbility = null;
+			endedCaster = null;
+			endedTimeManager = null;
+			Ability = ability;
+			Caster = caster;
+			timeManager = clock;
+			try
+			{
+				RunHitEvents(victim, point, normal, isAuthoritativeEcho: false, singleTarget: true);
+			}
+			finally
+			{
+				Ability = null;
+				Caster = null;
+				timeManager = null;
+				Snapshot = null;
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// True when one of this object's recent sweeps passed close enough to where the history puts
+		/// <paramref name="victim"/> for the view <paramref name="caster"/> claimed on that step.
+		/// </summary>
+		private bool TryValidateClaim(ICharacter victim, uint claimInputTick, ICharacter caster, TimeManager clock,
+			out Vector3 point, out Vector3 normal, out Vector3 localPoint)
+		{
+			point = default;
+			normal = default;
+			localPoint = default;
+			if (victim == null || recordedSweeps == null || caster == null || victim.GameObject == null)
+			{
+				return false;
+			}
+			if (hitTargets != null && hitTargets.Contains(victim.GameObject))
+			{
+				return false;
+			}
+			if (victim.GameObject.scene != (GameObject != null ? GameObject : gameObject).scene)
+			{
+				return false;
+			}
+
+			CharacterPositionHistory history = victim.GameObject.GetComponent<CharacterPositionHistory>();
+			ResolveVictimCapsule(victim, out float victimRadius, out float victimHeight);
+			Vector3 halfExtents = AbilityPrefabColliderCache.ResolveShapeHalfExtents(sweepShape);
+			float shapeReach = Mathf.Max(halfExtents.x, Mathf.Max(halfExtents.y, halfExtents.z));
+			Transform victimTransform = victim.Transform;
+
+			for (int i = 0; i < RecordedSweepCount; ++i)
+			{
+				RecordedSweep sweep = recordedSweeps[i];
+				// The step the owner hit on is before the input that says so, and not long before.
+				/* Either side of the claim, within the window. The owner claims with the input AFTER the step, but the server's
+				 * object steps on its own ticks, numbered from the input it last ran: after ticks without input those numbers
+				 * are estimates and can run ahead of the late inputs that follow, so the step a claim names can carry a number
+				 * at or past the claim's. The geometry below is what decides. */
+				int age = unchecked((int)(claimInputTick - sweep.StepInputTick));
+				if (!sweep.Valid || age < -(int)ClaimStepWindow || age > (int)ClaimStepWindow)
+				{
+					continue;
+				}
+
+				Vector3 victimFeet = victimTransform.position;
+				Quaternion victimRotation = victimTransform.rotation;
+				float victimSpeed = 0f;
+				if (history != null && clock != null &&
+					LagCompensationTick.TryResolve(caster, clock, sweep.StepInputTick, out RewindTarget target, sweep.ServerTick) &&
+					history.TryResolve(target, out CharacterPositionHistory.Snapshot then))
+				{
+					victimFeet = then.Position;
+					victimRotation = then.Rotation;
+					if (target.Tick > 0u &&
+						history.TryResolve(new RewindTarget(target.Tick - 1u, target.SubTickFraction), out CharacterPositionHistory.Snapshot before))
+					{
+						/* A claim older than the history clamps both looks to the oldest sample, which read as standing still and
+						 * held an honest high-latency claim to the 0.1 m of a still target. The speed is then taken going forward. */
+						if (before.Tick == then.Tick && history.TryResolve(then.Tick + 1u, out CharacterPositionHistory.Snapshot after) && after.Tick != then.Tick)
+						{
+							before = then;
+							then = after;
+						}
+						victimSpeed = (then.Position - before.Position).magnitude / Mathf.Max(tickDelta, 1e-5f);
+					}
+				}
+
+				float gap = HitClaimGeometry.Gap(sweep.From, sweep.To, shapeReach, victimFeet, victimTransform.up,
+					victimRadius, victimHeight, out point, out normal);
+				if (gap > HitClaimGeometry.Tolerance(victimSpeed, tickDelta))
+				{
+					continue;
+				}
+
+				/* And nothing solid between the path and the body. The tolerance is a distance, and a distance alone
+				 * reaches round a corner: a victim on the far side of a wall the projectile flew along is as near the
+				 * path as one standing in the open. No honest client claims that hit (its own copy meets the same wall);
+				 * this is the check that makes a forged one worthless. Scenery does not move, so it is read as it stands. */
+				GameObject self = GameObject != null ? GameObject : gameObject;
+				if (SceneryBetween(self.scene.GetPhysicsScene(), ClosestPointOnSegment(sweep.From, sweep.To, point), point,
+						AbilityObjectSweep.CollisionMaskForLayer(self.layer)))
+				{
+					continue;
+				}
+
+				// The point in the victim's own frame as it stood then, which is what a block volume is tested in.
+				/* Where the PROJECTILE was (its path's nearest point to the body), not the point on the body: a shield is a volume
+				 * in front of the body, and a point on the capsule's surface can never be inside it. */
+				Vector3 pathPoint = ClosestPointOnSegment(sweep.From, sweep.To, point);
+				localPoint = Quaternion.Inverse(victimRotation) * (pathPoint - victimFeet);
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>True when this object has already hit <paramref name="character"/> (it hits each body once).</summary>
+		internal bool HasHit(ICharacter character)
+		{
+			return character != null && character.GameObject != null && hitTargets != null && hitTargets.Contains(character.GameObject);
+		}
+
+		/// <summary>The victim's capsule, from its collider where it has one; a standing person's otherwise.</summary>
+		private static void ResolveVictimCapsule(ICharacter victim, out float radius, out float height)
+		{
+			radius = 0.4f;
+			height = 1.8f;
+			if (victim.Collider is CapsuleCollider capsule)
+			{
+				Vector3 scale = capsule.transform.lossyScale;
+				radius = capsule.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+				height = Mathf.Max(capsule.height * Mathf.Abs(scale.y), radius * 2f);
+			}
+			else if (victim.Collider != null)
+			{
+				Vector3 extents = victim.Collider.bounds.extents;
+				radius = Mathf.Max(extents.x, extents.z);
+				height = Mathf.Max(extents.y * 2f, radius * 2f);
+			}
+		}
+		#endregion
+
+		#region Presentation
+		/* What a client DRAWS of an ability object, apart from what it simulates.
+		 *
+		 * The simulation moves the object once a tick, to a position that is a closed form of its spawn pose and a whole
+		 * number of ticks (AbilityMoveTransformAction). That is what makes it reproducible, and drawn as it stands it is a
+		 * projectile that jumps forty centimetres thirty times a second. Three things are wrong with drawing the
+		 * simulation directly, and they share one fix: draw the object's VISUALS at a position of their own.
+		 *
+		 * 1. Between ticks. The same closed form is evaluated at a FRACTIONAL tick count every frame, so the visuals glide.
+		 *    Unlike a character's body this needs no lag: the path is a formula, so "now" can be drawn exactly.
+		 * 2. The owner's hand. The object spawns at the hand as the simulation has it (SimulatedSpawnerPose), which is
+		 *    ahead of the hand the owner sees by the body's smoothing. The visuals start at the DRAWN hand and blend onto
+		 *    the real path over HandBlendSeconds.
+		 * 3. An observer's clock. A client draws other characters in the past, on one shared playback clock
+		 *    (NetworkTransform.PlaybackDrawTick). An observed projectile drawn at its own present was ahead of everything
+		 *    around it by that delay: it left a caster who had not yet finished the cast, and struck a spot its victim had
+		 *    not yet reached. An observed copy now runs ON the playback clock: its age is the clock less the server tick
+		 *    it spawned on, and a hit, a redirect or an end the server reports is applied when the clock reaches the tick
+		 *    the server wrote it on (the tick every message is read against). Nothing extra is sent.
+		 *
+		 * The visuals are the object's children that carry no collider, moved under one holder; the collider stays on the
+		 * root, at the simulated position, and nothing here is read by a sweep, a hit or the server. */
+
+		/// <summary>
+		/// False to run observed copies on this client's own ticks from the moment their message arrives, as they did
+		/// before the playback clock: drawn ahead of the characters around them by the playback delay.
+		/// </summary>
+		public static bool ObservedPlayback = true;
+
+		/// <summary>How long the owner's visuals take to leave the drawn hand for the real path, seconds.</summary>
+		public const float HandBlendSeconds = 0.2f;
+
+		/// <summary>The most steps an observed copy takes in one tick to reach the playback clock (a late join mid-flight).</summary>
+		private const int MaximumPlaybackStepsPerTick = 64;
+
+		/// <summary>
+		/// Further behind the playback clock than this, an observed copy is not catching up a hiccup, it was first seen in
+		/// mid-flight: it jumps (<see cref="FastForward"/>) instead of stepping, and plays no spawn effect.
+		/// </summary>
+		private const int LateJoinStepTicks = 6;
+
+		/// <summary>The holder the visual children hang under; null on the server and for an object with none.</summary>
+		private Transform presented;
+		/// <summary>Renderers on the root itself (a melee swing draws its own box): hidden with the holder until an observed copy shows.</summary>
+		private Renderer[] rootRenderers;
+		/// <summary>True when the OnTick chain moves this object by the closed form, in <see cref="presentationMoveDirection"/>.</summary>
+		private bool presentationMoves;
+		private Vector3 presentationMoveDirection;
+		/// <summary>Where the owner saw the hand, less where the simulation had it; blended away over <see cref="HandBlendSeconds"/>.</summary>
+		private Vector3 presentationOffset;
+		/// <summary>True while the blend from the drawn hand is still running.</summary>
+		private bool presentationOffsetActive;
+		/// <summary>The caster's spawner, for a copy on the playback clock to measure the offset from when it first shows; null for none.</summary>
+		private Transform presentationSpawner;
+		/// <summary>True once a copy on the playback clock has been shown (and has taken its offset from the drawn spawner).</summary>
+		private bool presentationShown;
+
+		/// <summary>True for an observed copy that began in mid-flight (BeginObservedPlayback).</summary>
+		private bool observedLateJoin;
+
+		/// <summary>An effect a spawn chain asked for, kept until the visuals it belongs to are drawn (<see cref="ReleaseSpawnEffects"/>).</summary>
+		private struct HeldSpawnEffect
+		{
+			public GameObject Prefab;
+			public Scene Scene;
+			/// <summary>The object the effect belongs to; null when the event gave <see cref="Position"/> itself (a target, a hit point).</summary>
+			public AbilityObject Anchor;
+			public Vector3 Position;
+		}
+
+		/// <summary>The effects this root's spawn chain asked for and has not played yet; null for none.</summary>
+		private List<HeldSpawnEffect> heldSpawnEffects;
+		/// <summary>The root whose spawn chain is being dispatched on this client right now; null outside one.</summary>
+		private static AbilityObject spawnEffectHolder;
+
+		/// <summary>True for a copy that runs, or is about to be put, on the playback clock (<see cref="BeginObservedPlayback"/>).</summary>
+		private bool RunsOnPlaybackClock =>
+			ObservedPlayback && !isServer && !destroyed && timeManager != null && !ResolvesHitsLocally && PlaybackTick(timeManager) > 0d;
+
+		/// <summary>
+		/// Client: keeps an effect a spawn chain plays until the object it belongs to is drawn. False outside a spawn
+		/// chain; the caller then plays it at once.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Why it waits.</b> A spawn chain runs the moment the object is created, which is before anything about how it
+		/// is DRAWN is known. For the owner that is before the visuals are put at the spawner as this client draws it
+		/// (the hand, wand or staff): played then, the effect sat at the start of the launch line, up by the eye, while
+		/// the projectile left the hand. For an observer it is also before the playback clock reaches the cast: the
+		/// effect played when the message arrived, a few ticks ahead of the caster's animation and of the projectile it
+		/// belongs to.
+		/// </para>
+		/// <para>
+		/// Held on the ROOT, whichever member the effect belongs to: the members of one cast are shown together.
+		/// </para>
+		/// </remarks>
+		internal static bool TryHoldSpawnEffect(GameObject prefab, Scene scene, AbilityObject anchor, Vector3 position)
+		{
+			AbilityObject holder = spawnEffectHolder;
+			if (holder == null || prefab == null || holder.isServer)
+			{
+				return false;
+			}
+			holder.heldSpawnEffects ??= new List<HeldSpawnEffect>(2);
+			holder.heldSpawnEffects.Add(new HeldSpawnEffect { Prefab = prefab, Scene = scene, Anchor = anchor, Position = position });
+			return true;
+		}
+
+		/// <summary>
+		/// Where an effect that belongs to this object is drawn as it spawns: the caster's spawner as this client draws
+		/// it, for an object drawn leaving one; the object itself otherwise (and for a copy first seen far into its flight).
+		/// </summary>
+		private Vector3 SpawnEffectAnchor()
+		{
+			Vector3 position = Transform != null ? Transform.position : transform.position;
+			if (presentationSpawner != null)
+			{
+				Vector3 spawner = presentationSpawner.position;
+				if ((spawner - position).sqrMagnitude < MaximumHandOffset * MaximumHandOffset)
+				{
+					return spawner;
+				}
+			}
+			return position;
+		}
+
+		/// <summary>Plays the effects the spawn chain asked for, where the objects they belong to are drawn now.</summary>
+		private void ReleaseSpawnEffects()
+		{
+			if (heldSpawnEffects == null || heldSpawnEffects.Count == 0)
+			{
+				return;
+			}
+			for (int i = 0; i < heldSpawnEffects.Count; ++i)
+			{
+				HeldSpawnEffect held = heldSpawnEffects[i];
+				if (held.Anchor == null)
+				{
+					PlayFXAction.SpawnFX(held.Prefab, held.Position, held.Scene);
+				}
+				else if (!held.Anchor.destroyed)
+				{
+					PlayFXAction.SpawnFX(held.Prefab, held.Anchor.SpawnEffectAnchor(), held.Scene);
+				}
+			}
+			heldSpawnEffects.Clear();
+		}
+
+		/// <summary>
+		/// The end of a spawn: plays what the spawn chain asked for, unless this copy is about to go on the playback
+		/// clock, which plays it when the copy first shows.
+		/// </summary>
+		private void ReleaseSpawnEffectsUnlessObserved()
+		{
+			if (heldSpawnEffects != null && heldSpawnEffects.Count > 0 && !RunsOnPlaybackClock)
+			{
+				ReleaseSpawnEffects();
+			}
+		}
+
+		/// <summary>True for an observed copy that runs on the playback clock.</summary>
+		private bool onPlaybackClock;
+		/// <summary>The server tick the current leg began on (the spawn, or the latest redirect).</summary>
+		private uint playbackLegStartTick;
+		/// <summary>Ticks into the current leg the visuals are drawn at; negative before the clock reaches the leg's start. Never goes back.</summary>
+		private double presentedElapsed = -1d;
+		/// <summary>What the server has reported of this object that the playback clock has not reached yet, oldest first.</summary>
+		private Queue<ObservedEvent> observedEvents;
+
+		private enum ObservedEventKind : byte { Hit, ActionHit, Block, Deflection, Redirect, End }
+
+		private struct ObservedEvent
+		{
+			public uint Tick;
+			public ObservedEventKind Kind;
+			public ICharacter Character;
+			public Vector3 Point;
+			public Vector3 Vector;
+		}
+
+		/// <summary>
+		/// Test hook: when set, the playback clock observed copies run on. Null in every build that is not a test
+		/// (the same arrangement as LagCompensationTick.ClaimOverride).
+		/// </summary>
+		internal static System.Func<double> PlaybackTickOverride;
+
+		/// <summary>
+		/// The server tick observed characters are drawn at this frame (NetworkTransform.PlaybackDrawTick): the clock an
+		/// observed copy runs on. Zero when there is none (nothing received yet, or timed playback is off).
+		/// </summary>
+		private static double PlaybackTick(TimeManager clock)
+		{
+			if (PlaybackTickOverride != null)
+			{
+				return PlaybackTickOverride();
+			}
+			if (!FishNet.Component.Transforming.NetworkTransform.TimedPlayback)
+			{
+				return 0d;
+			}
+			return FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(clock, LagCompensationTick.SpectatorInterpolationTicks);
+		}
+
+		/// <summary>The position the closed form gives a moving object <paramref name="elapsedTicks"/> (whole or not) into its leg.</summary>
+		public static Vector3 PresentedPosition(Vector3 legStart, Quaternion legRotation, Vector3 moveDirection, float speed,
+			double elapsedTicks, float tickDelta)
+		{
+			return legStart + legRotation * moveDirection * (speed * (float)(elapsedTicks * tickDelta));
+		}
+
+		/// <summary>How much of the hand's offset is still applied <paramref name="age"/> seconds into the blend: 1 at the start, 0 from <see cref="HandBlendSeconds"/>.</summary>
+		public static float HandBlendWeight(float age)
+		{
+			if (age <= 0f)
+			{
+				return 1f;
+			}
+			float u = Mathf.Clamp01(age / HandBlendSeconds);
+			return 1f - u * u * (3f - 2f * u);
+		}
+
+		/// <summary>
+		/// How far into its leg an observed copy is drawn: the playback clock less the leg's start, never less than it was
+		/// (the clock steps back when the connection turns late, and a projectile must wait, not reverse).
+		/// </summary>
+		public static double ObservedElapsed(double drawTick, uint legStartTick, double previous)
+		{
+			double elapsed = drawTick - legStartTick;
+			return elapsed > previous ? elapsed : previous;
+		}
+
+		/// <summary>Client: finds how this object moves and gathers its visuals under a holder. Once per object.</summary>
+		private void InitializePresentation()
+		{
+			if (isServer || presented != null)
+			{
+				return;
+			}
+
+			presentationMoves = false;
+			IReadOnlyDictionary<int, AbilityOnTickEvent> tickEvents = ActiveOnTickEvents;
+			if (tickEvents != null)
+			{
+				foreach (AbilityOnTickEvent tickEvent in tickEvents.Values)
+				{
+					if (tickEvent == null || tickEvent.OnConditionsMetActions == null)
+					{
+						continue;
+					}
+					for (int i = 0; i < tickEvent.OnConditionsMetActions.Count; ++i)
+					{
+						if (tickEvent.OnConditionsMetActions[i] is AbilityMoveTransformAction move)
+						{
+							presentationMoves = true;
+							presentationMoveDirection = move.MoveDirection;
+						}
+					}
+				}
+			}
+
+			Transform root = Transform != null ? Transform : transform;
+			rootRenderers = root.GetComponents<Renderer>();
+			Transform holder = null;
+			for (int i = root.childCount - 1; i >= 0; --i)
+			{
+				Transform child = root.GetChild(i);
+				if (child.GetComponentInChildren<Collider>(true) != null)
+				{
+					continue;
+				}
+				if (holder == null)
+				{
+					holder = new GameObject("Presented").transform;
+					holder.SetParent(root, false);
+				}
+				// The holder rests at identity on the root, so a child keeps the local pose it was authored with.
+				child.SetParent(holder, false);
+			}
+			presented = holder;
+		}
+
+		/// <summary>Owner: the visuals start <paramref name="offset"/> from the simulated position (at the drawn hand) and blend back.</summary>
+		internal void SetPresentationOffset(Vector3 offset)
+		{
+			if (isServer || offset.sqrMagnitude < 1e-8f)
+			{
+				return;
+			}
+			presentationOffset = offset;
+			presentationOffsetActive = true;
+		}
+
+		/// <summary>
+		/// Client, for a copy this peer does not resolve hits for: puts it on the playback clock, with its current leg
+		/// starting on <paramref name="serverStartTick"/>.
+		/// </summary>
+		/// <returns>False when there is no playback clock to run on (nothing received yet, timed playback off): the caller catches the copy up the old way.</returns>
+		internal bool BeginObservedPlayback(uint serverStartTick, bool lateJoin = false)
+		{
+			if (!RunsOnPlaybackClock)
+			{
+				return false;
+			}
+			double drawTick = PlaybackTick(timeManager);
+
+			onPlaybackClock = true;
+			playbackLegStartTick = serverStartTick;
+			presentedElapsed = ObservedElapsed(drawTick, serverStartTick, -1d);
+			/* Joined in mid-flight: either told so (an object already in flight when this client began watching its caster)
+			 * or already well past its start when it began. Decided HERE, once, and not from how far behind the clock the
+			 * copy is later: a frame hitch also leaves every copy behind, and treated as a late join it skipped their tick
+			 * events and their spawn effects, and a copy whose life ended inside the jump vanished without its impact. */
+			observedLateJoin = lateJoin || presentedElapsed > LateJoinStepTicks;
+			ShowPresented(presentedElapsed >= 0d);
+			return true;
+		}
+
+		private void ShowPresented(bool visible)
+		{
+			if (presented != null && presented.gameObject.activeSelf != visible)
+			{
+				presented.gameObject.SetActive(visible);
+			}
+			if (rootRenderers != null)
+			{
+				for (int i = 0; i < rootRenderers.Length; ++i)
+				{
+					if (rootRenderers[i] != null && rootRenderers[i].enabled != visible)
+					{
+						rootRenderers[i].enabled = visible;
+					}
+				}
+			}
+		}
+
+		/// <summary>An observed copy's tick: applies what the clock has reached, then steps up to the clock.</summary>
+		private void StepOnPlaybackClock()
+		{
+			double drawTick = PlaybackTick(timeManager);
+			if (drawTick <= 0d)
+			{
+				/* The clock is gone (timed playback switched off under it). A copy that kept waiting for it never moved
+				 * and never ran out its life: it carries on by this client's own ticks, shown, with whatever the server
+				 * has already reported applied. */
+				// Drained while still on the clock, so a redirect among them rebases the leg as it would have.
+				DrainObservedEvents(double.MaxValue);
+				onPlaybackClock = false;
+				if (destroyed)
+				{
+					return;
+				}
+				ShowPresented(true);
+				ReleaseSpawnEffects();
+				StepOnce();
+				return;
+			}
+			DrainObservedEvents(drawTick);
+			if (destroyed)
+			{
+				return;
+			}
+			StepTo(drawTick - playbackLegStartTick);
+		}
+
+		/// <summary>Steps until the leg is <paramref name="legTicks"/> old (whole ticks), a bounded number at a time.</summary>
+		private void StepTo(double legTicks)
+		{
+			long target = (long)System.Math.Floor(legTicks);
+			/* Far behind the clock (a copy first seen well into its flight): the distance is JUMPED, by FastForward, which
+			 * charges the lifetime and moves the count without running the object's tick events. Stepping it ran every
+			 * one of those ticks' events in a single tick (a pulse a second, sixty times at once), which is what
+			 * FastForward exists to prevent. The last step is still a real one: it is what places the object. */
+			long behind = target - ElapsedTicks;
+			if (!destroyed && observedLateJoin && !presentationShown && behind > LateJoinStepTicks)
+			{
+				FastForward((uint)(behind - 1));
+			}
+			int steps = 0;
+			while (!destroyed && ElapsedTicks < target && steps++ < MaximumPlaybackStepsPerTick)
+			{
+				StepOnce();
+			}
+		}
+
+		/// <summary>
+		/// True when a report from the server has to wait for the playback clock: this copy runs on it, and the clock has
+		/// not reached <paramref name="eventTick"/> (or something earlier is still waiting, and order is kept).
+		/// </summary>
+		private bool DefersObserved(uint eventTick)
+		{
+			if (!onPlaybackClock || drainingObservedEvents || destroyed || eventTick == 0u || timeManager == null)
+			{
+				return false;
+			}
+			if (observedEvents != null && observedEvents.Count > 0)
+			{
+				return true;
+			}
+			double drawTick = PlaybackTick(timeManager);
+			return drawTick > 0d && eventTick > drawTick;
+		}
+
+		private void DeferObserved(uint eventTick, ObservedEventKind kind, ICharacter character, Vector3 point, Vector3 vector)
+		{
+			observedEvents ??= new Queue<ObservedEvent>(2);
+			observedEvents.Enqueue(new ObservedEvent { Tick = eventTick, Kind = kind, Character = character, Point = point, Vector = vector });
+		}
+
+		/// <summary>Applies every waiting report the playback clock has reached, each after stepping up to its tick.</summary>
+		private void DrainObservedEvents(double drawTick)
+		{
+			while (!destroyed && observedEvents != null && observedEvents.Count > 0 && observedEvents.Peek().Tick <= drawTick)
+			{
+				ObservedEvent observed = observedEvents.Dequeue();
+				// The object as it stood on the tick the server reported: a hit lands where the object then was.
+				StepTo((double)observed.Tick - playbackLegStartTick);
+				if (destroyed)
+				{
+					return;
+				}
+				// Applied through the same entry points a message uses; the flag stops them queueing it again.
+				drainingObservedEvents = true;
+				try
+				{
+					switch (observed.Kind)
+					{
+						case ObservedEventKind.Hit:
+							ApplyObservedHit(observed.Character, observed.Point, observed.Vector, observed.Tick);
+							break;
+						case ObservedEventKind.ActionHit:
+							ApplyObservedActionHit(observed.Character, observed.Point, observed.Vector, observed.Tick);
+							break;
+						case ObservedEventKind.Block:
+							ApplyObservedBlock(observed.Character, observed.Tick);
+							break;
+						case ObservedEventKind.Deflection:
+							ApplyObservedDeflection(observed.Vector, observed.Tick);
+							break;
+						case ObservedEventKind.Redirect:
+							ApplyObservedRedirect(observed.Vector, 0u, observed.Tick);
+							break;
+						case ObservedEventKind.End:
+							DestroyAbilityObjectInternal();
+							break;
+					}
+				}
+				finally
+				{
+					drainingObservedEvents = false;
+				}
+			}
+		}
+
+		/// <summary>True while <see cref="DrainObservedEvents"/> is applying a report, so applying it does not queue it again.</summary>
+		private bool drainingObservedEvents;
+
+		/// <summary>
+		/// The object just turned, on <paramref name="legStartTick"/> (a redirect or a deflection re-anchored it and zeroed
+		/// its leg): the playback clock counts the new leg from that tick. Called whether the report waited in the queue or
+		/// arrived already late; a late one leaves the leg some ticks old, which the next step walks.
+		/// </summary>
+		private void RebasePlaybackLeg(uint legStartTick)
+		{
+			if (!onPlaybackClock || destroyed || legStartTick == 0u || timeManager == null)
+			{
+				return;
+			}
+			playbackLegStartTick = legStartTick;
+			double drawTick = PlaybackTick(timeManager);
+			presentedElapsed = ObservedElapsed(drawTick, legStartTick, 0d);
+		}
+
+		/// <summary>An end the server reported: now, or when the playback clock reaches <paramref name="eventTick"/>.</summary>
+		internal void EndObserved(uint eventTick)
+		{
+			if (destroyed)
+			{
+				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.End, null, default, default);
+				return;
+			}
+			DestroyAbilityObjectInternal();
+		}
+
+#if !UNITY_SERVER
+		/// <summary>Every frame on a client: brings an observed copy up to the playback clock, and places the visuals.</summary>
+		private void LateUpdate()
+		{
+			if (destroyed || !initialized || isServer || timeManager == null)
+			{
+				return;
+			}
+
+			double elapsed;
+			// Seconds since the object spawned, by the tick clock: what the hand blend runs on (no wall clock in this file).
+			float age = 0f;
+			if (onPlaybackClock)
+			{
+				double drawTick = PlaybackTick(timeManager);
+				if (drawTick > 0d)
+				{
+					DrainObservedEvents(drawTick);
+					if (destroyed)
+					{
+						return;
+					}
+					presentedElapsed = ObservedElapsed(drawTick, playbackLegStartTick, presentedElapsed);
+				}
+				ShowPresented(presentedElapsed >= 0d);
+				elapsed = System.Math.Max(0d, presentedElapsed);
+				age = (float)((PreRedirectElapsedTicks + elapsed) * tickDelta);
+				if (!presentationShown && presentedElapsed >= 0d)
+				{
+					/* First shown: the drawn caster is releasing it now. Its spawner is where the visuals leave from,
+					 * measured against the leg's start, which is where the closed form puts them at this moment less the
+					 * little they have already travelled. A copy first shown well into its flight (a late join) is past
+					 * the blend and takes no offset. */
+					presentationShown = true;
+					presentationOffsetActive = false;
+					if (presentationSpawner != null && PreRedirectElapsedTicks == 0u)
+					{
+						Vector3 handOffset = presentationSpawner.position - SpawnPosition;
+						if (handOffset.sqrMagnitude < MaximumHandOffset * MaximumHandOffset)
+						{
+							SetPresentationOffset(handOffset);
+						}
+					}
+					// And what its spawn chain plays (a muzzle effect) is played now, with it.
+					// Not for a copy first seen in mid-flight: its launch happened before this client was watching.
+					if (!observedLateJoin && PreRedirectElapsedTicks == 0u)
+					{
+						ReleaseSpawnEffects();
+					}
+					else
+					{
+						heldSpawnEffects?.Clear();
+					}
+				}
+			}
+			else
+			{
+				// This peer's own ticks: the whole ticks simulated, and how far the clock is into the next.
+				double fraction = timeManager.GetTickPercentAsDouble();
+				elapsed = ElapsedTicks + (fraction < 0d ? 0d : fraction > 1d ? 1d : fraction);
+				age = (float)((PreRedirectElapsedTicks + elapsed) * tickDelta);
+			}
+
+			if (presented == null)
+			{
+				return;
+			}
+
+			Transform root = Transform != null ? Transform : transform;
+			Vector3 position = presentationMoves
+				? ClampToImpact(root, PresentedPosition(SpawnPosition, SpawnRotation, presentationMoveDirection, Speed, elapsed, tickDelta))
+				: root.position;
+			if (presentationOffsetActive)
+			{
+				float weight = HandBlendWeight(age);
+				position += presentationOffset * weight;
+				presentationOffsetActive = weight > 0f;
+			}
+			presented.SetPositionAndRotation(position, root.rotation);
+		}
+
+		/// <summary>
+		/// The drawn position, stopped at whatever the object is about to hit.
+		/// </summary>
+		/// <remarks>
+		/// The visuals run AHEAD of the simulated object by the part of a tick already elapsed, and the step that covers
+		/// that stretch is swept on the next tick. Drawn freely, a projectile went up to a step (0.4 m at 12 m/s) into a wall
+		/// or through a body before the hit ended it, and its impact effect then played behind where it had been seen. The
+		/// stretch from the simulated position to the drawn one is traced here and the drawing stops at the first thing in
+		/// it: scenery, or a character other than the caster.
+		/// </remarks>
+		private Vector3 ClampToImpact(Transform root, Vector3 drawn)
+		{
+			Vector3 from = root.position;
+			Vector3 span = drawn - from;
+			float distance = span.magnitude;
+			if (distance < 1e-3f)
+			{
+				return drawn;
+			}
+			GameObject self = root.gameObject;
+			int mask = AbilityObjectSweep.CollisionMaskForLayer(self.layer);
+			if (mask == 0)
+			{
+				return drawn;
+			}
+			Vector3 direction = span / distance;
+			PhysicsScene physicsScene = self.scene.GetPhysicsScene();
+			int count;
+			while (true)
+			{
+				count = physicsScene.Raycast(from, direction, coverHits, distance, mask, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref coverHits, count))
+				{
+					break;
+				}
+			}
+			float nearest = distance;
+			for (int i = 0; i < count; ++i)
+			{
+				Collider struck = coverHits[i].collider;
+				if (struck == null || struck.transform.IsChildOf(root))
+				{
+					continue;
+				}
+				TargetOrdering.ResolveHitRoot(struck, out ICharacter hitCharacter);
+				if (hitCharacter != null && (ReferenceEquals(hitCharacter, Caster) || HasHit(hitCharacter)))
+				{
+					continue;
+				}
+				if (coverHits[i].distance < nearest)
+				{
+					nearest = coverHits[i].distance;
+				}
+			}
+			return from + direction * nearest;
+		}
+#endif
+		#endregion
+
 		/// <summary>
 		/// Immutable snapshot of the ability data captured at spawn time.
 		/// Used as a fallback when the live <see cref="Ability"/> reference becomes null
@@ -600,6 +1583,18 @@ namespace FishMMO.Shared
 			UnregisterDetached();
 			ElapsedTicks = 0;
 			PreRedirectElapsedTicks = 0;
+			recordedSweeps = null;
+			recordedSweepNext = 0;
+			casterController = null;
+			onPlaybackClock = false;
+			playbackLegStartTick = 0u;
+			presentedElapsed = -1d;
+			observedEvents?.Clear();
+			presentationOffset = Vector3.zero;
+			presentationOffsetActive = false;
+			presentationSpawner = null;
+			presentationShown = false;
+			heldSpawnEffects?.Clear();
 			lastSweepPosition = Transform != null ? Transform.position : transform.position;
 			hitTargets?.Clear();
 			sweepHits?.Clear();
@@ -630,6 +1625,29 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Spawn effects nothing released: a copy that was expected on the playback clock and never put there, or one
+			 * spawned by a path that does not end in Spawn. Played now, not lost. */
+			if (heldSpawnEffects != null && heldSpawnEffects.Count > 0 && (!onPlaybackClock || presentationShown))
+			{
+				ReleaseSpawnEffects();
+			}
+
+			// An observed copy lives on the clock observed characters are drawn on, not on this client's own ticks.
+			if (onPlaybackClock)
+			{
+				StepOnPlaybackClock();
+				return;
+			}
+
+			StepOnce();
+		}
+
+		/// <summary>
+		/// One step of the object's life: the lifetime, the tick count, the OnTick chain (which is what moves it), expiry,
+		/// and the sweep.
+		/// </summary>
+		private void StepOnce()
+		{
 			float totalLifeTime = TotalLifeTime;
 
 			// Update remaining lifetime using deterministic tick delta.
@@ -809,6 +1827,12 @@ namespace FishMMO.Shared
 			// which would re-hit everything along it that the hit set has not already absorbed.
 			lastSweepPosition = to;
 
+			// Kept for a few ticks on the server: what a hit the owner claims is checked against (TryApplyClaimedHit).
+			if (isServer)
+			{
+				RecordSweep(from, to);
+			}
+
 			/* Advanced ABOVE this gate, not below it. Ownership can change while an object is in
 			 * the air, and a peer that starts resolving part-way through would otherwise sweep from
 			 * wherever the origin was last written — the spawn point — and resolve the entire flight
@@ -840,7 +1864,10 @@ namespace FishMMO.Shared
 				/* The caster is excluded — it fires from where it is, not where it was. The query is
 				 * run eagerly inside the scope and the results are dispatched after it closes, so no
 				 * damage or ECA action ever runs against a world several hundred milliseconds stale. */
-				using (LagCompensationRegistry.Rewind(scene, rewindTarget, Caster))
+				// Only the characters near this step are moved (LagCompensationRegistry.RewindReach covers how far one can have come).
+				Vector3 sweepHalfExtents = AbilityPrefabColliderCache.ResolveShapeHalfExtents(sweepShape);
+				float sweepRadius = (to - from).magnitude * 0.5f + Mathf.Max(sweepHalfExtents.x, Mathf.Max(sweepHalfExtents.y, sweepHalfExtents.z));
+				using (LagCompensationRegistry.Rewind(scene, rewindTarget, Caster, (from + to) * 0.5f, sweepRadius))
 				{
 					count = AbilityObjectSweep.Sweep(physicsScene, sweepShape, shapeTransform, from, to, mask, sweepHits);
 				}
@@ -852,8 +1879,14 @@ namespace FishMMO.Shared
 
 			for (int i = 0; i < count; ++i)
 			{
+				Vector3 hitPoint = sweepHits[i].Point;
 				if (!DispatchSweptHit(sweepHits[i]))
 				{
+					// The object stopped (or turned) here: so does the record of this step (TruncateLastSweep).
+					if (isServer)
+					{
+						TruncateLastSweep(hitPoint);
+					}
 					break;
 				}
 			}
@@ -994,6 +2027,12 @@ namespace FishMMO.Shared
 						BroadcastHitToObservers(hitCharacter, point, normal,
 							deflected: true, deflectHeading: deflectedHeading);
 					}
+					else
+					{
+						/* The owner's copy met the defender's parry: claimed like a hit, so the server's projectile (whose sweep
+						 * may have passed a hand's breadth by) is turned too, and does not fly on to strike somebody else. */
+						NoteOwnerHit(hitCharacter);
+					}
 					ApplyDeflection(deflectedHeading);
 					/* The rest of this tick's sweep is abandoned. Those hits were gathered along the
 					 * segment the object travelled INTO the defender, and it is not on that line any
@@ -1034,6 +2073,14 @@ namespace FishMMO.Shared
 						 * draws the impact on the shield face. */
 						BroadcastHitToObservers(hitCharacter, point, normal, blocked: true, ended: true);
 					}
+					else
+					{
+						// Claimed as for a parry, so the server's shield takes it too.
+						NoteOwnerHit(hitCharacter);
+					}
+					// Stopped by a defence: nothing is left for a late claim to grant.
+					endedOnCharacter = true;
+					MoveToImpact(point);
 					/* Destroyed, not merely stopped: a blocked projectile is gone. Destroy events fire
 					 * — an impact on a shield is exactly the moment an authored effect wants to play.
 					 * notifyObservers is false because the hit message above already said Ended; see
@@ -1067,6 +2114,13 @@ namespace FishMMO.Shared
 			if (isServer)
 			{
 				BroadcastHitToObservers(hitCharacter, point, normal, ended: endsOnThisHit);
+			}
+			else if (hitCharacter != null && !isAuthoritativeEcho && ResolvesHitsLocally)
+			{
+				/* The owner's own copy hit a character: say so with the next input, so the server can grant the hit
+				 * even where its history puts that character a hand's breadth from where it was drawn here. A hit the
+				 * server tells us about (the echo) is its own already. */
+				NoteOwnerHit(hitCharacter);
 			}
 
 			/* Captured before the events so a redirect they apply is detectable after. The hit
@@ -1111,6 +2165,8 @@ namespace FishMMO.Shared
 			HitCount--;
 			if (HitCount < 1)
 			{
+				// For the grace a late hit claim gets: an object that spent its last hit on a character has no hit left to grant.
+				endedOnCharacter = hitCharacter != null;
 				/* A hit is the one end-of-life that is NOT deterministic across peers: it is
 				 * resolved against the caster's world, which no observer holds, so the server tells
 				 * them. Lifetime expiry is identical everywhere and needs no message.
@@ -1118,11 +2174,33 @@ namespace FishMMO.Shared
 				 * It is told INLINE whenever the hit message could already state it — which is every
 				 * shipped ability, all of which carry HitCount 1 — and the standalone destroy is sent
 				 * only for the remainder: a pierce chain, whose count this hit could not predict. */
+				MoveToImpact(point);
 				DestroyAbilityObjectInternal(dispatchDestroyEvents: true, notifyObservers: !endsOnThisHit);
 				return false;
 			}
 
 			return true;
+		}
+
+		/// <summary>
+		/// A moving object ending on a hit is put where the hit is, so the effects its end plays (an impact, an explosion)
+		/// play there: the root had already been moved to the end of the step before the sweep found the hit, up to a step
+		/// past it, inside the wall or behind the victim, while the drawing stopped at the surface (ClampToImpact).
+		/// </summary>
+		private void MoveToImpact(Vector3 point)
+		{
+			if (Speed <= 0f || float.IsNaN(point.x) || float.IsNaN(point.y) || float.IsNaN(point.z))
+			{
+				return;
+			}
+			Transform root = Transform != null ? Transform : transform;
+			root.position = point;
+		}
+
+		/// <summary>Stopped by a defence (a raised shield took it): it answers no late claim (see endedOnCharacter).</summary>
+		internal void MarkStoppedByDefence()
+		{
+			endedOnCharacter = true;
 		}
 
 		/// <summary>
@@ -1176,10 +2254,15 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		/// <param name="heading">The absolute heading the server's copy left on.</param>
-		internal void ApplyObservedDeflection(Vector3 heading)
+		internal void ApplyObservedDeflection(Vector3 heading, uint eventTick = 0u)
 		{
 			if (destroyed || heading.sqrMagnitude < 1e-8f)
 			{
+				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.Deflection, null, default, heading);
 				return;
 			}
 
@@ -1197,6 +2280,7 @@ namespace FishMMO.Shared
 			}
 
 			ApplyDeflection(heading);
+			RebasePlaybackLeg(eventTick);
 		}
 
 		/// <summary>
@@ -1210,10 +2294,15 @@ namespace FishMMO.Shared
 		/// <param name="hitCharacter">The character the server hit, or null for scenery.</param>
 		/// <param name="point">World point of impact, as measured on the server.</param>
 		/// <param name="normal">Surface normal at the impact.</param>
-		internal void ApplyObservedHit(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		internal void ApplyObservedHit(ICharacter hitCharacter, Vector3 point, Vector3 normal, uint eventTick = 0u)
 		{
 			if (destroyed)
 			{
+				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.Hit, hitCharacter, point, normal);
 				return;
 			}
 
@@ -1263,10 +2352,15 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		/// <param name="hitCharacter">The character whose shield ate this object, or null for scenery.</param>
-		internal void ApplyObservedBlock(ICharacter hitCharacter)
+		internal void ApplyObservedBlock(ICharacter hitCharacter, uint eventTick = 0u)
 		{
 			if (destroyed)
 			{
+				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.Block, hitCharacter, default, default);
 				return;
 			}
 
@@ -1301,7 +2395,11 @@ namespace FishMMO.Shared
 		/// events on the collision payload; see
 		/// <see cref="AbilityCollisionEventData.IsAuthoritativeEcho"/>.
 		/// </param>
-		private void RunHitEvents(ICharacter hitCharacter, Vector3 point, Vector3 normal, bool isAuthoritativeEcho)
+		/// <param name="singleTarget">
+		/// For a hit claimed after the object ended: the chain acts on the victim alone. The chain already ran once, where the
+		/// object ended, and an area in it was applied there; a second fan-out would apply the area again.
+		/// </param>
+		private void RunHitEvents(ICharacter hitCharacter, Vector3 point, Vector3 normal, bool isAuthoritativeEcho, bool singleTarget = false)
 		{
 			if (Caster == null || !Caster.IsSpawned)
 			{
@@ -1326,6 +2424,10 @@ namespace FishMMO.Shared
 					Caster, hitCharacter, this, point, normal, RNG, isAuthoritativeEcho);
 
 				collisionEvent.Add(new TickEventData(Caster, collisionTick));
+				if (singleTarget)
+				{
+					collisionEvent.Add(new SingleTargetEventData(Caster));
+				}
 				hitEvent.Execute(collisionEvent);
 			}
 		}
@@ -1403,10 +2505,15 @@ namespace FishMMO.Shared
 		/// <param name="hitCharacter">The character that was hit, or null for scenery.</param>
 		/// <param name="point">World point of impact.</param>
 		/// <param name="normal">Surface normal at the impact.</param>
-		internal void ApplyObservedActionHit(ICharacter hitCharacter, Vector3 point, Vector3 normal)
+		internal void ApplyObservedActionHit(ICharacter hitCharacter, Vector3 point, Vector3 normal, uint eventTick = 0u)
 		{
 			if (destroyed)
 			{
+				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.ActionHit, hitCharacter, point, normal);
 				return;
 			}
 
@@ -1518,11 +2625,21 @@ namespace FishMMO.Shared
 		/// a second turn that would reset its leg clock and jump the pose.
 		/// </remarks>
 		/// <param name="heading">The absolute post-chain heading, already decoded.</param>
-		internal void ApplyObservedRedirect(Vector3 heading, uint catchUpTicks = 0u)
+		internal void ApplyObservedRedirect(Vector3 heading, uint catchUpTicks = 0u, uint eventTick = 0u)
 		{
 			if (destroyed || heading.sqrMagnitude < 1e-8f)
 			{
 				return;
+			}
+			if (DefersObserved(eventTick))
+			{
+				DeferObserved(eventTick, ObservedEventKind.Redirect, null, default, heading);
+				return;
+			}
+			if (onPlaybackClock)
+			{
+				// On the playback clock the new leg's age comes from the clock (RebasePlaybackLeg), not from a catch-up.
+				catchUpTicks = 0u;
 			}
 
 			Vector3 current = SpawnRotation * Vector3.forward;
@@ -1536,6 +2653,7 @@ namespace FishMMO.Shared
 			}
 
 			Redirect(AimDirectionCompression.ToRotation(AimDirectionCompression.Quantize(heading)));
+			RebasePlaybackLeg(eventTick);
 
 			/* The new leg is as old as the message. Redirect zeroed ElapsedTicks, and the
 			 * closed-form trajectory reads it, so this is what puts the object where the server
@@ -1791,6 +2909,14 @@ namespace FishMMO.Shared
 			// Set-once guard: if another path (collision vs lifetime) already
 			// set the flag, bail out immediately.
 			if (destroyed) return;
+			/* A copy whose whole life fell inside one frame (two ticks of a punch, across a hitch) is destroyed before it
+			 * was ever drawn, and its spawn effect went with it. It did begin: the effect is played. Before the flag
+			 * below, which is what ReleaseSpawnEffects reads to skip an anchor that is gone. */
+			if (!isServer && heldSpawnEffects != null && heldSpawnEffects.Count > 0 && !observedLateJoin &&
+				(!onPlaybackClock || presentedElapsed >= 0d || (timeManager != null && PlaybackTick(timeManager) >= playbackLegStartTick)))
+			{
+				ReleaseSpawnEffects();
+			}
 			destroyed = true;
 
 			// A destroyed phantom leaves the reclamation registry, whatever destroyed it.
@@ -1799,6 +2925,40 @@ namespace FishMMO.Shared
 			// Capture tick before unsubscribing — timeManager.LocalTick is unavailable
 			// after the subscription is removed and the reference is nulled.
 			uint destroyTick = GetCurrentAuthoritativeTick();
+
+			/* Server: an object that ended WITHOUT spending its last hit on a character (on scenery, or by running out)
+			 * stays answerable to a hit claim for a few ticks. The claim for a step arrives with the owner's NEXT input,
+			 * and an object that flew a hand's breadth past its victim into the wall behind has already ended by then:
+			 * the claim found nothing, and the hit the owner saw was lost. Kept here are only the things a claim needs
+			 * (the ability for its OnHit chain, the caster, the clock); the object itself is finished, off the tick, out
+			 * of the ability's containers, and destroyed when the grace runs out. */
+			/* Server: an object that spent its last hit on a character is not kept, but what it hit is noted, so the owner's
+			 * claim for that same hit (which arrives with its next input) is counted as agreed, not refused. */
+			if (isServer && AbilityController.HitClaims && endedOnCharacter && hitTargets != null && hitTargets.Count > 0 &&
+				Caster is IPlayerCharacter && Caster.NetworkObject != null)
+			{
+				AbilityController agreedController = Caster.NetworkObject.GetComponent<AbilityController>();
+				agreedController?.NoteEndedOnCharacter(SpawnTick.Value, ID, hitTargets);
+			}
+			bool keepForClaims = isServer && AbilityController.HitClaims && !endedOnCharacter &&
+				recordedSweeps != null && Ability != null && Caster is IPlayerCharacter && timeManager != null;
+			if (keepForClaims)
+			{
+				endedAbility = Ability;
+				endedCaster = Caster;
+				endedTimeManager = timeManager;
+				EndedOnTick = destroyTick;
+				NetworkObject endedCasterNob = Caster.NetworkObject;
+				AbilityController endedController = endedCasterNob != null ? endedCasterNob.GetComponent<AbilityController>() : null;
+				if (endedController != null)
+				{
+					endedController.NoteEndedObject(this);
+				}
+				else
+				{
+					keepForClaims = false;
+				}
+			}
 
 			if (notifyObservers)
 			{
@@ -1846,10 +3006,21 @@ namespace FishMMO.Shared
 
 			cachedTickEventData = null;
 			Caster = null;
-			Snapshot = null;
+			if (!keepForClaims)
+			{
+				Snapshot = null;
+			}
 			GameObject go = GameObject != null ? GameObject : gameObject;
 			go.SetActive(false);
-			Destroy(go);
+			if (keepForClaims)
+			{
+				// Inactive from here: it draws nothing and runs nothing. Unity destroys it when the grace has passed.
+				Destroy(go, (ClaimStepWindow + 2u) * tickDelta);
+			}
+			else
+			{
+				Destroy(go);
+			}
 		}
 
 		/// <summary>
@@ -2043,6 +3214,7 @@ namespace FishMMO.Shared
 			abilityObject.tickDelta = (float)timeManager.TickDelta;
 			abilityObject.isServer = timeManager.NetworkManager.IsServerStarted;
 			timeManager.OnTick += abilityObject.OnTick;
+			abilityObject.InitializePresentation();
 		}
 
 		/// <summary>
@@ -2101,20 +3273,34 @@ namespace FishMMO.Shared
 			// deterministic values using a shared, already-seeded generator.
 			spawnEventData.RNG = abilityObject.RNG;
 
-			if (hasPreSpawn)
+			/* Effects the chain plays are held on the root of the cast until its visuals are drawn (TryHoldSpawnEffect).
+			 * A member spawned inside this chain dispatches its own chain inside this one: the outer root keeps holding. */
+			AbilityObject outerHolder = spawnEffectHolder;
+			if (outerHolder == null && abilityObject != null && !abilityObject.isServer)
 			{
-				foreach (var trigger in ability.OnPreSpawnEvents.Values)
+				spawnEffectHolder = abilityObject;
+			}
+			try
+			{
+				if (hasPreSpawn)
 				{
-					trigger.Execute(spawnEventData);
+					foreach (var trigger in ability.OnPreSpawnEvents.Values)
+					{
+						trigger.Execute(spawnEventData);
+					}
+				}
+
+				if (hasSpawn)
+				{
+					foreach (var trigger in ability.OnSpawnEvents.Values)
+					{
+						trigger.Execute(spawnEventData);
+					}
 				}
 			}
-
-			if (hasSpawn)
+			finally
 			{
-				foreach (var trigger in ability.OnSpawnEvents.Values)
-				{
-					trigger.Execute(spawnEventData);
-				}
+				spawnEffectHolder = outerHolder;
 			}
 		}
 
@@ -2203,6 +3389,14 @@ namespace FishMMO.Shared
 			{
 				timeManager.OnTick += abilityObject.OnTick;
 			}
+			abilityObject.InitializePresentation();
+			// A fork is born on its source's clock, at the tick the source had reached.
+			if (source.onPlaybackClock)
+			{
+				abilityObject.onPlaybackClock = true;
+				abilityObject.playbackLegStartTick = unchecked(source.playbackLegStartTick + source.ElapsedTicks);
+				abilityObject.presentedElapsed = 0d;
+			}
 
 			spawnedAbilityObjects[abilityObjectID] = abilityObject;
 		}
@@ -2230,7 +3424,8 @@ namespace FishMMO.Shared
 		/// discarded — see <see cref="AbilityContainerAllocator"/>.
 		/// </returns>
 		public static AbilityObject Spawn(Ability ability, ICharacter caster, Transform abilitySpawner, TargetInfo targetInfo,
-			Vector3 aimOrigin, Vector3 aimDirection, int seed, PredictionTick spawnTick, AbilitySpawnPose? pose = null)
+			Vector3 aimOrigin, Vector3 aimDirection, int seed, PredictionTick spawnTick, AbilitySpawnPose? pose = null,
+			AimConvergence.AimLaunch launch = default)
 		{
 			AbilityTemplate template = ability.Template;
 			if (template == null)
@@ -2291,22 +3486,7 @@ namespace FishMMO.Shared
 			 * identically. */
 			if (template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
 			{
-				bool isServer = caster.NetworkObject?.NetworkManager?.IsServerStarted ?? false;
-				bool casterIsOwner = caster.NetworkObject != null && caster.NetworkObject.IsOwner;
-				if (ResolvesHitsOnThisPeer(isServer, casterIsOwner) &&
-					ability.OnHitEvents != null && ability.OnHitEvents.Count > 0)
-				{
-					DeterministicRNG rng = new DeterministicRNG(seed);
-					foreach (var hitEvent in ability.OnHitEvents.Values)
-					{
-						// The trigger's own TargetSelector handles fan-out (self / area / etc.).
-						AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, rng);
-						// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
-						// use the deterministic replicate tick rather than target.GetLocalTick().
-						collisionEvent.Add(new TickEventData(caster, spawnTick));
-						hitEvent.Execute(collisionEvent);
-					}
-				}
+				RunSelfTargetEffects(ability, caster, seed, spawnTick, isReplay: false);
 				return null;
 			}
 
@@ -2317,7 +3497,7 @@ namespace FishMMO.Shared
 
 			GameObject go = Instantiate(template.AbilityObjectPrefab);
 			SceneManager.MoveGameObjectToScene(go, caster.GameObject.scene);
-			AbilitySpawnPose resolvedPose = pose ?? ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection);
+			AbilitySpawnPose resolvedPose = pose ?? ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection, launch);
 			go.transform.SetPositionAndRotation(resolvedPose.Position, resolvedPose.Rotation);
 			go.SetActive(false);
 
@@ -2331,8 +3511,139 @@ namespace FishMMO.Shared
 			 * already simulating is kept and this copy is destroyed, in which case the existing
 			 * one comes back so the caller (an observer reproducing a broadcast) can still
 			 * fast-forward it rather than silently losing the correction. */
-			return InitializeAbilityObject(abilityObject, ability, caster, abilitySpawner, targetInfo, seed, spawnTick);
+			AbilityObject initialized = InitializeAbilityObject(abilityObject, ability, caster, abilitySpawner, targetInfo, seed, spawnTick);
+
+			/* On a client the visuals start at the SPAWNER as this client draws it (the hand, wand or staff, wherever the
+			 * body and its animation have it) and blend onto the simulated path (see the Presentation region). That holds
+			 * for the predicting owner, whose body is drawn a tick behind where the pose was resolved, and for an observer,
+			 * who is handed the pose and draws the caster from its transform stream. A copy on the playback clock measures
+			 * the offset again when it first shows, which is when the drawn caster releases it. */
+			if (initialized != null && !initialized.isServer && abilitySpawner != null &&
+				(template.AbilitySpawnTarget == AbilitySpawnTarget.Spawner ||
+				 template.AbilitySpawnTarget == AbilitySpawnTarget.SpawnerWithCameraRotation))
+			{
+				Vector3 handOffset = abilitySpawner.position - resolvedPose.Position;
+				bool blend = handOffset.sqrMagnitude < MaximumHandOffset * MaximumHandOffset;
+				if (ability.Objects != null &&
+					ability.Objects.TryGetValue(initialized.ContainerID, out Dictionary<int, AbilityObject> members) &&
+					members != null)
+				{
+					foreach (AbilityObject member in members.Values)
+					{
+						if (member == null)
+						{
+							continue;
+						}
+						member.presentationSpawner = abilitySpawner;
+						if (blend)
+						{
+							member.SetPresentationOffset(handOffset);
+						}
+					}
+				}
+			}
+
+			// What the spawn chain plays (a muzzle effect), now that where the visuals start is known.
+			initialized?.ReleaseSpawnEffectsUnlessObserved();
+
+			return initialized;
 		}
+
+		/// <summary>
+		/// Runs a self-target ability's hit events on its caster: the whole of what such an ability does (it has no object).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>On a replayed tick too</b> (<paramref name="isReplay"/>), which is the point of this being its own method.
+		/// A spawn is skipped on replay, because a world object survives a correction and must not be made twice. A
+		/// self-cast effect does NOT survive one: the correction for any tick before the cast sets the caster's buffs and
+		/// resources back to the server's, which do not have it yet, and the replay then ran the cast's tick without
+		/// putting it back. The owner's own heal or buff vanished a tick or two after it was cast and returned a round
+		/// trip later, and a speed buff replayed those ticks at the wrong speed. On replay the event is marked
+		/// <see cref="TickEventData.ReapplyOnly"/>, so only the actions that restore corrected state run
+		/// (<see cref="BaseAction.ReappliesOnReplay"/>); presentation and one-off actions do not repeat.
+		/// </para>
+		/// </remarks>
+		internal static void RunSelfTargetEffects(Ability ability, ICharacter caster, int seed, PredictionTick spawnTick, bool isReplay)
+		{
+			if (ability == null || caster == null || ability.OnHitEvents == null || ability.OnHitEvents.Count == 0)
+			{
+				return;
+			}
+			bool isServer = caster.NetworkObject?.NetworkManager?.IsServerStarted ?? false;
+			bool casterIsOwner = caster.NetworkObject != null && caster.NetworkObject.IsOwner;
+			if (!ResolvesHitsOnThisPeer(isServer, casterIsOwner))
+			{
+				return;
+			}
+
+			DeterministicRNG rng = new DeterministicRNG(seed);
+			foreach (var hitEvent in ability.OnHitEvents.Values)
+			{
+				// The trigger's own TargetSelector handles fan-out (self / area / etc.).
+				AbilityCollisionEventData collisionEvent = new AbilityCollisionEventData(caster, caster, null, rng);
+				// Thread the spawn tick so prediction-aware ECA actions (e.g. ApplyBuffAction)
+				// use the deterministic replicate tick rather than target.GetLocalTick().
+				collisionEvent.Add(new TickEventData(caster, spawnTick, isReplay) { ReapplyOnly = isReplay });
+				hitEvent.Execute(collisionEvent);
+			}
+		}
+
+		/// <summary>
+		/// On a REPLAYED tick that would have spawned this ability: its spawn chain's effects on the caster itself, again.
+		/// </summary>
+		/// <remarks>
+		/// The object is not made again (it survives the correction), but what its spawn chain did to the caster does not: a
+		/// guard buff a block raises as it spawns, a cost a shot pays before it leaves. The correction for an earlier tick sets
+		/// those back, and without this the guard's icon came and went on every tick of a round trip and the cost was refunded
+		/// for one. Run with <see cref="TickEventData.ReapplyOnly"/>, so only actions that restore corrected state run, and
+		/// only on the caster (Trigger). There is no object, so a selector that needs one finds none and selects nothing.
+		/// </remarks>
+		internal static void RunSpawnEffectsOnReplay(Ability ability, ICharacter caster, Transform abilitySpawner, int seed, PredictionTick spawnTick)
+		{
+			if (ability == null || caster == null)
+			{
+				return;
+			}
+			bool hasPreSpawn = ability.OnPreSpawnEvents != null && ability.OnPreSpawnEvents.Count > 0;
+			bool hasSpawn = ability.OnSpawnEvents != null && ability.OnSpawnEvents.Count > 0;
+			if (!hasPreSpawn && !hasSpawn)
+			{
+				return;
+			}
+			AbilitySpawnEventData spawnEventData = new AbilitySpawnEventData(caster, ability, abilitySpawner, default, seed, null,
+				new RefWrapper<int>(0), new Dictionary<int, AbilityObject>());
+			spawnEventData.Add(new TickEventData(caster, spawnTick, true) { ReapplyOnly = true });
+			spawnEventData.RNG = new DeterministicRNG(seed);
+			try
+			{
+				if (hasPreSpawn)
+				{
+					foreach (var trigger in ability.OnPreSpawnEvents.Values)
+					{
+						trigger.Execute(spawnEventData);
+					}
+				}
+				if (hasSpawn)
+				{
+					foreach (var trigger in ability.OnSpawnEvents.Values)
+					{
+						trigger.Execute(spawnEventData);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				// A selector written for a live object: nothing is put back for it, and the next correction settles it.
+				Log.Debug("AbilityObject", $"Replaying '{ability.Name}' spawn effects on the caster failed: {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// The farthest the drawn hand may be from the simulated one and still be blended from, metres. Further apart
+		/// than this the body was not smoothing a step, it was somewhere else (a teleport still catching up).
+		/// </summary>
+		private const float MaximumHandOffset = 3f;
 
 		/// <summary>
 		/// True when <see cref="Spawn"/> would create a world object for this template — i.e.
@@ -2358,10 +3669,139 @@ namespace FishMMO.Shared
 		/// See <see cref="ResolveSpawnPose"/>.
 		/// </summary>
 		public static void SetAbilitySpawnPosition(ICharacter caster, Ability ability, Transform abilitySpawner,
-			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection, Transform abilityTransform)
+			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection, Transform abilityTransform, AimConvergence.AimLaunch launch = default)
 		{
-			AbilitySpawnPose pose = ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection);
+			AbilitySpawnPose pose = ResolveSpawnPose(caster, ability, abilitySpawner, targetInfo, aimOrigin, aimDirection, launch);
 			abilityTransform.SetPositionAndRotation(pose.Position, pose.Rotation);
+		}
+
+		/// <summary>
+		/// Where the ability spawner is in the SIMULATION, not where it is drawn.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The spawner (AbilitySpawnPoint) is a child of the character's graphical object (Smoothing), which FishNet's tick
+		/// smoother holds behind the simulated root on the owner by the owner interpolation (a tick; two until 2026-11-14),
+		/// and does not move on the server. During a tick the smoother leaves that lag in place
+		/// (UniversalTickSmoother.OnPreTick caches, OnPostTick restores; the graphical rides along with the root in
+		/// between), so the owner read the hand where it was DRAWN while the server read it where it IS: two predictions
+		/// of the same cast starting that lag's movement apart (20 cm a tick for a running caster), and flying parallel
+		/// lines from there.
+		/// </para>
+		/// <para>
+		/// Re-expressed against the root as the graphical object rests on it (identity local pose, as every character
+		/// prefab authors it), the result is the simulated pose on both peers: on the server the graphical is at rest
+		/// already and nothing changes.
+		/// </para>
+		/// </remarks>
+		public static void SimulatedSpawnerPose(ICharacter caster, Transform abilitySpawner, out Vector3 position, out Quaternion rotation)
+		{
+			position = abilitySpawner.position;
+			rotation = abilitySpawner.rotation;
+
+			Transform graphical = caster != null && caster.NetworkObject != null ? caster.NetworkObject.GetGraphicalObject() : null;
+			SimulatedSpawnerPose(graphical, abilitySpawner, out position, out rotation);
+		}
+
+		/// <summary>
+		/// The spawner's pose with <paramref name="graphical"/> put back at rest on its parent (identity local pose); the
+		/// spawner's own pose when it is not under that graphical object.
+		/// </summary>
+		public static void SimulatedSpawnerPose(Transform graphical, Transform abilitySpawner, out Vector3 position, out Quaternion rotation)
+		{
+			position = abilitySpawner.position;
+			rotation = abilitySpawner.rotation;
+			if (graphical == null || graphical.parent == null || !abilitySpawner.IsChildOf(graphical))
+			{
+				return;
+			}
+			Transform root = graphical.parent;
+			position = root.TransformPoint(graphical.InverseTransformPoint(position));
+			rotation = root.rotation * (Quaternion.Inverse(graphical.rotation) * rotation);
+		}
+
+		/// <summary>
+		/// How far along its launch line a projectile's simulation starts, metres: about as far in front of the body as a
+		/// hand is held, so the visuals leave the spawner sideways onto the line and not backward along it.
+		/// </summary>
+		public const float LaunchLead = 0.5f;
+
+		/// <summary>Hit buffer for <see cref="ApplyCover"/>, grown as needed.</summary>
+		private static RaycastHit[] coverHits = new RaycastHit[TargetOrdering.QueryBufferSize(0)];
+
+		/// <summary>
+		/// Cover between the caster and the launch line: if the way from the eye to where the visuals join the line is
+		/// blocked, the projectile starts at the eye, heading for that point, and so strikes whatever blocks it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The launch line is the camera's, and a camera on the shoulder sees past a corner the body is behind. Simulated
+		/// on that line unchecked, a projectile would leave the hand (as drawn), pass through the corner and carry on.
+		/// The check is the body's own line of fire: from the eye, which the server derives, to the point on the launch
+		/// line the visuals reach when their blend from the spawner ends. Blocked, the projectile takes THAT path from the
+		/// start and its own sweep ends it on the cover; clear, the drawn projectile is on the simulated line before it
+		/// reaches anything, and what the player sees is what happens.
+		/// </para>
+		/// <para>
+		/// Scenery only. A character in the way is the sweep's business (it resolves against rewound characters, which a
+		/// plain ray here would not), and the ray is cast in the layers the projectile itself collides with. Both peers
+		/// cast it from the same replicated numbers against the same scenery, so they agree.
+		/// </para>
+		/// </remarks>
+		private static void ApplyCover(ICharacter caster, Ability ability, Vector3 eye, Vector3 lineOrigin, Vector3 lineDirection,
+			ref Vector3 position, ref Quaternion rotation)
+		{
+			if (caster == null || caster.GameObject == null)
+			{
+				return;
+			}
+			Vector3 join = lineOrigin + lineDirection * (LaunchLead + Mathf.Max(0f, ability.Speed) * HandBlendSeconds);
+			Vector3 toJoin = join - eye;
+			float distance = toJoin.magnitude;
+			if (distance < 1e-3f)
+			{
+				return;
+			}
+			Vector3 direction = toJoin / distance;
+
+			Collider prefabCollider = AbilityPrefabColliderCache.GetPrefabCollider(ability.Template);
+			int mask = prefabCollider != null
+				? AbilityObjectSweep.CollisionMaskForLayer(prefabCollider.gameObject.layer)
+				: Physics.DefaultRaycastLayers;
+			if (mask == 0)
+			{
+				return;
+			}
+
+			PhysicsScene physicsScene = caster.GameObject.scene.GetPhysicsScene();
+			int count;
+			while (true)
+			{
+				count = physicsScene.Raycast(eye, direction, coverHits, distance, mask, QueryTriggerInteraction.Ignore);
+				if (!TargetOrdering.TryGrowQueryBuffer(ref coverHits, count))
+				{
+					break;
+				}
+			}
+
+			bool blocked = false;
+			for (int i = 0; i < count; ++i)
+			{
+				TargetOrdering.ResolveHitRoot(coverHits[i].collider, out ICharacter hitCharacter);
+				if (hitCharacter == null)
+				{
+					blocked = true;
+					break;
+				}
+			}
+			if (!blocked)
+			{
+				return;
+			}
+
+			// From just in front of the eye, along the body's line of fire: the sweep finds the cover within a step or two.
+			position = eye + direction * Mathf.Min(LaunchLead, distance * 0.5f);
+			rotation = Quaternion.LookRotation(direction);
 		}
 
 		/// <summary>
@@ -2379,8 +3819,13 @@ namespace FishMMO.Shared
 		/// <param name="targetInfo">The targeting information.</param>
 		/// <param name="aimOrigin">Aim origin replicated for the tick being simulated.</param>
 		/// <param name="aimDirection">Aim direction replicated for the tick being simulated.</param>
+		/// <param name="launch">
+		/// The replicated launch line for the tick (<see cref="CharacterReplicateData.ConvergenceDistance"/> and the origin
+		/// offsets), or not given (an NPC, or a tick the owner did not expect to spawn on): a projectile then launches
+		/// from the eye along the aim.
+		/// </param>
 		public static AbilitySpawnPose ResolveSpawnPose(ICharacter caster, Ability ability, Transform abilitySpawner,
-			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection)
+			TargetInfo targetInfo, Vector3 aimOrigin, Vector3 aimDirection, AimConvergence.AimLaunch launch = default)
 		{
 			// Resolve motor transform (KCC motor for PCs, regular transform for NPCs).
 			IPlayerCharacter playerCaster = caster as IPlayerCharacter;
@@ -2439,41 +3884,79 @@ namespace FishMMO.Shared
 							distance += prefabHalfExtents.z;
 							height += prefabHalfExtents.y;
 						}
-						Vector3 positionOffset = caster.Transform.forward * distance;
+						/* A player's swing is laid along the AIM, from where the body stood when the aim was taken.
+						 *
+						 * The aim is the line from the eye at the start of the tick to the point under the crosshair
+						 * (AimConvergence), and the body at the start of the tick is directly below that eye. A box laid
+						 * out from there along the aim's heading therefore sits in the vertical plane the crosshair's point
+						 * is in: a target under the crosshair, within reach, is in front of the swing by construction.
+						 *
+						 * It was laid from the body AFTER the tick's move, along the body's facing. Both are close to the
+						 * aim's, and neither is it: the move shifts the box sideways by a tick of strafing (20 cm at a
+						 * run), and the facing is the body's heading, which the heading offset holds a few degrees off the
+						 * aim on purpose. An NPC has neither an eye record nor a crosshair and keeps its own pose. */
+						Vector3 swingOrigin = motorPosition;
+						Vector3 swingForward = caster.Transform.forward;
+						Quaternion swingRotation = caster.Transform.rotation;
+						if (playerCaster != null && playerCaster.Motor != null)
+						{
+							Vector3 up = playerCaster.Motor.CharacterUp;
+							Vector3 aimHeading = Vector3.ProjectOnPlane(aimDirection, up);
+							if (aimHeading.sqrMagnitude > 1e-8f)
+							{
+								swingForward = aimHeading.normalized;
+								swingRotation = Quaternion.LookRotation(swingForward, up);
+								swingOrigin = aimOrigin - up * CharacterAimOrigin.EyeHeight(playerCaster.Motor);
+							}
+						}
+						Vector3 positionOffset = swingForward * distance;
 						positionOffset.y += height;
 
-						position = motorPosition + positionOffset;
-						rotation = caster.Transform.rotation;
+						position = swingOrigin + positionOffset;
+						rotation = swingRotation;
 					}
 					break;
 				case AbilitySpawnTarget.Camera:
 					{
-						Vector3 cameraForward = aimDirection;
+						/* A metre out from the eye, looking along the aim. The rotation used to be taken toward a point a
+						 * full range down the same line, which is the aim itself for any reach over a metre and its
+						 * REVERSE for one under (a stationary object has no reach at all). */
+						Vector3 cameraForward = aimDirection.sqrMagnitude > 1e-8f ? aimDirection.normalized : Vector3.forward;
 
-						Vector3 spawnPosition = cameraPosition + cameraForward;
-
-						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
-
-						Vector3 lookDirection = (farTargetPosition - spawnPosition).normalized;
-
-						position = spawnPosition;
-						rotation = Quaternion.LookRotation(lookDirection);
+						position = cameraPosition + cameraForward;
+						rotation = Quaternion.LookRotation(cameraForward);
 					}
 					break;
 				case AbilitySpawnTarget.Spawner:
-					position = abilitySpawner.position;
-					rotation = abilitySpawner.rotation;
+					SimulatedSpawnerPose(caster, abilitySpawner, out position, out rotation);
 					break;
 				case AbilitySpawnTarget.SpawnerWithCameraRotation:
 					{
-						Vector3 cameraForward = aimDirection;
+						if (ability.Speed <= 0f)
+						{
+							/* Something that stays where it is cast (a flame held at the hand): at the spawner as the
+							 * simulation has it, facing the aim. It never travels, so there is no line to put it on. */
+							SimulatedSpawnerPose(caster, abilitySpawner, out position, out _);
+							rotation = Quaternion.LookRotation(aimDirection.sqrMagnitude > 1e-8f ? aimDirection.normalized : Vector3.forward);
+							break;
+						}
 
-						Vector3 farTargetPosition = cameraPosition + cameraForward * ability.Range;
-
-						Vector3 lookDirection = (farTargetPosition - abilitySpawner.position).normalized;
-
-						position = abilitySpawner.position;
-						rotation = Quaternion.LookRotation(lookDirection);
+						/* A projectile is SIMULATED on the launch line: the line through the crosshair (for a player; the
+						 * aim from the eye for an NPC), which is where the player aimed it, at every range. It is only
+						 * DRAWN leaving the spawner, by the presentation layer, which starts the visuals at the hand, wand
+						 * or staff as that client draws it and brings them onto this line within HandBlendSeconds.
+						 *
+						 * It used to be simulated from the spawner itself, turned toward the crosshair's point. That lands
+						 * exactly with the crosshair ON the target and low everywhere short of it, which is where a shot
+						 * led ahead of a moving target has to pass; and a spawner that follows a cast animation is in a
+						 * different place on every client and nowhere on the server. */
+						AimConvergence.LaunchLine(cameraPosition, aimDirection, launch, out Vector3 lineOrigin, out Vector3 lineDirection);
+						position = lineOrigin + lineDirection * LaunchLead;
+						rotation = Quaternion.LookRotation(lineDirection);
+						if (launch.IsGiven)
+						{
+							ApplyCover(caster, ability, cameraPosition, lineOrigin, lineDirection, ref position, ref rotation);
+						}
 					}
 					break;
 				default:

@@ -370,6 +370,8 @@ namespace FishMMO.Shared
 				 * authored effect wants to play. Observers are told only by the server, through the
 				 * reliable destroy broadcast that ends any collision — a predicting blocker has
 				 * already removed its own copy and needs no message. */
+				// Stopped by a defence: it answers no late hit claim for whoever stands behind the shield.
+				abilityObject.MarkStoppedByDefence();
 				abilityObject.DestroyAbilityObjectInternal(
 					dispatchDestroyEvents: true,
 					notifyObservers: abilityObject.IsServer);

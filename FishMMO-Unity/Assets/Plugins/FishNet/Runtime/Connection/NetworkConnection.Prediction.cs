@@ -23,6 +23,11 @@ namespace FishNet.Connection
         /// </summary>
         public EstimatedTick ReplicateTick { get; private set; } = new();
         /// <summary>
+        /// FISHMMO EDIT: the server's LocalTick when a replicate holding input, rather than default data, was last run for this
+        /// connection. A client only stops sending once its input is default, so input is still on its way after one that was not.
+        /// </summary>
+        internal uint LastInputReplicateLocalTick = TimeManager.UNSET_TICK;
+        /// <summary>
         /// Writers for states.
         /// </summary>
         internal List<PooledWriter> PredictionStateWriters = new();
@@ -112,6 +117,7 @@ namespace FishNet.Connection
         {
             StorePredictionStateWriters();
             ReplicateTick.Reset();
+            LastInputReplicateLocalTick = TimeManager.UNSET_TICK;
         }
     }
 }

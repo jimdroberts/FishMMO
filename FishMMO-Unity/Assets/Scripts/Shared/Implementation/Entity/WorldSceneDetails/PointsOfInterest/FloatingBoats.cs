@@ -218,7 +218,7 @@ namespace FishMMO.Shared
 		/// them are drawn at the same moment. Pinned to <c>PlatformRiderSmoothingTests.InterpolationTicks</c>; never give the
 		/// deck a different lag from the rider (see the rider-smoothing notes on issue #228).
 		/// </summary>
-		public const int VisualInterpolationTicks = 2;
+		public const int VisualInterpolationTicks = 1;
 
 		/// <summary>The lowest a rider's feet stand above the waterline in the hull's frame, metres: a swimmer alongside is never aboard.</summary>
 		public const float RiderAboveWaterline = 0.2f;

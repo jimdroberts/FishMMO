@@ -123,6 +123,149 @@ namespace FishMMO.Shared
 		private readonly List<Buff> reconcileRemovedEvents = new List<Buff>();
 
 		/// <summary>
+		/// What the UI was last told is on this character (the buff each OnAdd announced, until its OnRemove), by template.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The owner does not announce while a correction is being applied and replayed (<see cref="DefersAnnouncements"/>):
+		/// the correction takes away every buff the server's earlier state lacks, and the replay puts most of them straight
+		/// back. Announced as it happened, a buff predicted after the corrected tick vanished and returned on every
+		/// correction (icon and effect, a round trip of flicker), a buff whose expiry the replay ran was taken away with no
+		/// event at all (the icon stuck for good), and weather and volume buffs restarted their effects each time.
+		/// </para>
+		/// <para>
+		/// Instead the difference between this and the live set is announced once, on the first live tick after the replay
+		/// (<see cref="FlushAnnouncements"/>): what is gone, what is new. A buff that went and came back is not mentioned.
+		/// </para>
+		/// </remarks>
+		private Dictionary<int, Buff> announcedBuffs;
+
+		/// <summary>True when something changed while announcements were deferred.</summary>
+		private bool announcementsPending;
+
+		/// <summary>
+		/// True while the owner is inside a correction (restoring the server's state, or replaying its inputs after it): changes
+		/// are made, and told once the correction is over.
+		/// </summary>
+		private bool DefersAnnouncements =>
+			base.IsOwner && !base.IsServerStarted &&
+			(isReplayingTick || (base.PredictionManager != null && base.PredictionManager.IsReconciling));
+
+		private void NoteAnnouncedAdd(Buff buff)
+		{
+			if (buff?.Template == null)
+			{
+				return;
+			}
+			announcedBuffs ??= new Dictionary<int, Buff>(4);
+			announcedBuffs[buff.Template.ID] = buff;
+		}
+
+		private void NoteAnnouncedRemove(int templateID)
+		{
+			announcedBuffs?.Remove(templateID);
+		}
+
+		private readonly List<int> announceDiffBuffer = new List<int>();
+
+		/// <summary>Tells the UI the difference a correction made: what it took away for good, and what it added.</summary>
+		private void FlushAnnouncements()
+		{
+			if (!announcementsPending)
+			{
+				return;
+			}
+			announcementsPending = false;
+
+			announceDiffBuffer.Clear();
+			if (announcedBuffs != null)
+			{
+				foreach (KeyValuePair<int, Buff> announced in announcedBuffs)
+				{
+					if (!buffs.ContainsKey(announced.Key))
+					{
+						announceDiffBuffer.Add(announced.Key);
+					}
+				}
+			}
+			// Removed first, so a handler of an add never sees one that is gone.
+			for (int i = 0; i < announceDiffBuffer.Count; ++i)
+			{
+				int id = announceDiffBuffer[i];
+				Buff removed = announcedBuffs[id];
+				announcedBuffs.Remove(id);
+				if (removed.Template != null)
+				{
+					if (removed.Template.IsDebuff)
+					{
+						IBuffController.OnRemoveDebuff?.Invoke(this, removed);
+					}
+					else
+					{
+						IBuffController.OnRemoveBuff?.Invoke(this, removed);
+					}
+				}
+				DespawnBuffFX(id);
+			}
+			announceDiffBuffer.Clear();
+
+			foreach (KeyValuePair<int, Buff> live in buffs)
+			{
+				if (live.Value?.Template == null)
+				{
+					continue;
+				}
+				if (announcedBuffs != null && announcedBuffs.ContainsKey(live.Key))
+				{
+					// The same buff, perhaps rebuilt by the replay: the UI keeps its entry, and reads this one from now on.
+					announcedBuffs[live.Key] = live.Value;
+					continue;
+				}
+				announceDiffBuffer.Add(live.Key);
+			}
+			for (int i = 0; i < announceDiffBuffer.Count; ++i)
+			{
+				Buff added = buffs[announceDiffBuffer[i]];
+				NoteAnnouncedAdd(added);
+				if (added.Template.IsDebuff)
+				{
+					IBuffController.OnAddDebuff?.Invoke(this, added);
+				}
+				else
+				{
+					IBuffController.OnAddBuff?.Invoke(this, added);
+				}
+				SpawnBuffFX(added.Template, added);
+			}
+			announceDiffBuffer.Clear();
+		}
+
+		/// <summary>
+		/// A caster's client: marks the buff it has just predicted on ANOTHER character as provisional, so it is taken back
+		/// if the server never names it (<see cref="predictedUnconfirmedBuffs"/>).
+		/// </summary>
+		/// <remarks>
+		/// The cross-character route applies through <see cref="ApplyAuthoritative"/>, which is also how the server's own
+		/// messages arrive and which therefore LIFTS the deadline. Nothing set one, so the sweep built for a refused
+		/// prediction never ran for the only case it exists for: the caster kept a debuff icon and effect on a target the
+		/// server had refused (evading, dead, not an enemy) for the buff's whole duration.
+		/// </remarks>
+		internal void MarkPredictedByCaster(int templateID)
+		{
+			if (SimulatesBuffEffects || !buffs.ContainsKey(templateID))
+			{
+				return;
+			}
+			uint domainTick = GetCurrentDomainTick();
+			if (domainTick == TimeManager.UNSET_TICK || tickDelta <= 0f)
+			{
+				return;
+			}
+			predictedUnconfirmedBuffs ??= new Dictionary<int, uint>(1);
+			predictedUnconfirmedBuffs[templateID] = domainTick + (uint)Mathf.CeilToInt(PredictedBuffConfirmationSeconds / tickDelta);
+		}
+
+		/// <summary>
 		/// Cached reconcile snapshot, reused across ticks when buffs haven't changed.
 		/// Invalidated by <see cref="Apply(BaseBuffTemplate, PredictionTick)"/>, <see cref="Remove"/>,
 		/// <see cref="RemoveAll"/>, <see cref="RestoreFromReconcile"/>, and <see cref="Tick"/>.
@@ -1814,6 +1957,11 @@ namespace FishMMO.Shared
 			// UI/ECA/FX dispatch is suppressed so subscribers don't see duplicate events.
 			bool wasReplaying = isReplayingTick;
 			isReplayingTick = state.ContainsReplayed();
+			// A live tick: the correction and its replay are over, and what they changed is told now (FlushAnnouncements).
+			if (!isReplayingTick && !(base.PredictionManager != null && base.PredictionManager.IsReconciling))
+			{
+				FlushAnnouncements();
+			}
 			ICharacterAttributeController attributeController = null;
 			bool suppressAttributeNotifications = isReplayingTick &&
 				Character != null &&
@@ -2470,10 +2618,17 @@ namespace FishMMO.Shared
 				}
 				buffs.Add(template.ID, buffInstance);
 				structuralChange = true;
+				// Inside a correction nothing is told yet (FlushAnnouncements tells the difference once it is over).
+				bool defers = DefersAnnouncements;
+				if (defers)
+				{
+					announcementsPending = true;
+				}
 
 				// Skip event/ECA dispatch when applied during a replayed prediction tick.
-				if (!isReplayingTick)
+				if (!isReplayingTick && !defers)
 				{
+					NoteAnnouncedAdd(buffInstance);
 					if (template.IsDebuff)
 					{
 						IBuffController.OnAddDebuff?.Invoke(this, buffInstance);
@@ -2593,7 +2748,7 @@ namespace FishMMO.Shared
 			/* FX is per template and lives as long as the buff does; a refresh or a second stack
 			 * adds nothing to show. Suppressed during replay, which re-runs every tick since the
 			 * last authoritative state. */
-			if (!isReplayingTick)
+			if (!isReplayingTick && !DefersAnnouncements)
 			{
 				SpawnBuffFX(template, buffInstance);
 			}
@@ -2734,6 +2889,12 @@ namespace FishMMO.Shared
 					buff.Template.OnApplyStack(buff, Character);
 				}
 
+				if (DefersAnnouncements)
+				{
+					announcementsPending = true;
+					return;
+				}
+				NoteAnnouncedAdd(buff);
 				if (buff.Template.IsDebuff)
 				{
 					IBuffController.OnAddDebuff?.Invoke(this, buff);
@@ -2781,6 +2942,13 @@ namespace FishMMO.Shared
 				 * instead, diffing each arriving message against the last — and ReadPayload opens
 				 * with RemoveAll, so despawning here tore down every observed effect a moment
 				 * before that diff decided it was still showing and spawned it again. */
+				// Inside a correction nothing is told, and the effect keeps playing: the replay may put the buff back.
+				if (DefersAnnouncements)
+				{
+					announcementsPending = true;
+					return;
+				}
+
 				if (!DrivesFXFromObservedBuffs)
 				{
 					DespawnBuffFX(buffID);
@@ -2789,6 +2957,7 @@ namespace FishMMO.Shared
 				// Gate UI/ECA dispatch when invoked from a replayed tick.
 				if (!isReplayingTick && template != null)
 				{
+					NoteAnnouncedRemove(buffID);
 					if (template.IsDebuff)
 					{
 						IBuffController.OnRemoveDebuff?.Invoke(this, buffInstance);
@@ -2913,10 +3082,16 @@ namespace FishMMO.Shared
 						continue;
 					}
 					buffs.Remove(key);
+					if (DefersAnnouncements && !includePermanent)
+					{
+						announcementsPending = true;
+						continue;
+					}
 					if (!preserveFX)
 					{
 						DespawnBuffFX(key);
 					}
+					NoteAnnouncedRemove(key);
 
 					if (!ignoreInvokeRemove && !isReplayingTick && template != null)
 					{
@@ -3058,6 +3233,11 @@ namespace FishMMO.Shared
 						{
 							existing.CumulativeTickMultiplier = entry.CumulativeTickMultiplier;
 							changed = true;
+							// And the modifier it stands for, before the attributes are corrected against it.
+							if (existing.Template is AttributeTickBuffTemplate accruing && SimulatesBuffEffects)
+							{
+								accruing.RestateAccruedModifier(existing, Character);
+							}
 						}
 						/* Restored to what the server says is left. The owner refills this itself
 						 * whenever a channelled block re-applies its buff, and never sees the hits
@@ -3100,6 +3280,12 @@ namespace FishMMO.Shared
 						 * the server actually has left. */
 						buff.RemainingCharges = entry.RemainingCharges;
 
+						// A stat-per-tick buff arriving part-way: the modifier it has accrued, before attributes are corrected.
+						if (buff.CumulativeTickMultiplier > 0 && buff.Template is AttributeTickBuffTemplate accruingNew && SimulatesBuffEffects)
+						{
+							accruingNew.RestateAccruedModifier(buff, Character);
+						}
+
 						// Queue the add event for after the patch loop completes so subscribers
 						// cannot observe a half-restored buffs collection if they re-enter.
 						// FX are intentionally NOT replayed here — Apply(Buff, suppressFX:false)
@@ -3132,48 +3318,20 @@ namespace FishMMO.Shared
 				MarkObservedBuffsDirty();
 			}
 
-			// Fire remove events BEFORE add events so that subscribers iterating the
-			// active buff collection during an "add" handler see the post-remove state.
-			// This matches the natural order: old buffs are removed, then new buffs are added.
-			for (int i = 0; i < reconcileRemovedEvents.Count; i++)
+			/* Not told here. A correction is followed by a replay that puts most of what it took away straight back, so the
+			 * UI is told the difference once it is over (FlushAnnouncements, on the next live tick). A peer that is not
+			 * inside a correction (a forwarded observer) is told at once, the same way. No ECA dispatch either way: the
+			 * server fired those triggers when the buffs changed there. */
+			if (changed || reconcileRemovedEvents.Count > 0 || reconcileAddedEvents.Count > 0)
 			{
-				Buff removed = reconcileRemovedEvents[i];
-				if (removed.Template.IsDebuff)
-				{
-					IBuffController.OnRemoveDebuff?.Invoke(this, removed);
-				}
-				else
-				{
-					IBuffController.OnRemoveBuff?.Invoke(this, removed);
-				}
-				DespawnBuffFX(removed.Template.ID);
-
-				/* No ECA dispatch here. This path runs only on the owning client (a reconcile is sent
-				 * to the owner alone), and the server already fired these triggers when it removed
-				 * the buff. Invoking them again here ran every non-self-gating action a second time
-				 * on the client. The static UI events above still fire on this peer. */
+				announcementsPending = true;
 			}
 			reconcileRemovedEvents.Clear();
-
-			for (int i = 0; i < reconcileAddedEvents.Count; i++)
-			{
-				Buff added = reconcileAddedEvents[i];
-				if (added.Template.IsDebuff)
-				{
-					IBuffController.OnAddDebuff?.Invoke(this, added);
-				}
-				else
-				{
-					IBuffController.OnAddBuff?.Invoke(this, added);
-				}
-				/* A buff the owner did not predict — applied by the server between reconciles —
-				 * arrives here and nowhere else, so this is the only place its FX can start.
-				 * Tracked per template, so a buff that merely survived the diff does not restart. */
-				SpawnBuffFX(added.Template, added);
-
-				// No ECA dispatch here either — see the note on the removal loop above.
-			}
 			reconcileAddedEvents.Clear();
+			if (!DefersAnnouncements)
+			{
+				FlushAnnouncements();
+			}
 		}
 
 		/// <summary>
@@ -3198,6 +3356,8 @@ namespace FishMMO.Shared
 
 			// Same pooling rule: the next occupant inherits no provisional predictions.
 			predictedUnconfirmedBuffs?.Clear();
+			announcedBuffs?.Clear();
+			announcementsPending = false;
 
 			RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
 

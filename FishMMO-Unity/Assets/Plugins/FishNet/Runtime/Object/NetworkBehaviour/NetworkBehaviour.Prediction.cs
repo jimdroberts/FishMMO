@@ -226,6 +226,14 @@ namespace FishNet.Object
         private uint _lastCreatedRunTick = TimeManager.UNSET_TICK;
         /// <summary>Server: default data has run since <see cref = "_lastCreatedRunTick"/> (the stream broke).</summary>
         private bool _defaultRunSinceCreated;
+        /// <summary>Owner: keepalives written since its input last changed; the first few follow closely (see the send rule).</summary>
+        private byte _keepalivesSinceChange;
+        /// <summary>Server: bounds the tick the owner stamps on its replicates (ReplicateTickGuard).</summary>
+        private ReplicateTickGuard _replicateTickGuard;
+        /// <summary>Server: replicates refused in a row by the guard; the first of a run is logged.</summary>
+        private int _replicateTickGuardStreak;
+        /// <summary>Client: the server tick of the last reconcile read (see Reconcile_Reader_Remote).</summary>
+        private uint _lastReadReconcileServerTick = TimeManager.UNSET_TICK;
         #endregion
         /// <summary>
         /// Last tick read for a reconcile. This is only set on the client.
@@ -363,6 +371,7 @@ namespace FishNet.Object
             if (!asServer)
             {
                 _lastReadReconcileRemoteTick = TimeManager.UNSET_TICK;
+                _lastReadReconcileServerTick = TimeManager.UNSET_TICK;
                 _lastReconcileTick = TimeManager.UNSET_TICK;
             }
 
@@ -376,6 +385,14 @@ namespace FishNet.Object
             _lastHeldReplicateTick = TimeManager.UNSET_TICK;
             _lastCreatedRunTick = TimeManager.UNSET_TICK;
             _defaultRunSinceCreated = false;
+            _keepalivesSinceChange = 0;
+            /* A new owner (or none): its stream starts now, and its counter can have run no further than real time from here
+             * (ReplicateTickGuard rule 1). */
+            if (asServer && _networkObjectCache != null && _networkObjectCache.TimeManager != null)
+                _replicateTickGuard.Begin(_networkObjectCache.TimeManager.LocalTick);
+            else
+                _replicateTickGuard.Reset();
+            _replicateTickGuardStreak = 0;
 
             ClearReplicateCache();
         }
@@ -417,6 +434,18 @@ namespace FishNet.Object
             // Delta reconciles cannot continue from reconciles written or read before the cache was cleared.
             _lastFullReconcileWriteTick = TimeManager.UNSET_TICK;
             _fullReconcileRead = null;
+        }
+
+        /// <summary>
+        /// FISHMMO EDIT: server: has the next reconciles written although no input ran. The count of reconciles still to
+        /// write is only renewed by input (and by a moved transform), so on ticks without input it runs out, and a state the
+        /// owner must learn of that changed on such a tick (a cast cancelled for input that never came) was not sent until
+        /// the owner's next input arrived.
+        /// </summary>
+        public void RequestReconcileSends()
+        {
+            if (IsServerStarted)
+                _remainingReconcileResends = PredictionManager.RedundancyCount;
         }
 
         /// <summary>
@@ -658,11 +687,22 @@ namespace FishNet.Object
             /* FISHMMO EDIT: held idle input. A repeat of the previous input that the server may hold (ReplicateIdle) does not
              * restart the resends, so the owner stops sending it once they run out, like default data; the server repeats it
              * meanwhile. A keepalive resend every ReplicateIdle.KeepaliveTicks covers a server that lost the last ones. */
-            bool isRepeat = !isDefault && replicatesHistory.Count >= 2 && ReplicateIdle<T>.IsRepeat(replicatesHistory[replicatesHistory.Count - 2].Data, dataContainer.Data);
+            bool isRepeat = !isDefault && replicatesHistory.Count >= 2 && ReplicateIdle<T>.IsRepeat(replicatesHistory[replicatesHistory.Count - 2].Data, dataContainer.Data) &&
+                ReplicateIdle<T>.MayHoldNow(this);
             bool resetResends = (!isDefault && !isRepeat) || HasServerRigidbodyTransformChanged(updateLastValues: true);
+            /* The keepalive. The first few after the input last changed follow closely (2, 4, 8, 16 ticks apart, then every
+             * KeepaliveTicks): the input before the owner went quiet travels in only RedundancyCount packets, and if a burst
+             * of loss takes them all the server has nothing to hold and runs default data until it hears again. That was a
+             * full KeepaliveTicks, a second of a frozen body and a cancelled cast; it is now a few ticks. */
+            if (resetResends)
+                _keepalivesSinceChange = 0;
             if (isRepeat && !resetResends && _remainingReplicateResends <= 0 && !_replicateSendPending &&
-                (_lastReplicateWriteTick == TimeManager.UNSET_TICK || dataTick - _lastReplicateWriteTick >= ReplicateIdle.KeepaliveTicks))
+                (_lastReplicateWriteTick == TimeManager.UNSET_TICK || dataTick - _lastReplicateWriteTick >= ReplicateIdle.KeepaliveInterval(_keepalivesSinceChange)))
+            {
                 _remainingReplicateResends = 1;
+                if (_keepalivesSinceChange < byte.MaxValue)
+                    _keepalivesSinceChange++;
+            }
 
             byte redundancyCount = PredictionManager.RedundancyCount;
 
@@ -749,7 +789,7 @@ namespace FishNet.Object
             if (isServerStarted && !_replicateHolding && replicatesQueue.Count > 0 && LastRunIsHoldable() &&
                 (int)(replicatesQueue.Peek().Data.GetTick() - (_lastCreatedRunTick + 1)) > 0)
             {
-                if (TryStartHolding())
+                if (TryStartHolding(requireRepeat: false))
                     return;
             }
 
@@ -761,8 +801,16 @@ namespace FishNet.Object
                 if (HasServerRigidbodyTransformChanged(updateLastValues: true))
                     _remainingReconcileResends = predictionManager.RedundancyCount;
 
-                // FISHMMO EDIT: held idle input. The owner stopped sending a repeat of its last input: run it again instead.
-                if (!(isServerStarted && TryStartHolding()))
+                /* FISHMMO EDIT: held idle input. The owner stopped sending a repeat of its last input: run it again instead.
+                 *
+                 * Only when the last TWO inputs run were repeats of each other. An empty queue alone does not say the owner
+                 * stopped: its input may only be late. An owner that stops sends its repeats first (the resends of the
+                 * input that began them), so two in a row is the evidence; an owner whose input keeps changing while it
+                 * stands (a turning camera) never produces them, and its empty queue is late input. Holding then ran the
+                 * missing ticks as real input and, when the late ones arrived, ran those numbers a second time: a cast
+                 * counted down twice, a falling body stepped twice, and state updates were stamped with ticks the owner's
+                 * input had not reached. Default data runs instead, and the game waits the tick out. */
+                if (!(isServerStarted && TryStartHolding(requireRepeat: true)))
                     ReplicateDefaultData();
             }
             //Not predicted, is user created.
@@ -803,6 +851,18 @@ namespace FishNet.Object
 
                         bool consumeExcess = !predictionManager.DropExcessiveReplicates || IsClientOnlyStarted;
                         int leaveInBuffer = _networkObjectCache.PredictionManager.StateInterpolation;
+                        /* FISHMMO EDIT: the server drains a queue left deeper than the buffer by more than an input. With
+                         * DropExcessiveReplicates it never ran a second input in a tick, so the inputs a stalled client sent
+                         * in a burst stayed queued for as long as the client kept moving: every input ran that much later,
+                         * and lag compensation then had to reach back further than the position history holds (the victim
+                         * was checked where it stood several ticks too late). One extra input a tick, down to the buffer plus
+                         * one. The owner's counter cannot run ahead of real time by more than ReplicateTickGuard allows, so
+                         * this lets a client catch up, not move faster. */
+                        if (!consumeExcess && isServerStarted && count > leaveInBuffer + 1)
+                        {
+                            consumeExcess = true;
+                            leaveInBuffer += 1;
+                        }
 
                         //Only consume if the queue count is over leaveInBuffer.
                         if (consumeExcess && count > leaveInBuffer)
@@ -830,19 +890,30 @@ namespace FishNet.Object
              * tick runs it. */
             bool LastRunIsHoldable()
             {
-                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0)
+                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0 || !ReplicateIdle<T>.MayHoldNow(this))
                     return false;
                 ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
                 return last.IsCreated && ReplicateIdle<T>.CanHold(last.Data);
             }
 
-            bool TryStartHolding()
+            /* requireRepeat: the input before the last must be a created one the last repeats (see the empty queue above).
+             * Not asked for a GAP in what arrived: the ticks skipped can never arrive afterwards (the reader refuses a tick
+             * at or below the last one read), so filling them cannot run a number twice. */
+            bool TryStartHolding(bool requireRepeat)
             {
-                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0)
+                if (!ReplicateIdle<T>.Enabled || replicatesHistory.Count == 0 || !ReplicateIdle<T>.MayHoldNow(this))
                     return false;
                 ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
                 if (!last.IsCreated || !ReplicateIdle<T>.CanHold(last.Data))
                     return false;
+                if (requireRepeat)
+                {
+                    if (replicatesHistory.Count < 2)
+                        return false;
+                    ReplicateDataContainer<T> previous = replicatesHistory[replicatesHistory.Count - 2];
+                    if (!previous.IsCreated || !ReplicateIdle<T>.IsRepeat(previous.Data, last.Data))
+                        return false;
+                }
                 _replicateHolding = true;
                 _lastHeldReplicateTick = last.Data.GetTick();
                 return ReplicateHeld();
@@ -853,7 +924,7 @@ namespace FishNet.Object
              * False when there is nothing to hold any more. */
             bool ReplicateHeld()
             {
-                if (replicatesHistory.Count == 0)
+                if (replicatesHistory.Count == 0 || !ReplicateIdle<T>.MayHoldNow(this))
                 {
                     _replicateHolding = false;
                     return false;
@@ -876,6 +947,12 @@ namespace FishNet.Object
                     {
                         _replicateHolding = false;
                         _replicateCurrentStartTick = TimeManager.UNSET_TICK;
+                        /* A late head runs on a number at or below one already run as held. The connection's replicate tick
+                         * only ever moves forward (EstimatedTick discards the rest), so it would stay on the last held number
+                         * and the owner's state updates would claim inputs the server has not run. It is put on the head's
+                         * own tick: from here the real stream numbers the ticks again. */
+                        if (Owner.IsValid && (int)(headTick - (_lastHeldReplicateTick + 1)) < 0)
+                            Owner.ReplicateTick.Update(tm, headTick, EstimatedTick.OldTickOption.SetRemoteTick);
                         ReplicateData(replicatesQueue.Dequeue(), ReplicateState.Ticked | ReplicateState.Created);
                         return true;
                     }
@@ -907,6 +984,15 @@ namespace FishNet.Object
                 //     data.Data.SetTick(tm.LocalTick);
 
                 uint tick = data.Data.GetTick();
+
+                /* FISHMMO EDIT: note when what was run for the owner was input, for the tick of its state updates
+                 * (PredictionManager.SendStateUpdate). */
+                if (isServerStarted && state.ContainsCreated() && Owner.IsValid)
+                {
+                    Func<T, bool> isDefaultDel = PublicPropertyComparer<T>.IsDefault;
+                    if (isDefaultDel != null && !isDefaultDel.Invoke(data.Data))
+                        Owner.LastInputReplicateLocalTick = tm.LocalTick;
+                }
 
                 SetReplicateTick(tick, state.ContainsCreated());
                 // FISHMMO EDIT: held idle input. Where the run stream stands, for lining arriving input up with it.
@@ -1333,6 +1419,29 @@ namespace FishNet.Object
                     dataContainer.Dispose();
                     continue;
                 }
+                /* FISHMMO EDIT: the tick is the owner's own counter and games time cooldowns and effects on it. Refuse one
+                 * the owner's clock could not have reached (ReplicateTickGuard). Before _lastReadReplicateTick is moved: a
+                 * forged tick must not make the honest ones after it look old. */
+                if (isServer && Owner.IsValid)
+                {
+                    TimeManager guardClock = _networkObjectCache.TimeManager;
+                    if (!_replicateTickGuard.Accept(tick, guardClock.LocalTick, (uint)(guardClock.TickRate * ReplicateTickGuard.WindowSeconds), ReplicateTickGuard.CreepIntervalTicks,
+                            (uint)(guardClock.TickRate * ReplicateTickGuard.SettleSeconds)))
+                    {
+                        ReplicateTickGuard.Refused++;
+                        // Said once per run, so a refused owner is visible in the server log rather than only stuck.
+                        if (_replicateTickGuardStreak++ == 0 && NetworkManager != null)
+                            NetworkManager.LogWarning($"Replicate tick guard refused input {tick} from {Owner} on {gameObject.name}: offset {(long)tick - guardClock.LocalTick}, reference {_replicateTickGuard.Offset}.");
+                        dataContainer.Dispose();
+                        continue;
+                    }
+                    if (_replicateTickGuardStreak > 0)
+                    {
+                        if (NetworkManager != null)
+                            NetworkManager.LogWarning($"Replicate tick guard accepted input from {Owner} on {gameObject.name} again after refusing {_replicateTickGuardStreak}.");
+                        _replicateTickGuardStreak = 0;
+                    }
+                }
 
                 _lastReadReplicateTick = tick;
 
@@ -1375,8 +1484,25 @@ namespace FishNet.Object
              * x ticks. */
             /* FISHMMO EDIT: held idle input. Not while holding: the held ticks already keep the numbering continuous, and the
              * hold lines the arriving input up with it (ReplicateHoldPlanner). */
+            /* FISHMMO EDIT: the delay is what is still MISSING from the buffer. It waited StateInterpolation ticks however
+             * many inputs arrived together, so a burst after a stall (which already holds the buffer, or more) sat through the
+             * same default ticks as a single input and left the queue that much deeper, for good: nothing drains it while
+             * excess replicates are not consumed. One input waits StateInterpolation ticks as before; StateInterpolation + 1
+             * or more run at once. */
             if ((isServer || isAppendedOrder) && startQueueCount == 0 && replicatesQueue.Count > 0 && !_replicateHolding && !ContinuesRunStream(replicatesQueue, replicatesHistory))
-                _replicateCurrentStartTick = _networkObjectCache.TimeManager.LocalTick + pm.StateInterpolation;
+            {
+                _replicateCurrentStartTick = _networkObjectCache.TimeManager.LocalTick + ReplicateIdle.StartDelay(pm.StateInterpolation, replicatesQueue.Count);
+            }
+            /* FISHMMO EDIT: and while the delay is still waiting, input that arrives in the next reads counts too: a burst split
+             * over two reads (one input, then five) waited the whole delay with the buffer already full, and started with
+             * the surplus queued for good. The earlier start wins. */
+            else if ((isServer || isAppendedOrder) && startQueueCount > 0 && _replicateCurrentStartTick != TimeManager.UNSET_TICK &&
+                     _replicateCurrentStartTick > _networkObjectCache.TimeManager.LocalTick)
+            {
+                uint earlier = _networkObjectCache.TimeManager.LocalTick + ReplicateIdle.StartDelay(pm.StateInterpolation, replicatesQueue.Count);
+                if (earlier < _replicateCurrentStartTick)
+                    _replicateCurrentStartTick = earlier;
+            }
         }
 
         /// <summary>
@@ -1390,7 +1516,9 @@ namespace FishNet.Object
                 return false;
             if (!_defaultRunSinceCreated && replicatesQueue.Peek().Data.GetTick() == _lastCreatedRunTick + 1)
                 return true;
-            if (replicatesHistory.Count == 0)
+            /* Not once default data has run since: the stream broke (input was late and nothing was held), and the delay
+             * is what rebuilds the buffer, exactly as for a stream that never held anything. */
+            if (_defaultRunSinceCreated || replicatesHistory.Count == 0 || !ReplicateIdle<T>.MayHoldNow(this))
                 return false;
             ReplicateDataContainer<T> last = replicatesHistory[replicatesHistory.Count - 1];
             return last.IsCreated && ReplicateIdle<T>.CanHold(last.Data);
@@ -1689,9 +1817,20 @@ namespace FishNet.Object
             #else
             T newData = reader.ReadReconcile<T>();
             #endif
-            //Do not process if an old state.
-            if (tick < _lastReadReconcileRemoteTick)
+            /* Do not process if an old state.
+             *
+             * FISHMMO EDIT: unless it is a NEWER state from the server for an earlier tick of this client. That happens when
+             * the server ran held input for ticks whose real input then arrived late: it runs the real input on its own
+             * number, so its state is stamped below the held numbers already sent. Refused as old, the owner kept the state
+             * built on the held ticks (pulled back a tick per held tick, and snapped forward when its stamps caught up). The
+             * server tick says which is newer. */
+            uint serverStateTick = PredictionManager.ServerStateTick;
+            bool newerFromServer = IsOwner && serverStateTick != TimeManager.UNSET_TICK && _lastReadReconcileServerTick != TimeManager.UNSET_TICK &&
+                                   serverStateTick > _lastReadReconcileServerTick;
+            if (tick < _lastReadReconcileRemoteTick && !newerFromServer)
                 return;
+            if (IsOwner && serverStateTick != TimeManager.UNSET_TICK)
+                _lastReadReconcileServerTick = serverStateTick;
 
             lastReconcileData = newData;
             lastReconcileData.SetTick(tick);

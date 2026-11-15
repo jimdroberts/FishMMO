@@ -46,23 +46,6 @@ namespace FishMMO.Client
 		private static Client client;
 
 		/// <summary>
-		/// Frame on which <see cref="CloseNext"/> last actually closed something.
-		/// </summary>
-		private static int lastCloseFrame = -1;
-
-		/// <summary>
-		/// True when a panel was closed earlier in this same frame.
-		/// </summary>
-		/// <remarks>
-		/// Escape is bound to four separate actions — Player/Cancel, Player/CloseLastUI,
-		/// Player/Menu and UI/Cancel — so one press runs several handlers in subscription order.
-		/// CloseLastUI closes the top panel, and Menu then toggles the menu, which sees it closed
-		/// and opens it straight back up: the menu becomes impossible to close with the key that
-		/// opened it. A handler that would re-open something checks this first so the close wins.
-		/// </remarks>
-		internal static bool ClosedThisFrame => lastCloseFrame == UnityEngine.Time.frameCount;
-
-		/// <summary>
 		/// Injects the Client instance into all registered controls for network/UI interaction.
 		/// </summary>
 		/// <param name="value">Client instance to inject.</param>
@@ -582,11 +565,10 @@ namespace FishMMO.Client
 
 				/* An always-open panel cannot be closed, so it is not a candidate — but it used to
 				 * be treated as one: the entry was removed, Hide() no-opped against IsAlwaysOpen,
-				 * and lastCloseFrame was stamped anyway. The press was therefore consumed with
-				 * nothing closing, ClosedThisFrame suppressed the menu toggle that would otherwise
-				 * have handled it, and the panel the player actually wanted closed stayed up while
-				 * appearing to have been dealt with. Left in the list, because it is still visible
-				 * and still Escape-registered; skipping simply moves on to the next candidate. */
+				 * and the press was reported consumed with nothing closing, so the panel the player
+				 * actually wanted closed stayed up while appearing to have been dealt with. Left in
+				 * the list, because it is still visible and still Escape-registered; skipping simply
+				 * moves on to the next candidate. */
 				if (control.IsAlwaysOpen)
 				{
 					continue;
@@ -600,10 +582,6 @@ namespace FishMMO.Client
 				 * Escape-closable the moment it stops wanting the key. */
 				if (control.ConsumesEscape)
 				{
-					if (!peakOnly)
-					{
-						lastCloseFrame = UnityEngine.Time.frameCount;
-					}
 					return true;
 				}
 
@@ -614,7 +592,6 @@ namespace FishMMO.Client
 
 				closeOnEscapeControls.RemoveAt(i);
 				control.Hide();
-				lastCloseFrame = UnityEngine.Time.frameCount;
 				return true;
 			}
 			return false;

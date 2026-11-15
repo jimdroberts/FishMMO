@@ -218,9 +218,9 @@ namespace FishMMO.UnitTests
 		/// one from the panel — a shipped collision is a row the player can never rebind.
 		/// </para>
 		/// <para>
-		/// One collision is authored on purpose: Escape drives Cancel, CloseLastUI and Menu as a
-		/// chain, exempted by <c>SharedBindingGroups</c>. F is not part of it, so a second binding
-		/// on F would be an ordinary mistake rather than a designed one.
+		/// One collision is authored on purpose: Escape, and ~ beside it, each drive Cancel and
+		/// CloseLastUI as a pair, exempted by <c>SharedBindingGroups</c>. F is not part of it, so a
+		/// second binding on F would be an ordinary mistake rather than a designed one.
 		/// </para>
 		/// </remarks>
 		[Test]
@@ -285,6 +285,61 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(1, minimap.Count, "as must the minimap");
 			LogAssert.AreEqual("<Keyboard>/m", map[0], "the world map holds M");
 			LogAssert.AreEqual("<Keyboard>/n", minimap[0], "and the minimap holds N beside it.");
+		}
+
+		/// <summary>
+		/// The menu opens with F1, F1 does nothing else, and Escape no longer opens the menu.
+		/// </summary>
+		/// <remarks>
+		/// A browser keeps Escape for itself — it releases the cursor and leaves fullscreen, and the
+		/// game usually never sees the press — so a menu that only Escape opened could not be
+		/// reached on web. F1 used to toggle first person; that action ships unbound so the key is
+		/// the menu's alone, and its row stays in the Options panel for the player to bind.
+		/// </remarks>
+		[Test]
+		public void MenuKey_IsF1AndF1Alone()
+		{
+			// Keyboard only: the menu also has the gamepad's Start, which is not in question here.
+			List<string> menu = PathsFor("Menu").FindAll(p => p.StartsWith("<Keyboard>/", StringComparison.Ordinal));
+			LogAssert.AreEqual(1, menu.Count, "Menu must have exactly one keyboard binding");
+			LogAssert.AreEqual("<Keyboard>/f1", menu[0], "and it must be F1.");
+
+			List<string> onF1 = ActionsOn("<Keyboard>/f1");
+			LogAssert.AreEqual(1, onF1.Count, $"F1 must belong to the menu alone; it is shared with {string.Join(", ", onF1)}.");
+
+			LogAssert.IsFalse(ActionsOn("<Keyboard>/escape").Contains("Menu"),
+				"Escape must not open the menu: the browser takes it before the game does.");
+			LogAssert.AreEqual(0, PathsFor("ToggleFirstPerson").Count,
+				"first person ships unbound now that F1 is the menu's.");
+			LogAssert.IsTrue(PlayerActionNames().Contains("ToggleFirstPerson"),
+				"but it must keep its (empty) binding, or the Options panel has no row to bind it from.");
+		}
+
+		/// <summary>
+		/// ~ cancels and closes beside Escape, and does nothing else.
+		/// </summary>
+		/// <remarks>
+		/// A browser keeps Escape: it releases the pointer lock and leaves fullscreen, and the page
+		/// cannot stop it. ~ is the key that always reaches the game on web. It is bound to exactly
+		/// the two actions Escape drives in the Player map — Cancel and CloseLastUI — and not to the
+		/// UI map's Cancel, which UI Toolkit can deliver to a focused text field while the player is
+		/// typing the character. The panels' own handling of it is <see cref="CancelKey"/>.
+		/// </remarks>
+		[Test]
+		public void Backquote_DrivesCancelAndCloseLastUI_BesideEscape()
+		{
+			List<string> onBackquote = ActionsOn(CancelKey.BackquoteControlPath);
+			onBackquote.Sort(StringComparer.Ordinal);
+			LogAssert.AreEqual("Cancel, CloseLastUI", string.Join(", ", onBackquote),
+				"~ must drive exactly Player/Cancel and Player/CloseLastUI.");
+
+			LogAssert.IsTrue(PathsFor("Cancel").Contains(CancelKey.EscapeControlPath), "Escape still interrupts");
+			LogAssert.IsTrue(PathsFor("CloseLastUI").Contains(CancelKey.EscapeControlPath), "and still closes the top panel.");
+
+			string ui = MapScope("UI");
+			LogAssert.IsNotNull(ui, "the asset must still declare a UI action map");
+			LogAssert.IsFalse(ui.Contains(CancelKey.BackquoteControlPath),
+				"the UI map must not bind ~: it would cancel inside a text field the player is typing it into.");
 		}
 
 		/// <summary>

@@ -85,6 +85,19 @@ namespace FishMMO.Shared.Core
 		public virtual bool IsPresentation => false;
 
 		/// <summary>
+		/// True when this action must run again on a REPLAYED tick for an effect on the caster itself to survive a
+		/// correction: what it changes is state the correction has just set back (a resource, a buff), and running it
+		/// again from that state gives what the prediction had.
+		/// </summary>
+		/// <remarks>
+		/// Asked only for an event marked <c>TickEventData.ReapplyOnly</c> (a self-cast ability's effects, re-dispatched
+		/// on replay by <c>AbilityObject.RunSelfTargetEffects</c>). False by default, and that is the safe answer: an
+		/// action whose effect a correction does NOT take back (it grants an item, summons, teleports, plays something)
+		/// would do it a second time.
+		/// </remarks>
+		public virtual bool ReappliesOnReplay => false;
+
+		/// <summary>
 		/// Executes the action. Must be implemented by derived classes.
 		/// </summary>
 		/// <param name="initiator">The character initiating the action.</param>

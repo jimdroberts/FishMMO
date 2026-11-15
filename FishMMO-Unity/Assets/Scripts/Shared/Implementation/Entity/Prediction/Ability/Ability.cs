@@ -790,8 +790,17 @@ namespace FishMMO.Shared
 			DestroyAbilityObjectsInternal(tick, includeTick: true, onlyTick: true);
 		}
 
+		/// <summary>
+		/// Destroys the ability objects spawned after <paramref name="afterTick"/> and no later than <paramref name="upToTick"/>:
+		/// one cast's objects, when a later cast of the same ability is not to be touched.
+		/// </summary>
+		public void DestroyAbilityObjectsBetween(uint afterTick, uint upToTick)
+		{
+			DestroyAbilityObjectsInternal(afterTick, includeTick: false, onlyTick: false, upToTick: upToTick, bounded: true);
+		}
+
 		/// <summary>Shared body of the two reconcile-rollback destroy scopes.</summary>
-		private void DestroyAbilityObjectsInternal(uint tick, bool includeTick, bool onlyTick)
+		private void DestroyAbilityObjectsInternal(uint tick, bool includeTick, bool onlyTick, uint upToTick = 0u, bool bounded = false)
 		{
 			if (Objects == null)
 			{
@@ -814,6 +823,10 @@ namespace FishMMO.Shared
 						? objEntry.Value.SpawnTick.Value == tick
 						: (IsSpawnTickAfter(objEntry.Value.SpawnTick, tick) ||
 						   (includeTick && objEntry.Value.SpawnTick.Value == tick));
+					if (matches && bounded && IsSpawnTickAfter(objEntry.Value.SpawnTick, upToTick))
+					{
+						matches = false;
+					}
 					if (matches)
 					{
 						// Null the Ability back-reference so DestroyAbilityObjectInternal

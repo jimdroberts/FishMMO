@@ -34,7 +34,7 @@ namespace FishMMO.TestHarness
 	/// null in production, documented at its declaration.
 	/// </para>
 	/// </remarks>
-	public sealed class CombatSimBootstrap : MonoBehaviour
+	public sealed partial class CombatSimBootstrap : MonoBehaviour
 	{
 		[Tooltip("Direct references to the mock content (unregistered with addressables by design).")]
 		public CombatSimManifest Manifest;
@@ -51,7 +51,7 @@ namespace FishMMO.TestHarness
 		public bool AutoSweep = true;
 
 		[Tooltip("Tugboat listen port — any free port; no client ever connects.")]
-		public ushort Port = 7797;
+		public ushort Port = 8797;
 
 		private readonly SimServer server = new SimServer();
 		private NetworkManager networkManager;
@@ -271,7 +271,28 @@ namespace FishMMO.TestHarness
 				Team = team,
 			};
 			npc.TryGet(out fighter.Damage);
+
+			/* Both teams are clones of ONE NPC, so of one faction, and the harm rule (FactionHarm) lets a character
+			 * damage only its enemies. Every fighter has its aggression turned on, which is the game's own way to strike
+			 * a neutral; without it every hit in the sim resolves and does no damage. */
+			if (npc.TryGet(out IFactionController faction) && faction is FactionController factionController)
+			{
+				factionController.TrySetAggression(true, out _);
+			}
 			fighter.RosterOrder = ShuffledIndices(Manifest.Roster.Count);
+			/* The first scripted cast is a buff on the caster itself. The order is shuffled and the scripted casts are
+			 * sparse, so a run could go its whole length without one of the eight buff abilities coming up, and "no buffs
+			 * applied" then failed a run in which nothing was wrong. One that needs no target and no hit makes the buff
+			 * path certain, the way a recently damaged fighter makes the heal path certain. */
+			for (int i = 0; i < fighter.RosterOrder.Length; ++i)
+			{
+				AbilityTemplate candidate = Manifest.Roster[fighter.RosterOrder[i]];
+				if (candidate != null && candidate.name == CertainBuffAbilityName)
+				{
+					(fighter.RosterOrder[0], fighter.RosterOrder[i]) = (fighter.RosterOrder[i], fighter.RosterOrder[0]);
+					break;
+				}
+			}
 			fighter.NextScriptedCastAt = Time.time + UnityEngine.Random.Range(0.5f, 4f);
 			abilities.OnUpdate += (name, remaining, total) => fighter.LastCast = name;
 			BuildFighterVisual(fighter, clone.transform, team);
@@ -485,6 +506,12 @@ namespace FishMMO.TestHarness
 				}
 				fighters.RemoveAll(f => !f.Alive && f.Npc == null);
 
+				// A probe has the fighters to itself (CombatSimBootstrap.PredictionProbe.cs).
+				if (DirectorPaused)
+				{
+					continue;
+				}
+
 				foreach (Fighter fighter in fighters)
 				{
 					if (!fighter.Alive)
@@ -569,6 +596,9 @@ namespace FishMMO.TestHarness
 				}
 			}
 		}
+
+		/// <summary>The roster ability every fighter casts first: a buff on itself, which nothing can make miss.</summary>
+		private const string CertainBuffAbilityName = "Mock Self Armor Buff";
 
 		private static int[] ShuffledIndices(int count)
 		{

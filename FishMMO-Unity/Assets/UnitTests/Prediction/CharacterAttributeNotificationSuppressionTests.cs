@@ -116,6 +116,46 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// A value a replay changed silently is announced once on the next live tick, so the displays end on the replay's
+		/// result: a buff's bonus put back by a reconcile and taken off again by the replay left the Equipment panel showing
+		/// the bonus after the buff ran out.
+		/// </summary>
+		[Test]
+		public void ChangesMadeDuringReplay_AreAnnouncedOnceAfterIt()
+		{
+			CharacterAttribute attribute = new CharacterAttribute(controller, template.ID, 10, 0);
+			int notificationCount = 0;
+			int lastSeen = attribute.FinalValue;
+			attribute.OnAttributeUpdated += a => { notificationCount++; lastSeen = a.FinalValue; };
+
+			// The reconcile restores the buffed value and announces it.
+			attribute.AddModifier(5);
+			LogAssert.AreEqual(1, notificationCount, "the restore notifies");
+			LogAssert.AreEqual(15, lastSeen, "the display shows the restored, buffed value");
+
+			// The replay expires the buff again, silently.
+			controller.BeginNotificationSuppression();
+			try
+			{
+				attribute.AddModifier(-5);
+			}
+			finally
+			{
+				controller.EndNotificationSuppression();
+			}
+			LogAssert.AreEqual(1, notificationCount, "nothing is dispatched during the replay");
+			LogAssert.AreEqual(15, lastSeen, "so the display is still on the restored value");
+
+			// First live tick after the correction.
+			controller.AnnounceChangesMadeDuringReplay();
+			LogAssert.AreEqual(2, notificationCount, "the replay's change is announced once");
+			LogAssert.AreEqual(10, lastSeen, "the display ends on the replay's result");
+
+			controller.AnnounceChangesMadeDuringReplay();
+			LogAssert.AreEqual(2, notificationCount, "and only once");
+		}
+
+		/// <summary>
 		/// Verifies a no-op attribute reconcile preserves the cached snapshot reference.
 		/// </summary>
 		[Test]

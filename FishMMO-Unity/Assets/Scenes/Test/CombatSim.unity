@@ -249,7 +249,7 @@ MonoBehaviour:
   TeamSize: 2
   ClaimMs: 250
   AutoSweep: 1
-  Port: 7797
+  Port: 8797
 --- !u!4 &610141740
 Transform:
   m_ObjectHideFlags: 0

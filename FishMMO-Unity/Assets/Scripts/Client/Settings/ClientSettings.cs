@@ -71,6 +71,9 @@ namespace FishMMO.Client
 		/// </summary>
 		public const string LegacyLookSensitivityKey = "Look Sensitivity";
 
+		/// <summary>Where the view is taken from. Stored as the value of KCCCameraStyle (ClientCameraSettings.Style).</summary>
+		public const string CameraStyleKey = "Camera Style";
+
 		/// <summary>Texture filtering. Stored as the ordinal of ClientDisplaySettings.AnisotropicOption.</summary>
 		public const string AnisotropicFilteringKey = "Anisotropic Filtering";
 		/// <summary>Edge smoothing mode. Stored as the ordinal of ClientCameraSettings.AntialiasingOption.</summary>

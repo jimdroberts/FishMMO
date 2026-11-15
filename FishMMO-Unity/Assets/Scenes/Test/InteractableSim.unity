@@ -248,7 +248,7 @@ MonoBehaviour:
   Manifest: {fileID: 0}
   InteractablePrefab: {fileID: 0}
   PlayerPrefab: {fileID: 0}
-  Port: 7798
+  Port: 8798
   StepInterval: 0.35
 --- !u!4 &681732074
 Transform:

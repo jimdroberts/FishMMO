@@ -28,6 +28,7 @@ namespace FishMMO.UnitTests
 		{
 			ReplicateIdle<CharacterReplicateData>.CanHold = null;
 			ReplicateIdle<CharacterReplicateData>.SameInput = null;
+			ReplicateIdle<CharacterReplicateData>.CanHoldNow = null;
 		}
 
 		// ── Inputs ────────────────────────────────────────────────────────
@@ -106,6 +107,8 @@ namespace FishMMO.UnitTests
 			public int LostRealInputs;
 			public int PacketsSent;
 			public int IdlePacketsSent;
+			/// <summary>Tick numbers the server ran as input more than once (a held copy, then the late input for the same number).</summary>
+			public int DoubleRuns;
 			public List<Run> Runs = new List<Run>();
 			public List<uint> DefaultTimes = new List<uint>();
 		}
@@ -155,6 +158,7 @@ namespace FishMMO.UnitTests
 			bool pending = false;
 			uint lastWrite = 0;
 			bool hasWritten = false;
+			int keepalives = 0;
 
 			// Server state (Replicate_Reader / EnqueueReceived / NonAuthoritative with the edits).
 			var queue = new Queue<CharacterReplicateData>();
@@ -174,10 +178,12 @@ namespace FishMMO.UnitTests
 					if (!isRepeat)
 					{
 						remaining = Redundancy;
+						keepalives = 0;
 					}
-					else if (remaining <= 0 && !pending && (!hasWritten || t - lastWrite >= ReplicateIdle.KeepaliveTicks))
+					else if (remaining <= 0 && !pending && (!hasWritten || t - lastWrite >= ReplicateIdle.KeepaliveInterval(keepalives)))
 					{
 						remaining = 1;
+						keepalives++;
 					}
 					if (remaining > 0)
 					{
@@ -236,11 +242,11 @@ namespace FishMMO.UnitTests
 						queue.Enqueue(entry);
 					}
 					// The arming rule (Replicate_EnqueueReceivedReplicate + ContinuesRunStream).
-					bool continues = held && history.Count > 0 && queue.Count > 0 &&
-						((!DefaultSinceCreated(history) && queue.Peek().GetTick() == LastCreatedTick(history) + 1) || LastIsHoldable(history));
+					bool continues = held && history.Count > 0 && queue.Count > 0 && !DefaultSinceCreated(history) &&
+						(queue.Peek().GetTick() == LastCreatedTick(history) + 1 || LastIsHoldable(history));
 					if (before == 0 && queue.Count > 0 && !holding && !continues)
 					{
-						startTick = (uint)time + StateInterpolation;
+						startTick = (uint)time + ReplicateIdle.StartDelay(StateInterpolation, queue.Count);
 						startArmed = true;
 					}
 				}
@@ -264,8 +270,13 @@ namespace FishMMO.UnitTests
 			}
 
 			// Score: every run inside the scripted window is compared with the owner's input for its number.
+			var numbersRun = new HashSet<uint>();
 			foreach (Run run in outcome.Runs)
 			{
+				if (!run.Default && run.Time <= ticks + leadTicks && !numbersRun.Add(run.Number))
+				{
+					outcome.DoubleRuns++;
+				}
 				if (run.Time > ticks + leadTicks)
 				{
 					continue; // The script has ended: nothing was sent to run.
@@ -364,8 +375,9 @@ namespace FishMMO.UnitTests
 			}
 			if (queue.Count == 0)
 			{
-				if (held && history.Count > 0 && !history[history.Count - 1].Default &&
-					ReplicateIdle<CharacterReplicateData>.CanHold(history[history.Count - 1].Data))
+				// Only after two runs that repeat each other: an owner that stopped sent its repeats first (TryStartHolding).
+				if (held && history.Count > 1 && !history[history.Count - 1].Default && !history[history.Count - 2].Default &&
+					ReplicateIdle<CharacterReplicateData>.IsRepeat(history[history.Count - 2].Data, history[history.Count - 1].Data))
 				{
 					holding = true;
 					lastHeld = history[history.Count - 1].Data.GetTick();
@@ -432,6 +444,114 @@ namespace FishMMO.UnitTests
 			}
 			LogAssert.IsTrue(heldDesyncs <= todayDesyncs, $"held input must not desync more than today under loss and jitter ({heldDesyncs} vs {todayDesyncs}).");
 			LogAssert.IsTrue(heldLost <= todayLost, $"held input must not lose more of the owner's inputs than today ({heldLost} vs {todayLost}).");
+		}
+
+		// ── Late input is not an owner that stopped ───────────────────────
+
+		/// <summary>A standing owner turning its camera on every tick: every input inert, none a repeat of the last.</summary>
+		private static CharacterReplicateData[] TurningScript(int ticks)
+		{
+			var inputs = new CharacterReplicateData[ticks + 1];
+			for (int t = 1; t <= ticks; ++t)
+			{
+				inputs[t] = Idle((uint)t, t * 1.5f);
+			}
+			return inputs;
+		}
+
+		/// <summary>
+		/// An empty queue is not evidence that the owner stopped: its input may only be late. Holding on it ran the missing
+		/// ticks as real input, and the late inputs then ran those numbers again.
+		/// </summary>
+		/// <remarks>
+		/// The case is a player standing still and turning the camera, which is what a player casting a spell does. Every
+		/// input is inert (so it MAY be held) and none repeats the last (so every one is sent, and a late one is never
+		/// dropped as a repeat). Each tick number the server ran twice counted a cast in progress down twice, which
+		/// finished it early on the server and cost the owner its projectile, and stepped a falling body twice. The server
+		/// now holds only after two inputs that repeat each other, which this owner never sends: its late input is waited
+		/// out on default ticks, and every number runs once.
+		/// </remarks>
+		[TestCase(4, 3, 0.0)]
+		[TestCase(4, 3, 0.02)]
+		[TestCase(8, 6, 0.03)]
+		public void AStandingOwnerTurningItsCamera_IsNeverHeld_SoNoTickRunsTwice(int latency, int jitter, double loss)
+		{
+			const int Ticks = 30 * 120;
+			CharacterReplicateData[] inputs = TurningScript(Ticks);
+			for (int seed = 1; seed <= 4; ++seed)
+			{
+				Outcome held = Simulate(inputs, Ticks, held: true, latency, jitter, loss, seed);
+				LogAssert.AreEqual(0, held.DoubleRuns, $"seed {seed}: a tick number was run as input twice (a held copy, then the late input).");
+				// With nothing lost: every input run is the owner's own. (An input LOST outright leaves a gap that is filled
+				// with the last one, which is the best there is; that is not this test's subject.)
+				if (loss <= 0d && jitter <= 3)
+				{
+					LogAssert.AreEqual(0, held.Desyncs - held.DefaultTicks,
+						$"seed {seed}: every input run is the owner's own for that number; late input shows only as default ticks.");
+				}
+			}
+		}
+
+		/// <summary>
+		/// An input sent during a cast reads as inert, and repeating it is still not harmless (each tick run counts the
+		/// cast). That is decided from the caster's own state on each side, not from a flag in the input.
+		/// </summary>
+		[Test]
+		public void DuringACast_InputIsNeverHeld_DecidedFromStateOnEachSide()
+		{
+			LogAssert.IsNotNull(ReplicateIdle<CharacterReplicateData>.CanHoldNow, "The character input must say when its state forbids holding.");
+			LogAssert.IsTrue(ReplicateIdle<CharacterReplicateData>.MayHoldNow(null), "A behaviour that is not a character's prediction controller is not restricted.");
+
+			System.Func<FishNet.Object.NetworkBehaviour, bool> registered = ReplicateIdle<CharacterReplicateData>.CanHoldNow;
+			try
+			{
+				ReplicateIdle<CharacterReplicateData>.CanHoldNow = _ => false;
+				LogAssert.IsFalse(ReplicateIdle<CharacterReplicateData>.MayHoldNow(null), "While the state says no, nothing is held.");
+				ReplicateIdle<CharacterReplicateData>.CanHoldNow = null;
+				LogAssert.IsTrue(ReplicateIdle<CharacterReplicateData>.MayHoldNow(null), "No rule registered means always.");
+			}
+			finally
+			{
+				ReplicateIdle<CharacterReplicateData>.CanHoldNow = registered;
+			}
+
+			string fishnet = ProjectFiles.ReadAllText("Assets/Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs");
+			StringAssert.Contains("ReplicateIdle<T>.MayHoldNow(this);", fishnet,
+				"The OWNER must keep sending while its state forbids holding: a server that will not hold would otherwise wait on blank ticks and cancel the cast.");
+			int asked = 0;
+			for (int at = fishnet.IndexOf("ReplicateIdle<T>.MayHoldNow(this)", StringComparison.Ordinal); at >= 0;
+				at = fishnet.IndexOf("ReplicateIdle<T>.MayHoldNow(this)", at + 1, StringComparison.Ordinal))
+			{
+				asked++;
+			}
+			LogAssert.IsTrue(asked >= 5,
+				$"The SERVER must ask before starting a hold, before filling a gap, while holding, and before skipping the start delay (asked in {asked} places).");
+
+			string controller = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterPredictionController.cs");
+			StringAssert.Contains("CanHoldNow = behaviour => !(behaviour is CharacterPredictionController controller && controller.CastInProgress);", controller);
+			string flags = ProjectFiles.ReadAllText("Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityActivationFlags.cs");
+			StringAssert.DoesNotContain("IsCasting", flags, "Whether a cast is in progress is state both peers already have; it is not sent.");
+		}
+
+		[Test]
+		public void TheFirstKeepalivesFollowClosely_ThenSettle()
+		{
+			LogAssert.AreEqual(1u, ReplicateIdle.KeepaliveInterval(0), "The first keepalive follows the resends at once: the input before the last travels in as many packets as when every tick was sent.");
+			LogAssert.AreEqual(2u, ReplicateIdle.KeepaliveInterval(1));
+			LogAssert.AreEqual(4u, ReplicateIdle.KeepaliveInterval(2));
+			LogAssert.AreEqual(8u, ReplicateIdle.KeepaliveInterval(3));
+			LogAssert.AreEqual(16u, ReplicateIdle.KeepaliveInterval(4));
+			LogAssert.AreEqual(ReplicateIdle.KeepaliveTicks, ReplicateIdle.KeepaliveInterval(5));
+			LogAssert.AreEqual(ReplicateIdle.KeepaliveTicks, ReplicateIdle.KeepaliveInterval(200));
+		}
+
+		[Test]
+		public void TheStartDelay_IsOnlyWhatTheBufferStillLacks()
+		{
+			LogAssert.AreEqual(2u, ReplicateIdle.StartDelay(2, 1), "One input waits for the buffer to fill behind it.");
+			LogAssert.AreEqual(1u, ReplicateIdle.StartDelay(2, 2));
+			LogAssert.AreEqual(0u, ReplicateIdle.StartDelay(2, 3), "A burst that already holds the buffer runs at once.");
+			LogAssert.AreEqual(0u, ReplicateIdle.StartDelay(2, 7), "And a larger one is not made to wait either: the wait is what left the queue deeper for good.");
 		}
 
 		// ── Batched replicates ────────────────────────────────────────────

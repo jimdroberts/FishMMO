@@ -442,13 +442,32 @@ namespace FishMMO.Shared
 			{
 				nextTick = TARGET_UPDATE_RATE;
 
-				Mouse mouse = Mouse.current;
-				Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
-				Ray ray = Camera.main.ScreenPointToRay(mousePosition);
-				// Optionally, use screen center for targeting:
-				// Ray ray = Camera.main.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0));
+				/* With the cursor captured, the crosshair aims, and what it highlights is what the shot would hit: the
+				 * same line the cast traces, from the eye to the point under the crosshair (KCCPlayer.ResolveOwnerAim).
+				 * Taken along the camera's own ray instead, the highlight could sit on a target the eye cannot see (over
+				 * the shoulder the camera looks past corners), the owner would start the cast on it, and the server's
+				 * trace from the eye would refuse it. With the cursor free the player points at things with the mouse,
+				 * and the mouse's ray is the right one. */
+				Vector3 origin;
+				Vector3 direction;
+				KCCPlayer kccPlayer = Character is IPlayerCharacter player ? player.KCCPlayer : null;
+				if (Cursor.lockState == CursorLockMode.Locked &&
+					kccPlayer != null && kccPlayer.Motor != null &&
+					kccPlayer.CharacterCamera != null && kccPlayer.CharacterCamera.Transform != null)
+				{
+					Transform cameraTransform = kccPlayer.CharacterCamera.Transform;
+					kccPlayer.ResolveOwnerAim(cameraTransform.position, cameraTransform.rotation, out origin, out direction, out _, out _);
+				}
+				else
+				{
+					Mouse mouse = Mouse.current;
+					Vector2 mousePosition = mouse != null ? mouse.position.ReadValue() : new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+					Ray ray = Camera.main.ScreenPointToRay(mousePosition);
+					origin = ray.origin;
+					direction = ray.direction;
+				}
 
-				UpdateTarget(ray.origin, ray.direction, MAX_TARGET_DISTANCE);
+				UpdateTarget(origin, direction, MAX_TARGET_DISTANCE);
 
 				/* Normalised through Unity's overloaded == on purpose: a destroyed transform
 				 * answers "I am null" here, which is exactly the collapse we want on the way IN.

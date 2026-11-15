@@ -366,5 +366,37 @@ namespace FishMMO.UnitTests
 			int size = PacketCompression.Compress(PacketCompression.ToServer, input, packed);
 			Assert.Less(size, input.Length * 0.8, "Small-valued input packets shrink.");
 		}
+
+		/// <summary>
+		/// The idle send interval needs "near combat" to mean a fight. A target counts only when the viewer may harm it or it
+		/// is already fighting: the target is whatever character is under the crosshair, so in a crowd a player always had
+		/// one and spent 0% of ticks on the idle interval (simulate run 2026-11-15, against 91% before).
+		/// </summary>
+		[TestCase(false, false, false)]
+		[TestCase(true, false, true)]
+		[TestCase(false, true, true)]
+		[TestCase(true, true, true)]
+		public void ATargetIsCombatOnlyWhenItCanBeFoughtOrIsFighting(bool targetInCombat, bool viewerMayHarm, bool expected)
+		{
+			LogAssert.AreEqual(expected, ObserverStreamingPolicy.TargetMeansCombat(targetInCombat, viewerMayHarm),
+				"a friendly character under the crosshair must not keep the viewer at the full send rate");
+		}
+
+		/// <summary>The near-combat test no longer short-circuits on "has a target", and the target term goes through the harm rule.</summary>
+		[Test]
+		public void NearCombatDoesNotTreatEveryTargetAsAFight()
+		{
+			string path = Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/Scripts/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverStreamingRegistry.cs");
+			string source = ProjectFiles.ReadAllText(path);
+			int start = source.IndexOf("private static bool IsNearCombat(", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "the registry must still declare IsNearCombat");
+			int end = source.IndexOf("private static void Consider(", start, StringComparison.Ordinal);
+			string body = source.Substring(start, end - start);
+			LogAssert.IsFalse(body.Contains("viewerTargetId"), "having a target alone must not count as combat");
+			LogAssert.IsTrue(body.Contains("CombatRelevant"), "the target counts through CombatRelevant");
+			LogAssert.IsTrue(source.Contains("TargetMeansCombat(observed.InCombat") && source.Contains("FactionHarm.MayHarm(viewer.Character, observed.Character"),
+				"CombatRelevant asks the central harm rule");
+		}
 	}
 }

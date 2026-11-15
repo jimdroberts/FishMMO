@@ -47,12 +47,16 @@ namespace FishMMO.UnitTests
 	public class PlatformRiderSmoothingTests
 	{
 		/// <summary>
-		/// Ticks the visual trails the simulation by, for the rider AND for every platform deck.
-		/// FishNet's default; two ticks tolerate a tick landing a frame late without the visual
-		/// stalling, at the cost of ~66 ms of visual latency on the player's own movement. Lower
-		/// it here and both the prefabs and the scene must follow.
+		/// Ticks the visual trails the simulation by, for the rider AND for every platform deck and
+		/// ship (FloatingBoats.VisualInterpolationTicks).
+		/// One: the least a glide between two simulated positions can trail by, and FishNet's
+		/// default. It was two (2026-09-08, never judged in play), which tolerated a tick landing a
+		/// frame late without the visual stalling, at ~66 ms of visual latency on the player's own
+		/// movement; Jim asked for the lag gone (2026-11-14), and one is as far as that goes without
+		/// drawing the body AHEAD of the simulation. Change it here and the prefabs, the ships'
+		/// constant and any scene deck must follow.
 		/// </summary>
-		public const byte InterpolationTicks = 2;
+		public const byte InterpolationTicks = 1;
 
 		private static readonly string[] PlayablePrefabs =
 		{
@@ -166,16 +170,16 @@ namespace FishMMO.UnitTests
 
 			// The scan recognises a platform and passes a correct one ...
 			StringBuilder fixtureProblems = new StringBuilder();
-			int fixturePlatforms = CheckPlatforms("fixture", SceneDocumentsFromText(PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 0, 2)),
+			int fixturePlatforms = CheckPlatforms("fixture", SceneDocumentsFromText(PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 0, InterpolationTicks)),
 				platformGuid, networkObjectGuid, smootherGuid, fixtureProblems);
 			LogAssert.AreEqual(1, fixturePlatforms, "the scan must recognise the shipped MovingPlatform's layout as a platform");
 			LogAssert.IsTrue(fixtureProblems.Length == 0, "and pass it as it shipped:" + fixtureProblems);
 			// ... and fails one that smooths adaptively, at another interpolation, or not at all.
 			foreach ((string name, string text) in new[]
 			{
-				("adaptive", PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 1, 2)),
+				("adaptive", PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 1, InterpolationTicks)),
 				("three ticks", PlatformFixture(platformGuid, networkObjectGuid, smootherGuid, 0, 3)),
-				("no smoother", PlatformFixture(platformGuid, networkObjectGuid, "00000000000000000000000000000000", 0, 2)),
+				("no smoother", PlatformFixture(platformGuid, networkObjectGuid, "00000000000000000000000000000000", 0, InterpolationTicks)),
 			})
 			{
 				StringBuilder broken = new StringBuilder();

@@ -116,6 +116,7 @@ namespace FishMMO.Client
 			/* Applied alongside sensitivity so both reach the camera at the same moment, which
 			 * is the point where one exists. */
 			ApplySavedAntialiasing();
+			ApplyStyle(LoadSavedStyle());
 
 			if (ApplyLookSensitivity(sensitivity))
 			{
@@ -162,6 +163,102 @@ namespace FishMMO.Client
 
 			camera.RotationSpeed = 1f;
 			return true;
+		}
+
+		/// <summary>The camera style when nothing has been chosen: the original centred camera.</summary>
+		public const KCCCameraStyle DefaultStyle = KCCCameraStyle.ThirdPerson;
+
+		/// <summary>The styles in the order the Options dropdown lists them. The stored value is the enum's, not this index.</summary>
+		public static readonly KCCCameraStyle[] StyleOrder =
+		{
+			KCCCameraStyle.FirstPerson,
+			KCCCameraStyle.ThirdPerson,
+			KCCCameraStyle.OverShoulder,
+		};
+
+		/// <summary>Labels for <see cref="StyleOrder"/>, index for index.</summary>
+		public static readonly string[] StyleLabels =
+		{
+			"First Person",
+			"Third Person",
+			"Over Shoulder",
+		};
+
+		/// <summary>The camera style in effect.</summary>
+		public static KCCCameraStyle Style { get; private set; } = DefaultStyle;
+
+		/// <summary>
+		/// The style the first-person key returns to: the last one that was not first person.
+		/// </summary>
+		private static KCCCameraStyle lastOutsideFirstPerson = DefaultStyle;
+
+		/// <summary>
+		/// Raised when the style changes, from the Options panel or from the first-person key, so whichever of the two
+		/// did not make the change can show it.
+		/// </summary>
+		public static event System.Action<KCCCameraStyle> OnStyleChanged;
+
+		/// <summary>The saved style, or the default for a missing or unknown value (the file is the player's to edit).</summary>
+		public static KCCCameraStyle LoadSavedStyle()
+		{
+			int stored = ClientSettings.GetInt(ClientSettings.CameraStyleKey, (int)DefaultStyle);
+			if (stored < 0 || stored > byte.MaxValue)
+			{
+				return DefaultStyle;
+			}
+			KCCCameraStyle style = (KCCCameraStyle)(byte)stored;
+			return System.Enum.IsDefined(typeof(KCCCameraStyle), style) ? style : DefaultStyle;
+		}
+
+		/// <summary>Saves a style and applies it.</summary>
+		public static void SetStyle(KCCCameraStyle style)
+		{
+			ClientSettings.Set(ClientSettings.CameraStyleKey, (int)style);
+			ApplyStyle(style);
+		}
+
+		/// <summary>
+		/// The first-person key: into first person, or back out to the style the player was using before. Saved, so the
+		/// Options panel and the next session agree with what the key did.
+		/// </summary>
+		public static void ToggleFirstPerson()
+		{
+			SetStyle(Style == KCCCameraStyle.FirstPerson ? lastOutsideFirstPerson : KCCCameraStyle.FirstPerson);
+		}
+
+		/// <summary>
+		/// Puts a style into effect on the camera, if there is one yet.
+		/// </summary>
+		/// <remarks>
+		/// Held here as well as on the camera: boot applies settings before the world camera is picked up, and
+		/// PlayerInputController applies them again once it is (see <see cref="ApplySaved"/>).
+		/// </remarks>
+		/// <returns><c>true</c> if a camera received it.</returns>
+		public static bool ApplyStyle(KCCCameraStyle style)
+		{
+			if (!System.Enum.IsDefined(typeof(KCCCameraStyle), style))
+			{
+				style = DefaultStyle;
+			}
+
+			bool changed = style != Style;
+			Style = style;
+			if (style != KCCCameraStyle.FirstPerson)
+			{
+				lastOutsideFirstPerson = style;
+			}
+
+			KCCCamera camera = ResolveCamera();
+			if (camera != null)
+			{
+				camera.SetStyle(style);
+			}
+
+			if (changed)
+			{
+				OnStyleChanged?.Invoke(style);
+			}
+			return camera != null;
 		}
 
 		/// <summary>

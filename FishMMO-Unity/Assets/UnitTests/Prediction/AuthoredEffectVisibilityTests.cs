@@ -535,6 +535,124 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		// ── Effects a spawn chain plays ─────────────────────────────────────────────────────────
+
+		private static readonly FieldInfo SpawnEffectHolder =
+			typeof(AbilityObject).GetField("spawnEffectHolder", BindingFlags.Static | BindingFlags.NonPublic);
+
+		private static List<FXInstanceLifetime> LiveEffects()
+		{
+			List<FXInstanceLifetime> live = new List<FXInstanceLifetime>();
+			foreach (FXInstanceLifetime effect in Resources.FindObjectsOfTypeAll<FXInstanceLifetime>())
+			{
+				if (effect != null && effect.gameObject.scene.IsValid())
+				{
+					live.Add(effect);
+				}
+			}
+			return live;
+		}
+
+		/// <summary>Outside a spawn chain nothing is held: a hit, a tick and an end play their effects at once, as before.</summary>
+		[Test]
+		public void SpawnEffect_OutsideASpawnChain_IsNotHeld()
+		{
+			LogAssert.IsNotNull(SpawnEffectHolder, "AbilityObject.spawnEffectHolder is gone: nothing says a spawn chain is running.");
+			LogAssert.IsNull(SpawnEffectHolder.GetValue(null), "Sanity: no spawn chain is running.");
+			LogAssert.IsFalse(AbilityObject.TryHoldSpawnEffect(ShippedFireFX(), SceneManager.GetActiveScene(), null, Vector3.zero),
+				"With no spawn chain running the action must play its effect itself.");
+		}
+
+		/// <summary>
+		/// An effect the spawn chain plays (a muzzle flash) waits for the spawn to finish, and is played where the
+		/// object's visuals START: the caster's spawner as this client draws it.
+		/// </summary>
+		/// <remarks>
+		/// The chain runs the moment the object exists, at the simulated spawn position. For a projectile that is the
+		/// start of the launch line, up by the eye; the visuals leave the hand. Played at once, the flash and the
+		/// projectile it belongs to started half a metre apart.
+		/// </remarks>
+		[Test]
+		public void SpawnEffect_InsideASpawnChain_WaitsForTheSpawn_AndPlaysAtTheDrawnSpawner()
+		{
+			Vector3 launchLineStart = new Vector3(0f, 1.6f, 0.5f);
+			Vector3 drawnHand = new Vector3(0.35f, 1.1f, 0.3f);
+			AbilityObject abilityObject = MakeAbilityObject(launchLineStart);
+			GameObject hand = Track(new GameObject("ProbeSpawner"));
+			hand.transform.position = drawnHand;
+
+			int before = LiveEffects().Count;
+			SpawnEffectHolder.SetValue(null, abilityObject);
+			try
+			{
+				LogAssert.IsTrue(
+					AbilityObject.TryHoldSpawnEffect(ShippedFireFX(), SceneManager.GetActiveScene(), abilityObject, launchLineStart),
+					"Inside a spawn chain on a client the effect is kept for the object.");
+			}
+			finally
+			{
+				SpawnEffectHolder.SetValue(null, null);
+			}
+			LogAssert.AreEqual(before, LiveEffects().Count, "Nothing is played while the chain runs: where the visuals start is not known yet.");
+
+			// What Spawn does once the chain has run: hands the object its caster's spawner, then releases.
+			typeof(AbilityObject).GetField("presentationSpawner", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(abilityObject, hand.transform);
+			typeof(AbilityObject).GetMethod("ReleaseSpawnEffectsUnlessObserved", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(abilityObject, null);
+
+			List<FXInstanceLifetime> after = LiveEffects();
+			LogAssert.AreEqual(before + 1, after.Count, "The spawn has finished and this copy is not on the playback clock: the effect plays now, once.");
+			FXInstanceLifetime played = null;
+			foreach (FXInstanceLifetime effect in after)
+			{
+				if ((effect.transform.position - drawnHand).sqrMagnitude < 1e-6f)
+				{
+					played = effect;
+				}
+				Track(effect.gameObject);
+			}
+			LogAssert.IsNotNull(played, "At the spawner as this client draws it, where the projectile's visuals leave from; not at the start of the launch line.");
+
+			typeof(AbilityObject).GetMethod("ReleaseSpawnEffectsUnlessObserved", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(abilityObject, null);
+			LogAssert.AreEqual(before + 1, LiveEffects().Count, "And only once.");
+		}
+
+		/// <summary>A server holds nothing: it draws nothing, and the action never reaches it there.</summary>
+		[Test]
+		public void SpawnEffect_IsNeverHeldOnTheServer()
+		{
+			AbilityObject serverObject = MakeAbilityObject(Vector3.zero, isServer: true);
+			SpawnEffectHolder.SetValue(null, serverObject);
+			try
+			{
+				LogAssert.IsFalse(AbilityObject.TryHoldSpawnEffect(ShippedFireFX(), SceneManager.GetActiveScene(), serverObject, Vector3.zero));
+			}
+			finally
+			{
+				SpawnEffectHolder.SetValue(null, null);
+			}
+		}
+
+		/// <summary>
+		/// The wiring: the spawn chain opens the hold, the action uses it, and a copy on the playback clock is released
+		/// when it first shows, so an observer sees the effect with the projectile and not when the message arrived.
+		/// </summary>
+		[Test]
+		public void SpawnEffect_IsHeldByTheChain_AndReleasedWhenAnObservedCopyFirstShows()
+		{
+			string abilityObject = ReadSource("Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityObject.cs");
+			StringAssert.Contains("spawnEffectHolder = abilityObject;", abilityObject, "DispatchSpawnEvents no longer opens the hold.");
+			StringAssert.Contains("spawnEffectHolder = outerHolder;", abilityObject, "DispatchSpawnEvents no longer closes the hold (in a finally: a throwing action must not leave it open).");
+			StringAssert.Contains("initialized?.ReleaseSpawnEffectsUnlessObserved();", abilityObject, "Spawn no longer plays what its chain asked for.");
+			StringAssert.Contains("// And what its spawn chain plays (a muzzle effect) is played now, with it.", abilityObject,
+				"A copy on the playback clock no longer plays its spawn effects when it first shows.");
+			StringAssert.Contains("heldSpawnEffects.Count > 0 && (!onPlaybackClock || presentationShown)", abilityObject,
+				"Nothing plays a held effect for a copy no spawn path released: it would be lost.");
+
+			string action = ReadSource("Assets/Scripts/Shared/Implementation/Entity/ECA/Actions/PlayFXAction.cs");
+			StringAssert.Contains("if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition))", action,
+				"PlayFXAction plays a spawn chain's effect the moment the object is created again.");
+		}
+
 		// ── Probes ──────────────────────────────────────────────────────────────────────────────
 
 		/// <summary>A selector that resolves nothing, standing in for a spatial selector on an observer.</summary>

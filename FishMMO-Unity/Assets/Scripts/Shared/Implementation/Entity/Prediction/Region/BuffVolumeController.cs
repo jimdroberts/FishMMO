@@ -46,6 +46,8 @@ namespace FishMMO.Shared
 
 		/// <summary>Buff template IDs this controller currently has on, and the volume each came from.</summary>
 		private readonly Dictionary<int, BuffVolume> applied = new Dictionary<int, BuffVolume>();
+		/// <summary>Scratch for <see cref="OnReconcile"/>: credits to drop. Null until first needed.</summary>
+		private List<int> reconcileDropped;
 
 		/// <summary>Rebuilt each tick. A field so the per-tick pass does not allocate.</summary>
 		private readonly Dictionary<int, BuffVolume> wanted = new Dictionary<int, BuffVolume>();
@@ -122,6 +124,25 @@ namespace FishMMO.Shared
 			}
 
 			departed.Clear();
+			/* A credit whose buff is no longer on (it ran out inside the volume, it was dispelled, a correction took it) is
+			 * dropped, on both peers alike, so a volume still containing the character applies it again below. Kept, it was
+			 * never applied again until the character left and came back; and when only the owner dropped it (from its
+			 * correction), the owner predicted a buff the server had stopped granting. */
+			reconcileDropped ??= new List<int>(2);
+			reconcileDropped.Clear();
+			foreach (KeyValuePair<int, BuffVolume> entry in applied)
+			{
+				if (buffs.Buffs == null || !buffs.Buffs.ContainsKey(entry.Key))
+				{
+					reconcileDropped.Add(entry.Key);
+				}
+			}
+			for (int i = 0; i < reconcileDropped.Count; i++)
+			{
+				applied.Remove(reconcileDropped[i]);
+			}
+			reconcileDropped.Clear();
+
 			foreach (KeyValuePair<int, BuffVolume> entry in applied)
 			{
 				if (!target.ContainsKey(entry.Key))
@@ -169,6 +190,7 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{
+
 			/* Nothing to restore either. The buffs themselves have just been set to the server's by
 			 * BuffController; the applied set is rebuilt from the position on the first replayed
 			 * tick, which is the very next thing FishNet does. Clearing it here would be wrong, not

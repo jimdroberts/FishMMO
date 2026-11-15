@@ -39,6 +39,9 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private const int DispelSelectionSalt = 0x4453_504C; // "DSPL"
 
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
 		/// <summary>
 		/// Removes a computed number of buffs and/or debuffs from the target character.
 		/// </summary>

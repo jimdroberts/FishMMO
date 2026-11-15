@@ -110,8 +110,10 @@ namespace FishMMO.Shared
 			GenericDeltaReader<CharacterAttributeResourceState>.SetRead(ReadDelta);
 		}
 
-		/// <summary>Epsilon for float comparisons to avoid false-positive deltas from cross-platform drift.</summary>
-		private const float FLOAT_EPSILON = 0.001f;
+		/* No epsilon. The reader rebuilds a value that is not written from the BASELINE, so "close enough to skip" meant the
+		 * owner held the baseline's value, not the server's: a health of 0.0008 against the server's 0 read as alive on the
+		 * owner for up to a second. A changed value is written; an unchanged one compares equal exactly, on any platform,
+		 * because both sides hold the same bits (the baseline is what the writer itself last sent). */
 
 		/// <summary>
 		/// Delta writer for <see cref="CharacterAttributeResourceState"/>.
@@ -128,12 +130,8 @@ namespace FishMMO.Shared
 		/// (NextRegenTick, the maxima and the consumed ticks) use <c>WriteDeltaInt32</c>, which is a
 		/// varint difference and exact.
 		///
-		/// Float comparisons use a small epsilon (<see cref="FLOAT_EPSILON"/>) to avoid
-		/// false-positive deltas from cross-platform floating-point representation drift.
-		/// Values differing by less than 0.001 are treated as equal.
-		///
-		/// A float field is only worth moving to the delta primitive if it stops being something a
-		/// gameplay decision reads exactly.
+		/// Float values are compared exactly: the reader rebuilds a value that is not written from the baseline, so
+		/// a difference too small to send would leave the owner holding the baseline, not the server's value.
 		/// </remarks>
 		private static bool WriteDelta(
 			Writer writer,
@@ -156,7 +154,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32((int)prev.NextRegenTick, (int)next.NextRegenTick, fieldOption))
 				flags |= NEXT_REGEN_TICK_BIT;
 
-			if (fullSerialize || Mathf.Abs(prev.Health - next.Health) > FLOAT_EPSILON)
+			if (fullSerialize || !prev.Health.Equals(next.Health))
 			{
 				writer.WriteSingle(next.Health);
 				flags |= HEALTH_BIT;
@@ -165,7 +163,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxHealth, next.MaxHealth, fieldOption))
 				flags |= MAX_HEALTH_BIT;
 
-			if (fullSerialize || Mathf.Abs(prev.Mana - next.Mana) > FLOAT_EPSILON)
+			if (fullSerialize || !prev.Mana.Equals(next.Mana))
 			{
 				writer.WriteSingle(next.Mana);
 				flags |= MANA_BIT;
@@ -174,7 +172,7 @@ namespace FishMMO.Shared
 			if (writer.WriteDeltaInt32(prev.MaxMana, next.MaxMana, fieldOption))
 				flags |= MAX_MANA_BIT;
 
-			if (fullSerialize || Mathf.Abs(prev.Stamina - next.Stamina) > FLOAT_EPSILON)
+			if (fullSerialize || !prev.Stamina.Equals(next.Stamina))
 			{
 				writer.WriteSingle(next.Stamina);
 				flags |= STAMINA_BIT;
@@ -184,7 +182,7 @@ namespace FishMMO.Shared
 				flags |= MAX_STAMINA_BIT;
 
 			// Exact, as the other resources are: running out decides when drowning starts.
-			if (fullSerialize || Mathf.Abs(prev.Breath - next.Breath) > FLOAT_EPSILON)
+			if (fullSerialize || !prev.Breath.Equals(next.Breath))
 			{
 				writer.WriteSingle(next.Breath);
 				flags |= BREATH_BIT;

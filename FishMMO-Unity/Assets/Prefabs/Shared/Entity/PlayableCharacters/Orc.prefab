@@ -302,7 +302,7 @@ MonoBehaviour:
   _detachGraphicalObject: 0
   _enableStateForwarding: 0
   _networkTransform: {fileID: 7831027635627252520}
-  _ownerInterpolation: 2
+  _ownerInterpolation: 1
   _ownerSmoothedProperties: 3
   _adaptiveInterpolation: 3
   _spectatorSmoothedProperties: 3

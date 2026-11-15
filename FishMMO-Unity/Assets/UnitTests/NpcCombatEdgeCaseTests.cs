@@ -57,8 +57,10 @@ namespace FishMMO.UnitTests
 			string controller = ProjectFiles.ReadAllText(Path.Combine(Scripts,
 				"Implementation/Entity/Prediction/Ability/AbilityController.Activation.cs"));
 
-			LogAssert.IsTrue(controller.Contains("(Character.Transform.position - current.HitPosition).sqrMagnitude"),
-				"the reach is measured to the point the ray hit");
+			LogAssert.IsTrue(controller.Contains("(CharacterAimOrigin.Resolve(Character) - current.HitPosition).sqrMagnitude"),
+				"the reach is measured to the point the ray hit, from the eye the cast's own trace starts at");
+			LogAssert.IsFalse(controller.Contains("(Character.Transform.position - current.HitPosition).sqrMagnitude"),
+				"not from the feet: a target at chest height then read up to 40 cm farther than the cast's trace measures it");
 			LogAssert.IsFalse(controller.Contains("(Character.Transform.position - target.position).sqrMagnitude"),
 				"never to the hit object's origin (a terrain tile's is its corner)");
 		}

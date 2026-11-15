@@ -1,20 +1,36 @@
-body { padding: 0; margin: 0 }
+/* Colours from the fishmmo.com theme (public/main.css): body #050c10, header #030a0d, border #16323f, text #d6dee4,
+   muted #93a5b0, link #2b95e0 / hover #5db3ee. */
+html, body { height: 100%; padding: 0; margin: 0; background: #050c10; color: #d6dee4; overflow: hidden }
+body { font-family: -apple-system, 'Segoe UI', Roboto, 'Noto Sans', Cantarell, 'DejaVu Sans', sans-serif }
+
+/* Desktop: the game fills the whole window above the footer, at whatever shape the window is. */
 #unity-container { position: absolute }
-#unity-container.unity-desktop { left: 50%; top: 50%; transform: translate(-50%, -50%) }
+#unity-container.unity-desktop { position: fixed; inset: 0; display: flex; flex-direction: column }
 #unity-container.unity-mobile { position: fixed; width: 100%; height: 100% }
 .unity-mobile #unity-fullscreen-container { width: 100%; height: 100% }
-#unity-fullscreen-container { position: relative; }
-#unity-canvas { position: absolute; width: 100%; height: 100%; background: {{{ BACKGROUND_COLOR }}} }
+#unity-fullscreen-container { position: relative; flex: 1 1 auto; min-height: 0; background: #050c10 }
+#unity-canvas { position: absolute; inset: 0; width: 100%; height: 100%; background: #050c10; outline: none }
+
 #unity-loading-container { position: absolute; width: 100%; height: 100%; backdrop-filter: blur(5px); display: none; }
 #unity-loading-bar { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 #unity-logo { width: 154px; height: 130px; background: url('unity-logo-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
 #unity-progress-bar-empty { width: 141px; height: 18px; margin-top: 10px; margin-left: 6.5px; background: url('progress-bar-empty-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
 #unity-progress-bar-full { width: 0%; height: 18px; margin-top: 10px; background: url('progress-bar-full-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
-#unity-footer { position: relative }
+
+/* Footer: the home page's header bar. */
+#unity-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 20px; height: 40px; padding: 0 16px;
+  background: #030a0d; border-top: 1px solid #16323f; box-sizing: border-box; font-size: 14px; white-space: nowrap }
 .unity-mobile #unity-footer { display: none }
-#unity-logo-title-footer { float:left; width: 102px; height: 38px; background: url('unity-logo-title-footer.png') no-repeat center }
-#unity-build-title { float: right; margin-right: 10px; line-height: 38px; font-family: arial; font-size: 18px }
-#fishmmo-licenses-link { float: right; margin-right: 10px; line-height: 38px; font-family: arial; font-size: 12px; color: #888; text-decoration: none }
-#fishmmo-licenses-link:hover { text-decoration: underline }
-#unity-fullscreen-button { cursor:pointer; float: right; width: 38px; height: 38px; background: url('fullscreen-button.png') no-repeat center }
-#unity-warning { position: absolute; left: 50%; top: 5%; transform: translate(-50%); background: white; padding: 10px; display: none }
+#unity-build-title { font-weight: 650; color: #f2f6f9; letter-spacing: -.01em }
+#fishmmo-footer-links { display: flex; gap: 18px; flex: 1 1 auto; min-width: 0; overflow: hidden }
+#unity-footer a { color: #2b95e0; text-decoration: none }
+#unity-footer a:hover { color: #5db3ee; text-decoration: underline }
+#fishmmo-licenses-link { font-size: 12px; color: #93a5b0 !important }
+#unity-fullscreen-button { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; cursor: pointer;
+  color: #93a5b0; border-radius: 4px }
+#unity-fullscreen-button:hover { color: #f2f6f9; background: #0f2530 }
+#unity-fullscreen-button svg { width: 18px; height: 18px }
+#diagnostics-icon { cursor: pointer; height: 24px }
+
+#unity-warning { position: absolute; left: 50%; top: 5%; transform: translate(-50%); background: #0a1a22; color: #d6dee4;
+  border: 1px solid #16323f; padding: 10px; display: none; z-index: 10 }

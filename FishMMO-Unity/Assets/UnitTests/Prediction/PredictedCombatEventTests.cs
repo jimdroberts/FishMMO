@@ -200,6 +200,47 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>A rejection fires once, not on every sweep.</summary>
+		/// <summary>
+		/// A prediction that is given up says so with what it moved, so the bar can be put back: a hit the server absorbed,
+		/// evaded or refused changes nothing there, and nothing else is ever sent that would.
+		/// </summary>
+		[Test]
+		public void AGivenUpPrediction_ReportsWhatItMoved_SoTheBarCanBePutBack()
+		{
+			ICharacter target = MakeCharacter("ShieldedTarget", objectId: 21);
+			var undone = new System.Collections.Generic.List<(int target, int amount, PredictedCombatEvents.Kind kind, int stamp)>();
+			System.Action<int, int, PredictedCombatEvents.Kind, int> listener = (id, amount, kind, stamp) => undone.Add((id, amount, kind, stamp));
+			System.Func<ICharacter, int> previousStamp = PredictedCombatEvents.HealthPushStampOf;
+			PredictedCombatEvents.HealthPushStampOf = _ => 5;
+			PredictedCombatEvents.OnPredictionUndone += listener;
+			try
+			{
+				PredictedCombatEvents.Predict(attacker, target, 12, PredictedCombatEvents.Kind.Damage, null, 0f);
+				PredictedCombatEvents.Predict(attacker, target, 9, PredictedCombatEvents.Kind.Damage, null, 0f);
+
+				LogAssert.IsTrue(PredictedCombatEvents.TryConfirm(attacker, target, PredictedCombatEvents.Kind.Damage),
+					"Sanity: the server confirms the first hit.");
+				LogAssert.AreEqual(0, undone.Count, "A confirmed hit is not undone: the server's report stands for it.");
+
+				PredictedCombatEvents.Sweep(PredictedCombatEvents.ConfirmationWindowSeconds + 0.1f);
+				LogAssert.AreEqual(1, undone.Count, "The second hit was never confirmed: it is given up, once.");
+				LogAssert.AreEqual(21, undone[0].target);
+				LogAssert.AreEqual(9, undone[0].amount, "With the amount this client moved the bar by.");
+				LogAssert.AreEqual(5, undone[0].stamp,
+					"And the target's health-push count from when it was predicted: if the server has sent that health since, the bar is already right and is left alone.");
+
+				PredictedCombatEvents.Predict(attacker, target, 4, PredictedCombatEvents.Kind.Damage, null, 10f);
+				LogAssert.IsTrue(PredictedCombatEvents.TryRefuse(attacker, target, CombatEventKind.Evade), "Sanity: the server refuses the third.");
+				LogAssert.AreEqual(2, undone.Count, "A refused hit is undone as well: an evade moves no health on the server.");
+				LogAssert.AreEqual(4, undone[1].amount);
+			}
+			finally
+			{
+				PredictedCombatEvents.OnPredictionUndone -= listener;
+				PredictedCombatEvents.HealthPushStampOf = previousStamp;
+			}
+		}
+
 		[Test]
 		public void Sweep_RejectsEachPredictionOnlyOnce()
 		{

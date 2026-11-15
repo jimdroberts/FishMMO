@@ -284,12 +284,15 @@ namespace FishMMO.Client
 				return;
 			}
 
+			if (CancelKey.Matches(evt))
+			{
+				evt.StopPropagation();
+				Hide();
+				return;
+			}
+
 			switch (evt.keyCode)
 			{
-				case KeyCode.Escape:
-					evt.StopPropagation();
-					Hide();
-					return;
 				case KeyCode.UpArrow:
 					evt.StopPropagation();
 					MoveFocus(-1);

@@ -167,7 +167,7 @@ namespace FishMMO.UnitTests
 			/* Pinned in source: counts become degrees where the camera is fed, and the stick is a rate scaled by
 			 * frame time. */
 			string source = ReadSource("Assets/Scripts/Client/Input/PlayerInputController.cs");
-			StringAssert.Contains("Character.KCCPlayer.UpdateCamera(-mouseScrollInput, LookDegrees());", source);
+			StringAssert.Contains("Character.KCCPlayer.UpdateCamera(Time.unscaledDeltaTime, -mouseScrollInput, LookDegrees());", source);
 			StringAssert.Contains("lookInput * ClientCameraSettings.MouseDegreesPerCount", source);
 			StringAssert.Contains("ClientCameraSettings.StickDegreesPerSecondAtFullDeflection * Time.unscaledDeltaTime", source);
 		}

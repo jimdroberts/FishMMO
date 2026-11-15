@@ -70,6 +70,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// True for an event dispatched a second time on a REPLAYED tick only so that what the correction took back is put
+		/// back (a self-cast heal, buff or cost): only actions that answer <see cref="BaseAction.ReappliesOnReplay"/> run.
+		/// </summary>
+		public bool ReapplyOnly { get; set; }
+
+		/// <summary>
 		/// Creates tick event data from a replicate input tick, taking its replay answer from the
 		/// <see cref="ReplicateState"/> the dispatch is running under.
 		/// </summary>

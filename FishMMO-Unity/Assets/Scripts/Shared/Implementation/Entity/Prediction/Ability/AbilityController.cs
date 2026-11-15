@@ -66,6 +66,16 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool wasDenied;
 
+		/// <summary>Server: a Denied or NoSpawn report that still rides the reconciles of ticks without input.</summary>
+		private bool stickyDenied;
+		private bool stickyNoSpawn;
+		private int stickyBlankTicks;
+		/// <summary>Server: the last tick ran no input (default data).</summary>
+		private bool serverTickWasBlank;
+
+		/// <summary>How many ticks without input a one-shot report keeps riding: the same second the reconcile stamp holds the input's tick.</summary>
+		private const int StickyReportBlankTicks = 30;
+
 		/// <summary>Cached longest range among <c>KnownAbilities</c>; see <see cref="LongestKnownAbilityRange"/>.</summary>
 		private float longestKnownAbilityRange;
 
@@ -458,6 +468,10 @@ namespace FishMMO.Shared
 			replicatedFlags = 0;
 			// Clear the server-side denial sentinel so a respawn/possession does not
 			// carry over a stale Denied bit into the next reconcile.
+			stickyDenied = false;
+			stickyNoSpawn = false;
+			stickyBlankTicks = 0;
+			serverTickWasBlank = false;
 			wasDenied = false;
 			serverSpawnedNothingTick = TimeManager.UNSET_TICK;
 			Cancel();
@@ -498,6 +512,10 @@ namespace FishMMO.Shared
 			KnownAbilityOnDestroyEvents.Clear();
 			templateToAbilityID?.Clear();
 			pendingInFlightObjects.Clear();
+			pendingHitClaims.Clear();
+			recentlyEndedObjects.Clear();
+			blankTicksInCast = 0;
+			replicatedLaunch = default;
 
 			// Force regeneration of the ability seed generator on every reset.
 			// Without this, a non-null generator from a previous session (e.g.,
@@ -549,7 +567,384 @@ namespace FishMMO.Shared
 			input.QueuedAbilityID = abilityInput.QueuedAbilityID;
 
 			PopulateAiAim(ref input);
+			PopulateConvergence(ref input, abilityInput);
+			PopulateHitClaim(ref input);
 		}
+
+		/// <summary>
+		/// Owner: sends the launch line (the crosshair's own line, as three small numbers) on a tick a projectile may spawn.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Only then, because it means something on perhaps one tick in a hundred. The owner knows which: a cast it is
+		/// starting this tick (an instant one finishes on the same tick), a cast whose countdown has a tick or less to
+		/// run, and every tick of one that is held (a channel spawns each tick, a charge releases when the button does).
+		/// And only for an ability that is launched toward the aim from the spawner; nothing else reads it.
+		/// </para>
+		/// <para>
+		/// Guessing wrong costs accuracy, never agreement: a spawn on a tick without a launch line flies from the eye
+		/// along the aim on the server and the owner alike (AimConvergence.LaunchLine).
+		/// </para>
+		/// </remarks>
+		private void PopulateConvergence(ref CharacterReplicateData input, AbilityActivationReplicateData abilityInput)
+		{
+			if (PlayerCharacter == null || !base.IsOwner || base.IsServerStarted)
+			{
+				return;
+			}
+			KCCPlayer kccPlayer = PlayerCharacter.KCCPlayer;
+			if (kccPlayer == null || !kccPlayer.OwnerLaunch.IsGiven)
+			{
+				return;
+			}
+
+			/* The cast that may LAUNCH on this tick decides, and that is the one in progress when there is one: an id
+			 * queued behind it (only reachable when a correction re-installs a cast between the key press and the tick)
+			 * starts nothing while the cast runs, and letting its template decide left the finishing cast without its
+			 * line. */
+			long abilityID = NO_ABILITY;
+			if (IsActivating)
+			{
+				if (!replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable) &&
+					(remainingTicks <= 1u || replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld)))
+				{
+					abilityID = currentAbilityID;
+				}
+			}
+			else if (abilityInput.QueuedAbilityID != NO_ABILITY &&
+				!abilityInput.ActivationFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+			{
+				abilityID = abilityInput.QueuedAbilityID;
+			}
+
+			if (abilityID == NO_ABILITY ||
+				!KnownAbilities.TryGetValue(abilityID, out Ability ability) ||
+				ability.Template == null ||
+				ability.Template.AbilitySpawnTarget != AbilitySpawnTarget.SpawnerWithCameraRotation)
+			{
+				return;
+			}
+
+			AimConvergence.AimLaunch launch = kccPlayer.OwnerLaunch;
+			input.ConvergenceDistance = launch.Distance;
+			input.AimOriginRight = launch.Right;
+			input.AimOriginUp = launch.Up;
+		}
+
+		/// <summary>The launch line replicated for the tick being simulated; not given for none.</summary>
+		private AimConvergence.AimLaunch replicatedLaunch;
+
+		#region Hit claims
+		/// <summary>
+		/// False to stop sending and honouring hit claims (see <see cref="CharacterReplicateData.HitClaimVictim"/>): the
+		/// server's own lag-compensated sweep is then the only judge of a hit, as it was before claims existed.
+		/// </summary>
+		public static bool HitClaims = true;
+
+		/// <summary>Claims the server accepted since it started: hits its own sweep had not made.</summary>
+		public static long HitClaimsGranted;
+
+		/// <summary>Claims the server refused since it started, for any reason other than already agreeing.</summary>
+		public static long HitClaimsRefused;
+
+		/// <summary>A hit the owner's copy of one of its objects made, waiting for an input to carry it.</summary>
+		private struct PendingHitClaim
+		{
+			public uint SpawnTick;
+			public byte ObjectID;
+			public int VictimObjectID;
+			/// <summary>The ability whose object the claim names; 0 when it was not known.</summary>
+			public long AbilityID;
+		}
+
+		/// <summary>Claims waiting to be sent, oldest first. One goes with each input.</summary>
+		private readonly Queue<PendingHitClaim> pendingHitClaims = new Queue<PendingHitClaim>();
+
+		/// <summary>The most claims kept waiting; a burst beyond it (an area object over a crowd) drops its oldest.</summary>
+		private const int MaximumPendingHitClaims = 8;
+
+		/// <summary>Owner: a copy of one of this character's ability objects hit <paramref name="victimObjectID"/>.</summary>
+		internal void QueueHitClaim(PredictionTick spawnTick, byte objectID, int victimObjectID, long abilityID = 0)
+		{
+			if (!HitClaims || !base.IsOwner || base.IsServerStarted)
+			{
+				return;
+			}
+			while (pendingHitClaims.Count >= MaximumPendingHitClaims)
+			{
+				pendingHitClaims.Dequeue();
+			}
+			pendingHitClaims.Enqueue(new PendingHitClaim { SpawnTick = spawnTick.Value, ObjectID = objectID, VictimObjectID = victimObjectID, AbilityID = abilityID });
+		}
+
+		/// <summary>
+		/// Owner: forgets the waiting claims of objects a correction has just taken back (spawned after
+		/// <paramref name="tick"/>, or on it with <paramref name="includeTick"/>). The server never had those objects, so
+		/// their claims could only be refused, and counted as refusals that were nothing of the kind.
+		/// </summary>
+		private void DropPendingHitClaims(uint tick, bool includeTick, long abilityID = 0, bool onlyTick = false, uint upToTick = 0u, bool bounded = false)
+		{
+			int count = pendingHitClaims.Count;
+			for (int i = 0; i < count; ++i)
+			{
+				PendingHitClaim claim = pendingHitClaims.Dequeue();
+				int after = unchecked((int)(claim.SpawnTick - tick));
+				bool inScope = onlyTick ? after == 0 : (after > 0 || (includeTick && after == 0));
+				if (inScope && bounded && unchecked((int)(claim.SpawnTick - upToTick)) > 0)
+				{
+					inScope = false;
+				}
+				// Only the ability whose objects were taken back, when the caller says which: another's claims are good.
+				if (inScope && abilityID != 0 && claim.AbilityID != 0 && claim.AbilityID != abilityID)
+				{
+					inScope = false;
+				}
+				if (inScope)
+				{
+					continue;
+				}
+				pendingHitClaims.Enqueue(claim);
+			}
+		}
+
+		/// <summary>Owner: attaches the oldest waiting claim to this tick's input.</summary>
+		private void PopulateHitClaim(ref CharacterReplicateData input)
+		{
+			while (pendingHitClaims.Count > 0)
+			{
+				PendingHitClaim claim = pendingHitClaims.Dequeue();
+				// The input is stamped with this tick (NetworkBehaviour.Replicate_Authoritative), which the age counts from.
+				uint age = unchecked(base.TimeManager.LocalTick - claim.SpawnTick);
+				if (age == 0u || age > ushort.MaxValue || claim.VictimObjectID < 0 || claim.VictimObjectID == int.MaxValue)
+				{
+					continue;
+				}
+				input.HitClaimVictim = claim.VictimObjectID + 1;
+				input.HitClaimSpawnAge = (ushort)age;
+				input.HitClaimObject = claim.ObjectID;
+				return;
+			}
+		}
+
+		/// <summary>
+		/// Server: checks the claim an input carries and applies the hit if this character's object could have made it
+		/// (AbilityObject.TryApplyClaimedHit).
+		/// </summary>
+		private void ApplyHitClaim(ref CharacterReplicateData input)
+		{
+			if (!HitClaims || !base.IsServerStarted || input.HitClaimVictim <= 0 || PlayerCharacter == null ||
+				base.NetworkManager == null)
+			{
+				return;
+			}
+
+			uint spawnTick = unchecked(input.GetTick() - input.HitClaimSpawnAge);
+			AbilityObject claimed = FindAbilityObject(spawnTick, input.HitClaimObject);
+			// Not flying any more: one that ended a tick or two ago on scenery, or by running out, still answers.
+			AbilityObject ended = claimed == null ? FindEndedObject(spawnTick, input.HitClaimObject) : null;
+			if (claimed == null && ended == null)
+			{
+				// It ended on this very victim: the server made the hit itself. Otherwise gone, or it ended on somebody else.
+				if (EndedOnThisVictim(spawnTick, input.HitClaimObject, input.HitClaimVictim - 1))
+				{
+					HitClaimsAgreed++;
+				}
+				else
+				{
+					HitClaimsRefused++;
+				}
+				return;
+			}
+
+			ICharacter victim = null;
+			if (base.NetworkManager.ServerManager.Objects.Spawned.TryGetValue(input.HitClaimVictim - 1, out FishNet.Object.NetworkObject victimNob) &&
+				victimNob != null)
+			{
+				victimNob.TryGetComponent(out victim);
+			}
+			if (victim == null || ReferenceEquals(victim, Character))
+			{
+				HitClaimsRefused++;
+				return;
+			}
+
+			if (ended != null)
+			{
+				if (ended.TryApplyEndedClaim(victim, input.GetTick()))
+				{
+					HitClaimsGranted++;
+				}
+				else
+				{
+					HitClaimsRefused++;
+				}
+				return;
+			}
+
+			if (claimed.HasHit(victim))
+			{
+				// The server's own sweep made this hit already: the two agree, which is the usual case.
+				HitClaimsAgreed++;
+				return;
+			}
+			if (claimed.TryApplyClaimedHit(victim, input.GetTick()))
+			{
+				HitClaimsGranted++;
+			}
+			else
+			{
+				HitClaimsRefused++;
+			}
+		}
+
+		/// <summary>Server: this character's objects that ended within the claim grace (AbilityObject.DestroyAbilityObjectInternal).</summary>
+		private readonly List<AbilityObject> recentlyEndedObjects = new List<AbilityObject>();
+
+		/// <summary>True while any of this character's abilities has an object in the world.</summary>
+		internal bool HasLiveObjects
+		{
+			get
+			{
+				if (KnownAbilities == null)
+				{
+					return false;
+				}
+				foreach (Ability ability in KnownAbilities.Values)
+				{
+					if (ability?.Objects != null && ability.Objects.Count > 0)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+		}
+
+		/// <summary>Claims for a hit the server's own sweep had made already, since the server started.</summary>
+		public static long HitClaimsAgreed;
+
+		private struct EndedOnCharacter
+		{
+			public uint SpawnTick;
+			public int ObjectID;
+			public uint EndedTick;
+			public int VictimA;
+			public int VictimB;
+			public int VictimC;
+		}
+
+		/// <summary>Server: recent objects of this character that ended on a character, and on whom (up to three).</summary>
+		private readonly EndedOnCharacter[] endedOnCharacters = new EndedOnCharacter[8];
+		private int endedOnCharacterNext;
+
+		/// <summary>Server: an object of this character spent its last hit on a character; its claims are agreement, not refusals.</summary>
+		internal void NoteEndedOnCharacter(uint spawnTick, int objectID, HashSet<GameObject> victims)
+		{
+			EndedOnCharacter entry = new EndedOnCharacter
+			{
+				SpawnTick = spawnTick,
+				ObjectID = objectID,
+				EndedTick = base.TimeManager != null ? base.TimeManager.LocalTick : 0u,
+				VictimA = -1,
+				VictimB = -1,
+				VictimC = -1,
+			};
+			int filled = 0;
+			foreach (GameObject victim in victims)
+			{
+				FishNet.Object.NetworkObject victimNob = victim != null ? victim.GetComponent<FishNet.Object.NetworkObject>() : null;
+				if (victimNob == null)
+				{
+					continue;
+				}
+				if (filled == 0) entry.VictimA = victimNob.ObjectId;
+				else if (filled == 1) entry.VictimB = victimNob.ObjectId;
+				else entry.VictimC = victimNob.ObjectId;
+				if (++filled >= 3)
+				{
+					break;
+				}
+			}
+			endedOnCharacters[endedOnCharacterNext] = entry;
+			endedOnCharacterNext = (endedOnCharacterNext + 1) % endedOnCharacters.Length;
+		}
+
+		/// <summary>True when the object named ended on <paramref name="victimObjectID"/> within the claim window.</summary>
+		private bool EndedOnThisVictim(uint spawnTick, int objectID, int victimObjectID)
+		{
+			uint now = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+			for (int i = 0; i < endedOnCharacters.Length; ++i)
+			{
+				EndedOnCharacter entry = endedOnCharacters[i];
+				if (entry.SpawnTick == spawnTick && entry.ObjectID == objectID && unchecked(now - entry.EndedTick) <= AbilityObject.ClaimStepWindow + 2u &&
+					(entry.VictimA == victimObjectID || entry.VictimB == victimObjectID || entry.VictimC == victimObjectID))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Server: <paramref name="abilityObject"/> has ended but still answers a hit claim for a few ticks.</summary>
+		internal void NoteEndedObject(AbilityObject abilityObject)
+		{
+			PruneEndedObjects();
+			recentlyEndedObjects.Add(abilityObject);
+		}
+
+		/// <summary>Drops ended objects that Unity has destroyed, that have answered, or whose grace has run out.</summary>
+		private void PruneEndedObjects()
+		{
+			uint now = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+			for (int i = recentlyEndedObjects.Count - 1; i >= 0; --i)
+			{
+				AbilityObject ended = recentlyEndedObjects[i];
+				if (ended == null || !ended.AnswersClaimsAfterEnding ||
+					unchecked(now - ended.EndedOnTick) > AbilityObject.ClaimStepWindow + 2u)
+				{
+					recentlyEndedObjects.RemoveAt(i);
+				}
+			}
+		}
+
+		/// <summary>This character's object from the cast of <paramref name="spawnTick"/> that ended within the claim grace, or null.</summary>
+		private AbilityObject FindEndedObject(uint spawnTick, int objectID)
+		{
+			PruneEndedObjects();
+			for (int i = 0; i < recentlyEndedObjects.Count; ++i)
+			{
+				AbilityObject ended = recentlyEndedObjects[i];
+				if (ended.SpawnTick.Value == spawnTick && ended.ID == objectID)
+				{
+					return ended;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>This character's live ability object spawned by the cast of <paramref name="spawnTick"/>, by its index in the cast.</summary>
+		private AbilityObject FindAbilityObject(uint spawnTick, int objectID)
+		{
+			foreach (Ability ability in KnownAbilities.Values)
+			{
+				if (ability == null || ability.Objects == null)
+				{
+					continue;
+				}
+				foreach (Dictionary<int, AbilityObject> container in ability.Objects.Values)
+				{
+					if (container != null &&
+						container.TryGetValue(objectID, out AbilityObject abilityObject) &&
+						abilityObject != null && !abilityObject.IsDestroyed &&
+						abilityObject.SpawnTick.Value == spawnTick)
+					{
+						return abilityObject;
+					}
+				}
+			}
+			return null;
+		}
+		#endregion
 
 		/// <summary>
 		/// Writes an AI character's aim into the replicate stream.
@@ -632,8 +1027,17 @@ namespace FishMMO.Shared
 			activationFlags.EnableBit(AbilityActivationFlags.IsActualData);
 
 			// Clear one-shot flags from localInputFlags after capturing them.
-			// IsHeld, IsConsumable, and IsMount are persistent state flags cleared by Cancel().
+			// IsHeld and IsMount are persistent state flags cleared by Cancel().
 			localInputFlags.DisableBit(AbilityActivationFlags.Interrupt);
+			/* IsConsumable says what KIND of id this input queues, and nothing reads it on an input that queues none. It
+			 * leaves with the id. It used to stay set until this peer ran a Cancel, which it never does when the SERVER ends
+			 * or refuses the use (a stun, a death, an inventory disagreement: the owner learns by correction) or when the
+			 * item is pressed while dead: every ability pressed afterwards went out marked as a consumable, matched no item
+			 * on either peer, and silently did nothing until the Cancel key or the next successful potion. */
+			if (queuedAbilityID != NO_ABILITY)
+			{
+				localInputFlags.DisableBit(AbilityActivationFlags.IsConsumable);
+			}
 
 			AbilityActivationReplicateData activationEventData = new AbilityActivationReplicateData(activationFlags,
 																									queuedAbilityID);
@@ -674,6 +1078,49 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>Consecutive ticks the server has run without input while this character was casting.</summary>
+		private int blankTicksInCast;
+
+		/// <summary>Ticks, since the server started, on which a cast waited because its caster's input had not arrived.</summary>
+		public static long BlankCastTicks;
+
+		/// <summary>Casts, since the server started, cancelled because input stayed missing past <see cref="MaximumBlankTicksInCast"/>.</summary>
+		public static long BlankCastCancels;
+
+		/// <summary>
+		/// How many ticks in a row a cast waits for input the server does not have before the server cancels it: half a
+		/// second at 30 Hz.
+		/// </summary>
+		/// <remarks>
+		/// Long enough for any stall a playable connection produces (the input queue and the adaptive timing absorb far
+		/// less than this), short enough that withholding input cannot bank a finished cast to release later. The owner
+		/// learns of the cancel from the reconcile, like any other.
+		/// </remarks>
+		internal const int MaximumBlankTicksInCast = 15;
+
+		/// <summary>
+		/// Ticks without input a cast waits out before it is cancelled: <see cref="MaximumBlankTicksInCast"/>, plus the queue's
+		/// own start delay, which runs default data after an underrun with the input already waiting and so is not the owner's.
+		/// </summary>
+		internal int BlankTicksAllowedInCast => MaximumBlankTicksInCast + (base.PredictionManager != null ? base.PredictionManager.StateInterpolation : 0);
+
+		/// <summary>True where a tick without input freezes the ability state machine: the server, for anything it does not drive itself.</summary>
+		internal static bool FreezesOnBlankTick(bool isServerStarted) => isServerStarted;
+
+		/// <summary>
+		/// The eye this tick's shots are fired from: a player's eye at the start of the tick (KCCPlayer.TickAimOrigin, when
+		/// it was recorded for this very tick), otherwise the eye as it stands.
+		/// </summary>
+		private Vector3 ResolveTickAimOrigin(uint tick)
+		{
+			KCCPlayer kccPlayer = PlayerCharacter != null ? PlayerCharacter.KCCPlayer : null;
+			if (kccPlayer != null && kccPlayer.TickAimOriginTick != KCCPlayer.NoTickAimOrigin && kccPlayer.TickAimOriginTick == tick)
+			{
+				return kccPlayer.TickAimOrigin;
+			}
+			return CharacterAimOrigin.Resolve(Character);
+		}
+
 		/// <summary>
 		/// The body of <see cref="OnReplicate"/>; split out so every early return still lands in
 		/// the per-tick history record.
@@ -687,9 +1134,15 @@ namespace FishMMO.Shared
 
 			/* Aim for THIS tick. The direction is replicated; the origin is DERIVED, because a
 			 * client-supplied origin was never validated against the caster's own position and so
-			 * chose the point the server raycast from. See CharacterAimOrigin. KCCPlayer (Order 80)
-			 * has already advanced the motor for this tick by the time this runs (Order 100). */
-			replicatedAimOrigin = CharacterAimOrigin.Resolve(Character);
+			 * chose the point the server raycast from. See CharacterAimOrigin.
+			 *
+			 * For a player, the eye at the START of the tick, recorded by KCCPlayer (Order 80) before
+			 * it moved the motor: the owner converged the aim on the crosshair's point from that eye
+			 * (AimConvergence), so it is the only origin from which the shot reaches that point. The
+			 * eye after the move, read here, put the shot on a parallel line one tick of movement away.
+			 * An NPC has no KCCPlayer and keeps the eye as it stands. */
+			replicatedAimOrigin = ResolveTickAimOrigin(input.GetTick());
+			replicatedLaunch = new AimConvergence.AimLaunch(input.ConvergenceDistance, input.AimOriginRight, input.AimOriginUp);
 			replicatedAimDirection = input.AimDirection.sqrMagnitude > 1e-12f
 				? input.AimDirection
 				// The QUANTISED fallback: KCCPlayer.PopulateInput writes that vector for a missing
@@ -701,10 +1154,44 @@ namespace FishMMO.Shared
 
 			bool hasActualData = activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsActualData);
 
-			// FishNet may occasionally provide default replicate data. That means
-			// no new input arrived for this tick, not that simulation should stop.
-			// Preserve held-state continuity for active casts while still running
-			// deterministic cooldown/resource simulation below.
+			/* A tick the server ran with NO input (its queue for this player was empty: FishNet hands the body a blank
+			 * one) does nothing to a cast. The countdown is counted in the owner's inputs, because the owner predicts it
+			 * that way: N inputs after the one that started the cast, it finishes, with the aim of that input. A blank
+			 * tick used to count as well, so every tick the queue ran dry during a cast finished it one input EARLIER on
+			 * the server than the owner predicted. The owner was then corrected to "already finished" and never spawned
+			 * its own projectile (a replayed tick does not spawn, and the server's activation message goes to everyone
+			 * but the owner), and a countdown that ran out ON the blank tick fired with the blank input's aim, which is
+			 * none: due north. Movement already waits out a blank tick (KCCPlayer.OnReplicate); now the cast does too,
+			 * and finishes on the same input on both peers however late that input is.
+			 *
+			 * An input that never comes does not hold a cast for ever: see MaximumBlankTicksInCast. */
+			if (!hasActualData && FreezesOnBlankTick(base.IsServerStarted))
+			{
+				serverTickWasBlank = true;
+				if (IsActivating)
+				{
+					BlankCastTicks++;
+					if (++blankTicksInCast > BlankTicksAllowedInCast)
+					{
+						blankTicksInCast = 0;
+						BlankCastCancels++;
+						Cancel(state);
+						// Nothing renews the reconcile on a tick without input: the owner has to be told now, not when
+						// its input comes back, by which time it has launched what the server cancelled.
+						if (predictionController != null)
+						{
+							predictionController.RequestReconcileSends();
+						}
+					}
+				}
+				return;
+			}
+			blankTicksInCast = 0;
+			serverTickWasBlank = false;
+
+			ApplyHitClaim(ref input);
+
+			// Off the server a tick without input is an observer's (state forwarding): held state carries over.
 			if (!hasActualData)
 			{
 				activationData.QueuedAbilityID = NO_ABILITY;
@@ -914,10 +1401,15 @@ namespace FishMMO.Shared
 		{
 			// Include server-authoritative denial flag if the last tick denied an activation.
 			int flags = replicatedFlags;
+			/* A one-shot report rides every reconcile until an input runs after it. The reconcile of a tick with no input is
+			 * stamped with the last input's tick too (PredictionManager.SendStateUpdate), so the owner can receive both in one
+			 * state and keeps the later: a report that rode only the first was lost. */
+			bool freshReport = false;
 			if (wasDenied)
 			{
-				flags.EnableBit(AbilityActivationFlags.Denied);
+				stickyDenied = true;
 				wasDenied = false;
+				freshReport = true;
 			}
 			/* Only when the no-spawn belongs to the tick this reconcile describes. A reconcile is the
 			 * state after the LAST replicate the server ran this tick, so that tick — and no other —
@@ -931,9 +1423,33 @@ namespace FishMMO.Shared
 
 				if (ShouldFlagNoSpawn(serverSpawnedNothingTick, reconcileTick))
 				{
-					flags.EnableBit(AbilityActivationFlags.NoSpawn);
+					stickyNoSpawn = true;
+					freshReport = true;
 				}
 				serverSpawnedNothingTick = TimeManager.UNSET_TICK;
+			}
+			if (freshReport)
+			{
+				stickyBlankTicks = 0;
+			}
+			else if (!serverTickWasBlank)
+			{
+				// An input ran after the one the report was about: this reconcile is that input's, and the report is spent.
+				stickyDenied = false;
+				stickyNoSpawn = false;
+			}
+			else if ((stickyDenied || stickyNoSpawn) && ++stickyBlankTicks > StickyReportBlankTicks)
+			{
+				stickyDenied = false;
+				stickyNoSpawn = false;
+			}
+			if (stickyDenied)
+			{
+				flags.EnableBit(AbilityActivationFlags.Denied);
+			}
+			if (stickyNoSpawn)
+			{
+				flags.EnableBit(AbilityActivationFlags.NoSpawn);
 			}
 
 			if ((flags & ~0xFFFF) != 0)
@@ -1034,6 +1550,15 @@ namespace FishMMO.Shared
 				 * RequiresTarget miss at T erased a confirmed projectile from T+1 permanently. Only a
 				 * genuine seed mismatch (or denial, which implies one at T) justifies the wider sweep. */
 				bool onlyAtTick = destroyAtTick && havePredicted && predictedSeed == rd.Seed;
+				long droppedAbility = predictedAbilityID != NO_ABILITY && KnownAbilities.ContainsKey(predictedAbilityID) ? predictedAbilityID : 0;
+				if (onlyAtTick)
+				{
+					DropPendingHitClaims(reconcileTick, includeTick: true, droppedAbility, onlyTick: true);
+				}
+				else
+				{
+					DropPendingHitClaims(reconcileTick, destroyAtTick, droppedAbility);
+				}
 
 				if (predictedAbilityID != NO_ABILITY && KnownAbilities.TryGetValue(predictedAbilityID, out Ability mismatchedAbility))
 				{
@@ -1084,6 +1609,20 @@ namespace FishMMO.Shared
 			{
 				OnCancel?.Invoke();
 
+				/* And whatever that cast has launched SINCE is taken back. The seeds can agree here (the server ended the
+				 * cast without finishing it: an interrupt, a stun, a death, input that never came), so the mismatch sweep
+				 * above did not run, and the replay from this state does not finish the cast. The projectile the owner
+				 * launched after this tick therefore had no server counterpart and flew its whole life as a ghost, showing
+				 * hits nobody else saw. Objects from an EARLIER cast of the same ability (at or before this tick) stay. */
+				if (KnownAbilities.TryGetValue(predictedAbilityID, out Ability endedAbility))
+				{
+					/* Only that cast's: up to the tick this client's own prediction ended it. A later cast of the same ability
+					 * is one the server runs too (it never finished the first, so nothing is cooling down) and must stay. */
+					uint castEnd = PredictedCastEndAfter(reconcileTick, predictedAbilityID);
+					endedAbility.DestroyAbilityObjectsBetween(reconcileTick, castEnd);
+					DropPendingHitClaims(reconcileTick, includeTick: false, predictedAbilityID, upToTick: castEnd, bounded: true);
+				}
+
 				/* And the persistent animation state with it. Cancel() clears the Block bool, but a
 				 * SERVER-side interrupt runs Cancel on the server only — where SetBlocking compiles
 				 * out — and the owner learns of it exactly here, through the reconcile. Without this
@@ -1092,6 +1631,27 @@ namespace FishMMO.Shared
 				 * cancelled ability. Trigger-based animations are transient and need no clear. */
 				cachedAnimationController?.SetBlocking(false);
 			}
+		}
+
+		/// <summary>
+		/// The first tick after <paramref name="afterTick"/> on which this client's own prediction no longer had
+		/// <paramref name="abilityID"/> in progress (its cast ended there, finishing or not), or the current tick.
+		/// </summary>
+		private uint PredictedCastEndAfter(uint afterTick, long abilityID)
+		{
+			uint now = base.TimeManager != null ? base.TimeManager.LocalTick : afterTick;
+			for (uint t = afterTick + 1u; (int)(now - t) >= 0; ++t)
+			{
+				if (!predictedStateHistory.TryGet(t, out _, out long predicted))
+				{
+					continue;
+				}
+				if (predicted != abilityID)
+				{
+					return t;
+				}
+			}
+			return now;
 		}
 
 		/// <summary>
@@ -1244,6 +1804,9 @@ namespace FishMMO.Shared
 		{
 			currentAbilityID = rd.AbilityID;
 			remainingTicks = rd.RemainingTicks;
+			// The countdown restored is the one AFTER the corrected tick: the replay counts on from that number.
+			lastCastTick = rd.GetTick();
+			hasLastCastTick = true;
 			/* Restored like every other predicted counter. The owner increments this once per
 			 * invocation of the replicate body, and a reconcile replays every tick since the
 			 * correction — so left to itself it runs at several times the server's rate and the

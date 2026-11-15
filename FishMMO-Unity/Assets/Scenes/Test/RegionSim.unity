@@ -248,7 +248,7 @@ MonoBehaviour:
   Manifest: {fileID: 0}
   PlayerPrefab: {fileID: 0}
   BoostedAttribute: {fileID: 0}
-  Port: 7799
+  Port: 8799
   WalkSpeed: 6
 --- !u!4 &681732074
 Transform:

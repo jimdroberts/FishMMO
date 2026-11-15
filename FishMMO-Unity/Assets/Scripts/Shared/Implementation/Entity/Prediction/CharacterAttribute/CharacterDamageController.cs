@@ -640,6 +640,42 @@ namespace FishMMO.Shared
 			}
 			combatEventBroadcastRegistered = true;
 			networkManager.ClientManager.RegisterBroadcast<CombatEventBroadcast>(OnCombatEventBroadcast);
+			PredictedCombatEvents.HealthPushStampOf = HealthPushStampOf;
+			PredictedCombatEvents.OnPredictionUndone += OnPredictionUndone;
+			// Predictions name characters by object id, and ids mean nothing on the next server: dropped with the connection.
+			networkManager.ClientManager.OnClientConnectionState += _ => PredictedCombatEvents.Clear();
+		}
+
+		private static int HealthPushStampOf(ICharacter target)
+		{
+			return target != null && target.GameObject != null &&
+				target.GameObject.TryGetComponent(out CharacterAttributeController attributes)
+				? attributes.ObservedHealthPushCount
+				: 0;
+		}
+
+		/// <summary>
+		/// A prediction of this client's on ANOTHER character was given up: its health goes back by what the prediction
+		/// moved it (see <see cref="PredictedCombatEvents.OnPredictionUndone"/>).
+		/// </summary>
+		private static void OnPredictionUndone(int targetObjectId, int amount, PredictedCombatEvents.Kind kind, int healthPushStamp)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (amount <= 0 || nm == null || nm.IsServerStarted || nm.ClientManager == null ||
+				!nm.ClientManager.Objects.Spawned.TryGetValue(targetObjectId, out FishNet.Object.NetworkObject targetNob) ||
+				targetNob == null || targetNob.IsOwner)
+			{
+				// Its own character is corrected by the reconcile, not here.
+				return;
+			}
+			CharacterAttributeController attributes = targetNob.GetComponent<CharacterAttributeController>();
+			// The server has sent this target's health since the prediction: the bar is already the server's.
+			if (attributes == null || attributes.ObservedHealthPushCount != healthPushStamp)
+			{
+				return;
+			}
+			// Undoing damage restores; undoing a heal takes it away.
+			attributes.ApplyObservedHealthDelta(amount, restoresHealth: kind == PredictedCombatEvents.Kind.Damage);
 		}
 
 		/// <summary>

@@ -365,7 +365,7 @@ namespace FishMMO.Client
 
 		private void OnRootKeyDown(KeyDownEvent evt)
 		{
-			if (!Visible || evt.keyCode != KeyCode.Escape)
+			if (!Visible || !CancelKey.Matches(evt))
 			{
 				return;
 			}

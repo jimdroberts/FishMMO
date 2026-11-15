@@ -8,8 +8,8 @@ namespace FishMMO.Shared
 	/// Custom delta serializers for <see cref="CharacterReplicateData"/>.
 	/// <para>
 	/// <b>Delta serializer</b>: Writes a 1-byte bitmask followed by delta-encoded values for only
-	/// the changed fields. All eight bits are in use — bit 3, once a retired gap, now carries the
-	/// equipment request pair, see the constants.
+	/// the changed fields. All eight bits are in use — bit 3 opens a second byte for the rare one-shot
+	/// fields (equipment request, convergence distance, hit claim), see the constants.
 	/// <para>
 	/// An idle tick costs the bitmask alone. For real figures rather than an estimate, run
 	/// <c>PredictionBandwidthBenchmarkTests</c>, which measures this type against the production
@@ -19,19 +19,114 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class CharacterReplicateDataDeltaSerializer
 	{
-		/// <summary>Bit flag for forward axis changes.</summary>
-		private const byte FORWARD_BIT = 1 << 0;
-		/// <summary>Bit flag for right axis changes.</summary>
-		private const byte RIGHT_BIT = 1 << 1;
+		/// <summary>Bit flag for a change to either move axis; both are written (two bytes).</summary>
+		/* One bit for the pair, where each axis used to have its own. The second bit was worth more as the heading
+		 * offset's: that changes on many ticks of a turning camera, where an axis changes on a key press, and a key
+		 * press now costs one byte more (the axis that did not change) where a turning tick costs one less. */
+		private const byte MOVE_AXES_BIT = 1 << 0;
+		/// <summary>Bit flag for a change to the heading offset (zig-zag packed quarter degrees).</summary>
+		private const byte HEADING_OFFSET_BIT = 1 << 1;
 		/// <summary>Bit flag for move flags changes.</summary>
 		private const byte MOVE_FLAGS_BIT = 1 << 2;
-		/// <summary>Bit flag for the equipment request pair (packed request + source index).</summary>
+		/// <summary>
+		/// Bit flag for the rare fields: a second flags byte follows (<see cref="RARE_EQUIPMENT_BIT"/> and the rest), then
+		/// each field it names.
+		/// </summary>
 		/* Bit 3 carried CameraPosition until the aim origin was derived from the motor (see
-		 * CharacterAimOrigin) and sat as a gap for a while. It is live again: the byte was full, and
-		 * widening the bitmask to a ushort would have cost every replicate a byte to carry a field
-		 * that is non-zero on perhaps one tick in a thousand. Both peers ship together, so there is
-		 * no build in the field that could read this bit as the old position. */
-		private const byte EQUIPMENT_BIT = 1 << 3;
+		 * CharacterAimOrigin), then the equipment request pair alone. It now opens a second byte, because three fields
+		 * share its nature: present on perhaps one tick in a hundred, and absent (not "unchanged") on all the others.
+		 * Widening the first byte would have cost every replicate a byte for them; this costs a byte only on the tick
+		 * one of them is there. Both peers ship together, so no build in the field reads this bit the old way. */
+		private const byte RARE_BIT = 1 << 3;
+		/// <summary>Rare field: the equipment request pair (packed request + source index), three bytes.</summary>
+		private const byte RARE_EQUIPMENT_BIT = 1 << 0;
+		/// <summary>Rare field: the launch line (convergence distance and the two origin offsets), three bytes.</summary>
+		private const byte RARE_CONVERGENCE_BIT = 1 << 1;
+		/// <summary>Rare field: a hit claim (victim, cast age, object index).</summary>
+		private const byte RARE_HIT_CLAIM_BIT = 1 << 2;
+
+		/// <summary>The rare fields an input carries, as the second flags byte names them. Zero for almost every input.</summary>
+		private static byte RareFields(in CharacterReplicateData value)
+		{
+			byte rare = 0;
+			if (value.EquipmentRequest != 0 || value.EquipmentIndex != 0)
+			{
+				rare |= RARE_EQUIPMENT_BIT;
+			}
+			if (value.ConvergenceDistance != 0)
+			{
+				rare |= RARE_CONVERGENCE_BIT;
+			}
+			if (value.HitClaimVictim != 0)
+			{
+				rare |= RARE_HIT_CLAIM_BIT;
+			}
+			return rare;
+		}
+
+		/// <summary>
+		/// Writes the rare fields <paramref name="rare"/> names. The reader takes every field it does not name as ZERO:
+		/// these are one-shot values, present on the tick they mean something and gone on the next, so "absent" never
+		/// means "as before".
+		/// </summary>
+		private static void WriteRareFields(Writer writer, in CharacterReplicateData value, byte rare)
+		{
+			writer.WriteUInt8Unpacked(rare);
+			if ((rare & RARE_EQUIPMENT_BIT) != 0)
+			{
+				writer.WriteUInt8Unpacked(value.EquipmentRequest);
+				writer.WriteInt16(value.EquipmentIndex);
+			}
+			if ((rare & RARE_CONVERGENCE_BIT) != 0)
+			{
+				writer.WriteUInt8Unpacked(value.ConvergenceDistance);
+				writer.WriteInt8Unpacked(value.AimOriginRight);
+				writer.WriteInt8Unpacked(value.AimOriginUp);
+			}
+			if ((rare & RARE_HIT_CLAIM_BIT) != 0)
+			{
+				writer.WriteUnsignedPackedWhole((uint)value.HitClaimVictim);
+				writer.WriteUnsignedPackedWhole(value.HitClaimSpawnAge);
+				writer.WriteUInt8Unpacked(value.HitClaimObject);
+			}
+		}
+
+		/// <summary>Reads what <see cref="WriteRareFields"/> wrote into <paramref name="value"/>; fields not named are zeroed.</summary>
+		private static void ReadRareFields(Reader reader, ref CharacterReplicateData value)
+		{
+			ClearRareFields(ref value);
+			byte rare = reader.ReadUInt8Unpacked();
+			if ((rare & RARE_EQUIPMENT_BIT) != 0)
+			{
+				value.EquipmentRequest = reader.ReadUInt8Unpacked();
+				value.EquipmentIndex = reader.ReadInt16();
+			}
+			if ((rare & RARE_CONVERGENCE_BIT) != 0)
+			{
+				value.ConvergenceDistance = reader.ReadUInt8Unpacked();
+				value.AimOriginRight = reader.ReadInt8Unpacked();
+				value.AimOriginUp = reader.ReadInt8Unpacked();
+			}
+			if ((rare & RARE_HIT_CLAIM_BIT) != 0)
+			{
+				value.HitClaimVictim = (int)(uint)reader.ReadUnsignedPackedWhole();
+				value.HitClaimSpawnAge = (ushort)reader.ReadUnsignedPackedWhole();
+				value.HitClaimObject = reader.ReadUInt8Unpacked();
+			}
+		}
+
+		/// <summary>The rare fields as an input without any carries them.</summary>
+		private static void ClearRareFields(ref CharacterReplicateData value)
+		{
+			value.EquipmentRequest = 0;
+			value.EquipmentIndex = 0;
+			value.ConvergenceDistance = 0;
+			value.AimOriginRight = 0;
+			value.AimOriginUp = 0;
+			value.HitClaimVictim = 0;
+			value.HitClaimSpawnAge = 0;
+			value.HitClaimObject = 0;
+		}
 		/// <summary>Bit flag for aim direction changes.</summary>
 		private const byte AIM_DIRECTION_BIT = 1 << 4;
 		/// <summary>Bit flag for activation flags changes.</summary>
@@ -62,12 +157,14 @@ namespace FishMMO.Shared
 			// Packed yaw/pitch rather than a quaternion — see AimDirectionCompression for why the
 			// wire format has to be one the producer can commit to exactly.
 			writer.WriteUInt32Unpacked(AimDirectionCompression.Encode(value.AimDirection));
+			// Zig-zag packed: one byte for the zero every camera on the character's line sends.
+			writer.WriteSignedPackedWhole(value.HeadingOffset);
 			writer.WriteInt32(value.ActivationFlags);
 			writer.WriteInt64(value.QueuedAbilityID);
-			// The equipment request: one packed byte, plus the source index for an equip. Written
-			// whole; both are small fixed-width values and a difference could only ever match.
-			writer.WriteUInt8Unpacked(value.EquipmentRequest);
-			writer.WriteInt16(value.EquipmentIndex);
+			/* The rare fields behind one byte that says which are here: the equipment request, the convergence distance
+			 * and a hit claim. This form opens every packet, and the equipment pair alone used to cost it three bytes
+			 * that were zero on all but one packet in thousands. */
+			WriteRareFields(writer, in value, RareFields(in value));
 		}
 
 		/// <summary>
@@ -75,7 +172,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public static CharacterReplicateData ReadCharacterReplicateData(this Reader reader)
 		{
-			return new CharacterReplicateData
+			CharacterReplicateData value = new CharacterReplicateData
 			{
 				MoveAxisForward = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
 				MoveAxisRight = MoveAxisCompression.Decode(reader.ReadInt8Unpacked()),
@@ -85,11 +182,12 @@ namespace FishMMO.Shared
 				ViewTickOffset = reader.ReadUInt16Unpacked(),
 				ViewTickFraction = reader.ReadUInt8Unpacked(),
 				AimDirection = AimDirectionCompression.Decode(reader.ReadUInt32Unpacked()),
+				HeadingOffset = (short)reader.ReadSignedPackedWhole(),
 				ActivationFlags = reader.ReadInt32(),
 				QueuedAbilityID = reader.ReadInt64(),
-				EquipmentRequest = reader.ReadUInt8Unpacked(),
-				EquipmentIndex = reader.ReadInt16(),
 			};
+			ReadRareFields(reader, ref value);
+			return value;
 		}
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -144,17 +242,13 @@ namespace FishMMO.Shared
 			writer.WriteUInt8Unpacked(0);
 
 			/* Written whole rather than delta'd: the packed axis is already a single byte, so a
-			 * varint difference could only ever match it and would cost a branch to decide. */
-			if (fullSerialize || prev.MoveAxisForward != next.MoveAxisForward)
+			 * varint difference could only ever match it and would cost a branch to decide. Both axes on a change to
+			 * either: see MOVE_AXES_BIT for what the shared bit bought. */
+			if (fullSerialize || prev.MoveAxisForward != next.MoveAxisForward || prev.MoveAxisRight != next.MoveAxisRight)
 			{
 				writer.WriteInt8Unpacked(MoveAxisCompression.Encode(next.MoveAxisForward));
-				flags |= FORWARD_BIT;
-			}
-
-			if (fullSerialize || prev.MoveAxisRight != next.MoveAxisRight)
-			{
 				writer.WriteInt8Unpacked(MoveAxisCompression.Encode(next.MoveAxisRight));
-				flags |= RIGHT_BIT;
+				flags |= MOVE_AXES_BIT;
 			}
 
 			if (writer.WriteDeltaInt32(prev.MoveFlags, next.MoveFlags, fieldOption))
@@ -188,24 +282,33 @@ namespace FishMMO.Shared
 					AimDirectionCompression.Encode(next.AimDirection), fieldOption))
 				flags |= AIM_DIRECTION_BIT;
 
+			/* The heading offset, whole, on a tick it changes. Its own bit, so a camera on the character's line (where
+			 * it stays zero) and a steady aim cost nothing for it. */
+			if (fullSerialize || prev.HeadingOffset != next.HeadingOffset)
+			{
+				writer.WriteSignedPackedWhole(next.HeadingOffset);
+				flags |= HEADING_OFFSET_BIT;
+			}
+
 			if (writer.WriteDeltaInt32(prev.ActivationFlags, next.ActivationFlags, fieldOption))
 				flags |= ACTIVATION_FLAGS_BIT;
 
 			if (writer.WriteDeltaInt64(prev.QueuedAbilityID, next.QueuedAbilityID, fieldOption))
 				flags |= QUEUED_ABILITY_BIT;
 
-			/* Written explicitly, as a pair, for the same reason the view offset is: three fixed
-			 * bytes on the rare tick that carries a request, nothing on every other tick. */
-			if (fullSerialize ||
-				prev.EquipmentRequest != next.EquipmentRequest ||
-				prev.EquipmentIndex != next.EquipmentIndex)
+			/* The rare fields (equipment request, convergence distance, hit claim): one-shot, so they are written when
+			 * this input HAS one, not when one changed, and the reader zeroes them whenever the bit is clear. An input
+			 * that follows one carrying them therefore has to reach the reader even if nothing else changed, or the
+			 * reader would keep the previous input's request and run it twice. */
+			byte rare = RareFields(in next);
+			if (fullSerialize || rare != 0)
 			{
-				writer.WriteUInt8Unpacked(next.EquipmentRequest);
-				writer.WriteInt16(next.EquipmentIndex);
-				flags |= EQUIPMENT_BIT;
+				WriteRareFields(writer, in next, rare);
+				flags |= RARE_BIT;
 			}
+			bool clearsRareFields = rare == 0 && RareFields(in prev) != 0;
 
-			if (flags != 0 || mustEmit)
+			if (flags != 0 || mustEmit || clearsRareFields)
 			{
 				/* Insert rather than seek-write-seek: the Insert* helpers are fixed width and
 				 * cannot silently change size. The placeholder here is a single byte written by
@@ -239,11 +342,11 @@ namespace FishMMO.Shared
 			byte flags = reader.ReadUInt8Unpacked();
 			CharacterReplicateData result = prev;
 
-			if ((flags & FORWARD_BIT) != 0)
+			if ((flags & MOVE_AXES_BIT) != 0)
+			{
 				result.MoveAxisForward = MoveAxisCompression.Decode(reader.ReadInt8Unpacked());
-
-			if ((flags & RIGHT_BIT) != 0)
 				result.MoveAxisRight = MoveAxisCompression.Decode(reader.ReadInt8Unpacked());
+			}
 
 			if ((flags & MOVE_FLAGS_BIT) != 0)
 				result.MoveFlags = reader.ReadDeltaInt32(prev.MoveFlags);
@@ -260,17 +363,20 @@ namespace FishMMO.Shared
 				result.AimDirection = AimDirectionCompression.Decode(
 					reader.ReadDeltaUInt32(AimDirectionCompression.Encode(prev.AimDirection)));
 
+			if ((flags & HEADING_OFFSET_BIT) != 0)
+				result.HeadingOffset = (short)reader.ReadSignedPackedWhole();
+
 			if ((flags & ACTIVATION_FLAGS_BIT) != 0)
 				result.ActivationFlags = reader.ReadDeltaInt32(prev.ActivationFlags);
 
 			if ((flags & QUEUED_ABILITY_BIT) != 0)
 				result.QueuedAbilityID = reader.ReadDeltaInt64(prev.QueuedAbilityID);
 
-			if ((flags & EQUIPMENT_BIT) != 0)
-			{
-				result.EquipmentRequest = reader.ReadUInt8Unpacked();
-				result.EquipmentIndex = reader.ReadInt16();
-			}
+			// One-shot fields: absent means none, never "as the previous input".
+			if ((flags & RARE_BIT) != 0)
+				ReadRareFields(reader, ref result);
+			else
+				ClearRareFields(ref result);
 
 			return result;
 		}

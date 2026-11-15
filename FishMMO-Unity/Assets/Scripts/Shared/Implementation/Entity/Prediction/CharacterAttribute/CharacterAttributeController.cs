@@ -403,9 +403,55 @@ namespace FishMMO.Shared
 			// wave of notifications that escapes DiscardPendingNotifications.
 			if (suppressNotifications)
 			{
+				// Not dispatched, but remembered: the replay's result is the state the displays must end on (see
+				// AnnounceChangesMadeDuringReplay). Recording runs no listener, so nothing leaks out of the replay.
+				unannouncedChanges.Add(attribute);
 				return;
 			}
 			pendingNotifications.Add(attribute);
+		}
+
+		/// <summary>
+		/// Attributes changed while notifications were suppressed (a prediction replay), not yet announced.
+		/// </summary>
+		private readonly HashSet<CharacterAttribute> unannouncedChanges = new HashSet<CharacterAttribute>();
+
+		/// <summary>
+		/// Tells listeners, once, about every attribute a replay changed without telling them. Called on the first live tick
+		/// after a correction.
+		/// </summary>
+		/// <remarks>
+		/// A correction first restores the server's state at an earlier tick, which notifies, and then replays the ticks since,
+		/// which does not. When the replay changes a value again, the displays are left on the restored one. Reported as the
+		/// Equipment panel keeping a buff's attributes after the buff ran out: the owner expired it on time and the panel
+		/// updated, a reconcile from before the expiry put the buff's bonus back (announced), and the replay took it off again
+		/// (silenced). Removing a buff by hand worked because the server removed it, so no replay re-removed it. The resource
+		/// bars had the same fault and their own fix (PresentResourcesIfStale); this covers every attribute.
+		/// </remarks>
+		internal void AnnounceChangesMadeDuringReplay()
+		{
+			if (unannouncedChanges.Count == 0)
+			{
+				return;
+			}
+			if (base.IsServerStarted)
+			{
+				unannouncedChanges.Clear();
+				return;
+			}
+			BeginPropagation();
+			try
+			{
+				foreach (CharacterAttribute attribute in unannouncedChanges)
+				{
+					pendingNotifications.Add(attribute);
+				}
+				unannouncedChanges.Clear();
+			}
+			finally
+			{
+				EndPropagation();
+			}
 		}
 
 		/// <inheritdoc/>
@@ -946,6 +992,9 @@ namespace FishMMO.Shared
 			nextRegenTick = 0u;
 			hasNextRegenTick = false;
 			lastProcessedRegenTick = 0u;
+			hasLastBreathTick = false;
+			hasCreatedBreathTick = false;
+			ObservedHealthPushCount = 0;
 			// Sampled state is meaningless for the next occupant of a pooled object.
 			lastObservedResourceValues.Clear();
 			lastConsumedResourceTicks.Clear();
@@ -955,6 +1004,7 @@ namespace FishMMO.Shared
 			// Reset propagation state.
 			propagationDepth = 0;
 			pendingNotifications.Clear();
+			unannouncedChanges.Clear();
 			isDrainingNotifications = false;
 			// Clear suppression flags unconditionally. An exception that exits a
 			// BeginPropagation/EndPropagation or replay block with one of these stuck
@@ -2045,6 +2095,12 @@ namespace FishMMO.Shared
 		/// </remarks>
 		/// <param name="amount">The amount reported, never negative.</param>
 		/// <param name="restoresHealth">True for a heal; false for damage.</param>
+		/// <summary>
+		/// How many times the server has sent this character's health to this client (a resource push). A predicted hit
+		/// that is later given up is only undone if this has not moved since: once it has, the bar is the server's.
+		/// </summary>
+		public int ObservedHealthPushCount { get; private set; }
+
 		public void ApplyObservedHealthDelta(int amount, bool restoresHealth)
 		{
 			if (amount <= 0 || HealthResourceTemplateID == 0)
@@ -2101,6 +2157,10 @@ namespace FishMMO.Shared
 			if (hasCurrent)
 			{
 				resource.SetCurrentValue(currentValue, false);
+				if (templateID == HealthResourceTemplateID)
+				{
+					unchecked { ++ObservedHealthPushCount; }
+				}
 			}
 
 			if (previousMax != resource.FinalValue || previousCurrent != resource.CurrentValue)
@@ -2293,8 +2353,33 @@ namespace FishMMO.Shared
 			EnsureRegenIntervalCurrent();
 
 			ProcessReplicateTick(input.GetTick(), state);
-			StepBreath();
+
+			/* Breath is counted once per tick NUMBER, as regeneration is. On the server a tick with no input still runs
+			 * (numbered on from the last one), and the late inputs that follow carry those same numbers: stepped on both,
+			 * the breath ran down for the stall twice and the owner's bar snapped by its length. A replayed tick always
+			 * steps: the correction has just put the breath back to the tick before it. */
+			uint breathTick = input.GetTick();
+			/* Not on a tick without input before the first input has run: its number is the server's estimate, which can be
+			 * ahead of the owner's real ticks, and anchored there the breath stopped until the owner's ticks passed it. */
+			bool created = state.ContainsCreated() || state.ContainsReplayed();
+			if (created)
+			{
+				hasCreatedBreathTick = true;
+			}
+			bool stepBreath = state.ContainsReplayed() ||
+				((created || hasCreatedBreathTick) && (!hasLastBreathTick || (int)(breathTick - lastBreathTick) > 0));
+			if (stepBreath)
+			{
+				lastBreathTick = breathTick;
+				hasLastBreathTick = true;
+			}
+			StepBreath(stepBreath);
 		}
+
+		/// <summary>The newest tick number breath was stepped on, and whether there is one yet.</summary>
+		private uint lastBreathTick;
+		private bool hasLastBreathTick;
+		private bool hasCreatedBreathTick;
 
 		/// <summary>
 		/// Decides whether a replicate's tick may drive regeneration, and remembers the first one
@@ -2356,6 +2441,7 @@ namespace FishMMO.Shared
 			else
 			{
 				Regenerate(tick);
+				AnnounceChangesMadeDuringReplay();
 				PresentResourcesIfStale();
 			}
 		}

@@ -310,6 +310,12 @@ namespace FishMMO.Shared
 		public static float EngagementRangeCeiling { get; set; } = 100f;
 
 		/// <summary>
+		/// Whether a viewer's target puts the viewer near combat (full send rate): only when the viewer may harm it, or it is
+		/// already fighting. A friendly character under the crosshair is not a fight.
+		/// </summary>
+		public static bool TargetMeansCombat(bool targetInCombat, bool viewerMayHarm) => targetInCombat || viewerMayHarm;
+
+		/// <summary>
 		/// Metres added to a character's longest ability range when resolving its engagement radius,
 		/// covering the ground both parties can close during the compensation window.
 		/// </summary>

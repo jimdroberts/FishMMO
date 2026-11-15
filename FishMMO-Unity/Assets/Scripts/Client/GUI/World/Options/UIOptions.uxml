@@ -136,6 +136,10 @@
 
                 <ui:Label text="CAMERA" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
+                    <ui:Label text="Camera Style" class="fish-label options-row-label" />
+                    <ui:DropdownField name="camera-style-dropdown" class="fish-dropdown options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
                     <ui:Label text="Look Sensitivity" class="fish-label options-row-label" />
                     <ui:Slider name="look-sensitivity-slider" low-value="0.05" high-value="20" show-input-field="true" class="fish-slider options-row-field" />
                 </ui:VisualElement>
@@ -181,7 +185,7 @@
                     <ui:Button name="options-reset-controls-btn" text="Reset All Keys"
                                class="fish-button options-reset-btn" />
                 </ui:VisualElement>
-                <ui:Label text="Click a binding, then press the key you want.  Escape cancels  ·  Backspace clears a binding  ·  each key can only be used once."
+                <ui:Label text="Click a binding, then press the key you want.  Esc or ~ cancels  ·  Backspace clears a binding  ·  each key can only be used once."
                           class="fish-hint options-hint options-controls-hint" />
                 <ui:ScrollView class="fish-scroll options-scroll">
                     <ui:VisualElement name="options-controls-list" class="options-list" />

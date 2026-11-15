@@ -159,17 +159,37 @@ Unified per-tick input struct. Contains only input, not state.
 | `AimDirection`     | `Vector3`    | KCC       | Unit aim vector, **already quantised** (see below) |
 | `ViewOffsetTicks`  | `byte`       | Lag comp  | Whole ticks this client was rendering its peers behind server-present |
 | `ViewOffsetFraction`| `byte`      | Lag comp  | Sub-tick remainder of that offset, in 1/256ths of a tick |
+| `ViewTickOffset`   | `ushort`     | Lag comp  | The exact server tick this client was DRAWING its peers at, as an offset from this input's tick (low 16 bits). Supersedes the two fields above when present |
+| `ViewTickFraction` | `byte`       | Lag comp  | Sub-tick part of that drawn tick, 1..255; 0 means "no exact claim" |
+| `HeadingOffset`    | `short`      | KCC       | Yaw from the aim's heading to the body's, in quarter degrees (see [Aim, body and launch line](#aim-body-and-launch-line)) |
+| `ConvergenceDistance` | `byte`    | Ability   | **One-shot.** Log-coded distance along the aim to the point under the crosshair; with the two below it states the launch line a projectile is simulated on. 0 = not given |
+| `AimOriginRight` / `AimOriginUp` | `sbyte` | Ability | **One-shot.** Where the launch line starts beside the eye, centimetres across the aim (held to 1 m) |
+| `HitClaimVictim`   | `int`        | Ability   | **One-shot.** A character the owner's own copy of one of its ability objects hit, as network object id + 1; 0 = none (see [Hit claims](#hit-claims)) |
+| `HitClaimSpawnAge` / `HitClaimObject` | `ushort` / `byte` | Ability | **One-shot.** Which object: input ticks since its cast spawned it, and its index in the cast |
 | `ActivationFlags`  | `int`        | Ability   | Bitmask: IsActualData, Interrupt, IsHeld, IsConsumable, IsMount |
 | `QueuedAbilityID`  | `long`       | Ability   | Ability or consumable template ID to activate    |
 | `EquipmentRequest` | `byte`       | Equipment | One packed equip/unequip request (`EquipmentReplicateInput`), 0 for "nothing asked" |
 | `EquipmentIndex`   | `short`      | Equipment | The source index in the named container for an equip; ignored for an unequip |
 
-Delta serialized with an 8-bit bitmask, and **all eight bits are now allocated**
-(`KCCPredictionDeltaSerializers`: forward, right, move flags, equipment, aim direction, activation
-flags, queued ability, view offset). A ninth field means widening the mask to a `ushort`, which
-costs a byte on every replicate. The two equipment fields deliberately share one bit. The axes ride
-a single signed byte each (`MoveAxisCompression`) and the aim direction a packed `uint`
+Delta serialized with an 8-bit bitmask, and **all eight bits are allocated**
+(`KCCPredictionDeltaSerializers`): bit 0 both move axes, bit 1 heading offset, bit 2 move flags,
+bit 3 the rare fields, bit 4 aim direction, bit 5 activation flags, bit 6 queued ability, bit 7 the
+view claim (both forms share it). The axes ride a single signed byte each (`MoveAxisCompression`),
+written together when either changes, and the aim direction a packed `uint`
 (`AimDirectionCompression`: 16 bits of yaw, 16 of pitch).
+
+**Bit 3 opens a second flags byte** for the fields that are present on perhaps one tick in a
+hundred: bit 0 the equipment request, bit 1 the launch line (`ConvergenceDistance` and the two origin
+offsets, three bytes), bit 2 a hit claim. These are **one-shot**: the writer sets the bit when the
+input HAS the field, never when it changed, and the reader zeroes every rare field whenever bit 3 is
+clear. Absent means zero, never "as the previous input". An input that follows one carrying a rare
+field therefore has to reach the reader even if nothing else changed (the writer forces it), or the
+reader would keep the request and run it twice. `IsInertInput` refuses to treat an input carrying a
+launch line or a claim as an idle repeat for the same reason. A new rare field takes a bit of the
+second byte; a new persistent field would mean widening the first.
+
+The full form, which opens every packet, writes the same rare byte where it used to write the three
+equipment bytes unconditionally.
 
 **`AimDirection` replaced a full `Quaternion CameraRotation`.** Nothing ever read the roll —
 movement takes `rotation * Vector3.forward` to build its planar basis and the ability path takes
@@ -184,8 +204,39 @@ direction while the server and observers simulate with the decoded one, and ever
 the quantisation error. `Encode`/`Decode` is a fixed point: the poles pin yaw to 0 and pitch uses
 `Atan2` rather than `Asin`, which is numerically flat near ±1.
 
-**The view offset is a client measurement the server cannot derive.** It is the full round trip
-plus the client's interpolation buffer — see [Lag compensation](#lag-compensation).
+**The view claim is a client measurement the server cannot derive.** See
+[Lag compensation](#lag-compensation).
+
+#### Aim, body and launch line
+
+The camera is never at the character's eye: behind and below it in third person, half a metre to
+the side over the shoulder. Three things are derived from it each tick by the owner
+(`KCCPlayer.ResolveOwnerAim`, `AimConvergence`), and each travels in the form the server can check:
+
+| What | How it is derived | Used for |
+|------|-------------------|----------|
+| `AimDirection` | From the eye **at the start of the tick** (`KCCPlayer.TickAimOrigin`) to the point under the crosshair: the camera's ray is traced from level with the eye, and the point is never nearer than 2 m | The cast-time target trace and anything fired from the eye |
+| `HeadingOffset` | The body faces and walks toward the same point, measured from where it is DRAWN and never nearer than 6 m; the offset is that heading less the aim's | The motor's movement basis and facing (`AimConvergence.MovementRotation`) |
+| Launch line | The camera's own ray: it starts at the point of the ray level with the eye (the two origin offsets) and passes through the crosshair's point (`ConvergenceDistance` along the aim) | The line a projectile is **simulated** on (`AimConvergence.LaunchLine`) |
+
+**The eye is the eye at the start of the tick, on every peer.** The owner knows no other when it
+builds the input, and the aim only reaches the crosshair's point if the shot starts from the eye it
+was converged from. `AbilityController` (Order 100) runs after the motor has moved, so it reads the
+eye `KCCPlayer` (Order 80) recorded first thing.
+
+**A projectile is simulated on the launch line and only DRAWN leaving the spawner.** The spawner
+(a point on a hand, wand or staff) is where the visuals start, on each client, as that client draws
+it; it plays no part in the simulation, which is what lets it follow a cast animation that no
+server plays. On the line, a projectile follows the crosshair at every range, so a shot led ahead
+of a moving target passes where the crosshair was put. `AbilityObject.ApplyCover` keeps cover
+honest: if scenery blocks the way from the eye to where the visuals join the line, the projectile
+starts at the eye heading for that point and ends on the cover. An NPC has no camera and sends no
+launch line: its projectile flies from its eye along its aim, which its brain took from that eye.
+A stationary object (speed 0) stays at the spawner as the simulation has it.
+
+**The launch line is sent only on a tick that may spawn** (`AbilityController.PopulateConvergence`:
+a cast starting this tick, one with a tick or less to run, or a held one). A wrong guess costs
+accuracy, never agreement: both peers fall back to the eye and the aim.
 
 **Equipment is input, and it rides here.** `EquipmentReplicateInput.TryPack` packs a request into
 one byte — two bits of `EquipmentRequestKind`, two of `InventoryType` (Inventory or Bank only), four
@@ -294,6 +345,39 @@ the whole session (stamina and mana never regenerated on any long-running server
 second line of defence: a replicate that carried no real input (`ReplicateState.Created` unset)
 cannot anchor the regen schedule until one that did has run. `RegenReplicateTickSeedTests` pins both.
 
+#### A tick the server runs without input
+
+When a player's input queue is empty FishNet still runs the replicate body, with default data and
+without `ReplicateState.Created`. Nothing a player did is in that input, so nothing a player does
+advances on it:
+
+- `KCCPlayer` does not step the motor.
+- `AbilityController` does not count a cast down, spawn, or accept a claim (`FreezesOnBlankTick`).
+  A cast is counted in the owner's INPUTS, because that is how the owner predicts it; counting blank
+  ticks too finished it early on the server, left the owner without its projectile (a replayed tick
+  does not spawn), and fired a cast that ended ON the blank tick with no aim. A cast that waits more
+  than `MaximumBlankTicksInCast` ticks in a row is cancelled.
+- **FISHMMO EDIT in `PredictionManager.SendStateUpdate`:** while input is late, a state update is
+  stamped with the tick of the last input the server RAN for the connection
+  (`ReplicateTick.RemoteTick`), not that tick carried forward by the server ticks since. Upstream's
+  stamp advanced on blank ticks while the state did not, which told the owner "this is where you
+  were at your next tick" about a state that had not moved: one tick of its own movement pulled back
+  per blank tick, and FishNet's start delay adds `StateInterpolation` more of them before the queue
+  runs again.
+
+  The carried-forward stamp is still right for an owner that has STOPPED sending, and is kept for
+  it: FishNet's owner goes quiet once its input is default, and the default data the server runs
+  stands in for its next ticks. The server tells the two apart from the last input it ran
+  (`NetworkConnection.LastInputReplicateLocalTick`, `PredictionManager.GetStateClientTick`): an
+  owner sends its default input before going quiet, so a queue that runs dry straight after input
+  that was NOT default is late input. Every real FishMMO input carries `IsActualData` and so is
+  never default; an idle owner is held by the server instead (`ReplicateIdle`). The exact stamp is
+  used for at most one second of ticks, which bounds what the owner replays. Proposed upstream as
+  `fix/state-update-tick-late-input`.
+
+What remains on an underrun is the server's own pause: the character does not move there until its
+input arrives, and observers see it stop for those ticks.
+
 ### Controller Order Example
 
 If you need current movement/camera state to be available before buff, cooldown, attribute, and ability logic:
@@ -305,6 +389,79 @@ CooldownController (Order=90)  → Expires elapsed cooldowns
 CharacterAttributeController (Order=95) → Regenerates resources
 AbilityController (Order=100)  → Activates abilities, checks cooldowns + resources
 ```
+
+### Rules the 2026-11-14 audit added
+
+Each closes a case where owner and server could count differently, or where a client's word was taken on trust.
+The full list of what was wrong is in `PREDICTION_AUDIT_REPORT.md` at the project root.
+
+**When the server may repeat an owner's input (held idle input).**
+
+- Only after the last TWO inputs it ran were repeats of each other (`TryStartHolding(requireRepeat: true)` in
+  FishNet's `NetworkBehaviour.Prediction.cs`). An empty queue alone is not evidence the owner stopped: a
+  standing player turning the camera sends a different inert input every tick, and its empty queue is LATE
+  input. Holding there ran the missing ticks and then ran the late inputs on the same numbers.
+- Never during a cast, on either side (`ReplicateIdle<T>.CanHoldNow`, answered by
+  `CharacterPredictionController.CastInProgress`). Nothing is sent for this: each peer asks its own ability
+  controller. The owner keeps sending every tick of a cast, and the server runs a blank tick for one whose input
+  has not arrived, which the cast waits out (`FreezesOnBlankTick`). An input sent during a cast reads as inert,
+  but repeating it is not harmless: every tick that runs counts the cast.
+- The first keepalives after an owner goes quiet follow 1, 2, 4, 8 and 16 ticks apart
+  (`ReplicateIdle.KeepaliveInterval`), then every `KeepaliveTicks`.
+- An idle owner keeps its previous view claim while nothing can use it (`KeepIdleViewClaim`), so its input
+  repeats at any frame rate.
+- The server drains a queue left more than one input over the buffer, one extra input a tick. Effects driven by
+  the server's own clock (weather steps, drowning pulses, ship carry) run once per server tick.
+- The start delay is what the buffer still lacks (`ReplicateIdle.StartDelay`): a burst that already holds
+  `StateInterpolation` + 1 inputs runs at once.
+
+**Casts count in tick numbers.** `AbilityController.AccountMissedCastTicks` takes the ticks between the last
+input counted and this one off the countdown first, so both peers finish on the same INPUT even when one before
+it never arrived (made up for at most `MaximumMissedCastTicks`), and a number run twice counts once.
+
+**The tick on an input is bounded** (`ReplicateTickGuard`, FishNet). Cooldowns, buff durations and
+regeneration are timed on the owner's own tick counter, so the server bounds how far it may run AHEAD:
+
+- For the first `SettleSeconds` after the first read, an input may be no further ahead of the first input than
+  real time since the server gave the owner the object (`Begin`, from `ResetState_Prediction`), plus the window.
+  This is what keeps world entry safe: the client's first frames are long, it catches their ticks up at once,
+  and the first input read is the oldest of that burst. The first version anchored on that input and refused
+  everything after it, which left the player stuck at the spawn point for minutes.
+- After that, an input more than `WindowSeconds` (1 s) above the highest offset seen is refused. The reference
+  rises by one tick each `CreepIntervalTicks` and never falls. Slow is never refused.
+- `ReplicateTickGuard.Refused` counts refusals, the server log says when an owner starts and stops being
+  refused, and `/admin simulate` reports the count.
+
+**What a correction leaves alone and puts back.**
+
+- The owner does not announce buff changes (icon events, effects) while a correction is applied and replayed
+  (`BuffController.DefersAnnouncements`, which also covers applies made by other controllers during the replay).
+  The difference between what was last announced and the live set is announced once, on the next live tick
+  (`FlushAnnouncements`). A buff that went and came back is not mentioned; one whose expiry the replay ran is.
+- A self-target ability's effects run again on the replayed tick (`AbilityObject.RunSelfTargetEffects`), and so
+  do the caster effects of any other ability's spawn chain (`RunSpawnEffectsOnReplay`), marked
+  `TickEventData.ReapplyOnly`: only actions that answer `BaseAction.ReappliesOnReplay` run, and only on the
+  caster, whether the trigger or the action picks the targets.
+- A correction that finds the server with no cast where the owner had one also removes what that cast launched
+  after the corrected tick.
+- Weather "held" state comes from the server's buff list in the same correction.
+
+**Predictions on other characters are provisional.** A debuff the caster predicts on a target is removed after
+`PredictedBuffConfirmationSeconds` unless the server names it (`BuffController.MarkPredictedByCaster`). A
+predicted hit that is given up puts the target's bar back (`PredictedCombatEvents.OnPredictionUndone`), unless
+the server has sent that target's health since.
+
+**Hit claims** additionally need a clear line from the swept path to the body (`SceneryBetween`), are measured
+against a step that ends where the object stopped (`TruncateLastSweep`), and meet the victim's parry and shield
+even when the object has already ended. The window is `ClaimStepWindow` = 8 steps.
+
+**A rider is carried on a tick with no input** (`KCCPlayer.CarryOnBlankTick`), so it keeps its place on a
+moving deck while its input is late.
+
+**Aim.** The body's 6 m floor is measured on the ground plane (`AimConvergence.BodyFloorAlongRay`). The heading
+offset covers the whole circle (`MaxHeadingOffsetDegrees` 180), so the aim is never bent to fit the body and the
+body never snaps round. `AimDirectionCompression.ToRotation` keeps the aim's heading up to exactly vertical. The
+owner's range pre-filter measures from the eye.
 
 ## Lag compensation
 
@@ -407,6 +564,30 @@ Resolution distinguishes two cases that look alike and are not:
 | The caster's owner | Yes, as a prediction, uncompensated | Its world already *is* that rewound one, which is what makes its predicted hit and the server's agree by construction |
 | A third-party observer | **No** | It holds every character interpolated against its own latency, so the same query answers a question nobody asked. It is told instead, by `AbilityObjectHitBroadcast`. |
 
+### Hit claims
+
+The rewind reproduces the owner's view exactly while a character moves steadily and its updates
+arrive on time. It cannot when the owner drew something the server never had: the straight line
+between two position updates two ticks apart while the character turned between them, a character
+held at its last update because the next was late, a position on the wire's centimetre grid. No
+rewind can recover those, because the server does not know what a client drew.
+
+So the owner says what it saw. When its own copy of one of its ability objects hits a character, the
+next input carries a claim (`HitClaimVictim`, `HitClaimSpawnAge`, `HitClaimObject`). The server
+(`AbilityController.ApplyHitClaim`, `AbilityObject.TryApplyClaimedHit`):
+
+1. finds the object by the tick its cast spawned on and its index in the cast;
+2. does nothing if its own sweep already hit that character (the usual case);
+3. otherwise checks one of the object's last few recorded sweeps against where the position history
+   puts the victim for the view the caster claimed on that step, with a tolerance of 0.1 m plus 2.5
+   ticks of the victim's own speed, capped at 1.5 m (`HitClaimGeometry`);
+4. applies the hit through the same path as a swept one.
+
+An object that ended a tick or two earlier on scenery, or by running out, still answers for a few
+ticks (`TryApplyEndedClaim`); one that spent its last hit on another character does not. A modified
+client gains at most the tolerance. `AbilityController.HitClaims` turns the whole mechanism off, and
+`/admin simulate` reports claims granted and refused.
+
 ## Observer synchronisation
 
 State forwarding is **off** for playable characters, and that is intended rather than a
@@ -423,6 +604,24 @@ observer path:
 | Ability casts | Own simulation | `AbilityActivatedBroadcast` |
 | Ability hits | Own prediction, absorbed on echo | `AbilityObjectHitBroadcast` |
 | Ability end-of-life | Own simulation | `AbilityObjectDestroyedBroadcast` (only for a hit-count end; lifetime expiry is identical everywhere and needs no message) |
+
+**Observed ability objects run on the playback clock.** A client draws other characters in the
+past, on one shared clock (`NetworkTransform.PlaybackDrawTick`). An observed copy of an ability
+object runs on that same clock (`AbilityObject.BeginObservedPlayback`): its age is the clock less
+the server tick it spawned on, it is hidden until the clock reaches that tick, and a hit, redirect
+or end the server reports is applied when the clock reaches the tick the message was WRITTEN on
+(`LastPacketTick.LastRemoteTick`, which a tick marker keeps exact when two ticks share a packet).
+Observed cast animations wait for the clock the same way. Without a clock (nothing received yet,
+timed playback off, every EditMode test) a copy is advanced by the estimated transit, as before.
+`AbilityObject.ObservedPlayback` turns it off.
+
+**What is drawn is not what is simulated.** On every client an object's visual children hang under
+a `Presented` holder that is placed each frame from the move action's closed form at a fractional
+tick (`AbilityObject`, region Presentation): the owner's at its own tick plus the fraction into the
+next, an observer's at the playback clock. The visuals start at the caster's spawner as that client
+draws it and blend onto the simulated path over `HandBlendSeconds`. The collider stays on the root,
+at the simulated position; nothing in the presentation is read by a sweep, a hit or the server, and
+nothing in these files reads a wall clock (`ObserverSynchronizationProofTests`).
 
 They are **broadcasts, not RPCs**, sent to the observer set except the owner via
 `ObserverBroadcastScope`. Every one of these is also written into the spawn payload in an
@@ -767,7 +966,7 @@ TimeManager.OnTick()
 ### Delta Serialization
 
 ```
-CharacterReplicateData: 8-bit byte bitmask (fully allocated) → only changed fields written
+CharacterReplicateData: 8-bit byte bitmask (fully allocated; bit 3 opens a second byte of rare one-shot fields) → only changed fields written
 CharacterReconcileData: ushort bitmask, 12 of 16 bits in use → per-field delta encoding
 ├── KinematicCharacterMotorState: ushort bitmask, 13 live bits (bit 4 retired, left as a gap)
 ├── CharacterAttributeResourceState: 7-bit byte bitmask
@@ -793,6 +992,7 @@ Prediction/
 ├── AimDirectionCompression.cs                  # Yaw/pitch packing for CharacterReplicateData.AimDirection; Encode/Decode is a fixed point
 ├── MoveAxisCompression.cs                      # Signed-byte packing for the movement axes
 ├── CharacterAimOrigin.cs                       # Derives the aim origin from the motor (never replicated — it is reconstructible)
+├── AimConvergence.cs                           # Aim from the eye to the crosshair's point, the body's heading offset, and the launch line a projectile is simulated on
 ├── PayloadVisibility.cs                        # Chooses the owner or observer spawn-payload shape for a connection
 ├── ObserverSyncMode.cs                         # Whether a NetworkObject's observers consume reconcile or broadcasts
 ├── NetworkTransformDistanceLod.cs              # Per-observer send-rate shaping for the NetworkTransform
@@ -853,7 +1053,8 @@ Prediction/
 │   ├── LagCompensationRegistry.cs              # The rewind scope: displace every character, sync, restore. Refuses nesting.
 │   ├── CharacterPositionHistory.cs             # Per-character pose ring, sized from maximumRewindMilliseconds
 │   ├── LagCompensatedQuery.cs                  # OverlapSphereNearest / RaycastNearest — query, rank, dedupe and cap all inside ONE scope
-│   └── RewindTarget.cs                         # A tick plus a sub-tick fraction, clamped
+│   ├── RewindTarget.cs                         # A tick plus a sub-tick fraction, clamped
+│   └── HitClaimGeometry.cs                     # The tolerance and segment-to-capsule distance a hit the owner claims is checked with
 ├── ObserverStreaming/                          # Per-observer range and full-rate cap
 │   ├── ObserverStreamingRegistry.cs            # Registration and per-observer decisions
 │   ├── ObserverStreamingPolicy.cs              # Density-scaled range and budget policy
