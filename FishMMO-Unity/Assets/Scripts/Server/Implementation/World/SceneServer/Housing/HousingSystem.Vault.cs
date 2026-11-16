@@ -5,6 +5,7 @@ using FishMMO.Database;
 using FishMMO.Database.Data;
 using FishMMO.Database.Npgsql.Services.Interfaces;
 using FishMMO.Logging;
+using FishMMO.Server.Core.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using FishNet.Connection;
@@ -258,19 +259,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Buys one stored stack back out of the vault — refused, for now.
+		/// Buys one stored stack back out of the vault, as structure kits delivered to the bank.
 		/// </summary>
 		/// <remarks>
-		/// <para>Refused before anything is read or charged, because there is nowhere yet to put what
-		/// would be bought. A vault row is a structure template and a count; structures are not
-		/// items, so there is no inventory to hand them to, and a plot's pieces are placed with a
-		/// position the row does not keep. This used to charge the fee and delete the row all the
-		/// same, and hand over nothing: the player paid to have their own furniture destroyed.</para>
+		/// <para>A vault row is a structure template and a count, and a structure standing on a plot is
+		/// not an item; what is handed over is the structure's <see cref="PlotStructureTemplate.Kit"/>,
+		/// an item the building tool places. A structure with no kit cannot be retrieved, and is refused
+		/// before anything is charged (it used to charge the fee, delete the row and hand over nothing).</para>
 		///
-		/// <para>When retrieval opens, the order it needs is the one that was here: charge, then
-		/// remove the row (the removal's row count is what settles a double click, and a fee taken
-		/// for a row already gone is refunded), then hand over — and only record the fee in the
-		/// ledger after the deduction. The hand-over is the step that has to exist first.</para>
+		/// <para>The order is the README's: charge, then remove the row (its row count settles a double
+		/// click; a fee taken for a row already gone is refunded), then hand over — and the fee reaches
+		/// the ledger only after the hand-over. See <see cref="BeginRetrieve"/>.</para>
 		/// </remarks>
 		public void RetrieveFromVault(NetworkConnection conn, IPlayerCharacter player, long vaultID)
 		{
@@ -278,9 +277,239 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			if (currencyTemplate == null)
+			{
+				Log.Error("HousingSystem", "Vault retrieval refused: currencyTemplate is not assigned, so the fee cannot be charged.");
+				SendHousingResult(conn, 0, HousingResult.Failed);
+				return;
+			}
 
-			Log.Debug("HousingSystem", $"CharID={player.ID} asked to retrieve vault entry {vaultID}; retrieval is not open yet.");
-			SendHousingResult(conn, 0, HousingResult.Failed);
+			long characterID = player.ID;
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				if (!TryGetDbService(out IPlotVaultService vaultService))
+				{
+					SendHousingResultOnMainThread(conn, 0, HousingResult.Failed);
+					return;
+				}
+				DatabaseResult<PlotVaultData?> read = await vaultService.FetchEntryAsync(vaultID, characterID);
+				if (!read.IsSuccess)
+				{
+					Log.Error("HousingSystem", $"Could not read vault entry {vaultID} for CharID={characterID}: [{read.ErrorCode}] {read.ErrorMessage}");
+					SendHousingResultOnMainThread(conn, 0, HousingResult.Failed);
+					return;
+				}
+				if (read.Data == null)
+				{
+					SendHousingResultOnMainThread(conn, 0, HousingResult.NothingStored);
+					return;
+				}
+				PlotVaultData entry = read.Data.Value;
+				long fee = PlotVaultFee.Calculate(entry.BaseFee, entry.StoredAtUtc, DateTime.UtcNow, entry.FeeRatePerDay);
+				if (!TryEnqueueHousingMainThread(() => BeginRetrieve(conn, player, entry, fee)))
+				{
+					SendHousingResultOnMainThread(conn, 0, HousingResult.Failed);
+				}
+			}, characterID))
+			{
+				SendHousingResult(conn, 0, HousingResult.Failed);
+			}
+		}
+
+		/// <summary>
+		/// Charges the fee, removes the row, hands the kits over — in that order (README, "The orderings
+		/// that matter"). Main thread.
+		/// </summary>
+		/// <remarks>
+		/// <para>Room is checked before anything is charged: every stack must fit in the bank, or failing
+		/// that in the bags, or nothing happens. The row is the contended step (a double click), so its
+		/// removal decides who hands over; a fee taken for a row already gone is refunded.</para>
+		///
+		/// <para>Kits are only ever handed out. Nothing puts an item back into the vault: the vault is
+		/// where a lost house waits, not storage.</para>
+		/// </remarks>
+		private void BeginRetrieve(NetworkConnection conn, IPlayerCharacter player, PlotVaultData entry, long fee)
+		{
+			if (player == null || player.ID != entry.CharacterID)
+			{
+				return;
+			}
+			PlotStructureTemplate structure = PlotStructureTemplate.Get<PlotStructureTemplate>(entry.TemplateID);
+			StructureKitTemplate kit = structure != null ? structure.Kit : null;
+			if (kit == null || entry.Amount <= 0)
+			{
+				SendHousingResult(conn, 0, HousingResult.NotRetrievable);
+				return;
+			}
+			List<uint> stacks = Stacks(kit, entry.Amount);
+			InventoryType destination;
+			if (FreeSlots(player, InventoryType.Bank) >= stacks.Count)
+			{
+				destination = InventoryType.Bank;
+			}
+			else if (FreeSlots(player, InventoryType.Inventory) >= stacks.Count)
+			{
+				destination = InventoryType.Inventory;
+			}
+			else
+			{
+				SendHousingResult(conn, 0, HousingResult.NoRoom);
+				return;
+			}
+
+			if (fee > 0 && !CharacterCurrency.TrySpend(player, currencyTemplate, fee, () => TryPersistCurrency(player)))
+			{
+				SendHousingResult(conn, 0, HousingResult.CannotAfford);
+				return;
+			}
+
+			long characterID = player.ID;
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				HousingResult refusal = HousingResult.Failed;
+				bool removed = false;
+				if (TryGetDbService(out IPlotVaultService vaultService))
+				{
+					DatabaseResult<int> result = await vaultService.TryRemoveEntryAsync(entry.ID, characterID);
+					removed = result.IsSuccess && result.Data == 1;
+					refusal = result.IsSuccess ? HousingResult.NothingStored : HousingResult.Failed;
+				}
+				if (!TryEnqueueHousingMainThread(() =>
+				{
+					if (removed)
+					{
+						DeliverKits(conn, player, entry, kit, stacks, destination, fee);
+					}
+					else
+					{
+						RefundVaultFee(player, fee);
+						SendHousingResult(conn, 0, refusal);
+					}
+				}))
+				{
+					Log.Error("HousingSystem", $"Vault entry {entry.ID} retrieval for CharID={characterID} could not finish on the main thread (removed: {removed}); the fee of {fee} was not refunded.");
+				}
+			}, characterID))
+			{
+				RefundVaultFee(player, fee);
+				SendHousingResult(conn, 0, HousingResult.Failed);
+			}
+		}
+
+		/// <summary>
+		/// Hands the kits over. Whatever cannot be placed (the bank and bags filled in the moment since
+		/// the room was checked) goes back into the vault as it was; the fee is refunded only when
+		/// nothing at all was handed over.
+		/// </summary>
+		private void DeliverKits(NetworkConnection conn, IPlayerCharacter player, PlotVaultData entry, StructureKitTemplate kit, List<uint> stacks, InventoryType destination, long fee)
+		{
+			int delivered = 0;
+			if (player != null && Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				InventoryType other = destination == InventoryType.Bank ? InventoryType.Inventory : InventoryType.Bank;
+				foreach (uint amount in stacks)
+				{
+					if (!inventorySystem.TryGrantItem(player, new Item(kit, amount), destination) &&
+						!inventorySystem.TryGrantItem(player, new Item(kit, amount), other))
+					{
+						break;
+					}
+					delivered += (int)amount;
+				}
+			}
+
+			int left = entry.Amount - delivered;
+			if (left > 0)
+			{
+				EnqueuePersistence(async () =>
+				{
+					if (!TryGetDbService(out IPlotVaultService vaultService))
+					{
+						Log.Error("HousingSystem", $"{left} undelivered kit(s) of vault entry {entry.ID} for CharID={entry.CharacterID} could not be put back: IPlotVaultService unavailable.");
+						return;
+					}
+					DatabaseResult<int> restored = await vaultService.RestoreEntryAsync(entry.CharacterID, entry.TemplateID, left, entry.OriginalPlotID, entry.StoredAtUtc, entry.BaseFee, entry.FeeRatePerDay);
+					if (!restored.IsSuccess)
+					{
+						Log.Error("HousingSystem", $"{left} undelivered kit(s) of vault entry {entry.ID} for CharID={entry.CharacterID} could not be put back: [{restored.ErrorCode}] {restored.ErrorMessage}");
+					}
+				}, entry.CharacterID);
+			}
+
+			if (delivered == 0)
+			{
+				RefundVaultFee(player, fee);
+				SendHousingResult(conn, 0, HousingResult.NoRoom);
+				return;
+			}
+
+			RecordVaultFee(entry.CharacterID, fee);
+			SendHousingResult(conn, 0, left > 0 ? HousingResult.NoRoom : HousingResult.Success);
+			if (player != null)
+			{
+				FetchVault(player, (entries, fees) => SendVault(conn, entries, fees), null);
+			}
+		}
+
+		/// <summary>The stacks an amount of kits comes in, each no bigger than the kit stacks.</summary>
+		private static List<uint> Stacks(StructureKitTemplate kit, int amount)
+		{
+			uint size = Math.Max(1u, kit.MaxStackSize);
+			var stacks = new List<uint>();
+			for (uint left = (uint)Math.Max(0, amount); left > 0;)
+			{
+				uint take = Math.Min(size, left);
+				stacks.Add(take);
+				left -= take;
+			}
+			return stacks;
+		}
+
+		private static int FreeSlots(IPlayerCharacter player, InventoryType container)
+		{
+			switch (container)
+			{
+				case InventoryType.Bank:
+					return player.TryGet(out IBankController bank) ? bank.FreeSlots() : 0;
+				case InventoryType.Inventory:
+					return player.TryGet(out IInventoryController inventory) ? inventory.FreeSlots() : 0;
+				default:
+					return 0;
+			}
+		}
+
+		private void RefundVaultFee(IPlayerCharacter player, long fee)
+		{
+			if (player == null || fee <= 0)
+			{
+				return;
+			}
+			CharacterCurrency.TryAdd(player, currencyTemplate, fee);
+			if (!TryPersistCurrency(player))
+			{
+				Log.Error("HousingSystem", $"The refunded vault fee of {fee} for CharID={player.ID} could not be persisted; the in-memory balance is right, the database holds the charge.");
+			}
+		}
+
+		private void RecordVaultFee(long characterID, long amount)
+		{
+			if (characterID <= 0 || amount <= 0)
+			{
+				return;
+			}
+			EnqueuePersistence(async () =>
+			{
+				if (!TryGetDbService(out ICurrencyLedgerService ledgerService))
+				{
+					Log.Warning("HousingSystem", $"Currency ledger: could not record {amount} (vault fee) for CharID={characterID}: ICurrencyLedgerService unavailable.");
+					return;
+				}
+				DatabaseResult record = await ledgerService.RecordAsync(characterID, amount, (int)CurrencyMovementReason.HouseVaultFee, (int)CurrencyMovementState.Absorbed);
+				if (!record.IsSuccess)
+				{
+					Log.Warning("HousingSystem", $"Currency ledger: could not record {amount} (vault fee) for CharID={characterID}: [{record.ErrorCode}] {record.ErrorMessage}");
+				}
+			}, characterID);
 		}
 
 		/// <summary>

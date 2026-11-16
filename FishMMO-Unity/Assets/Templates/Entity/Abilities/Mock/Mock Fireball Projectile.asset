@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Fireball Projectile
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 5452caac181243387f91a103cd135623
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -79,7 +79,7 @@ namespace FishMMO.Shared
 			}
 
 			if (!TryResolveTargetOrInitiator(initiator, eventData, out ICharacter characterToConsume)) return false;
-			// Draining someone else's resource is hostile (CharacterEvade, FactionHarm); paying one's own cost is not.
+			// Draining someone else's resource is hostile (CharacterEvade, HarmRule); paying one's own cost is not.
 			if (!ReferenceEquals(characterToConsume, initiator) && CharacterEvade.RefusesHostileEffects(characterToConsume, initiator)) return false;
 			if (!characterToConsume.TryGet(out ICharacterAttributeController attributeController)) return false;
 

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Stun
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 94417ed9a98a40b703d81c0d0fde536d
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

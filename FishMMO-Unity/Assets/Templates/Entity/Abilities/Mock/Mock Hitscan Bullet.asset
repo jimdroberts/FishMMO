@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Hitscan Bullet
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 958c503f6ae68ea9634882542de43a35
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

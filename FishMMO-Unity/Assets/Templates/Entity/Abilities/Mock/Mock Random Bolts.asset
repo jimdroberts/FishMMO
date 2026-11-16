@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Random Bolts
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 4eeb27fcd8bb085a4e75ea78595a0fb9
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

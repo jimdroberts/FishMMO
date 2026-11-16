@@ -217,9 +217,8 @@ namespace FishMMO.Shared
 
 			/* The generic path creates one Editor for the asset, which for a prefab is the
 			 * GameObject header and nothing else. What a designer edits lives on components. */
-			AddNPCComponentSection(prefab.GetComponent<NPC>(), "NPC — loot, corpse, abilities");
+			AddNPCComponentSection(prefab.GetComponent<NPC>(), "NPC — race, aggression, loot, corpse, abilities");
 			AddNPCBrainSection(prefab);
-			AddNPCComponentSection(prefab.GetComponent<FactionController>(), "Faction — race, aggression");
 			AddNPCComponentSection(prefab.GetComponent<CharacterAttributeController>(), "Attributes");
 			AddNPCComponentSection(prefab.GetComponent<Interactable>(), "Interaction");
 			AddNPCComponentSection(prefab.GetComponent<SceneObjectNamer>(), "Naming");

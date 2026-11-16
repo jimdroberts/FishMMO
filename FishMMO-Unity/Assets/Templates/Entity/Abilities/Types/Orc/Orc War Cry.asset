@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Orc War Cry
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 03cf49f9a9bccd0f882016628a27e79c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

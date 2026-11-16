@@ -54,7 +54,9 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public bool ExecuteOnInteract(EventData eventData)
 		{
-			if (onInteractTriggers == null || onInteractTriggers.Count < 1)
+			// What modules attach to this kind of interactable (InteractableTriggers) runs after the authored list.
+			List<Trigger> attached = InteractableTriggers.For(GetType());
+			if ((onInteractTriggers == null || onInteractTriggers.Count < 1) && attached.Count == 0)
 			{
 				Log.Warning("Interactable",
 					$"'{Name}' ({GetType().Name}) was interacted with but has no OnInteract triggers configured, so nothing happened. " +
@@ -63,7 +65,8 @@ namespace FishMMO.Shared
 			}
 
 			bool fired = false;
-			for (int i = 0; i < onInteractTriggers.Count; ++i)
+			int authored = onInteractTriggers != null ? onInteractTriggers.Count : 0;
+			for (int i = 0; i < authored; ++i)
 			{
 				Trigger trigger = onInteractTriggers[i];
 				if (trigger == null)
@@ -73,6 +76,11 @@ namespace FishMMO.Shared
 					continue;
 				}
 				trigger.Execute(eventData);
+				fired = true;
+			}
+			for (int i = 0; i < attached.Count; ++i)
+			{
+				attached[i].Execute(eventData);
 				fired = true;
 			}
 			return fired;

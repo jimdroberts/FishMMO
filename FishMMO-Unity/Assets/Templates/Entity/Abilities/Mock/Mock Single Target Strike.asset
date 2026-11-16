@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Single Target Strike
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: cf71fca02d0093a4a7b44f18a8fcabc9
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

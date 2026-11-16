@@ -10625,6 +10625,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b1d47bf128fd622309a2a6ef13d9eacb
+    m_Address: a fire elemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b2ae33f093ed6f98a9f3eda1c3d34381
     m_Address: RoyalMausoleum - Walled Tomb (Small)
     m_ReadOnly: 0
@@ -11033,6 +11040,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b9d6e2aa13c84f17db6a76137cf7dff7
     m_Address: Shabchiragh Gem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b9e85d09166321f51820d0406c3b3dd3
+    m_Address: Premade Self Dispel Magic
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12881,6 +12895,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: dbbd48bc3e78a40a0887f23809828ee2
     m_Address: Salsola Ash
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dbc5daca94d67bab2ba10ab55b2fd140
+    m_Address: Premade Dispel Magic
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

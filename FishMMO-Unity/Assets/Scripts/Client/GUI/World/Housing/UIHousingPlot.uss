@@ -14,7 +14,7 @@
 .plot-panel {
     position: absolute;
     left: 50%; top: 50%; translate: -50% -50%;
-    width: 380px;
+    width: 440px;
     flex-direction: column;
     flex-shrink: 0;
 }
@@ -85,8 +85,116 @@
 
 .plot-footer__button {
     margin-left: 8px;
-    min-width: 96px;
+    min-width: 72px;
     height: 28px;
+}
+
+/* ── Pay ahead ─────────────────────────────────────────── */
+.plot-prepay {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 8px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.plot-prepay__step {
+    width: 28px;
+    min-width: 28px;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.plot-prepay__periods {
+    width: 80px;
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
+.plot-prepay__pay {
+    flex: 1;
+    height: 26px;
+    margin-left: 8px;
+}
+
+/* ── Guests ────────────────────────────────────────────── */
+.plot-guests {
+    flex-direction: column;
+    margin-top: 10px;
+    flex-shrink: 0;
+}
+
+.plot-guests__title {
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.plot-guests__add {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* Not pinned to a height (see fishmmo-uitk-conventions): the theme's padding needs room to draw the text. */
+.plot-guests__name {
+    flex: 1;
+    min-height: 22px;
+}
+
+.plot-guests__grant {
+    margin-left: 8px;
+    min-width: 80px;
+    height: 26px;
+}
+
+.plot-guests__flags {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.plot-guests__flag {
+    margin-right: 10px;
+}
+
+.plot-guests__list {
+    max-height: 150px;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.plot-guest-row {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    flex-shrink: 0;
+}
+
+.plot-guest-row__name {
+    width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.plot-guest-row__flags {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.plot-guest-row__revoke {
+    min-width: 64px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.plot-guests__empty {
+    margin-top: 4px;
+    flex-shrink: 0;
 }
 
 .plot-hidden {

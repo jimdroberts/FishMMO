@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Direct Heal
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: ad4c7a80c09a5756bf95f97d052d7e49
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -149,6 +149,8 @@ MonoBehaviour:
     - Scene_Server
     - Shared_Dynamic
     - Shared_Biomes
+    - ClientWorldGUI_Panels
+    - SceneServer_Systems
   m_SchemaTemplates: []
   m_GroupTemplateObjects:
   - {fileID: 11400000, guid: 2f9575764d1020448a25d0512380c601, type: 2}

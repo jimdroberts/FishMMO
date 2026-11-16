@@ -857,8 +857,11 @@ namespace FishMMO.Client
 			focusingFromChatKey = true;
 			inputReleasedOnFrame = -1;
 
-			inputField.Focus();
+			FocusInputLikeAClick();
 			inputFocusedOnFrame = Time.frameCount;
+			holdFocusUntilFrame = Time.frameCount + HoldFocusFrames;
+			refocusAttempts = 0;
+			ChatFocusLog($"opened by the chat key (from {(typingStartedInMouseMode ? "mouse" : "aim")} mode); focused now: {IsInputFocused} ({FocusedName()}){(IsInputFocused ? "" : "; " + WhyFocusRefused())}");
 
 			/* Chat is typed in mouse mode: the cursor is freed, so the player can also click the channel selector, the
 			 * tabs or a name in the window. The claim is taken here, not only in UpdateCursorRelease, because
@@ -884,11 +887,170 @@ namespace FishMMO.Client
 				authoredReleasesCursor = ReleasesCursor;
 			}
 
-			bool wanted = authoredReleasesCursor || IsInputFocused || IsSameKeypress(inputFocusedOnFrame);
+			HoldFocusAfterOpening();
+			bool wanted = authoredReleasesCursor || IsInputFocused || IsSameKeypress(inputFocusedOnFrame) || HoldingFocus;
 			if (ReleasesCursor != wanted)
 			{
 				ReleasesCursor = wanted;
 			}
+		}
+
+		/// <summary>Frames after the chat key opens the field during which lost focus is put back (about half a second).</summary>
+		private const int HoldFocusFrames = 30;
+
+		/// <summary>Most times focus is put back in one opening; past it, whatever keeps taking it wins and is logged.</summary>
+		private const int MaxRefocusAttempts = 3;
+
+		/// <summary>Last frame of the hold that follows an opening by the chat key; -1 when none.</summary>
+		private int holdFocusUntilFrame = -1;
+
+		private int refocusAttempts;
+
+		/// <summary>True during the hold that follows an opening by the chat key.</summary>
+		private bool HoldingFocus => holdFocusUntilFrame >= 0 && Time.frameCount <= holdFocusUntilFrame;
+
+		/// <summary>
+		/// Puts focus back on the field when something took it in the moments after the chat key opened it.
+		/// </summary>
+		/// <remarks>
+		/// In the browser, Enter from aim mode freed the cursor and took it straight back: the field lost focus within a
+		/// frame or two, so the panel stopped claiming the cursor and the auto-dismiss captured it again, before a key
+		/// could be typed. What took the focus could not be reproduced outside the browser, so the opening holds it for
+		/// <see cref="HoldFocusFrames"/> (at most <see cref="MaxRefocusAttempts"/> times) and says in the console what took
+		/// it (<see cref="ChatFocusLog"/>). Deliberate exits (sending, Escape, Tab) end the hold first.
+		/// </remarks>
+		private void HoldFocusAfterOpening()
+		{
+			if (!HoldingFocus || inputField == null || IsInputFocused)
+			{
+				return;
+			}
+			if (refocusAttempts >= MaxRefocusAttempts)
+			{
+				ChatFocusLog($"focus keeps being taken ({FocusedName()}); giving up after {refocusAttempts} tries.");
+				holdFocusUntilFrame = -1;
+				return;
+			}
+			refocusAttempts++;
+			ChatFocusLog($"focus was taken {Time.frameCount - inputFocusedOnFrame} frame(s) after opening (now on {FocusedName()}); {WhyFocusRefused()}; putting it back.");
+			FocusInputLikeAClick();
+		}
+
+		/// <summary>
+		/// Focuses the field the way a click on it does: the chat panel is selected in the EventSystem first, then focused.
+		/// </summary>
+		/// <remarks>
+		/// <para>A click goes through <c>PanelEventHandler.OnPointerDown</c>, which calls
+		/// <c>EventSystem.SetSelectedGameObject(panel's handler)</c> before the pointer event moves focus; a click on the
+		/// field works in the browser. The chat key called <c>Focus()</c> with nothing selected (aim mode deselects every
+		/// panel, see <c>PlayerInputController.MouseMode</c>), and the browser log (11-16, f17699) showed the field able to
+		/// grab focus (canGrabFocus True, visible, enabled) yet focus on nothing and the EventSystem still selecting
+		/// nothing straight after: the FocusIn that selects the panel (<c>PanelEventHandler.OnElementFocus</c>) never ran.</para>
+		/// <para>The <c>Blur()</c> first clears a focus change left pending on the field: <c>FocusController.SwitchFocus</c>
+		/// returns early when the element asked for is already the pending one, so a stuck request made every retry a no-op.</para>
+		/// </remarks>
+		private void FocusInputLikeAClick()
+		{
+			if (inputField == null)
+			{
+				return;
+			}
+			UnityEngine.EventSystems.EventSystem eventSystem = UnityEngine.EventSystems.EventSystem.current;
+			if (eventSystem != null && inputField.panel != null && !eventSystem.alreadySelecting)
+			{
+				foreach (PanelEventHandler handler in eventSystem.GetComponentsInChildren<PanelEventHandler>(true))
+				{
+					if (handler != null && handler.panel == inputField.panel)
+					{
+						if (eventSystem.currentSelectedGameObject != handler.gameObject)
+						{
+							eventSystem.SetSelectedGameObject(handler.gameObject);
+						}
+						break;
+					}
+				}
+			}
+			if (!IsInputFocused)
+			{
+				inputField.Blur();
+			}
+			FocusLeaf().Focus();
+		}
+
+		/// <summary>
+		/// The element inside the field that actually takes focus (the text element a click focuses), found without the
+		/// focus ring's tab-index rule.
+		/// </summary>
+		/// <remarks>
+		/// THE root of "Enter frees the cursor and takes it straight back" (11-16, found from the browser log: canGrabFocus
+		/// True, panel selected, yet focus on nothing and never a FocusOut). <c>inputField.Focus()</c> delegates: a TextField
+		/// hands focus to its first child that can grab focus AND has <c>tabIndex &gt;= 0</c>
+		/// (<c>Focusable.GetFirstFocusableChild</c>). <see cref="ExcludeFromTabNavigation"/> sets every focusable element in
+		/// the chat to -1, the field's inner text element included, so the delegate came back null and
+		/// <c>SwitchFocus(null)</c> with nothing focused does nothing at all: no event, no error. A click lands on the text
+		/// element itself and needs no delegate, which is why clicking the field always worked.
+		/// </remarks>
+		private Focusable FocusLeaf()
+		{
+			VisualElement leaf = inputField.Query<VisualElement>()
+				.Where(e => e != inputField && e.focusable && !e.delegatesFocus && e.canGrabFocus)
+				.First();
+			return leaf != null ? leaf : inputField;
+		}
+
+		/// <summary>Ends the post-opening hold: the player left the field on purpose.</summary>
+		private void EndFocusHold()
+		{
+			holdFocusUntilFrame = -1;
+		}
+
+		/// <summary>
+		/// Why <c>Focus()</c> on the field focused nothing, for the console.
+		/// </summary>
+		/// <remarks>
+		/// <c>Focusable.Focus()</c> calls <c>SwitchFocus(null)</c> (blurs everything) when the element cannot grab focus, and
+		/// <c>VisualElement.canGrabFocus</c> needs the element visible, displayed, enabled in hierarchy and focusable (and its
+		/// composite root able to grab focus). The browser log showed "focused now: False (nothing)" on every attempt, so this
+		/// names the first element on the path from the field's text input to the root that fails one of those.
+		/// </remarks>
+		private string WhyFocusRefused()
+		{
+			if (inputField == null) return "no field";
+			if (inputField.panel == null) return "field has no panel";
+			VisualElement inner = inputField.Q(className: TextField.inputUssClassName) ?? inputField;
+			var why = new System.Text.StringBuilder();
+			why.Append($"field canGrabFocus={inputField.canGrabFocus}, inner canGrabFocus={inner.canGrabFocus}");
+			for (VisualElement e = inner; e != null; e = e.hierarchy.parent)
+			{
+				string fault =
+					!e.enabledSelf ? "disabled" :
+					e.resolvedStyle.display == DisplayStyle.None ? "display:none" :
+					e.resolvedStyle.visibility != Visibility.Visible ? "visibility:hidden" :
+					null;
+				if (fault != null)
+				{
+					why.Append($"; {fault} at {e.GetType().Name} '{e.name}' ({string.Join(" ", e.GetClasses())})");
+					break;
+				}
+			}
+			if (!inner.focusable) why.Append("; inner not focusable");
+			if (!inputField.focusable) why.Append("; field not focusable");
+			var es = UnityEngine.EventSystems.EventSystem.current;
+			why.Append($"; EventSystem selected: {(es == null ? "no EventSystem" : es.currentSelectedGameObject != null ? es.currentSelectedGameObject.name : "none")}");
+			return why.ToString();
+		}
+
+		/// <summary>What the panel's focus controller says is focused, for the console.</summary>
+		private string FocusedName()
+		{
+			Focusable focused = inputField?.panel?.focusController?.focusedElement;
+			return focused is VisualElement element ? $"{element.GetType().Name} '{element.name}'" : "nothing";
+		}
+
+		/// <summary>One chat-focus line in the browser console (and the editor's), for the Enter-opens-chat path only.</summary>
+		private static void ChatFocusLog(string message)
+		{
+			Debug.Log($"[ChatFocus] f{Time.frameCount} {message}");
 		}
 
 		/// <summary>
@@ -903,6 +1065,7 @@ namespace FishMMO.Client
 		/// <param name="enter">True when the press was Enter rather than '/'.</param>
 		public void OnChatKey(bool enter)
 		{
+			ChatFocusLog($"chat key ({(enter ? "Enter" : "/")}); field focused: {IsInputFocused}, mouse mode: {PlayerInputController.MouseMode}");
 			if (IsInputFocused)
 			{
 				if (enter && inputFocusedOnFrame != Time.frameCount)
@@ -931,6 +1094,15 @@ namespace FishMMO.Client
 				return;
 			}
 			OnSubmit(inputField.value);
+			EndFocusHold();
+			/* Typing that began in mouse mode (Tab, then a click on the field) stays in the field: the player is chatting
+			 * with the cursor out and the next line follows. Only typing that began in aim mode goes back to the game. */
+			if (typingStartedInMouseMode)
+			{
+				inputField.value = "";
+				ChatFocusLog("sent; staying in the field (typing began in mouse mode).");
+				return;
+			}
 			inputReleasedOnFrame = Time.frameCount;
 			ReleaseInputFocus();
 			RestoreModeAfterTyping();
@@ -992,6 +1164,7 @@ namespace FishMMO.Client
 			{
 				return false;
 			}
+			EndFocusHold();
 			ReleaseInputFocus();
 			PlayerInputController.EnterAimMode();
 			return true;
@@ -1103,6 +1276,7 @@ namespace FishMMO.Client
 					 * means "stop typing", which is what every other game means by it. */
 					inputField.value = "";
 					ResetInputHistoryCursor();
+					EndFocusHold();
 					ReleaseInputFocus();
 					RestoreModeAfterTyping();
 					evt.StopPropagation();
@@ -1145,6 +1319,10 @@ namespace FishMMO.Client
 		/// <param name="evt">The focus-out event.</param>
 		private void OnInputFocusOut(FocusOutEvent evt)
 		{
+			if (HoldingFocus)
+			{
+				ChatFocusLog($"field lost focus to {(evt.relatedTarget is VisualElement to ? $"{to.GetType().Name} '{to.name}'" : "nothing")}.");
+			}
 			focusingFromChatKey = false;
 			ResetInputHistoryCursor();
 			ReleasesCursor = authoredCursorCaptured && authoredReleasesCursor;
@@ -1442,8 +1620,9 @@ namespace FishMMO.Client
 		/// be this input. Chat then opened itself on a Tab press, and every key after that typed
 		/// into it instead of driving the game. That was half of the "chat gains focus at random"
 		/// report. A tab index below zero is the ring's own exclusion test
-		/// (<c>VisualElementFocusRing</c> skips <c>tabIndex &lt; 0</c>); clicks and
-		/// <see cref="Focusable.Focus"/> do not consult it. The buttons are excluded too, so Tab
+		/// (<c>VisualElementFocusRing</c> skips <c>tabIndex &lt; 0</c>); clicks do not consult it. <see cref="Focusable.Focus"/>
+		/// on an element that DELEGATES focus does: the delegate search skips tab index -1, so a TextField excluded here
+		/// cannot be focused through itself, only through its inner element (<see cref="FocusLeaf"/>). The buttons are excluded too, so Tab
 		/// cannot park focus on "+" or the channel selector, where the next Enter would press them.
 		/// </remarks>
 		/// <param name="element">The subtree to exclude; may be null.</param>

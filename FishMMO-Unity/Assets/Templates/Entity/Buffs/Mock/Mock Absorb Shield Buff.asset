@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock absorb shield. Absorbs 40 damage from any direction.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 5be3c8f02884c1a27409942910e22607
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

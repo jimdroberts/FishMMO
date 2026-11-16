@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Self Minor Armor
   m_EditorClassIdentifier: 
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 43cdbd5a8563ca5d46a6a7e75299897c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

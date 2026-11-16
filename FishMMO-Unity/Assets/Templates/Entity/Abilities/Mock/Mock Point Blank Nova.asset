@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Point Blank Nova
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 7c65fcb82d031358ecee480be92f9970
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

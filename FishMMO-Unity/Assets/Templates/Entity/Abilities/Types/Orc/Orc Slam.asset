@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Orc Slam
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b37c708c14bb2a10065b923a9798f1fc
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -29,7 +29,7 @@ namespace FishMMO.Client
 	///
 	/// <para><b>Fast travel.</b> A discovered waypoint is a marker like any other until it is
 	/// clicked, which selects it into the side bar's waypoint section; the button there sends a
-	/// <see cref="WaypointTravelRequestBroadcast"/>. Nothing moves until the server answers — a
+	/// <c>WaypointTravelRequestBroadcast</c>. Nothing moves until the server answers — a
 	/// refusal comes back with a reason and the button re-enables, an arrival closes the map. The
 	/// click, arrival, refusal and discovery each have a sound slot, and
 	/// <see cref="OnFastTravelClicked"/> is the hook for anything else that wants the click. When
@@ -1318,11 +1318,8 @@ namespace FishMMO.Client
 			travelPendingUntil = Time.unscaledTimeAsDouble + TravelResponseTimeout;
 			RefreshWaypointPanel();
 
-			Client.Broadcast(new WaypointTravelRequestBroadcast()
-			{
-				SceneName = sceneName,
-				WaypointIndex = selectedWaypointIndex,
-			}, FishNet.Transporting.Channel.Reliable);
+			// The Travel module's controller sends the request (WaypointTravelRequestBroadcast).
+			controller.RequestTravel(sceneName, selectedWaypointIndex);
 		}
 
 		/// <summary>

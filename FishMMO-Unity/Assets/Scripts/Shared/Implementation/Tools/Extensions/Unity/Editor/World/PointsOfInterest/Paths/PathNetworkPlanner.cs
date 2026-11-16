@@ -47,9 +47,26 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, BiomeStraightRoads> StraightRoadsAt;
 		/// <summary>The strike-slip traces the ways jog at (<see cref="PathJogs"/>, 2026-10-26, phase I2l-b); null or empty for none.</summary>
 		public IReadOnlyList<PathJogs.Trace> Faults;
+
+		/// <summary>
+		/// Places that are not sites but still want a way to the nearest settlement's network (2026-11-15: the housing
+		/// districts' lane ends and the countryside lots, HousingPlotStage): each gets a spur, as a mine or a shrine does.
+		/// </summary>
+		public IReadOnlyList<PathSpurEnd> ExtraSpurs = Array.Empty<PathSpurEnd>();
 	}
 
 	/// <summary>A bridge a way needs where no bridge stands: the stage turns each into a Bridge site.</summary>
+	/// <summary>A spur's far end that is not a site (<see cref="PathPlanInput.ExtraSpurs"/>).</summary>
+	public struct PathSpurEnd
+	{
+		/// <summary>An id no site uses (the router's owner id for the spur's own end); negative by convention.</summary>
+		public int Id;
+		/// <summary>Where the way ends, on the ground.</summary>
+		public Vector3 Position;
+		/// <summary>What kind of way it is.</summary>
+		public ScenePathClass Way;
+	}
+
 	public sealed class PathBridgeSite
 	{
 		public int PathId;
@@ -426,6 +443,28 @@ namespace FishMMO.Shared.WorldDesign
 						// A cave whose mouth lies under water is dived to: no way is laid to it.
 						spurs.Add((record, way, wear));
 					}
+				}
+
+				foreach (PathSpurEnd extra in input.ExtraSpurs ?? Array.Empty<PathSpurEnd>())
+				{
+					// A stand-in record: no shape, no template, no rank — EndFor reaches it at its point like any plain site.
+					var stand = new PointOfInterestRecord
+					{
+						Id = extra.Id,
+						Kind = POIType.Waystation,
+						Position = extra.Position,
+						Radius = 2f,
+						Template = string.Empty,
+						Race = string.Empty,
+						Name = string.Empty,
+						Description = string.Empty,
+						ParentId = -1,
+						RiverId = -1,
+						PlanetRiver = -1,
+						LakeId = -1,
+						UnlockIndex = -1,
+					};
+					spurs.Add((stand, extra.Way, 1f));
 				}
 
 				Trunks(settlements);

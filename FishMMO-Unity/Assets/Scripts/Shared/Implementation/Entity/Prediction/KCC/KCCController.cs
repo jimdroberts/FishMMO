@@ -252,6 +252,11 @@ namespace FishMMO.Shared
 		private byte motionTicks;
 		private ushort motionSpeed;
 		private ushort motionYaw;
+		// The owner's rush stops made by a predicted hit, by the replicate tick they followed: see EndMotionFromHit.
+		private readonly PredictedRushStops predictedRushStops = new PredictedRushStops();
+		private uint lastSimulatedTick;
+		private bool hasSimulatedTick;
+		private bool recordsPredictedStops;
 
 		// The water at the character this tick: sampled before the motor moves, from the synced clock.
 		private WaterSample water = WaterSample.Dry;
@@ -307,7 +312,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		/// <summary>Ends an ability rush now (it struck something).</summary>
+		/// <summary>Ends an ability rush now, from inside the movement step (stunned, rooted): a replay reaches it by itself.</summary>
 		public void EndMotion()
 		{
 			if (motionTicks == 0)
@@ -316,6 +321,70 @@ namespace FishMMO.Shared
 			}
 			motionTicks = 0;
 			SettleAfterMotion();
+		}
+
+		/// <summary>
+		/// Ends an ability rush because a hit stopped it: from OUTSIDE the movement step, where the ability object resolves
+		/// its hits.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>On the owner the stop is remembered</b>, against the movement tick it followed. A hit is not run again when the owner
+		/// replays a correction, so a correction from before the hit used to replay the rush straight past the target, and
+		/// the server's own stop then snapped the charger back to it a moment later. The remembered stop is applied again when
+		/// a replay passes its tick (<see cref="ReapplyPredictedRushStop"/>) or when a correction lands past it with the server
+		/// still rushing (<see cref="OnReconciled"/>), and forgotten once the server's state shows the rush stopped there (or
+		/// after <see cref="PredictedRushStops.ExpiryTicks"/>, when the server never struck: then the server's rush is the truth).
+		/// </para>
+		/// <para>On the server it is simply the stop; the reconcile carries it.</para>
+		/// </remarks>
+		public void EndMotionFromHit()
+		{
+			if (motionTicks == 0)
+			{
+				return;
+			}
+			motionTicks = 0;
+			SettleAfterMotion();
+			if (recordsPredictedStops && hasSimulatedTick)
+			{
+				predictedRushStops.Record(lastSimulatedTick);
+			}
+		}
+
+		/// <summary>
+		/// Called after every movement step (first pass and replay) with its tick. <paramref name="recordsStops"/> is true on
+		/// the owner only, which is the one peer that replays and so the one that must remember hit stops.
+		/// </summary>
+		public void NoteSimulatedTick(uint tick, bool recordsStops)
+		{
+			lastSimulatedTick = tick;
+			hasSimulatedTick = true;
+			recordsPredictedStops = recordsStops;
+		}
+
+		/// <summary>On a REPLAYED movement step: the rush stop a hit made after this tick, made again.</summary>
+		public void ReapplyPredictedRushStop(uint tick)
+		{
+			if (motionTicks > 0 && predictedRushStops.StopsAfter(tick))
+			{
+				motionTicks = 0;
+				SettleAfterMotion();
+			}
+		}
+
+		/// <summary>
+		/// After a correction for <paramref name="reconciledTick"/> has been applied (before the replay): forgets the stops the
+		/// server has confirmed or never made, and keeps a stop the correction would undo (the server, a tick or two behind
+		/// the owner's hit, still rushing at a tick past it).
+		/// </summary>
+		public void OnReconciled(uint reconciledTick)
+		{
+			if (predictedRushStops.OnReconciled(reconciledTick, motionTicks > 0))
+			{
+				motionTicks = 0; // past the stop and still rushing: the replay must not carry on
+				SettleAfterMotion();
+			}
 		}
 
 		/// <summary>

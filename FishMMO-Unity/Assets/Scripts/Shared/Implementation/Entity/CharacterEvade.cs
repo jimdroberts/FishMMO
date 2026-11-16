@@ -4,7 +4,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Single definition of "this character accepts nothing hostile": it is evading, or (with a source) the harm rule
-	/// (<see cref="FactionHarm"/>) does not let that source harm it.
+	/// (<see cref="HarmRule"/>) does not let that source harm it.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// True when <paramref name="target"/> must refuse a hostile effect from <paramref name="source"/>: it is evading
 		/// (<see cref="RefusesHostileEffects(ICharacter)"/>), or the harm rule does not let <paramref name="source"/> harm it
-		/// (<see cref="FactionHarm"/>: enemies only, unless an aggression toggle is on; a pet as its owner). The one question
+		/// (<see cref="HarmRule"/>: enemies only, unless an aggression toggle is on; a pet as its owner). The one question
 		/// every hostile route asks — damage, debuffs, knockback, interrupts, taunts, buff-stripping dispels, drains — so none
 		/// can be the one that still lands on a friend.
 		/// </summary>
@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 		/// <returns>True when the effect must be refused.</returns>
 		public static bool RefusesHostileEffects(ICharacter target, ICharacter source)
 		{
-			return RefusesHostileEffects(target) || !FactionHarm.Allows(source, target);
+			return RefusesHostileEffects(target) || !HarmRule.Allows(source, target);
 		}
 
 		/// <summary>

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Forking Projectile
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 2ecf9a69c1cfaffcdff75cfe16c52a97
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

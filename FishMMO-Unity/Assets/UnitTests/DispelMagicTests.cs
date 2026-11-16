@@ -93,7 +93,9 @@ namespace FishMMO.UnitTests
 			ApplyDispelAction lift = OnlyDispel(cleanse);
 			Assert.IsTrue(lift.IncludeDebuffs && !lift.IncludeBuffs, "a friend loses debuffs, never buffs");
 			TargetAllianceCondition friendGate = AllianceGate(cleanse);
-			Assert.IsTrue(friendGate.ApplyToAllies && !friendGate.ApplyToEnemy && !friendGate.ApplyToNeutral);
+			// Not the heals' rule (Jim, 11-16): any neutral character is cleansed, NPCs, pets and wildlife included; never an enemy.
+			Assert.IsTrue(friendGate.ApplyToAllies && friendGate.ApplyToSelf && !friendGate.ApplyToEnemy && friendGate.ApplyToNeutral
+				&& !friendGate.NeutralPlayersOnly);
 		}
 
 		[Test]

@@ -16,8 +16,8 @@ MonoBehaviour:
     rid: -2
   Conditions: []
   OnConditionsMetActions:
-  - rid: 4295713116978937932
-  - rid: 4295713116978937933
+  - rid: 4295713125095964748
+  - rid: 4295713125095964749
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -32,7 +32,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937932
+    - rid: 4295713125095964748
       type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -41,7 +41,7 @@ MonoBehaviour:
         FXPrefab: {fileID: 5092284259553131164, guid: 136e765e89867c7569387e269f43411f, type: 3}
         Size: 2
         HeightOffset: 1
-    - rid: 4295713116978937933
+    - rid: 4295713125095964749
       type: {class: TeleportCasterAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

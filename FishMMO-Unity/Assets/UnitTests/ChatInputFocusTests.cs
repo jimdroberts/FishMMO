@@ -76,7 +76,7 @@ namespace FishMMO.UnitTests
 		{
 			string body = MethodBody(ReadSource(ChatPath), "public void EnableChatInput()", "private void UpdateCursorRelease()");
 			int gate = body.IndexOf("UIManager.InputControlHasFocus(this)", StringComparison.Ordinal);
-			int focus = body.IndexOf("inputField.Focus()", StringComparison.Ordinal);
+			int focus = body.IndexOf("FocusInputLikeAClick()", StringComparison.Ordinal);
 			LogAssert.IsTrue(gate >= 0 && focus > gate, "Enter or '/' typed into another field must not pull focus into chat");
 		}
 
@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests
 			string source = ReadSource(ChatPath);
 			string body = MethodBody(source, "public void EnableChatInput()", "private void UpdateCursorRelease()");
 			int record = body.IndexOf("typingStartedInMouseMode = PlayerInputController.MouseMode", StringComparison.Ordinal);
-			int focus = body.IndexOf("inputField.Focus()", StringComparison.Ordinal);
+			int focus = body.IndexOf("FocusInputLikeAClick()", StringComparison.Ordinal);
 			int claim = body.IndexOf("ReleasesCursor = true", StringComparison.Ordinal);
 			int free = body.IndexOf("PlayerInputController.MouseMode = true", StringComparison.Ordinal);
 			LogAssert.IsTrue(focus >= 0, "Enter still focuses the input");
@@ -148,6 +148,32 @@ namespace FishMMO.UnitTests
 
 			string input = MethodBody(ReadSource(InputPath), "private void OnChatPerformed", "/// <summary>");
 			LogAssert.IsTrue(input.Contains("OnChatKey(") && input.Contains("Key.Enter"), "the Chat action must tell chat whether it was Enter");
+		}
+
+		/// <summary>
+		/// Typing that began in mouse mode (Tab, then a click on the field) stays in the field after Enter sends; only typing
+		/// that began in aim mode leaves it and goes back to the game.
+		/// </summary>
+		[Test]
+		public void SendingKeepsTheFieldWhenTypingBeganInMouseMode()
+		{
+			string send = MethodBody(ReadSource(ChatPath), "private void SubmitAndRelease()", "private void RestoreModeAfterTyping()");
+			int keep = send.IndexOf("if (typingStartedInMouseMode)", StringComparison.Ordinal);
+			int release = send.IndexOf("ReleaseInputFocus()", StringComparison.Ordinal);
+			LogAssert.IsTrue(keep >= 0 && release > keep, "the mouse-mode case must return before the field is released");
+			LogAssert.IsTrue(send.Substring(keep, release - keep).Contains("return;"), "and keep the field focused");
+		}
+
+		/// <summary>The chat key's opening holds focus for a moment and puts it back if something takes it.</summary>
+		[Test]
+		public void OpeningHoldsFocusAgainstWhateverTakesIt()
+		{
+			string source = ReadSource(ChatPath);
+			string open = MethodBody(source, "public void EnableChatInput()", "private void UpdateCursorRelease()");
+			LogAssert.IsTrue(open.Contains("holdFocusUntilFrame = Time.frameCount + HoldFocusFrames"), "opening starts the hold");
+			string claim = MethodBody(source, "private void UpdateCursorRelease()", "/// <summary>Frames after the chat key opens");
+			LogAssert.IsTrue(claim.Contains("HoldFocusAfterOpening()") && claim.Contains("HoldingFocus"),
+				"the panel keeps the cursor and restores focus during the hold");
 		}
 
 		[Test]

@@ -297,14 +297,14 @@ namespace FishMMO.Shared
 				recipe.AttributeDatabase = attributes.CharacterAttributeDatabase;
 			}
 
-			FactionController faction = prefab.GetComponent<FactionController>();
-			if (faction != null)
+			NPC raceHolder = prefab.GetComponent<NPC>();
+			if (raceHolder != null)
 			{
 				/* The runtime accessor resolves through the template cache, which is empty in
 				 * the editor, so the serialized ID is read and matched against the assets. */
-				SerializedObject serialized = new SerializedObject(faction);
+				SerializedObject serialized = new SerializedObject(raceHolder);
 				recipe.Race = FindTemplateByID<RaceTemplate>(serialized.FindProperty("raceTemplateID").intValue);
-				recipe.IsAggressive = faction.IsAggressive;
+				recipe.IsAggressive = serialized.FindProperty("isAggressive").boolValue;
 			}
 
 			Merchant merchant = prefab.GetComponent<Merchant>();
@@ -526,12 +526,12 @@ namespace FishMMO.Shared
 				attributes.CharacterAttributeDatabase = recipe.AttributeDatabase;
 			}
 
-			FactionController faction = root.GetComponent<FactionController>();
-			if (faction != null)
+			NPC raceHolder = root.GetComponent<NPC>();
+			if (raceHolder != null)
 			{
-				/* Both fields are private and serialized; the race is stored as the template's
+				/* Both fields are private and serialized on the NPC; the race is stored as the template's
 				 * deterministic ID, exactly as the TemplateReference drawer writes it. */
-				SerializedObject serialized = new SerializedObject(faction);
+				SerializedObject serialized = new SerializedObject(raceHolder);
 				serialized.FindProperty("raceTemplateID").intValue = ComputeTemplateID(recipe.Race);
 				serialized.FindProperty("isAggressive").boolValue = recipe.IsAggressive;
 				serialized.ApplyModifiedPropertiesWithoutUndo();

@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock deflect stance. Deflects up to 3 frontal projectiles.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 3640e19e46f3ff5fefb8bedcd210845f
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

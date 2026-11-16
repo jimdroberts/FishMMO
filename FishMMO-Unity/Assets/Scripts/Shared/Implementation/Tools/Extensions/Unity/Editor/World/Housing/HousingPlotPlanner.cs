@@ -62,6 +62,12 @@ namespace FishMMO.Shared
 		/// <summary>The share of countryside cells that get a group.</summary>
 		public const float CountryChance = 0.35f;
 
+		/// <summary>
+		/// Spots tried in a chosen cell before it is given up: one spot was too few, as a coast or a wooded slope
+		/// (Moron 1, 11-15) refused every cell's single try and the scene got no lot at all.
+		/// </summary>
+		public const int CountryTries = 16;
+
 		/// <summary>How far countryside lots keep from any point of interest's edge, metres.</summary>
 		public const float CountryFromSites = 160f;
 
@@ -302,8 +308,6 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
-					float px = x0 + 40f + rng.NextFloat() * (CountryCell - 80f);
-					float pz = z0 + 40f + rng.NextFloat() * (CountryCell - 80f);
 					int wanted = 1 + rng.Next(3);
 					int axis = rng.Next(2);
 					int side = rng.Next(2) == 0 ? 1 : -1;
@@ -312,28 +316,34 @@ namespace FishMMO.Shared
 					{
 						sizes[i] = Pick(rng, CountryWeights);
 					}
-					if (!AwayFromSites(input, px, pz) || NearDistrict(occupied, px, pz, 150f))
-					{
-						continue;
-					}
 
+					// The first spot in the cell whose first lot fits holds the group (the spots are drawn from the cell's own seed).
 					string group = $"Countryside {cx},{cz}";
-					float cursor = 0f;
 					int laid = 0;
-					for (int i = 0; i < wanted && laidTotal + laid < MaxCountryLots; i++)
+					for (int attempt = 0; attempt < CountryTries && laid == 0; attempt++)
 					{
-						float size = sizes[i];
-						float along = cursor + size * 0.5f, across = side * size * 0.5f;
-						float x = px + (axis == 0 ? along : across), z = pz + (axis == 0 ? across : along);
-						int front = axis == 0 ? (side > 0 ? 3 : 1) : (side > 0 ? 2 : 0);
-						if (!AwayFromSites(input, x, z) || !TryLot(input, x, z, size, front, PriceOf(size, 0.8f), false, occupied, out ScenePlotManifest.Lot lot))
+						float px = x0 + 40f + rng.NextFloat() * (CountryCell - 80f);
+						float pz = z0 + 40f + rng.NextFloat() * (CountryCell - 80f);
+						if (!AwayFromSites(input, px, pz) || NearDistrict(occupied, px, pz, 150f))
 						{
-							break;
+							continue;
 						}
-						lot.Group = group;
-						Add(result, occupied, lot);
-						cursor += size + Gap;
-						laid++;
+						float cursor = 0f;
+						for (int i = 0; i < wanted && laidTotal + laid < MaxCountryLots; i++)
+						{
+							float size = sizes[i];
+							float along = cursor + size * 0.5f, across = side * size * 0.5f;
+							float x = px + (axis == 0 ? along : across), z = pz + (axis == 0 ? across : along);
+							int front = axis == 0 ? (side > 0 ? 3 : 1) : (side > 0 ? 2 : 0);
+							if (!AwayFromSites(input, x, z) || !TryLot(input, x, z, size, front, PriceOf(size, 0.8f), false, occupied, out ScenePlotManifest.Lot lot))
+							{
+								break;
+							}
+							lot.Group = group;
+							Add(result, occupied, lot);
+							cursor += size + Gap;
+							laid++;
+						}
 					}
 					laidTotal += laid;
 					result.NewCountryLots += laid;
@@ -457,6 +467,87 @@ namespace FishMMO.Shared
 				Group = string.Empty,
 			};
 			return true;
+		}
+
+		/// <summary>Where a way should reach a group of lots.</summary>
+		public struct SpurEnd
+		{
+			public Vector2 Position;
+			public bool District;
+			public string Group;
+		}
+
+		/// <summary>
+		/// One way end per group of lots: a district's lane end nearer its settlement (just past the last lot,
+		/// on the lane's line), a countryside group's front, a few metres out from its first lot's post.
+		/// </summary>
+		/// <remarks>
+		/// Worked out from the lots alone, so kept lots from an older manifest get their ways back on a re-cut.
+		/// A district's lane runs along X when its posts face ±Z (fronts 1 and 3), along Z otherwise.
+		/// </remarks>
+		public static List<SpurEnd> SpurEnds(IReadOnlyList<ScenePlotManifest.Lot> lots, IReadOnlyList<Settlement> settlements)
+		{
+			var ends = new List<SpurEnd>();
+			var order = new List<string>();
+			var groups = new Dictionary<string, List<ScenePlotManifest.Lot>>();
+			foreach (ScenePlotManifest.Lot lot in lots)
+			{
+				string key = (lot.District ? "d:" : "c:") + (lot.Group ?? string.Empty);
+				if (!groups.TryGetValue(key, out List<ScenePlotManifest.Lot> list))
+				{
+					list = new List<ScenePlotManifest.Lot>();
+					groups[key] = list;
+					order.Add(key);
+				}
+				list.Add(lot);
+			}
+			foreach (string key in order)
+			{
+				List<ScenePlotManifest.Lot> group = groups[key];
+				ScenePlotManifest.Lot first = group[0];
+				if (!first.District)
+				{
+					Vector3 dir = FrontDirection(first.Front);
+					float reach = first.Size.x * 0.5f + 4f;
+					ends.Add(new SpurEnd { Position = new Vector2(first.Centre.x + dir.x * reach, first.Centre.z + dir.z * reach), District = false, Group = first.Group });
+					continue;
+				}
+				bool alongX = (first.Front & 1) == 1;
+				float lane = 0f, min = float.MaxValue, max = float.MinValue, cx = 0f, cz = 0f;
+				foreach (ScenePlotManifest.Lot lot in group)
+				{
+					float half = lot.Size.x * 0.5f;
+					switch (lot.Front & 3)
+					{
+						case 0: lane += lot.Centre.x + half + LaneHalf; break;
+						case 1: lane += lot.Centre.z + half + LaneHalf; break;
+						case 2: lane += lot.Centre.x - half - LaneHalf; break;
+						default: lane += lot.Centre.z - half - LaneHalf; break;
+					}
+					float along = alongX ? lot.Centre.x : lot.Centre.z;
+					min = Mathf.Min(min, along - half);
+					max = Mathf.Max(max, along + half);
+					cx += lot.Centre.x;
+					cz += lot.Centre.z;
+				}
+				lane /= group.Count;
+				var centroid = new Vector2(cx / group.Count, cz / group.Count);
+				Vector2 a = alongX ? new Vector2(min - 4f, lane) : new Vector2(lane, min - 4f);
+				Vector2 b = alongX ? new Vector2(max + 4f, lane) : new Vector2(lane, max + 4f);
+				Vector2 toward = centroid;
+				float best = float.MaxValue;
+				foreach (Settlement settlement in settlements)
+				{
+					float d = Distance(centroid.x, centroid.y, settlement.X, settlement.Z);
+					if (d < best)
+					{
+						best = d;
+						toward = new Vector2(settlement.X, settlement.Z);
+					}
+				}
+				ends.Add(new SpurEnd { Position = (a - toward).sqrMagnitude <= (b - toward).sqrMagnitude ? a : b, District = true, Group = first.Group });
+			}
+			return ends;
 		}
 
 		/// <summary>The plot key of a lot centred at (x, z): its rounded position, unique since lots never overlap.</summary>

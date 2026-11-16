@@ -170,8 +170,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			// Group finder: its two requests, its pump, and its tunables. See InteractableSystem.GroupFinder.cs.
 			InitializeGroupFinder();
 
-			// Waypoints: the fast-travel request and the discovery hooks. See InteractableSystem.Waypoint.cs.
-			InitializeWaypoints();
+			// Waypoints' fast travel and discovery hooks moved to the Travel module (WaypointTravelSystem).
 
 			// Portals: the activation store, its persistence, and the client reports. See InteractableSystem.Portal.cs.
 			InitializePortals();
@@ -240,8 +239,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			DeinitializeGroupFinder();
-
-			DeinitializeWaypoints();
 
 			DeinitializePortals();
 

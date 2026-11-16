@@ -472,6 +472,18 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 
+				/* The housing lots (HousingPlotStage), on the ground the pads and shapers left and before the ways: the ways then
+				 * route round every lot and a spur reaches each district's lane and each countryside group. */
+				try
+				{
+					Housing?.Plan(this, tiles, terrains, field, water, notes);
+				}
+				catch (Exception ex)
+				{
+					notes?.Add($"Housing plots could not be planned: {ex.Message}");
+					Debug.LogException(ex);
+				}
+
 				// The ways between the sites, on the ground the pads and shapers left: routed, bridged and carved in.
 				PlanPaths(tiles, terrains, water, input, ground, library, biomes, notes);
 
@@ -619,6 +631,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The straight roads (2026-10-26, I2l-b): asked only where some biome of the scene lays them, so no other scene changes.
 				StraightRoadsAt = StraightRoadsAt(input, biomes),
 				Faults = Faults.Count > 0 ? Faults : null,
+				ExtraSpurs = Housing != null ? Housing.Spurs : (IReadOnlyList<PathSpurEnd>)Array.Empty<PathSpurEnd>(),
 			};
 			var clock = System.Diagnostics.Stopwatch.StartNew();
 			PathPlan paths = PathNetworkPlanner.Plan(pathInput);

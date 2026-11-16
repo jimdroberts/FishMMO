@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// The rules wildlife lives by, outside the faction system. Every check that would otherwise ask a faction asks here
-	/// first: the harm rule (<see cref="FactionHarm.MayHarm"/>) and the AI's search for something to fight or flee.
+	/// first: the harm rule (<see cref="HarmRule.MayHarm"/>) and the AI's search for something to fight or flee.
 	/// </summary>
 	public static class WildlifeRules
 	{

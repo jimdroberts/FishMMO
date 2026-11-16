@@ -194,8 +194,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterAttributeData> Attributes;
 			public readonly List<CharacterAbilityData> Abilities;
 			public readonly List<PetSnapshot> Pets;
-			public readonly List<CharacterWaypointData> Waypoints;
-			public readonly List<CharacterFactionData> Factions;
 			public readonly List<CharacterArchetypeData> Archetypes;
 			public readonly List<CharacterKnownAbilityData> KnownAbilities;
 			/// <summary>
@@ -237,8 +235,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Attributes = new List<CharacterAttributeData>(n * 16);
 				Abilities = new List<CharacterAbilityData>(n * 8);
 				Pets = new List<PetSnapshot>(n);
-				Waypoints = new List<CharacterWaypointData>(n);
-				Factions = new List<CharacterFactionData>(n * 8);
 				Archetypes = new List<CharacterArchetypeData>(n);
 				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
 				Hotkeys = new List<CharacterHotkeyData>();
@@ -293,8 +289,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes);
 					Abilities.AddRange(other.Abilities);
 					Pets.AddRange(other.Pets);
-					Waypoints.AddRange(other.Waypoints);
-					Factions.AddRange(other.Factions);
 					Archetypes.AddRange(other.Archetypes);
 					KnownAbilities.AddRange(other.KnownAbilities);
 					Hotkeys.AddRange(other.Hotkeys);
@@ -304,8 +298,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes.Where(r => !conflicting.Contains(r.CharacterID)));
 					Abilities.AddRange(other.Abilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Pets.AddRange(other.Pets.Where(r => !conflicting.Contains(r.Pet.CharacterID)));
-					Waypoints.AddRange(other.Waypoints.Where(r => !conflicting.Contains(r.CharacterID)));
-					Factions.AddRange(other.Factions.Where(r => !conflicting.Contains(r.CharacterID)));
 					Archetypes.AddRange(other.Archetypes.Where(r => !conflicting.Contains(r.CharacterID)));
 					KnownAbilities.AddRange(other.KnownAbilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Hotkeys.AddRange(other.Hotkeys.Where(r => !conflicting.Contains(r.CharacterID)));
@@ -368,8 +360,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				participants[i].Capture(character, snapshot.RowsFor(participants[i]));
 			}
-			AppendWaypointData(character, snapshot.Waypoints);
-			AppendFactionData(character, snapshot.Factions);
 			AppendArchetypeData(character, snapshot.Archetypes);
 			AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions);
 		}
@@ -486,8 +476,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					EnqueuePersistence(() => writer.SaveAsync(this, rows, claims));
 				}
 			}
-			if (s.Waypoints.Count > 0) EnqueuePersistence(() => SaveWaypointsAsync(s.Waypoints));
-			if (s.Factions.Count > 0) EnqueuePersistence(() => SaveFactionsAsync(s.Factions, claims));
 			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes, claims));
 			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims));
 			if (s.Hotkeys.Count > 0)
@@ -554,8 +542,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					done &= await SaveWithRetryAsync(() => writer.SaveAsync(this, rows, claims), writer.Name, characterID);
 				}
 			}
-			if (s.Waypoints.Count > 0) done &= await SaveWithRetryAsync(() => SaveWaypointsAsync(s.Waypoints), "waypoints", characterID);
-			if (s.Factions.Count > 0) done &= await SaveWithRetryAsync(() => SaveFactionsAsync(s.Factions, claims), "factions", characterID);
 			if (s.Archetypes.Count > 0) done &= await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes, claims), "archetype", characterID);
 			if (s.KnownAbilities.Count > 0) done &= await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims), "known abilities", characterID);
 			if (s.Hotkeys.Count > 0) done &= await SaveWithRetryAsync(() => SaveHotkeysAsync(s.Hotkeys, claims), "hotkey bar", characterID);
@@ -2662,121 +2648,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
-		/// <summary>Scratch list for collecting dirty waypoint pages on the main thread.</summary>
-		private readonly List<WaypointPageSnapshot> waypointPageScratch = new List<WaypointPageSnapshot>();
-
-		/// <summary>
-		/// Appends every discovered-waypoint page the database has not yet confirmed.
-		/// Main-thread only.
-		/// </summary>
-		/// <remarks>
-		/// The unlock path writes each page the moment it changes; this is the retry for a write
-		/// that was lost, and the flush before a session release. A page is dirty until the
-		/// merge is confirmed, so a lost write simply shows up here on the next pass.
-		/// </remarks>
-		private void AppendWaypointData(IPlayerCharacter character, List<CharacterWaypointData> waypoints)
-		{
-			WaypointPersistence.AppendDirtyPages(character, waypoints, waypointPageScratch);
-		}
-
-		/// <summary>
-		/// Merges discovered-waypoint pages into the database asynchronously.
-		/// </summary>
-		/// <returns>
-		/// False when the merge did not land. Any failure counts: the merge is an OR, so repeating
-		/// one that did land loses nothing.
-		/// </returns>
-		private async Task<bool> SaveWaypointsAsync(List<CharacterWaypointData> waypoints)
-		{
-			if (Server?.Database?.ServiceRegistry == null ||
-				!Server.Database.ServiceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
-			{
-				return true;
-			}
-
-			if (await WaypointPersistence.MergeAsync(waypointService, waypoints, "CharacterSystem"))
-			{
-				TryEnqueueMainThread(() => WaypointPersistence.MarkPersisted(waypoints, ResolveResidentCharacterForWaypoints));
-				return true;
-			}
-			return false;
-		}
-
-		/// <summary>Resolves a connected or lingering character for waypoint write confirmation. Main thread.</summary>
-		private ICharacter ResolveResidentCharacterForWaypoints(long characterID)
-		{
-			return TryGetResidentCharacter(characterID, out IPlayerCharacter character) ? character : null;
-		}
-
-		/// <summary>
-		/// Appends every faction standing changed since the database last confirmed it.
-		/// Main-thread only. Each appended DTO has its Version bumped on the runtime Faction.
-		/// </summary>
-		/// <remarks>
-		/// Factions had no save leg at all before 2026-09-07: the only writer was character
-		/// creation, so every kill credit and quest reward vanished on logout. Same shape as
-		/// achievements — <see cref="Faction.MarkChanged"/> on mutation, a second bump here, and
-		/// <see cref="MarkFactionsPersisted"/> clearing only a still-matching version.
-		/// </remarks>
-		private void AppendFactionData(IPlayerCharacter character, List<CharacterFactionData> factions)
-		{
-			if (!character.TryGet(out IFactionController factionController) ||
-				factionController.Factions.Count == 0)
-			{
-				return;
-			}
-
-			foreach (var kvp in factionController.Factions)
-			{
-				Faction faction = kvp.Value;
-				if (faction == null || !faction.PersistenceDirty)
-				{
-					continue;
-				}
-
-				faction.Version++;
-				factions.Add(new CharacterFactionData(
-					id: 0,
-					version: faction.Version,
-					characterID: character.ID,
-					templateID: kvp.Key,
-					value: faction.Value));
-			}
-		}
-
-		/// <summary>
-		/// Persists a snapshot of faction standings asynchronously.
-		/// </summary>
-		/// <param name="factions">The rows.</param>
-		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
-		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveFactionsAsync(List<CharacterFactionData> factions, IReadOnlyCollection<CharacterSessionLeaseData> claims)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterFactionService>(out var factionService))
-				{
-					return true;
-				}
-
-				DatabaseResult<BulkWriteResult> result = await factionService.PersistOwnedAsync(factions, claims);
-				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Faction save", result);
-
-				if (BulkWriteReporting.MayClearDirtyMarks(result))
-				{
-					TryEnqueueMainThread(() => MarkFactionsPersisted(factions));
-				}
-
-				return written || !result.IsTransient;
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("CharacterSystem", $"SaveFactionsAsync failed: {ex}");
-				return false;
-			}
-		}
-
 		/// <summary>
 		/// Captures a character's ability knowledge, when any of it is new since the last write.
 		/// </summary>
@@ -2901,33 +2772,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					abilityController.KnowledgeVersion == captured.Value)
 				{
 					abilityController.KnowledgeDirty = false;
-				}
-			}
-		}
-
-		/// <summary>
-		/// Clears the dirty mark on every faction a completed write covered. Main thread.
-		/// </summary>
-		private void MarkFactionsPersisted(List<CharacterFactionData> factions)
-		{
-			if (factions == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < factions.Count; ++i)
-			{
-				CharacterFactionData saved = factions[i];
-
-				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
-					!character.TryGet(out IFactionController factionController))
-				{
-					continue;
-				}
-
-				if (factionController.Factions.TryGetValue(saved.TemplateID, out Faction faction) && faction != null)
-				{
-					faction.MarkPersisted(saved.Version);
 				}
 			}
 		}

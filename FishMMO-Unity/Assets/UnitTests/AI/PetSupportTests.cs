@@ -65,50 +65,6 @@ namespace FishMMO.UnitTests.AI
 			return character;
 		}
 
-		private FactionController FactionsOf(ICharacter character)
-		{
-			FactionController factions = ((Component)character).GetComponent<FactionController>();
-			if (factions == null)
-			{
-				factions = ((Component)character).gameObject.AddComponent<FactionController>();
-			}
-			factions.InitializeOnce(character);
-			return factions;
-		}
-
-		[Test]
-		public void APetAndItsOwner_AreAllies()
-		{
-			/* They share no party or guild of their own, so they used to read as neutral — and an
-			 * ally-only heal cast by the pet bounced off the owner it was for. */
-			PlayerCharacter owner = NewCharacter<PlayerCharacter>("PetSupportOwner", 9101);
-			Pet pet = NewCharacter<Pet>("PetSupportPet", 9102);
-			pet.PetOwner = owner;
-
-			FactionController ownerFactions = FactionsOf(owner);
-			FactionController petFactions = FactionsOf(pet);
-
-			Assert.AreEqual(FactionAllianceLevel.Ally, petFactions.GetAllianceLevel(ownerFactions), "the pet sees its owner as an ally");
-			Assert.AreEqual(FactionAllianceLevel.Ally, ownerFactions.GetAllianceLevel(petFactions), "and the owner sees the pet as one");
-		}
-
-		[Test]
-		public void TwoPetsOfOneOwner_AreAllies_AndAStrangersPetIsNot()
-		{
-			PlayerCharacter owner = NewCharacter<PlayerCharacter>("PetSupportOwnerA", 9111);
-			PlayerCharacter stranger = NewCharacter<PlayerCharacter>("PetSupportOwnerB", 9112);
-			Pet first = NewCharacter<Pet>("PetSupportPetA1", 9113);
-			Pet second = NewCharacter<Pet>("PetSupportPetA2", 9114);
-			Pet strangersPet = NewCharacter<Pet>("PetSupportPetB", 9115);
-			first.PetOwner = owner;
-			second.PetOwner = owner;
-			strangersPet.PetOwner = stranger;
-
-			Assert.AreEqual(FactionAllianceLevel.Ally, FactionsOf(first).GetAllianceLevel(FactionsOf(second)));
-			Assert.AreNotEqual(FactionAllianceLevel.Ally, FactionsOf(first).GetAllianceLevel(FactionsOf(strangersPet)),
-				"another player's pet is that player's side, not this one");
-		}
-
 		[Test]
 		public void SummonFireElemental_IsTheLesserSpellWithEffectSlots()
 		{

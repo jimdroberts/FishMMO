@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Damage Over Time
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 2d623a057603f8553f3e169b6a2c5be5
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

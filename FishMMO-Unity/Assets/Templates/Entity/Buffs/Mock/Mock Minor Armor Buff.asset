@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock armor buff. +5 armor for 60 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 531050b1ea8f11470e7da22730638a06
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

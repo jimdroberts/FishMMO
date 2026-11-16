@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Core;
 using FishNet.Object;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -80,16 +81,29 @@ namespace FishMMO.Shared
 			IReadOnlyList<SceneCaveLifeSpot> caves = points != null ? points.CaveLife : null;
 			Func<float, float, bool> keptOut = points != null ? points.IsKeptOut : (Func<float, float, bool>)null;
 
-			// Off the map, or ground the map cannot place, is unknown: the planner treats it as nowhere to live.
+			/* The ground's height is MEASURED, by a ray down onto the scene's own colliders, not read from the biome map: the
+			 * map stores the planet's metres above its sea level, not scene units, and spawners placed at those heights hung
+			 * hundreds of metres off the ground, so their spawns found no ground and floated off the NavMesh (Moron 1 and 2,
+			 * 2026-11-15). Off the map, or where nothing is under the point, is unknown: the planner treats it as nowhere to
+			 * live. */
+			PhysicsScene physics = scene.GetPhysicsScene();
+			if (!physics.IsValid())
+			{
+				physics = Physics.defaultPhysicsScene;
+			}
+			Physics.SyncTransforms();
+			int groundMask = LayerMask.GetMask("Default", "Ground");
 			bool Ground(float x, float z, out BiomeHabitat habitat, out float altitude)
 			{
 				habitat = BiomeHabitat.None;
 				altitude = 0f;
 				var at = new Vector3(x, 0f, z);
-				if (!map.Contains(at) || !map.TryGroundAltitude(x, z, out altitude))
+				if (!map.Contains(at) ||
+					!physics.Raycast(new Vector3(x, 20000f, z), Vector3.down, out RaycastHit hit, 40000f, groundMask, QueryTriggerInteraction.Ignore))
 				{
 					return false;
 				}
+				altitude = hit.point.y;
 				if (BiomeRegistry.TryGetByID(map.IDAt(at), out BiomeTemplate biome) && biome != null)
 				{
 					habitat = biome.LiveHabitat;
@@ -101,7 +115,9 @@ namespace FishMMO.Shared
 				return true;
 			}
 
-			List<WildlifeArea> areas = WildlifePlanner.Plan(scene.name, new Rect(map.WorldOrigin, map.WorldSize), Ground,
+			// Inside the scene boundary (less a margin) as well as the map: a spawner past the edge drops its animals off the world.
+			Rect bounds = PlacementBounds(scene, map, catalogue.BoundaryMargin, notes);
+			List<WildlifeArea> areas = WildlifePlanner.Plan(scene.name, bounds, Ground,
 				pois, keptOut, caves, species, catalogue);
 
 			GameObject root = ReplaceRoot(scene);
@@ -172,6 +188,40 @@ namespace FishMMO.Shared
 			}
 			// The sea level is not kept on the scene; the biome habitats still keep land species off sea biomes.
 			return Place(scene, settings.BiomeMap, null, notes);
+		}
+
+		/// <summary>
+		/// Where wildlife may be placed: the biome map's extent cut to the scene's boundary (IBoundary: centre and size), less
+		/// <paramref name="margin"/> on every side. The map alone when the scene has no boundary.
+		/// </summary>
+		public static Rect PlacementBounds(Scene scene, SceneBiomeMap map, float margin, List<string> notes)
+		{
+			Rect rect = new Rect(map.WorldOrigin, map.WorldSize);
+			IBoundary boundary = null;
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				boundary = root.GetComponentInChildren<IBoundary>(true);
+				if (boundary != null)
+				{
+					break;
+				}
+			}
+			if (boundary != null)
+			{
+				Vector3 centre = boundary.GetBoundaryOffset(), size = boundary.GetBoundarySize();
+				float xMin = Mathf.Max(rect.xMin, centre.x - size.x * 0.5f), xMax = Mathf.Min(rect.xMax, centre.x + size.x * 0.5f);
+				float zMin = Mathf.Max(rect.yMin, centre.z - size.z * 0.5f), zMax = Mathf.Min(rect.yMax, centre.z + size.z * 0.5f);
+				rect = Rect.MinMaxRect(xMin, zMin, xMax, zMax);
+			}
+			else
+			{
+				notes?.Add($"Wildlife: '{scene.name}' has no scene boundary; placing over the whole biome map.");
+			}
+			if (rect.width > margin * 2f && rect.height > margin * 2f)
+			{
+				rect = Rect.MinMaxRect(rect.xMin + margin, rect.yMin + margin, rect.xMax - margin, rect.yMax - margin);
+			}
+			return rect;
 		}
 
 		/// <summary>The catalogue's species: every prefab whose NPC carries a wildlife template.</summary>

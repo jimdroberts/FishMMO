@@ -351,7 +351,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The player's OWN standing is how a stranger sees them: red with crossed swords while their aggression is on
 		/// (anyone outside their party and guild may fight them), the neutral colour and no mark while it is off.
-		/// Their own PET acts under them (FactionHarm.Principal), so it is red with crossed swords while their aggression
+		/// Their own PET acts under them (HarmRule.Principal), so it is red with crossed swords while their aggression
 		/// is on — it may be fought too — and otherwise carries the friendly shield: it is on their side.
 		/// Everyone else is the viewer's displayed standing toward them.
 		/// </remarks>

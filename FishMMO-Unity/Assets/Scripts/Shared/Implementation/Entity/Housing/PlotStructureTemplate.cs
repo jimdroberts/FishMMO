@@ -45,6 +45,16 @@ namespace FishMMO.Shared
 		public long Price;
 
 		/// <summary>
+		/// This structure in carried form: what the house vault hands back when it is bought out.
+		/// </summary>
+		/// <remarks>
+		/// A vault entry without one cannot be retrieved — there is nothing to hand over — and the
+		/// vault window says so rather than taking a fee for nothing.
+		/// </remarks>
+		[Tooltip("The item this structure becomes when bought back out of the house vault. Without one it cannot be retrieved.")]
+		public StructureKitTemplate Kit;
+
+		/// <summary>
 		/// The structure's footprint, floored so a mis-authored template cannot occupy nothing.
 		/// </summary>
 		/// <remarks>

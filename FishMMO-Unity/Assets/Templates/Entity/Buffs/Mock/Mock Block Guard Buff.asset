@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock block guard. 50% off frontal damage while raised.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b31cb1e4f62ab9bbd20f4b5932792b39
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

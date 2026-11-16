@@ -230,6 +230,7 @@ namespace FishMMO.Shared
 		{
 			base.OnStopCharacter();
 
+			ClearPendingPetAdd();
 			if (base.IsOwner)
 			{
 				ClientManager.UnregisterBroadcast<PetAddBroadcast>(OnClientPetAddBroadcastReceived);
@@ -240,30 +241,65 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>The pet the server announced whose object has not reached this client yet; see <see cref="OnClientPetAddBroadcastReceived"/>.</summary>
+		private PetAddBroadcast? pendingPetAdd;
+
 		/// <summary>
 		/// Handles the broadcast when a pet is added. Sets the pet reference and invokes the OnPetSummoned event.
 		/// </summary>
+		/// <remarks>
+		/// The pet object may not be here yet. After a scene change the server spawns the pet in the new scene and announces
+		/// it at once, but the pet reaches this client through the observer system, which can deliver it a moment later.
+		/// The announcement used to be dropped then: the client never learned it had a pet, so the pet panel kept the old
+		/// scene's pet and its controls did nothing. It is now held until the pet registers (<see cref="SceneObject.Registered"/>).
+		/// </remarks>
 		/// <param name="msg">The broadcast message containing the pet ID and orders.</param>
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPetAddBroadcastReceived(PetAddBroadcast msg, Channel channel)
 		{
-			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject))
+			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject) &&
+				sceneObject != null && sceneObject.GameObject != null && sceneObject.GameObject.TryGetComponent(out Pet pet))
 			{
-				Pet = sceneObject.GameObject.GetComponent<Pet>();
-
-				Stance = msg.Stance;
-				MovementOrder = msg.MovementOrder;
-				AttackPriority = PetAttackPriority.Normalize(msg.AttackPriority);
-				if (Pet != null)
-				{
-					Pet.Stance = msg.Stance;
-					Pet.MovementOrder = msg.MovementOrder;
-					Pet.AttackPriority = AttackPriority;
-				}
-
-				IPetController.OnPetSummoned?.Invoke(Pet);
-				Trigger.InvokeAll(onPetSummonTriggers, new PetEventData(Character, Pet));
+				ClearPendingPetAdd();
+				ApplyPetAdd(msg, pet);
+				return;
 			}
+			pendingPetAdd = msg;
+			SceneObject.Registered -= SceneObject_Registered;
+			SceneObject.Registered += SceneObject_Registered;
+		}
+
+		private void SceneObject_Registered(ISceneObject sceneObject)
+		{
+			if (pendingPetAdd == null || sceneObject == null || sceneObject.ID != pendingPetAdd.Value.ID ||
+				sceneObject.GameObject == null || !sceneObject.GameObject.TryGetComponent(out Pet pet))
+			{
+				return;
+			}
+			PetAddBroadcast msg = pendingPetAdd.Value;
+			ClearPendingPetAdd();
+			ApplyPetAdd(msg, pet);
+		}
+
+		private void ClearPendingPetAdd()
+		{
+			pendingPetAdd = null;
+			SceneObject.Registered -= SceneObject_Registered;
+		}
+
+		private void ApplyPetAdd(PetAddBroadcast msg, Pet pet)
+		{
+			Pet = pet;
+
+			Stance = msg.Stance;
+			MovementOrder = msg.MovementOrder;
+			AttackPriority = PetAttackPriority.Normalize(msg.AttackPriority);
+			Pet.Stance = msg.Stance;
+			Pet.MovementOrder = msg.MovementOrder;
+			Pet.AttackPriority = AttackPriority;
+
+			IPetController.OnPetSummoned?.Invoke(Pet);
+			Trigger.InvokeAll(onPetSummonTriggers, new PetEventData(Character, Pet));
 		}
 
 		/// <summary>
@@ -273,6 +309,7 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPetRemoveBroadcastReceived(PetRemoveBroadcast msg, Channel channel)
 		{
+			ClearPendingPetAdd();
 			Pet = null;
 			IPetController.OnPetDestroyed?.Invoke();
 			Trigger.InvokeAll(onPetDismissTriggers, new PetEventData(Character, null));

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Heal Over Time
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 8d4ebdf9f53fdfaf36bb9d2456a52319
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

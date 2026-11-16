@@ -59,6 +59,15 @@ namespace FishMMO.Shared
 
 		/// <summary>The requester is too far from the plot's deed post.</summary>
 		TooFar = 13,
+
+		/// <summary>No character of that name lives on this world.</summary>
+		NoSuchCharacter = 14,
+
+		/// <summary>There is no room in the bank or the bags for it.</summary>
+		NoRoom = 15,
+
+		/// <summary>This cannot be taken out of the vault (yet): it has no item form.</summary>
+		NotRetrievable = 16,
 	}
 
 	/// <summary>
@@ -157,8 +166,14 @@ namespace FishMMO.Shared
 		/// <summary>The plot being shared.</summary>
 		public long PlotID;
 
-		/// <summary>Who is being let in.</summary>
+		/// <summary>Who is being let in, or zero to name them by <see cref="CharacterName"/>.</summary>
 		public long CharacterID;
+
+		/// <summary>
+		/// Who is being let in, by name, when <see cref="CharacterID"/> is zero: the guest list window
+		/// knows names, not IDs. Resolved on the server against characters of the sender's own world.
+		/// </summary>
+		public string CharacterName;
 
 		/// <summary>
 		/// What they may do, as a <see cref="PlotPermission"/> bitmask.
@@ -191,8 +206,20 @@ namespace FishMMO.Shared
 		/// <summary>The character granted access.</summary>
 		public long CharacterID;
 
+		/// <summary>Their name, or empty when it could not be read (a deleted character).</summary>
+		public string Name;
+
 		/// <summary>What they hold, as a <see cref="PlotPermission"/> bitmask.</summary>
 		public int Permissions;
+	}
+
+	/// <summary>
+	/// Asks for a plot's guest list. Answered only to somebody who may let people in.
+	/// </summary>
+	public struct HousingAccessListRequestBroadcast : IBroadcast
+	{
+		/// <summary>The plot whose list is wanted.</summary>
+		public long PlotID;
 	}
 
 	/// <summary>
@@ -339,6 +366,24 @@ namespace FishMMO.Shared
 
 		/// <summary>True when the asking player already owns land somewhere (one house each).</summary>
 		public bool OwnsLand;
+
+		/// <summary>How many periods the owner may pay ahead right now (<see cref="PlotRentPrepay"/>); 0 for anyone else.</summary>
+		public int PrepayPeriodsAllowed;
+	}
+
+	/// <summary>
+	/// The owner pays rent ahead, at the amount the panel quoted.
+	/// </summary>
+	public struct HousingPrepayRentBroadcast : IBroadcast
+	{
+		/// <summary>The plot.</summary>
+		public long PlotID;
+
+		/// <summary>How many periods to pay.</summary>
+		public int Periods;
+
+		/// <summary>What the panel said it would cost; refused with <see cref="HousingResult.PriceChanged"/> if not.</summary>
+		public long QuotedAmount;
 	}
 
 	/// <summary>

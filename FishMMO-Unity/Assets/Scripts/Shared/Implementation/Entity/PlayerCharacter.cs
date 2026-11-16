@@ -35,8 +35,6 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(GuildController))]
 	[RequireComponent(typeof(PartyController))]
 	[RequireComponent(typeof(FriendController))]
-	[RequireComponent(typeof(FactionController))]
-	[RequireComponent(typeof(WaypointController))]
 	[RequireComponent(typeof(ArchetypeController))]
 	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(BodyVisibilityManager))]
@@ -288,6 +286,9 @@ namespace FishMMO.Shared
 				AccessLevel = (AccessLevel)reader.ReadUInt8Unpacked();
 			}
 
+			// Modules' parts (CharacterPart), each in its own framed block.
+			CharacterParts.ReadPayload(this, connection, reader);
+
 #if !UNITY_SERVER
 			ClientCharacters[ID] = this;
 
@@ -349,6 +350,9 @@ namespace FishMMO.Shared
 				writer.WriteString(InstanceSceneName ?? string.Empty);
 				writer.WriteUInt8Unpacked((byte)AccessLevel);
 			}
+
+			// Modules' parts (CharacterPart), each in its own framed block.
+			CharacterParts.WritePayload(this, connection, writer);
 		}
 
 		/// <summary>Shape flag: the payload carries the owner-only block.</summary>

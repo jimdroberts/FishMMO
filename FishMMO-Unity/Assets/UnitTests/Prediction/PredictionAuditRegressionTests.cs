@@ -689,198 +689,6 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The owner's deferred resource values are applied after every behaviour has read.
-		/// </summary>
-		/// <remarks>
-		/// A depletable value is clamped against its maximum, and the owner's maximum is not complete
-		/// until the buff and equipment restores have run. <c>OnStartNetwork</c> is the first hook
-		/// that runs after every behaviour on the object has read its payload — FishNet initialises
-		/// objects in a later loop than the one that reads them — so it is where the clamp may
-		/// finally run honestly.
-		/// </remarks>
-		[Test]
-		public void DeferredResourceValues_AreAppliedAfterEveryBehaviourHasRead()
-		{
-			string path = Path.Combine(Application.dataPath,
-				"Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterAttributeController.cs");
-			string source = ProjectFiles.ReadAllText(path);
-			int start = source.IndexOf("public override void OnStartNetwork()", StringComparison.Ordinal);
-			LogAssert.IsTrue(start >= 0, "CharacterAttributeController must override OnStartNetwork.");
-			int call = source.IndexOf("ApplyDeferredResourceValues();", start, StringComparison.Ordinal);
-			LogAssert.IsTrue(call > start && call - start < 800,
-				"OnStartNetwork must apply the owner's deferred resource current values; it is the " +
-				"first hook that runs after every behaviour on the object has read its payload, and " +
-				"so the first point at which the maximum they are clamped against is complete.");
-		}
-
-		// ── 10. NPC factions: derived from the race template, not sent; pet rosters were discarded ──
-
-		private static RaceTemplate MakeRace(string name, List<UnityEngine.Object> assets, out FactionTemplate alliedFaction, out FactionTemplate hostileFaction)
-		{
-			alliedFaction = ScriptableObject.CreateInstance<FactionTemplate>();
-			alliedFaction.name = name + "_Allied"; alliedFaction.AddToCache(alliedFaction.name); assets.Add(alliedFaction);
-
-			hostileFaction = ScriptableObject.CreateInstance<FactionTemplate>();
-			hostileFaction.name = name + "_Hostile"; hostileFaction.AddToCache(hostileFaction.name); assets.Add(hostileFaction);
-
-			FactionTemplate initial = ScriptableObject.CreateInstance<FactionTemplate>();
-			initial.name = name + "_Initial";
-			initial.DefaultAllied = new FactionTemplate.FactionHashSet { alliedFaction };
-			initial.DefaultNeutral = new FactionTemplate.FactionHashSet();
-			initial.DefaultHostile = new FactionTemplate.FactionHashSet { hostileFaction };
-			initial.AddToCache(initial.name); assets.Add(initial);
-
-			RaceTemplate race = ScriptableObject.CreateInstance<RaceTemplate>();
-			race.name = name + "_Race"; race.InitialFaction = initial;
-			race.AddToCache(race.name); assets.Add(race);
-			return race;
-		}
-
-		/// <summary>
-		/// An NPC's standings are a pure function of immutable template data, so the payload carries
-		/// the race — which a spawner may have overridden server-side — and the receiver rebuilds the
-		/// roster itself instead of being told it.
-		/// </summary>
-		[Test]
-		public void NpcFactions_AreRebuiltFromTheRace_AndTheRaceOverrideTravels()
-		{
-			GameObject writerGo = new GameObject("FactionWriter");
-			GameObject readerGo = new GameObject("FactionReader");
-			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
-			try
-			{
-				RaceTemplate race = MakeRace("Audit_Npc", assets, out FactionTemplate allied, out FactionTemplate hostile);
-
-				FactionController source = writerGo.AddComponent<FactionController>();
-				source.InitializeOnce(new MockCharacter());
-				source.SetRaceTemplateOnSpawn(race);   // what NPCSpawnableSettings.FactionOverride does
-				source.InitializeTemplateFactions();
-
-				LogAssert.IsTrue(source.FactionsAreTemplateDerived, "An NPC roster is derived.");
-				LogAssert.IsTrue(source.Hostile.ContainsKey(hostile.ID), "Hostile defaults are loaded at runtime.");
-				LogAssert.IsTrue(source.Allied.ContainsKey(allied.ID), "Allied defaults are loaded at runtime.");
-
-				Writer payload = new Writer();
-				source.WritePayload(null, payload);
-
-				// The reader has never heard of this race: no serialized template, empty roster.
-				FactionController target = readerGo.AddComponent<FactionController>();
-				target.InitializeOnce(new MockCharacter());
-				LogAssert.AreEqual(0, target.Factions.Count, "The reader starts with nothing.");
-
-				Reader reader = new Reader(payload.GetArraySegment(), null);
-				target.ReadPayload(null, reader);
-				LogAssert.AreEqual(0, reader.Remaining, "The faction block must be consumed exactly.");
-
-				LogAssert.IsTrue(target.FactionsAreTemplateDerived, "The receiver rebuilds rather than being told.");
-				LogAssert.AreEqual(race.ID, target.RaceTemplate.ID,
-					"The spawner's race override must reach the client, or it judges the NPC by the prefab's race.");
-				LogAssert.AreEqual(source.Factions.Count, target.Factions.Count, "Both peers derive the same roster.");
-				LogAssert.IsTrue(target.Hostile.ContainsKey(hostile.ID), "...including which factions are hostile.");
-
-				/* And the roster itself is not on the wire: an owned roster of the same two entries
-				 * costs more than a derived one, which carries only the race and a shape flag. */
-				FactionController owned = readerGo.AddComponent<FactionController>();
-				owned.InitializeOnce(new MockCharacter());
-				owned.SetFaction(allied.ID, FactionTemplate.Maximum);
-				owned.SetFaction(hostile.ID, FactionTemplate.Minimum);
-				Writer ownedPayload = new Writer();
-				owned.WritePayload(null, ownedPayload);
-				LogAssert.IsTrue(ownedPayload.Position > payload.Position,
-					$"A derived roster must not put its entries on the wire (derived {payload.Position} B, owned {ownedPayload.Position} B).");
-			}
-			finally
-			{
-				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
-				UnityEngine.Object.DestroyImmediate(writerGo);
-				UnityEngine.Object.DestroyImmediate(readerGo);
-			}
-		}
-
-		/// <summary>
-		/// A pet's roster is copied from its owner and cannot be derived from any template, so it
-		/// travels — and must survive arrival. <c>ReadPayload</c> used to install it through
-		/// <c>SetFaction</c>, which refuses to move an NPC's standing, so every entry was dropped on
-		/// the floor and a summoned pet reached its owner's client with an empty roster no matter
-		/// what the server sent. A pet is an NPC, so the guard always fired.
-		/// </summary>
-		[Test]
-		public void PetFactionRoster_CopiedFromItsOwner_SurvivesArrivalOnAnNpc()
-		{
-			GameObject ownerGo = new GameObject("FactionOwner");
-			GameObject serverPetGo = new GameObject("FactionPetServer");
-			GameObject clientPetGo = new GameObject("FactionPetClient");
-			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
-			try
-			{
-				RaceTemplate race = MakeRace("Audit_Pet", assets, out FactionTemplate allied, out FactionTemplate hostile);
-
-				FactionController ownerFactions = ownerGo.AddComponent<FactionController>();
-				ownerFactions.InitializeOnce(new MockCharacter());
-				ownerFactions.SetFaction(allied.ID, FactionTemplate.Maximum);
-				ownerFactions.SetFaction(hostile.ID, FactionTemplate.Minimum);
-
-				// Both ends are real pets: a Pet is an NPC, which is why the old guard always fired.
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
-				Pet serverPet = serverPetGo.AddComponent<Pet>();
-				Pet clientPet = clientPetGo.AddComponent<Pet>();
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
-
-				FactionController serverFactions = serverPetGo.GetComponent<FactionController>();
-				// Not LogAssert.IsNotNull: that helper stringifies the object, and FishNet's
-				// NetworkBehaviour.ToString() dereferences network state an unspawned behaviour
-				// does not have.
-				LogAssert.IsTrue(serverFactions != null, "Pet requires a FactionController.");
-				serverFactions.SetRaceTemplateOnSpawn(race);
-				serverFactions.InitializeOnce(serverPet);
-				LogAssert.IsTrue(serverFactions.FactionsAreTemplateDerived,
-					"An NPC seeds a derived roster from its race as soon as it is assembled.");
-
-				serverFactions.CopyFrom(ownerFactions);          // what PetSystem does before the spawn
-				LogAssert.IsFalse(serverFactions.FactionsAreTemplateDerived,
-					"A copied roster is owned state and must travel.");
-
-				Writer payload = new Writer();
-				serverFactions.WritePayload(null, payload);
-
-				FactionController clientFactions = clientPetGo.GetComponent<FactionController>();
-				clientFactions.InitializeOnce(clientPet);
-				LogAssert.IsTrue(clientFactions.Character as NPC != null,
-					"A pet is an NPC; SetFaction would refuse every entry.");
-
-				Reader reader = new Reader(payload.GetArraySegment(), null);
-				clientFactions.ReadPayload(null, reader);
-				LogAssert.AreEqual(0, reader.Remaining, "The faction block must be consumed exactly.");
-
-				LogAssert.AreEqual(2, clientFactions.Factions.Count,
-					"A pet must arrive holding the standings its owner handed it.");
-				LogAssert.IsTrue(clientFactions.Hostile.ContainsKey(hostile.ID),
-					"...grouped as its owner had them.");
-
-				/* A non-owner receives the SIGN of each standing, not the standing itself — the
-				 * payload is shaped per receiver, and the only thing any observer does with a peer's
-				 * factions is ask GetAllianceLevel which side they are on. A pet is spawned with no
-				 * owning connection, so every recipient reads the observer shape, including the
-				 * summoner. What must survive arrival is the alliance stance, and it does: the two
-				 * entries above are present and grouped exactly as the owner had them. */
-				LogAssert.AreEqual(-1, clientFactions.Factions[hostile.ID].Value,
-					"A hostile standing arrives as its sign, not as its magnitude.");
-
-				// And the guard the restore path bypasses is still in force for gameplay adjustments.
-				clientFactions.SetFaction(hostile.ID, FactionTemplate.Maximum);
-				LogAssert.AreEqual(-1, clientFactions.Factions[hostile.ID].Value,
-					"An NPC still refuses a gameplay faction adjustment.");
-			}
-			finally
-			{
-				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
-				UnityEngine.Object.DestroyImmediate(ownerGo);
-				UnityEngine.Object.DestroyImmediate(serverPetGo);
-				UnityEngine.Object.DestroyImmediate(clientPetGo);
-			}
-		}
-
-		/// <summary>
 		/// The same double-count on the observer route: watching a peer equip a generated item used
 		/// to add that item's bonuses to the observer's copy of the peer's sheet, on top of the
 		/// authoritative total the server already broadcasts.
@@ -1622,6 +1430,53 @@ namespace FishMMO.UnitTests
 				FieldInfo instances = typeof(BuffController).GetField("buffFXInstances", Any);
 				LogAssert.AreEqual(0, ((System.Collections.ICollection)instances.GetValue(buffs)).Count,
 					"No FX instance may remain tracked.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// The model swap deactivates every old child of the mesh root and Destroys it (deferred to the end of the frame), then
+		/// raises OnModelReady in the same frame. A buff FX caught in the swap is not null yet, and it must still be re-created:
+		/// after a scene change the race model is cached, the swap lands right after the payload restored the buffs, and the
+		/// speed buff's ankle effect vanished for good (Jim, 11-16).
+		/// </summary>
+		[Test]
+		public void BuffFX_CaughtInTheModelSwap_IsRecreatedOnModelReady()
+		{
+			GameObject go = new GameObject("BuffFXModelSwap");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				PermanentFXProbeTemplate template = ScriptableObject.CreateInstance<PermanentFXProbeTemplate>();
+				template.name = "Audit_ModelSwap_Buff";
+				template.IsPermanent = true;
+				template.Duration = 0f;
+				template.AddToCache(template.name);
+				assets.Add(template);
+
+				BuffController buffs = BuildBuffController(go, new MockCharacter());
+				buffs.Apply(new Buff(template.ID, 0u, 0u, 1f / 30f, 0, 0), suppressFX: false);
+				LogAssert.AreEqual(1, template.ApplyFXCalls, "The buff's FX must have spawned.");
+
+				FieldInfo instances = typeof(BuffController).GetField("buffFXInstances", Any);
+				var table = (Dictionary<int, GameObject>)instances.GetValue(buffs);
+				GameObject doomed = table[template.ID];
+				LogAssert.IsTrue(doomed != null, "The FX instance is tracked.");
+
+				// What InstantiateRaceModelFromIndex does to the old children before Destroy (which only lands at frame end).
+				doomed.SetActive(false);
+
+				buffs.OnModelReady();
+
+				LogAssert.AreEqual(2, template.ApplyFXCalls, "An FX deactivated by the swap must be spawned again on model ready.");
+				LogAssert.AreEqual(1, template.RemoveFXCalls, "...and the doomed instance removed rather than leaked.");
+				GameObject fresh = table[template.ID];
+				LogAssert.IsTrue(fresh != null && fresh.activeSelf, "The tracked instance is the new, active one.");
+				if (fresh != null) UnityEngine.Object.DestroyImmediate(fresh);
 			}
 			finally
 			{

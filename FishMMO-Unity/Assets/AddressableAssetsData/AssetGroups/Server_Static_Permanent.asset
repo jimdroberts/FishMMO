@@ -22,6 +22,13 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0170ef0ae18c4f54b17b317e1eb90d59
+    m_Address: FactionSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0abe9137cceb5fe83026def40795bdc0
     m_Address: Pet Balanced Personality
     m_ReadOnly: 0
@@ -362,6 +369,7 @@ MonoBehaviour:
     m_Address: LeaderboardSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -804,6 +812,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fe1a8f52b6f9483182aa329d2a076fe3
+    m_Address: WaypointTravelSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: ffdfee25096d5c769f84d5a4f6e91773

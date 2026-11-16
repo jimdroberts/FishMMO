@@ -1785,10 +1785,15 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* "Without a live instance" includes one the swap is destroying right now. The swap deactivates each old child
+			 * of the mesh root and calls Destroy, which only takes effect at the end of the frame, then raises this in the
+			 * SAME frame, so a doomed instance does not compare null yet. After a scene change the race model is already
+			 * loaded, the swap completes synchronously right after the payload restored the buffs, and their FX (the speed
+			 * buff's ankle effect) vanished for good: this saw them as still showing. Deactivated is the swap's mark. */
 			fxTeardownBuffer.Clear();
 			foreach (KeyValuePair<int, GameObject> pair in buffFXInstances)
 			{
-				if (pair.Value == null)
+				if (pair.Value == null || !pair.Value.activeSelf)
 				{
 					fxTeardownBuffer.Add(pair.Key);
 				}
@@ -1802,6 +1807,11 @@ namespace FishMMO.Shared
 				{
 					buffFXInstances.Remove(templateID);
 					continue;
+				}
+				if (buffFXInstances.TryGetValue(templateID, out GameObject stale) && stale != null)
+				{
+					// Already scheduled by the swap; harmless if so, and no leak if something else deactivated it.
+					template.OnRemoveFX(stale, Character);
 				}
 				buffs.TryGetValue(templateID, out Buff buff);
 				buffFXInstances[templateID] = template.OnApplyFX(buff, Character);

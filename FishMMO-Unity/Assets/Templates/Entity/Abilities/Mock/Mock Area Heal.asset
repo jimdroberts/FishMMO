@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Area Heal
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: c1a09166678121c7eb3521e7328c3757
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

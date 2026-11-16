@@ -20,6 +20,8 @@ MonoBehaviour:
   - {fileID: -4468559157413045786, guid: f1b02b8fa3f9478b681ea51b69ac86a7, type: 3}
   - {fileID: -4468559157413045786, guid: bd9feef207c6fcc1c9f5c5e9c689c5ab, type: 3}
   CellMetres: 256
+  SpawnCountMin: 8
+  SpawnCountMax: 24
   MaxSpawnersPerScene: 240
   CaveDenChance: 0.35
   SettlementClearance: 60

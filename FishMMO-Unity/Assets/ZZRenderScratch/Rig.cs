@@ -88,7 +88,8 @@ namespace FishMMO.RenderScratch
 			Register<IBankController>(behaviours, new FakeBank(character));
 			Register<ICharacterAttributeController>(behaviours, new FakeAttributes(character));
 			Register<IAchievementController>(behaviours, new FakeAchievements(character));
-			Register<IFactionController>(behaviours, new FakeFactions(character));
+			// Modules' fakes (Factions registers its own: Assets/Modules/Factions/Editor/RenderScratch).
+			ExtraFakes?.Invoke(character, behaviours);
 			Register<IFriendController>(behaviours, new FakeFriends(character));
 			Register<IPetController>(behaviours, new FakePet(character));
 
@@ -96,7 +97,11 @@ namespace FishMMO.RenderScratch
 			return character;
 		}
 
-		private static void Register<T>(Dictionary<Type, ICharacterBehaviour> behaviours,
+		/// <summary>Modules add their fake controllers here (a module's panel needs its own controller).</summary>
+		public static event Action<ICharacter, Dictionary<Type, ICharacterBehaviour>> ExtraFakes;
+
+		/// <summary>Registers a fake behaviour under one interface.</summary>
+		public static void Register<T>(Dictionary<Type, ICharacterBehaviour> behaviours,
 			ICharacterBehaviour behaviour) where T : class, ICharacterBehaviour
 		{
 			behaviours[typeof(T)] = behaviour;

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Short Charge
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 9d274818dedd2d084de4204305f23fc8
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713116978937931
+  - rid: 4295713125095964747
   AbilityObjectPrefab: {fileID: 7477845698768692465, guid: 75aff5bd1b61f1c48b1950fa4b07dc9c, type: 3}
   AbilitySpawnTarget: 3
   RequiresTarget: 0
@@ -49,7 +49,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937931
+    - rid: 4295713125095964747
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

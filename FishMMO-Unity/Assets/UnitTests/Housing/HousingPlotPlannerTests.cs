@@ -192,5 +192,44 @@ namespace FishMMO.UnitTests
 				Assert.That(identity.PlotKey, Is.EqualTo(lot.Key));
 			}
 		}
+
+		[Test]
+		public void EachGroupGetsOneWayEnd_ADistrictsOnItsLaneNearerItsSettlement()
+		{
+			HousingPlotPlanner.Input input = Scene();
+			HousingPlotPlanner.Result result = HousingPlotPlanner.Plan(input);
+			List<HousingPlotPlanner.SpurEnd> ends = HousingPlotPlanner.SpurEnds(result.Lots, input.Settlements);
+
+			var groups = new HashSet<string>();
+			foreach (ScenePlotManifest.Lot lot in result.Lots)
+			{
+				groups.Add((lot.District ? "d:" : "c:") + lot.Group);
+			}
+			Assert.AreEqual(groups.Count, ends.Count);
+
+			foreach (HousingPlotPlanner.SpurEnd end in ends)
+			{
+				foreach (ScenePlotManifest.Lot lot in result.Lots)
+				{
+					float half = lot.Size.x * 0.5f;
+					bool inside = Mathf.Abs(end.Position.x - lot.Centre.x) < half && Mathf.Abs(end.Position.y - lot.Centre.z) < half;
+					Assert.IsFalse(inside, $"the way end of {end.Group} lies inside {lot.Key}");
+				}
+			}
+		}
+
+		[Test]
+		public void WayEnds_ComeBackFromKeptLotsAlone()
+		{
+			HousingPlotPlanner.Input input = Scene();
+			List<ScenePlotManifest.Lot> lots = HousingPlotPlanner.Plan(input).Lots;
+			List<HousingPlotPlanner.SpurEnd> a = HousingPlotPlanner.SpurEnds(lots, input.Settlements);
+			List<HousingPlotPlanner.SpurEnd> b = HousingPlotPlanner.SpurEnds(new List<ScenePlotManifest.Lot>(lots), input.Settlements);
+			Assert.AreEqual(a.Count, b.Count);
+			for (int i = 0; i < a.Count; i++)
+			{
+				Assert.AreEqual(a[i].Position, b[i].Position);
+			}
+		}
 	}
 }

@@ -102,5 +102,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 2e0ce5d688dc85030b72228051d87212, type: 2}
   - {fileID: 11400000, guid: 37a92ffb555d7b9f898787772eac2173, type: 2}
   - {fileID: 11400000, guid: ac780f30a18e80f8e8ea4593d87dcc93, type: 2}
+  - {fileID: 11400000, guid: dbc5daca94d67bab2ba10ab55b2fd140, type: 2}
+  - {fileID: 11400000, guid: b9e85d09166321f51820d0406c3b3dd3, type: 2}
   BuysItems: 0
   SellPriceMultiplier: 0.25

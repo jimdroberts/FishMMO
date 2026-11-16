@@ -263,6 +263,8 @@ namespace FishMMO.Shared
 			// Prey is never leashed home: it settles wherever its flight ends.
 			flee.MinLeashRange = 5000f;
 			flee.MaxLeashRange = 10000f;
+			// It runs from the target, so it keeps it (also as the prey's RetreatState).
+			flee.KeepsCombatTarget = true;
 			var so = new SerializedObject(flee);
 			SetFloat(so, "updateRate", 0.3f);
 			so.ApplyModifiedPropertiesWithoutUndo();
@@ -309,7 +311,8 @@ namespace FishMMO.Shared
 			SetObject(so, "WanderState", wander);
 			if (clearRetreat)
 			{
-				SetObject(so, "RetreatState", null);
+				// Prey's flight is its retreat too (its personality flees when hurt); predators fight to the death.
+				SetObject(so, "RetreatState", attacking is WildlifeFleeState ? attacking : null);
 			}
 			SetString(so, "Description", description);
 			so.ApplyModifiedPropertiesWithoutUndo();

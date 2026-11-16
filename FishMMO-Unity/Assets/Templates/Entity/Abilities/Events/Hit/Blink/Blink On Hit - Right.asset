@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Blink On Hit - Right
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnHitEvent
   TargetSelector:
-    rid: 4295713116978937951
+    rid: 4295713125095964767
   Conditions: []
   OnConditionsMetActions:
-  - rid: 4295713116978937952
+  - rid: 4295713125095964768
   OnConditionsNotMetActions: []
   Verbose: 0
   icon: {fileID: 0}
@@ -31,13 +31,13 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937951
+    - rid: 4295713125095964767
       type: {class: EventTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         Conditions:
-        - rid: 4295713116978937953
+        - rid: 4295713125095964769
         FallbackToInitiator: 0
-    - rid: 4295713116978937952
+    - rid: 4295713125095964768
       type: {class: BlinkToHitTargetAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:
@@ -50,7 +50,7 @@ MonoBehaviour:
         ArriveFX: {fileID: 5613510495892676584, guid: 7d40ba888f0c352ba8f48f332a22eb35, type: 3}
         FXSize: 2
         FXHeight: 1
-    - rid: 4295713116978937953
+    - rid: 4295713125095964769
       type: {class: IsCharacterAliveCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

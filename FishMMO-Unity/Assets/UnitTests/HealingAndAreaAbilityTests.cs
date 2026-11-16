@@ -174,7 +174,8 @@ namespace FishMMO.UnitTests
 			Assert.That(hit.OnConditionsMetActions.OfType<ApplyHealAction>().Count(), Is.EqualTo(1));
 			TargetAllianceCondition alliance = hit.TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
 			Assert.That(alliance.ApplyToAllies, Is.True);
-			Assert.That(alliance.ApplyToEnemy || alliance.ApplyToNeutral, Is.False, "an enemy it strikes is spared");
+			Assert.That(alliance.ApplyToEnemy, Is.False, "an enemy it strikes is spared");
+			Assert.That(alliance.ApplyToNeutral && alliance.NeutralPlayersOnly, Is.True, "a stranger is healed, wildlife and neutral NPCs are not");
 			Assert.That(heal.OnDestroyEvents.SelectMany(e => e.OnConditionsMetActions).OfType<PlayFXAction>().Any(a => a.FXPrefab != null), Is.True, "a burst where it ends");
 		}
 
@@ -225,13 +226,45 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void FriendlyAreas_ReachTheCasterAndAllies_Only()
 		{
-			foreach (string path in new[] { AbilityPaths[2], AbilityPaths[4], AbilityPaths[5] })
+			// The area heal: you, allies and neutral players. The area buffs: you and allies only (Jim, 11-16).
+			TargetAllianceCondition heal = Load(AbilityPaths[2]).OnHitEvents.Single().TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
+			Assert.That(heal.ApplyToSelf && heal.ApplyToAllies && heal.ApplyToNeutral && heal.NeutralPlayersOnly && !heal.ApplyToEnemy, Is.True, "area heal");
+			foreach (string path in new[] { AbilityPaths[4], AbilityPaths[5] })
 			{
 				AbilityTemplate area = Load(path);
 				TargetAllianceCondition alliance = area.OnHitEvents.Single().TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
 				Assert.That(alliance.ApplyToSelf && alliance.ApplyToAllies, Is.True, area.name);
 				Assert.That(alliance.ApplyToEnemy || alliance.ApplyToNeutral, Is.False, area.name);
 			}
+		}
+
+		[Test]
+		public void NeutralPlayersOnly_LetsStrangersThrough_NotWildlifeOrTownsfolk()
+		{
+			TargetAllianceCondition healable = new TargetAllianceCondition
+			{
+				ApplyToSelf = true, ApplyToEnemy = false, ApplyToNeutral = true, NeutralPlayersOnly = true, ApplyToAllies = true,
+			};
+			Assert.That(healable.Passes(FactionAllianceLevel.Neutral, defenderIsPlayer: true), Is.True, "a player you are not grouped with");
+			Assert.That(healable.Passes(FactionAllianceLevel.Neutral, defenderIsPlayer: false), Is.False, "wildlife, a neutral NPC, a pet");
+			Assert.That(healable.Passes(FactionAllianceLevel.Ally, defenderIsPlayer: false), Is.True, "an ally's side is not narrowed");
+			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, defenderIsPlayer: true), Is.False, "a hostile player (aggression on)");
+
+			// The toggle widens HOSTILE reach only (Jim, 11-16): a neutral player read as Enemy because aggression is on is still
+			// healable and cleansable; one whose standing is hostile is not.
+			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, FactionAllianceLevel.Neutral, defenderIsPlayer: true), Is.True,
+				"a neutral player while aggression is on");
+			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, FactionAllianceLevel.Enemy, defenderIsPlayer: true), Is.False,
+				"a player whose standing is hostile");
+			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, FactionAllianceLevel.Neutral, defenderIsPlayer: false), Is.False,
+				"wildlife or a neutral NPC stays out with aggression on");
+
+			TargetAllianceCondition enemiesOnly = new TargetAllianceCondition { ApplyToEnemy = true };
+			Assert.That(enemiesOnly.Passes(FactionAllianceLevel.Enemy, FactionAllianceLevel.Neutral, defenderIsPlayer: true), Is.True,
+				"hostile reach still widens to neutrals with the toggle");
+
+			TargetAllianceCondition plain = new TargetAllianceCondition { ApplyToEnemy = false, ApplyToNeutral = true };
+			Assert.That(plain.Passes(FactionAllianceLevel.Neutral, defenderIsPlayer: false), Is.True, "off by default: existing content unchanged");
 		}
 
 		[Test]

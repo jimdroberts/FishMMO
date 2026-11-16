@@ -102,7 +102,10 @@ namespace FishMMO.AbilityContent
 			});
 			AbilityOnHitEvent cleanse = SaveEvent<AbilityOnHitEvent>(DispelEventFolder, "Dispel Magic Cleanse", ev =>
 			{
-				ev.TargetSelector = Friends(new TargetedEntitySelector { MaximumRange = DispelRange });
+				/* Not the heals' rule (Jim, 11-16, later): a cleanse lifts harmful magic from you, allies and ANY neutral
+				 * character, so neutral NPCs, other players' pets and wildlife are freed too. Only enemies are left out; they
+				 * get the purge. */
+				ev.TargetSelector = Cleansable(new TargetedEntitySelector { MaximumRange = DispelRange });
 				ev.OnConditionsMetActions.Add(Dispel(buffs: false));
 				ev.OnConditionsMetActions.Add(DispelFX(burst));
 			});
@@ -117,7 +120,7 @@ namespace FishMMO.AbilityContent
 
 			abilities.Add(SaveAbility(DispelAbilityFolder, "Dispel Magic", a =>
 			{
-				a.Description = $"Unweaves the magic on your target. Strips up to {DispelAmount} beneficial effects from an enemy, or lifts up to {DispelAmount} harmful ones from a friend.";
+				a.Description = $"Unweaves the magic on your target. Strips up to {DispelAmount} beneficial effects from an enemy, or lifts up to {DispelAmount} harmful ones from anyone else.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.RequiresTarget = true;
 				a.Type = AbilityType.GroundedMagic;
@@ -147,6 +150,21 @@ namespace FishMMO.AbilityContent
 			events.Add(purge);
 			events.Add(cleanse);
 			events.Add(self);
+		}
+
+		/// <summary>Who a cleanse reaches: you, allies and every neutral character (NPCs, pets, wildlife); never an enemy.</summary>
+		private static T Cleansable<T>(T selector) where T : TargetSelector
+		{
+			selector.Conditions.Add(new TargetAllianceCondition
+			{
+				ApplyToSelf = true,
+				ApplyToEnemy = false,
+				ApplyToNeutral = true,
+				NeutralPlayersOnly = false,
+				ApplyToAllies = true,
+			});
+			selector.Conditions.Add(new IsCharacterAliveCondition());
+			return selector;
 		}
 
 		/// <summary>Removes up to <see cref="DispelAmount"/> buffs, or debuffs.</summary>

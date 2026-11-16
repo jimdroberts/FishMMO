@@ -26,6 +26,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		[Range(0f, 1f)]
 		public float MinimumCoverage = 0.1f;
 
+		[Tooltip("Fewest animals one wildlife spawner keeps (its MaxSpawnCount is rolled between these).")]
+		[Min(1)]
+		public int SpawnCountMin = 2;
+
+		[Tooltip("Most animals one wildlife spawner keeps.")]
+		[Min(1)]
+		public int SpawnCountMax = 6;
+
+		[Tooltip("Metres every spawner's area stays inside the scene boundary, so nothing spawns past the edge and falls.")]
+		[Min(0f)]
+		public float BoundaryMargin = 16f;
+
 		[Tooltip("Most wildlife spawners in one scene, dens included: the AI's cost cap.")]
 		[Min(0)]
 		public int MaxSpawnersPerScene = 240;

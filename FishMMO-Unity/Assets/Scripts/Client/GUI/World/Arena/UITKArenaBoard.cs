@@ -98,12 +98,9 @@ namespace FishMMO.Client
 		private ArenaProfileBroadcast? profile;
 		private float profileReceivedAt;
 		private ArenaHistoryBroadcast? history;
-		/// <summary>
-		/// The arena rating board's first page, as <c>LeaderboardSystem</c> serves it to the
-		/// Leaderboards panel too — one read, one set of rules, whichever window shows it.
-		/// </summary>
-		private LeaderboardPageBroadcast? leaderboard;
-		private readonly LeaderboardRequester leaderboardRequests = new LeaderboardRequester();
+		/// <summary>The season standings the Leaderboard view shows (the Leaderboards module), or null: the view is then hidden.</summary>
+		private static IArenaStandingsSource Standings => ArenaStandings.Source;
+		private readonly List<ArenaStandingRow> standingRows = new List<ArenaStandingRow>();
 
 		/// <summary>Board the panel is describing. 0 when it has none.</summary>
 		private long currentInteractableID;
@@ -182,7 +179,11 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.RegisterBroadcast<GroupFinderStatusBroadcast>(OnClientGroupFinderStatusBroadcastReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ArenaProfileBroadcast>(OnClientArenaProfileReceived);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<ArenaHistoryBroadcast>(OnClientArenaHistoryReceived);
-			Client.NetworkManager.ClientManager.RegisterBroadcast<LeaderboardPageBroadcast>(OnClientLeaderboardPageReceived);
+			if (Standings != null)
+			{
+				Standings.Attach(Client);
+				Standings.Changed += OnStandingsChanged;
+			}
 		}
 
 		public override void OnClientUnset()
@@ -191,7 +192,11 @@ namespace FishMMO.Client
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<GroupFinderStatusBroadcast>(OnClientGroupFinderStatusBroadcastReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ArenaProfileBroadcast>(OnClientArenaProfileReceived);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<ArenaHistoryBroadcast>(OnClientArenaHistoryReceived);
-			Client.NetworkManager.ClientManager.UnregisterBroadcast<LeaderboardPageBroadcast>(OnClientLeaderboardPageReceived);
+			if (Standings != null)
+			{
+				Standings.Changed -= OnStandingsChanged;
+				Standings.Detach(Client);
+			}
 		}
 
 		/// <summary>Opens the panel for one board.</summary>
@@ -234,8 +239,7 @@ namespace FishMMO.Client
 
 			view = BoardView.Queue;
 			history = null;
-			leaderboard = null;
-			leaderboardRequests.Clear();
+			Standings?.Reset();
 
 			// The scroll position persists with the tree; a fresh visit opens at the top.
 			if (listScroll != null)
@@ -313,7 +317,7 @@ namespace FishMMO.Client
 			}
 			view = next;
 			if (next == BoardView.History && !history.HasValue) RequestHistory();
-			if (next == BoardView.Leaderboard && !leaderboard.HasValue) RequestLeaderboard();
+			if (next == BoardView.Leaderboard) Standings?.Open(Client);
 			ApplyView();
 		}
 
@@ -323,6 +327,8 @@ namespace FishMMO.Client
 			SetTabActive(viewQueueButton, view == BoardView.Queue);
 			SetTabActive(viewHistoryButton, view == BoardView.History);
 			SetTabActive(viewBoardButton, view == BoardView.Leaderboard);
+			// No standings source (the Leaderboards module is not installed): no Leaderboard view to offer.
+			SetHidden(viewBoardButton, Standings == null);
 
 			bool queueView = view == BoardView.Queue;
 			SetHidden(arenaTabs, !queueView || arenas.Count < 2);
@@ -369,30 +375,6 @@ namespace FishMMO.Client
 			Client.Broadcast(new ArenaHistoryRequestBroadcast { InteractableID = currentInteractableID });
 		}
 
-		/// <summary>
-		/// Asks for the arena rating board's first page. Sent from <see cref="OnTick"/> by the
-		/// requester, which keeps one request outstanding and re-asks if the reply is lost.
-		/// </summary>
-		private void RequestLeaderboard()
-		{
-			LeaderboardTemplate board = LeaderboardTemplate.FirstArenaRatingBoard();
-			if (board == null)
-			{
-				leaderboardRequests.Clear();
-				return;
-			}
-			leaderboardRequests.Want(board.ID, 1);
-		}
-
-		private void SendLeaderboardRequest(int templateID, int page)
-		{
-			if (Client == null || Client.NetworkManager == null || !Client.NetworkManager.IsClientStarted)
-			{
-				return;
-			}
-			Client.Broadcast(new LeaderboardPageRequestBroadcast { TemplateID = templateID, Page = page });
-		}
-
 		private void OnClientArenaProfileReceived(ArenaProfileBroadcast msg, Channel channel)
 		{
 			profile = msg;
@@ -406,14 +388,8 @@ namespace FishMMO.Client
 			if (view == BoardView.History) BuildHistory();
 		}
 
-		private void OnClientLeaderboardPageReceived(LeaderboardPageBroadcast msg, Channel channel)
+		private void OnStandingsChanged()
 		{
-			// Replies for the Leaderboards panel's other pages and boards arrive here too.
-			if (!leaderboardRequests.Accept(msg))
-			{
-				return;
-			}
-			leaderboard = msg;
 			if (view == BoardView.Leaderboard) BuildLeaderboard();
 		}
 
@@ -507,77 +483,39 @@ namespace FishMMO.Client
 			if (listBox == null) return;
 			listBox.Clear();
 
-			LeaderboardTemplate board = LeaderboardTemplate.FirstArenaRatingBoard();
-			if (board == null)
+			if (Standings == null)
 			{
-				AddListEmpty("No arena leaderboard is configured.");
+				AddListEmpty("No leaderboards are installed.");
 				return;
 			}
-			if (!leaderboard.HasValue)
+			ArenaStandingsView standings = Standings.Describe(Character != null ? Character.ID : 0, standingRows);
+			if (standingRows.Count > 0)
 			{
-				AddListEmpty(leaderboardRequests.GaveUp ? "The leaderboard could not be loaded. Reopen the board to try again." : "Loading the season leaderboard…");
-				return;
-			}
-			LeaderboardPageBroadcast page = leaderboard.Value;
-			if (page.Unavailable)
-			{
-				AddListEmpty("The leaderboard is unavailable right now. Reopen the board to try again.");
-				return;
-			}
-			string season = string.IsNullOrEmpty(page.SeasonName) ? "This season" : page.SeasonName;
-			if (page.Entries == null || page.Entries.Length == 0)
-			{
-				AddListEmpty(string.IsNullOrEmpty(page.SeasonName)
-					? "No ranked season is running yet."
-					: $"{season} has no ranked players yet. Players appear after {board.MinimumGames} ranked {(board.MinimumGames == 1 ? "game" : "games")}.");
-				return;
-			}
-
-			AddListColumns(("#", "arena-col--rank"), (season, "arena-col--name"), (board.ResolvedScoreLabel, "arena-col--num"), ("W", "arena-col--num"), ("L", "arena-col--num"));
-			for (int i = 0; i < page.Entries.Length; ++i)
-			{
-				LeaderboardEntry e = page.Entries[i];
-				VisualElement row = new VisualElement();
-				row.AddToClassList("arena-list__row");
-				if (Character != null && e.CharacterID == Character.ID)
+				AddListColumns(("#", "arena-col--rank"), (standings.SeasonTitle ?? "This season", "arena-col--name"), (standings.ScoreTitle ?? "Score", "arena-col--num"), ("W", "arena-col--num"), ("L", "arena-col--num"));
+				foreach (ArenaStandingRow e in standingRows)
 				{
-					row.AddToClassList("arena-list__row--mine");
-				}
-				// By rank, not position: everyone tied into the top three is marked.
-				row.style.borderLeftColor = e.Rank <= 3 ? new Color(0.95f, 0.78f, 0.25f) : Color.clear;
-				row.Add(MakeCell(e.Rank.ToString(), "arena-col--rank"));
-				// A player-chosen name: never parsed as markup.
-				Label name = MakeCell(e.CharacterName ?? string.Empty, "arena-col--name");
-				name.enableRichText = false;
-				row.Add(name);
-				row.Add(MakeCell(e.Score.ToString(), "arena-col--num"));
-				row.Add(MakeCell(e.Wins.ToString(), "arena-col--num"));
-				row.Add(MakeCell(e.Losses.ToString(), "arena-col--num"));
-				listBox.Add(row);
-			}
-
-			/* The board shows its first page only; a player further down is told their rank here
-			 * rather than told they are unranked, which the old top-50 board did to everyone below
-			 * fiftieth. The full board, every page of it, is in the Leaderboards window. */
-			if (page.YourRank > 0)
-			{
-				bool onPage = false;
-				foreach (LeaderboardEntry e in page.Entries)
-				{
-					if (Character != null && e.CharacterID == Character.ID)
+					VisualElement row = new VisualElement();
+					row.AddToClassList("arena-list__row");
+					if (e.Mine)
 					{
-						onPage = true;
-						break;
+						row.AddToClassList("arena-list__row--mine");
 					}
-				}
-				if (!onPage)
-				{
-					AddListEmpty($"You are #{page.YourRank} of {page.TotalRanked} with {board.ResolvedScoreLabel.ToLowerInvariant()} {page.YourScore}. See every rank under Leaderboards in the game menu.");
+					// By rank, not position: everyone tied into the top three is marked.
+					row.style.borderLeftColor = e.Rank <= 3 ? new Color(0.95f, 0.78f, 0.25f) : Color.clear;
+					row.Add(MakeCell(e.Rank.ToString(), "arena-col--rank"));
+					// A player-chosen name: never parsed as markup.
+					Label name = MakeCell(e.Name ?? string.Empty, "arena-col--name");
+					name.enableRichText = false;
+					row.Add(name);
+					row.Add(MakeCell(e.Score.ToString(), "arena-col--num"));
+					row.Add(MakeCell(e.Wins.ToString(), "arena-col--num"));
+					row.Add(MakeCell(e.Losses.ToString(), "arena-col--num"));
+					listBox.Add(row);
 				}
 			}
-			else
+			if (!string.IsNullOrEmpty(standings.Notice))
 			{
-				AddListEmpty($"You are not ranked yet: players appear after {board.MinimumGames} ranked {(board.MinimumGames == 1 ? "game" : "games")} this season.");
+				AddListEmpty(standings.Notice);
 			}
 		}
 
@@ -801,12 +739,7 @@ namespace FishMMO.Client
 			}
 			if (view == BoardView.Leaderboard)
 			{
-				bool wasWaiting = leaderboardRequests.Waiting;
-				leaderboardRequests.Tick(Time.unscaledTime, SendLeaderboardRequest);
-				if (wasWaiting && leaderboardRequests.GaveUp)
-				{
-					BuildLeaderboard();
-				}
+				Standings?.Tick(Client, Time.unscaledTime);
 			}
 			ApplyControls();
 			if (profile.HasValue && profile.Value.QueueLockSeconds > 0)
@@ -978,8 +911,7 @@ namespace FishMMO.Client
 			currentInteractableID = 0;
 			profile = null;
 			history = null;
-			leaderboard = null;
-			leaderboardRequests.Clear();
+			Standings?.Reset();
 			view = BoardView.Queue;
 			arenas.Clear();
 			ApplyBoard();

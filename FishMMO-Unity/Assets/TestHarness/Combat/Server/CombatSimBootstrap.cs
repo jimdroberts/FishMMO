@@ -272,12 +272,12 @@ namespace FishMMO.TestHarness
 			};
 			npc.TryGet(out fighter.Damage);
 
-			/* Both teams are clones of ONE NPC, so of one faction, and the harm rule (FactionHarm) lets a character
+			/* Both teams are clones of ONE NPC, so of one faction, and the harm rule (HarmRule) lets a character
 			 * damage only its enemies. Every fighter has its aggression turned on, which is the game's own way to strike
 			 * a neutral; without it every hit in the sim resolves and does no damage. */
-			if (npc.TryGet(out IFactionController faction) && faction is FactionController factionController)
+			if (npc.TryGet(out IFactionController faction))
 			{
-				factionController.TrySetAggression(true, out _);
+				faction.TrySetAggression(true, out _);
 			}
 			fighter.RosterOrder = ShuffledIndices(Manifest.Roster.Count);
 			/* The first scripted cast is a buff on the caster itself. The order is shuffled and the scripted casts are

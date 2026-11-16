@@ -203,7 +203,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			var registry = Server.Database?.ServiceRegistry;
 			if (registry == null ||
 				!registry.TryGet<ICharacterService>(out var characterService) ||
-				!registry.TryGet<ICharacterFactionService>(out var factionService) ||
 				!registry.TryGet<ICharacterAbilityService>(out var abilityService) ||
 				!registry.TryGet<ICharacterItemService>(out var itemService) ||
 				!registry.TryGet<ICharacterAttributeService>(out var attributeService) ||
@@ -243,7 +242,16 @@ namespace FishMMO.Server.Implementation.LoginServer
 			// main-thread assertion in certain Unity versions.  Extract everything
 			// into plain C# objects now so the async worker never touches Unity types.
 			var preparedAttributes = BuildStartingAttributeEntries(raceTemplate);
-			var preparedFactions   = BuildStartingFactionEntries(raceTemplate);
+			// Modules' shares of the new character (starting factions, ...), prepared here on the main thread.
+			var contributions = new List<KeyValuePair<CharacterCreationContributor, object>>();
+			foreach (CharacterCreationContributor contributor in CharacterCreationContributors.All)
+			{
+				object prepared = contributor.Prepare(raceTemplate);
+				if (prepared != null)
+				{
+					contributions.Add(new KeyValuePair<CharacterCreationContributor, object>(contributor, prepared));
+				}
+			}
 			var preparedAbilities  = new List<PreparedAbilityEntry>();
 			BuildStartingAbilityEntries(startingAbilityIDs, preparedAbilities);
 			BuildStartingAbilityEntries(raceTemplate.StartingAbilities, preparedAbilities);
@@ -327,9 +335,9 @@ namespace FishMMO.Server.Implementation.LoginServer
 				conn, msg, accountName,
 				raceTemplateName,
 				preparedSpawn,
-				preparedAttributes, preparedFactions, preparedAbilities,
+				preparedAttributes, contributions, preparedAbilities,
 				preparedInventory, preparedEquipment,
-				characterService, factionService, abilityService,
+				characterService, registry, abilityService,
 				itemService, attributeService,
 				unitOfWorkService), conn.ClientId))
 			{
@@ -355,7 +363,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <param name="accountName">Validated account name.</param>
 		/// <param name="raceTemplate">Validated race template (immutable, main-thread lookup already done).</param>
 		/// <param name="characterService">Resolved character service.</param>
-		/// <param name="factionService">Resolved faction service.</param>
+		/// <param name="services">The database services, for the modules' contributions.</param>
 		/// <param name="abilityService">Resolved ability service.</param>
 		/// <param name="itemService">Resolved item service, covering every container.</param>
 		/// <param name="attributeService">Resolved attribute service.</param>
@@ -367,12 +375,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 			string raceTemplateName,
 			PreparedSpawnDetails preparedSpawn,
 			List<PreparedAttributeEntry> preparedAttributes,
-			List<PreparedFactionEntry> preparedFactions,
+			List<KeyValuePair<CharacterCreationContributor, object>> contributions,
 			List<PreparedAbilityEntry> preparedAbilities,
 			List<PreparedInventoryEntry> preparedInventory,
 			List<PreparedEquipmentEntry> preparedEquipment,
 			ICharacterService characterService,
-			ICharacterFactionService factionService,
+			IDatabaseServiceRegistry services,
 			ICharacterAbilityService abilityService,
 			ICharacterItemService itemService,
 			ICharacterAttributeService attributeService,
@@ -516,22 +524,18 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 					// Build sub-entity DTOs with the real character ID from precomputed payloads.
 					Dictionary<int, CharacterAttributeData> initialAttributes = BuildStartingAttributes(characterID, preparedAttributes);
-					List<CharacterFactionData> factions = BuildStartingFactions(characterID, preparedFactions);
 					List<CharacterAbilityData> abilities = BuildStartingAbilities(characterID, preparedAbilities);
 					List<CharacterItemData> inventoryItems = BuildStartingItems(characterID, preparedInventory);
 					List<CharacterItemData> equipment = BuildStartingEquipment(characterID, preparedEquipment);
 
 					// --- Persist all sub-entities within the same transaction ---
 
-					if (factions.Count > 0)
+					foreach (KeyValuePair<CharacterCreationContributor, object> contribution in contributions)
 					{
-						/* Must land in full. These rows are being created for the first time, so
-						 * nothing newer can exist to supersede them — a short write means rows
-						 * were dropped, and a character handed to the player missing part of its
-						 * starting factions is worse than a failed creation they can retry. */
-						if (!await BulkWriteReporting.RequireCompleteAsync(
-								"CharacterCreateSystem", "Starting factions", await factionService.PersistAsync(factions), $"character {characterID}"))
+						/* Must land in full, like every row below: these are being created for the first time. */
+						if (!await contribution.Key.PersistAsync(services, characterID, contribution.Value))
 						{
+							await Log.Warning("CharacterCreateSystem", $"Starting {contribution.Key.Name} did not land for character {characterID}; the creation is refused.");
 							TryEnqueueMainThread(() =>
 							{
 								if (conn != null && conn.IsActive)
@@ -704,35 +708,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return attributes;
-		}
-
-		/// <summary>
-		/// Builds CPU-only prepared faction entries from immutable templates.
-		/// </summary>
-		private List<PreparedFactionEntry> BuildStartingFactionEntries(RaceTemplate raceTemplate)
-		{
-			var factions = new List<PreparedFactionEntry>();
-			if (raceTemplate?.InitialFaction == null)
-			{
-				return factions;
-			}
-
-			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultAllied)
-			{
-				factions.Add(new PreparedFactionEntry(faction.ID, FactionTemplate.Maximum));
-			}
-
-			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultNeutral)
-			{
-				factions.Add(new PreparedFactionEntry(faction.ID, 0));
-			}
-
-			foreach (FactionTemplate faction in raceTemplate.InitialFaction.DefaultHostile)
-			{
-				factions.Add(new PreparedFactionEntry(faction.ID, FactionTemplate.Minimum));
-			}
-
-			return factions;
 		}
 
 		/// <summary>
@@ -914,35 +889,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 			}
 
 			return attributes;
-		}
-
-		/// <summary>
-		/// Builds starting faction data for a newly created character from prepared entries.
-		/// </summary>
-		/// <param name="characterID">ID of the newly created character.</param>
-		/// <param name="preparedFactions">Prepared faction entries.</param>
-		/// <returns>List of faction data objects to persist.</returns>
-		private List<CharacterFactionData> BuildStartingFactions(long characterID, List<PreparedFactionEntry> preparedFactions)
-		{
-			var factions = new List<CharacterFactionData>(preparedFactions?.Count ?? 0);
-			if (preparedFactions == null)
-			{
-				return factions;
-			}
-
-			for (int i = 0; i < preparedFactions.Count; ++i)
-			{
-				PreparedFactionEntry faction = preparedFactions[i];
-				factions.Add(new CharacterFactionData(
-					id: 0,
-					version: 1,
-					characterID: characterID,
-					templateID: faction.TemplateID,
-					value: faction.Value
-				));
-			}
-
-			return factions;
 		}
 
 		/// <summary>
@@ -1146,28 +1092,6 @@ namespace FishMMO.Server.Implementation.LoginServer
 				TemplateID = templateID;
 				Value = value;
 				IsResourceAttribute = isResourceAttribute;
-			}
-		}
-
-		/// <summary>
-		/// Prepared immutable faction payload row for deferred persistence.
-		/// </summary>
-		private readonly struct PreparedFactionEntry
-		{
-			/// <summary>The faction template ID.</summary>
-			public readonly int TemplateID;
-			/// <summary>The initial faction standing value.</summary>
-			public readonly int Value;
-
-			/// <summary>
-			/// Initializes a new faction entry with the given template and value.
-			/// </summary>
-			/// <param name="templateID">The faction template ID.</param>
-			/// <param name="value">The initial faction standing value.</param>
-			public PreparedFactionEntry(int templateID, int value)
-			{
-				TemplateID = templateID;
-				Value = value;
 			}
 		}
 

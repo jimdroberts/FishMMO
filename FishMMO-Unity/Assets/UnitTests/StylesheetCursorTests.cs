@@ -139,13 +139,34 @@ namespace FishMMO.UnitTests
 		/// <summary>Every runtime stylesheet, theme included.</summary>
 		private static List<string> RuntimeSheets()
 		{
-			return new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uss", SearchOption.AllDirectories));
+			var sheets = new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uss", SearchOption.AllDirectories));
+			sheets.AddRange(ModuleClientFiles("*.uss"));
+			return sheets;
+		}
+
+		/// <summary>Modules' runtime UI (<c>Assets/Modules/&lt;Name&gt;/Client</c>), held to the same rules as the game's own.</summary>
+		private static IEnumerable<string> ModuleClientFiles(string pattern)
+		{
+			string modules = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Modules");
+			if (!Directory.Exists(modules))
+			{
+				yield break;
+			}
+			foreach (string client in Directory.GetDirectories(modules, "Client", SearchOption.AllDirectories))
+			{
+				foreach (string file in Directory.GetFiles(client, pattern, SearchOption.AllDirectories))
+				{
+					yield return file;
+				}
+			}
 		}
 
 		/// <summary>Every runtime layout.</summary>
 		private static List<string> RuntimeLayouts()
 		{
-			return new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uxml", SearchOption.AllDirectories));
+			var layouts = new List<string>(Directory.GetFiles(ProjectFiles.Folder(GuiRoot), "*.uxml", SearchOption.AllDirectories));
+			layouts.AddRange(ModuleClientFiles("*.uxml"));
+			return layouts;
 		}
 
 		/// <summary>Walks a stylesheet's rule blocks and collects every <c>cursor</c> declaration.</summary>
@@ -198,7 +219,7 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(names.Contains(ThemeSheet), $"the theme must be swept; looked in {GuiRoot}");
 			LogAssert.IsTrue(names.Contains(GuildSheet), $"{GuildSheet} must be swept; looked in {GuiRoot}");
-			LogAssert.IsTrue(names.Contains("UIFactions.uss"), "a panel sheet must be swept");
+			LogAssert.IsTrue(names.Contains("UIAchievements.uss"), "a panel sheet must be swept");
 
 			/* A floor rather than an exact count: sheets are added, and this should never be the test
 			 * that has to be edited when one is. It only has to be low enough to fail if the sweep

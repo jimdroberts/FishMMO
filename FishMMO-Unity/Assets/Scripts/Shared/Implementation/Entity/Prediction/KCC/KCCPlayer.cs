@@ -320,10 +320,22 @@ namespace FishMMO.Shared
 		{
 			if (!base.IsOwner || CharacterCamera != null) return;
 
+			/* The camera with a KCCCamera, not merely Camera.main: a world scene that brings its own active "Main Camera"
+			 * (the re-cut Moron 1 and 2 on 11-16) can win Camera.main, and adopting that one left the player camera
+			 * unbound for the whole session. Client.DisableStrayMainCameras switches such a camera off on load. */
+			KCCCamera found = null;
 			Camera mc = Camera.main;
 			if (mc != null)
 			{
-				CharacterCamera = mc.gameObject.GetComponent<KCCCamera>();
+				found = mc.GetComponent<KCCCamera>();
+			}
+			if (found == null)
+			{
+				found = UnityEngine.Object.FindAnyObjectByType<KCCCamera>();
+			}
+			if (found != null)
+			{
+				CharacterCamera = found;
 				if (CharacterCamera != null)
 				{
 					CharacterCamera.SetFollowTransform(CharacterController.CameraFollowPoint);
@@ -959,6 +971,14 @@ namespace FishMMO.Shared
 
 			Motor.Transform.SetPositionAndRotation(Motor.TransientPosition, Motor.TransientRotation);
 
+			/* The rush stops a predicted hit made (KCCController.EndMotionFromHit) follow the movement step they followed the
+			 * first time; only the owner replays, so only the owner remembers them. */
+			CharacterController.NoteSimulatedTick(kccInput.GetTick(), base.IsOwner && !base.IsServerStarted);
+			if (state.ContainsReplayed())
+			{
+				CharacterController.ReapplyPredictedRushStop(kccInput.GetTick());
+			}
+
 			// The owner's latest prediction for this tick (first pass or replay), for measuring the server's correction of it.
 			if (base.IsOwner && !base.IsServerStarted)
 			{
@@ -1034,6 +1054,10 @@ namespace FishMMO.Shared
 			}
 
 			CharacterController.ApplyState(rd.MotorState);
+			if (base.IsOwner && !base.IsServerStarted)
+			{
+				CharacterController.OnReconciled(rd.GetTick());
+			}
 
 			pendingPlatformID = rd.MotorState.CurrentPlatformID;
 			currentPlatform = ResolvePlatform(pendingPlatformID);

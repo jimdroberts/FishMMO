@@ -42,6 +42,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			PlotInfo = 11,
 			Claim = 12,
 			Release = 13,
+			AccessList = 14,
+			PrepayRent = 15,
 		}
 
 		[Header("Request Protection")]
@@ -99,6 +101,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultRetrieveBroadcast>(OnServerHousingVaultRetrieve, true);
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit, true);
 			RegisterPanelBroadcasts();
+			Server.NetworkWrapper.RegisterBroadcast<HousingAccessListRequestBroadcast>(OnServerHousingAccessListRequest, true);
 		}
 
 		/// <summary>
@@ -126,6 +129,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultRetrieveBroadcast>(OnServerHousingVaultRetrieve);
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit);
 			UnregisterPanelBroadcasts();
+			Server.NetworkWrapper.UnregisterBroadcast<HousingAccessListRequestBroadcast>(OnServerHousingAccessListRequest);
 		}
 
 		/// <summary>
@@ -401,6 +405,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the wire and may carry bits this build has no name for. */
 			PlotPermission requested = PlotAccess.Sanitize(msg.Permissions);
 
+			// Named rather than numbered: resolved off the main thread, then granted as if numbered.
+			if (msg.CharacterID <= 0)
+			{
+				GrantAccessByName(conn, player, msg.PlotID, msg.CharacterName, requested);
+				return;
+			}
+
 			// Accepted grants are answered, with the updated list, once the database has replied.
 			if (!TryGrantAccess(conn, player, foundation, msg.CharacterID, requested))
 			{
@@ -469,20 +480,99 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			HousingAccessEntry[] entries = new HousingAccessEntry[grants.Count];
 
 			int i = 0;
+			var ids = new List<long>(grants.Count);
 			foreach (KeyValuePair<long, PlotPermission> grant in grants)
 			{
 				entries[i++] = new HousingAccessEntry
 				{
 					CharacterID = grant.Key,
+					Name = string.Empty,
 					Permissions = (int)grant.Value,
 				};
+				ids.Add(grant.Key);
 			}
 
-			Server.NetworkWrapper.Broadcast(conn, new HousingAccessListBroadcast
+			long plotID = foundation.PlotID;
+			if (ids.Count == 0 || !TryEnqueueAsyncWork(() => SendAccessListWithNamesAsync(conn, plotID, entries, ids), player.ID))
 			{
-				PlotID = foundation.PlotID,
-				Entries = entries,
-			}, true, Channel.Reliable);
+				// Nobody to name, or the worker is full: the list goes out as it is rather than not at all.
+				Server.NetworkWrapper.Broadcast(conn, new HousingAccessListBroadcast { PlotID = plotID, Entries = entries }, true, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// Names the guests (the window shows names, not IDs), then sends the list on the main thread.
+		/// </summary>
+		private async System.Threading.Tasks.Task SendAccessListWithNamesAsync(NetworkConnection conn, long plotID, HousingAccessEntry[] entries, List<long> ids)
+		{
+			try
+			{
+				if (TryGetDbService(out FishMMO.Database.Npgsql.Services.Interfaces.ICharacterService characters))
+				{
+					FishMMO.Database.DatabaseResult<IReadOnlyList<CharacterNameData>> names = await characters.FetchNamesAsync(ids);
+					if (names.IsSuccess && names.Data != null)
+					{
+						var byID = new Dictionary<long, string>(names.Data.Count);
+						foreach (CharacterNameData name in names.Data)
+						{
+							byID[name.CharacterID] = name.Name;
+						}
+						for (int i = 0; i < entries.Length; i++)
+						{
+							if (byID.TryGetValue(entries[i].CharacterID, out string name))
+							{
+								entries[i].Name = name ?? string.Empty;
+							}
+						}
+					}
+				}
+			}
+			catch (System.Exception ex)
+			{
+				Log.Warning("HousingSystem", $"Plot {plotID}'s guest list was sent without names: {ex.Message}");
+			}
+
+			if (!TryEnqueueHousingMainThread(() =>
+			{
+				if (conn != null && conn.IsActive && Server?.NetworkWrapper != null)
+				{
+					Server.NetworkWrapper.Broadcast(conn, new HousingAccessListBroadcast { PlotID = plotID, Entries = entries }, true, Channel.Reliable);
+				}
+			}))
+			{
+				Log.Warning("HousingSystem", $"Could not send plot {plotID}'s guest list.");
+			}
+		}
+
+		/// <summary>
+		/// The guest list window asks for a plot's list.
+		/// </summary>
+		private void OnServerHousingAccessListRequest(NetworkConnection conn, HousingAccessListRequestBroadcast msg, Channel channel)
+		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.AccessList))
+			{
+				return;
+			}
+			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
+			{
+				return;
+			}
+			if (!IsHousingEnabled)
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.Disabled);
+				return;
+			}
+			if (!TryResolveRequestedPlot(player, msg.PlotID, out PlotFoundation foundation))
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.UnknownPlot);
+				return;
+			}
+			if (!foundation.PermissionsFor(player.ID, GuildIDOf(player)).HasFlag(PlotPermission.InviteFriends))
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.NotPermitted);
+				return;
+			}
+			SendAccessList(conn, foundation);
 		}
 
 		/// <summary>

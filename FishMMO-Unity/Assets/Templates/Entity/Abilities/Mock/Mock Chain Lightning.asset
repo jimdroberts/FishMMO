@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Chain Lightning
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 18ef2a1d1c5c990f44eb2f2760ccf7d5
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

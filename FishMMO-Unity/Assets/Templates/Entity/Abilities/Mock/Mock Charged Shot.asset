@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Charged Shot
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b0b6b0d2a917c2c0190356db57b5fcc6
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

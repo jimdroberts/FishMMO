@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	{
 		/// <summary>
 		/// Runs the hit's chain inside an attack scope naming the cast and the character struck, so a hostile effect the harm
-		/// rule refuses can be counted once per cast (<see cref="FactionHarm.BeginAttack"/>). Every hit route (projectile
+		/// rule refuses can be counted once per cast (<see cref="HarmRule.BeginAttack"/>). Every hit route (projectile
 		/// sweep, target, hitscan, area) reaches its chain through here with the ability object on the event.
 		/// </summary>
 		public override void Execute(EventData eventData)
@@ -21,14 +21,14 @@ namespace FishMMO.Shared
 				base.Execute(eventData);
 				return;
 			}
-			FactionHarm.AttackScope previous = FactionHarm.BeginAttack(CastKey(hit.AbilityObject), hit.TargetCharacter, hit.IsSplash);
+			HarmRule.AttackScope previous = HarmRule.BeginAttack(CastKey(hit.AbilityObject), hit.TargetCharacter, hit.IsSplash);
 			try
 			{
 				base.Execute(eventData);
 			}
 			finally
 			{
-				FactionHarm.EndAttack(previous);
+				HarmRule.EndAttack(previous);
 			}
 		}
 

@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock damage over time. 3 health per second for 6 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 2d623a057603f8553f3e169b6a2c5be5
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

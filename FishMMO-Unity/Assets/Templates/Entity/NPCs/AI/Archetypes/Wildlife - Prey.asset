@@ -19,7 +19,7 @@ MonoBehaviour:
   WanderState: {fileID: 11400000, guid: 8c7b67da34d8e69bd97e839391902102, type: 2}
   PatrolState: {fileID: 11400000, guid: 7c8337299754b7fd04e54964b911ae42, type: 2}
   ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
-  RetreatState: {fileID: 0}
+  RetreatState: {fileID: 11400000, guid: 08e6cbd6774b0d6bf9a41c088868ab86, type: 2}
   DeadState: {fileID: 0}
   Personality: {fileID: 11400000, guid: f31f7444f35b6ffee4ed41a0418e0b05, type: 2}
   AbilityRotation: {fileID: 0}

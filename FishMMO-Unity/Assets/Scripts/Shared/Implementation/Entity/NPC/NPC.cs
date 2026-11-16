@@ -22,7 +22,6 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(CharacterDamageController))]
-	[RequireComponent(typeof(FactionController))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter, ISceneObject, ISpawnable, IInteractable, ILootableCorpse
@@ -249,6 +248,50 @@ namespace FishMMO.Shared
 		[Tooltip("Set for wild animals: their role and speeds. Wildlife ignores factions; anyone may harm it.")]
 		public WildlifeTemplate Wildlife;
 
+		[Header("Identity")]
+		[Tooltip("The NPC's race: its models, its generated name and, with the Factions module, the standings it starts with.")]
+		[SerializeField, TemplateReference(typeof(RaceTemplate))]
+		private int raceTemplateID;
+		private RaceTemplate cachedRaceTemplate;
+
+		[Tooltip("Treats every other character as an enemy, whatever any standing says (with the Factions module: hostile to all).")]
+		[SerializeField]
+		private bool isAggressive = false;
+
+		/// <summary>The NPC's race, or null. Was the faction controller's; it is the NPC's own now, so models and names need no Factions module.</summary>
+		public RaceTemplate RaceTemplate
+		{
+			get
+			{
+				if (cachedRaceTemplate == null && raceTemplateID != 0)
+				{
+					cachedRaceTemplate = RaceTemplate.Get<RaceTemplate>(raceTemplateID);
+				}
+				return cachedRaceTemplate;
+			}
+		}
+
+		/// <summary>True when the NPC treats every other character as an enemy.</summary>
+		public bool IsAggressive => isAggressive;
+
+		/// <summary>
+		/// Server: a spawner's race override, applied before the spawn payload is written so the new race travels with the
+		/// object. Raises <see cref="RaceChanged"/> so anything derived from the race (faction standings) is rebuilt.
+		/// </summary>
+		public void SetRaceTemplateOnSpawn(RaceTemplate raceTemplate)
+		{
+			if (raceTemplate == null || raceTemplate.ID == raceTemplateID)
+			{
+				return;
+			}
+			raceTemplateID = raceTemplate.ID;
+			cachedRaceTemplate = raceTemplate;
+			RaceChanged?.Invoke(this);
+		}
+
+		/// <summary>Raised when <see cref="SetRaceTemplateOnSpawn"/> changes the race.</summary>
+		public event System.Action<NPC> RaceChanged;
+
 		/// <summary>
 		/// Server: the pack this NPC belongs to (its spawner's group), 0 for none. Predators of one pack never harm each other
 		/// (<see cref="WildlifeRules.MayHarm(WildlifeRole, int, WildlifeRole, int)"/>); different packs fight it out.
@@ -474,15 +517,28 @@ namespace FishMMO.Shared
 			 * SetModifier would replace it with the bonus alone. */
 			AddNPCAttributes(false);
 
+			// The race (a spawner may have overridden the prefab's): models and names need it before anything below.
+			int race = reader.ReadInt32();
+			if (race != raceTemplateID)
+			{
+				raceTemplateID = race;
+				cachedRaceTemplate = null;
+			}
+
+			// Modules' parts (CharacterPart), each in its own framed block.
+			CharacterParts.ReadPayload(this, connection, reader);
+
 #if !UNITY_SERVER
 			ClientCharacters[ID] = this;
 
-			// FactionController stores a reference to the RaceTemplate.
-			if (this.TryGet(out IFactionController factionController))
+			// The NPC's own race (it used to live on the faction controller).
 			{
-				RaceTemplate raceTemplate = factionController.RaceTemplate;
+				RaceTemplate raceTemplate = RaceTemplate;
 				int modelIndex = -1;
-				int modelCount = raceTemplate == null ? 0 : raceTemplate.GetModelCount(npcGender);
+				/* Wildlife draws its own procedural body (WildlifeBody, under the mesh root) and has no race model. The
+				 * builder cloned the wildlife prefabs from "an orc", race included, and a race model's swap destroys every
+				 * other child of the mesh root, so the race is ignored for the body here. */
+				int modelCount = raceTemplate == null || Wildlife != null ? 0 : raceTemplate.GetModelCount(npcGender);
 				if (modelCount > 0)
 				{
 					// Pick a random model for this NPC using the RNG.
@@ -534,6 +590,12 @@ namespace FishMMO.Shared
 			 * death; PlayerCharacter has carried its flags in the payload for exactly this reason
 			 * and NPCs did not, which is why walking up to an existing corpse showed it standing. */
 			writer.WriteInt32(Flags);
+
+			// The race, which a spawner may have overridden (see ReadPayload).
+			writer.WriteInt32(raceTemplateID);
+
+			// Modules' parts (CharacterPart), each in its own framed block.
+			CharacterParts.WritePayload(this, connection, writer);
 
 			//Log.Debug($"Writing NPC RNG Seed {npcSeed}");
 		}

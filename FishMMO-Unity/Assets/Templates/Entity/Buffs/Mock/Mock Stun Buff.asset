@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock stun. Sets IsStunned for 2 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 94417ed9a98a40b703d81c0d0fde536d
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

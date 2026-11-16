@@ -252,6 +252,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2cdaeeadbc4c47a5836f83fb00be9a9b
+    m_Address: UIFactions
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2d680113291d4e2aa640bf46c6c99fe6
     m_Address: UIArenaResults
     m_ReadOnly: 0
@@ -1077,6 +1084,13 @@ MonoBehaviour:
     m_Address: UIMapShared
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ff785d3244344a1eaa6f661c13f72ccf
+    m_Address: UILeaderboards
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   m_ReadOnly: 0

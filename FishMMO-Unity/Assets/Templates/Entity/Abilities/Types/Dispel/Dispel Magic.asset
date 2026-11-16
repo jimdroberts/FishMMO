@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Dispel Magic
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: efc3f8dead4c1fbf9bbfb36d15ffee0c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Unweaves the magic on your target. Strips up to 2 beneficial effects from an enemy, or lifts up to 2 harmful ones from a friend.
+  Description: Unweaves the magic on your target. Strips up to 2 beneficial effects from an enemy, or lifts up to 2 harmful ones from anyone else.
   ActivationTime: 0.5
   LifeTime: 1
   Speed: 25
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713117057843216
+  - rid: 4295713125095964802
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 1
@@ -47,7 +47,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713117057843216
+    - rid: 4295713125095964802
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

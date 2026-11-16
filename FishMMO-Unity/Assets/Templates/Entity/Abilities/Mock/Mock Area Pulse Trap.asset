@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Area Pulse Trap
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 02ead420d755d5e8535fe17f080d5c9e
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

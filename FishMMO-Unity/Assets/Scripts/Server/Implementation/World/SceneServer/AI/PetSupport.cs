@@ -268,11 +268,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			{
 				return false;
 			}
-			if (FactionHarm.AreCompanions(pet, candidate))
+			if (HarmRule.AreCompanions(pet, candidate))
 			{
 				return true;
 			}
-			if (FactionHarm.MayHarm(pet, candidate, out _))
+			if (HarmRule.MayHarm(pet, candidate, out _))
 			{
 				return false;
 			}

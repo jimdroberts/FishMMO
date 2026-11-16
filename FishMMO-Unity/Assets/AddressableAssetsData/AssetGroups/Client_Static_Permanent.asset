@@ -15,6 +15,440 @@ MonoBehaviour:
   m_GroupName: Client_Static_Permanent
   m_GUID: 8057324dd1039b846be556683994bffd
   m_SerializeEntries:
+  - m_GUID: 5be3c8f02884c1a27409942910e22607
+    m_Address: AbilityIcon_AbsorbBubble
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ea38f6f19c855972c747fdd6aa54c9a1
+    m_Address: AbilityIcon_Beam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2d623a057603f8553f3e169b6a2c5be5
+    m_Address: AbilityIcon_BleedingDagger
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4aee10797571de392fe3ad35448e6881
+    m_Address: AbilityIcon_BlinkBolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 958c503f6ae68ea9634882542de43a35
+    m_Address: AbilityIcon_Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4e24ef67d0bf972c15d4b96ac9060c42
+    m_Address: AbilityIcon_Campfire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 18ef2a1d1c5c990f44eb2f2760ccf7d5
+    m_Address: AbilityIcon_ChainLightning
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9d274818dedd2d084de4204305f23fc8
+    m_Address: AbilityIcon_Charge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b0b6b0d2a917c2c0190356db57b5fcc6
+    m_Address: AbilityIcon_ChargedShot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b0a5188b4c3e6ddfcfabae9beec7fae9
+    m_Address: AbilityIcon_ClawStrike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 05daaabb6ca6c4c92730fe0d08f366ce
+    m_Address: AbilityIcon_Cleanse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 00e17b38d526d6a94b54e4336609c61e
+    m_Address: AbilityIcon_Cone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 43cdbd5a8563ca5d46a6a7e75299897c
+    m_Address: AbilityIcon_Cuirass
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fa795591c5ea78d5e65a40da5541e728
+    m_Address: AbilityIcon_CuirassArea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 531050b1ea8f11470e7da22730638a06
+    m_Address: AbilityIcon_CuirassPlus
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dc631212bdfeecef69683dbc69b0cd07
+    m_Address: AbilityIcon_CuirassRising
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3640e19e46f3ff5fefb8bedcd210845f
+    m_Address: AbilityIcon_Deflect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: c215dbc27ebf5f2f3140b2d6442c7c6d
+    m_Address: AbilityIcon_Droplets
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8a42cc4758ac9358c7a05c601af13a2c
+    m_Address: AbilityIcon_FireElemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 70503b6d8e4fb3b319bcfc73630d1a12
+    m_Address: AbilityIcon_FireRing
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5452caac181243387f91a103cd135623
+    m_Address: AbilityIcon_Fireball
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 34bece08670907d736f6a0ebe734768c
+    m_Address: AbilityIcon_Firebolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 11f9db0e0f2f5b20e497457b903f64c8
+    m_Address: AbilityIcon_Fist
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6bc6ac43cd912b1288a3fec183e59964
+    m_Address: AbilityIcon_Flame
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5a180a741c50cbff494ba77da2625848
+    m_Address: AbilityIcon_FlameJet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2ecf9a69c1cfaffcdff75cfe16c52a97
+    m_Address: AbilityIcon_Fork
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 05e3f25f21ba55765ff0f67d912bcbe6
+    m_Address: AbilityIcon_FrozenDrop
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 55c12c7a458da853e5da55e52afb2b36
+    m_Address: AbilityIcon_HealArea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b26d1aa17b044faae39c1522d88e4e80
+    m_Address: AbilityIcon_HealMote
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8d4ebdf9f53fdfaf36bb9d2456a52319
+    m_Address: AbilityIcon_HealOverTime
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2810f71789d530de5cffef2a12089076
+    m_Address: AbilityIcon_HealSelf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: c1a09166678121c7eb3521e7328c3757
+    m_Address: AbilityIcon_HealTrio
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ad4c7a80c09a5756bf95f97d052d7e49
+    m_Address: AbilityIcon_HeartHeal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 126dcdddb8eba3e2f1be3b92a1306505
+    m_Address: AbilityIcon_Interrupt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 78799c8cdefb2d6003f9eecb56bd4abc
+    m_Address: AbilityIcon_KnockbackBurst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dbe76a6ced26a6f980be825286868a0c
+    m_Address: AbilityIcon_KnockbackOrb
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3778dcb4d66a118f7717e1d9058efd17
+    m_Address: AbilityIcon_Lance
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: be299c909ddc8e9d5b6f6606a5f1175e
+    m_Address: AbilityIcon_LesserFireElemental
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 7c65fcb82d031358ecee480be92f9970
+    m_Address: AbilityIcon_Nova
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a51990583bdcf74aecee5be9c8f9b82b
+    m_Address: AbilityIcon_Pierce
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fbdfeb3ee5cbcc972db7150bcba197c2
+    m_Address: AbilityIcon_Potion
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 02ead420d755d5e8535fe17f080d5c9e
+    m_Address: AbilityIcon_PulseTrap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4eeb27fcd8bb085a4e75ea78595a0fb9
+    m_Address: AbilityIcon_RandomBolts
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 80b432362196fad835b137a9472057b9
+    m_Address: AbilityIcon_Reticle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b38897430e1f1502783531f0b6637968
+    m_Address: AbilityIcon_Roots
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: aeb59f5ec6c6ee0cc48b2a288790bd96
+    m_Address: AbilityIcon_Shadowstep
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: efc3f8dead4c1fbf9bbfb36d15ffee0c
+    m_Address: AbilityIcon_Shatter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6f4c4570f9726618463ae49ccfcbc4ad
+    m_Address: AbilityIcon_ShatterSelf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b31cb1e4f62ab9bbd20f4b5932792b39
+    m_Address: AbilityIcon_Shield
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b37c708c14bb2a10065b923a9798f1fc
+    m_Address: AbilityIcon_Slam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e9ab4ac309908e6605e56599c4db4820
+    m_Address: AbilityIcon_Snail
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d4faf93d67d90db2f9aa03f838efb0d4
+    m_Address: AbilityIcon_Snowflake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ee3b7318f4bc2a2bc7945ba46047e7a5
+    m_Address: AbilityIcon_Spread
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 79b0fe8fee848bcbb180daa6e617b3aa
+    m_Address: AbilityIcon_Strip
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 94417ed9a98a40b703d81c0d0fde536d
+    m_Address: AbilityIcon_Stun
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: cf71fca02d0093a4a7b44f18a8fcabc9
+    m_Address: AbilityIcon_Sword
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: bc547d24a0641a461f098c8782a5d7be
+    m_Address: AbilityIcon_Taunt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dfc1823d8279e61710ab6af6273d9ae8
+    m_Address: AbilityIcon_Teleport
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3d9af5acd88bb17ed226fa577fd3c3b6
+    m_Address: AbilityIcon_ThreatPulse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 03cf49f9a9bccd0f882016628a27e79c
+    m_Address: AbilityIcon_WarHorn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e685376ecb635bfae615782d351b2412
+    m_Address: AbilityIcon_WingedBoot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 30882fc62669db1d62c2f1f0d12615ea
+    m_Address: AbilityIcon_WingedBootArea
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 00215e1a57c5e60448c288f8237afed3
     m_Address: FishPrecipitation
     m_ReadOnly: 0

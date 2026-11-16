@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Nearest Strike
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b0a5188b4c3e6ddfcfabae9beec7fae9
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

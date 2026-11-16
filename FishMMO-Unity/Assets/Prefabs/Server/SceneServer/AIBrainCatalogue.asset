@@ -34,6 +34,9 @@ MonoBehaviour:
   - Prefab: {fileID: -4468559157413045786, guid: f0126e7e2491fef5fa70d4ee4ed413bc, type: 3}
     Archetype: {fileID: 11400000, guid: 8e8c694b2cea07d2cb175ef593556baf, type: 2}
     BossScript: {fileID: 0}
+  - Prefab: {fileID: -4468559157413045786, guid: b1d47bf128fd622309a2a6ef13d9eacb, type: 3}
+    Archetype: {fileID: 11400000, guid: 4689f14e17de9c19f5ab5e2f64222034, type: 2}
+    BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: 3762c468afe7fd3e8bd77675ec6189ba, type: 3}
     Archetype: {fileID: 11400000, guid: 6e798e2ad3941655eaf189dba5684e1d, type: 2}
     BossScript: {fileID: 0}

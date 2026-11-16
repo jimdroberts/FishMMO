@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock ramping armor. +1 armor every 2 seconds for 10 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: dc631212bdfeecef69683dbc69b0cd07
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

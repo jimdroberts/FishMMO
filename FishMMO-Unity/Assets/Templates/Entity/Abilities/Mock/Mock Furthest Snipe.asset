@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Furthest Snipe
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 80b432362196fad835b137a9472057b9
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

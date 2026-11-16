@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Shield Block
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b31cb1e4f62ab9bbd20f4b5932792b39
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

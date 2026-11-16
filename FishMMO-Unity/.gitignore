@@ -78,6 +78,9 @@ crashlytics-build.properties
 /[Aa]ssets/[Gg]enerated.meta
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientWorldMaps.asset*
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientWorldMaps_*
+# Baked portal views (one cubemap per scene teleporter destination) live in Assets/Generated too; their group exists only during a build.
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/ClientPortalViews.asset*
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/AssetGroups/Schemas/ClientPortalViews_*
 
 # World scenes. Not shared: the planets and the scenes cut from them are this project's own
 # content, and a generated scene brings a folder of terrain data with it.

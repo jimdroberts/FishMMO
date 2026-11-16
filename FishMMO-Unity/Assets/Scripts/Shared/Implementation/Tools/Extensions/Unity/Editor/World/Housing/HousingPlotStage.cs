@@ -54,8 +54,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How far in from its lot's front edge the deed post stands, metres.</summary>
 		public const float PostInset = 1f;
 
-		/// <summary>Habitats no lot stands in.</summary>
-		private const BiomeHabitat Unbuildable = BiomeHabitat.Sea | BiomeHabitat.FreshWater | BiomeHabitat.Wetland | BiomeHabitat.Cave;
+		/// <summary>Habitats no lot stands in, beside open water (<see cref="BiomeHabitats.IsWater"/>): the water bits alone also
+		/// mark land biomes' creatures (Forest is Forest | FreshWater), and refused every forest.</summary>
+		private const BiomeHabitat Unbuildable = BiomeHabitat.Wetland | BiomeHabitat.Cave;
 
 		private readonly string terrainFolder;
 		private readonly string sceneName;
@@ -67,6 +68,18 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>The lots planned, once <see cref="Plan"/> has run.</summary>
 		public HousingPlotPlanner.Result Planned { get; private set; }
+
+		/// <summary>
+		/// The ways the lots want, handed to the path network (<see cref="PathPlanInput.ExtraSpurs"/>): a cart track to each
+		/// district's lane end, a footpath to each countryside group. Empty on a repaint, which lays no ways.
+		/// </summary>
+		public readonly List<PathSpurEnd> Spurs = new List<PathSpurEnd>();
+
+		/// <summary>The keep-out id every lot's disc carries in the sites' plan: no site has it, so every way routes round lots.</summary>
+		public const int LotKeepOutId = -1000000;
+
+		/// <summary>The first spur id; each spur takes the next one down.</summary>
+		public const int SpurIdBase = -2000000;
 
 		private HousingPlotStage(string terrainFolder, string sceneName, int seed, bool reused)
 		{
@@ -121,6 +134,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
+			int sampled = 0, refusedSamples = 0;
 			var input = new HousingPlotPlanner.Input
 			{
 				Seed = seed,
@@ -133,7 +147,17 @@ namespace FishMMO.Shared.WorldDesign
 			};
 			if (!Reused)
 			{
-				input.Blocked = BlockedQuery(poi, tiles, terrains, field, water);
+				Func<float, float, bool> blocked = BlockedQuery(poi, tiles, terrains, field, water);
+				input.Blocked = (x, z) =>
+				{
+					sampled++;
+					bool refused = blocked(x, z);
+					if (refused)
+					{
+						refusedSamples++;
+					}
+					return refused;
+				};
 				FillSites(input, poi.Plan?.Records);
 			}
 
@@ -142,12 +166,59 @@ namespace FishMMO.Shared.WorldDesign
 
 			if (!Reused)
 			{
+				/* Into the sites' own keep-outs (stored with them): the ways route round every lot, the wayside sites keep off
+				 * them, and the wildlife and the scatter read them like any site's. The lanes only keep trees off (Reserved): a
+				 * district's way ends on its lane. */
+				foreach (ScenePlotManifest.Lot lot in planned.Lots)
+				{
+					poi.Plan?.KeepOuts.Add(new PointOfInterestKeepOut
+					{
+						Id = LotKeepOutId,
+						X = lot.Centre.x,
+						Z = lot.Centre.z,
+						Radius = lot.Size.x * 0.7072f + 1.5f,
+						Outline = Array.Empty<float>(),
+					});
+				}
+				Spurs.Clear();
+				List<HousingPlotPlanner.SpurEnd> ends = HousingPlotPlanner.SpurEnds(planned.Lots, input.Settlements);
+				for (int i = 0; i < ends.Count; i++)
+				{
+					Vector2 at = ends[i].Position;
+					Spurs.Add(new PathSpurEnd
+					{
+						Id = SpurIdBase - i,
+						Position = new Vector3(at.x, SceneGenerator.GroundAltitude(terrains, tiles, at.x, at.y), at.y),
+						Way = ends[i].District ? ScenePathClass.CartTrack : ScenePathClass.Footpath,
+					});
+				}
 				int levelled = Level(terrains, tiles, planned.Lots);
-				notes?.Add($"Housing: {planned.Lots.Count} lot(s) — {planned.Kept} kept from the last cut, {planned.NewDistrictLots} new in {planned.NewDistricts} district(s), {planned.NewCountryLots} new in the countryside; {levelled} height sample(s) levelled.");
+				string note = $"Housing: {planned.Lots.Count} lot(s) — {planned.Kept} kept from the last cut, {planned.NewDistrictLots} new in {planned.NewDistricts} district(s), {planned.NewCountryLots} new in the countryside; {input.Settlements.Count} city/capital site(s); {refusedSamples}/{sampled} ground sample(s) refused as water, sites, ways or habitat; {levelled} height sample(s) levelled.";
+				notes?.Add(note);
+				// The batch re-cut does not print the cut's notes; this line is how a headless run reads the count.
+				Debug.Log($"[Housing plots] '{sceneName}' {note}");
 			}
 			foreach (HousingPlotPlanner.Disc disc in planned.Clear)
 			{
 				poi.Reserved.Add(new PointOfInterestKeepOut { Id = -1, X = disc.X, Z = disc.Z, Radius = disc.Radius, Outline = Array.Empty<float>() });
+			}
+		}
+
+		/// <summary>
+		/// Levels the lots' footprints again, after the ways were carved: a way carved beside a lot may have cut its edge.
+		/// Nothing on a repaint, which levels nothing.
+		/// </summary>
+		public void RelevelFootprints(Terrain[,] terrains, TerrainTilePlan tiles)
+		{
+			if (Reused || Planned == null || terrains == null)
+			{
+				return;
+			}
+			foreach (ScenePlotManifest.Lot lot in Planned.Lots)
+			{
+				float hx = lot.Size.x * 0.5f, hz = lot.Size.y * 0.5f, floor = lot.Centre.y;
+				PointOfInterestTerrain.EditHeights(terrains, tiles,
+					Rect.MinMaxRect(lot.Centre.x - hx, lot.Centre.z - hz, lot.Centre.x + hx, lot.Centre.z + hz), (x, z, metres) => floor);
 			}
 		}
 
@@ -189,7 +260,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (field != null)
 				{
 					BiomeTemplate biome = field.DominantAt(x, z);
-					if (biome != null && (biome.LiveHabitat & Unbuildable) != 0)
+					if (biome != null && ((biome.LiveHabitat & Unbuildable) != 0 || BiomeHabitats.IsWater(biome.LiveHabitat)))
 					{
 						return true;
 					}

@@ -27,8 +27,8 @@ namespace FishMMO.Client
 		private const string CHANNELS_BUTTON_NAME = "menu-channels-btn";
 		/// <summary>Name of the instance-management button element in the UXML.</summary>
 		private const string INSTANCE_BUTTON_NAME = "menu-instance-btn";
-		/// <summary>Name of the leaderboards button element in the UXML.</summary>
-		private const string LEADERBOARDS_BUTTON_NAME = "menu-leaderboards-btn";
+		/// <summary>Name of the element the modules' menu entries (<see cref="GameMenuEntries"/>) are laid out in.</summary>
+		private const string MODULE_ENTRIES_NAME = "menu-module-entries";
 		/// <summary>Name of the quit-to-login button element in the UXML.</summary>
 		private const string QUIT_TO_LOGIN_BUTTON_NAME = "menu-quit-to-login-btn";
 		/// <summary>Name of the quit button element in the UXML.</summary>
@@ -64,11 +64,10 @@ namespace FishMMO.Client
 				instanceButton.clicked += OnButtonInstance;
 			}
 
-			Button leaderboardsButton = Root.Q<Button>(LEADERBOARDS_BUTTON_NAME);
-			if (leaderboardsButton != null)
-			{
-				leaderboardsButton.clicked += OnButtonLeaderboards;
-			}
+			moduleEntries = Root.Q<VisualElement>(MODULE_ENTRIES_NAME);
+			GameMenuEntries.Changed -= BuildModuleEntries;
+			GameMenuEntries.Changed += BuildModuleEntries;
+			BuildModuleEntries();
 
 			Button quitToLoginButton = Root.Q<Button>(QUIT_TO_LOGIN_BUTTON_NAME);
 			if (quitToLoginButton != null)
@@ -175,24 +174,50 @@ namespace FishMMO.Client
 			ReportUnavailable("Dungeon information is not available right now.");
 		}
 
+		/// <summary>Where the modules' entries are laid out, or null when the UXML has no slot for them.</summary>
+		private VisualElement moduleEntries;
+
 		/// <summary>
-		/// Opens the PvP and PvE leaderboards.
+		/// Lays out one button per <see cref="GameMenuEntries"/> entry, in order. Rebuilt whenever a module adds or
+		/// removes one. The menu stays open behind whatever an entry opens, as it does for its own destinations.
 		/// </summary>
-		/// <remarks>
-		/// Reached from here rather than from a key binding: boards are looked at now and then, not
-		/// mid-fight, and the menu is the one panel a player can always open. The window asks the
-		/// server for its board as it opens. The menu stays open behind it, as it does for the
-		/// other destinations here.
-		/// </remarks>
-		public void OnButtonLeaderboards()
+		private void BuildModuleEntries()
 		{
-			if (UIManager.TryGetTK(UITKLeaderboards.PanelName, out UITKLeaderboards leaderboards))
+			if (moduleEntries == null)
 			{
-				leaderboards.Show();
 				return;
 			}
+			moduleEntries.Clear();
+			foreach (GameMenuEntries.Entry entry in GameMenuEntries.All)
+			{
+				System.Action onClick = entry.OnClick;
+				var button = new Button(() =>
+				{
+					try
+					{
+						onClick();
+					}
+					catch (System.Exception ex)
+					{
+						Log.Error("UITKMenu", $"The '{entry.Id}' menu entry threw.", ex);
+						ReportUnavailable($"{entry.Label} is not available right now.");
+					}
+				})
+				{
+					name = $"menu-entry-{entry.Id}",
+					text = entry.Label,
+				};
+				button.AddToClassList("fish-button");
+				button.AddToClassList("menu-action");
+				moduleEntries.Add(button);
+			}
+		}
 
-			ReportUnavailable("Leaderboards are not available right now.");
+		/// <summary>Stops listening for module entries.</summary>
+		public override void OnDestroying()
+		{
+			GameMenuEntries.Changed -= BuildModuleEntries;
+			base.OnDestroying();
 		}
 
 		/// <summary>

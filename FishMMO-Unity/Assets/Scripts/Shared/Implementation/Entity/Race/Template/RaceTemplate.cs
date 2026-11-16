@@ -120,11 +120,6 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplateDatabase InitialAttributes;
 
 		/// <summary>
-		/// The initial faction for the race.
-		/// </summary>
-		public FactionTemplate InitialFaction;
-
-		/// <summary>
 		/// List of starting abilities for the race.
 		/// </summary>
 		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
@@ -178,7 +173,7 @@ namespace FishMMO.Shared
 		public bool IsImmuneTo(DamageAttributeTemplate damage) => damage != null && DamageImmunities != null && DamageImmunities.Contains(damage);
 
 		/// <summary>
-		/// The race of any character: a player's own, or an NPC's through its faction controller. Null when it has none.
+		/// The race of any character: a player's own, or an NPC's. Null when it has none.
 		/// </summary>
 		public static RaceTemplate Of(ICharacter character)
 		{
@@ -190,7 +185,7 @@ namespace FishMMO.Shared
 			{
 				return player.RaceTemplate;
 			}
-			return character.TryGet(out IFactionController faction) ? faction.RaceTemplate : null;
+			return character is NPC npc ? npc.RaceTemplate : null;
 		}
 
 		private string namingKey;

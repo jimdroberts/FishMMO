@@ -26,12 +26,16 @@ namespace FishMMO.RenderScratch
 			Items(character);
 			Attributes(character);
 			Achievements(character);
-			Factions(character);
 			Friends(character);
+			// Modules' fixtures (Factions adds its standings).
+			ExtraFixtures?.Invoke(character);
 		}
 
+		/// <summary>Modules add their fixture data here.</summary>
+		public static event System.Action<ICharacter> ExtraFixtures;
+
 		/// <summary>Loads every asset of a type under a folder and registers it in the ID cache.</summary>
-		private static List<T> Load<T>(string folder) where T : UnityEngine.Object
+		public static List<T> Load<T>(string folder) where T : UnityEngine.Object
 		{
 			List<T> loaded = new List<T>();
 			foreach (string guid in AssetDatabase.FindAssets("t:" + typeof(T).Name, new[] { folder }))
@@ -190,22 +194,6 @@ namespace FishMMO.RenderScratch
 				controller.SetAchievement(t.ID, tier, value);
 				tier = (byte)((tier + 1) % 3);
 				value = value * 4 + 13;
-			}
-		}
-
-		// ── Factions ────────────────────────────────────────────────
-
-		private static void Factions(ICharacter character)
-		{
-			if (!character.TryGet(out IFactionController controller)) { return; }
-
-			List<FactionTemplate> templates = Load<FactionTemplate>("Assets/Templates/Entity/Factions");
-
-			// A spread across allied / neutral / hostile so all three groups render.
-			int[] standings = { 8200, -4500, 0, 15000, -12000, 350, 0 };
-			for (int i = 0; i < templates.Count; ++i)
-			{
-				controller.SetFaction(templates[i].ID, standings[i % standings.Length]);
 			}
 		}
 

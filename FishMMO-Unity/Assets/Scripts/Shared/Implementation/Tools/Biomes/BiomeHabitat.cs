@@ -74,6 +74,21 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The bits a template stores: every member but <see cref="BiomeHabitat.Alien"/>.</summary>
 		public const BiomeHabitat Stored = ~BiomeHabitat.Alien;
 
+		/// <summary>The bits that say a biome has dry ground to stand on (every land country but the wetland).</summary>
+		public const BiomeHabitat Land = BiomeHabitat.Forest | BiomeHabitat.Woodland | BiomeHabitat.Jungle | BiomeHabitat.Grassland |
+			BiomeHabitat.Farmland | BiomeHabitat.Scrub | BiomeHabitat.Desert | BiomeHabitat.Coast | BiomeHabitat.Mountain |
+			BiomeHabitat.Tundra | BiomeHabitat.Ice | BiomeHabitat.Settlement | BiomeHabitat.Volcanic | BiomeHabitat.Barren;
+
+		/// <summary>
+		/// True for a water biome: sea or fresh water and no land beside it. The water bits alone do not say it, since they
+		/// also name the creatures a land biome holds (a Forest is Forest | FreshWater for its streams' fish), and testing
+		/// them alone refused every forest (housing lots and Moron 2's gate, 2026-11-16).
+		/// </summary>
+		public static bool IsWater(BiomeHabitat habitat)
+		{
+			return (habitat & (BiomeHabitat.Sea | BiomeHabitat.FreshWater)) != 0 && (habitat & Land) == 0;
+		}
+
 		/// <summary>World requirements that only another world's air meets: methane weather, air cold enough to condense, frozen nitrogen.</summary>
 		public const BiomeWorldRequirement OtherAirWorlds = BiomeWorldRequirement.MethaneCycle | BiomeWorldRequirement.CryogenicAir | BiomeWorldRequirement.FrozenNitrogen;
 

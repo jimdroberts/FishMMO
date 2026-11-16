@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Channeled Flame
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 5a180a741c50cbff494ba77da2625848
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

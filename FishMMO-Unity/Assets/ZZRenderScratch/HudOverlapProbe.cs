@@ -102,6 +102,7 @@ namespace FishMMO.RenderScratch
 			 * section of the log — with a full six-member party mounted. */
 			new Mount { Name = "UIParty",      Uxml = ROOT + "Party/UIParty.uxml",              Selector = "party-root",      PanelType = typeof(UITKParty), IgnoreOverlap = true },
 			new Mount { Name = "UIChat",       Uxml = ROOT + "Chat/UIChat.uxml",                Selector = "chat-root",       PanelType = typeof(UITKChat) },
+			new Mount { Name = "UIPetControl", Uxml = ROOT + "Pet/UIPetControl.uxml",          Selector = "pet-root",        PanelType = typeof(UITKPetControl) },
 			new Mount { Name = "UIArenaHud",   Uxml = ROOT + "Arena/UIArenaHud.uxml",           Selector = "arenahud-root",   PanelType = typeof(UITKArenaHud) },
 		};
 

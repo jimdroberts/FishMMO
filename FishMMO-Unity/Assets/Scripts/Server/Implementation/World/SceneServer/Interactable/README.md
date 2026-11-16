@@ -38,7 +38,6 @@ The system's own C# is split across partial classes of `InteractableSystem`, one
 | `InteractableSystem.Mailbox.cs` | `MailFetchBroadcast` / `MailSendBroadcast` / `MailDeleteBroadcast` / `MailClaimAttachmentBroadcast` |
 | `InteractableSystem.Container.cs` | `ContainerTakeItemBroadcast` — retrieving items from an open container |
 | `InteractableSystem.Corpse.cs` | `CorpseLootTakeItemBroadcast` / `CorpseLootTakeCurrencyBroadcast` / `CorpseLootTakeAllBroadcast` / `CorpseLootCloseBroadcast` — a shared loot pile on a dead NPC, kept in step across every looter |
-| `InteractableSystem.Waypoint.cs` | `WaypointTravelRequestBroadcast` — fast travel, plus persisting a discovered waypoint page |
 
 The implementation uses a split execution model:
 - **Main thread:** request validation, ingress guard checks, trigger execution, dialogue session management, debounce sweep, and network broadcasts.
@@ -72,7 +71,7 @@ All interaction entry points share a single per-connection `IngressGuard` with a
 - Arena queueing on the same queue rows: solo or as a pre-made party (every member connected here, inside the same board's leash, free of instances and live matches, and fitting one team of the format — all or none). Team assignment is written by `IGroupFinderQueueService.TryFormArenaMatchAsync`. Profile and history lookups answer from the database; the board's leaderboard view reads the arena rating board through `LeaderboardSystem`, the same cached read the Leaderboards window uses
 - Arena match coordination, owned by whichever scene server hosts the instance: Gathering (wait for seats, drop absentees), ReadyCheck (a decline or a silence cancels and locks the culprit out of the queue), Countdown (move to team spawns; `ArenaTeamRegistry` reports every seat as an ally so nobody can be hurt yet), Live (kills, objectives, respawns at team spawn, backfill window, disconnect grace, ends on score limit / clock / walkover), Ended (tallies, result, ratings, PvP attributes, reward hook, results screen)
 - Corpse looting of a shared pile: the corpse is the authority, the client sends only a scene object ID and a slot index, and every looter's window is kept in step. Its own ingress operation code with a 50 ms debounce rather than the one-second general interaction debounce
-- Waypoint fast travel validated end to end on the server (the map's scene must be the character's scene, the waypoint must be live in that scene instance, and `WaypointTravel.TryTravel` applies can-act / not-in-combat / standing at a discovered waypoint / discovered / conditions), with every refusal reported so the map can re-enable its button and say why. Discovery itself is an ECA action on the waypoint's trigger; this system hears `IWaypointController.OnWaypointUnlocked` and merges the page into the database
+- Waypoint fast travel (now the Travel module's `WaypointTravelSystem`, `Assets/Modules/Travel`) validated end to end on the server (the map's scene must be the character's scene, the waypoint must be live in that scene instance, and `WaypointTravel.TryTravel` applies can-act / not-in-combat / standing at a discovered waypoint / discovered / conditions), with every refusal reported so the map can re-enable its button and say why. Discovery itself is an ECA action on the waypoint's trigger; this system hears `IWaypointController.OnWaypointUnlocked` and merges the page into the database
 - Merchant sell-back via `MerchantSellBroadcast`
 - Mail attachments claimed via `MailClaimAttachmentBroadcast`
 - Mailbox operations: fetch (async DB read → broadcast mail list), send (input validation, async DB write), and delete (async soft-delete)
@@ -224,7 +223,6 @@ general interaction guard governed by `interactionDebounceMilliseconds`.
 | `ArenaProfileRequestBroadcast` | `OnServerArenaProfileRequestReceived` | `InteractableSystem.Arena.cs` | Read a character's arena rating and record |
 | `ArenaHistoryRequestBroadcast` | `OnServerArenaHistoryRequestReceived` | `InteractableSystem.Arena.cs` | Read recent matches |
 | `ArenaReadyResponseBroadcast` | `OnServerArenaReadyResponseReceived` | `InteractableSystem.ArenaMatch.cs` | Accept or decline the ready check |
-| `WaypointTravelRequestBroadcast` | `OnServerWaypointTravelRequestBroadcastReceived` | `InteractableSystem.Waypoint.cs` | Fast travel to a discovered waypoint |
 
 ### Generic Interaction Dispatch
 
@@ -480,7 +478,7 @@ conventionally wired to do.
 | `Shrine` | Heals health/mana by percentage, applies buff stacks; achievement |
 | `Switch` | Toggles `ISwitchTarget` activate/deactivate; achievement |
 | `Teleporter` | Teleports via direct transform or named destination; achievement |
-| `Waypoint` | The shipped `Waypoint Interact` trigger runs `UnlockWaypointAction` and the discovery achievement. Travel is **not** an interaction: it is requested from the map, validated by the server, and the arrival runs `OnTravelTriggers` |
+| `Waypoint` | The Travel module attaches its `Waypoint Interact` trigger at run time (`InteractableTriggers`): `UnlockWaypointAction` and the discovery achievement. Travel is **not** an interaction: it is requested from the map, validated by the server, and the arrival runs `OnTravelTriggers` |
 | `WorldItem` | Picks up the item with a concurrency guard, adjusts stack or despawns; achievement |
 | `ArenaBoard` | Opens the arena panel: queueing, profile, history, and the season leaderboard (served by `LeaderboardSystem`) |
 | `ArenaObjective` | A flag stand or control point; its trigger runs `InteractWithArenaObjectiveAction`, which the match coordinator scores |
@@ -778,7 +776,6 @@ Interactable/
 ├── InteractableSystem.GroupFinder.cs          # Partial: the shared cross-server queue table, its pump, formation and backfill
 ├── InteractableSystem.Mailbox.cs              # Partial: mail fetch/send/delete/claim-attachment and async persistence
 ├── InteractableSystem.Merchant.cs             # Partial: merchant purchase and sell handling (items, abilities, events, premades)
-├── InteractableSystem.Waypoint.cs             # Partial: fast-travel request and waypoint page persistence
 ├── InteractableSystemMainThreadQueueData.cs   # Main-thread action queue container
 └── InteractableSystemRuntimeData.cs           # Runtime state (IngressGuard)
 ```
@@ -810,7 +807,6 @@ ServerBehaviour
         ├── InteractableSystem.GroupFinder.cs   # Shared queue table, pump, formation, backfill
         ├── InteractableSystem.Mailbox.cs       # Mail fetch/send/delete/claim async flows
         ├── InteractableSystem.Merchant.cs      # Merchant purchase/sell + ability learning
-        └── InteractableSystem.Waypoint.cs      # Fast travel + waypoint page persistence
 
 RuntimeDataContainer
 └── InteractableSystemRuntimeData : IInteractableSystemRuntimeData

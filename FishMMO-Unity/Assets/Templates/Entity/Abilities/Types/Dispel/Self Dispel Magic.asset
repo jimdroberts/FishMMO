@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Self Dispel Magic
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 6f4c4570f9726618463ae49ccfcbc4ad
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713117057843217
+  - rid: 4295713125095964803
   AbilityObjectPrefab: {fileID: 0}
   AbilitySpawnTarget: 0
   RequiresTarget: 0
@@ -46,7 +46,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713117057843217
+    - rid: 4295713125095964803
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

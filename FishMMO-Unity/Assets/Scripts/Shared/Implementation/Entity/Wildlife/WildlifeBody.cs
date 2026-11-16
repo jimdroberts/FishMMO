@@ -40,6 +40,22 @@ namespace FishMMO.Shared
 #endif
 		}
 
+		/// <summary>
+		/// Builds the body on every client that spawns this animal.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="OnStartCharacter"/> alone never ran for an NPC: only the OWNER's player character starts its behaviours
+		/// (PlayerCharacter.TryInitializeLocalClient), so every animal arrived on clients with a nameplate and no body (Jim,
+		/// 11-16, "a fox" invisible). OnStartClient runs for every spawned object, after its payload.
+		/// </remarks>
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+#if !UNITY_SERVER
+			BuildBody();
+#endif
+		}
+
 		public override void ResetState(bool asServer)
 		{
 			base.ResetState(asServer);

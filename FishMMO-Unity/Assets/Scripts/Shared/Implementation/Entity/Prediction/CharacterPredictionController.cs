@@ -478,8 +478,40 @@ namespace FishMMO.Shared
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			for (int i = 0; i < controllers.Length; i++)
 			{
-				controllers[i].OnReplicate(ref input, state, channel);
+				/* One controller's failure stays its own. This runs inside TimeManager.OnTick, a plain multicast event: an
+				 * exception escaping here skipped every subscriber after this character for that tick — every other
+				 * character's prediction tick. On 11-16 a pet with no ability spawner threw on each cast (1,438 times), and
+				 * while it fought, the wolves' attacks never resolved, so no hit landed on the player or the pet. */
+				try
+				{
+					controllers[i].OnReplicate(ref input, state, channel);
+				}
+				catch (Exception ex)
+				{
+					ReportReplicateFailure(controllers[i], ex);
+				}
 			}
+		}
+
+		/// <summary>Frame of the last replicate failure logged, so a failure repeating every tick logs once a second.</summary>
+		private float lastReplicateFailureLogTime = float.NegativeInfinity;
+
+		/// <summary>Number of replicate failures since the last one logged.</summary>
+		private int suppressedReplicateFailures;
+
+		private void ReportReplicateFailure(IPredictableController failed, Exception ex)
+		{
+			float now = UnityEngine.Time.realtimeSinceStartup;
+			if (now - lastReplicateFailureLogTime < 1f)
+			{
+				++suppressedReplicateFailures;
+				return;
+			}
+			lastReplicateFailureLogTime = now;
+			string repeats = suppressedReplicateFailures > 0 ? $" ({suppressedReplicateFailures} more since the last report)" : string.Empty;
+			suppressedReplicateFailures = 0;
+			FishMMO.Logging.Log.Error("CharacterPredictionController",
+				$"{gameObject.name}: {failed?.GetType().Name} threw in its replicate{repeats}; the other controllers and characters carry on.", ex);
 		}
 
 		/// <summary>

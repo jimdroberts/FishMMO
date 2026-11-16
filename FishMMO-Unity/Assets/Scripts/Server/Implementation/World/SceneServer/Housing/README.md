@@ -18,7 +18,8 @@ database answer comes back through the main-thread queue:
 | `HousingSystem.Vault.cs` | Where a house goes when its owner loses the land |
 | `HousingSystem.Sync.cs` | Keeping plots consistent across channels |
 | `HousingSystem.Network.cs` | The client-facing broadcasts and the ingress guard |
-| `HousingSystem.Panel.cs` | The plot panel: describing a plot, buying at a quoted price, giving land up |
+| `HousingSystem.Panel.cs` | The plot panel: describing a plot, buying at a quoted price, giving land up, paying rent ahead, granting by name |
+| `HousingSystem.Staff.cs` | What the `/gm plot` and `/admin plot` commands call |
 | `HousingSystemMainThreadQueueData.cs` | The concrete main-thread action queue container |
 | `PlotTaxRouting.cs` | Pure: which path a due plot takes (held here, offline batch, reclaim, defer) |
 | `PlotSyncWindow.cs` | Pure: where each `plot_updates` poll starts, and when it may move on |
@@ -46,7 +47,8 @@ its instance details.
 
 ## The wire
 
-Thirteen client requests, all registered `requireAuthentication: true`:
+Fifteen client requests, all registered `requireAuthentication: true` (the thirteen below, plus
+`HousingAccessListRequestBroadcast` and `HousingPrepayRentBroadcast`):
 `HousingBeginBuildingBroadcast`, `HousingEndBuildingBroadcast`, `HousingFinishBuildingBroadcast`,
 `HousingPlaceStructureBroadcast`, `HousingRemoveStructureBroadcast`, `HousingGrantAccessBroadcast`,
 `HousingRevokeAccessBroadcast`, `HousingVaultRequestBroadcast`, `HousingVaultRetrieveBroadcast`,
@@ -125,10 +127,16 @@ against a specific failure. They are not interchangeable.
   refund every time two people wanted the same land. The claim clears the last owner's guest list
   and anything left standing **in the same transaction** that takes the plot: as separate writes
   after it, a failure left the claim standing with the old keys under it.
-- **Charge the vault fee, then remove the row, then hand over** — once retrieval opens. A vault row
-  is contended by nobody but its owner, so the only race is a double click, and the removal settles
-  it; a fee taken for a row already gone is refunded. Retrieval is refused for now, because there is
-  nowhere yet to hand a stored structure to — it used to charge and delete the row and give nothing.
+- **Charge the vault fee, then remove the row, then hand over.** A vault row is contended by nobody
+  but its owner, so the only race is a double click, and the removal settles it; a fee taken for a
+  row already gone is refunded. Room in the bank (or the bags) is checked before anything is charged;
+  kits that still cannot be placed go back into the vault as they were (`RestoreEntryAsync`, same
+  date and fee terms), and the fee is refunded only when nothing at all was handed over.
+- **Win the due date, then take the rent, when paying ahead.** The due date is what a sweep contends
+  for, so the prepayment moves it first with the sweep's own pinned write (`TryAdvanceTaxAsync`),
+  then charges the purse; a charge that fails puts the date back (`TryRestoreTaxDueAsync`). A payment
+  that lands clears the missed-payment mark, as every payment does (`PlotRentPrepay`, capped at 8
+  periods past now).
 - **Win the right to bill, then collect.** Advancing the due date is pinned to the date the sweep
   read, so a bill produces one charge however many servers sweep it. No leader, and it survives
   any of them dying. Any earlier missed-payment mark comes off in the **same commit** as the payment
@@ -255,8 +263,11 @@ Reclaiming a plot destroys something a player built and paid for. Doing that wit
 make one missed payment the most punishing event in the game, and would make going on holiday a
 risk. What stood on the plot is moved to the owner's vault instead, where they will be able to buy it
 back — `baseFee * (1 + daysStored * rate)`, which is both an incentive to collect promptly and a gold
-sink — or give it up. The fee is quoted and forfeiting works; buying back waits on a destination for
-a stored structure (see below).
+sink — or give it up. Buying back hands the structures over as their `PlotStructureTemplate.Kit`
+items (`StructureKitTemplate`), into the bank, or the bags when the bank is full; a structure with no
+kit cannot be retrieved and is refused before anything is charged. Nothing puts an item back into the
+vault. The client's `UITKHousingVault` window is opened from the bank, whose "House vault" button
+shows only while the vault holds something (the bank asks on every open).
 
 The fee's base and rate are frozen onto each row rather than read from configuration, so rebalancing
 what a structure costs cannot change what a player owes on something already in their vault.
@@ -293,14 +304,34 @@ same house would be open in one channel and shut in the next.
 
 ## Not yet built
 
-- **Guest list and vault windows.** The plot panel buys, finishes building and gives land up; the
-  access and vault broadcasts have no window yet.
 - **Structures are not spawned.** Placements are validated, persisted and read back, but no prefab
   is instantiated from `PlotStructureTemplate.Prefab` — a plot's contents exist in the database and
   in the server's placement cache, not yet in the world.
-- **Vault retrieval.** A vault row is a structure template and a count, and structures are neither
-  items nor carried, so there is nowhere to hand one back to. `RetrieveFromVault` answers `Failed`
-  without charging until there is.
+- **No structure has a kit yet.** Retrieval works, but there are no `PlotStructureTemplate` or
+  `StructureKitTemplate` assets until the building tool brings them.
 - **Guild land is deferred, not taxed**, and has no vault. Both wait on a guild treasury.
-- **No paying rent ahead.** Rent is taken from the owner's purse when it falls due; nothing lets
-  them prepay periods.
+- **Retiring an orphaned plot refunds nothing.** `/admin plot retire` vaults its contents; the
+  purchase price is refunded by hand (`/admin givegold`), since the price lived on the foundation the
+  re-cut removed.
+
+## Staff commands
+
+`/gm plot [plot]` describes a plot (GMs may not change gameplay). `/admin plot help` lists the rest:
+`info`, `release` (contents to the owner's vault), `reset` (demolish, no vault), `setdue <now|+1h|-2d>`,
+`orphans` (owned rows no foundation carries any more), `retire <id>`, and `sweep` (run the rent sweep
+now). A plot is named by key or ID, or left out for the one the operator stands on.
+
+## Guests
+
+The plot panel's Guests section (for anyone holding `InviteFriends`) lists the guest list with names
+(`HousingAccessEntry.Name`, read with `ICharacterService.FetchNamesAsync`) and grants by name:
+`HousingGrantAccessBroadcast.CharacterName`, resolved only among characters of the granter's own world,
+then the ordinary `TryGrantAccess` with all its rules.
+
+## Ways to the lots
+
+The cut plans the lots inside `PointOfInterestStage.PlanSites`, just before the ways: every lot becomes
+a keep-out of the sites' plan (id `HousingPlotStage.LotKeepOutId`), so ways and wayside sites route
+round it, and each district's lane end (a cart track) and each countryside group (a footpath) is a
+`PathPlanInput.ExtraSpurs` end the network reaches like a mine or a shrine. The lots' floors are
+levelled again after the carve.

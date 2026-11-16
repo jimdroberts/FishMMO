@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Area Lesser Heal
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 55c12c7a458da853e5da55e52afb2b36
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Restores 6 health to you and up to 4 allies within 8 m.
+  Description: Restores 6 health to you and up to 4 allies or friendly players within 8 m.
   ActivationTime: 1.5
   LifeTime: 0.5
   Speed: 0
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713116978937918
+  - rid: 4295713125095964734
   AbilityObjectPrefab: {fileID: 5419506727904623116, guid: 565e0766498da82c2bc22b585fcf1a8b, type: 3}
   AbilitySpawnTarget: 1
   RequiresTarget: 0
@@ -47,7 +47,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937918
+    - rid: 4295713125095964734
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

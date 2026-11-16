@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>Abortable, and authored with <see cref="BaseAction.StopChainOnFailure"/> set, exactly like
-	/// <see cref="UnlockWaypointAction"/>: it fails when the site was already discovered, so the
+	/// <c>UnlockWaypointAction</c>: it fails when the site was already discovered, so the
 	/// exploration achievement increment after it counts each site once per character rather than once
 	/// per entry. It also fails, without counting, while the character's record is not loaded yet; the
 	/// next entry counts it.</para>

@@ -52,6 +52,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				return result;
 			}
 			int max = Mathf.Max(0, limits.MaxSpawnersPerScene);
+			int countMin = Mathf.Max(1, limits.SpawnCountMin);
+			int countMax = Mathf.Max(countMin, limits.SpawnCountMax);
 			var rng = new DeterministicRNG(StableHash(sceneName));
 			List<Vector3> settlements = Settlements(pois, limits.SettlementClearance);
 
@@ -63,10 +65,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 					for (int s = 0; s < species.Count && result.Count < max; ++s)
 					{
 						WildlifeTemplate t = species[s].Template;
-						if (t.DenKinds != null && t.DenKinds.Contains(poi.Kind))
+						if (t.DenKinds != null && t.DenKinds.Contains(poi.Kind) && Inside(area, poi.Position))
 						{
 							float spread = Mathf.Clamp(poi.Radius, 8f, 30f) * 2f;
-							result.Add(Single(species[s], poi.Position, spread, rng.Next(t.GroupMax, t.GroupMax + 3), $"{t.name} den ({poi.Kind})"));
+							result.Add(Single(species[s], poi.Position, spread, rng.Next(countMin, countMax + 1), $"{t.name} den ({poi.Kind})"));
 						}
 					}
 				}
@@ -87,7 +89,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 						if (t.DensInCaveMouths && rng.NextFloat() < limits.CaveDenChance)
 						{
 							Vector3 outside = spot.Position + new Vector3(spot.Normal.x, 0f, spot.Normal.z).normalized * 6f;
-							result.Add(Single(species[s], outside, 12f, rng.Next(t.GroupMin, t.GroupMax + 1), $"{t.name} cave den"));
+							if (Inside(area, outside))
+							{
+								result.Add(Single(species[s], outside, 12f, rng.Next(countMin, countMax + 1), $"{t.name} cave den"));
+							}
 							break;
 						}
 					}
@@ -106,16 +111,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			{
 				for (int ix = 0; ix < across && result.Count < max; ++ix)
 				{
-					float cx = area.xMin + (ix + 0.5f) * stride;
-					float cz = area.yMin + (iz + 0.5f) * stride;
+					// The area's box, cut to the scene (the boundary, less its margin): nothing spawns past the edge and falls.
+					float x0 = Mathf.Max(area.xMin, area.xMin + (ix + 0.5f) * stride - size * 0.5f);
+					float x1 = Mathf.Min(area.xMax, area.xMin + (ix + 0.5f) * stride + size * 0.5f);
+					float z0 = Mathf.Max(area.yMin, area.yMin + (iz + 0.5f) * stride - size * 0.5f);
+					float z1 = Mathf.Min(area.yMax, area.yMin + (iz + 0.5f) * stride + size * 0.5f);
+					if (x1 - x0 < 32f || z1 - z0 < 32f)
+					{
+						continue;
+					}
+					float cx = (x0 + x1) * 0.5f, cz = (z0 + z1) * 0.5f, sizeX = x1 - x0, sizeZ = z1 - z0;
 					Array.Clear(matches, 0, matches.Length);
 					float low = float.PositiveInfinity, high = float.NegativeInfinity;
 					for (int sz = 0; sz < Samples; ++sz)
 					{
 						for (int sx = 0; sx < Samples; ++sx)
 						{
-							float x = cx + ((sx + 0.5f) / Samples - 0.5f) * size;
-							float z = cz + ((sz + 0.5f) / Samples - 0.5f) * size;
+							float x = cx + ((sx + 0.5f) / Samples - 0.5f) * sizeX;
+							float z = cz + ((sz + 0.5f) / Samples - 0.5f) * sizeZ;
 							bool any = false;
 							float altitude = 0f;
 							for (int s = 0; s < species.Count; ++s)
@@ -151,23 +164,30 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 						weights.Add(new WildlifeWeight(species[s], animals));
 						expected += animals;
 					}
-					int count = Mathf.FloorToInt(expected) + (rng.NextFloat() < expected - Mathf.Floor(expected) ? 1 : 0);
-					if (count < 1 || weights.Count == 0)
+					// Any species whose ground covers enough of it gives the area a spawner; how many animals it keeps is
+					// the catalogue's range, the species' shares are their weights.
+					if (weights.Count == 0 || expected <= 0f)
 					{
 						continue;
 					}
+					int count = rng.Next(countMin, countMax + 1);
 					result.Add(new WildlifeArea
 					{
 						Name = $"Wildlife Area {ix},{iz}",
 						Center = new Vector3(cx, (low + high) * 0.5f, cz),
 						// Tall enough for the area's whole relief, with room to cast down onto the lowest ground.
-						Size = new Vector3(size, Mathf.Max(20f, high - low + 30f), size),
+						Size = new Vector3(sizeX, Mathf.Max(20f, high - low + 30f), sizeZ),
 						Species = weights,
 						Count = count,
 					});
 				}
 			}
 			return result;
+		}
+
+		private static bool Inside(Rect area, Vector3 position)
+		{
+			return position.x >= area.xMin && position.x <= area.xMax && position.z >= area.yMin && position.z <= area.yMax;
 		}
 
 		private static WildlifeArea Single(Species species, Vector3 position, float spread, int count, string name)

@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Your clothes are soaked through.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: c215dbc27ebf5f2f3140b2d6442c7c6d
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

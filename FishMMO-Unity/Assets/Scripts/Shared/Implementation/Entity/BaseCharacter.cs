@@ -285,6 +285,9 @@ namespace FishMMO.Shared
 				gameObject.layer = Constants.Layers.Index.Player;
 			}
 
+			// Modules' parts first (CharacterPart), so they initialise with the authored behaviours.
+			CharacterParts.Attach(this);
+
 			// Initialize all attached character behaviours.
 			ICharacterBehaviour[] c = gameObject.GetComponents<ICharacterBehaviour>();
 			if (c != null)
@@ -382,11 +385,13 @@ namespace FishMMO.Shared
 			base.OnStartServer();
 			EnsureCoreLink(SimulationSide.Server);
 			PropColliderStreamer.AddFocus(Transform != null ? Transform : transform, PropColliderStreamer.ServerRadius);
+			CharacterParts.Forward(this, part => part.OnStartServer());
 		}
 
 		/// <summary>Stops streaming prop colliders round this character and ends its Core entity.</summary>
 		public override void OnStopServer()
 		{
+			CharacterParts.Forward(this, part => part.OnStopServer());
 			PropColliderStreamer.RemoveFocus(Transform != null ? Transform : transform);
 			ReleaseCoreLink();
 			base.OnStopServer();
@@ -467,6 +472,7 @@ namespace FishMMO.Shared
 #endif
 
 			Flags = 0;
+			CharacterParts.Forward(this, part => part.ResetState(asServer));
 			// The next occupant of this pool slot gets a fresh entity, with fresh feature state.
 			ReleaseCoreLink();
 		}

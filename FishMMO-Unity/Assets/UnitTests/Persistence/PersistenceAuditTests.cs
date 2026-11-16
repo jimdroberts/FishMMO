@@ -71,94 +71,7 @@ namespace FishMMO.UnitTests
 			public void Invoke(List<Trigger> triggers, EventData eventData) { }
 		}
 
-		private FactionTemplate NewFactionTemplate(string name)
-		{
-			FactionTemplate template = ScriptableObject.CreateInstance<FactionTemplate>();
-			template.name = name;
-			template.AddToCache(name);
-			temporaries.Add(template);
-			return template;
-		}
-
 		// ── Faction ──────────────────────────────────────────────────────────────
-
-		[Test]
-		public void Faction_MarkChanged_AdvancesVersion_AndOnlyAMatchingConfirmationClears()
-		{
-			FactionTemplate template = NewFactionTemplate("PersistenceAudit_Faction");
-			Faction faction = new Faction(template.ID, 10);
-			Assert.IsFalse(faction.PersistenceDirty, "A freshly constructed standing is what the constructor was given, not a change.");
-			Assert.AreEqual(0, faction.Version);
-
-			faction.MarkChanged();
-			Assert.IsTrue(faction.PersistenceDirty);
-			Assert.AreEqual(1, faction.Version);
-
-			long snapshot = ++faction.Version;   // the save snapshot's own bump
-			faction.MarkChanged();               // changed while the write was in flight
-			faction.MarkPersisted(snapshot);
-			Assert.IsTrue(faction.PersistenceDirty, "A confirmation for an older snapshot must not clear a newer change.");
-
-			faction.MarkPersisted(faction.Version);
-			Assert.IsFalse(faction.PersistenceDirty);
-		}
-
-		[Test]
-		public void FactionController_GameplayMutationsDirty_RestoreDoesNot()
-		{
-			FactionTemplate template = NewFactionTemplate("PersistenceAudit_ControllerFaction");
-			GameObject host = new GameObject("FactionHost");
-			temporaries.Add(host);
-			FactionController controller = host.AddComponent<FactionController>();
-			controller.InitializeOnce(new MockCharacter(1));
-
-			// The load path: install, stamp, confirm.
-			controller.SetFaction(template.ID, 25, skipEvent: true);
-			Assert.IsTrue(controller.Factions.TryGetValue(template.ID, out Faction restored));
-			Assert.IsFalse(restored.PersistenceDirty, "skipEvent is the restore path and must not dirty.");
-			restored.Version = 7;
-			restored.MarkPersisted(7);
-			Assert.IsFalse(restored.PersistenceDirty);
-
-			controller.Add(template, 5);
-			Assert.AreEqual(30, restored.Value);
-			Assert.IsTrue(restored.PersistenceDirty, "A kill credit or quest reward is a change the database has not seen.");
-			Assert.AreEqual(8, restored.Version, "Add advances the version from the loaded row's.");
-
-			restored.MarkPersisted(8);
-			controller.SetFaction(template.ID, 40);
-			Assert.IsTrue(restored.PersistenceDirty, "SetFaction without skipEvent is a gameplay change.");
-			Assert.AreEqual(9, restored.Version);
-		}
-
-		[Test]
-		public void FactionController_ReadPayload_RefusesAFrameTooShortForItsHeader()
-		{
-			GameObject host = new GameObject("FactionReader");
-			temporaries.Add(host);
-			FactionController controller = host.AddComponent<FactionController>();
-			controller.InitializeOnce(new MockCharacter(2));
-
-			Writer writer = new Writer();
-			writer.WriteUInt32Unpacked(0);          // a zero-length faction block
-			writer.WriteInt32(123456);              // the NEXT behaviour's bytes
-			Reader reader = new Reader(writer.GetArraySegment(), null);
-
-			UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
-			try
-			{
-				controller.ReadPayload(null, reader);
-			}
-			finally
-			{
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
-			}
-
-			Assert.AreEqual(4, reader.Position, "The reader must stop at the block end, leaving the next behaviour's bytes untouched.");
-			Assert.AreEqual(0, controller.Factions.Count);
-		}
-
-		// ── Attribute persistence state across pooling ───────────────────────────
 
 		[Test]
 		public void CharacterAttribute_ResetPersistenceState_ForgetsThePreviousOccupant()
@@ -216,6 +129,7 @@ namespace FishMMO.UnitTests
 
 		// ── The prefab contract ──────────────────────────────────────────────────
 
+
 		[Test]
 		public void PlayerCharacter_RequiresEveryControllerTheSaveLegsWrite()
 		{
@@ -230,8 +144,8 @@ namespace FishMMO.UnitTests
 			foreach (System.Type type in new[]
 			{
 				typeof(CharacterAttributeController), typeof(AbilityController), typeof(AchievementController),
-				typeof(BuffController), typeof(FactionController), typeof(InventoryController), typeof(BankController),
-				typeof(EquipmentController), typeof(QuestController), typeof(WaypointController), typeof(ArchetypeController),
+				typeof(BuffController), typeof(InventoryController), typeof(BankController),
+				typeof(EquipmentController), typeof(QuestController), typeof(ArchetypeController),
 			})
 			{
 				Assert.IsTrue(required.Contains(type), $"PlayerCharacter must require {type.Name}: the load and save legs address it, and a prefab without it silently loses that table.");

@@ -395,7 +395,7 @@ namespace FishMMO.UnitTests
 			string body = source.Substring(start, end - start);
 			LogAssert.IsFalse(body.Contains("viewerTargetId"), "having a target alone must not count as combat");
 			LogAssert.IsTrue(body.Contains("CombatRelevant"), "the target counts through CombatRelevant");
-			LogAssert.IsTrue(source.Contains("TargetMeansCombat(observed.InCombat") && source.Contains("FactionHarm.MayHarm(viewer.Character, observed.Character"),
+			LogAssert.IsTrue(source.Contains("TargetMeansCombat(observed.InCombat") && source.Contains("HarmRule.MayHarm(viewer.Character, observed.Character"),
 				"CombatRelevant asks the central harm rule");
 		}
 	}

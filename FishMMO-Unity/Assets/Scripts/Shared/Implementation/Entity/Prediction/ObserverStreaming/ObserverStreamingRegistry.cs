@@ -185,7 +185,7 @@ namespace FishMMO.Shared
 			public bool Fighting;
 			/// <summary>
 			/// A fight the viewer is in or could start now: fighting it in either direction, or its target when the viewer
-			/// may harm it (<see cref="FactionHarm.MayHarm"/>) or it is in combat. Unlike <see cref="Fighting"/>, a friendly
+			/// may harm it (<see cref="HarmRule.MayHarm"/>) or it is in combat. Unlike <see cref="Fighting"/>, a friendly
 			/// character merely under the crosshair does not count. Read by <see cref="IsNearCombat"/>.
 			/// </summary>
 			public bool CombatRelevant;
@@ -1077,7 +1077,7 @@ namespace FishMMO.Shared
 						// Prey and territorial wildlife may be hunted but never come for anyone: hovering a deer is no fight.
 						WildlifeRules.RoleOf(observed.Character) is WildlifeRole wild &&
 						(wild == WildlifeRole.None || wild == WildlifeRole.Predator) &&
-						FactionHarm.MayHarm(viewer.Character, observed.Character, out _))),
+						HarmRule.MayHarm(viewer.Character, observed.Character, out _))),
 			});
 		}
 

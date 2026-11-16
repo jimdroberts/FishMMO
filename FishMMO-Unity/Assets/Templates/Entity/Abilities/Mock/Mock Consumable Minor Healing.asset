@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Consumable Minor Healing
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: fbdfeb3ee5cbcc972db7150bcba197c2
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

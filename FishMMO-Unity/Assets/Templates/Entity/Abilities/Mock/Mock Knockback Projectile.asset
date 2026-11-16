@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Knockback Projectile
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: dbe76a6ced26a6f980be825286868a0c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

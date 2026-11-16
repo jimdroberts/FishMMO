@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock heal over time. 4 health per second for 8 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 8d4ebdf9f53fdfaf36bb9d2456a52319
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

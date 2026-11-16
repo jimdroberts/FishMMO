@@ -34,7 +34,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// A hostile effect like any other (CharacterEvade, FactionHarm): a friend's cast is not broken.
+			// A hostile effect like any other (CharacterEvade, HarmRule): a friend's cast is not broken.
 			if (CharacterEvade.RefusesHostileEffects(target, initiator))
 			{
 				return;

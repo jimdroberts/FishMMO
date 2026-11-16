@@ -80,6 +80,47 @@ namespace FishMMO.Shared
 			EditorApplication.Exit(ok ? 0 : 1);
 		}
 
+		/// <summary>Batch: <see cref="PrepareMoron"/>, exiting 0 on success.</summary>
+		public static void PrepareMoronBatch()
+		{
+			EditorApplication.Exit(PrepareMoron() ? 0 : 1);
+		}
+
+		/// <summary>Re-places Moron 1's and Moron 2's wildlife spawners and rebakes their spawn tables, then puts portal surfaces in
+		/// and bakes portal views for every world scene, then rebuilds the world scene details cache.</summary>
+		public static bool PrepareMoron()
+		{
+			bool ok = true;
+			var notes = new List<string>();
+			try
+			{
+				foreach (string path in new[] { "Assets/Scenes/WorldScene/Moron/Moron 1.unity", "Assets/Scenes/WorldScene/Moron/Moron 2.unity" })
+				{
+					Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+					SceneManager.SetActiveScene(scene);
+					Physics.SyncTransforms();
+					int placed = WildlifeSpawnerCut.PlaceInScene(scene, notes);
+					EditorSceneManager.SaveScene(scene);
+					var problems = new List<string>();
+					SpawnTableBaker.BakeScene(scene, problems);
+					notes.Add($"{scene.name}: {placed} wildlife spawner(s); spawn table rebaked" + (problems.Count > 0 ? $" ({string.Join("; ", problems)})." : "."));
+					ok &= placed > 0;
+				}
+				AssetDatabase.SaveAssets();
+				PortalViewBaker.BakeAll();
+				bool cache = WorldSceneDetailsCacheBuilder.Rebuild();
+				notes.Add(cache ? "World scene details cache rebuilt." : "FAILED: the world scene details cache rebuild failed.");
+				ok &= cache;
+			}
+			catch (Exception ex)
+			{
+				ok = false;
+				notes.Add($"FAILED: {ex}");
+			}
+			Debug.Log("[Prepare Moron]\n  " + string.Join("\n  ", notes) + $"\n  ok={ok}");
+			return ok;
+		}
+
 		/// <summary>Places a gate in each scene leading to the other; optionally re-places and rebakes their wildlife too.</summary>
 		public static bool Link(string pathA, string pathB, bool placeWildlife, List<string> notes)
 		{
@@ -107,6 +148,13 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(gate);
 			EditorSceneManager.SaveScene(a);
 			notes.Add($"{nameA}'s gate now leads to {nameB}.");
+
+			// Both scenes' portal surfaces and the views of both arrivals.
+			SceneManager.SetActiveScene(a);
+			PortalViewBaker.ProcessScene(a, notes);
+			Scene b = EditorSceneManager.OpenScene(pathB, OpenSceneMode.Single);
+			SceneManager.SetActiveScene(b);
+			PortalViewBaker.ProcessScene(b, notes);
 			return true;
 		}
 
@@ -265,7 +313,7 @@ namespace FishMMO.Shared
 			}
 			if (map != null && map.Contains(hit.point) &&
 				BiomeRegistry.TryGetByID(map.IDAt(hit.point), out BiomeTemplate biome) && biome != null &&
-				(biome.LiveHabitat & (BiomeHabitat.Sea | BiomeHabitat.FreshWater)) != 0)
+				BiomeHabitats.IsWater(biome.LiveHabitat))
 			{
 				return false;
 			}

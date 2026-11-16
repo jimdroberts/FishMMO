@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Orc Firebolt
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 34bece08670907d736f6a0ebe734768c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

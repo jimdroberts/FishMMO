@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 	/// in the out-of-editor runners that load this assembly by reflection from the project root.
 	/// </para>
 	/// </remarks>
-	internal static class ProjectFiles
+	public static class ProjectFiles
 	{
 		private static readonly string[] Roots = { "Assets", "Packages" };
 

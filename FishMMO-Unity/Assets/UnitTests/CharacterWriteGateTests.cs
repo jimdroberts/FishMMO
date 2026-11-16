@@ -131,8 +131,9 @@ namespace FishMMO.UnitTests
 			string source = CodeOnly(SaveSources());
 			LogAssert.IsFalse(source.Contains("Filtered == 0"),
 				"every mark clear goes through BulkWriteReporting.MayClearDirtyMarks, not a hand-written test");
-			LogAssert.AreEqual(6, Occurrences(source, "BulkWriteReporting.MayClearDirtyMarks(result)"),
-				"attributes, abilities, achievements, factions, known abilities and archetypes");
+			// Factions' save is the Factions module's participant now (FactionPersistenceAuditTests pins it there).
+			LogAssert.AreEqual(5, Occurrences(source, "BulkWriteReporting.MayClearDirtyMarks(result)"),
+				"attributes, abilities, achievements, known abilities and archetypes");
 		}
 
 		#endregion
@@ -159,7 +160,7 @@ namespace FishMMO.UnitTests
 			string source = CodeOnly(SaveSources());
 			foreach (string service in new[]
 			{
-				"attrService", "abilityService", "achievementService", "factionService", "knownAbilityService",
+				"attrService", "abilityService", "achievementService", "knownAbilityService",
 				"archetypeService", "petService", "petAttributeService", "petBuffService", "hotkeyService",
 			})
 			{

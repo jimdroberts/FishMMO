@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Shadowstep
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: aeb59f5ec6c6ee0cc48b2a288790bd96
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713116978937968
+  - rid: 4295713125095964784
   AbilityObjectPrefab: {fileID: 8089488340802066002, guid: a5039dcd272ea8462978d1e3f4ec8b55, type: 3}
   AbilitySpawnTarget: 6
   RequiresTarget: 0
@@ -49,7 +49,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937968
+    - rid: 4295713125095964784
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

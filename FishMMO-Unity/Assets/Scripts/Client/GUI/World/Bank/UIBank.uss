@@ -272,3 +272,15 @@
     height: 15px;
     flex-shrink: 0;
 }
+
+/* The house vault's door: pushed to the footer's far end, and gone entirely while the vault is empty. */
+.bank-vault-button {
+    margin-left: auto;
+    height: 20px;
+    min-width: 92px;
+    flex-shrink: 0;
+}
+
+.bank-vault-button--hidden {
+    display: none;
+}

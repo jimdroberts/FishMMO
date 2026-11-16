@@ -83,7 +83,14 @@ namespace FishMMO.Shared
 
 			// Add to dictionary
 			Objects[sceneObject.ID] = sceneObject;
+			Registered?.Invoke(sceneObject);
 		}
+
+		/// <summary>
+		/// Raised after an object is registered, on the server and on clients. For a peer that heard of an object (by ID)
+		/// before the object itself arrived: a pet's PetAddBroadcast can reach its owner before the pet's spawn does.
+		/// </summary>
+		public static event System.Action<ISceneObject> Registered;
 
 		/// <summary>
 		/// Unregisters a scene object, removing it from the dictionary.

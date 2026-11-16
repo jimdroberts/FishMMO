@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Dispel
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 79b0fe8fee848bcbb180daa6e617b3aa
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

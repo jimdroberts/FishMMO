@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Slightly increases the entities movement speed.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: e685376ecb635bfae615782d351b2412
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

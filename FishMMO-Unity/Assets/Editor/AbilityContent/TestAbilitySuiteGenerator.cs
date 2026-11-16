@@ -23,6 +23,7 @@ namespace FishMMO.AbilityContent
 	/// takes about eight minutes; health does not regenerate at all, which is what makes healing worth its mana):
 	/// </para>
 	/// <list type="bullet">
+	///   <item>Heals mend you, your allies and any non-hostile PLAYER (not wildlife or neutral NPCs); buffs are allies only.</item>
 	///   <item>A single-target "lesser" effect moves about a tenth of a pool. Lesser Heal: 12 health for 8 mana (1.5 health
 	///   per mana, 144 health per full bar). The self heal is 10: it cannot miss and needs no aim.</item>
 	///   <item>An area effect gives about half per target, caps at five, costs about twice as much and cools down longer,
@@ -652,7 +653,7 @@ namespace FishMMO.AbilityContent
 			// ── Lesser Heal (projectile): heals the friend it strikes; an enemy it strikes is spared. ──
 			e.LesserHealImpact = SaveEvent<AbilityOnHitEvent>(HealHitEventFolder, "Lesser Heal Impact", ev =>
 			{
-				ev.TargetSelector = Friends(new EventTargetSelector { FallbackToInitiator = false });
+				ev.TargetSelector = Healable(new EventTargetSelector { FallbackToInitiator = false });
 				ev.OnConditionsMetActions.Add(new ApplyHealAction { HealValue = new ConstantValue { Amount = 12 } });
 			});
 			// The burst plays where the projectile ends, struck or spent, as the fireball's impact does.
@@ -672,7 +673,7 @@ namespace FishMMO.AbilityContent
 			// ── Area hit events: run once per body the area query found (IsSplash, the object as centre). ──
 			e.AreaHeal = SaveEvent<AbilityOnHitEvent>(AreaHitEventFolder, "Area Lesser Heal Event", ev =>
 			{
-				ev.TargetSelector = Friends(new EventTargetSelector { FallbackToInitiator = false });
+				ev.TargetSelector = Healable(new EventTargetSelector { FallbackToInitiator = false });
 				ev.OnConditionsMetActions.Add(new ApplyHealAction { HealValue = new ConstantValue { Amount = 6 } });
 				ev.OnConditionsMetActions.Add(new PlayFXAction { FXPrefab = fx.HealBurst, Size = 1.2f, HeightOffset = 1f });
 			});
@@ -737,7 +738,7 @@ namespace FishMMO.AbilityContent
 
 			abilities.Add(SaveAbility(HealAbilityFolder, "Lesser Heal", a =>
 			{
-				a.Description = "Hurls a mote of healing light that restores 12 health to the friend it strikes. An enemy it strikes is spared.";
+				a.Description = "Hurls a mote of healing light that restores 12 health to the ally or friendly player it strikes. An enemy it strikes is spared.";
 				a.AbilityObjectPrefab = prefabs.LesserHealProjectile;
 				a.AbilitySpawnTarget = AbilitySpawnTarget.SpawnerWithCameraRotation;
 				a.Type = AbilityType.GroundedMagic;
@@ -765,7 +766,7 @@ namespace FishMMO.AbilityContent
 			}));
 
 			abilities.Add(Area("Area Lesser Heal",
-				$"Restores 6 health to you and up to {HealMaxHits - 1} allies within {HealRadius:0} m.",
+				$"Restores 6 health to you and up to {HealMaxHits - 1} allies or friendly players within {HealRadius:0} m.",
 				AbilityType.GroundedMagic, 1.5f, 8f, mana, 15, e.AreaHealBurst, e.AreaHeal));
 			abilities.Add(Area("Area Lesser Fire",
 				$"A ring of flame bursts from you, dealing 5 fire damage to up to {FireMaxHits} foes within {FireRadius:0} m.",
@@ -946,6 +947,24 @@ namespace FishMMO.AbilityContent
 		}
 
 		/// <summary>
+		/// Who a heal mends: you, your allies, and any player who is not hostile to you — never wildlife, neutral NPCs or pets
+		/// (Jim, 11-16). Buffs stay with <see cref="Friends"/>: allies only.
+		/// </summary>
+		private static T Healable<T>(T selector) where T : TargetSelector
+		{
+			selector.Conditions.Add(new TargetAllianceCondition
+			{
+				ApplyToSelf = true,
+				ApplyToEnemy = false,
+				ApplyToNeutral = true,
+				NeutralPlayersOnly = true,
+				ApplyToAllies = true,
+			});
+			selector.Conditions.Add(new IsCharacterAliveCondition());
+			return selector;
+		}
+
+		/// <summary>
 		/// Anyone but you and your allies, alive. Neutral is included on purpose: wildlife stands outside the factions and
 		/// reads as neutral, and the central harm rule (FactionHarm) is what refuses a neutral player or townsperson.
 		/// </summary>
@@ -970,6 +989,33 @@ namespace FishMMO.AbilityContent
 			return Save(instance, folder, assetName);
 		}
 
+		/// <summary>
+		/// Carries the icon already on <paramref name="existing"/> onto the fresh <paramref name="instance"/> when the
+		/// generator gave it none, so an overwrite does not blank an icon assigned by hand or by
+		/// FishMMO-Art/Icons/generate_ability_icons.py. Covers both the addressable <c>icon</c> of ability and buff
+		/// templates and the plain sprite <c>icon</c> of ability events.
+		/// </summary>
+		private static void KeepIcon(ScriptableObject existing, ScriptableObject instance)
+		{
+			SerializedObject from = new SerializedObject(existing);
+			SerializedProperty kept = from.FindProperty("icon");
+			SerializedObject to = new SerializedObject(instance);
+			SerializedProperty fresh = to.FindProperty("icon");
+			if (kept == null || fresh == null)
+			{
+				return;
+			}
+			bool freshHasIcon = fresh.propertyType == SerializedPropertyType.ObjectReference
+				? fresh.objectReferenceValue != null
+				: !string.IsNullOrEmpty(fresh.FindPropertyRelative("m_AssetGUID")?.stringValue);
+			if (freshHasIcon)
+			{
+				return; // the generator chose an icon itself
+			}
+			to.CopyFromSerializedProperty(kept);
+			to.ApplyModifiedPropertiesWithoutUndo();
+		}
+
 		/// <summary>Overwrites an existing asset of the same type in place (keeping its GUID), else creates it.</summary>
 		private static T Save<T>(T instance, string folder, string assetName) where T : ScriptableObject
 		{
@@ -978,6 +1024,7 @@ namespace FishMMO.AbilityContent
 			ScriptableObject existing = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
 			if (existing != null && existing.GetType() == typeof(T))
 			{
+				KeepIcon(existing, instance);
 				EditorUtility.CopySerialized(instance, existing);
 				EditorUtility.SetDirty(existing);
 				UnityEngine.Object.DestroyImmediate(instance);

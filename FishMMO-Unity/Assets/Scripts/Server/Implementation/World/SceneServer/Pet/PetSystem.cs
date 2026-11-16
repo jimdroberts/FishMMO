@@ -800,7 +800,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				!petController.Pet.TryGet(out IFactionController _) ||
 				!target.TryGet(out IFactionController _) ||
 				// The harm rule, with the pet answering as its owner: an enemy, or anyone while the owner's aggression is on.
-				!FactionHarm.MayHarm(petController.Pet, target, out _))
+				!HarmRule.MayHarm(petController.Pet, target, out _))
 			{
 				return false;
 			}
@@ -828,6 +828,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			if (aiController.AttackingState != null)
 			{
 				aiController.ChangeState(aiController.AttackingState);
+
+				/* Set again AFTER the transition. ChangeState re-enters an attacking state on purpose (that is how an NPC
+				 * re-targets) and runs Exit first, and Exit drops the target unless the next state keeps it — so a pet
+				 * already fighting, or in one of its combat sub-states, lost the target set above and was left with none.
+				 * Its own sweep finds only characters hostile by faction, so an enemy came back and a NEUTRAL target sent
+				 * with the owner's aggression on never did (Jim, 11-16). Not through the candidate list: PickTarget refuses
+				 * every target for a Passive pet, and an explicit order is obeyed in any stance. */
+				aiController.Target = target.Transform;
 			}
 		}
 

@@ -733,6 +733,8 @@ namespace FishMMO.Client
 			{
 				if (PlayerInputController.MouseMode)
 				{
+					// Rare (the cursor is taken back on its own), and the line that names the chat-focus failure when it happens.
+					Debug.Log($"[ChatFocus] f{Time.frameCount} no panel claims the cursor; taking it back for aim mode.");
 					PlayerInputController.ToggleMouseMode();
 				}
 			}

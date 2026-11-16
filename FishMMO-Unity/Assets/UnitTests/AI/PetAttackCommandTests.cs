@@ -40,6 +40,26 @@ namespace FishMMO.UnitTests.AI
 				"the attack button must fill both frame ids");
 		}
 
+		/// <summary>
+		/// The ordered target is set AFTER the state change. ChangeState re-enters an attacking state and runs Exit first, and
+		/// Exit drops the target (AILeashPhaseSweepTests' control: "an ordinary transition between attacking states is a
+		/// disengage"), so a pet already fighting lost the target it was just given; its sweep then found only faction
+		/// enemies, and a neutral sent with the owner's aggression on was never attacked (Jim, 11-16).
+		/// </summary>
+		[Test]
+		public void TheOrderedTargetSurvivesTheStateChange()
+		{
+			string pets = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
+			int command = pets.IndexOf("private static void CommandPetAttack(", StringComparison.Ordinal);
+			int end = pets.IndexOf("private static void RecallPet(", command, StringComparison.Ordinal);
+			LogAssert.IsTrue(command >= 0 && end > command, "CommandPetAttack must exist");
+			string body = pets.Substring(command, end - command);
+			int change = body.IndexOf("aiController.ChangeState(aiController.AttackingState)", StringComparison.Ordinal);
+			int assign = body.LastIndexOf("aiController.Target = target.Transform;", StringComparison.Ordinal);
+			LogAssert.IsTrue(change >= 0 && assign > change,
+				"the target must be assigned after ChangeState, whose Exit drops it, not only before");
+		}
+
 		[Test]
 		public void TheServerWalksTheOwnersOrderAndVerifiesEveryStep()
 		{

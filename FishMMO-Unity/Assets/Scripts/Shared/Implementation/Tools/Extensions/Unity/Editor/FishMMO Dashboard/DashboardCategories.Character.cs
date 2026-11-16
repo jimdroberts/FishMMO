@@ -93,14 +93,6 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/CharacterAttributes",
 				"FishMMO/Character/Attribute/Character Attribute");
 
-			list.Add<FactionTemplate>("Factions", "Character",
-				"Assets/Templates/Entity/Factions",
-				"FishMMO/Character/Faction/Faction");
-
-			list.Add<FactionMatrixTemplate>("Faction Matrix", "Character",
-				"Assets/Templates/Entity/Factions",
-				"FishMMO/Character/Faction/Faction Matrix");
-
 			list.Add<QuestTemplate>("Quests", "Character",
 				"Assets/Templates/Entity/Quests",
 				"FishMMO/Character/Quest/Quest");

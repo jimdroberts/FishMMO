@@ -1093,7 +1093,43 @@ namespace FishMMO.Client
 		{
 			this.worldSceneLoading = false;
 			this.worldSceneLoadEndFrame = Time.frameCount;
-			if (args.LoadedScenes != null) foreach (var s in args.LoadedScenes) this.loadedWorldScenes[s.handle] = s;
+			if (args.LoadedScenes != null)
+			{
+				foreach (var s in args.LoadedScenes)
+				{
+					this.loadedWorldScenes[s.handle] = s;
+					DisableStrayMainCameras(s);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Switches off any camera tagged MainCamera that a world scene brought with it.
+		/// </summary>
+		/// <remarks>
+		/// The player camera is ClientPreboot's alone; <c>KCCPlayer</c> adopts it through <c>Camera.main</c> when the local
+		/// character spawns. A world scene's own "Main Camera" (an editor convenience a re-cut keeps, and which Moron 3 has
+		/// switched off) competes for <c>Camera.main</c>: on 11-16 the re-cut Moron 1 and 2 shipped with theirs active, the
+		/// character adopted a camera with no KCCCamera, and the view never followed the player, while the stray camera
+		/// rendered the whole world a second time every frame.
+		/// </remarks>
+		private static void DisableStrayMainCameras(Scene scene)
+		{
+			if (!scene.IsValid() || !scene.isLoaded)
+			{
+				return;
+			}
+			foreach (GameObject root in scene.GetRootGameObjects())
+			{
+				foreach (Camera camera in root.GetComponentsInChildren<Camera>(true))
+				{
+					if (camera.CompareTag("MainCamera") && camera.GetComponent<KCCCamera>() == null && camera.gameObject.activeSelf)
+					{
+						Log.Warning("Client", $"World scene '{scene.name}' carries an active MainCamera '{camera.name}'; switching it off (the player camera is ClientPreboot's). Deactivate it in the scene.");
+						camera.gameObject.SetActive(false);
+					}
+				}
+			}
 		}
 		/// <summary>
 		/// Called when a scene unload completes. Removes unloaded scenes from the tracking dictionary.

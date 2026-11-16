@@ -248,14 +248,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				return;
 			}
 
-			/* Concrete FactionController rather than the interface: the interface exposes
-			 * RaceTemplate read-only on purpose, because changing it after a character has built
-			 * its alliance tables would leave the two disagreeing. This runs before the spawn, so
-			 * the spawn-time setter is the correct entry point. */
-			FactionController factionController = nob.GetComponent<FactionController>();
-			if (factionController != null)
+			/* The race is the NPC's own (it was the faction controller's). This runs before the spawn, so the
+			 * spawn-time setter is the right entry point: the new race travels in the spawn payload, and the Factions
+			 * module rebuilds a race-derived standing table from it (NPC.RaceChanged). */
+			NPC npc = nob.GetComponent<NPC>();
+			if (npc != null)
 			{
-				factionController.SetRaceTemplateOnSpawn(FactionOverride);
+				npc.SetRaceTemplateOnSpawn(FactionOverride);
 			}
 		}
 

@@ -467,7 +467,7 @@ namespace FishMMO.RenderScratch
 		/// <c>Character.TryGet&lt;TController&gt;()</c>, so the character has to exist and be set
 		/// before OnStarting runs.
 		/// </remarks>
-		private static T Character<T>(GameObject h, UIDocument d) where T : UITKCharacterControl
+		public static T Character<T>(GameObject h, UIDocument d) where T : UITKCharacterControl
 		{
 			PlayerCharacter character = Rig.Build(h);
 
@@ -700,7 +700,6 @@ namespace FishMMO.RenderScratch
 		}
 		public static void Bank(GameObject h, UIDocument d) => Character<UITKBank>(h, d);
 		public static void Achievements(GameObject h, UIDocument d) => Character<UITKAchievements>(h, d);
-		public static void Factions(GameObject h, UIDocument d) => Character<UITKFactions>(h, d);
 		public static void FriendList(GameObject h, UIDocument d) => Character<UITKFriendList>(h, d);
 
 		public static void DeathDialog(GameObject h, UIDocument d)

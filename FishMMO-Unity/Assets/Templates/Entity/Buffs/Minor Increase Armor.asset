@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Slightly increases the characters armor.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 43cdbd5a8563ca5d46a6a7e75299897c
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

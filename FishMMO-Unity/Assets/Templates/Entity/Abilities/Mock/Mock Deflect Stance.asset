@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Deflect Stance
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 3640e19e46f3ff5fefb8bedcd210845f
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -23,7 +23,7 @@ MonoBehaviour:
   LineOfSightBlockingLayers:
     serializedVersion: 2
     m_Bits: 0
-  KeepsCombatTarget: 0
+  KeepsCombatTarget: 1
   PreferredDistance: 0
   MinComfortDistance: 0
   EmergencyRetreatThreshold: 0.5

@@ -152,6 +152,26 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc />
+		public async Task<DatabaseResult<int>> RestoreEntryAsync(long characterID, int templateID, int amount, long originalPlotID, DateTime storedAtUtc, long baseFee, float feeRatePerDay, CancellationToken cancellationToken = default)
+		{
+			if (characterID <= 0 || amount <= 0)
+			{
+				return DatabaseResult<int>.Failure(DatabaseErrorCodes.ValidationError, "A restored vault entry needs a character and a positive amount.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				string sql = $@"INSERT INTO {TableName} (character_id, template_id, amount, original_plot_id, stored_at_utc, base_fee, fee_rate_per_day, version)
+					VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, 1)";
+
+				return await dbContext.Database.ExecuteSqlRawAsync(
+					sql,
+					new object[] { characterID, templateID, amount, originalPlotID, DateTime.SpecifyKind(storedAtUtc, DateTimeKind.Utc), baseFee, feeRatePerDay },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc />
 		public async Task<DatabaseResult<int>> ForfeitAllAsync(long characterID, CancellationToken cancellationToken = default)
 		{
 			if (characterID <= 0)

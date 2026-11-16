@@ -679,6 +679,18 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				result.Wrote.Add(scenePath);
 				clock.Lap("Saving the scene");
+
+				// Portal surfaces in its teleporters, and the views of its destinations (what portals elsewhere show of this
+				// scene): Assets/Generated/PortalViews, per machine like the world maps.
+				try
+				{
+					PortalViewBaker.ProcessScene(scene, result.Notes);
+				}
+				catch (Exception ex)
+				{
+					Debug.LogError($"[Scene generator] Portal views for '{request.SceneName}' threw, the scene is still fine: {ex}");
+				}
+				clock.Lap("Portal views");
 			}
 			finally
 			{
@@ -1104,11 +1116,19 @@ namespace FishMMO.Shared.WorldDesign
 			 * flattened (and a shaper's holes cut) now, so the splat paints the ground they leave, and everything placed
 			 * below keeps out of their footprints. A repaint's stage carries the stored plan and plans nothing. */
 			poi?.PlanSites(scene, plan, terrains, field, water, result.Notes);
-			/* The housing lots, on the same ground: levelled now and reserved, so the scatter below keeps trees and
-			 * rocks off them (HousingPlotStage). Before the keep-outs are read, or they would not be in them. */
+			/* The housing lots (HousingPlotStage): a cut plans them inside PlanSites, before the ways; a repaint, whose stage
+			 * plans no sites, lays its stored lots here. Either way before the keep-outs are read, so the scatter below keeps
+			 * trees and rocks off them. After a cut's ways were carved, the lots' floors are levelled again. */
 			try
 			{
-				poi?.Housing?.Plan(poi, plan, terrains, field, water, result.Notes);
+				if (poi?.Housing != null && poi.Housing.Planned == null)
+				{
+					poi.Housing.Plan(poi, plan, terrains, field, water, result.Notes);
+				}
+				else
+				{
+					poi?.Housing?.RelevelFootprints(terrains, plan);
+				}
 			}
 			catch (Exception ex)
 			{

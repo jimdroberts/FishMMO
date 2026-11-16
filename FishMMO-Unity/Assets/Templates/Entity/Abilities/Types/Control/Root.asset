@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Root
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: b38897430e1f1502783531f0b6637968
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
@@ -26,7 +26,7 @@ MonoBehaviour:
   WeatherModifiers: []
   Price: 0
   ActivationConditions:
-  - rid: 4295713116978937941
+  - rid: 4295713125095964757
   AbilityObjectPrefab: {fileID: 2994410393538299177, guid: 6aec4506e766478d68ed4a5d540a17cf, type: 3}
   AbilitySpawnTarget: 6
   RequiresTarget: 0
@@ -48,7 +48,7 @@ MonoBehaviour:
     RefIds:
     - rid: -2
       type: {class: , ns: , asm: }
-    - rid: 4295713116978937941
+    - rid: 4295713125095964757
       type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
       data:
         TargetSelector:

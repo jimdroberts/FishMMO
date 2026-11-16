@@ -33,7 +33,27 @@ namespace FishMMO.Client
 		private const string BUY_NAME = "plot-buy";
 		private const string FINISH_NAME = "plot-finish";
 		private const string RELEASE_NAME = "plot-release";
+		private const string GUESTS_TOGGLE_NAME = "plot-guests-toggle";
+		private const string GUESTS_NAME = "plot-guests";
+		private const string GUEST_NAME_FIELD = "plot-guest-name";
+		private const string GUEST_GRANT_NAME = "plot-guest-grant";
+		private const string GUEST_LIST_NAME = "plot-guest-list";
+		private const string GUESTS_EMPTY_NAME = "plot-guests-empty";
+		private const string PREPAY_NAME = "plot-prepay";
+		private const string PREPAY_LESS_NAME = "plot-prepay-less";
+		private const string PREPAY_MORE_NAME = "plot-prepay-more";
+		private const string PREPAY_PERIODS_NAME = "plot-prepay-periods";
+		private const string PREPAY_PAY_NAME = "plot-prepay-pay";
 		private const string CSS_HIDDEN = "plot-hidden";
+
+		/// <summary>The four guest-permission toggles, in <see cref="PlotPermission"/> bit order.</summary>
+		private static readonly (string name, PlotPermission flag)[] GuestFlags =
+		{
+			("plot-guest-enter", PlotPermission.Enter),
+			("plot-guest-place", PlotPermission.PlaceItems),
+			("plot-guest-remove", PlotPermission.RemoveItems),
+			("plot-guest-invite", PlotPermission.InviteFriends),
+		};
 
 		/// <summary>Seconds a first press of "Give up land" stays armed.</summary>
 		private const float ReleaseArmSeconds = 5f;
@@ -42,6 +62,10 @@ namespace FishMMO.Client
 		private bool hasInfo;
 		private string message = string.Empty;
 		private float releaseArmedFor;
+		private int prepayPeriods = 1;
+		private bool guestsOpen;
+		private HousingAccessEntry[] guests;
+		private bool clearGuestNameOnSuccess;
 
 		/// <inheritdoc />
 		public override void OnStarting()
@@ -71,6 +95,20 @@ namespace FishMMO.Client
 			{
 				release.clicked += OnReleaseClicked;
 			}
+			Wire(root, GUESTS_TOGGLE_NAME, OnGuestsToggled);
+			Wire(root, GUEST_GRANT_NAME, OnGrantClicked);
+			Wire(root, PREPAY_LESS_NAME, () => StepPrepay(-1));
+			Wire(root, PREPAY_MORE_NAME, () => StepPrepay(1));
+			Wire(root, PREPAY_PAY_NAME, OnPrepayClicked);
+		}
+
+		private static void Wire(VisualElement root, string name, Action action)
+		{
+			Button button = root.Q<Button>(name);
+			if (button != null)
+			{
+				button.clicked += action;
+			}
 		}
 
 		/// <inheritdoc />
@@ -92,6 +130,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.RegisterBroadcast<HousingPlotInfoBroadcast>(OnPlotInfo);
 			Client.NetworkManager.ClientManager.RegisterBroadcast<HousingResultBroadcast>(OnHousingResult);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<HousingAccessListBroadcast>(OnAccessList);
 		}
 
 		/// <inheritdoc />
@@ -99,6 +138,7 @@ namespace FishMMO.Client
 		{
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<HousingPlotInfoBroadcast>(OnPlotInfo);
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<HousingResultBroadcast>(OnHousingResult);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<HousingAccessListBroadcast>(OnAccessList);
 		}
 
 		private void OnPlotInfo(HousingPlotInfoBroadcast msg, Channel channel)
@@ -110,7 +150,11 @@ namespace FishMMO.Client
 			{
 				message = string.Empty;
 				releaseArmedFor = 0f;
+				prepayPeriods = 1;
+				guestsOpen = false;
+				guests = null;
 			}
+			prepayPeriods = Mathf.Clamp(prepayPeriods, 1, Mathf.Max(1, msg.PrepayPeriodsAllowed));
 			if (!Visible)
 			{
 				Show();
@@ -123,30 +167,141 @@ namespace FishMMO.Client
 
 		private void OnHousingResult(HousingResultBroadcast msg, Channel channel)
 		{
-			bool aboutThisPlot = hasInfo && (msg.PlotID == info.PlotID || msg.PlotID == 0);
-			if (!Visible)
+			// A deed post's refusal carries plot -1; vault answers carry 0 and belong to the vault window.
+			const long PostRefusal = -1;
+			bool aboutThisPlot = hasInfo && msg.PlotID == info.PlotID;
+			if (msg.PlotID == PostRefusal)
 			{
 				/* A post that answered with a refusal instead of a description (housing switched
 				 * off, land not surveyed yet): open on the reason, or the key press reads as ignored. */
-				if (msg.Result == HousingResult.Disabled || msg.Result == HousingResult.UnknownPlot)
+				hasInfo = false;
+				message = Describe(msg.Result);
+				if (!Visible)
 				{
-					hasInfo = false;
-					message = Describe(msg.Result);
 					Show();
+				}
+				else
+				{
+					ApplyContent();
 				}
 				return;
 			}
-			if (!aboutThisPlot && hasInfo)
+			if (!Visible || !aboutThisPlot)
 			{
 				return;
 			}
 			message = Describe(msg.Result);
+			if (msg.Result == HousingResult.Success && clearGuestNameOnSuccess)
+			{
+				TextField field = Root?.Q<TextField>(GUEST_NAME_FIELD);
+				if (field != null)
+				{
+					field.SetValueWithoutNotify(string.Empty);
+				}
+			}
+			clearGuestNameOnSuccess = false;
 			ApplyContent();
 			// Whatever happened may have changed the plot; ask again (the server also re-sends after a purchase).
 			if (hasInfo && msg.Result != HousingResult.Disabled && msg.Result != HousingResult.UnknownPlot)
 			{
 				Client.Broadcast(new HousingPlotInfoRequestBroadcast { PlotID = info.PlotID }, Channel.Reliable);
 			}
+		}
+
+		private void OnAccessList(HousingAccessListBroadcast msg, Channel channel)
+		{
+			if (!hasInfo || msg.PlotID != info.PlotID)
+			{
+				return;
+			}
+			guests = msg.Entries ?? Array.Empty<HousingAccessEntry>();
+			ApplyContent();
+		}
+
+		private void OnGuestsToggled()
+		{
+			if (!hasInfo)
+			{
+				return;
+			}
+			guestsOpen = !guestsOpen;
+			if (guestsOpen)
+			{
+				Client.Broadcast(new HousingAccessListRequestBroadcast { PlotID = info.PlotID }, Channel.Reliable);
+			}
+			ApplyContent();
+		}
+
+		private void OnGrantClicked()
+		{
+			if (!hasInfo || Root == null)
+			{
+				return;
+			}
+			TextField field = Root.Q<TextField>(GUEST_NAME_FIELD);
+			string name = field != null ? field.value?.Trim() : null;
+			if (string.IsNullOrEmpty(name))
+			{
+				message = "Type the name of the character to give a key to.";
+				ApplyContent();
+				return;
+			}
+			int permissions = 0;
+			foreach ((string toggleName, PlotPermission flag) in GuestFlags)
+			{
+				Toggle toggle = Root.Q<Toggle>(toggleName);
+				if (toggle != null && toggle.value)
+				{
+					permissions |= (int)flag;
+				}
+			}
+			if (permissions == 0)
+			{
+				message = "Tick at least one thing they may do.";
+				ApplyContent();
+				return;
+			}
+			clearGuestNameOnSuccess = true;
+			message = $"Giving {name} a key…";
+			ApplyContent();
+			Client.Broadcast(new HousingGrantAccessBroadcast { PlotID = info.PlotID, CharacterID = 0, CharacterName = name, Permissions = permissions }, Channel.Reliable);
+		}
+
+		private void Revoke(long characterID, string name)
+		{
+			if (!hasInfo)
+			{
+				return;
+			}
+			message = $"Taking {(string.IsNullOrEmpty(name) ? "their" : name + "'s")} key back…";
+			ApplyContent();
+			Client.Broadcast(new HousingRevokeAccessBroadcast { PlotID = info.PlotID, CharacterID = characterID }, Channel.Reliable);
+		}
+
+		private void StepPrepay(int step)
+		{
+			if (!hasInfo)
+			{
+				return;
+			}
+			prepayPeriods = Mathf.Clamp(prepayPeriods + step, 1, Mathf.Max(1, info.PrepayPeriodsAllowed));
+			ApplyContent();
+		}
+
+		private void OnPrepayClicked()
+		{
+			if (!hasInfo || info.PrepayPeriodsAllowed <= 0 || info.RentPerPeriod <= 0)
+			{
+				return;
+			}
+			message = "Paying rent…";
+			ApplyContent();
+			Client.Broadcast(new HousingPrepayRentBroadcast
+			{
+				PlotID = info.PlotID,
+				Periods = prepayPeriods,
+				QuotedAmount = prepayPeriods * info.RentPerPeriod,
+			}, Channel.Reliable);
 		}
 
 		private void OnBuyClicked()
@@ -236,6 +391,82 @@ namespace FishMMO.Client
 			{
 				release.text = releaseArmedFor > 0f ? "Confirm give up" : "Give up land";
 			}
+
+			bool prepay = owner && owned && info.RentPerPeriod > 0 && info.PrepayPeriodsAllowed > 0;
+			Show(root, PREPAY_NAME, prepay);
+			if (prepay)
+			{
+				SetText(root, PREPAY_PERIODS_NAME, prepayPeriods == 1 ? "1 period" : $"{prepayPeriods} periods");
+				Button pay = root.Q<Button>(PREPAY_PAY_NAME);
+				if (pay != null)
+				{
+					pay.text = $"Pay {prepayPeriods * info.RentPerPeriod:N0} {currency} ahead";
+				}
+			}
+
+			bool mayInvite = hasInfo && owned && ((PlotPermission)info.Permissions & PlotPermission.InviteFriends) != 0;
+			if (!mayInvite)
+			{
+				guestsOpen = false;
+			}
+			Show(root, GUESTS_TOGGLE_NAME, mayInvite);
+			Button guestsToggle = root.Q<Button>(GUESTS_TOGGLE_NAME);
+			if (guestsToggle != null)
+			{
+				guestsToggle.text = guestsOpen ? "Hide guests" : "Guests";
+			}
+			Show(root, GUESTS_NAME, guestsOpen);
+			if (guestsOpen)
+			{
+				FillGuests(root);
+			}
+		}
+
+		/// <summary>Rebuilds the guest rows from the last list the server sent.</summary>
+		private void FillGuests(VisualElement root)
+		{
+			ScrollView list = root.Q<ScrollView>(GUEST_LIST_NAME);
+			if (list == null)
+			{
+				return;
+			}
+			list.Clear();
+			int count = guests != null ? guests.Length : 0;
+			SetText(root, GUESTS_EMPTY_NAME, guests == null ? "Loading…" : "Nobody holds a key.");
+			Show(root, GUESTS_EMPTY_NAME, count == 0);
+			for (int i = 0; i < count; i++)
+			{
+				HousingAccessEntry entry = guests[i];
+				var row = new VisualElement();
+				row.AddToClassList("plot-guest-row");
+				var name = new Label(string.IsNullOrEmpty(entry.Name) ? $"#{entry.CharacterID}" : entry.Name);
+				name.AddToClassList("fish-label");
+				name.AddToClassList("plot-guest-row__name");
+				var flags = new Label(DescribeFlags((PlotPermission)entry.Permissions));
+				flags.AddToClassList("fish-label");
+				flags.AddToClassList("fish-label--secondary");
+				flags.AddToClassList("plot-guest-row__flags");
+				long id = entry.CharacterID;
+				string who = entry.Name;
+				var revoke = new Button(() => Revoke(id, who)) { text = "Revoke" };
+				revoke.AddToClassList("fish-button");
+				revoke.AddToClassList("fish-button--danger");
+				revoke.AddToClassList("plot-guest-row__revoke");
+				row.Add(name);
+				row.Add(flags);
+				row.Add(revoke);
+				list.Add(row);
+			}
+		}
+
+		private static string DescribeFlags(PlotPermission permissions)
+		{
+			var parts = new System.Collections.Generic.List<string>(4);
+			if ((permissions & PlotPermission.Enter) != 0) parts.Add("enter");
+			if ((permissions & PlotPermission.PlaceItems) != 0) parts.Add("place");
+			if ((permissions & PlotPermission.RemoveItems) != 0) parts.Add("remove");
+			if ((permissions & PlotPermission.InviteFriends) != 0) parts.Add("invite");
+			return parts.Count == 0 ? "—" : string.Join(", ", parts);
 		}
 
 		private static string TitleFor(PlotState state, string ownerName, bool owner)
@@ -339,6 +570,9 @@ namespace FishMMO.Client
 				case HousingResult.AlreadyOwnsLand: return "You already own land. One house each.";
 				case HousingResult.PriceChanged: return "The price has changed. Check it and buy again.";
 				case HousingResult.TooFar: return "Stand by the deed post to buy.";
+				case HousingResult.NoSuchCharacter: return "No character of that name lives on this world.";
+				case HousingResult.NoRoom: return "There is no room in your bank or bags.";
+				case HousingResult.NotRetrievable: return "That cannot be taken out of the vault yet.";
 				default: return "Something went wrong. Nothing was changed.";
 			}
 		}

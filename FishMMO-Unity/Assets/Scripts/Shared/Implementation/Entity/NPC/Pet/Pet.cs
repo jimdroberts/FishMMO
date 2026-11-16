@@ -45,7 +45,24 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public ICharacter PetOwner
 		{
-			get => petOwner;
+			get
+			{
+#if !UNITY_SERVER
+				/* Clients: only the server ever assigned this (PetSystem), so on every client a pet had no owner.
+				 * HarmRule.Principal(pet) then answered the pet itself, the companion relation could not see an owner and
+				 * its own pet as one side, and with aggression on the owner's client predicted hits on its own pet that
+				 * the server refused (Jim, 11-16). The owner's ID is in the spawn payload; the owner may spawn after the
+				 * pet, so it is resolved here, lazily, and re-checked so a pooled object reused as somebody else is
+				 * never kept. */
+				if (payloadOwnerID != 0 && (petOwner == null || petOwner.ID != payloadOwnerID))
+				{
+					petOwner = BaseCharacter.ClientCharacters.TryGetValue(payloadOwnerID, out ICharacter owner) && !ReferenceEquals(owner, this)
+						? owner
+						: null;
+				}
+#endif
+				return petOwner;
+			}
 			set
 			{
 				if (ReferenceEquals(petOwner, value))
@@ -60,6 +77,9 @@ namespace FishMMO.Shared
 
 		/// <summary>Backing field for <see cref="PetOwner"/>.</summary>
 		private ICharacter petOwner;
+
+		/// <summary>Clients: the owner's character ID from the spawn payload, which <see cref="PetOwner"/> resolves; 0 for none.</summary>
+		private long payloadOwnerID;
 
 		/// <summary>
 		/// The packed order the attack command tries its target choices in; see
@@ -250,6 +270,7 @@ namespace FishMMO.Shared
 		{
 			base.ResetState(asServer);
 
+			payloadOwnerID = 0;
 			PetOwner = null;
 			PetAbilityTemplate = null;
 			Stance = PetStance.Defensive;
@@ -280,6 +301,7 @@ namespace FishMMO.Shared
 			base.ReadPayload(connection, reader);
 
 			long ownerID = reader.ReadInt64();
+			payloadOwnerID = ownerID;
 
 			// Notify listeners that the owner ID has been read for this pet.
 			OnReadID?.Invoke(ownerID, this);

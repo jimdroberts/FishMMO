@@ -593,9 +593,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CharacterPartyData? partyData = null;
 				IReadOnlyList<CharacterHotkeyData> hotkeyData = null;
 				IReadOnlyList<CharacterBuffData> buffData = null;
-				IReadOnlyList<CharacterFactionData> factionData = null;
 				IReadOnlyList<CharacterQuestData> questData = null;
-				IReadOnlyList<CharacterWaypointData> waypointData = null;
 				IReadOnlyList<CharacterArchetypeData> archetypeData = null;
 				CharacterChatMuteState? chatMute = null;
 
@@ -919,16 +917,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						participantData[participant] = fetched.Data;
 					}
-					if (serviceRegistry.TryGet<ICharacterWaypointService>(out var waypointService))
-					{
-						var result = await waypointService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("waypoints", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						waypointData = result.Data;
-					}
 					if (serviceRegistry.TryGet<ICharacterFriendService>(out var friendService))
 					{
 						var result = await friendService.FetchAsync(characterID);
@@ -1028,16 +1016,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						buffData = result.Data;
 					}
-					if (serviceRegistry.TryGet<ICharacterFactionService>(out var factionService))
-					{
-						var result = await factionService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("factions", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						factionData = result.Data;
-					}
 					if (serviceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
 					{
 						var result = await archetypeService.FetchAsync(characterID);
@@ -1092,7 +1070,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					attributeData, abilityData, knownAbilityData,
 					participantData, friendData,
 					guildData, partyData,
-					hotkeyData, buffData, factionData, questData, waypointData, archetypeData, chatMute);
+					hotkeyData, buffData, questData, archetypeData, chatMute);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
 				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
 				 * item therefore left the character Online with nothing left holding its token —
@@ -1484,9 +1462,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			CharacterPartyData? partyData = ctx.PartyData;
 			IReadOnlyList<CharacterHotkeyData> hotkeyData = ctx.HotkeyData;
 			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
-			IReadOnlyList<CharacterFactionData> factionData = ctx.FactionData;
 			IReadOnlyList<CharacterQuestData> questData = ctx.QuestData;
-			IReadOnlyList<CharacterWaypointData> waypointData = ctx.WaypointData;
 			IReadOnlyList<CharacterArchetypeData> archetypeData = ctx.ArchetypeData;
 
 			if (conn == null || !conn.IsActive)
@@ -1803,16 +1779,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Discovered waypoints. Restored as persisted, so nothing is dirty after a login.
-			if (waypointData != null && waypointData.Count > 0 &&
-				character.TryGet(out IWaypointController waypointController))
-			{
-				foreach (CharacterWaypointData page in waypointData)
-				{
-					waypointController.Restore(page.SceneName, page.Page, page.Mask);
-				}
-			}
-
 			// Friends
 			if (friendData != null && friendData.Count > 0 &&
 				character.TryGet(out IFriendController friendController))
@@ -1887,22 +1853,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// under the row's version. See CharacterSystem.CaptureBuffSet.
 					Buff newBuff = new Buff(buff.TemplateID, expiryTick, nextTickTick, loadTickDelta, buff.Stacks, buff.TickCount);
 					buffController.Apply(newBuff);
-				}
-			}
-
-			// Factions
-			if (factionData != null && factionData.Count > 0 &&
-				character.TryGet(out IFactionController factionController))
-			{
-				foreach (CharacterFactionData faction in factionData)
-				{
-					factionController.SetFaction(faction.TemplateID, faction.Value, true);
-					if (factionController.Factions.TryGetValue(faction.TemplateID, out Faction fac))
-					{
-						fac.Version = faction.Version;
-						// Restored, not changed: the database already holds this.
-						fac.MarkPersisted(faction.Version);
-					}
 				}
 			}
 
@@ -2443,12 +2393,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
 			/// <summary>Pre-fetched active buff data.</summary>
 			public readonly IReadOnlyList<CharacterBuffData> BuffData;
-			/// <summary>Pre-fetched faction standing data.</summary>
-			public readonly IReadOnlyList<CharacterFactionData> FactionData;
 			/// <summary>Pre-fetched quest state data.</summary>
 			public readonly IReadOnlyList<CharacterQuestData> QuestData;
-			/// <summary>Pre-fetched discovered-waypoint pages.</summary>
-			public readonly IReadOnlyList<CharacterWaypointData> WaypointData;
 			/// <summary>Pre-fetched archetype rows.</summary>
 			public readonly IReadOnlyList<CharacterArchetypeData> ArchetypeData;
 			/// <summary>Pre-fetched chat mutes, or null when they could not be read (the load fails open).</summary>
@@ -2473,9 +2419,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="partyData">Pre-fetched party membership data.</param>
 			/// <param name="hotkeyData">Pre-fetched hotkey bar data.</param>
 			/// <param name="buffData">Pre-fetched active buff data.</param>
-			/// <param name="factionData">Pre-fetched faction standing data.</param>
 			/// <param name="questData">Pre-fetched quest state data.</param>
-			/// <param name="waypointData">Pre-fetched discovered-waypoint pages.</param>
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,
@@ -2490,9 +2434,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				CharacterPartyData? partyData,
 				IReadOnlyList<CharacterHotkeyData> hotkeyData,
 				IReadOnlyList<CharacterBuffData> buffData,
-				IReadOnlyList<CharacterFactionData> factionData,
 				IReadOnlyList<CharacterQuestData> questData,
-				IReadOnlyList<CharacterWaypointData> waypointData,
 				IReadOnlyList<CharacterArchetypeData> archetypeData,
 				CharacterChatMuteState? chatMute)
 			{
@@ -2512,9 +2454,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				PartyData = partyData;
 				HotkeyData = hotkeyData;
 				BuffData = buffData;
-				FactionData = factionData;
 				QuestData = questData;
-				WaypointData = waypointData;
 				ArchetypeData = archetypeData;
 				ChatMute = chatMute;
 			}

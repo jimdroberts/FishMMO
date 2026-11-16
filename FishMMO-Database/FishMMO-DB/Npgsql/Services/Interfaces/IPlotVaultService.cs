@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -48,6 +49,19 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// </remarks>
 		/// <returns>One when the entry was removed, zero when it was already gone.</returns>
 		Task<DatabaseResult<int>> TryRemoveEntryAsync(long vaultID, long characterID, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Puts an entry taken out of the vault back in, as it was: same template, amount, plot, date and
+		/// frozen fee terms (a new row ID).
+		/// </summary>
+		/// <remarks>
+		/// The undo for a retrieval that removed the row and then could not hand the structure over —
+		/// the bank and bags filled in the moment between. Keeping the stored date and fee terms means
+		/// the owner owes exactly what they owed before; a fresh date would reset the fee they had been
+		/// accruing.
+		/// </remarks>
+		/// <returns>One when the row was written.</returns>
+		Task<DatabaseResult<int>> RestoreEntryAsync(long characterID, int templateID, int amount, long originalPlotID, DateTime storedAtUtc, long baseFee, float feeRatePerDay, CancellationToken cancellationToken = default);
 
 		/// <summary>
 		/// Empties a character's vault.

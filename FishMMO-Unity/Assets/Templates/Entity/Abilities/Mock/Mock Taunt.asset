@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Taunt
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: bc547d24a0641a461f098c8782a5d7be
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

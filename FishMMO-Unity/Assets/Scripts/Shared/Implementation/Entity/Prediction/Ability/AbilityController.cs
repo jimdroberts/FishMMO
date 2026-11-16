@@ -384,6 +384,35 @@ namespace FishMMO.Shared
 			KnownAbilityOnSpawnEvents = new HashSet<int>();
 			KnownAbilityOnDestroyEvents = new HashSet<int>();
 			templateToAbilityID = new Dictionary<int, long>();
+
+			ResolveAbilitySpawner();
+		}
+
+		/// <summary>
+		/// Makes sure there is a spawner: the authored one, else a child named "AbilitySpawnPoint", else the character itself.
+		/// </summary>
+		/// <remarks>
+		/// "a lesser fire elemental" and "Simulated Player" shipped with no spawner assigned. Every cast then threw in
+		/// AbilityObject.SimulatedSpawnerPose (1,438 NullReferenceExceptions on the live scene server, 11-16): the pet fired
+		/// once and stalled, and nothing it cast ever spawned. A missing reference is reported, never fatal.
+		/// </remarks>
+		private void ResolveAbilitySpawner()
+		{
+			if (AbilitySpawner != null)
+			{
+				return;
+			}
+			Transform found = null;
+			foreach (Transform child in GetComponentsInChildren<Transform>(true))
+			{
+				if (child.name == "AbilitySpawnPoint")
+				{
+					found = child;
+					break;
+				}
+			}
+			AbilitySpawner = found != null ? found : transform;
+			Log.Error("AbilityController", $"{gameObject.name} has no AbilitySpawner assigned; using {(found != null ? "its AbilitySpawnPoint" : "the character itself")}. Assign it on the prefab.");
 		}
 
 		/// <summary>

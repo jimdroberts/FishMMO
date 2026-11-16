@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Cleanse
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 05daaabb6ca6c4c92730fe0d08f366ce
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

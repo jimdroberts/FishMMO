@@ -237,7 +237,6 @@ GameObject:
   - component: {fileID: 6038023079570568745}
   - component: {fileID: 4989737185595066850}
   - component: {fileID: 6845158710477467009}
-  - component: {fileID: 6690946415020651589}
   - component: {fileID: 7810264000710710752}
   - component: {fileID: 34196052825852577}
   - component: {fileID: 522642137528249964}
@@ -252,7 +251,6 @@ GameObject:
   - component: {fileID: 2972397609184501588}
   - component: {fileID: 6670408025619885663}
   - component: {fileID: 5163947853931126818}
-  - component: {fileID: 7201188053420161329}
   - component: {fileID: 7201188053420161330}
   - component: {fileID: 4160517728137701302}
   - component: {fileID: 4671600843438701699}
@@ -339,7 +337,7 @@ MonoBehaviour:
   - {fileID: 3124264775330692708}
   - {fileID: 4966316198463876083}
   - {fileID: 6038023079570568745}
-  - {fileID: 6690946415020651589}
+  - {fileID: 0}
   - {fileID: 7810264000710710752}
   - {fileID: 34196052825852577}
   InitializedParentNetworkBehaviour: {fileID: 0}
@@ -741,24 +739,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 1
---- !u!114 &6690946415020651589
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2d54339ff3d1e7f498b872ac6b1633a4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 14
-  _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 4964627840297570917}
-  isAggressive: 0
-  onFactionChangeTriggers: []
-  raceTemplateID: -2095018830
 --- !u!114 &7810264000710710752
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1026,21 +1006,6 @@ MonoBehaviour:
   _updateHostVisibility: 1
   _observerConditions:
   - {fileID: 11400000, guid: a42dd55b9b0e2524f8d7d2d0f621d179, type: 2}
---- !u!114 &7201188053420161329
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4573496687782621821}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e00ff579a1db412785d471af1e78fcce, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 16
-  _addedNetworkObject: {fileID: 4964627840297570917}
-  _networkObjectCache: {fileID: 4964627840297570917}
 --- !u!114 &7201188053420161330
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -174,6 +174,13 @@ namespace FishMMO.Shared
 					OnInterrupt?.Invoke();
 				}
 				Cancel(state, true);
+				/* The Cancel key also stops a charge already under way (a rush, KCCController.BeginMotion): cancelling during
+				 * the run-up used to leave the character sliding on to the end of it. Here, inside the replicate, on both
+				 * peers and again on every replay (the flag is in the input), so the stop needs no remembering. */
+				if (PlayerCharacter != null && PlayerCharacter.CharacterController != null)
+				{
+					PlayerCharacter.CharacterController.EndMotion();
+				}
 				return true;
 			}
 			return false;

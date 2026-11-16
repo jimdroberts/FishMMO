@@ -1155,7 +1155,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// third of a second.
 		/// </summary>
 		[Tooltip("How quickly a knockback bleeds off, m/s per second. 8 m/s at 24 slides ~1.3 m over ~0.33 s.")]
-		public float KnockbackDeceleration = 24f;
+		public float KnockbackDeceleration = KnockbackHitAction.DefaultDeceleration;
 
 		/// <summary>The fastest a knockback may push, metres per second, however many land at once.</summary>
 		public const float MAX_KNOCKBACK_SPEED = 20f;

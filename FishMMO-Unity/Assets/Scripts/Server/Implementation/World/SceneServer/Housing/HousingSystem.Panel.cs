@@ -29,6 +29,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </remarks>
 	public partial class HousingSystem
 	{
+		/// <summary>The plot ID a deed post's refusal carries, so only the plot panel opens on it.</summary>
+		public const long PostRefusalPlotID = -1;
+
 		/// <summary>How far past the post's interaction range a panel request is still honoured, metres.</summary>
 		private const float PanelReachSlackMetres = 4f;
 
@@ -41,6 +44,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<HousingPlotInfoRequestBroadcast>(OnServerHousingPlotInfoRequest, true);
 			Server.NetworkWrapper.RegisterBroadcast<HousingClaimBroadcast>(OnServerHousingClaim, true);
 			Server.NetworkWrapper.RegisterBroadcast<HousingReleaseBroadcast>(OnServerHousingRelease, true);
+			Server.NetworkWrapper.RegisterBroadcast<HousingPrepayRentBroadcast>(OnServerHousingPrepayRent, true);
 		}
 
 		private void UnregisterPanelBroadcasts()
@@ -52,6 +56,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<HousingPlotInfoRequestBroadcast>(OnServerHousingPlotInfoRequest);
 			Server.NetworkWrapper.UnregisterBroadcast<HousingClaimBroadcast>(OnServerHousingClaim);
 			Server.NetworkWrapper.UnregisterBroadcast<HousingReleaseBroadcast>(OnServerHousingRelease);
+			Server.NetworkWrapper.UnregisterBroadcast<HousingPrepayRentBroadcast>(OnServerHousingPrepayRent);
 		}
 
 		/// <summary>
@@ -64,15 +69,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
+			/* A deed post that cannot describe its plot answers with plot -1: the panel opens on that to say
+			 * why (vault answers carry 0 and must not open it). */
 			if (!IsHousingEnabled)
 			{
-				SendHousingResult(conn, plot.PlotID, HousingResult.Disabled);
+				SendHousingResult(conn, PostRefusalPlotID, HousingResult.Disabled);
 				return;
 			}
 			if (plot.PlotID <= 0)
 			{
 				// The scene's plots have not been read back from the database yet.
-				SendHousingResult(conn, 0, HousingResult.UnknownPlot);
+				SendHousingResult(conn, PostRefusalPlotID, HousingResult.UnknownPlot);
 				return;
 			}
 			SendPlotInfo(conn, player, plot);
@@ -237,6 +244,223 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		/// <summary>The rent period, as the sweep measures it.</summary>
+		private TimeSpan RentPeriod => TimeSpan.FromDays(Mathf.Max(0.001f, taxPeriodDays));
+
+		/// <summary>
+		/// The owner pays rent ahead.
+		/// </summary>
+		/// <remarks>
+		/// <para>The due date is the contended thing — a tax sweep on any server may be billing the same
+		/// plot — so it is won first: <c>TryAdvanceTaxAsync</c> moves it only if it still holds the date
+		/// read, the same pin the sweep uses, so a payment and a bill cannot both land on one period. Then
+		/// the money is taken from the owner's purse (the in-memory balance, like a purchase); a charge
+		/// that fails puts the date back with <c>TryRestoreTaxDueAsync</c>, pinned to the date it was
+		/// moved to.</para>
+		///
+		/// <para>A payment that lands clears any missed-payment mark, as every payment does.</para>
+		/// </remarks>
+		private void OnServerHousingPrepayRent(NetworkConnection conn, HousingPrepayRentBroadcast msg, Channel channel)
+		{
+			if (!TryDebounceHousingRequest(conn, HousingOperation.PrepayRent))
+			{
+				return;
+			}
+			if (!TryGetActingPlayer(conn, out IPlayerCharacter player))
+			{
+				return;
+			}
+			if (!IsHousingEnabled || !IsTaxEnabled || currencyTemplate == null)
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.Disabled);
+				return;
+			}
+			if (!TryResolveRequestedPlot(player, msg.PlotID, out PlotFoundation foundation))
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.UnknownPlot);
+				return;
+			}
+			if (foundation.Owner.Type != PlotOwnerType.Character || foundation.Owner.ID != player.ID)
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.NotTheOwner);
+				return;
+			}
+			if (msg.Periods <= 0 || msg.Periods > PlotRentPrepay.MaxPeriodsAhead || msg.QuotedAmount <= 0)
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.WrongState);
+				return;
+			}
+			if (!CharacterCurrency.CanAfford(player, currencyTemplate, msg.QuotedAmount))
+			{
+				SendHousingResult(conn, msg.PlotID, HousingResult.CannotAfford);
+				return;
+			}
+
+			long plotID = foundation.PlotID;
+			long characterID = player.ID;
+			int periods = msg.Periods;
+			long quoted = msg.QuotedAmount;
+			long rent = taxPerPeriod;
+			TimeSpan period = RentPeriod;
+
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				if (!TryGetDbService(out IPlotService plotService))
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
+					return;
+				}
+				DatabaseResult<List<PlotData>> read = await plotService.FetchByIdsAsync(new[] { plotID });
+				if (!read.IsSuccess || read.Data == null || read.Data.Count != 1)
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
+					return;
+				}
+				PlotData plot = read.Data[0];
+				if (plot.OwnerCharacterID != characterID || !plot.TaxDueUtc.HasValue)
+				{
+					SendHousingResultOnMainThread(conn, plotID, plot.OwnerCharacterID != characterID ? HousingResult.NotTheOwner : HousingResult.WrongState);
+					return;
+				}
+
+				DateTime dueUtc = plot.TaxDueUtc.Value;
+				PlotRentPrepay.Quote quote = PlotRentPrepay.Price(dueUtc, DateTime.UtcNow, period, rent, periods);
+				if (!quote.IsValid)
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.WrongState);
+					return;
+				}
+				if (quote.Amount != quoted)
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.PriceChanged);
+					return;
+				}
+
+				DatabaseResult<int> advanced = await plotService.TryAdvanceTaxAsync(plotID, dueUtc, quote.NextDueUtc);
+				if (!advanced.IsSuccess || advanced.Data != 1)
+				{
+					// A sweep billed it a moment ago, or the database refused: nothing was taken.
+					SendHousingResultOnMainThread(conn, plotID, advanced.IsSuccess ? HousingResult.WrongState : HousingResult.Failed);
+					return;
+				}
+
+				bool delinquent = plot.TaxDelinquentSinceUtc.HasValue;
+				if (!TryEnqueueHousingMainThread(() => SettlePrepay(conn, player, plotID, characterID, quote, dueUtc, delinquent)))
+				{
+					// Nothing charged, so the date goes back.
+					await plotService.TryRestoreTaxDueAsync(plotID, quote.NextDueUtc, dueUtc);
+					Log.Warning("HousingSystem", $"Could not charge CharID={characterID}'s rent prepayment on plot {plotID}; its due date was put back.");
+				}
+			}, characterID))
+			{
+				SendHousingResult(conn, plotID, HousingResult.Failed);
+			}
+		}
+
+		/// <summary>
+		/// Takes a won prepayment's money, or puts the due date back when it cannot be taken. Main thread.
+		/// </summary>
+		private void SettlePrepay(NetworkConnection conn, IPlayerCharacter player, long plotID, long characterID, PlotRentPrepay.Quote quote, DateTime previousDueUtc, bool delinquent)
+		{
+			bool paid = player != null && player.ID == characterID &&
+				CharacterCurrency.TrySpend(player, currencyTemplate, quote.Amount, () => TryPersistCurrency(player));
+
+			EnqueuePersistence(async () =>
+			{
+				if (!TryGetDbService(out IPlotService plotService))
+				{
+					Log.Error("HousingSystem", $"Plot {plotID}'s prepayment could not be settled: IPlotService unavailable.");
+					return;
+				}
+				if (!paid)
+				{
+					DatabaseResult<int> restored = await plotService.TryRestoreTaxDueAsync(plotID, quote.NextDueUtc, previousDueUtc);
+					if (!restored.IsSuccess)
+					{
+						Log.Error("HousingSystem", $"Plot {plotID}'s due date could not be put back after an unpaid prepayment: [{restored.ErrorCode}] {restored.ErrorMessage}");
+					}
+					return;
+				}
+				if (delinquent)
+				{
+					DatabaseResult<int> cleared = await plotService.ClearTaxDelinquencyAsync(plotID);
+					if (!cleared.IsSuccess)
+					{
+						Log.Warning("HousingSystem", $"Plot {plotID} was paid ahead but its missed-payment mark could not be cleared: [{cleared.ErrorCode}] {cleared.ErrorMessage}");
+					}
+				}
+			}, characterID);
+
+			if (!paid)
+			{
+				SendHousingResult(conn, plotID, HousingResult.CannotAfford);
+				return;
+			}
+
+			RecordLandTax(characterID, quote.Amount);
+			Log.Debug("HousingSystem", $"CharID={characterID} paid {quote.Amount} rent ({quote.Periods} period(s)) ahead on plot {plotID}; next due {quote.NextDueUtc:u}.");
+			SendHousingResult(conn, plotID, HousingResult.Success);
+			if (TryResolveRequestedPlot(player, plotID, out PlotFoundation here))
+			{
+				SendPlotInfo(conn, player, here);
+			}
+		}
+
+		/// <summary>
+		/// Grants access to a character named rather than numbered: the guest list window knows names.
+		/// </summary>
+		/// <remarks>
+		/// Only characters of the granter's own world are found — a key to a house on a world the guest
+		/// does not play on is a key to nothing. Once the name has an ID the grant is the ordinary one
+		/// (<see cref="TryGrantAccess"/>), with every rule it carries: clamped to what the granter holds,
+		/// never to themselves, only on held land.
+		/// </remarks>
+		private void GrantAccessByName(NetworkConnection conn, IPlayerCharacter player, long plotID, string name, PlotPermission requested)
+		{
+			string trimmed = name?.Trim();
+			if (string.IsNullOrEmpty(trimmed) || trimmed.Length > 64)
+			{
+				SendHousingResult(conn, plotID, HousingResult.NoSuchCharacter);
+				return;
+			}
+			long worldID = player.WorldServerID;
+			long granterID = player.ID;
+
+			if (!TryEnqueueAsyncWork(async () =>
+			{
+				if (!TryGetDbService(out ICharacterService characters))
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.Failed);
+					return;
+				}
+				DatabaseResult<CharacterData?> found = await characters.FetchAsync(trimmed);
+				if (!found.IsSuccess || found.Data == null || found.Data.Value.WorldServerID != worldID)
+				{
+					SendHousingResultOnMainThread(conn, plotID, HousingResult.NoSuchCharacter);
+					return;
+				}
+				long targetID = found.Data.Value.ID;
+				if (!TryEnqueueHousingMainThread(() =>
+				{
+					if (!TryResolveRequestedPlot(player, plotID, out PlotFoundation foundation))
+					{
+						SendHousingResult(conn, plotID, HousingResult.UnknownPlot);
+						return;
+					}
+					if (!TryGrantAccess(conn, player, foundation, targetID, requested))
+					{
+						SendHousingResult(conn, plotID, HousingResult.NotPermitted);
+					}
+				}))
+				{
+					Log.Warning("HousingSystem", $"Could not apply the named grant on plot {plotID}.");
+				}
+			}, granterID))
+			{
+				SendHousingResult(conn, plotID, HousingResult.Failed);
+			}
+		}
+
 		/// <summary>
 		/// Answers a claim on the main thread: the result, and on success the plot described again.
 		/// </summary>
@@ -339,6 +563,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							if (plot.TaxDelinquentSinceUtc.HasValue)
 							{
 								info.UnpaidForSeconds = Math.Max(1.0, (now - plot.TaxDelinquentSinceUtc.Value).TotalSeconds);
+							}
+							if (plot.TaxDueUtc.HasValue && info.RentPerPeriod > 0)
+							{
+								info.PrepayPeriodsAllowed = PlotRentPrepay.PeriodsAllowed(plot.TaxDueUtc.Value, now, RentPeriod);
 							}
 						}
 					}

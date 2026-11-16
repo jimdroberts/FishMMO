@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Line Lance
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 3778dcb4d66a118f7717e1d9058efd17
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

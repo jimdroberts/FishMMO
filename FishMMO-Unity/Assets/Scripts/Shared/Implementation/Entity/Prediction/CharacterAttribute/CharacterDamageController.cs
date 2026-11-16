@@ -1421,11 +1421,11 @@ namespace FishMMO.Shared
 				return 0;
 			}
 
-			/* Only who the attacker may harm (FactionHarm): an enemy, or anyone while either side's aggression is on. Every
+			/* Only who the attacker may harm (HarmRule): an enemy, or anyone while either side's aggression is on. Every
 			 * damage source passes here, so no ability needs an authored condition to spare its caster's friends — none of
 			 * the shipped ones had one, and every hit landed on neutrals, allies, party and guild alike. Refused as silently
 			 * as a miss: no threat, no combat entry, no number. */
-			if (!FactionHarm.Allows(attacker, Character))
+			if (!HarmRule.Allows(attacker, Character))
 			{
 				return 0;
 			}

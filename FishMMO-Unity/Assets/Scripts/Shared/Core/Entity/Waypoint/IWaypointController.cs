@@ -54,6 +54,12 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		FishMMO.Shared.WaypointTravelPolicy TravelPolicy { get; }
 
+		/// <summary>
+		/// Client (owner): asks the server to fast travel to a discovered waypoint. The answer arrives as
+		/// <see cref="OnWaypointTravelled"/> or <see cref="OnWaypointTravelRefused"/>.
+		/// </summary>
+		void RequestTravel(string sceneName, int waypointIndex);
+
 		/// <summary>Every scene the character has at least one unlocked waypoint in.</summary>
 		IReadOnlyCollection<string> UnlockedScenes { get; }
 

@@ -72,7 +72,7 @@ namespace FishMMO.Shared
 		public SceneObjectNamingMode Mode = SceneObjectNamingMode.Character;
 
 		[Header("Race")]
-		[Tooltip("Race to name from. Leave unset to use the object's FactionController race.")]
+		[Tooltip("Race to name from. Leave unset to use the NPC's own race.")]
 		[TemplateReference(typeof(RaceTemplate))]
 		public int RaceOverrideID;
 		[Tooltip("Optional culture key within the race, e.g. 'nordic'. Unknown keys fall back to the race's own phonology.")]
@@ -132,8 +132,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	public static class SceneObjectNameResolver
 	{
-		/// <summary>The race a namer draws from: the explicit override when set, else the faction's race.</summary>
-		public static RaceTemplate ResolveRace(SceneObjectNamingSettings settings, IFactionController faction)
+		/// <summary>The race a namer draws from: the explicit override when set, else the object's own race (an NPC's).</summary>
+		public static RaceTemplate ResolveRace(SceneObjectNamingSettings settings, RaceTemplate ownRace)
 		{
 			if (settings != null && settings.RaceOverrideID != 0)
 			{
@@ -147,7 +147,7 @@ namespace FishMMO.Shared
 					return overrideRace;
 				}
 			}
-			return faction?.RaceTemplate;
+			return ownRace;
 		}
 
 		/// <summary>

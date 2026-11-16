@@ -235,7 +235,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
+			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<NPC>()?.RaceTemplate);
 			nameSeed = SceneObjectNameResolver.DeriveSeed(settings, authoredName);
 			selectedGender = settings.Mode == SceneObjectNamingMode.Character
 				? SceneObjectNameResolver.ResolveGender(settings.GenderPolicy, race, SceneObjectNameResolver.GenderRng(nameSeed))
@@ -261,7 +261,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<IFactionController>());
+			RaceTemplate race = SceneObjectNameResolver.ResolveRace(settings, GetComponent<NPC>()?.RaceTemplate);
 			// A merchant is titled as a merchant unless the settings say otherwise.
 			Interactable interactable = GetComponent<Interactable>();
 			string autoProfession = interactable == null || string.IsNullOrWhiteSpace(interactable.Title) ? null : interactable.Title;

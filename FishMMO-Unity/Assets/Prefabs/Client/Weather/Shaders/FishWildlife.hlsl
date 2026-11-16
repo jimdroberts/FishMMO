@@ -32,7 +32,6 @@ float3 WildRotZ(float3 p, float a) { float s, c; sincos(a, s, c); return float3(
 // rolls onto its side as it dies.
 void WildlifePose(inout float3 position, inout float3 normal, float4 part)
 {
-    const float PI = 3.14159265;
     int id = (int)round(part.w);
     float3 pivot = part.xyz;
     float phase = _WildGait.x;

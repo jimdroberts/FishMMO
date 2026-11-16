@@ -1,0 +1,101 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIHousingVault.uss
+    House Vault  —  Structure & Layout only
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Sized against the 1200x800 reference resolution.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+.vault-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 480px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.vault-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.vault-header__title {
+    flex: 1;
+    -unity-text-align: middle-left;
+}
+
+.vault-intro {
+    white-space: normal;
+    margin: 10px 12px 4px 12px;
+    flex-shrink: 0;
+}
+
+.vault-list {
+    max-height: 300px;
+    margin: 4px 12px;
+    flex-shrink: 0;
+}
+
+.vault-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    flex-shrink: 0;
+}
+
+.vault-row__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vault-row__amount {
+    width: 44px;
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+}
+
+.vault-row__fee {
+    width: 110px;
+    -unity-text-align: middle-right;
+    flex-shrink: 0;
+    margin-right: 8px;
+}
+
+.vault-row__button {
+    min-width: 74px;
+    height: 24px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.vault-empty {
+    margin: 8px 12px;
+    flex-shrink: 0;
+}
+
+.vault-footer {
+    flex-direction: row;
+    align-items: center;
+    min-height: 34px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.vault-message {
+    flex: 1;
+    white-space: normal;
+}
+
+.vault-hidden {
+    display: none;
+}

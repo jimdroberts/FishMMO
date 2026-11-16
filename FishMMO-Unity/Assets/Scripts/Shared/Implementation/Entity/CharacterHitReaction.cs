@@ -77,8 +77,25 @@ namespace FishMMO.Shared
 		private float offsetMagnitude;
 		private float remaining;
 
+		/// <summary>
+		/// Seconds a predicted shove may wait, after its own slide has ended, for the server's real displacement to catch it
+		/// up before the lead it still holds fades out. A round trip plus the transform stream's interpolation, with room to
+		/// spare; a shove the server refused (an immortal target, the harm rule) fades over this instead of snapping.
+		/// </summary>
+		[Tooltip("Seconds a predicted shove waits for the server's real displacement before any lead it still holds fades out.")]
+		[Min(0.05f)]
+		public float ShoveCatchUpSeconds = 0.6f;
+
+		// A predicted shove (Shove): the slide the server will make, drawn on the model until the root has made it.
+		private bool shoving;
+		private Vector3 shoveDirection;
+		private Vector3 shoveOrigin;
+		private float shoveSpeed;
+		private float shoveDeceleration;
+		private float shoveElapsed;
+
 		/// <summary>True while a reaction is still decaying.</summary>
-		public bool IsPlaying => remaining > 0f;
+		public bool IsPlaying => remaining > 0f || shoving;
 
 		/// <summary>
 		/// Starts a reaction in a world-space direction.
@@ -116,6 +133,64 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Starts a predicted SHOVE: the model slides along <paramref name="worldDirection"/> as the server's knockback will move
+		/// the character, starting now rather than a round trip from now.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The slide follows the same law the server applies (<paramref name="speed"/> bled off at
+		/// <paramref name="deceleration"/>), measured from where the networked root stood when it started. Each frame the model
+		/// is offset only by the part of that slide the ROOT has not yet made: as the server's real displacement arrives through
+		/// the transform stream the offset shrinks to nothing, so the two hand over without a jump and never add up. Whatever
+		/// lead is left when the slide is over fades out over <see cref="ShoveCatchUpSeconds"/>.
+		/// </para>
+		/// <para>
+		/// This is what the knockback's displacement could not be on the attacker's client (the root belongs to the server),
+		/// done where it can be: on the model, which nothing networked reads.
+		/// </para>
+		/// </remarks>
+		/// <param name="worldDirection">The push's direction; only its horizontal part is used.</param>
+		/// <param name="speed">The push, metres per second.</param>
+		/// <param name="deceleration">How fast it bleeds off, metres per second per second.</param>
+		public void Shove(Vector3 worldDirection, float speed, float deceleration)
+		{
+			if (!EnsureMeshRoot())
+			{
+				return;
+			}
+			Vector3 flat = worldDirection;
+			flat.y = 0f;
+			if (flat.sqrMagnitude <= 0.0001f || speed <= 0f || deceleration <= 0f)
+			{
+				return;
+			}
+			shoveDirection = flat.normalized;
+			shoveOrigin = transform.position;
+			shoveSpeed = speed;
+			shoveDeceleration = deceleration;
+			shoveElapsed = 0f;
+			shoving = true;
+		}
+
+		/// <summary>
+		/// How far the model leads its root along a shove: the slide predicted so far less the part the root has made, faded
+		/// out once the slide is over. Pure, for the tests.
+		/// </summary>
+		internal static float ShoveLead(float speed, float deceleration, float elapsed, float rootTravel, float catchUpSeconds)
+		{
+			float stopTime = speed / deceleration;
+			float t = Mathf.Min(elapsed, stopTime);
+			float predicted = speed * t - 0.5f * deceleration * t * t;
+			float lead = Mathf.Clamp(predicted - rootTravel, 0f, predicted);
+			if (elapsed > stopTime)
+			{
+				float fade = 1f - (elapsed - stopTime) / Mathf.Max(0.01f, catchUpSeconds);
+				lead *= Mathf.Clamp01(fade);
+			}
+			return lead;
+		}
+
+		/// <summary>
 		/// Decays the current reaction. Runs in <c>LateUpdate</c> so the offset is applied AFTER
 		/// anything that writes the character's transform this frame.
 		/// </summary>
@@ -136,31 +211,47 @@ namespace FishMMO.Shared
 		/// <param name="deltaSeconds">Seconds elapsed since the last step.</param>
 		internal void Step(float deltaSeconds)
 		{
-			if (remaining <= 0f || meshRoot == null)
+			if (meshRoot == null || (remaining <= 0f && !shoving))
 			{
 				return;
 			}
 
-			remaining -= deltaSeconds;
+			Vector3 worldOffset = Vector3.zero;
 
-			if (remaining <= 0f)
+			if (remaining > 0f)
 			{
-				remaining = 0f;
-				meshRoot.localPosition = restLocalPosition;
-				return;
+				remaining -= deltaSeconds;
+				if (remaining > 0f)
+				{
+					/* Eased rather than linear: an impact should land hard and settle, and a constant-rate
+					 * return reads like the model sliding rather than recoiling. */
+					float t = remaining / ReactionSeconds;
+					worldOffset += offsetDirection * (offsetMagnitude * t * t);
+				}
+				else
+				{
+					remaining = 0f;
+				}
 			}
 
-			/* Eased rather than linear: an impact should land hard and settle, and a constant-rate
-			 * return reads like the model sliding rather than recoiling. */
-			float t = remaining / ReactionSeconds;
-			float eased = t * t;
+			if (shoving)
+			{
+				shoveElapsed += deltaSeconds;
+				float rootTravel = Vector3.Dot(transform.position - shoveOrigin, shoveDirection);
+				float lead = ShoveLead(shoveSpeed, shoveDeceleration, shoveElapsed, rootTravel, ShoveCatchUpSeconds);
+				if (shoveElapsed > shoveSpeed / shoveDeceleration + ShoveCatchUpSeconds)
+				{
+					shoving = false;
+				}
+				else
+				{
+					worldOffset += shoveDirection * lead;
+				}
+			}
 
-			// Local space, because the offset should follow the character as it turns.
-			Vector3 localDirection = meshRoot.parent != null
-				? meshRoot.parent.InverseTransformDirection(offsetDirection)
-				: offsetDirection;
-
-			meshRoot.localPosition = restLocalPosition + localDirection * (offsetMagnitude * eased);
+			// Local space, because the offset should follow the character as it turns (Vector, not Direction: metres).
+			Vector3 localOffset = meshRoot.parent != null ? meshRoot.parent.InverseTransformVector(worldOffset) : worldOffset;
+			meshRoot.localPosition = restLocalPosition + localOffset;
 		}
 
 		/// <summary>
@@ -185,6 +276,7 @@ namespace FishMMO.Shared
 		public void ResetToRest()
 		{
 			remaining = 0f;
+			shoving = false;
 			if (meshRoot != null && restCaptured)
 			{
 				meshRoot.localPosition = restLocalPosition;
@@ -226,28 +318,38 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Plays a reaction on a character, if it has the component.
+		/// Plays a reaction on a character, adding the component the first time it is needed.
 		/// </summary>
 		/// <remarks>
-		/// A convenience so callers do not need a null-checked GetComponent at every hit site. A
-		/// character without the component simply does not flinch, which is the correct degradation
-		/// for something purely cosmetic.
+		/// Added on demand rather than authored on prefabs: no character prefab carried it, so the predicted flinch never
+		/// played anywhere. Only a client that plays a predicted reaction ever reaches this, so a server never adds one.
 		/// </remarks>
 		/// <param name="character">The character being hit.</param>
 		/// <param name="worldDirection">Direction of the impact.</param>
 		/// <param name="strength">0 to 1.</param>
 		public static void PlayOn(ICharacter character, Vector3 worldDirection, float strength = 1f)
 		{
+			Resolve(character)?.Play(worldDirection, strength);
+		}
+
+		/// <summary>Plays a predicted shove (<see cref="Shove"/>) on a character, adding the component when needed.</summary>
+		public static void ShoveOn(ICharacter character, Vector3 worldDirection, float speed, float deceleration)
+		{
+			Resolve(character)?.Shove(worldDirection, speed, deceleration);
+		}
+
+		private static CharacterHitReaction Resolve(ICharacter character)
+		{
 			GameObject gameObject = character?.GameObject;
 			if (gameObject == null)
 			{
-				return;
+				return null;
 			}
-
-			if (gameObject.TryGetComponent(out CharacterHitReaction reaction))
+			if (!gameObject.TryGetComponent(out CharacterHitReaction reaction))
 			{
-				reaction.Play(worldDirection, strength);
+				reaction = gameObject.AddComponent<CharacterHitReaction>();
 			}
+			return reaction;
 		}
 	}
 }

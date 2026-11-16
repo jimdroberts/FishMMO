@@ -190,8 +190,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4131707743960135806}
   _networkObjectCache: {fileID: 4131707743960135806}
   InteractionRange: 3.5
-  onInteractTriggers:
-  - {fileID: 11400000, guid: 8f32ac1f15ee4a928ab2289d38f797fb, type: 2}
+  onInteractTriggers: []
   GizmoColor: {r: 0.5, g: 0.8, b: 1, a: 1}
   waypointIndex: 0
   WaypointName: 

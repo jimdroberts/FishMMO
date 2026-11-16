@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Piercing Projectile
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: a51990583bdcf74aecee5be9c8f9b82b
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -59,6 +59,13 @@ namespace FishMMO.Shared
 		public IFloatValueProvider ForceValue;
 
 		/// <summary>
+		/// How fast a knockback bleeds off, metres per second per second: the NPC brain's law
+		/// (<c>AIController.KnockbackDeceleration</c>) and the attacker's predicted shove
+		/// (<see cref="CharacterHitReaction.Shove"/>), so the shove drawn now is the slide the server makes.
+		/// </summary>
+		public const float DefaultDeceleration = 24f;
+
+		/// <summary>
 		/// Which way the victim is pushed. <see cref="KnockbackDirection.Auto"/> decides from the attack's shape.
 		/// </summary>
 		[Tooltip("Which way the victim is pushed. Auto: area = away from the blast centre, projectile = along its flight, melee = away from the caster.")]
@@ -194,7 +201,7 @@ namespace FishMMO.Shared
 			{
 				if (EcaAuthority.MayPredict(initiator, eventData))
 				{
-					PlayPredictedReaction(initiator, eventData);
+					PlayPredictedReaction(initiator, eventData, force);
 				}
 				return;
 			}
@@ -214,7 +221,7 @@ namespace FishMMO.Shared
 			/* An evading NPC cannot be displaced: the same question the damage and debuff paths
 			 * ask (CharacterEvade), so no hostile route stays open during the walk home. Separate
 			 * from the Immortal test below, whose meaning is unchanged. */
-			// And a target the harm rule protects from this initiator (FactionHarm): a friend is not knocked about.
+			// And a target the harm rule protects from this initiator (HarmRule): a friend is not knocked about.
 			if (CharacterEvade.RefusesHostileEffects(target, initiator))
 			{
 				return;
@@ -346,7 +353,7 @@ namespace FishMMO.Shared
 		/// replay rather than lean once. Leans the way the authoritative branch will push, so the two agree.
 		/// </para>
 		/// </remarks>
-		private void PlayPredictedReaction(ICharacter initiator, EventData eventData)
+		private void PlayPredictedReaction(ICharacter initiator, EventData eventData, float force)
 		{
 			if (IsReplayTick(eventData))
 			{
@@ -359,12 +366,20 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			// Not on a character the harm rule protects from this attacker: the server will not move it either.
+			if (!HarmRule.MayHarm(initiator, target, out _))
+			{
+				return;
+			}
+
 			if (!TryResolvePush(initiator, eventData, target, out Vector3 direction))
 			{
 				return;
 			}
 
 			CharacterHitReaction.PlayOn(target, direction);
+			// The displacement itself, drawn now on the model and handed over to the server's as it arrives.
+			CharacterHitReaction.ShoveOn(target, direction, force, DefaultDeceleration);
 		}
 	}
 }

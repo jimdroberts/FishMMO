@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// waypoint every existing character loses. Adding a new one at the next free index is safe.
 	/// The world scene details cache rebuild reports duplicates.</para>
 	/// <para><b>Behaviour.</b> Like every interactable, what happens on interaction is the ECA
-	/// trigger list: the shipped <c>Waypoint Interact</c> trigger runs <see cref="UnlockWaypointAction"/>
+	/// trigger list: the shipped <c>Waypoint Interact</c> trigger runs <c>UnlockWaypointAction</c>
 	/// and then the discovery achievement. Travel is not an interaction — it is requested from
 	/// the map, validated by the server, and the arrival runs <see cref="OnTravelTriggers"/>.
 	/// <see cref="TravelConditions"/> are the designer's gate on that request.</para>

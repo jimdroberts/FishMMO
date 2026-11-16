@@ -64,6 +64,10 @@ namespace FishMMO.RenderScratch
 				Seed.All();
 
 				Dictionary<string, Action<GameObject, UIDocument>> populators = Populators();
+				foreach (KeyValuePair<string, Action<GameObject, UIDocument>> extra in ExtraPopulators)
+				{
+					populators[extra.Key] = extra.Value;
+				}
 
 				foreach (string path in AssetDatabase.FindAssets("t:VisualTreeAsset", new[] { GUI_ROOT })
 					.Select(AssetDatabase.GUIDToAssetPath)
@@ -147,6 +151,9 @@ namespace FishMMO.RenderScratch
 			return new Job { Label = label, Uxml = uxml, Populate = populate };
 		}
 
+		/// <summary>Modules' panels (Factions adds UIFactions).</summary>
+		public static readonly Dictionary<string, Action<GameObject, UIDocument>> ExtraPopulators = new Dictionary<string, Action<GameObject, UIDocument>>();
+
 		private static Dictionary<string, Action<GameObject, UIDocument>> Populators()
 		{
 			return new Dictionary<string, Action<GameObject, UIDocument>>
@@ -163,7 +170,6 @@ namespace FishMMO.RenderScratch
 				{ "UIInventory",      Panels.Inventory },
 				{ "UIBank",           Panels.Bank },
 				{ "UIAchievements",   Panels.Achievements },
-				{ "UIFactions",       Panels.Factions },
 				{ "UIFriendList",     Panels.FriendList },
 				{ "UIDungeonFinder",  Panels.DungeonFinder },
 				{ "UIInstance",       Panels.InstancePanel },

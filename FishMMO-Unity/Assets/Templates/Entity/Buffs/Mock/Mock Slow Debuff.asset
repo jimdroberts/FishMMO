@@ -20,7 +20,7 @@ MonoBehaviour:
     m_EditorAssetChanged: 0
   Description: Mock slow debuff. -2 move speed for 10 seconds.
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: e9ab4ac309908e6605e56599c4db4820
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

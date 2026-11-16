@@ -83,8 +83,11 @@ namespace FishMMO.UnitTests
 			foreach (WildlifeArea a in plan)
 			{
 				LogAssert.IsTrue(a.Center.x - a.Size.x * 0.5f < 2048f, $"{a.Name} lies wholly at sea");
-				LogAssert.IsTrue(a.Count >= 1, "every placed area holds animals");
-				LogAssert.IsTrue(a.Size.x > limits.AreaStrideMetres, "areas are bigger than their stride, so they overlap");
+				LogAssert.IsTrue(a.Count >= 2 && a.Count <= 6, "every spawner keeps the catalogue's 2 to 6 animals");
+				LogAssert.IsTrue(a.Center.x - a.Size.x * 0.5f >= World.xMin && a.Center.x + a.Size.x * 0.5f <= World.xMax &&
+					a.Center.z - a.Size.z * 0.5f >= World.yMin && a.Center.z + a.Size.z * 0.5f <= World.yMax,
+					$"{a.Name}'s box stays inside the placement bounds");
+				LogAssert.IsTrue(a.Size.x >= 32f, "a clipped area keeps a usable size");
 			}
 		}
 
@@ -160,7 +163,7 @@ namespace FishMMO.UnitTests
 			List<WildlifeArea> plan = WildlifePlanner.Plan("Test", World, HalfForest, pois, null, null, species, Limits(max: 3));
 			LogAssert.AreEqual(3, plan.Count, "the cap holds");
 			LogAssert.IsTrue(plan[0].Den && plan[0].Center == pois[0].Position, "the den is placed first, at the den");
-			LogAssert.IsTrue(plan[0].Count >= wolf.GroupMax, "a den's pack is at least the biggest open-country one");
+			LogAssert.IsTrue(plan[0].Count >= 2 && plan[0].Count <= 6, "a den keeps the catalogue's 2 to 6");
 		}
 
 		/// <summary>The runtime's per-spawn ground check: one of its habitats, never a settlement or the sea.</summary>

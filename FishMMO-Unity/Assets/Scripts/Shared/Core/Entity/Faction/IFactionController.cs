@@ -5,21 +5,18 @@ using UnityEngine;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// Interface for faction controllers, providing access and management for all faction relationships and reputation values.
-	/// Used to read, modify, and synchronize faction standings for a character.
+	/// A character's standing toward others, as the rest of the game asks it: alliance level and its colour, the
+	/// aggression toggle and its lock, setting a standing by template id. Core: implemented by the Factions module's
+	/// <c>FactionController</c> (a character part); without the module a character has none and every caller treats that
+	/// as "no relation" (the harm rule allows, AI sees no enemy but the aggressive).
 	/// </summary>
+	/// <remarks>The standings themselves (the <c>Faction</c> rows and templates) are the module's: <c>IFactionStandings</c>.</remarks>
 	public interface IFactionController : ICharacterBehaviour
 	{
 		/// <summary>
-		/// Event invoked when a faction is updated (standing changes).
-		/// Parameters: character, updated faction.
-		/// </summary>
-		static Action<ICharacter, Faction> OnUpdateFaction;
-
-		/// <summary>
 		/// Gets or sets whether the character is aggressive (treats others as enemies).
 		/// </summary>
-		bool IsAggressive { get; set; }
+		bool IsAggressive { get; }
 
 		/// <summary>
 		/// A player's aggression toggle, as the server last set it: while on, they may harm neutral and allied targets, and
@@ -27,25 +24,18 @@ namespace FishMMO.Shared.Core
 		/// </summary>
 		bool AggressionEnabled => false;
 
-		/// <summary>
-		/// Dictionary of all factions and their standing values, keyed by template ID.
-		/// </summary>
-		Dictionary<int, Faction> Factions { get; }
+		/// <summary>Seconds before the aggression toggle may be turned off again (a hit made or taken restarts it).</summary>
+		float AggressionLockRemaining => 0f;
 
 		/// <summary>
-		/// Dictionary of allied factions (positive standing), keyed by template ID.
+		/// Server: sets the aggression toggle when the rules allow it. False, with the seconds left, when turning it off is
+		/// still locked.
 		/// </summary>
-		Dictionary<int, Faction> Allied { get; }
-
-		/// <summary>
-		/// Dictionary of neutral factions (zero standing), keyed by template ID.
-		/// </summary>
-		Dictionary<int, Faction> Neutral { get; }
-
-		/// <summary>
-		/// Dictionary of hostile factions (negative standing), keyed by template ID.
-		/// </summary>
-		Dictionary<int, Faction> Hostile { get; }
+		bool TrySetAggression(bool enabled, out float lockedSeconds)
+		{
+			lockedSeconds = 0f;
+			return false;
+		}
 
 		/// <summary>
 		/// The race template associated with this character, used for initial faction setup.
@@ -81,13 +71,6 @@ namespace FishMMO.Shared.Core
 		void AdjustFaction(IFactionController defenderFactionController, float alliedPercentToSubtract, float hostilePercentToAdd);
 
 		/// <summary>
-		/// Adds an amount to the value of a specific faction.
-		/// </summary>
-		/// <param name="template">Faction template to adjust.</param>
-		/// <param name="amount">Amount to add (default 1).</param>
-		void Add(FactionTemplate template, int amount = 1);
-
-		/// <summary>
 		/// Gets the alliance level (Ally, Neutral, Enemy) between this character and another faction controller.
 		/// </summary>
 		/// <param name="otherFactionController">The other faction controller to compare against.</param>
@@ -104,8 +87,16 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// The standing this character's client shows for another: <see cref="GetAllianceLevel"/>, except that a player
 		/// whose aggression is on reads as an enemy to everyone but their companions (party, guild), as
-		/// FactionHarm treats them. What the nameplate's colour and mark both follow.
+		/// HarmRule treats them. What the nameplate's colour and mark both follow.
 		/// </summary>
 		FactionAllianceLevel GetDisplayedAllianceLevel(IFactionController otherFactionController) => GetAllianceLevel(otherFactionController);
+
+		/// <summary>
+		/// The standing between the two as it is, without the aggression toggle: <see cref="GetAllianceLevel"/> reads any pair
+		/// where either side's aggression is on as Enemy (so hostile effects reach neutrals), and that widening is for HOSTILE
+		/// reach only. Beneficial targeting (a heal or cleanse that reaches neutral players) reads this, so turning aggression
+		/// on does not stop a player healing the neutral player beside them (Jim, 11-16).
+		/// </summary>
+		FactionAllianceLevel GetStandingAllianceLevel(IFactionController otherFactionController) => GetAllianceLevel(otherFactionController);
 	}
 }

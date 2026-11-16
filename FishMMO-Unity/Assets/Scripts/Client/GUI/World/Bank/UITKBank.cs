@@ -3,6 +3,7 @@ using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace FishMMO.Client
 {
@@ -37,6 +38,55 @@ namespace FishMMO.Client
 
 		/// <inheritdoc/>
 		protected override InventoryType OwnInventoryType => InventoryType.Bank;
+
+		private const string VAULT_BUTTON_NAME = "bank-vault-button";
+		private const string VAULT_BUTTON_HIDDEN = "bank-vault-button--hidden";
+
+		/// <summary>
+		/// Wires the house vault button. It only shows while the vault holds something; the vault is
+		/// asked every time the bank opens (<see cref="OnAfterShow"/>).
+		/// </summary>
+		public override void OnStarting()
+		{
+			base.OnStarting();
+			Button vault = Root?.Q<Button>(VAULT_BUTTON_NAME);
+			if (vault != null)
+			{
+				vault.clicked += OpenVault;
+			}
+			UITKHousingVault.OnVaultKnown += SetVaultButton;
+		}
+
+		/// <inheritdoc />
+		public override void OnDestroying()
+		{
+			UITKHousingVault.OnVaultKnown -= SetVaultButton;
+			base.OnDestroying();
+		}
+
+		/// <summary>Hides the vault button and asks whether the vault holds anything.</summary>
+		protected override void OnAfterShow()
+		{
+			base.OnAfterShow();
+			SetVaultButton(false);
+			if (Client != null)
+			{
+				UITKHousingVault.Request();
+			}
+		}
+
+		private void SetVaultButton(bool holdsSomething)
+		{
+			Root?.Q(VAULT_BUTTON_NAME)?.EnableInClassList(VAULT_BUTTON_HIDDEN, !holdsSomething);
+		}
+
+		private void OpenVault()
+		{
+			if (UIManager.TryGetTK(UITKHousingVault.ControlName, out UITKHousingVault vault))
+			{
+				vault.Open();
+			}
+		}
 
 		/// <summary>
 		/// Registers the banker broadcast handler and joins the shared operation tracker.

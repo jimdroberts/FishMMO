@@ -1259,6 +1259,33 @@ namespace FishMMO.MockContent
 			return Save(instance, AbilityFolder, assetName);
 		}
 
+		/// <summary>
+		/// Carries the icon already on <paramref name="existing"/> onto the fresh <paramref name="instance"/> when the
+		/// generator gave it none, so an overwrite does not blank an icon assigned by hand or by
+		/// FishMMO-Art/Icons/generate_ability_icons.py. Covers both the addressable <c>icon</c> of ability and buff
+		/// templates and the plain sprite <c>icon</c> of ability events.
+		/// </summary>
+		private static void KeepIcon(ScriptableObject existing, ScriptableObject instance)
+		{
+			SerializedObject from = new SerializedObject(existing);
+			SerializedProperty kept = from.FindProperty("icon");
+			SerializedObject to = new SerializedObject(instance);
+			SerializedProperty fresh = to.FindProperty("icon");
+			if (kept == null || fresh == null)
+			{
+				return;
+			}
+			bool freshHasIcon = fresh.propertyType == SerializedPropertyType.ObjectReference
+				? fresh.objectReferenceValue != null
+				: !string.IsNullOrEmpty(fresh.FindPropertyRelative("m_AssetGUID")?.stringValue);
+			if (freshHasIcon)
+			{
+				return; // the generator chose an icon itself
+			}
+			to.CopyFromSerializedProperty(kept);
+			to.ApplyModifiedPropertiesWithoutUndo();
+		}
+
 		private static T Save<T>(T instance, string folder, string assetName) where T : ScriptableObject
 		{
 			string path = $"{folder}/{assetName}.asset";
@@ -1272,6 +1299,7 @@ namespace FishMMO.MockContent
 			ScriptableObject existing = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
 			if (existing != null && existing.GetType() == typeof(T))
 			{
+				KeepIcon(existing, instance);
 				EditorUtility.CopySerialized(instance, existing);
 				EditorUtility.SetDirty(existing);
 				UnityEngine.Object.DestroyImmediate(instance);

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Hitscan Beam
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: ea38f6f19c855972c747fdd6aa54c9a1
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

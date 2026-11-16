@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Self Armor Buff
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 531050b1ea8f11470e7da22730638a06
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

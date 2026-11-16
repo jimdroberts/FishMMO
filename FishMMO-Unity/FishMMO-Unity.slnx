@@ -1,4 +1,5 @@
 ﻿<Solution>
+  <Project Path="FishMMO.Factions.Tests.csproj" />
   <Project Path="FishMMO.Client.csproj" />
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
   <Project Path="FishMMO.Shared.csproj" />
@@ -7,6 +8,7 @@
   <Project Path="FishMMO.Client.GUI.Editor.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
   <Project Path="KinematicCharacterController.csproj" />
+  <Project Path="FishMMO.Leaderboards.csproj" />
   <Project Path="Unity.FishNet.Codegen.csproj" />
   <Project Path="FishMMO.Water.csproj" />
   <Project Path="FishMMO.Core.csproj" />
@@ -17,19 +19,27 @@
   <Project Path="FishMMO.Render.Scratch.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="FishMMO.GeneratedFiles.Editor.csproj" />
+  <Project Path="FishMMO.Leaderboards.Client.csproj" />
   <Project Path="FishMMO.Water.Editor.csproj" />
   <Project Path="FishMMO.Shared.Map.Editor.csproj" />
   <Project Path="FishMMO.Client.Weather.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.Weather.Editor.csproj" />
   <Project Path="FishMMO.TestHarness.World.Editor.csproj" />
+  <Project Path="FishMMO.Factions.RenderScratch.csproj" />
+  <Project Path="FishMMO.Factions.csproj" />
   <Project Path="FishMMO.TestHarness.csproj" />
   <Project Path="FishMMO.Client.Security.Editor.csproj" />
-  <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="WebTransport.csproj" />
+  <Project Path="FishMMO.Leaderboards.Server.csproj" />
+  <Project Path="FishMMO.Travel.csproj" />
+  <Project Path="FishMMO.Travel.Server.csproj" />
   <Project Path="FishMMO.Shared.Biomes.Editor.csproj" />
+  <Project Path="FishMMO.Factions.Client.csproj" />
+  <Project Path="FishMMO.Leaderboards.Tests.csproj" />
   <Project Path="FishMMO.TestHarness.Server.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="FishMMO.Shared.WorldSceneDetails.Editor.csproj" />
+  <Project Path="FishMMO.Travel.Tests.csproj" />
   <Project Path="Unity.RenderPipelines.Universal.Config.Editor.Tests.csproj" />
   <Project Path="FishMMO.TestHarness.Sky.Editor.csproj" />
   <Project Path="FishMMO.UnitTests.PlayMode.csproj" />
@@ -37,7 +47,9 @@
   <Project Path="FishMMO.TestHarness.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
   <Project Path="FishNet.Demos.csproj" />
+  <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
+  <Project Path="FishMMO.Factions.Server.csproj" />
   <Project Path="FishMMO.MockContent.Editor.csproj" />
   <Project Path="WebTransport.Editor.csproj" />
   <Project Path="FishMMO.Shared.SerializableDictionary.Editor.csproj" />

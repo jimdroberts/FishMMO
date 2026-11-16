@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Cone Blast
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 00e17b38d526d6a94b54e4336609c61e
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Punch
   m_EditorClassIdentifier: 
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 11f9db0e0f2f5b20e497457b903f64c8
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

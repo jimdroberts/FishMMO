@@ -1380,6 +1380,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			return Scene.IsValid() ? $"{Scene.name} (handle {Scene.handle})" : "no scene";
 		}
 
+		/// <summary>A random point of the area on the ground under it; false when the cast found no ground.</summary>
+		private bool TryCastToGround(SpawnableSettings settings, out Vector3 position)
+		{
+			position = Definition.Position;
+			PhysicsScene physics = Scene.GetPhysicsScene();
+			if (!physics.IsValid())
+			{
+				return false;
+			}
+			Vector3 extents = Definition.BoundingBoxExtents;
+			Vector3 origin = Definition.Position + new Vector3(DeterministicRNG.Shared.Range(-extents.x, extents.x), extents.y,
+				DeterministicRNG.Shared.Range(-extents.z, extents.z));
+			if (!physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, Definition.BoundingBoxSize.y,
+					Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+			{
+				return false;
+			}
+			position = hit.point;
+			position.y += settings.YOffset;
+			return true;
+		}
+
 		/// <summary>Metres within which spawned members of one species count as one herd.</summary>
 		public const float HerdRadius = 40f;
 
@@ -1436,10 +1458,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				return true;
 			}
 
+			/* Only on ground the cast actually hit. ResolveSpawnPosition falls back to the spawner's own position when it
+			 * finds none, which for an area hundreds of metres wide is a point in the air (or in a hill): the animal then
+			 * stood off the NavMesh where nobody could see it. A miss is another try, and after the last one the spawn
+			 * waits for the next check. */
 			for (int attempt = 0; attempt < HabitatTries; ++attempt)
 			{
-				Vector3 candidate = ResolveSpawnPosition(settings);
-				if (LivesAt(species, candidate))
+				if (TryCastToGround(settings, out Vector3 candidate) && LivesAt(species, candidate))
 				{
 					position = candidate;
 					return true;

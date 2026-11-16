@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Mock Threat Pulse
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityTemplate
   icon:
-    m_AssetGUID: 
+    m_AssetGUID: 3d9af5acd88bb17ed226fa577fd3c3b6
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 

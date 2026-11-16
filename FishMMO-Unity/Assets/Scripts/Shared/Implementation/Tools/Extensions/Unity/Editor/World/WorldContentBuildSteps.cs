@@ -137,6 +137,17 @@ namespace FishMMO.Shared
 				Log.Warning("BuildLogger", $"Planet surface bake failed; the build continues without those images: {ex.Message}");
 			}
 
+			try
+			{
+				Log.Debug("BuildLogger", "Baking any missing or out of date portal views (before the maps: putting in a missing portal surface saves its scene)...");
+				PortalViewBaker.BakeOutOfDate();
+			}
+			catch (OperationCanceledException) { throw; }
+			catch (Exception ex)
+			{
+				Log.Warning("BuildLogger", $"Portal view bake failed; portals show only their glow where no view was baked: {ex.Message}");
+			}
+
 			WorldMapDefinition.ReferenceBakedMaps = true;
 			try
 			{
@@ -252,6 +263,9 @@ namespace FishMMO.Shared
 			{
 				Log.Debug("BuildLogger", "Removing the planet surfaces' addressable group (the baked images stay for the next build)...");
 				FishMMO.Shared.WorldDesign.PlanetSurfaceBaker.RemoveBuildGroup();
+
+				Log.Debug("BuildLogger", "Removing the portal views' addressable group (the baked views stay for the next build)...");
+				PortalViewBaker.RemoveBuildGroup();
 
 				Log.Debug("BuildLogger", "Removing the world maps' addressable group (the baked maps stay for the next build)...");
 				FishMMO.Shared.WorldMaps.WorldMapBaker.RemoveBuildGroup();

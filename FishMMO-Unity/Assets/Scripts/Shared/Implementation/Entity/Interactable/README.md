@@ -77,7 +77,7 @@ Under `Assets/Templates/Entity/ECA/Interactions/`:
 | `Ability Crafter Interact` | `NPCLookAtInteractorAction`, `SendAbilityCrafterBroadcastAction` | HumanAbilityCrafter |
 | `Dungeon Entrance Interact` | `SendDungeonFinderBroadcastAction` | InstanceDungeonTest |
 | `Teleporter Interact` | `TeleportAction` | every Teleporter |
-| `Waypoint Interact` | `UnlockWaypointAction` (stop on failure), `AchievementIncrementAction` (Waypoints Discovered) | Waypoint prefab |
+| `Waypoint Interact` | `UnlockWaypointAction` (stop on failure), `AchievementIncrementAction` (Waypoints Discovered) | Attached to every Waypoint by the Travel module (`InteractableTriggers`) |
 | `Waypoint Travel` | `AchievementIncrementAction` (Fast Travels) | Waypoint prefab, `OnTravelTriggers` |
 | `World Item Pickup` | `PickupWorldItemAction` | Small World Item |
 

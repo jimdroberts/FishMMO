@@ -357,6 +357,9 @@ namespace FishMMO.Server.Implementation
 			NetworkWrapper.AttachLoginAuthenticator(this);
 			NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState);
 
+			// Module systems join the scene's own list before anything scans it.
+			AdoptModuleSystems();
+
 			// Initialize all registered runtime data containers
 			DataContainerRegistry = new RuntimeDataContainerRegistry();
 			DiscoverAndCreateDataContainers();
@@ -895,6 +898,52 @@ namespace FishMMO.Server.Implementation
 		/// SIGKILLs mid-flush, losing the work the flush was protecting.
 		/// </remarks>
 		private const int shutdownBlockingBudgetMilliseconds = 8_000;
+
+		/// <summary>Addressables label suffix of the module systems a server scene adopts: <c>&lt;scene name&gt;</c> + this.</summary>
+		public const string ModuleSystemsLabelSuffix = "_Systems";
+
+		/// <summary>
+		/// Appends the module systems for this server's scene to <see cref="serverBehaviors"/>: every server behaviour
+		/// asset labelled <c>&lt;scene name&gt;_Systems</c> (the scene server's are <c>SceneServer_Systems</c>).
+		/// </summary>
+		/// <remarks>
+		/// A module's system is not in the scene's list, so removing the module leaves no missing reference there;
+		/// the asset, in the module's folder, carries the label. Loaded synchronously: this runs once at start, before
+		/// the list is scanned, on a server (never WebGL). A behaviour already in the list is not added twice.
+		/// </remarks>
+		private void AdoptModuleSystems()
+		{
+			string label = gameObject.scene.name + ModuleSystemsLabelSuffix;
+			var locations = UnityEngine.AddressableAssets.Addressables.LoadResourceLocationsAsync(label);
+			try
+			{
+				IList<UnityEngine.ResourceManagement.ResourceLocations.IResourceLocation> found = locations.WaitForCompletion();
+				if (found == null)
+				{
+					return;
+				}
+				foreach (UnityEngine.ResourceManagement.ResourceLocations.IResourceLocation location in found)
+				{
+					ScriptableObject asset = UnityEngine.AddressableAssets.Addressables.LoadAssetAsync<ScriptableObject>(location).WaitForCompletion();
+					if (asset is ServerBehaviour behaviour && !serverBehaviors.Contains(behaviour))
+					{
+						serverBehaviors.Add(behaviour);
+						Log.Debug("Server", $"Module system {behaviour.GetType().Name} adopted from '{label}'.");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Error("Server", $"Loading the module systems labelled '{label}' failed; the server runs without them.", ex);
+			}
+			finally
+			{
+				if (locations.IsValid())
+				{
+					UnityEngine.AddressableAssets.Addressables.Release(locations);
+				}
+			}
+		}
 
 		/// <summary>
 		/// Registers all server behaviours in order.

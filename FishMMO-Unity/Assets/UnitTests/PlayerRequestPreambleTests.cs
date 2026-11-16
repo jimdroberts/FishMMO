@@ -46,6 +46,9 @@ namespace FishMMO.UnitTests
 		/// <summary>The resolution the shared entry point replaces.</summary>
 		private const string Resolution = "conn.FirstObject.GetComponent<IPlayerCharacter>()";
 
+		/// <summary>Where modules live; each module's server code is in its <c>Server</c> folder.</summary>
+		private const string ModulesRoot = "Assets/Modules";
+
 		private static string ServerRoot =>
 			Path.Combine(Directory.GetCurrentDirectory(), "Assets/Scripts/Server");
 
@@ -93,7 +96,7 @@ namespace FishMMO.UnitTests
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Container.cs", 1 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Mailbox.cs", 3 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Merchant.cs", 2 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Waypoint.cs", 1 },
+				{ "Modules/Travel/Server/WaypointTravelSystem.cs", 1 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.cs", 1 },
 
 				// Resolved after the guard, inside a try/finally that reports the failure reason.
@@ -136,6 +139,23 @@ namespace FishMMO.UnitTests
 					.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
 					.Replace('\\', '/');
 				sources[key] = ProjectFiles.ReadAllText(file).Replace("\r\n", "\n");
+			}
+
+			/* Modules' server code too (Assets/Modules/<Name>/Server), keyed "Modules/<Name>/Server/<file>": a module's
+			 * request handlers are held to the same preamble as the server's own. */
+			string modulesRoot = Path.Combine(Directory.GetCurrentDirectory(), ModulesRoot);
+			if (Directory.Exists(modulesRoot))
+			{
+				foreach (string moduleServer in Directory.GetDirectories(modulesRoot, "Server", SearchOption.AllDirectories))
+				{
+					foreach (string file in Directory.GetFiles(moduleServer, "*.cs", SearchOption.AllDirectories))
+					{
+						string key = "Modules/" + file.Substring(modulesRoot.Length)
+							.TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+							.Replace('\\', '/');
+						sources[key] = File.ReadAllText(file).Replace("\r\n", "\n");
+					}
+				}
 			}
 
 			LogAssert.IsTrue(sources.Count > 0, "there must be server sources to scan");
@@ -225,7 +245,7 @@ namespace FishMMO.UnitTests
 				{ "Implementation/World/SceneServer/Chat/ChatSystem.ReportPlayer.cs", "files a support ticket" },
 				/* Reading a leaderboard page is a database read that changes nothing and leads to
 				 * nothing, and a dead or stunned player may still look (issue #261). */
-				{ "Implementation/World/SceneServer/Leaderboard/LeaderboardSystem.cs", "reads a leaderboard page" },
+				{ "Modules/Leaderboards/Server/LeaderboardSystem.cs", "reads a leaderboard page" },
 			};
 
 		[Test]
@@ -238,6 +258,11 @@ namespace FishMMO.UnitTests
 
 			foreach (KeyValuePair<string, string> exempt in NonActionOptOuts)
 			{
+				// A module that is not installed has nothing to check; its entry outlives it harmlessly.
+				if (exempt.Key.StartsWith("Modules/", StringComparison.Ordinal) && !sources.ContainsKey(exempt.Key))
+				{
+					continue;
+				}
 				LogAssert.IsTrue(sources.TryGetValue(exempt.Key, out string exemptSource) &&
 					exemptSource.Contains("PlayerRequestGate.SkipCanAct"),
 					$"{exempt.Key} is listed as a non-action opt-out ({exempt.Value}) but no longer opts out; remove it from the list");

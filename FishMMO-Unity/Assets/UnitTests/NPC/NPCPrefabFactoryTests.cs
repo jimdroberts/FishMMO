@@ -73,7 +73,7 @@ namespace FishMMO.UnitTests.NPCs
 
 		private static int SerializedRaceID(GameObject prefab)
 		{
-			return new SerializedObject(prefab.GetComponent<FactionController>()).FindProperty("raceTemplateID").intValue;
+			return new SerializedObject(prefab.GetComponent<NPC>()).FindProperty("raceTemplateID").intValue;
 		}
 
 		// --- Reading recipes -----------------------------------------------------------------
@@ -150,56 +150,6 @@ namespace FishMMO.UnitTests.NPCs
 		// --- Creation --------------------------------------------------------------------------
 
 		[Test]
-		public void Create_ClonesTheBaseAndWritesTheRecipeOntoIt()
-		{
-			GameObject orc = Load(ORC);
-			RaceTemplate human = LoadAsset<RaceTemplate>(HUMAN);
-			AIArchetypeTemplate archer = LoadAsset<AIArchetypeTemplate>(ARCHER);
-			AIArchetypeTemplate orcBrain = AIBrainCatalogueEditorUtility.GetArchetype(orc);
-			int orcRaceID = SerializedRaceID(orc);
-
-			NPCRecipe recipe = NPCPrefabFactory.RecipeFrom(orc);
-			recipe.Name = "Factory Human Archer";
-			recipe.Folder = SCRATCH;
-			recipe.Race = human;
-			recipe.Archetype = archer;
-			recipe.IsAggressive = true;
-			recipe.IsCharmable = false;
-			recipe.RegisterAddressable = false;
-
-			GameObject created = NPCPrefabFactory.Create(recipe);
-
-			Assert.IsNotNull(created);
-			Assert.AreEqual(SCRATCH + "/Factory Human Archer.prefab", AssetDatabase.GetAssetPath(created));
-			Assert.AreEqual("Factory Human Archer", created.name);
-
-			// The recipe landed.
-			Assert.AreSame(archer, AIBrainCatalogueEditorUtility.GetArchetype(created),
-				"the recipe's brain must land in the server catalogue");
-			Assert.IsNull(created.GetComponent<AIController>(), "the brain is server data; the prefab must not carry it");
-			Assert.AreEqual(NPCPrefabFactory.ComputeTemplateID(human), SerializedRaceID(created));
-			Assert.IsTrue(created.GetComponent<FactionController>().IsAggressive);
-			Assert.IsFalse(created.GetComponent<NPC>().IsCharmable);
-			CollectionAssert.AreEqual(recipe.Abilities, created.GetComponent<NPC>().Abilities);
-			Assert.AreSame(recipe.AttributeDatabase, created.GetComponent<CharacterAttributeController>().CharacterAttributeDatabase);
-
-			// The boilerplate came along.
-			Assert.IsNotNull(created.GetComponent<FishNet.Object.NetworkObject>());
-			Assert.IsNotNull(created.GetComponent<CharacterPredictionController>());
-			Assert.IsNotNull(created.GetComponent<CooldownController>());
-			Assert.IsNotNull(created.GetComponent<AbilityController>());
-			Assert.IsNotNull(created.GetComponent<NPC>().CharacterNameplate, "the overhead nameplate must survive the clone");
-
-			// Nothing inside it points at another asset's NetworkObject.
-			Assert.IsEmpty(NetworkObjectBindingValidator.Scan(AssetDatabase.GetAssetPath(created)),
-				"a cloned prefab must own every NetworkBehaviour it carries");
-
-			// And the base was not edited in the process.
-			Assert.AreSame(orcBrain, AIBrainCatalogueEditorUtility.GetArchetype(orc));
-			Assert.AreEqual(orcRaceID, SerializedRaceID(orc));
-		}
-
-		[Test]
 		public void Create_GivesAMonsterAnInteractionRole()
 		{
 			NPCRecipe recipe = NPCPrefabFactory.RecipeFrom(Load(ORC));
@@ -243,5 +193,55 @@ namespace FishMMO.UnitTests.NPCs
 			Assert.Throws<InvalidOperationException>(() => NPCPrefabFactory.Create(recipe),
 				"a second create at the same path must refuse rather than clobber a designer's prefab");
 		}
+		[Test]
+		public void Create_ClonesTheBaseAndWritesTheRecipeOntoIt()
+		{
+			GameObject orc = Load(ORC);
+			RaceTemplate human = LoadAsset<RaceTemplate>(HUMAN);
+			AIArchetypeTemplate archer = LoadAsset<AIArchetypeTemplate>(ARCHER);
+			AIArchetypeTemplate orcBrain = AIBrainCatalogueEditorUtility.GetArchetype(orc);
+			int orcRaceID = SerializedRaceID(orc);
+
+			NPCRecipe recipe = NPCPrefabFactory.RecipeFrom(orc);
+			recipe.Name = "Factory Human Archer";
+			recipe.Folder = SCRATCH;
+			recipe.Race = human;
+			recipe.Archetype = archer;
+			recipe.IsAggressive = true;
+			recipe.IsCharmable = false;
+			recipe.RegisterAddressable = false;
+
+			GameObject created = NPCPrefabFactory.Create(recipe);
+
+			Assert.IsNotNull(created);
+			Assert.AreEqual(SCRATCH + "/Factory Human Archer.prefab", AssetDatabase.GetAssetPath(created));
+			Assert.AreEqual("Factory Human Archer", created.name);
+
+			// The recipe landed.
+			Assert.AreSame(archer, AIBrainCatalogueEditorUtility.GetArchetype(created),
+				"the recipe's brain must land in the server catalogue");
+			Assert.IsNull(created.GetComponent<AIController>(), "the brain is server data; the prefab must not carry it");
+			Assert.AreEqual(NPCPrefabFactory.ComputeTemplateID(human), SerializedRaceID(created));
+			Assert.IsTrue(created.GetComponent<NPC>().IsAggressive);
+			Assert.IsFalse(created.GetComponent<NPC>().IsCharmable);
+			CollectionAssert.AreEqual(recipe.Abilities, created.GetComponent<NPC>().Abilities);
+			Assert.AreSame(recipe.AttributeDatabase, created.GetComponent<CharacterAttributeController>().CharacterAttributeDatabase);
+
+			// The boilerplate came along.
+			Assert.IsNotNull(created.GetComponent<FishNet.Object.NetworkObject>());
+			Assert.IsNotNull(created.GetComponent<CharacterPredictionController>());
+			Assert.IsNotNull(created.GetComponent<CooldownController>());
+			Assert.IsNotNull(created.GetComponent<AbilityController>());
+			Assert.IsNotNull(created.GetComponent<NPC>().CharacterNameplate, "the overhead nameplate must survive the clone");
+
+			// Nothing inside it points at another asset's NetworkObject.
+			Assert.IsEmpty(NetworkObjectBindingValidator.Scan(AssetDatabase.GetAssetPath(created)),
+				"a cloned prefab must own every NetworkBehaviour it carries");
+
+			// And the base was not edited in the process.
+			Assert.AreSame(orcBrain, AIBrainCatalogueEditorUtility.GetArchetype(orc));
+			Assert.AreEqual(orcRaceID, SerializedRaceID(orc));
+		}
+
 	}
 }
