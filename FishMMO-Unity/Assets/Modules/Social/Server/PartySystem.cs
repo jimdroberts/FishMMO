@@ -3077,6 +3077,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							TimeSpan.FromSeconds(perTargetInviteCooldownSeconds),
 							now))
 					{
+						SendInviteToast(conn, $"You invited {targetCharacter.CharacterName} too recently; try again shortly.", ToastSeverity.Warning);
 						return;
 					}
 
@@ -3085,6 +3086,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// if the target doesn't already have a pending invite
 					if (!runtimeData.TryAddPendingInvitation(targetCharacterID, invitation))
 					{
+						SendInviteToast(conn, $"{targetCharacter.CharacterName} already has a party invitation waiting.", ToastSeverity.Info);
 						return;
 					}
 
@@ -3093,11 +3095,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						InviterCharacterID = inviterCharacterID,
 						TargetCharacterID = targetCharacter.ID
 					}, true, Channel.Reliable);
+					SendInviteToast(conn, $"Party invitation sent to {targetCharacter.CharacterName}.", ToastSeverity.Info);
 				});
 			}
 			catch (Exception ex)
 			{
 				await Log.Error("PartySystem", $"Error validating party invite (PartyID={inviterPartyID}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Tells the inviter what became of an invitation: sent, or why not. An invitation that ended in silence was
+		/// indistinguishable from one the target ignored (2026-11-17).
+		/// </summary>
+		private void SendInviteToast(NetworkConnection conn, string text, ToastSeverity severity)
+		{
+			if (conn != null && conn.IsActive)
+			{
+				Server.NetworkWrapper.Broadcast(conn, new ToastBroadcast() { Text = text, Severity = severity }, true, Channel.Reliable);
 			}
 		}
 

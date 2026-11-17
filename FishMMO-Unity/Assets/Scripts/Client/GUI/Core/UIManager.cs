@@ -46,6 +46,12 @@ namespace FishMMO.Client
 		private static Client client;
 
 		/// <summary>
+		/// The character in play, or null. Kept so a character control that registers after world entry is handed it
+		/// as it registers (see <see cref="RegisterTK"/>).
+		/// </summary>
+		private static IPlayerCharacter currentCharacter;
+
+		/// <summary>
 		/// Injects the Client instance into all registered controls for network/UI interaction.
 		/// </summary>
 		/// <param name="value">Client instance to inject.</param>
@@ -83,6 +89,7 @@ namespace FishMMO.Client
 		/// <param name="character">Player character to inject.</param>
 		internal static void SetCharacter(IPlayerCharacter character)
 		{
+			currentCharacter = character;
 			/* Each control is isolated. This runs inside Client.OnCharacterStartLocal, which
 			 * also dismisses the loading screen and wires up the player input controller — so
 			 * an exception from any single panel aborted world entry entirely, leaving the
@@ -111,6 +118,7 @@ namespace FishMMO.Client
 		/// </summary>
 		internal static void UnsetCharacter()
 		{
+			currentCharacter = null;
 			// Isolated for the same reason as SetCharacter: teardown runs on logout and on
 			// character despawn from Client.OnCharacterStopLocal, which still has to
 			// deinitialize input and destroy the character object afterwards. One panel
@@ -176,6 +184,23 @@ namespace FishMMO.Client
 			catch (Exception ex)
 			{
 				Log.Error("UIManager", $"SetClient failed while registering control '{control.Name}'.", ex);
+			}
+
+			/* A character control that registers after world entry is handed the character in play, as it is handed
+			 * the client above. Module windows (ModulePanelHost) are placed after an Addressables load, which can finish
+			 * after the player spawned; SetCharacter had already walked the registered controls, so such a window kept a
+			 * null character for the session and everything it subscribes to in OnPostSetCharacter never arrived: party
+			 * and guild invitations, and trade requests (the trade window drops one without a character), found 2026-11-17. */
+			if (characterControl != null && currentCharacter != null)
+			{
+				try
+				{
+					characterControl.SetCharacter(currentCharacter);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("UIManager", $"SetCharacter failed while registering control '{control.Name}'.", ex);
+				}
 			}
 		}
 

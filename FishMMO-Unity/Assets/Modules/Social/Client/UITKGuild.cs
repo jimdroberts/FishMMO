@@ -869,6 +869,11 @@ namespace FishMMO.Client
 
 			ClientNamingSystem.SetName(NamingSystemType.CharacterName, inviterCharacterID, (n) =>
 			{
+				// A toast as well as the dialog: the dialog can sit behind another window, the toast is seen.
+				if (UIManager.TryGetTK("UIToast", out UITKToast toast))
+				{
+					toast.Show(n + " invited you to join their guild.", ToastSeverity.Info);
+				}
 				if (UIManager.TryGetTK("UIDialogBox", out UITKDialogBox uiTooltip))
 				{
 					uiTooltip.Open("You have been invited to join " + n + "'s guild. Would you like to join?",

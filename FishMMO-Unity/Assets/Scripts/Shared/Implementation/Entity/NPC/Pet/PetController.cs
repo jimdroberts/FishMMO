@@ -375,8 +375,15 @@ namespace FishMMO.Shared
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPetAddBroadcastReceived(PetAddBroadcast msg, Channel channel)
 		{
+			/* Only a LIVE object is the pet. A client unregisters a scene object when it is destroyed, not when it is
+			 * despawned to the pool, and the server keeps a re-spawned pet's ID — so after any despawn (a scene change, a
+			 * dismiss and re-summon, a death, an observer drop) this ID could still name the previous, pooled copy until
+			 * the new one arrived and overwrote the entry. That copy was bound: the pet panel drew its frozen health (full)
+			 * while the target frame, reading the live pet, showed 70% (2026-11-17). A dead copy now waits like a missing
+			 * one, for the live object's registration. */
 			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject) &&
-				sceneObject != null && sceneObject.GameObject != null && sceneObject.GameObject.TryGetComponent(out Pet pet))
+				sceneObject != null && sceneObject.GameObject != null && sceneObject.GameObject.TryGetComponent(out Pet pet) &&
+				IsLive(pet))
 			{
 				RemovePendingPetAdd(msg.ID);
 				ApplyPetAdd(msg, pet);
@@ -433,8 +440,23 @@ namespace FishMMO.Shared
 			SceneObject.Registered -= SceneObject_Registered;
 		}
 
+		/// <summary>True when <paramref name="pet"/> is a spawned, active object rather than a pooled copy still registered under its ID.</summary>
+		private static bool IsLive(Pet pet)
+		{
+			return pet != null && pet.gameObject.activeInHierarchy && pet.NetworkObject != null && pet.NetworkObject.IsSpawned;
+		}
+
 		private void ApplyPetAdd(PetAddBroadcast msg, Pet pet)
 		{
+			/* One entry per pet: a stale copy listed under this ID before (see OnClientPetAddBroadcastReceived) gives way
+			 * to the live object, and the panel's rebind on OnPetSummoned drops its row. */
+			for (int i = pets.Count - 1; i >= 0; --i)
+			{
+				if (pets[i] != null && !ReferenceEquals(pets[i], pet) && pets[i].ID == msg.ID)
+				{
+					RemovePet(pets[i]);
+				}
+			}
 			AddPet(pet);
 
 			Stance = msg.Stance;

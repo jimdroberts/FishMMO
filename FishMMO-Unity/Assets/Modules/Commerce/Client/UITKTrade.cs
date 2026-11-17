@@ -491,16 +491,24 @@ namespace FishMMO.Client
 
 		private void OnClientTradeInviteReceived(TradeInviteBroadcast msg, Channel channel)
 		{
-			if (Character == null)
-			{
-				return;
-			}
-
 			pendingRequesterID = msg.RequesterCharacterID;
 			pendingInviteExpiresAt = Time.unscaledTime + Mathf.Max(1.0f, msg.ExpiresInSeconds);
 
 			long requesterID = msg.RequesterCharacterID;
 			string name = string.IsNullOrEmpty(msg.RequesterName) ? "Someone" : msg.RequesterName;
+
+			/* Declined, never dropped. This returned in silence while the window had no character — which was every
+			 * session where the window (a module prefab placed after an Addressables load) registered after the
+			 * player spawned (2026-11-17) — and the server kept the request pending, so the requester's next try was
+			 * refused with "already has a pending trade request". UIManager now hands late windows the character;
+			 * if there is still none, the requester gets an answer. */
+			if (Character == null)
+			{
+				AnswerInvite(requesterID, false);
+				return;
+			}
+
+			Toast($"{name} wants to trade with you.", ToastSeverity.Info);
 
 			if (!UIManager.TryGetTK(DIALOG_NAME, out UITKDialogBox dialog) ||
 				!dialog.Open($"{name} wants to trade with you.",
