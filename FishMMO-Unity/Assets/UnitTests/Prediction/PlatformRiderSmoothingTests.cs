@@ -52,7 +52,7 @@ namespace FishMMO.UnitTests
 		/// One: the least a glide between two simulated positions can trail by, and FishNet's
 		/// default. It was two (2026-09-08, never judged in play), which tolerated a tick landing a
 		/// frame late without the visual stalling, at ~66 ms of visual latency on the player's own
-		/// movement; Jim asked for the lag gone (2026-11-14), and one is as far as that goes without
+		/// movement; and one is as far as that goes without
 		/// drawing the body AHEAD of the simulation. Change it here and the prefabs, the ships'
 		/// constant and any scene deck must follow.
 		/// </summary>

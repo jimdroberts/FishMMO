@@ -184,6 +184,10 @@ namespace FishMMO.Shared
 				notes.Add("FAILED: an archetype could not be made.");
 				return notes;
 			}
+			/* Fighters keep a target: the beast base's Raging personality rolls a 60% random retarget every few seconds, so a
+			 * wolf bounced between a player and their pet. Aggressive Melee targets by threat and switches on a clear lead. */
+			SetPersonality(predator, FocusedPersonalityPath, notes);
+			SetPersonality(territorial, FocusedPersonalityPath, notes);
 
 			var condition = AssetDatabase.LoadAssetAtPath<ObserverCondition>(WildlifeConditionPath);
 			var bite = AssetDatabase.LoadAssetAtPath<AbilityTemplate>(BiteAbilityPath);
@@ -317,6 +321,21 @@ namespace FishMMO.Shared
 			SetString(so, "Description", description);
 			so.ApplyModifiedPropertiesWithoutUndo();
 			return archetype;
+		}
+
+		private const string FocusedPersonalityPath = "Assets/Templates/Entity/NPCs/AI/Personalities/Aggressive Melee Personality.asset";
+
+		private static void SetPersonality(AIArchetypeTemplate archetype, string personalityPath, List<string> notes)
+		{
+			var personality = AssetDatabase.LoadAssetAtPath<ScriptableObject>(personalityPath);
+			if (personality == null)
+			{
+				notes.Add($"FAILED: no {personalityPath}; {archetype.name} keeps its personality.");
+				return;
+			}
+			var so = new SerializedObject(archetype);
+			SetObject(so, "Personality", personality);
+			so.ApplyModifiedPropertiesWithoutUndo();
 		}
 
 		private static WildlifeTemplate EnsureTemplate(Species species, Material material, List<string> notes)

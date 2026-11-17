@@ -200,29 +200,29 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			/* STRICT toggle: a held pin is released by this key whatever is under the pointer, and
-			 * only when nothing is pinned does the key pin what the pointer is on.
-			 *
-			 * It was contextual — release when the pointer was on the pinned character or on
-			 * nothing, otherwise (re)pin whatever it was on — which reads well right up until it
-			 * matters. In a fight the pointer is on an enemy essentially always, so the only way to
-			 * let go of a pin was to aim at empty sky first, and aiming at a second enemy silently
-			 * MOVED the pin rather than dropping it. Release was reachable only by first doing
-			 * something that is not releasing, which is what made the whole feature feel broken.
-			 *
-			 * The cost is that moving a pin takes two presses. That is the trade taken here: one
-			 * meaning per press, and the player never has to look at the pointer to know which one
-			 * they are about to get. */
+			/* One press does what the pointer says (Jim, 11-16: pressing the key with a pin held must pin the new target at
+			 * once, not release and wait for a second press):
+			 *   - on another character that can be pinned: the pin MOVES there;
+			 *   - on the pinned character itself, on nothing, or on scenery: the pin is RELEASED.
+			 * It replaced the strict toggle (#286), where a held pin was always released first, so moving a pin took two
+			 * presses. Letting go mid-fight is aiming at the pinned character, or away from everyone, and pressing. */
+			Transform hovered = Current.Target != null ? Current.Target : null;
+
 			if (!ReferenceEquals(pinnedTarget, null))
 			{
 				/* Reference identity, not Unity's overloaded ==. A target destroyed since the last
 				 * validation tick is still a live reference here, and it must take this branch —
-				 * the release is exactly what clears it and takes the card down. */
+				 * the release (or the move) is exactly what clears it and takes the card down.
+				 * TryPinTarget refuses a non-character without touching the held pin, and replaces
+				 * the held pin itself when it accepts. */
+				if (hovered != null && !ReferenceEquals(hovered, pinnedTarget) && TryPinTarget(hovered))
+				{
+					return true;
+				}
 				ClearPinnedTarget();
 				return false;
 			}
 
-			Transform hovered = Current.Target != null ? Current.Target : null;
 			if (hovered == null)
 			{
 				return false;

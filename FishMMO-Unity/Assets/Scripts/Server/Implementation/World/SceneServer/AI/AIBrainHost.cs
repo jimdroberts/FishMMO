@@ -415,7 +415,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		/// <param name="networkManager">The network manager whose host prepared the brain.</param>
 		/// <param name="instance">The pooled instance; one with no brain is left alone.</param>
-		internal static void RetireBrainOf(NetworkManager networkManager, FishNet.Object.NetworkObject instance)
+		public static void RetireBrainOf(NetworkManager networkManager, FishNet.Object.NetworkObject instance)
 		{
 			AIController brain = instance != null ? instance.GetComponent<AIController>() : null;
 			if (brain == null)

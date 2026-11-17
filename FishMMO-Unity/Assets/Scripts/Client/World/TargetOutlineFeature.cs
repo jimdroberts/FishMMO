@@ -142,6 +142,21 @@ namespace FishMMO.Client
 			private readonly List<Renderer> drawRenderers = new List<Renderer>();
 			private readonly List<int> drawSubmeshes = new List<int>();
 			private readonly List<int> drawOutline = new List<int>();
+
+			/// <summary>
+			/// Per drawn renderer: its material when that material draws its own mask ("FishOutlineMask" pass), else null.
+			/// </summary>
+			/// <remarks>
+			/// A shader that poses its vertices (the wildlife's gait, bite and fall) is drawn into the mask by its own pass;
+			/// the generic mask knows nothing of the pose, so a dead animal's outline stood up (11-16).
+			/// </remarks>
+			private readonly List<Material> drawOwnMaterial = new List<Material>();
+
+			/// <summary>Per drawn renderer: the index of its material's own mask pass, or -1.</summary>
+			private readonly List<int> drawOwnPass = new List<int>();
+
+			/// <summary>The LightMode/name of a material's own mask pass.</summary>
+			private const string OwnMaskPassName = "FishOutlineMask";
 			private readonly List<Vector4> outlineColors = new List<Vector4>();
 			private readonly List<Vector4> outlineParams = new List<Vector4>();
 
@@ -272,6 +287,8 @@ namespace FishMMO.Client
 				drawRenderers.Clear();
 				drawSubmeshes.Clear();
 				drawOutline.Clear();
+				drawOwnMaterial.Clear();
+				drawOwnPass.Clear();
 				outlineColors.Clear();
 				outlineParams.Clear();
 				widest = 0f;
@@ -306,6 +323,11 @@ namespace FishMMO.Client
 					drawRenderers.Add(renderer);
 					drawSubmeshes.Add(submeshes);
 					drawOutline.Add(0);
+					// One submesh only: sharedMaterial is the material of submesh 0, and reading every slot allocates.
+					Material own = submeshes == 1 ? renderer.sharedMaterial : null;
+					int ownPass = own != null ? own.FindPass(OwnMaskPassName) : -1;
+					drawOwnMaterial.Add(ownPass >= 0 ? own : null);
+					drawOwnPass.Add(ownPass);
 				}
 
 				if (drawRenderers.Count > 0)
@@ -420,9 +442,17 @@ namespace FishMMO.Client
 						cmd.SetGlobalVector(MaskParamsId, outlineParams[outline]);
 					}
 					int submeshes = drawSubmeshes[i];
+					Material own = drawOwnMaterial[i];
 					for (int s = 0; s < submeshes; s++)
 					{
-						cmd.DrawRenderer(renderer, d.Material, s, MaskPass);
+						if (own != null)
+						{
+							cmd.DrawRenderer(renderer, own, s, drawOwnPass[i]);
+						}
+						else
+						{
+							cmd.DrawRenderer(renderer, d.Material, s, MaskPass);
+						}
 					}
 				}
 			}

@@ -19,17 +19,17 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class AuditFollowUpPinsTests
 	{
-		private const string GuildSystemPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Guild/GuildSystem.cs";
+		private const string GuildSystemPath = "Assets/Modules/Social/Server/GuildSystem.cs";
 		private const string ChatPanelPath = "Assets/Scripts/Client/GUI/World/Chat/UITKChat.cs";
 		private const string AbilitySystemPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Ability/AbilitySystem.cs";
-		private const string AbilityCraftPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.AbilityCraft.cs";
-		private const string MerchantPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.Merchant.cs";
+		private const string AbilityCraftPath = "Assets/Modules/AbilityCrafting/Server/AbilityCraftingSystem.Craft.cs";
+		private const string MerchantPath = "Assets/Modules/Commerce/Server/CommerceSystem.Merchant.cs";
 		private const string ContainerSystemPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.Container.cs";
 		private const string HotkeySystemPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Hotkey/HotkeySystem.cs";
 		private const string SavingPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs";
 		private const string InspectPath = "Assets/Scripts/Client/GUI/World/Inspect/UITKInspect.cs";
 		private const string SheetViewPath = "Assets/Scripts/Client/GUI/World/CharacterSheet/CharacterSheetView.cs";
-		private const string LootPath = "Assets/Scripts/Client/GUI/World/Loot/UITKLoot.cs";
+		private const string LootPath = "Assets/Modules/Commerce/Client/UITKLoot.cs";
 		private const string ContainerPanelPath = "Assets/Scripts/Client/GUI/World/Container/UITKContainer.cs";
 		private const string ControlPath = "Assets/Scripts/Client/GUI/UITKControl.cs";
 
@@ -72,6 +72,12 @@ namespace FishMMO.UnitTests
 
 		#region Guild invite claims nothing for a target it cannot reach
 
+		/// <summary>True when <paramref name="path"/> exists: a module's code is pinned only while the module is installed.</summary>
+		private static bool Installed(string path)
+		{
+			return ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), path));
+		}
+
 		[Test]
 		public void GuildInvite_ResolvesTheTarget_BeforeClaimingCooldownOrPendingSlot()
 		{
@@ -79,6 +85,10 @@ namespace FishMMO.UnitTests
 			 * invitation blocking every real invite to an offline or cross-server target until the
 			 * TTL, and a spent cooldown, in silence. The party path had already been fixed; this
 			 * keeps the guild path level with it. */
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), GuildSystemPath)))
+			{
+				Assert.Ignore("The Social module (guilds) is not installed.");
+			}
 			string body = MethodBody(ReadSource(GuildSystemPath),
 				"private async Task InviteToGuildAsync(",
 				"private void ClearPendingInvitation(long characterID)");
@@ -129,18 +139,29 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void CraftAndPurchase_ChargeOnlyInsideTheirSettleCallback()
 		{
-			string craft = MethodBody(ReadSource(AbilityCraftPath),
-				"public void OnServerAbilityCraftBroadcastReceived(",
-				"\n\t}\n}");
-			string sale = MethodBody(ReadSource(MerchantPath),
-				"private bool TryPurchasePremadeAbility(",
-				"private MerchantPurchaseFailure LearnAbilityGeneric<");
-
-			foreach (var (name, body, settle, answer) in new[]
+			var paths = new System.Collections.Generic.List<(string name, string body, string settle, string answer)>();
+			// The craft is the Ability Crafting module's.
+			if (Installed(AbilityCraftPath))
 			{
-				("craft", craft, "bool SettleCraft(", "void AnswerRejectedCraft("),
-				("sale", sale, "bool SettleSale(", "void AnswerRejectedSale("),
-			})
+				string craft = MethodBody(ReadSource(AbilityCraftPath),
+					"public void OnServerAbilityCraftBroadcastReceived(",
+					"\n\t}\n}");
+				paths.Add(("craft", craft, "bool SettleCraft(", "void AnswerRejectedCraft("));
+			}
+			// The merchant's sale is the Commerce module's.
+			if (Installed(MerchantPath))
+			{
+				string sale = MethodBody(ReadSource(MerchantPath),
+					"private bool TryPurchasePremadeAbility(",
+					"private MerchantPurchaseFailure LearnAbilityGeneric<");
+				paths.Add(("sale", sale, "bool SettleSale(", "void AnswerRejectedSale("));
+			}
+			if (paths.Count == 0)
+			{
+				Assert.Ignore("Neither the Ability Crafting nor the Commerce module is installed.");
+			}
+
+			foreach (var (name, body, settle, answer) in paths)
 			{
 				LogAssert.AreEqual(1, Occurrences(body, "CharacterCurrency.TrySpend("),
 					$"the {name} spends exactly once");
@@ -278,9 +299,13 @@ namespace FishMMO.UnitTests
 			/* Both rows wear the slot marker, so the root's cancel rule leaves a drag to them; a
 			 * handler that took the item under it let the carried thing survive an unrelated
 			 * action. One press, one thing. */
-			string loot = MethodBody(ReadSource(LootPath), "private void OnRowPointerDown(PointerDownEvent evt, int slot)", "private void OnCurrencyPointerDown(");
-			AssertOrdered(loot, "TryPutDownCarriedDrag()", "RequestTakeItem(slot)",
-				"a loot row puts the drag down before it would take");
+			// The loot window is the Commerce module's.
+			if (Installed(LootPath))
+			{
+				string loot = MethodBody(ReadSource(LootPath), "private void OnRowPointerDown(PointerDownEvent evt, int slot)", "private void OnCurrencyPointerDown(");
+				AssertOrdered(loot, "TryPutDownCarriedDrag()", "RequestTakeItem(slot)",
+					"a loot row puts the drag down before it would take");
+			}
 
 			string container = ReadSource(ContainerPanelPath);
 			AssertOrdered(container, "TryPutDownCarriedDrag()", "OnRowPointerDown(capturedSlot)",

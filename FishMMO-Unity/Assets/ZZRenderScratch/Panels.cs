@@ -94,7 +94,7 @@ namespace FishMMO.RenderScratch
 			"display", "audio", "gameplay", "controls", "interface",
 		};
 
-		private static void Click(Button b)
+		public static void Click(Button b)
 		{
 			if (b == null) return;
 			using (NavigationSubmitEvent e = NavigationSubmitEvent.GetPooled())
@@ -104,7 +104,7 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		internal static void Tick(object panel)
+		public static void Tick(object panel)
 		{
 			if (panel == null) { return; }
 
@@ -149,126 +149,6 @@ namespace FishMMO.RenderScratch
 			m?.Invoke(panel, null);
 
 			Rig.Set(panel, "Visible", true);
-		}
-
-		// ── Party ───────────────────────────────────────────────────
-
-		public static void Party(GameObject h, UIDocument d)
-		{
-			UITKParty p = h.AddComponent<UITKParty>();
-			p.Document = d;
-			p.OnStarting();
-
-			p.OnPartyAddMember(1001, PartyRank.Leader, 1.0f);
-			p.OnPartyAddMember(1002, PartyRank.Member, 1.0f);
-			p.OnPartyAddMember(1003, PartyRank.Member, 1.0f);
-			p.OnPartyAddMember(1004, PartyRank.Member, 1.0f);
-			p.OnPartyAddMember(1005, PartyRank.Member, 1.0f);
-
-			p.OnPartyUpdateVitals(new[]
-			{
-				Vitals(1001, 0.92f, 0.64f, 0.81f, 1482.5f, 0f,
-					Seed.Buff(Seed.BuffArmor, 1, 22f, 30f), Seed.Buff(Seed.BuffHaste, 2, 8f, 15f)),
-				Vitals(1002, 0.47f, 0.88f, 0.55f, 210f, 2310.75f,
-					Seed.Buff(Seed.BuffArmor, 1, 12f, 30f), Seed.Buff(Seed.DebuffSlow, 1, 5f, 10f)),
-				Vitals(1003, 0.18f, 0.12f, 0.30f, 968.25f, 0f,
-					Seed.Buff(Seed.DebuffPoison, 4, 9f, 20f), Seed.Buff(Seed.DebuffBurn, 2, 3f, 12f),
-					Seed.Buff(Seed.BuffHaste, 1, 27f, 30f)),
-				Vitals(1004, 1.0f, 1.0f, 0.96f, 0f, 0f),
-				Vitals(1005, 0.73f, 0.41f, 0.12f, 1105f, 145.5f,
-					Seed.Buff(Seed.DebuffSlow, 3, 14f, 20f)),
-			});
-		}
-
-		private static PartyMemberVitalsEntry Vitals(long id, float hp, float mp, float sp,
-			float dps, float hps, params ObservedBuffEntry[] buffs)
-		{
-			/* The fixture still speaks in fractions and rates; the payload carries them quantised
-			 * (one byte per fraction, a whole-number rate) since the vitals push became change
-			 * gated. Converting here keeps every caller of this helper unchanged. */
-			return new PartyMemberVitalsEntry
-			{
-				CharacterID = id,
-				HealthPCT = PartyVitalsQuantiser.FractionToByte(hp),
-				ManaPCT = PartyVitalsQuantiser.FractionToByte(mp),
-				StaminaPCT = PartyVitalsQuantiser.FractionToByte(sp),
-				DamagePerSecond = PartyVitalsQuantiser.RateToUInt16(dps),
-				HealPerSecond = PartyVitalsQuantiser.RateToUInt16(hps),
-				BuffsChanged = true,
-				Buffs = buffs,
-			};
-		}
-
-		// ── Guild ───────────────────────────────────────────────────
-
-		public static void Guild(GameObject h, UIDocument d, string tab)
-		{
-			UITKGuild g = h.AddComponent<UITKGuild>();
-			g.Document = d;
-			g.OnStarting();
-
-			g.GuildController_OnReceiveGuildRanks(new GuildRankListBroadcast
-			{
-				LeaderRankOrder = 0, ViewerRankOrder = 1,
-				ViewerPermissions = long.MaxValue,
-				Ranks = new[]
-				{
-					new GuildRankEntry { RankOrder = 0, Name = "Tidecaller", Permissions = long.MaxValue },
-					new GuildRankEntry { RankOrder = 1, Name = "Warden", Permissions = 0x3F },
-					new GuildRankEntry { RankOrder = 2, Name = "Deepkin", Permissions = 0x0F },
-					new GuildRankEntry { RankOrder = 3, Name = "Initiate", Permissions = 0x01 },
-				},
-			});
-
-			g.GuildController_OnReceiveGuildInfo(Seed.GuildID, "Tideborn Covenant",
-				"Raid forms at 19:00 server time. Bring tide-warding charms.",
-				"Welcome to the Covenant. Read the notice, mind the reef, and never sail alone.");
-
-			g.GuildController_OnAddMember(GMember(1001, 0, "Sunken Cathedral", "Guild lead"));
-			g.GuildController_OnAddMember(GMember(1002, 1, "Coral Wastes", "Raid officer"));
-			g.GuildController_OnAddMember(GMember(1003, 1, "Sunken Cathedral", "Recruitment"));
-			g.GuildController_OnAddMember(GMember(1004, 2, "Tidewatch Keep", ""));
-			g.GuildController_OnAddMember(GMember(1005, 2, "Coral Wastes", "Alt of Brynn"));
-			g.GuildController_OnAddMember(GMember(1006, 2, "", ""));
-			g.GuildController_OnAddMember(GMember(1007, 3, "", "New — needs a mentor"));
-			g.GuildController_OnAddMember(GMember(1008, 3, "Tidewatch Keep", ""));
-
-			long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), hour = 3600L;
-			g.GuildController_OnReceiveGuildLog(new[]
-			{
-				Log(GuildLogEvent.Joined, 1002, 1008, "", now - hour / 4),
-				Log(GuildLogEvent.Promoted, 1001, 1003, "Warden", now - hour * 2),
-				Log(GuildLogEvent.Joined, 1003, 1007, "", now - hour * 6),
-				Log(GuildLogEvent.Left, 1006, 1006, "", now - hour * 30),
-				Log(GuildLogEvent.Demoted, 1001, 1005, "Deepkin", now - hour * 50),
-			});
-
-			// The roster view is rebuilt from OnTick, not synchronously on member-add.
-			Tick(g);
-			Click(d.rootVisualElement.Q<Button>(tab));
-			Tick(g);
-		}
-
-		private static GuildAddBroadcast GMember(long id, byte rank, string loc, string note)
-		{
-			return new GuildAddBroadcast
-			{
-				GuildID = Seed.GuildID,
-				Member = new GuildAddEntry
-				{
-					CharacterID = id, RankOrder = rank,
-					Location = loc, RaceID = 1, PublicNote = note,
-				},
-			};
-		}
-
-		private static GuildLogEntry Log(GuildLogEvent e, long actor, long target, string detail, long unixSeconds)
-		{
-			return new GuildLogEntry
-			{
-				Event = e, ActorCharacterID = actor, TargetCharacterID = target,
-				Detail = detail, TimeUnixSeconds = unixSeconds,
-			};
 		}
 
 		// ── Options ─────────────────────────────────────────────────
@@ -485,7 +365,7 @@ namespace FishMMO.RenderScratch
 		/// the same shape as Chat. The FishNet Channel argument is built from the method's own
 		/// signature so this assembly needs no FishNet reference for it.
 		/// </remarks>
-		private static void Broadcast(object panel, string handler, object message)
+		public static void Broadcast(object panel, string handler, object message)
 		{
 			MethodInfo m = panel.GetType().GetMethod(handler,
 				BindingFlags.NonPublic | BindingFlags.Instance);
@@ -507,7 +387,7 @@ namespace FishMMO.RenderScratch
 		/// send, and only a NullReferenceException raised there is tolerated, so a genuine fault
 		/// anywhere else in the handler still fails the capture.
 		/// </remarks>
-		private static void BroadcastOffline(object panel, string handler, object message, string sendSite)
+		public static void BroadcastOffline(object panel, string handler, object message, string sendSite)
 		{
 			try
 			{
@@ -530,44 +410,8 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		/// <summary>Dungeon Finder showing a populated instance list at a chosen difficulty.</summary>
-		public static void DungeonFinder(GameObject h, UIDocument d)
-		{
-			UITKDungeonFinder panel = Character<UITKDungeonFinder>(h, d);
-			DungeonTemplate dungeon = SeedDungeon();
-
-			// The entrance the player interacted with, then the list the server answers with.
-			BroadcastOffline(panel, "OnClientDungeonFinderBroadcastReceived", new DungeonFinderBroadcast
-			{
-				InteractableID = 77001,
-				DungeonTemplateID = dungeon != null ? dungeon.ID : 0,
-			}, sendSite: "UITKDungeonFinder.RequestList");
-
-			/* The panel resets to the first difficulty on every open, and discards a reply whose
-			 * difficulty is not the one it is showing. Echo back whatever it settled on rather
-			 * than naming an index and having the list silently dropped. */
-			int difficulty = Read<int>(panel, "selectedDifficulty");
-
-			Broadcast(panel, "OnClientDungeonFinderListResultBroadcastReceived",
-				new DungeonFinderListResultBroadcast
-				{
-					InteractableID = 77001,
-					Difficulty = difficulty,
-					Reason = DungeonListFailureReason.None,
-					Instances = new[]
-					{
-						Instance(88001, "Brynn", 4, 5, 1820, false, true),
-						Instance(88002, "Kaelen Duskwater", 5, 5, 640, false, false),
-						Instance(88003, "Vaskir", 2, 5, 3540, true, false),
-						Instance(88004, "Elowen", 1, 5, 2995, false, false),
-					},
-				});
-
-			Tick(panel);
-		}
-
 		/// <summary>Reads a private field the panel keeps its state in.</summary>
-		private static T Read<T>(object target, string field)
+		public static T Read<T>(object target, string field)
 		{
 			FieldInfo f = target.GetType().GetField(field,
 				BindingFlags.NonPublic | BindingFlags.Instance);
@@ -583,7 +427,7 @@ namespace FishMMO.RenderScratch
 		/// is a stand-in built in memory so the header, the description and a multi-difficulty strip
 		/// are all on screen.
 		/// </remarks>
-		private static DungeonTemplate SeedDungeon()
+		public static DungeonTemplate SeedDungeon()
 		{
 			DungeonTemplate dungeon = ScriptableObject.CreateInstance<DungeonTemplate>();
 			dungeon.hideFlags = HideFlags.HideAndDontSave;
@@ -617,16 +461,6 @@ namespace FishMMO.RenderScratch
 
 			dungeon.AddToCache(dungeon.name);
 			return dungeon;
-		}
-
-		private static DungeonInstanceEntry Instance(long id, string leader, int members, int max,
-			int remaining, bool loading, bool ownParty)
-		{
-			return new DungeonInstanceEntry
-			{
-				InstanceID = id, LeaderName = leader, MemberCount = members, MaxMembers = max,
-				RemainingSeconds = remaining, IsLoading = loading, IsOwnParty = ownParty,
-			};
 		}
 
 		/// <summary>Instance panel from inside a running instance, as its leader.</summary>
@@ -700,7 +534,6 @@ namespace FishMMO.RenderScratch
 		}
 		public static void Bank(GameObject h, UIDocument d) => Character<UITKBank>(h, d);
 		public static void Achievements(GameObject h, UIDocument d) => Character<UITKAchievements>(h, d);
-		public static void FriendList(GameObject h, UIDocument d) => Character<UITKFriendList>(h, d);
 
 		public static void DeathDialog(GameObject h, UIDocument d)
 		{

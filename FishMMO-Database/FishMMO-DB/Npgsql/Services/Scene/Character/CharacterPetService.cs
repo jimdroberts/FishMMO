@@ -50,26 +50,22 @@ namespace FishMMO.Database.Npgsql.Services
 					.FirstOrDefault());
 
 		/// <summary>
-		/// Compiled query for retrieving character pet.
+		/// Compiled query for retrieving a character's pets.
 		/// </summary>
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getPetQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterPetEntity>> getPetsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterPets
 					.AsNoTracking()
-					.FirstOrDefault(p => p.CharacterID == characterId && !p.Deleted));
-#pragma warning restore CS8619
+					.Where(p => p.CharacterID == characterId && !p.Deleted));
 
 		/// <summary>
-		/// Compiled query for retrieving spawned character pet.
+		/// Compiled query for retrieving the pets a character had out.
 		/// </summary>
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type
-		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<CharacterPetEntity?>> getSpawnedPetQuery =
-			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId, CancellationToken ct) =>
+		private static readonly Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterPetEntity>> getSpawnedPetsQuery =
+			EF.CompileAsyncQuery((NpgsqlDbContext context, long characterId) =>
 				context.CharacterPets
 					.AsNoTracking()
-					.FirstOrDefault(p => p.CharacterID == characterId && p.Spawned && !p.Deleted));
-#pragma warning restore CS8619
+					.Where(p => p.CharacterID == characterId && p.Spawned && !p.Deleted));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterPetService"/> class.
@@ -107,6 +103,13 @@ namespace FishMMO.Database.Npgsql.Services
 					"Invalid version. Version must be greater than 0.");
 			}
 
+			if (petData.Slot < 0)
+			{
+				return DatabaseResult.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"Pet slot must not be negative.");
+			}
+
 			/* A transaction now, not a lone statement: the pet row and the pruning of the rows it
 			 * leaves unrestorable commit together. See PruneUnrestorableRowsAsync. */
 			var result = await ExecuteTransactionAsync<int>(async dbContext =>
@@ -127,9 +130,10 @@ namespace FishMMO.Database.Npgsql.Services
 					),
 					upserted AS (
 						INSERT INTO {TableName}
-							(character_id, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
+							(character_id, slot, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
 						SELECT
 							{{0}},
+							{{7}},
 							{{1}},
 							{{2}},
 							{{3}},
@@ -139,7 +143,7 @@ namespace FishMMO.Database.Npgsql.Services
 							NULL
 						WHERE EXISTS (SELECT 1 FROM active_character)
 							AND (SELECT ok FROM id_ok)
-						ON CONFLICT (character_id)
+						ON CONFLICT (character_id, slot)
 						DO UPDATE SET
 							template_id = EXCLUDED.template_id,
 							abilities = EXCLUDED.abilities,
@@ -161,7 +165,7 @@ namespace FishMMO.Database.Npgsql.Services
 				int written = await ExecuteScalarIntAsync(
 					dbContext,
 					sql,
-					new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilities, petData.Spawned, now, petData.ID },
+					new object[] { petData.CharacterID, petData.TemplateID, petData.Version, abilities, petData.Spawned, now, petData.ID, petData.Slot },
 					cancellationToken).ConfigureAwait(false);
 
 				// Written, or superseded by a newer pet row: either way the character has one to prune against.
@@ -230,37 +234,46 @@ namespace FishMMO.Database.Npgsql.Services
 					"One or more pets had an invalid Version. Version must be greater than 0.");
 			}
 
+			if (petList.Any(p => p.Slot < 0))
+			{
+				return DatabaseResult<BulkWriteResult>.Failure(
+					DatabaseErrorCodes.ValidationError,
+					"One or more pets had a negative slot.");
+			}
+
 			// Separate pets into updates and inserts based on ID
 			var petsToUpdate = petList.Where(p => p.ID > 0).ToList();
 			var petsToInsert = petList.Where(p => p.ID == 0).ToList();
 
-			// Deduplicate across update and insert groups to prevent the same CharacterID
+			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
+			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous. Deduplicated before
+			// the cross-group pass below, which looks each pet up by its key.
+			petsToInsert = BulkBatch.KeepNewest(petsToInsert, pet => (pet.CharacterID, pet.Slot), pet => pet.Version);
+			petsToUpdate = BulkBatch.KeepNewest(petsToUpdate, pet => (pet.CharacterID, pet.Slot), pet => pet.Version);
+
+			// Deduplicate across update and insert groups to prevent the same pet (character and slot)
 			// from appearing in both, which would cause a double-update conflict.
 			// When a duplicate is found, keep the one with the higher Version.
 			if (petsToInsert.Count > 0 && petsToUpdate.Count > 0)
 			{
-				var insertLookup = petsToInsert.ToDictionary(p => p.CharacterID);
-				var updateLookup = petsToUpdate.ToDictionary(p => p.CharacterID);
+				var insertLookup = petsToInsert.ToDictionary(p => (p.CharacterID, p.Slot));
+				var updateLookup = petsToUpdate.ToDictionary(p => (p.CharacterID, p.Slot));
 
-				var crossKeys = new HashSet<long>(insertLookup.Keys);
+				var crossKeys = new HashSet<(long, int)>(insertLookup.Keys);
 				crossKeys.IntersectWith(updateLookup.Keys);
 
-				foreach (var characterId in crossKeys)
+				foreach (var key in crossKeys)
 				{
-					if (updateLookup[characterId].Version >= insertLookup[characterId].Version)
+					if (updateLookup[key].Version >= insertLookup[key].Version)
 					{
-						petsToInsert.Remove(insertLookup[characterId]);
+						petsToInsert.Remove(insertLookup[key]);
 					}
 					else
 					{
-						petsToUpdate.Remove(updateLookup[characterId]);
+						petsToUpdate.Remove(updateLookup[key]);
 					}
 				}
 			}
-
-			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
-			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
-			petsToInsert = BulkBatch.KeepNewest(petsToInsert, pet => pet.CharacterID, pet => pet.Version);
 
 			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
 			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
@@ -376,14 +389,16 @@ namespace FishMMO.Database.Npgsql.Services
 						.Select(p => (p.Abilities ?? new List<int>()).ToArray())
 						.ToArray());
 					var spawnedArray = activeInserts.Select(p => p.Spawned).ToArray();
+					var slotArray = activeInserts.Select(p => p.Slot).ToArray();
 
 					// See the UPDATE branch above: abilities is sent as jsonb and decoded server-side
 					// instead of as a native integer[][] parameter.
 					var sql = $@"
 						INSERT INTO {TableName}
-							(character_id, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
+							(character_id, slot, template_id, version, abilities, spawned, time_created, deleted, time_deleted)
 						SELECT
 							u.character_id,
+							u.slot,
 							u.template_id,
 							u.version,
 							events.abilities,
@@ -395,15 +410,16 @@ namespace FishMMO.Database.Npgsql.Services
 							{{0}}::bigint[],
 							{{1}}::integer[],
 							{{2}}::bigint[],
-							{{4}}::boolean[]
-						) WITH ORDINALITY AS u(character_id, template_id, version, spawned, ord)
+							{{4}}::boolean[],
+							{{6}}::integer[]
+						) WITH ORDINALITY AS u(character_id, template_id, version, spawned, slot, ord)
 						JOIN (
 							SELECT
 								arr.ord,
 								ARRAY(SELECT elem::integer FROM jsonb_array_elements_text(arr.value) AS elem) AS abilities
 							FROM jsonb_array_elements({{3}}::jsonb) WITH ORDINALITY AS arr(value, ord)
 						) AS events ON events.ord = u.ord
-						ON CONFLICT (character_id)
+						ON CONFLICT (character_id, slot)
 						DO UPDATE SET
 							template_id = EXCLUDED.template_id,
 							abilities = EXCLUDED.abilities,
@@ -418,7 +434,7 @@ namespace FishMMO.Database.Npgsql.Services
 						dbContext,
 						sql,
 						activeInserts.Count,
-						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray, now },
+						new object[] { characterIdArray, templateIdArray, versionArray, abilitiesJson, spawnedArray, now, slotArray },
 						"One or more pets were rejected due to a stale Version.",
 						cancellationToken,
 						BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
@@ -435,7 +451,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 		/// <summary>
 		/// Deletes every pet attribute and pet buff row of these characters that no longer matches
-		/// the version of the pet row stored for them, inside the caller's transaction.
+		/// the version of the pet row stored for the same slot, inside the caller's transaction.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -489,6 +505,7 @@ namespace FishMMO.Database.Npgsql.Services
 						AND NOT EXISTS (
 							SELECT 1 FROM {pets} AS p
 							WHERE p.character_id = d.character_id
+								AND p.slot = d.slot
 								AND p.deleted = FALSE
 								AND p.version = d.version)";
 				await dbContext.Database.ExecuteSqlRawAsync(sql, new object[] { characterIds }, cancellationToken).ConfigureAwait(false);
@@ -524,8 +541,11 @@ namespace FishMMO.Database.Npgsql.Services
 
 				if (rowsAffected == 0)
 				{
-					var pet = await getPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-					if (pet != null)
+					bool anyPet = await dbContext.CharacterPets
+						.AsNoTracking()
+						.AnyAsync(p => p.CharacterID == characterId && !p.Deleted, cancellationToken)
+						.ConfigureAwait(false);
+					if (anyPet)
 					{
 						throw new StaleStateException("Pet delete rejected due to a stale Version.");
 					}
@@ -534,56 +554,43 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterPetData?>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
-		{
-			if (characterId <= 0)
-			{
-				return DatabaseResult<CharacterPetData?>.Failure(
-					DatabaseErrorCodes.ValidationError,
-					"Character ID must be greater than 0.");
-			}
-
-			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>
-			{
-				var entity = await getPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
-					return null;
-
-				return new CharacterPetData(
-					id: entity.ID,
-					version: entity.Version,
-					characterID: entity.CharacterID,
-					templateID: entity.TemplateID,
-					abilities: entity.Abilities ?? new List<int>(),
-					spawned: entity.Spawned
-				);
-			}, cancellationToken: cancellationToken).ConfigureAwait(false);
-		}
+		public Task<DatabaseResult<IReadOnlyList<CharacterPetData>>> FetchAsync(long characterId, CancellationToken cancellationToken = default)
+			=> FetchPetsAsync(characterId, getPetsQuery, cancellationToken);
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<CharacterPetData?>> FetchSpawnedAsync(long characterId, CancellationToken cancellationToken = default)
+		public Task<DatabaseResult<IReadOnlyList<CharacterPetData>>> FetchSpawnedAsync(long characterId, CancellationToken cancellationToken = default)
+			=> FetchPetsAsync(characterId, getSpawnedPetsQuery, cancellationToken);
+
+		/// <summary>
+		/// Reads a character's pet rows through one of the compiled queries above.
+		/// </summary>
+		private async Task<DatabaseResult<IReadOnlyList<CharacterPetData>>> FetchPetsAsync(
+			long characterId,
+			Func<NpgsqlDbContext, long, IAsyncEnumerable<CharacterPetEntity>> query,
+			CancellationToken cancellationToken)
 		{
 			if (characterId <= 0)
 			{
-				return DatabaseResult<CharacterPetData?>.Failure(
+				return DatabaseResult<IReadOnlyList<CharacterPetData>>.Failure(
 					DatabaseErrorCodes.ValidationError,
 					"Character ID must be greater than 0.");
 			}
 
-			return await ExecuteReadAsync<CharacterPetData?>(async dbContext =>
+			return await ExecuteReadAsync(async dbContext =>
 			{
-				var entity = await getSpawnedPetQuery(dbContext, characterId, cancellationToken).ConfigureAwait(false);
-				if (entity == null)
-					return null;
-
-				return new CharacterPetData(
+				var entities = await query(dbContext, characterId).MaterializeAsync(cancellationToken).ConfigureAwait(false);
+				// Slot order, sorted here: a compiled async query cannot end in OrderBy, and a character has a handful of pets.
+				var pets = entities.OrderBy(entity => entity.Slot).Select(entity => new CharacterPetData(
 					id: entity.ID,
 					version: entity.Version,
 					characterID: entity.CharacterID,
+					slot: entity.Slot,
 					templateID: entity.TemplateID,
 					abilities: entity.Abilities ?? new List<int>(),
 					spawned: entity.Spawned
-				);
+				)).ToList();
+
+				return (IReadOnlyList<CharacterPetData>)pets;
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 	}

@@ -14,29 +14,50 @@ namespace FishMMO.Shared.Core
 		static Action<Pet> OnPetSummoned;
 
 		/// <summary>
-		/// Event triggered when a pet is destroyed.
+		/// Event triggered when a pet is dismissed or destroyed. Carries the pet that left, or null when every pet left at once.
 		/// </summary>
-		static Action OnPetDestroyed;
+		static Action<Pet> OnPetDestroyed;
 
 		/// <summary>
-		/// Event triggered when the server confirms a change to the pet's stance or movement order.
-		/// Carries the pet, which may be null if it was dismissed in the meantime.
+		/// Event triggered when the server confirms a change to the pets' stance or movement order.
+		/// Orders apply to every pet, so this carries the first pet, or null when none is out.
 		/// </summary>
 		static Action<Pet> OnPetOrdersChanged;
 
 		/// <summary>
-		/// The pet instance managed by this controller.
+		/// The pets out, in the order they were summoned. Every order and stance applies to all of them.
 		/// </summary>
-		Pet Pet { get; set; }
+		IReadOnlyList<Pet> Pets { get; }
 
 		/// <summary>
-		/// The pet's combat stance as this peer currently understands it.
+		/// How many pets this character may keep out at once: the final value of its Pet Slots character attribute, so an
+		/// archetype, an item or a buff grants slots as it moves any attribute. A summon spell's own <c>MaxPets</c> can only
+		/// lower it. See <see cref="PetSlotRules"/>.
+		/// </summary>
+		int PetSlots { get; }
+
+		/// <summary>
+		/// Raised on the server when the Pet Slots attribute falls under a slot a pet holds, so that pet can be dismissed.
+		/// </summary>
+		event Action<IPetController> OnPetSlotsReduced;
+
+		/// <summary>Adds a pet. False when it is already listed or null.</summary>
+		bool AddPet(Pet pet);
+
+		/// <summary>Removes a pet. False when it was not listed.</summary>
+		bool RemovePet(Pet pet);
+
+		/// <summary>Forgets every pet.</summary>
+		void ClearPets();
+
+		/// <summary>
+		/// The pets' combat stance as this peer currently understands it.
 		/// Server-authoritative; clients only ever request a change.
 		/// </summary>
 		PetStance Stance { get; set; }
 
 		/// <summary>
-		/// The pet's movement order as this peer currently understands it.
+		/// The pets' movement order as this peer currently understands it.
 		/// </summary>
 		PetMovementOrder MovementOrder { get; set; }
 

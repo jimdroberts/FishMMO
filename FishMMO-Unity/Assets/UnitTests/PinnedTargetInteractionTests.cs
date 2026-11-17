@@ -90,32 +90,24 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The pin key releases before it pins, and does not ask what is under the pointer first.
+		/// With a pin held, one press moves it to the character under the pointer; pointing at the pinned character itself, or
+		/// at nothing, releases it (11-16). The strict toggle it replaced (#286) always released first, so moving a pin took
+		/// two presses.
 		/// </summary>
-		/// <remarks>
-		/// This is the defect. The key used to read the hovered transform first and take the
-		/// release branch only when that transform was null or was the pinned character itself —
-		/// so in a fight, where the pointer is on an enemy essentially always, the release branch
-		/// was unreachable and pressing the key on a second enemy silently moved the pin. Ordering
-		/// is the whole contract, which is why it is asserted rather than merely commented.
-		/// </remarks>
 		[Test]
-		public void PinKey_ReleasesBeforeItReadsThePointer()
+		public void PinKey_MovesAHeldPinInOnePress()
 		{
 			string body = MethodBody(TargetController, "public bool TogglePinnedTarget()");
 
-			int release = body.IndexOf("ClearPinnedTarget();", StringComparison.Ordinal);
-			int readPointer = body.IndexOf("Current.Target", StringComparison.Ordinal);
-			int pin = body.IndexOf("TryPinTarget(hovered)", StringComparison.Ordinal);
-
-			LogAssert.IsTrue(release >= 0, "The key must be able to release a pin.");
-			LogAssert.IsTrue(pin >= 0, "The key must still be able to pin a hovered character.");
-			LogAssert.IsTrue(readPointer >= 0, "The key pins what the pointer is on.");
-
-			LogAssert.IsTrue(release < readPointer,
-				"A held pin is released whatever the pointer is on: the release must be decided before the hovered target is even read.");
-			LogAssert.IsTrue(release < pin,
-				"Release comes first, or a player aiming at a second enemy can never let go of the first.");
+			int held = body.IndexOf("if (!ReferenceEquals(pinnedTarget, null))", StringComparison.Ordinal);
+			int move = body.IndexOf("TryPinTarget(hovered)", held, StringComparison.Ordinal);
+			int release = body.IndexOf("ClearPinnedTarget();", held, StringComparison.Ordinal);
+			LogAssert.IsTrue(held >= 0 && move > held && release > move,
+				"with a pin held, the key tries to pin the hovered character first and releases only when that fails");
+			LogAssert.IsTrue(body.Contains("!ReferenceEquals(hovered, pinnedTarget)"),
+				"pressing the key on the pinned character itself releases it rather than re-pinning it");
+			LogAssert.IsTrue(body.IndexOf("Current.Target", StringComparison.Ordinal) < held,
+				"the pointer is read before the held pin is decided, so the press can move it");
 		}
 
 		/// <summary>

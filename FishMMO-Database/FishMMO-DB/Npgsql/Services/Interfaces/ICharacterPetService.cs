@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace FishMMO.Database.Npgsql.Services.Interfaces
 {
 	/// <summary>
-	/// Service interface for managing a character's pet.
+	/// Service interface for managing a character's pets, one row per pet slot.
 	/// </summary>
 	/// <remarks>
 	/// Pet persistence and deletion should be version-gated via the logical <c>Version</c>
@@ -18,16 +18,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		IPersistManyAction<CharacterPetData>,
 		IPersistManyOwnedAction<CharacterPetData>,
 		IDeleteByKeyVersionedAction<long>,
-		IFetchByKeyAction<long, CharacterPetData?>
+		IFetchCollectionByKeyAction<long, CharacterPetData>
 	{
 		/// <summary>
-		/// Fetches the spawned pet for the specified character.
+		/// Fetches the pets the specified character had out, in slot order.
 		/// </summary>
 		/// <param name="characterId">The character ID.</param>
 		/// <param name="cancellationToken">Token to cancel the operation.</param>
 		/// <returns>
-		/// A <see cref="DatabaseResult{T}"/> containing the spawned pet on success, or <c>null</c> when not spawned.
+		/// A <see cref="DatabaseResult{T}"/> containing the spawned pets on success; empty when none was out.
 		/// </returns>
-		Task<DatabaseResult<CharacterPetData?>> FetchSpawnedAsync(long characterId, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<IReadOnlyList<CharacterPetData>>> FetchSpawnedAsync(long characterId, CancellationToken cancellationToken = default);
 	}
 }

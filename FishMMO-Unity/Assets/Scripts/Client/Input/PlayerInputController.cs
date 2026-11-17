@@ -733,8 +733,6 @@ namespace FishMMO.Client
 			{
 				if (PlayerInputController.MouseMode)
 				{
-					// Rare (the cursor is taken back on its own), and the line that names the chat-focus failure when it happens.
-					Debug.Log($"[ChatFocus] f{Time.frameCount} no panel claims the cursor; taking it back for aim mode.");
 					PlayerInputController.ToggleMouseMode();
 				}
 			}
@@ -819,37 +817,10 @@ namespace FishMMO.Client
 					uiInspect.Inspect(capturedTarget);
 				}
 			})));
-			entries.Add(("Add Friend", new Action(() =>
-			{
-				Client.Broadcast(new FriendAddNewBroadcast()
-				{
-					CharacterID = targetCharacterID,
-				}, Channel.Reliable);
-			})));
-			entries.Add(("Invite to Party", new Action(() =>
-			{
-				Client.Broadcast(new PartyInviteBroadcast()
-				{
-					InviterCharacterID = Character.ID,
-					TargetCharacterID = targetCharacterID,
-				}, Channel.Reliable);
-			})));
-			entries.Add(("Trade", new Action(() =>
-			{
-				// The trade window owns the request: it pre-checks range and state, and the
-				// server applies the same rules again before anyone sees an invitation.
-				if (UIManager.TryGetTK("UITrade", out UITKTrade uiTrade))
-				{
-					uiTrade.RequestTrade(targetCharacterID);
-				}
-			})));
-			/* The name is read now, while the menu is built. By the time the entry is clicked the
+			/* Every other action is a CharacterMenuEntries entry (Add Friend, Invite to Party, Trade, Report, ...), in
+			 * their order. The name is read now, while the menu is built: by the time an entry is clicked the
 			 * character may have despawned and its pooled instance belong to somebody else. */
-			string targetCharacterName = capturedTarget.CharacterName;
-			entries.Add(("Report", new Action(() =>
-			{
-				UITKReportPlayer.TryOpen(targetCharacterID, targetCharacterName);
-			})));
+			CharacterMenuEntries.AppendTo(entries, new CharacterMenuTarget(targetCharacterID, capturedTarget.CharacterName, CharacterMenuSource.World));
 
 			contextMenu.Open(entries);
 		}
@@ -1011,8 +982,8 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Callback for the pin-target key: releases a held pin, or pins the hovered character
-		/// when nothing is pinned. See <see cref="ITargetController.TogglePinnedTarget"/>.
+		/// Callback for the pin-target key: pins the hovered character (moving a held pin to it), or releases the pin when
+		/// the pointer is on the pinned character or on nothing. See <see cref="ITargetController.TogglePinnedTarget"/>.
 		/// </summary>
 		/// <remarks>
 		/// <para>

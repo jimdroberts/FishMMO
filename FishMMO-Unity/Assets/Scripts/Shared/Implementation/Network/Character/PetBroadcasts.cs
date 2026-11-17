@@ -11,6 +11,9 @@ namespace FishMMO.Shared
 		/// <summary>Unique ID of the pet to add.</summary>
 		public long ID;
 
+		/// <summary>The pet slot it holds (<see cref="PetSlotRules"/>); the panel lists pets in slot order.</summary>
+		public byte Slot;
+
 		/// <summary>The pet's current combat stance, so the UI opens showing the truth.</summary>
 		public PetStance Stance;
 
@@ -23,10 +26,11 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Broadcast for removing a pet from a character.
-	/// No additional data required.
 	/// </summary>
 	public struct PetRemoveBroadcast : IBroadcast
 	{
+		/// <summary>Unique ID of the pet that left; 0 when every pet left at once.</summary>
+		public long ID;
 	}
 
 	/// <summary>
@@ -123,5 +127,38 @@ namespace FishMMO.Shared
 	{
 		/// <summary>The authoritative movement order.</summary>
 		public PetMovementOrder MovementOrder;
+	}
+}
+
+namespace FishMMO.Shared
+{
+	/// <summary>What a pet has just started doing, for its owner's chat (<see cref="PetActionBroadcast"/>).</summary>
+	public enum PetAction : byte
+	{
+		/// <summary>Went for the target the owner ordered it at.</summary>
+		Attacking = 1,
+		/// <summary>Went for something that attacked its owner or itself (a defensive pet).</summary>
+		Defending = 2,
+		/// <summary>Went for something on its own (an aggressive pet hunting).</summary>
+		Engaging = 3,
+		/// <summary>The owner's attack order found nothing it may attack.</summary>
+		NoTarget = 4,
+	}
+
+	/// <summary>
+	/// Server → owner: what their pet has just started doing, so the client can have the pet say it in chat. Only the owner
+	/// gets it, and only for what the client cannot see for itself: which target the server chose (the attack priority
+	/// decides it) and when the pet joined a fight on its own. Stance and movement confirmations already say the rest.
+	/// </summary>
+	public struct PetActionBroadcast : IBroadcast
+	{
+		/// <summary>Which pet (its ID): an owner with several pets hears each by name.</summary>
+		public long PetID;
+
+		/// <summary>The <see cref="PetAction"/>.</summary>
+		public byte Action;
+
+		/// <summary>The character the pet went for (its ID, players and NPCs alike); 0 for none.</summary>
+		public long TargetID;
 	}
 }

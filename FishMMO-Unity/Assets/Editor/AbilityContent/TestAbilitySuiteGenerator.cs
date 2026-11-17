@@ -948,7 +948,7 @@ namespace FishMMO.AbilityContent
 
 		/// <summary>
 		/// Who a heal mends: you, your allies, and any player who is not hostile to you — never wildlife, neutral NPCs or pets
-		/// (Jim, 11-16). Buffs stay with <see cref="Friends"/>: allies only.
+		/// Buffs stay with <see cref="Friends"/>: allies only.
 		/// </summary>
 		private static T Healable<T>(T selector) where T : TargetSelector
 		{

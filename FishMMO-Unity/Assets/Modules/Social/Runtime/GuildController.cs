@@ -1,0 +1,676 @@
+﻿using FishNet.Connection;
+using FishNet.Serializing;
+using FishNet.Transporting;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using FishMMO.Shared.Core;
+
+namespace FishMMO.Shared
+{
+	/// <summary>
+	/// Character guild controller. Manages guild membership, events, and synchronization for a character.
+	/// </summary>
+	public class GuildController : CharacterPart, IGuildMembership
+	{
+		/// <summary>
+		/// Event triggered when a guild invite is received. Parameter: inviter's character ID.
+		/// </summary>
+		public event Action<long> OnReceiveGuildInvite;
+
+		/// <summary>
+		/// Event triggered when a guild member is added, or their roster row changes.
+		/// </summary>
+		public event Action<GuildAddBroadcast> OnAddGuildMember;
+
+		/// <summary>
+		/// Event triggered to validate the set of guild members. Parameter: set of member IDs.
+		/// </summary>
+		public event Action<HashSet<long>> OnValidateGuildMembers;
+
+		/// <summary>
+		/// Event triggered when a guild member is removed. Parameter: member ID.
+		/// </summary>
+		public event Action<long> OnRemoveGuildMember;
+
+		/// <summary>
+		/// Event triggered when leaving a guild.
+		/// </summary>
+		public event Action OnLeaveGuild;
+
+		/// <summary>
+		/// Event triggered when a guild result is received. Parameter: result type.
+		/// </summary>
+		public event Action<GuildResultType> OnReceiveGuildResult;
+
+		/// <summary>
+		/// Event triggered when the guild's descriptive text arrives.
+		/// Parameters: guild ID, name, notice, message of the day.
+		/// </summary>
+		public event Action<long, string, string, string> OnReceiveGuildInfo;
+
+		/// <summary>
+		/// Event triggered when the guild's recent activity log arrives.
+		/// Parameters: entries (newest first).
+		/// </summary>
+		public event Action<GuildLogEntry[]> OnReceiveGuildLog;
+
+		/// <summary>
+		/// Event triggered when the guild's rank ladder arrives.
+		/// </summary>
+		public event Action<GuildRankListBroadcast> OnReceiveGuildRanks;
+
+		/// <summary>
+		/// Event triggered when the guild's own recruitment advertisement arrives.
+		/// </summary>
+		public event Action<GuildRecruitmentInfoBroadcast> OnReceiveGuildRecruitmentInfo;
+
+		/// <summary>
+		/// Event triggered when a page of the recruitment directory arrives.
+		/// </summary>
+		public event Action<GuildDirectoryEntry[]> OnReceiveGuildDirectory;
+
+		/// <summary>
+		/// Event triggered when the guild's pending application queue arrives.
+		/// </summary>
+		public event Action<GuildApplicationEntry[]> OnReceiveGuildApplications;
+
+		[Header("ECA - Guild")]
+		[Tooltip("Triggers invoked when the character joins a guild.")]
+		[SerializeField]
+		private List<Trigger> onGuildJoinTriggers = new List<Trigger>();
+		[Tooltip("Triggers invoked when the character leaves a guild.")]
+		[SerializeField]
+		private List<Trigger> onGuildLeaveTriggers = new List<Trigger>();
+
+		/// <inheritdoc />
+		public List<Trigger> OnGuildJoinTriggers => onGuildJoinTriggers;
+		/// <inheritdoc />
+		public List<Trigger> OnGuildLeaveTriggers => onGuildLeaveTriggers;
+
+		/// <summary>
+		/// The unique guild ID for this character. Synchronized over the network.
+		/// </summary>
+		public long ID { get { return guildID; } set { SetGuildID(value); } }
+
+		/// <summary>
+		/// The character's position on the guild's rank ladder. Zero means "not in a guild".
+		/// </summary>
+		public byte RankOrder { get; set; }
+
+		/// <inheritdoc />
+		public event Action<int, long> OnReceiveGuildCreationCost;
+
+		/// <inheritdoc />
+		public int CreationCostCurrencyTemplateID { get; private set; }
+
+		/// <inheritdoc />
+		public long CreationCost { get; private set; }
+
+		/// <inheritdoc />
+		public long InfoGuildID { get; private set; }
+
+		/// <inheritdoc />
+		public string MessageOfTheDay { get; private set; } = string.Empty;
+
+		/// <summary>
+		/// Storage for <see cref="Permissions"/>, held as the underlying <see cref="long"/>.
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not an auto-property of type <see cref="GuildPermissions"/>. This type is a
+		/// <c>CharacterBehaviour</c>, so FishNet's code generator walks its fields, and it rejects a
+		/// <c>long</c>-backed enum outright:
+		/// <c>"Unsupported enum type 'FishMMO.Shared.GuildPermissions' used for field
+		/// '&lt;Permissions&gt;k__BackingField'"</c>. The compiler-generated backing field of an
+		/// auto-property is what it sees, so there is nowhere to put an attribute even if one
+		/// existed.
+		/// <para>
+		/// Narrowing the enum to <c>int</c> would also have silenced it, and was rejected: the
+		/// mask is stored in a <c>bigint</c> column and travels as a <c>long</c> on the wire, both
+		/// chosen deliberately for headroom, and capping the flag set at 31 to satisfy a
+		/// serializer that never needed to touch this value is the wrong trade. A plain
+		/// <c>long</c> field is a type the generator already supports, and the conversion is free.
+		/// </para>
+		/// </remarks>
+		private long permissionsMask;
+
+		/// <summary>
+		/// The permissions the character's rank holds, as computed by the server.
+		/// </summary>
+		public GuildPermissions Permissions
+		{
+			get { return (GuildPermissions)this.permissionsMask; }
+			set { this.permissionsMask = (long)value; }
+		}
+
+		/// <summary>
+		/// The highest rank order that exists in this guild — the leader's seat.
+		/// </summary>
+		public byte LeaderRankOrder { get; set; }
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// <c>HasFlag</c> is avoided deliberately: it boxes on the enum and this is called once
+		/// per row per roster refresh, which for a full guild is a hundred allocations for a
+		/// bitwise AND.
+		/// </remarks>
+		public bool HasGuildPermission(GuildPermissions permission)
+		{
+			return (Permissions & permission) == permission;
+		}
+
+		/// <summary>
+		/// Whether an announced membership is a join: a guild the client did not already hold.
+		/// </summary>
+		/// <param name="heldGuildID">The guild the client holds now, or 0.</param>
+		/// <param name="announcedGuildID">The guild the server's join notice names.</param>
+		/// <returns>True when the notice moves the client into a guild it was not in.</returns>
+		/// <remarks>
+		/// Applied to the server's JOIN NOTICE only — the single <see cref="GuildAddBroadcast"/> the
+		/// create and join paths send — and never to a roster. See
+		/// <see cref="OnClientGuildAddMultipleBroadcastReceived"/> for why a roster cannot answer.
+		/// </remarks>
+		public static bool IsNewMembership(long heldGuildID, long announcedGuildID)
+		{
+			return announcedGuildID > 0 && heldGuildID != announcedGuildID;
+		}
+
+		/// <summary>
+		/// Clears every cached component of the character's guild standing.
+		/// </summary>
+		/// <remarks>
+		/// One method because forgetting one of the three is a real defect and not a visible one:
+		/// a stale <see cref="Permissions"/> mask left behind after leaving a guild would draw a
+		/// disband button for a player with no guild, and the refusal would arrive from the server
+		/// with no explanation the panel could render.
+		/// </remarks>
+		private void ClearGuildStanding()
+		{
+			RankOrder = 0;
+			Permissions = GuildPermissions.None;
+			LeaderRankOrder = 0;
+
+			// The cached text belongs to the guild that was left, as the standing does.
+			InfoGuildID = 0;
+			MessageOfTheDay = string.Empty;
+		}
+
+		/// <summary>
+		/// Drops the character's guild standing and every UI subscriber before the object is
+		/// pooled.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <see cref="ID"/> is cleared here directly (not through its setter, which would broadcast); it was a SyncVar
+		/// FishNet reset itself until the controller became a character part. The three standing fields do not reset either:
+		/// <see cref="RankOrder"/>, <see cref="Permissions"/> and <see cref="LeaderRankOrder"/>
+		/// are written from roster broadcasts and were left exactly as the previous occupant of
+		/// this pool slot last saw them. A guildless character inheriting a leader's permission
+		/// mask draws every officer control in the guild panel, and the server refuses each one
+		/// with a result the panel has no way to explain.
+		/// </para>
+		/// <para>
+		/// <see cref="ClearGuildStanding"/> is reused rather than repeated here — it is the same
+		/// three fields the leave path already clears, and keeping one writer is what stops the
+		/// two copies drifting.
+		/// </para>
+		/// </remarks>
+		/// <param name="asServer">True if called on the server.</param>
+		public override void ResetState(bool asServer)
+		{
+			base.ResetState(asServer);
+
+			guildID = 0;
+			ClearGuildStanding();
+
+			/* Subscribers are per-spawn. Every one of these is held by an owner-side panel bound
+			 * to the character being torn down, and a recycled controller that kept them would
+			 * push the next character's roster into the previous character's UI. */
+			OnReceiveGuildInvite = null;
+			OnAddGuildMember = null;
+			OnGuildMemberAdded = null;
+			OnValidateGuildMembers = null;
+			OnRemoveGuildMember = null;
+			OnLeaveGuild = null;
+			OnReceiveGuildResult = null;
+			OnReceiveGuildCreationCost = null;
+			CreationCostCurrencyTemplateID = 0;
+			CreationCost = 0;
+			OnReceiveGuildInfo = null;
+			OnReceiveGuildLog = null;
+			OnReceiveGuildRanks = null;
+			OnReceiveGuildRecruitmentInfo = null;
+			OnReceiveGuildDirectory = null;
+			OnReceiveGuildApplications = null;
+		}
+
+		/// <summary>The guild ID. Every observer holds it (nameplates, the harm rule); see <see cref="SetGuildID"/>.</summary>
+		private long guildID;
+
+		/// <inheritdoc />
+		public event Action<long> OnGuildMemberAdded;
+
+		/// <summary>This part's id in the character's spawn payload.</summary>
+		public override uint PayloadId => PayloadKey;
+
+		/// <summary>The payload id; never changes.</summary>
+		public static readonly uint PayloadKey = CharacterParts.IdOf("social.guild");
+
+		/// <summary>
+		/// Sets the guild ID. On the server a change is broadcast to every observer but the owner, who learns of its own
+		/// guild through the roster broadcasts; at spawn the ID rides the payload instead. On a client it re-reads the
+		/// nameplate's guild and, leaving a guild, drops the cached standing.
+		/// </summary>
+		/// <remarks>
+		/// This was a SyncVar (ExcludeOwner) while the controller was a NetworkBehaviour on the player prefab. As a
+		/// character part it has no SyncVars; the payload and <see cref="GuildIdentityBroadcast"/> carry the same value
+		/// to the same peers.
+		/// </remarks>
+		private void SetGuildID(long value)
+		{
+			if (guildID == value)
+			{
+				return;
+			}
+			guildID = value;
+
+			if (IsServerStarted)
+			{
+				if (Character != null && NetworkObject != null)
+				{
+					ObserverBroadcastScope.BroadcastToObserversExceptOwner(NetworkObject,
+						new GuildIdentityBroadcast { CharacterID = Character.ID, GuildID = value }, Channel.Reliable);
+				}
+				return;
+			}
+
+#if !UNITY_SERVER
+			if (value == 0)
+			{
+				ClearGuildStanding();
+			}
+			IGuildController.OnReadID?.Invoke(value, PlayerCharacter);
+#endif
+		}
+
+		/// <inheritdoc />
+		public override void WritePayload(NetworkConnection conn, Writer writer)
+		{
+			writer.WriteInt64(guildID);
+		}
+
+		/// <inheritdoc />
+		public override void ReadPayload(NetworkConnection conn, Reader reader)
+		{
+			SetGuildID(reader.ReadInt64());
+		}
+
+#if !UNITY_SERVER
+		/// <summary>Client: another character's guild changed while this client could see it.</summary>
+		private static void OnClientGuildIdentityBroadcastReceived(GuildIdentityBroadcast msg, Channel channel)
+		{
+			if (msg.CharacterID > 0 &&
+				BaseCharacter.ClientCharacters.TryGetValue(msg.CharacterID, out ICharacter character) &&
+				character != null &&
+				character.TryGet(out IGuildMembership guild))
+			{
+				guild.ID = msg.GuildID;
+			}
+		}
+
+		/// <summary>
+		/// Called when the character starts. Registers guild broadcast handlers on the owning client.
+		/// </summary>
+		public override void OnStartCharacter()
+		{
+			base.OnStartCharacter();
+
+			if (base.IsOwner)
+			{
+				ClientManager.RegisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRosterDeltaBroadcast>(OnClientGuildRosterDeltaBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildCreationCostBroadcast>(OnClientGuildCreationCostBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildInfoBroadcast>(OnClientGuildInfoBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildLogBroadcast>(OnClientGuildLogBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRankListBroadcast>(OnClientGuildRankListBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildRecruitmentInfoBroadcast>(OnClientGuildRecruitmentInfoBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildDirectoryBroadcast>(OnClientGuildDirectoryBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildApplicationListBroadcast>(OnClientGuildApplicationListBroadcastReceived);
+				ClientManager.RegisterBroadcast<GuildIdentityBroadcast>(OnClientGuildIdentityBroadcastReceived);
+
+				if (PlayerCharacter != null)
+				{
+					IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Called when the character stops. Unregisters guild broadcast handlers on the owning client.
+		/// </summary>
+		public override void OnStopCharacter()
+		{
+			base.OnStopCharacter();
+
+			if (base.IsOwner)
+			{
+				ClientManager.UnregisterBroadcast<GuildInviteBroadcast>(OnClientGuildInviteBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildAddBroadcast>(OnClientGuildAddBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildAddMultipleBroadcast>(OnClientGuildAddMultipleBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildRosterDeltaBroadcast>(OnClientGuildRosterDeltaBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildLeaveBroadcast>(OnClientGuildLeaveBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildRemoveBroadcast>(OnClientGuildRemoveBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildResultBroadcast>(OnClientGuildResultBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildCreationCostBroadcast>(OnClientGuildCreationCostBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildInfoBroadcast>(OnClientGuildInfoBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildLogBroadcast>(OnClientGuildLogBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildRankListBroadcast>(OnClientGuildRankListBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildRecruitmentInfoBroadcast>(OnClientGuildRecruitmentInfoBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildDirectoryBroadcast>(OnClientGuildDirectoryBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildApplicationListBroadcast>(OnClientGuildApplicationListBroadcastReceived);
+				ClientManager.UnregisterBroadcast<GuildIdentityBroadcast>(OnClientGuildIdentityBroadcastReceived);
+			}
+		}
+
+		/// <summary>
+		/// When the character receives an invitation to join a guild.
+		/// *Note* msg.targetClientID should be our own ClientId but it doesn't matter if it changes. Server has authority.
+		/// </summary>
+		public void OnClientGuildInviteBroadcastReceived(GuildInviteBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildInvite?.Invoke(msg.InviterCharacterID);
+		}
+
+		/// <summary>
+		/// The server's notice that we founded or joined a guild: our own row, alone.
+		/// </summary>
+		/// <remarks>
+		/// Sent only by the create and join paths, so this is the one message that announces a
+		/// join, and the join triggers fire from here — once, and only when the notice names a
+		/// guild we were not already in (<see cref="IsNewMembership"/>).
+		/// </remarks>
+		public void OnClientGuildAddBroadcastReceived(GuildAddBroadcast msg, Channel channel)
+		{
+			ApplyRosterRow(msg, isJoinNotice: true);
+		}
+
+		/// <summary>
+		/// Adopts one roster row: ours updates our own standing, and every row reaches the panel.
+		/// </summary>
+		/// <param name="msg">The row, with its guild.</param>
+		/// <param name="isJoinNotice">True for the server's join notice; false for a row of a roster.</param>
+		private void ApplyRosterRow(GuildAddBroadcast msg, bool isJoinNotice)
+		{
+			// if this is our own id
+			if (PlayerCharacter != null && msg.Member.CharacterID == Character.ID)
+			{
+				// Decided before the ID is overwritten: a join is a guild we did not already hold.
+				bool joined = isJoinNotice && IsNewMembership(ID, msg.GuildID);
+
+				ID = msg.GuildID;
+
+				/* The ladder position, stored as sent. It used to be cast to a GuildRank enum
+				 * here; ranks are rows a guild owns now, so there is nothing to cast it TO. The
+				 * permission mask that decides what this player may do arrives separately, in
+				 * GuildRankListBroadcast, because the server computes it rather than letting the
+				 * client infer it from a number. */
+				RankOrder = msg.Member.RankOrder;
+
+				IGuildController.OnReadID?.Invoke(ID, PlayerCharacter);
+
+				if (joined)
+				{
+					Trigger.InvokeAll(onGuildJoinTriggers, new GuildEventData(Character, ID, RankOrder, Permissions));
+				}
+			}
+
+			// update our Guild list with the new Guild member
+			OnAddGuildMember?.Invoke(msg);
+			OnGuildMemberAdded?.Invoke(msg.Member.CharacterID);
+		}
+
+		/// <summary>
+		/// A whole roster: the one sent as a character loads on a scene server, and the update
+		/// pump's full delivery.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Never a join.</b> Our own row here adopts the guild and our rank, and fires nothing.
+		/// The rows used to go through the join notice's handler, so every roster fired the join
+		/// triggers for our own row — on every login and every zone change, since each loads the
+		/// character on a new scene server and the first thing it sends is this roster.
+		/// </para>
+		/// <para>
+		/// "Not already in that guild" cannot be read from here either. The guild ID is not sent to
+		/// its owner (the SyncVar excludes the owner), so a character that has just spawned holds 0
+		/// until its first roster arrives, and every roster after a load would look like a join. A
+		/// real join is announced by its own message, <see cref="OnClientGuildAddBroadcastReceived"/>.
+		/// The one join no notice announces is an application accepted while the applicant was
+		/// offline or on another scene server; they find the guild in this roster on their next
+		/// load, and it is presented as what it is by then — their membership, not an event.
+		/// </para>
+		/// </remarks>
+		public void OnClientGuildAddMultipleBroadcastReceived(GuildAddMultipleBroadcast msg, Channel channel)
+		{
+			HashSet<long> newIds = new HashSet<long>(msg.Members.Length);
+			for (int i = 0; i < msg.Members.Length; i++)
+			{
+				newIds.Add(msg.Members[i].CharacterID);
+			}
+
+			OnValidateGuildMembers?.Invoke(newIds);
+
+			/* The guild id is carried once by the payload, not once per row. Re-attaching it here
+			 * is what lets the per-row handler stay identical for a roster refresh and for a
+			 * single-member add. */
+			foreach (GuildAddEntry entry in msg.Members)
+			{
+				ApplyRosterRow(new GuildAddBroadcast()
+				{
+					GuildID = msg.GuildID,
+					Member = entry,
+				}, isJoinNotice: false);
+			}
+		}
+
+		/// <summary>
+		/// Applies the changes to our guild's roster since the last roster or delta.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Each upsert goes to the same <see cref="OnAddGuildMember"/> a full roster row does, and
+		/// every listener already treats that as add-or-update. Each removal goes to
+		/// <see cref="OnRemoveGuildMember"/>, as a kick does.
+		/// </para>
+		/// <para>
+		/// <b>Not routed through <see cref="ApplyRosterRow"/>.</b> That adopts the guild ID from our
+		/// own row, which a delta must never do — a delta is applied only to the guild we already
+		/// hold, and our row changing because we changed zone or were promoted is not a join. Here
+		/// our own row updates <see cref="RankOrder"/> and nothing else. Our own removal is never applied from a delta: leaving is announced by
+		/// <see cref="GuildLeaveBroadcast"/>, which clears the whole guild.
+		/// </para>
+		/// <para>
+		/// A delta for a guild other than the one we are in is stale — it was built before we left
+		/// or moved — and is ignored rather than written into the panel of the guild we are in.
+		/// </para>
+		/// </remarks>
+		public void OnClientGuildRosterDeltaBroadcastReceived(GuildRosterDeltaBroadcast msg, Channel channel)
+		{
+			if (PlayerCharacter == null || msg.GuildID < 1 || msg.GuildID != ID)
+			{
+				return;
+			}
+
+			if (msg.Upserts != null)
+			{
+				for (int i = 0; i < msg.Upserts.Length; ++i)
+				{
+					GuildAddEntry entry = msg.Upserts[i];
+					if (entry.CharacterID == Character.ID)
+					{
+						// Our own standing moved. The permission mask comes with GuildRankListBroadcast.
+						RankOrder = entry.RankOrder;
+					}
+
+					OnAddGuildMember?.Invoke(new GuildAddBroadcast()
+					{
+						GuildID = msg.GuildID,
+						Member = entry,
+					});
+					OnGuildMemberAdded?.Invoke(entry.CharacterID);
+				}
+			}
+
+			if (msg.Removals != null)
+			{
+				for (int i = 0; i < msg.Removals.Length; ++i)
+				{
+					if (msg.Removals[i] == Character.ID)
+					{
+						continue;
+					}
+
+					OnRemoveGuildMember?.Invoke(msg.Removals[i]);
+				}
+			}
+		}
+
+		/// <summary>
+		/// When our local client leaves the guild.
+		/// </summary>
+		public void OnClientGuildLeaveBroadcastReceived(GuildLeaveBroadcast msg, Channel channel)
+		{
+			if (PlayerCharacter == null)
+			{
+				return;
+			}
+			ID = 0;
+			ClearGuildStanding();
+			OnLeaveGuild?.Invoke();
+			Trigger.InvokeAll(onGuildLeaveTriggers, new GuildEventData(Character, 0, 0, GuildPermissions.None));
+		}
+
+		/// <summary>
+		/// When we need to remove guild members.
+		/// </summary>
+		public void OnClientGuildRemoveBroadcastReceived(GuildRemoveBroadcast msg, Channel channel)
+		{
+			OnRemoveGuildMember?.Invoke(msg.CharacterID);
+		}
+
+		/// <summary>
+		/// Handles a guild result broadcast from the server (e.g., creation success, name taken).
+		/// </summary>
+		/// <param name="msg">The guild result broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildResultBroadcastReceived(GuildResultBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildResult?.Invoke(msg.Result);
+		}
+
+		/// <summary>
+		/// Handles the server stating the guild creation fee. Issue #186.
+		/// </summary>
+		/// <remarks>
+		/// Kept on the controller as well as raised, because the guild panel is usually bound
+		/// after this arrives: it reads the stored values when it binds and listens for changes
+		/// after.
+		/// </remarks>
+		/// <param name="msg">The fee: currency template ID and amount, both 0 when there is none.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildCreationCostBroadcastReceived(GuildCreationCostBroadcast msg, Channel channel)
+		{
+			CreationCostCurrencyTemplateID = msg.CurrencyTemplateID;
+			CreationCost = msg.Amount;
+			OnReceiveGuildCreationCost?.Invoke(msg.CurrencyTemplateID, msg.Amount);
+		}
+
+		/// <summary>
+		/// Handles the guild information broadcast (name, notice, message of the day).
+		/// </summary>
+		/// <param name="msg">The guild information broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		/// <remarks>
+		/// Delivered on join and again whenever a leader or officer edits the text, so the panel
+		/// never has to ask for it. Not filtered by <see cref="ID"/> here: the server only sends
+		/// this to members of the guild it describes, and a client that filtered on its own
+		/// (possibly not-yet-updated) guild ID would drop the copy that arrives alongside the join.
+		/// </remarks>
+		public void OnClientGuildInfoBroadcastReceived(GuildInfoBroadcast msg, Channel channel)
+		{
+			InfoGuildID = msg.GuildID;
+			MessageOfTheDay = msg.MessageOfTheDay ?? string.Empty;
+			OnReceiveGuildInfo?.Invoke(msg.GuildID, msg.Name, msg.Notice, msg.MessageOfTheDay);
+		}
+
+		/// <summary>
+		/// Handles the guild activity log broadcast.
+		/// </summary>
+		/// <param name="msg">The guild log broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildLogBroadcastReceived(GuildLogBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildLog?.Invoke(msg.Entries ?? Array.Empty<GuildLogEntry>());
+		}
+		/// <summary>
+		/// Handles the guild rank ladder broadcast.
+		/// </summary>
+		/// <param name="msg">The rank list broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		/// <remarks>
+		/// This message, not <see cref="GuildAddBroadcast"/>, is what establishes what the local
+		/// player may DO. The server sends the viewer's own mask inside it rather than expecting
+		/// the client to look its rank up in the ladder, so that the panel and the server always
+		/// agree about which buttons should exist.
+		/// </remarks>
+		public void OnClientGuildRankListBroadcastReceived(GuildRankListBroadcast msg, Channel channel)
+		{
+			RankOrder = msg.ViewerRankOrder;
+			Permissions = (GuildPermissions)msg.ViewerPermissions;
+			LeaderRankOrder = msg.LeaderRankOrder;
+
+			OnReceiveGuildRanks?.Invoke(msg);
+		}
+
+		/// <summary>
+		/// Handles the guild's own recruitment advertisement broadcast.
+		/// </summary>
+		/// <param name="msg">The recruitment info broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildRecruitmentInfoBroadcastReceived(GuildRecruitmentInfoBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildRecruitmentInfo?.Invoke(msg);
+		}
+
+		/// <summary>
+		/// Handles a page of the recruitment directory.
+		/// </summary>
+		/// <param name="msg">The directory broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		public void OnClientGuildDirectoryBroadcastReceived(GuildDirectoryBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildDirectory?.Invoke(msg.Entries ?? Array.Empty<GuildDirectoryEntry>());
+		}
+
+		/// <summary>
+		/// Handles the guild's pending application queue.
+		/// </summary>
+		/// <param name="msg">The application list broadcast message.</param>
+		/// <param name="channel">The network channel the broadcast was received on.</param>
+		/// <remarks>
+		/// Only ever delivered to a client whose rank holds <c>ManageApplications</c> — the server
+		/// does not send the queue to anybody else, so there is nothing to filter here.
+		/// </remarks>
+		public void OnClientGuildApplicationListBroadcastReceived(GuildApplicationListBroadcast msg, Channel channel)
+		{
+			OnReceiveGuildApplications?.Invoke(msg.Entries ?? Array.Empty<GuildApplicationEntry>());
+		}
+#endif
+
+	}
+}

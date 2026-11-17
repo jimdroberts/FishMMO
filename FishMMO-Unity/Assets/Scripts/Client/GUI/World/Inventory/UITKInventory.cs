@@ -104,13 +104,11 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* While a trade window is open, right-click means "put this on the table" for
-			 * every item, wearable or not — the convention every MMO trade window follows,
-			 * and the one thing a player with a trade open is trying to do with their bag.
-			 * The trade panel pre-checks the slot and the server decides. */
-			if (UIManager.TryGetTK("UITrade", out UITKTrade uiTrade) && uiTrade.SessionOpen && uiTrade.Visible)
+			/* An open window may take the click for itself: while a trade is open, right-click
+			 * means "put this on the table" for every item, wearable or not (the Commerce module's
+			 * trade window, through InventorySlotClaims). */
+			if (InventorySlotClaims.TryClaimRightClick(slotIndex))
 			{
-				uiTrade.TryOfferInventorySlot(slotIndex);
 				return;
 			}
 

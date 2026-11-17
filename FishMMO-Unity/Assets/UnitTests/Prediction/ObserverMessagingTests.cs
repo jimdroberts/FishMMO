@@ -607,41 +607,5 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(0, read.Attributes.Length, "An over-large count must yield no entries.");
 		}
 
-		// ── Party vitals quantisation ───────────────────────────────────
-
-		/// <summary>Fractions survive the byte round trip closely enough to draw.</summary>
-		[Test]
-		public void PartyVitals_FractionQuantisationIsAccurateEnoughToDraw()
-		{
-			Assert.AreEqual(0, PartyVitalsQuantiser.FractionToByte(0.0f));
-			Assert.AreEqual(255, PartyVitalsQuantiser.FractionToByte(1.0f));
-			Assert.AreEqual(0.0f, PartyVitalsQuantiser.ByteToFraction(0));
-			Assert.AreEqual(1.0f, PartyVitalsQuantiser.ByteToFraction(255));
-
-			for (float f = 0.0f; f <= 1.0f; f += 0.01f)
-			{
-				float round = PartyVitalsQuantiser.ByteToFraction(PartyVitalsQuantiser.FractionToByte(f));
-				Assert.Less(System.Math.Abs(round - f), 0.005f, $"Fraction {f} lost too much precision.");
-			}
-		}
-
-		/// <summary>Out-of-range and NaN inputs clamp instead of wrapping.</summary>
-		/// <remarks>
-		/// A percentage can arrive above one from an over-heal, and NaN from a maximum of zero on a
-		/// character whose attributes have not finished loading. Wrapping either into a byte would
-		/// draw a full bar on a dying party member.
-		/// </remarks>
-		[Test]
-		public void PartyVitals_QuantisationClampsHostileInputs()
-		{
-			Assert.AreEqual(0, PartyVitalsQuantiser.FractionToByte(float.NaN));
-			Assert.AreEqual(0, PartyVitalsQuantiser.FractionToByte(-5.0f));
-			Assert.AreEqual(255, PartyVitalsQuantiser.FractionToByte(17.0f));
-
-			Assert.AreEqual(0, PartyVitalsQuantiser.RateToUInt16(float.NaN));
-			Assert.AreEqual(0, PartyVitalsQuantiser.RateToUInt16(-1.0f));
-			Assert.AreEqual(ushort.MaxValue, PartyVitalsQuantiser.RateToUInt16(1e9f));
-			Assert.AreEqual(1234, PartyVitalsQuantiser.RateToUInt16(1234.4f));
-		}
 	}
 }

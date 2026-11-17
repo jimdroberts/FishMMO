@@ -44,7 +44,7 @@ namespace FishMMO.UnitTests.AI
 		/// The ordered target is set AFTER the state change. ChangeState re-enters an attacking state and runs Exit first, and
 		/// Exit drops the target (AILeashPhaseSweepTests' control: "an ordinary transition between attacking states is a
 		/// disengage"), so a pet already fighting lost the target it was just given; its sweep then found only faction
-		/// enemies, and a neutral sent with the owner's aggression on was never attacked (Jim, 11-16).
+		/// enemies, and a neutral sent with the owner's aggression on was never attacked.
 		/// </summary>
 		[Test]
 		public void TheOrderedTargetSurvivesTheStateChange()
@@ -60,6 +60,31 @@ namespace FishMMO.UnitTests.AI
 				"the target must be assigned after ChangeState, whose Exit drops it, not only before");
 		}
 
+		/// <summary>
+		/// The pet tells its owner what it is doing: the target an attack order chose (the server picks it by priority, which
+		/// the client cannot know), an order that found nothing, and a fight it joined on its own (defending or engaging).
+		/// </summary>
+		[Test]
+		public void ThePetTellsItsOwnerWhatItIsDoing()
+		{
+			string pets = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Server/Implementation/World/SceneServer/Pet/PetSystem.cs"));
+			int handler = pets.IndexOf("private void OnPetAttackBroadcastReceived(", StringComparison.Ordinal);
+			int next = pets.IndexOf("private void OnPetAttackPriorityBroadcastReceived(", handler, StringComparison.Ordinal);
+			string body = pets.Substring(handler, next - handler);
+			LogAssert.IsTrue(body.Contains("AnnouncePetAction(pet, PetAction.Attacking, chosen);") &&
+				body.Contains("AnnouncePetAction(lead, PetAction.NoTarget, null);"),
+				"an attack order announces the chosen target for each pet it sends, or that there was none");
+			LogAssert.IsTrue(pets.Contains("AIController.OnPetTargetChanged += OnPetTargetChanged;") &&
+				pets.Contains("PetAction.Engaging : PetAction.Defending"),
+				"a fight the pet joins on its own is announced as defending, or engaging for an aggressive pet");
+
+			string panel = ProjectFiles.ReadAllText(Path.Combine(Scripts, "Client/GUI/World/Pet/UITKPetControl.cs"));
+			LogAssert.IsTrue(panel.Contains("PetController.OnClientPetAction += PetController_OnClientPetAction;") &&
+				panel.Contains("chat.InstantiateChatMessage(ChatChannel.Say, speaker, text);") &&
+				panel.Contains("Say(bound.Name, $\"Attacking {target}, master.\");"),
+				"the owner's client has the pet say it in chat, locally");
+		}
+
 		[Test]
 		public void TheServerWalksTheOwnersOrderAndVerifiesEveryStep()
 		{
@@ -72,7 +97,7 @@ namespace FishMMO.UnitTests.AI
 			int hovered = pets.IndexOf("TryResolveFrameTarget(player, msg.HoveredTargetObjectID, out candidate)", handler, StringComparison.Ordinal);
 			int serverCopy = pets.IndexOf("TryResolveFrameTarget(player, targetController.ClientSelectedTargetObjectId, out candidate);", handler, StringComparison.Ordinal);
 			int threat = pets.IndexOf("AggressionDispatcher.TryFindHighestThreatAgainst(player,", handler, StringComparison.Ordinal);
-			int validated = pets.IndexOf("if (candidate != null && IsValidPetTarget(petController, player, candidate))", handler, StringComparison.Ordinal);
+			int validated = pets.IndexOf("if (candidate != null && IsValidPetTarget(petController, lead, player, candidate", handler, StringComparison.Ordinal);
 			int raycast = pets.IndexOf("targetController.UpdateTarget(", handler, StringComparison.Ordinal);
 
 			LogAssert.IsTrue(handler >= 0 && nextHandler > handler && decode > handler && decode < nextHandler,

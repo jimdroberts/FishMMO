@@ -21,7 +21,7 @@ MonoBehaviour:
   ReturnHomeState: {fileID: 11400000, guid: b84f263b6aaadc40b9179f69c75abdf0, type: 2}
   RetreatState: {fileID: 0}
   DeadState: {fileID: 0}
-  Personality: {fileID: 11400000, guid: bb0ae43dffda32580c997677cd023680, type: 2}
+  Personality: {fileID: 11400000, guid: 36ffc773df7e677d46d6958c8baa7820, type: 2}
   AbilityRotation: {fileID: 0}
   BehaviorTree: {fileID: 0}
   AimProfile: {fileID: 0}

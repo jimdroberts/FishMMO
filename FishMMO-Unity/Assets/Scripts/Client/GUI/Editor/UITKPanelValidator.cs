@@ -36,8 +36,8 @@ namespace FishMMO.Client.Editor
 		private const string GUI_ROOT = "Assets/Scripts/Client/GUI";
 
 		/// <summary>Capture size, matching the PanelSettings reference resolution.</summary>
-		private const int CAPTURE_WIDTH = 1200;
-		private const int CAPTURE_HEIGHT = 800;
+		private const int CAPTURE_WIDTH = 1280;
+		private const int CAPTURE_HEIGHT = 960;
 
 		/// <summary>Collected problems, reported together at the end.</summary>
 		private static readonly List<string> problems = new List<string>();

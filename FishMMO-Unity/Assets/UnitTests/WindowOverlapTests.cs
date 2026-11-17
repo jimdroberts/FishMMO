@@ -38,10 +38,9 @@ namespace FishMMO.UnitTests
 	/// reported arrangement rather than a friendlier one.
 	/// </para>
 	/// <para>
-	/// The shared settings carry a render target of 1200x675, which is what makes the panel that
-	/// size: the arrangement is horizontal, and horizontal is the axis PanelSettings pins — it
-	/// scales with screen size matching width, so panel space is 1200 units wide at every aspect
-	/// ratio while the height follows the screen. Nothing here depends on the height.
+	/// The shared settings carry a render target of 1280x960. PanelSettings scales with screen size against a 1280x960
+	/// reference, Expand (the whole reference always fits), so 1280 is the NARROWEST panel space the game ever has (a 4:3
+	/// screen; a wider one only adds width) and the strictest place to check that the windows tile.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -51,10 +50,10 @@ namespace FishMMO.UnitTests
 		private const string GuiRoot = "Assets/Scripts/Client/GUI/World/";
 
 		/// <summary>The panel's unit width, which PanelSettings fixes by matching width.</summary>
-		private const float PanelWidth = 1200f;
+		private const float PanelWidth = 1280f;
 
 		/// <summary>The panel height at 16:9. Only the width is fixed; the height follows the screen.</summary>
-		private const int PanelHeight = 675;
+		private const int PanelHeight = 960;
 
 		/// <summary>One of the windows that share the panel, and where its UXML lives.</summary>
 		private sealed class Window
@@ -177,10 +176,8 @@ namespace FishMMO.UnitTests
 					$"it resolved to {rect.width}x{rect.height}");
 			}
 
-			// PanelSettings is ScaleWithScreenSize with m_Match: 0 (match width), so panel space
-			// is exactly this wide at every aspect ratio and the USS percentages are a fixed
-			// horizontal arrangement. If this ever stops holding, the numbers in those
-			// stylesheets stop meaning what their comments say they mean.
+			// PanelSettings is ScaleWithScreenSize, 1280x960, Expand: at a 1280x960 target the panel is exactly 1280 wide,
+			// the narrowest it gets. If this stops holding, the windows' percentages are no longer checked at their tightest.
 			float width = documents[0].rootVisualElement.layout.width;
 			LogAssert.IsTrue(Mathf.Abs(width - PanelWidth) < 1f,
 				$"panel space must be {PanelWidth} units wide; it resolved to {width}");

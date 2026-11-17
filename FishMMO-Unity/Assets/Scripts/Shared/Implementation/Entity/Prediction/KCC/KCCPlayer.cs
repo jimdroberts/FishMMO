@@ -560,7 +560,7 @@ namespace FishMMO.Shared
 				out Vector3 launchPoint);
 			aimDirection = AimDirectionCompression.Quantize(aim);
 			/* Over the shoulder the crosshair's ray runs beside the character, through the shoulder pivot, and a line
-			 * started there put the projectile out at the view's side, not at the character (Jim, 2026-11-15). The
+			 * started there put the projectile out at the view's side, not at the character. The
 			 * shoulder's displacement is taken back out, so the line starts where third person's ray would pass and runs
 			 * to the same point under the crosshair: the projectile leaves the character in every style, and still lands
 			 * on what the crosshair is on. */

@@ -189,8 +189,8 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <summary>
 		/// Raised when a pet owned by the character is killed. Subscribers may
 		/// use this to update pet-related state, notify the client, or trigger
-		/// persistence.
+		/// persistence. The third argument is the pet that died: a character can have several.
 		/// </summary>
-		event Action<TConnection, IPlayerCharacter> OnPetKilled;
+		event Action<TConnection, IPlayerCharacter, ICharacter> OnPetKilled;
 	}
 }

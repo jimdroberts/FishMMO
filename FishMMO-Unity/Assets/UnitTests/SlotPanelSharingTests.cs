@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -70,7 +71,7 @@ namespace FishMMO.UnitTests
 		private const string InventoryPath =
 			"Assets/Scripts/Client/GUI/World/Inventory/UITKInventory.cs";
 		private const string TradePath =
-			"Assets/Scripts/Client/GUI/World/Trade/UITKTrade.cs";
+			"Assets/Modules/Commerce/Client/UITKTrade.cs";
 		private const string HotkeyBarPath =
 			"Assets/Scripts/Client/GUI/World/HotkeyBar/UITKHotkeyBar.cs";
 		private const string ControlPath =
@@ -85,13 +86,11 @@ namespace FishMMO.UnitTests
 		/// <c>UICharacterSheet.uxml</c> rather than created in code, and the mark is applied to the authored
 		/// element as it is found — the UXML carries the look, the class list carries the meaning.
 		/// </remarks>
-		private static readonly string[] SlotBuildingPaths =
-		{
+		private static readonly string[] SlotBuildingPaths = Installed(
 			GridPath, EquipmentPath, TradePath, HotkeyBarPath,
-			"Assets/Scripts/Client/GUI/World/Loot/UITKLoot.cs",
+			"Assets/Modules/Commerce/Client/UITKLoot.cs",
 			"Assets/Scripts/Client/GUI/World/Container/UITKContainer.cs",
-			"Assets/Scripts/Client/GUI/World/Inspect/UITKInspect.cs",
-		};
+			"Assets/Scripts/Client/GUI/World/Inspect/UITKInspect.cs");
 
 		/// <summary>Every panel that draws item slots, base excluded.</summary>
 		private static readonly string[] PanelPaths =
@@ -109,10 +108,8 @@ namespace FishMMO.UnitTests
 		/// one. The rule about releases is about the GESTURE, so it is checked wherever the gesture
 		/// can land.
 		/// </remarks>
-		private static readonly string[] DropTargetPaths =
-		{
-			BasePath, GridPath, EquipmentPath, BankPath, InventoryPath, TradePath, HotkeyBarPath,
-		};
+		private static readonly string[] DropTargetPaths = Installed(
+			BasePath, GridPath, EquipmentPath, BankPath, InventoryPath, TradePath, HotkeyBarPath);
 
 		/// <summary>The same panels as types, for the reflection half.</summary>
 		private static readonly Type[] PanelTypes =
@@ -121,11 +118,21 @@ namespace FishMMO.UnitTests
 		};
 
 		/// <summary>Every drop target as a type, the base included.</summary>
-		private static readonly Type[] DropTargetTypes =
+		private static readonly Type[] DropTargetTypes = new[]
 		{
 			typeof(UITKSlotPanelBase), typeof(UITKItemGridPanel), typeof(UITKEquipment),
-			typeof(UITKBank), typeof(UITKInventory), typeof(UITKTrade), typeof(UITKHotkeyBar),
-		};
+			typeof(UITKBank), typeof(UITKInventory), Type.GetType("FishMMO.Client.UITKTrade, FishMMO.Commerce.Client"), typeof(UITKHotkeyBar),
+		}.Where(t => t != null).ToArray();
+
+		/// <summary>
+		/// The paths that exist: a module's panels (the Commerce module's trade and loot windows) are checked only when the
+		/// module is installed.
+		/// </summary>
+		private static string[] Installed(params string[] paths)
+		{
+			return paths.Where(p => !p.StartsWith("Assets/Modules/", StringComparison.Ordinal) ||
+				ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), p))).ToArray();
+		}
 
 		/// <summary>
 		/// Members whose one implementation belongs to the shared base and nowhere else.

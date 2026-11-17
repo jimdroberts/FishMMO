@@ -209,4 +209,32 @@ half4 WildlifeDepthFragment(WildlifeDepthVaryings input) : SV_Target
 
 #endif
 
+#if defined(FISH_WILDLIFE_PASS_OUTLINE)
+
+#include "Assets/Prefabs/Client/Materials/Outline/FishTargetOutlineMask.hlsl"
+
+struct WildlifeOutlineVaryings
+{
+    float4 positionCS : SV_POSITION;
+};
+
+// The target outline's mask in the pose: the same WildlifePose as the lit pass, so the outline follows the gait, the bite
+// and the fall.
+WildlifeOutlineVaryings WildlifeOutlineVertex(WildlifeAttributes input)
+{
+    WildlifeOutlineVaryings o = (WildlifeOutlineVaryings)0;
+    float3 position = input.positionOS.xyz;
+    float3 normal = input.normalOS;
+    WildlifePose(position, normal, input.part);
+    o.positionCS = TransformWorldToHClip(TransformObjectToWorld(position));
+    return o;
+}
+
+half4 WildlifeOutlineFragment(WildlifeOutlineVaryings input) : SV_Target
+{
+    return FishOutlineMaskFragment(input.positionCS);
+}
+
+#endif
+
 #endif

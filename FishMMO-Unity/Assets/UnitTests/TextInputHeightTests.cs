@@ -231,7 +231,12 @@ namespace FishMMO.UnitTests
 			 *
 			 * The general rule this stands for: a control sharing a row with a text field must not
 			 * pin its own height. */
-			string sheet = ReadSource("Assets/Scripts/Client/GUI/World/Guild/UIGuild.uss");
+			const string GuildSheet = "Assets/Modules/Social/Client/UIGuild.uss";
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), GuildSheet)))
+			{
+				Assert.Ignore("The Social module (guilds) is not installed.");
+			}
+			string sheet = ReadSource(GuildSheet);
 
 			LogAssert.IsTrue(Declares(RuleBody(sheet, ".guild-filter-bar"), "align-items"),
 				"the filter bar must give its children a height, so they cannot disagree");

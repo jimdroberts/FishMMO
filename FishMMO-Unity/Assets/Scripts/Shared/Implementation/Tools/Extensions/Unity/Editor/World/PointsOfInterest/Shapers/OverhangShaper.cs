@@ -29,8 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why the perch (Jim, 2026-10-14: "just a rock sticking out of the ground instead of an actual perch on a cliff
-	/// face").</b> The old overhang was the river boulders' slab stretched to a plank and pushed into a 40° earth slope over
+	/// The old overhang was the river boulders' slab stretched to a plank and pushed into a 40° earth slope over
 	/// a slot cut under it: no cliff above, beside or below it, nothing to stand on, no drop. A real one is the face's own
 	/// cap rock: a resistant bed left jutting where the softer beds under it wore back, its top the clifftop, a sheer face
 	/// under it and the cliff running on either side. So the site is built as that cliff: the <c>Overhang</c> section

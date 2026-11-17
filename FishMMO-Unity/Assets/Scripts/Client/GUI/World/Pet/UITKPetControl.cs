@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.UIElements;
 using FishNet.Object;
 using FishMMO.Shared;
@@ -8,12 +9,16 @@ using FishNet.Transporting;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// UI Toolkit pet control panel. Shows the pet's name and health, and issues
-	/// follow/stay/summon/release commands.
+	/// UI Toolkit pet control panel. Shows each pet's name and health, one row per pet, and issues
+	/// follow/stay/summon/release commands, which go to every pet.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// The pet's health is a live value, so this panel subscribes to the pet's health attribute
+	/// Clicking a pet's row pins that pet to the target frame (<see cref="ITargetController.TryPinTarget"/>), and the
+	/// pinned pet's row is marked.
+	/// </para>
+	/// <para>
+	/// A pet's health is a live value, so this panel subscribes to each pet's health attribute
 	/// rather than sampling it once at summon time. It previously read the attribute exactly twice
 	/// — on summon and on character set — and then never again, so the bar showed the pet's health
 	/// at the moment it appeared for the pet's whole life.
@@ -29,14 +34,17 @@ namespace FishMMO.Client
 		/// <summary>Draw order tier for this panel. See <see cref="UITKPanelLayer"/>.</summary>
 		protected override UITKPanelLayer Layer => UITKPanelLayer.Window;
 
-		/// <summary>Name of the pet name label element.</summary>
+		/// <summary>Name of the panel title label element.</summary>
 		private const string NAME_LABEL_NAME = "pet-name";
 
-		/// <summary>Name of the pet health fill element.</summary>
-		private const string HEALTH_FILL_NAME = "pet-health-fill";
+		/// <summary>Name of the container the per-pet rows are built in.</summary>
+		private const string LIST_NAME = "pet-list";
 
-		/// <summary>Name of the pet health value label element.</summary>
-		private const string HEALTH_TEXT_NAME = "pet-health-text";
+		/// <summary>Name prefix of a pet's row; the pet's slot follows.</summary>
+		public const string ROW_PREFIX = "pet-row-";
+
+		/// <summary>Class on the row of the pet pinned to the target frame.</summary>
+		private const string ROW_PINNED_CLASS = "pet-row--pinned";
 
 		/// <summary>Name of the pet status badge element.</summary>
 		private const string STATUS_LABEL_NAME = "pet-status";
@@ -104,12 +112,10 @@ namespace FishMMO.Client
 		/// <summary>Class applied to the stance button matching the pet's current stance.</summary>
 		private const string STANCE_ACTIVE_CLASS = "pet-stance--active";
 
-		/// <summary>Cached reference to the pet name label element.</summary>
+		/// <summary>Cached reference to the panel title label element.</summary>
 		private Label nameLabel;
-		/// <summary>Cached reference to the pet health fill element.</summary>
-		private VisualElement healthFill;
-		/// <summary>Cached reference to the pet health value label element.</summary>
-		private Label healthText;
+		/// <summary>Cached reference to the container of per-pet rows.</summary>
+		private VisualElement petList;
 		/// <summary>Cached reference to the pet status badge element.</summary>
 		private Label statusLabel;
 
@@ -130,21 +136,37 @@ namespace FishMMO.Client
 		private PetMovementOrder petMovementOrder = PetMovementOrder.Follow;
 
 		/// <summary>
-		/// The pet whose health attribute this panel is currently subscribed to.
+		/// One pet the panel shows: the health subscription taken on it and its row in the current tree.
 		/// </summary>
 		/// <remarks>
-		/// Held so the subscription can be released against the SAME pet it was taken on. Reading
-		/// the controller again at unsubscribe time can hand back a different pet (or none), which
-		/// leaves the old attribute holding a handler that writes into this panel forever.
+		/// Model, not view: the subscription is held so it can be released against the SAME pet it was taken on (reading
+		/// the controller again at unsubscribe time can hand back a different pet, or none, which leaves the old attribute
+		/// holding a handler that writes into this panel forever), and the health is kept so a rebuilt tree is redrawn.
 		/// </remarks>
-		private Pet boundPet;
+		private sealed class BoundPet
+		{
+			public Pet Pet;
+			public string Name;
+			public CharacterResourceAttribute Health;
+			public System.Action<CharacterAttribute> OnHealth;
+			public float HealthFraction;
+			public string HealthText = string.Empty;
+			public VisualElement Row;
+			public VisualElement Fill;
+			public Label Text;
+		}
 
-		/// <summary>The pet name currently displayed. Model, not view — survives a tree rebuild.</summary>
+		/// <summary>The pets shown, in slot order.</summary>
+		private readonly List<BoundPet> boundPets = new List<BoundPet>();
+
+		/// <summary>The container the rows were last built in; a rebuilt tree has a new one.</summary>
+		private VisualElement rowsBuiltIn;
+
+		/// <summary>The target controller whose pin events this panel listens to, released against the same one.</summary>
+		private ITargetController pinSource;
+
+		/// <summary>The first pet's name, which speaks for the pack when an order applies to all of them.</summary>
 		private string petName = "Pet";
-		/// <summary>The pet health fraction currently displayed.</summary>
-		private float petHealthFraction;
-		/// <summary>The pet health text currently displayed.</summary>
-		private string petHealthText = string.Empty;
 
 		/// <summary>
 		/// Queries elements and wires up the command buttons.
@@ -158,8 +180,7 @@ namespace FishMMO.Client
 			}
 
 			nameLabel = root.Q<Label>(NAME_LABEL_NAME);
-			healthFill = root.Q(HEALTH_FILL_NAME);
-			healthText = root.Q<Label>(HEALTH_TEXT_NAME);
+			petList = root.Q(LIST_NAME);
 			statusLabel = root.Q<Label>(STATUS_LABEL_NAME);
 
 			Button follow = root.Q<Button>(FOLLOW_BUTTON_NAME);
@@ -245,6 +266,8 @@ namespace FishMMO.Client
 			IPetController.OnPetDestroyed += PetController_OnPetDestroyed;
 			IPetController.OnPetOrdersChanged -= PetController_OnPetOrdersChanged;
 			IPetController.OnPetOrdersChanged += PetController_OnPetOrdersChanged;
+			PetController.OnClientPetAction -= PetController_OnClientPetAction;
+			PetController.OnClientPetAction += PetController_OnClientPetAction;
 		}
 
 		/// <summary>
@@ -255,8 +278,10 @@ namespace FishMMO.Client
 			IPetController.OnPetSummoned -= PetController_OnPetSummoned;
 			IPetController.OnPetDestroyed -= PetController_OnPetDestroyed;
 			IPetController.OnPetOrdersChanged -= PetController_OnPetOrdersChanged;
+			PetController.OnClientPetAction -= PetController_OnClientPetAction;
 
-			UnbindPetHealth();
+			UnbindAllPets();
+			UnbindPinSource();
 
 			base.OnDestroying();
 		}
@@ -268,10 +293,13 @@ namespace FishMMO.Client
 		{
 			base.OnPostSetCharacter();
 
-			if (Character.TryGet(out IPetController petController))
+			if (Character.TryGet(out ITargetController targetController))
 			{
-				BindPet(petController.Pet);
+				pinSource = targetController;
+				pinSource.OnPinTarget += TargetController_OnPinChanged;
+				pinSource.OnUnpinTarget += TargetController_OnPinChanged;
 			}
+			RebindPets();
 		}
 
 		/// <summary>
@@ -279,7 +307,8 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnPreSetCharacter()
 		{
-			UnbindPetHealth();
+			UnbindAllPets();
+			UnbindPinSource();
 		}
 
 		/// <summary>
@@ -289,11 +318,10 @@ namespace FishMMO.Client
 		{
 			base.OnPreUnsetCharacter();
 
-			UnbindPetHealth();
+			UnbindAllPets();
+			UnbindPinSource();
 
 			petName = "Pet";
-			petHealthFraction = 0.0f;
-			petHealthText = string.Empty;
 			petStance = PetStance.Defensive;
 			petMovementOrder = PetMovementOrder.Follow;
 			ApplyPetState();
@@ -326,23 +354,147 @@ namespace FishMMO.Client
 		{
 			if (nameLabel != null)
 			{
-				nameLabel.text = petName;
+				nameLabel.text = boundPets.Count > 1 ? $"Pets ({boundPets.Count})" : (boundPets.Count == 1 ? boundPets[0].Name : "Pet");
 			}
-			if (healthFill != null)
+			BuildRows();
+			for (int i = 0; i < boundPets.Count; ++i)
 			{
-				healthFill.style.width = Length.Percent(UnityEngine.Mathf.Clamp01(petHealthFraction) * 100.0f);
+				ApplyRowHealth(boundPets[i]);
 			}
-			if (healthText != null)
-			{
-				healthText.text = petHealthText;
-			}
+			ApplyPinnedRow();
 			if (statusLabel != null)
 			{
-				statusLabel.text = boundPet != null ? DescribeOrders() : string.Empty;
+				statusLabel.text = boundPets.Count > 0 ? DescribeOrders() : string.Empty;
 			}
 
 			ApplyStanceHighlight();
 			ApplyPriorityRows();
+		}
+
+		/// <summary>
+		/// Builds one row per pet in the current tree, in slot order, unless the rows already there are these pets'.
+		/// </summary>
+		private void BuildRows()
+		{
+			if (petList == null)
+			{
+				return;
+			}
+			bool current = rowsBuiltIn == petList && petList.childCount == boundPets.Count;
+			for (int i = 0; current && i < boundPets.Count; ++i)
+			{
+				current = boundPets[i].Row != null && boundPets[i].Row.parent == petList && petList[i] == boundPets[i].Row;
+			}
+			if (current)
+			{
+				return;
+			}
+
+			petList.Clear();
+			rowsBuiltIn = petList;
+			for (int i = 0; i < boundPets.Count; ++i)
+			{
+				BoundPet bound = boundPets[i];
+				VisualElement row = new VisualElement();
+				row.name = ROW_PREFIX + bound.Pet.Slot;
+				row.AddToClassList("pet-row");
+				row.tooltip = "Pin " + bound.Name + " to the target frame";
+
+				Label name = new Label(bound.Name);
+				name.pickingMode = PickingMode.Ignore;
+				name.AddToClassList("fish-label");
+				name.AddToClassList("pet-row__name");
+				row.Add(name);
+
+				VisualElement bar = new VisualElement();
+				bar.pickingMode = PickingMode.Ignore;
+				bar.AddToClassList("fish-bar");
+				bar.AddToClassList("pet-health");
+				VisualElement fill = new VisualElement();
+				fill.pickingMode = PickingMode.Ignore;
+				fill.AddToClassList("fish-bar__fill");
+				fill.AddToClassList("fish-bar__fill--hp");
+				fill.AddToClassList("pet-health-fill");
+				Label text = new Label();
+				text.pickingMode = PickingMode.Ignore;
+				text.AddToClassList("fish-bar__label");
+				text.AddToClassList("pet-health-text");
+				bar.Add(fill);
+				bar.Add(text);
+				row.Add(bar);
+
+				Pet pet = bound.Pet;
+				row.RegisterCallback<ClickEvent>(_ => OnPetRowClicked(pet));
+
+				bound.Row = row;
+				bound.Fill = fill;
+				bound.Text = text;
+				petList.Add(row);
+			}
+		}
+
+		/// <summary>Writes one pet's health into its row.</summary>
+		private static void ApplyRowHealth(BoundPet bound)
+		{
+			if (bound.Fill != null)
+			{
+				bound.Fill.style.width = Length.Percent(Mathf.Clamp01(bound.HealthFraction) * 100.0f);
+			}
+			if (bound.Text != null)
+			{
+				bound.Text.text = bound.HealthText;
+			}
+		}
+
+		/// <summary>Marks the row of the pet pinned to the target frame, and only that one.</summary>
+		private void ApplyPinnedRow()
+		{
+			Transform pinned = pinSource != null ? pinSource.PinnedTarget : null;
+			for (int i = 0; i < boundPets.Count; ++i)
+			{
+				BoundPet bound = boundPets[i];
+				bound.Row?.EnableInClassList(ROW_PINNED_CLASS, pinned != null && bound.Pet != null && bound.Pet.Transform == pinned);
+			}
+		}
+
+		/// <summary>Clicking a pet's row pins that pet as the target.</summary>
+		public void OnPetRowClicked(Pet pet)
+		{
+			if (pet == null || Character == null || !Character.TryGet(out ITargetController targetController))
+			{
+				return;
+			}
+			targetController.TryPinTarget(pet.Transform);
+			ApplyPinnedRow();
+		}
+
+		/// <summary>A pin was taken or released: re-mark the rows.</summary>
+		private void TargetController_OnPinChanged(Transform target)
+		{
+			ApplyPinnedRow();
+		}
+
+		/// <summary>Stops listening to the pin events of the outgoing character.</summary>
+		private void UnbindPinSource()
+		{
+			if (pinSource == null)
+			{
+				return;
+			}
+			pinSource.OnPinTarget -= TargetController_OnPinChanged;
+			pinSource.OnUnpinTarget -= TargetController_OnPinChanged;
+			pinSource = null;
+		}
+
+		/// <summary>The stance's colour class, on the stance buttons (fixed) and on the status badge (following the stance).</summary>
+		private static string StanceClass(PetStance stance)
+		{
+			switch (stance)
+			{
+				case PetStance.Aggressive: return "pet-stance--aggressive";
+				case PetStance.Passive: return "pet-stance--passive";
+				default: return "pet-stance--defensive";
+			}
 		}
 
 		/// <summary>
@@ -392,6 +544,14 @@ namespace FishMMO.Client
 			SetStanceActive(passiveButton, petStance == PetStance.Passive);
 			SetStanceActive(defensiveButton, petStance == PetStance.Defensive);
 			SetStanceActive(aggressiveButton, petStance == PetStance.Aggressive);
+			// The badge in the header takes the stance's colour too (the word stays: colour is never the only cue).
+			if (statusLabel != null)
+			{
+				foreach (PetStance stance in new[] { PetStance.Passive, PetStance.Defensive, PetStance.Aggressive })
+				{
+					statusLabel.EnableInClassList(StanceClass(stance), boundPets.Count > 0 && petStance == stance);
+				}
+			}
 		}
 
 		/// <summary>
@@ -411,7 +571,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Refreshes the panel when the server confirms a stance or movement order change.
 		/// </summary>
-		/// <param name="pet">The pet whose orders changed.</param>
+		/// <param name="pet">The first of the pets whose orders changed.</param>
 		public void PetController_OnPetOrdersChanged(Pet pet)
 		{
 			/* Static event: it fires for every pet on this client. Only react to ours. */
@@ -419,13 +579,14 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (pet != null && !ReferenceEquals(petController.Pet, pet))
+			if (pet != null && !IsOurs(petController, pet))
 			{
 				return;
 			}
 
 			petStance = petController.Stance;
 			petMovementOrder = petController.MovementOrder;
+			SayConfirmedOrders();
 			/* The server's confirmation is the order in force; it wins over the local copy and
 			 * is what gets remembered, so the panel and the settings never disagree with it. */
 			attackPriority = PetAttackPriority.Normalize(petController.AttackPriority);
@@ -433,45 +594,175 @@ namespace FishMMO.Client
 			ApplyPetState();
 		}
 
-		/// <summary>
-		/// Binds this panel to a pet: shows its name, subscribes to its health and reveals the panel.
-		/// </summary>
-		/// <param name="pet">The pet to bind, or null to unbind.</param>
-		private void BindPet(Pet pet)
-		{
-			UnbindPetHealth();
+		/// <summary>A stance the owner asked for and the server has not confirmed yet; null for none.</summary>
+		private PetStance? pendingStance;
 
-			if (pet == null)
+		/// <summary>A movement order the owner asked for and the server has not confirmed yet; null for none.</summary>
+		private PetMovementOrder? pendingMovementOrder;
+
+		/// <summary>
+		/// The pet says, in the owner's chat only, the order the server just confirmed. Only orders this owner gave: a summon
+		/// or a reconnect confirms orders too, and the pet does not announce those.
+		/// </summary>
+		private void SayConfirmedOrders()
+		{
+			if (pendingStance.HasValue && pendingStance.Value == petStance)
+			{
+				pendingStance = null;
+				switch (petStance)
+				{
+					case PetStance.Aggressive: Say("I will attack anything that comes near, master."); break;
+					case PetStance.Defensive: Say("I will defend you, master."); break;
+					case PetStance.Passive: Say("I will not fight unless you command it, master."); break;
+				}
+			}
+			if (pendingMovementOrder.HasValue && pendingMovementOrder.Value == petMovementOrder)
+			{
+				pendingMovementOrder = null;
+				Say(petMovementOrder == PetMovementOrder.Stay ? "I will hold here, master." : "Following you, master.");
+			}
+		}
+
+		/// <summary>
+		/// What the pet has just started doing, from the server (<see cref="PetActionBroadcast"/>): which target an attack order
+		/// chose, or a fight it joined on its own.
+		/// </summary>
+		public void PetController_OnClientPetAction(Pet pet, PetAction action, long targetID)
+		{
+			BoundPet bound = Find(pet);
+			if (bound == null)
+			{
+				return;
+			}
+			string target = TargetName(targetID);
+			switch (action)
+			{
+				case PetAction.Attacking: Say(bound.Name, $"Attacking {target}, master."); break;
+				case PetAction.Defending: Say(bound.Name, $"Defending against {target}, master!"); break;
+				case PetAction.Engaging: Say(bound.Name, $"Engaging {target}!"); break;
+				case PetAction.NoTarget: Say(bound.Name, "I see nothing I may attack, master."); break;
+			}
+		}
+
+		/// <summary>The name this client shows for a character, as the target frame does.</summary>
+		private static string TargetName(long characterID)
+		{
+			if (characterID != 0 && BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter character) && character != null)
+			{
+				if (character is IPlayerCharacter player && !string.IsNullOrEmpty(player.CharacterName))
+				{
+					return player.CharacterName;
+				}
+				if (character.GameObject != null)
+				{
+					return character.GameObject.name.Replace("(Clone)", string.Empty);
+				}
+			}
+			return "the target";
+		}
+
+		/// <summary>The first pet says <paramref name="text"/> for the pack: an order every pet obeys is confirmed once.</summary>
+		private void Say(string text)
+		{
+			Say(petName, text);
+		}
+
+		/// <summary>The pet named <paramref name="speaker"/> says <paramref name="text"/> in this client's chat, as a local Say line.</summary>
+		private static void Say(string speaker, string text)
+		{
+			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+			{
+				chat.InstantiateChatMessage(ChatChannel.Say, speaker, text);
+			}
+		}
+
+		/// <summary>The name this client shows for a pet.</summary>
+		private static string PetDisplayName(Pet pet)
+		{
+			return pet != null && pet.GameObject != null ? pet.GameObject.name.Replace("(Clone)", string.Empty) : "Pet";
+		}
+
+		/// <summary>True when <paramref name="pet"/> is one of <paramref name="petController"/>'s pets.</summary>
+		private static bool IsOurs(IPetController petController, Pet pet)
+		{
+			for (int i = 0; i < petController.Pets.Count; ++i)
+			{
+				if (ReferenceEquals(petController.Pets[i], pet))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The shown entry for <paramref name="pet"/>, or null.</summary>
+		private BoundPet Find(Pet pet)
+		{
+			for (int i = 0; pet != null && i < boundPets.Count; ++i)
+			{
+				if (ReferenceEquals(boundPets[i].Pet, pet))
+				{
+					return boundPets[i];
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Shows exactly the pets the character has out: binds the new ones (health subscription, nameplate), releases the
+		/// ones that left, orders the rows by slot, and shows or hides the panel.
+		/// </summary>
+		private void RebindPets()
+		{
+			List<Pet> pets = new List<Pet>();
+			if (Character != null && Character.TryGet(out IPetController petController))
+			{
+				for (int i = 0; i < petController.Pets.Count; ++i)
+				{
+					if (petController.Pets[i] != null)
+					{
+						pets.Add(petController.Pets[i]);
+					}
+				}
+			}
+
+			for (int i = boundPets.Count - 1; i >= 0; --i)
+			{
+				if (!pets.Contains(boundPets[i].Pet))
+				{
+					Unbind(boundPets[i]);
+					boundPets.RemoveAt(i);
+				}
+			}
+
+			bool added = false;
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (Find(pets[i]) == null)
+				{
+					boundPets.Add(Bind(pets[i]));
+					added = true;
+				}
+			}
+			boundPets.Sort((a, b) => a.Pet.Slot.CompareTo(b.Pet.Slot));
+
+			if (boundPets.Count == 0)
 			{
 				petName = "Pet";
-				petHealthFraction = 0.0f;
-				petHealthText = string.Empty;
+				petStance = PetStance.Defensive;
+				petMovementOrder = PetMovementOrder.Follow;
 				ApplyPetState();
 				Hide();
 				return;
 			}
 
-			boundPet = pet;
-			petName = pet.GameObject != null ? pet.GameObject.name.Replace("(Clone)", string.Empty) : "Pet";
-			petStance = pet.Stance;
-			petMovementOrder = pet.MovementOrder;
-			ReplayStoredPriority(pet);
-
-			if (pet.CharacterNameplate != null)
+			BoundPet first = boundPets[0];
+			petName = first.Name;
+			petStance = first.Pet.Stance;
+			petMovementOrder = first.Pet.MovementOrder;
+			if (added)
 			{
-				pet.CharacterNameplate.Visible = true;
-			}
-
-			if (pet.TryGet(out ICharacterAttributeController attributeController) &&
-				attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
-			{
-				health.OnAttributeUpdated += PetHealth_OnAttributeUpdated;
-				ApplyHealth(health);
-			}
-			else
-			{
-				petHealthFraction = 0.0f;
-				petHealthText = string.Empty;
+				ReplayStoredPriority(first.Pet);
 			}
 
 			// Show() writes the state above through OnAfterShow; an already-visible panel is
@@ -486,91 +777,105 @@ namespace FishMMO.Client
 			}
 		}
 
-		/// <summary>
-		/// Releases the health subscription held on the currently bound pet.
-		/// </summary>
-		private void UnbindPetHealth()
+		/// <summary>Takes a pet's health subscription and shows its nameplate.</summary>
+		private BoundPet Bind(Pet pet)
 		{
-			if (boundPet == null)
+			BoundPet bound = new BoundPet() { Pet = pet, Name = PetDisplayName(pet) };
+
+			if (pet.CharacterNameplate != null)
 			{
-				return;
+				pet.CharacterNameplate.Visible = true;
 			}
 
-			if (boundPet.TryGet(out ICharacterAttributeController attributeController) &&
+			if (pet.TryGet(out ICharacterAttributeController attributeController) &&
 				attributeController.TryGetHealthAttribute(out CharacterResourceAttribute health))
 			{
-				health.OnAttributeUpdated -= PetHealth_OnAttributeUpdated;
+				bound.Health = health;
+				bound.OnHealth = attribute => PetHealth_OnAttributeUpdated(bound, attribute);
+				health.OnAttributeUpdated += bound.OnHealth;
+				ApplyHealth(bound, health);
 			}
+			return bound;
+		}
 
-			boundPet = null;
+		/// <summary>Releases a pet's health subscription, on the attribute it was taken on.</summary>
+		private static void Unbind(BoundPet bound)
+		{
+			if (bound.Health != null && bound.OnHealth != null)
+			{
+				bound.Health.OnAttributeUpdated -= bound.OnHealth;
+			}
+			bound.Health = null;
+			bound.OnHealth = null;
+			bound.Row?.RemoveFromHierarchy();
+		}
+
+		/// <summary>Releases every pet's health subscription.</summary>
+		private void UnbindAllPets()
+		{
+			for (int i = 0; i < boundPets.Count; ++i)
+			{
+				Unbind(boundPets[i]);
+			}
+			boundPets.Clear();
 		}
 
 		/// <summary>
-		/// Refreshes the pet health bar whenever the pet's health attribute changes.
+		/// Refreshes a pet's health bar whenever its health attribute changes.
 		/// </summary>
-		/// <param name="attribute">The updated attribute.</param>
-		private void PetHealth_OnAttributeUpdated(CharacterAttribute attribute)
+		private void PetHealth_OnAttributeUpdated(BoundPet bound, CharacterAttribute attribute)
 		{
 			if (attribute is CharacterResourceAttribute resource)
 			{
-				ApplyHealth(resource);
+				ApplyHealth(bound, resource);
 
 				// Every health tick; a hidden panel is written when it opens, by OnAfterShow.
 				if (Visible)
 				{
-					ApplyPetState();
+					ApplyRowHealth(bound);
 				}
 			}
 		}
 
 		/// <summary>
-		/// Recomputes the pet health fraction and label from a resource attribute.
+		/// Recomputes a pet's health fraction and label from its resource attribute.
 		/// </summary>
-		/// <param name="health">The pet's health resource attribute.</param>
-		private void ApplyHealth(CharacterResourceAttribute health)
+		private static void ApplyHealth(BoundPet bound, CharacterResourceAttribute health)
 		{
 			// CurrentValue / FinalValue. The original was FinalValue / CurrentValue, which is the
 			// reciprocal — a pet at 1/100 health showed a bar clamped to full.
-			petHealthFraction = health.FinalValueAsFloat > 0.0f
+			bound.HealthFraction = health.FinalValueAsFloat > 0.0f
 				? health.CurrentValue / health.FinalValueAsFloat
 				: 0.0f;
-			petHealthText = UnityEngine.Mathf.RoundToInt(health.CurrentValue) + "/" + health.FinalValue;
+			bound.HealthText = Mathf.RoundToInt(health.CurrentValue) + "/" + health.FinalValue;
 		}
 
 		/// <summary>
-		/// Updates the panel when a pet is summoned and makes it visible.
+		/// Adds a summoned pet's row and makes the panel visible.
 		/// </summary>
 		/// <param name="pet">The summoned pet.</param>
 		public void PetController_OnPetSummoned(Pet pet)
 		{
 			/* Static event: it fires for EVERY pet summoned anywhere on this client, including
-			 * other players'. Only bind the one belonging to this panel's character. */
+			 * other players'. Only bind the ones belonging to this panel's character. */
 			if (pet != null &&
 				Character != null &&
 				Character.TryGet(out IPetController petController) &&
-				!ReferenceEquals(petController.Pet, pet))
+				!IsOurs(petController, pet))
 			{
 				return;
 			}
 
-			BindPet(pet);
+			RebindPets();
 		}
 
 		/// <summary>
-		/// Hides the panel when the pet is destroyed.
+		/// Drops a pet's row when it leaves; hides the panel when none is left.
 		/// </summary>
-		public void PetController_OnPetDestroyed()
+		/// <param name="pet">The pet that left, or null when every pet left.</param>
+		public void PetController_OnPetDestroyed(Pet pet)
 		{
-			UnbindPetHealth();
-
-			petName = "Pet";
-			petHealthFraction = 0.0f;
-			petHealthText = string.Empty;
-			petStance = PetStance.Defensive;
-			petMovementOrder = PetMovementOrder.Follow;
-			ApplyPetState();
-
-			Hide();
+			RebindPets();
 		}
 
 		/// <summary>
@@ -581,11 +886,11 @@ namespace FishMMO.Client
 		{
 			return Character != null &&
 				Character.TryGet(out IPetController petController) &&
-				petController.Pet != null;
+				petController.Pets.Count > 0;
 		}
 
 		/// <summary>
-		/// Sends a follow command to the pet.
+		/// Sends a follow command to every pet.
 		/// </summary>
 		public void OnFollowPet()
 		{
@@ -593,11 +898,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			pendingMovementOrder = PetMovementOrder.Follow;
 			Client.Broadcast(new PetFollowBroadcast(), Channel.Reliable);
 		}
 
 		/// <summary>
-		/// Sends a stay command to the pet.
+		/// Sends a stay command to every pet.
 		/// </summary>
 		public void OnStayPet()
 		{
@@ -605,11 +911,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			pendingMovementOrder = PetMovementOrder.Stay;
 			Client.Broadcast(new PetStayBroadcast(), Channel.Reliable);
 		}
 
 		/// <summary>
-		/// Sends a summon command to the pet.
+		/// Calls every pet to the player's side.
 		/// </summary>
 		public void OnSummonPet()
 		{
@@ -621,7 +928,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Orders the pet to attack the player's current target.
+		/// Orders every pet to attack the player's current target.
 		/// </summary>
 		/// <remarks>
 		/// Names the target frame — the pinned target when one is held, else whatever is hovered —
@@ -739,7 +1046,7 @@ namespace FishMMO.Client
 		private void ReplayStoredPriority(Pet pet)
 		{
 			if (pet == null || Character == null || !Character.TryGet(out IPetController petController) ||
-				!ReferenceEquals(petController.Pet, pet))
+				!IsOurs(petController, pet))
 			{
 				return;
 			}
@@ -811,11 +1118,12 @@ namespace FishMMO.Client
 			{
 				return;
 			}
+			pendingStance = stance;
 			Client.Broadcast(new PetStanceBroadcast() { Stance = stance }, Channel.Reliable);
 		}
 
 		/// <summary>
-		/// Sends a release command to the pet.
+		/// Releases every pet.
 		/// </summary>
 		public void OnReleasePet()
 		{

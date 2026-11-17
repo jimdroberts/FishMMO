@@ -41,6 +41,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Skabiwarren Merchant Spawner [4bb809e4]'
     Position: {x: 140.60614, y: 65.41388, z: -472.0505}
     Rotation: {x: -0, y: 0.06975647, z: -0, w: 0.9975641}
@@ -67,6 +68,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Skabiwarren Banker Spawner [4bb809e4]'
     Position: {x: 71.60206, y: 60.202576, z: -437.08734}
     Rotation: {x: -0, y: 0.06975647, z: -0, w: 0.9975641}
@@ -93,6 +95,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Skabiwarren Crafter Spawner [4bb809e4]'
     Position: {x: 226.35211, y: 68.11896, z: -471.33}
     Rotation: {x: -0, y: 0.06975647, z: -0, w: 0.9975641}
@@ -119,6 +122,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Skabiwarren Guard Spawner [4bb809e4]'
     Position: {x: 175.39621, y: 68.11896, z: -516.73663}
     Rotation: {x: -0, y: 0.06975647, z: -0, w: 0.9975641}
@@ -144,6 +148,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Skabiwarren Townsfolk Spawner [4bb809e4]'
     Position: {x: 130.16408, y: 68.11896, z: -519.08014}
     Rotation: {x: -0, y: 0.06975647, z: -0, w: 0.9975641}
@@ -169,6 +174,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Golurashadow Merchant Spawner [01eef504]'
     Position: {x: -24.459507, y: 53.957092, z: -176.35176}
     Rotation: {x: -0, y: 0.71325046, z: -0, w: 0.70090926}
@@ -195,6 +201,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Golurashadow Townsfolk Spawner [01eef504]'
     Position: {x: -69.087326, y: 53.957092, z: -183.59137}
     Rotation: {x: -0, y: 0.71325046, z: -0, w: 0.70090926}
@@ -220,6 +227,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'South Paaenclosure Merchant Spawner [6b608415]'
     Position: {x: -1169.0596, y: 78.744446, z: -703.357}
     Rotation: {x: -0, y: 0.551937, z: -0, w: 0.83388585}
@@ -246,6 +254,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'South Paaenclosure Townsfolk Spawner [6b608415]'
     Position: {x: -1178.5244, y: 78.78009, z: -704.69305}
     Rotation: {x: -0, y: 0.551937, z: -0, w: 0.83388585}
@@ -271,6 +280,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grakden Merchant Spawner [0a65d8b9]'
     Position: {x: -282.17435, y: 50.933777, z: -356.92236}
     Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
@@ -297,6 +307,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grakden Banker Spawner [0a65d8b9]'
     Position: {x: -266.1214, y: 50.933777, z: -320.79562}
     Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
@@ -323,6 +334,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grakden Crafter Spawner [0a65d8b9]'
     Position: {x: -310.1417, y: 50.933777, z: -321.09448}
     Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
@@ -349,6 +361,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grakden Guard Spawner [0a65d8b9]'
     Position: {x: -282.3913, y: 50.933777, z: -361.74997}
     Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
@@ -374,6 +387,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grakden Townsfolk Spawner [0a65d8b9]'
     Position: {x: -293.62427, y: 50.933777, z: -358.32584}
     Rotation: {x: -0, y: 0.8290376, z: -0, w: -0.55919284}
@@ -399,6 +413,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Hesestead Keep Guard Spawner [780ffe34]'
     Position: {x: 731.4107, y: 57.974915, z: -202.97128}
     Rotation: {x: -0, y: 0.52991927, z: -0, w: 0.8480481}
@@ -424,6 +439,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Hesestead Keep Merchant Spawner [780ffe34]'
     Position: {x: 731.21497, y: 57.974915, z: -210.13873}
     Rotation: {x: -0, y: 0.52991927, z: -0, w: 0.8480481}
@@ -450,6 +466,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Grotto of Sabre Cats MonsterPack Spawner [4cbc926a]'
     Position: {x: 1440.9695, y: 3.069046, z: 624.30304}
     Rotation: {x: -0, y: 0.26552087, z: -0, w: -0.9641052}
@@ -475,6 +492,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Chine Camp MonsterPack Spawner [5798796b]'
     Position: {x: 1019.6267, y: 94.17511, z: 167.15015}
     Rotation: {x: -0, y: 0.976296, z: -0, w: 0.21643965}
@@ -500,6 +518,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Chine Camp Elite Spawner [5798796b]'
     Position: {x: 1012.875, y: 94.135315, z: 171.27858}
     Rotation: {x: -0, y: 0.976296, z: -0, w: 0.21643965}
@@ -525,6 +544,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Tiaa Bone-pile MonsterPack Spawner [7bc054cf]'
     Position: {x: 891.7869, y: 82.20416, z: 70.4759}
     Rotation: {x: -0, y: 0.39874908, z: -0, w: 0.9170601}
@@ -550,6 +570,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'To Offering Stone MonsterPack Spawner [4e2960ef]'
     Position: {x: 968.5695, y: 80.68182, z: 339.0702}
     Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
@@ -575,6 +596,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'To Offering Stone Elite Spawner [4e2960ef]'
     Position: {x: 971.226, y: 80.7287, z: 347.09988}
     Rotation: {x: -0, y: 0.559193, z: -0, w: -0.8290375}
@@ -600,6 +622,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Honeycombed Boneyard MonsterPack Spawner [05a74866]'
     Position: {x: 423.4204, y: 54.829895, z: -270.52304}
     Rotation: {x: -0, y: 0.9902681, z: -0, w: -0.13917309}
@@ -625,6 +648,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Honeycombed Boneyard Elite Spawner [05a74866]'
     Position: {x: 423.86166, y: 54.58673, z: -263.296}
     Rotation: {x: -0, y: 0.9902681, z: -0, w: -0.13917309}
@@ -650,6 +674,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Antenna Tumulus of the Empty Bone MonsterPack Spawner [314060dd]'
     Position: {x: 919.5199, y: 81.88141, z: -471.3364}
     Rotation: {x: -0, y: 0.9426415, z: -0, w: -0.33380687}
@@ -675,6 +700,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mor Sunken Hull Scallop Bed Spawner 1 [170b6bfc]'
     Position: {x: -987.6109, y: -15.672058, z: 244.56982}
     Rotation: {x: -0, y: 0.916304, z: -0, w: -0.40048367}
@@ -701,6 +727,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mor Sunken Hull Scallop Bed Spawner 2 [170b6bfc]'
     Position: {x: -988.5557, y: -16.097046, z: 252.94211}
     Rotation: {x: -0, y: 0.92155683, z: -0, w: 0.3882438}
@@ -727,6 +754,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mor Sunken Hull Scallop Bed Spawner 3 [170b6bfc]'
     Position: {x: -1009.9098, y: -16.503662, z: 239.85489}
     Rotation: {x: -0, y: 0.47572604, z: -0, w: 0.8795937}
@@ -753,6 +781,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mor Sunken Hull Scallop Bed Spawner 4 [170b6bfc]'
     Position: {x: -1007.2982, y: -15.952637, z: 258.5215}
     Rotation: {x: -0, y: 0.85347795, z: -0, w: -0.52112913}
@@ -779,6 +808,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mor Sunken Hull Scallop Bed Spawner 5 [170b6bfc]'
     Position: {x: -1010.8675, y: -15.982483, z: 254.665}
     Rotation: {x: -0, y: 0.08870503, z: -0, w: -0.996058}
@@ -805,6 +835,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Sa Lie MonsterPack Spawner [352fefab]'
     Position: {x: 854.66907, y: 153.2392, z: 1016.8567}
     Rotation: {x: -0, y: 0.9914449, z: -0, w: -0.13052621}
@@ -830,6 +861,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Sa Lie Elite Spawner [352fefab]'
     Position: {x: 854.2817, y: 153.19281, z: 1012.96405}
     Rotation: {x: -0, y: 0.9914449, z: -0, w: -0.13052621}
@@ -855,6 +887,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   references:
     version: 2
     RefIds:

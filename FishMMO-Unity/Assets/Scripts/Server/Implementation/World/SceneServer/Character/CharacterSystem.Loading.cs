@@ -588,13 +588,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAbilityData> abilityData = null;
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = null;
 				var participantData = new Dictionary<CharacterPersistenceParticipant, object>();
-				IReadOnlyList<CharacterFriendData> friendData = null;
-				CharacterGuildData? guildData = null;
-				CharacterPartyData? partyData = null;
 				IReadOnlyList<CharacterHotkeyData> hotkeyData = null;
 				IReadOnlyList<CharacterBuffData> buffData = null;
-				IReadOnlyList<CharacterQuestData> questData = null;
-				IReadOnlyList<CharacterArchetypeData> archetypeData = null;
 				CharacterChatMuteState? chatMute = null;
 
 				// --- Fetch the character row and claim its session BEFORE the Unit of Work ---
@@ -909,92 +904,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// Every feature that saves through a participant loads through it too; see CharacterPersistence.cs.
 					foreach (CharacterPersistenceParticipant participant in CharacterPersistenceParticipants.All)
 					{
-						CharacterFetch fetched = await participant.FetchAsync(this, characterID);
+						CharacterFetch fetched = await participant.FetchAsync(this, charData);
 						if (!fetched.IsSuccess)
 						{
 							await AbandonLoadAfterFetchFailure(participant.Name, fetched.ErrorCode, fetched.ErrorMessage);
 							return;
 						}
 						participantData[participant] = fetched.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterFriendService>(out var friendService))
-					{
-						var result = await friendService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("friends", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						friendData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterGuildService>(out var guildService))
-					{
-						var result = await guildService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("guild membership", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						guildData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterPartyService>(out var partyService))
-					{
-						var result = await partyService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("party membership", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						partyData = result.Data;
-
-						/* A party belongs to one world server, and this character may have
-						 * arrived on a different one.
-						 *
-						 * Characters are global on purpose — the same character can be played on
-						 * any world server so that friends can play together wherever they are —
-						 * but a party is replicated between scene servers through the party update
-						 * pump, and that pump is scoped to a world server. Carrying a membership
-						 * across would produce a party half of whose members are updated by a pump
-						 * the other half cannot see: rosters that never converge, invitations to
-						 * instances that do not exist on the other side, and a leader nobody can
-						 * reach. Every one of those is a bug that only appears once somebody
-						 * changes shard, which is the worst kind to diagnose.
-						 *
-						 * So the membership is dropped here, at the moment of arrival, before any
-						 * of it is applied to the character. Dropped rather than migrated: the
-						 * party is still live on the world server it belongs to, and pulling it
-						 * across would take its other members with it.
-						 */
-						if (partyData.HasValue &&
-							partyData.Value.PartyID > 0 &&
-							serviceRegistry.TryGet<IPartyService>(out var partyLookupService))
-						{
-							var partyResult = await partyLookupService.FetchAsync(partyData.Value.PartyID);
-
-							if (!partyResult.IsSuccess)
-							{
-								/* Could not read the party. The membership is left alone: a
-								 * transient database fault is not evidence that the character has
-								 * changed shard, and evicting on one would break up parties for
-								 * no reason. If it really is a cross-server membership it will be
-								 * caught on the next load. */
-								await Log.Warning("CharacterSystem",
-									$"Could not read party {partyData.Value.PartyID} to check its world server for character {characterID}; leaving the membership in place.");
-							}
-							else if (partyResult.Data == null)
-							{
-								// The party is gone. Nothing to belong to.
-								await DropPartyMembershipAsync(partyData.Value, "the party no longer exists");
-								partyData = null;
-							}
-							else if (partyResult.Data.Value.WorldServerID != 0 &&
-									 partyResult.Data.Value.WorldServerID != charData.WorldServerID)
-							{
-								await DropPartyMembershipAsync(partyData.Value,
-									$"it belongs to world server {partyResult.Data.Value.WorldServerID}, not {charData.WorldServerID}");
-								partyData = null;
-							}
-						}
 					}
 					if (serviceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
 					{
@@ -1015,26 +931,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							return;
 						}
 						buffData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
-					{
-						var result = await archetypeService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("archetype", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						archetypeData = result.Data;
-					}
-					if (serviceRegistry.TryGet<ICharacterQuestService>(out var questService))
-					{
-						var result = await questService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("quests", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						questData = result.Data;
 					}
 					/* The chat mute — the character's own and its account's, in one read, and LAST in the
 					 * unit of work so a failure cannot poison the reads before it. It fails OPEN: a
@@ -1068,9 +964,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					instanceSceneName, instanceSceneHandle,
 					itemData,
 					attributeData, abilityData, knownAbilityData,
-					participantData, friendData,
-					guildData, partyData,
-					hotkeyData, buffData, questData, archetypeData, chatMute);
+					participantData,
+					hotkeyData, buffData, chatMute);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
 				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
 				 * item therefore left the character Online with nothing left holding its token —
@@ -1457,13 +1352,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterAttributeData> attributeData = ctx.AttributeData;
 			IReadOnlyList<CharacterAbilityData> abilityData = ctx.AbilityData;
 			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = ctx.KnownAbilityData;
-			IReadOnlyList<CharacterFriendData> friendData = ctx.FriendData;
-			CharacterGuildData? guildData = ctx.GuildData;
-			CharacterPartyData? partyData = ctx.PartyData;
 			IReadOnlyList<CharacterHotkeyData> hotkeyData = ctx.HotkeyData;
 			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
-			IReadOnlyList<CharacterQuestData> questData = ctx.QuestData;
-			IReadOnlyList<CharacterArchetypeData> archetypeData = ctx.ArchetypeData;
 
 			if (conn == null || !conn.IsActive)
 			{
@@ -1779,38 +1669,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Friends
-			if (friendData != null && friendData.Count > 0 &&
-				character.TryGet(out IFriendController friendController))
-			{
-				foreach (CharacterFriendData friend in friendData)
-				{
-					friendController.AddFriend(friend.FriendCharacterID);
-				}
-			}
-
-			// Guild
-			if (guildData.HasValue &&
-				character.TryGet(out IGuildController guildController))
-			{
-				guildController.ID = guildData.Value.GuildID;
-				/* The ladder POSITION, as stored. What that position is allowed to do is not
-				 * knowable from the membership row alone — it depends on the guild's own rank
-				 * rows — so the permission mask stays empty until GuildSystem resolves and
-				 * publishes it. Empty is the safe direction: the pre-filters that read this mask
-				 * refuse, and every guild operation re-resolves before acting anyway. */
-				guildController.RankOrder = guildData.Value.Rank;
-				guildController.Permissions = GuildPermissions.None;
-			}
-
-			// Party
-			if (partyData.HasValue &&
-				character.TryGet(out IPartyController partyController))
-			{
-				partyController.ID = partyData.Value.PartyID;
-				partyController.Rank = (PartyRank)partyData.Value.Rank;
-			}
-
 			// Hotkeys
 			if (hotkeyData != null && hotkeyData.Count > 0)
 			{
@@ -1853,51 +1711,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					// under the row's version. See CharacterSystem.CaptureBuffSet.
 					Buff newBuff = new Buff(buff.TemplateID, expiryTick, nextTickTick, loadTickDelta, buff.Stacks, buff.TickCount);
 					buffController.Apply(newBuff);
-				}
-			}
-
-			// Archetype. One row per character; if there are several, the newest version wins.
-			if (archetypeData != null && archetypeData.Count > 0 &&
-				character.TryGet(out IArchetypeController archetypeController))
-			{
-				CharacterArchetypeData newest = archetypeData[0];
-				for (int i = 1; i < archetypeData.Count; ++i)
-				{
-					if (archetypeData[i].Version > newest.Version)
-					{
-						newest = archetypeData[i];
-					}
-				}
-				archetypeController.Restore(newest.TemplateID, newest.Version);
-			}
-
-			// Quests
-			if (questData != null && questData.Count > 0 &&
-				character.TryGet(out IQuestController questController))
-			{
-				foreach (CharacterQuestData quest in questData)
-				{
-					QuestTemplate questTemplate = QuestTemplate.Get<QuestTemplate>(quest.TemplateID);
-					if (questTemplate == null)
-					{
-						continue;
-					}
-
-					long[] objectiveValues = ParseObjectiveValues(quest.ObjectiveValues);
-					questController.SetQuest(questTemplate, (QuestStatus)quest.Status, objectiveValues);
-
-					/* The row's version, restored exactly as achievements and factions restore theirs.
-					 *
-					 * It used to be dropped here, so every loaded quest restarted at version 0 while
-					 * its row stood at whatever the last session had reached. Each write this session
-					 * then quoted a version the row already outranked: progress and completion were
-					 * refused as stale (at Debug, so nobody saw), and the turn-in's delete was refused
-					 * the same way — the rewards were paid, the quest left memory, and the row came
-					 * back as Complete at the next login to be turned in again, every login. */
-					if (questController.Quests.TryGetValue(questTemplate.Name, out QuestInstance questInstance))
-					{
-						questInstance.Version = quest.Version;
-					}
 				}
 			}
 
@@ -2182,36 +1995,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Send non-DB data immediately on the main thread
 				SendNonDbCharacterData(character);
 
-				// Capture social IDs on the main thread for async DB fetch
-				long guildID = 0;
-				if (character.TryGet(out IGuildController gc))
-				{
-					guildID = gc.ID;
-				}
-				long partyID = 0;
-				if (character.TryGet(out IPartyController pc))
-				{
-					partyID = pc.ID;
-				}
-				List<long> friendIDs = null;
-				if (character.TryGet(out IFriendController fc) &&
-					fc.Friends != null &&
-					fc.Friends.Count > 0)
-				{
-					friendIDs = new List<long>(fc.Friends);
-				}
-				NetworkConnection owner = character.Owner;
-				/* Captured on the main thread with everything else. The guild roster payload needs
-				 * to know WHOSE roster it is in order to apply the officer-note filter, and the
-				 * async path must not reach back into the character to ask. */
-				long socialCharacterID = character.ID;
-
-				// Enqueue only the DB-dependent social data fetch
-				if (!EnqueueAsyncWork(() => SendAllCharacterDataAsync(owner, socialCharacterID, guildID, partyID, friendIDs)))
-				{
-					Log.Warning("CharacterSystem", $"Failed to enqueue social data broadcast fetch for character {character.ID}.");
-				}
-
 				//Log.Debug("CharacterSystem", character.CharacterName + " has been spawned at: " + character.SceneName + " " + character.Transform.position.ToString());
 			}
 		}
@@ -2265,25 +2048,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			//Log.Debug($"Connection unloaded scene: {msg.UnloadedScenes[0].Name}|{msg.UnloadedScenes[0].Handle}");
 
 			conn.Disconnect(false);
-		}
-
-		/// <summary>
-		/// Parses a comma-separated objective values string into a long array.
-		/// </summary>
-		private static long[] ParseObjectiveValues(string objectiveValues)
-		{
-			if (string.IsNullOrEmpty(objectiveValues))
-			{
-				return Array.Empty<long>();
-			}
-
-			string[] parts = objectiveValues.Split(',');
-			long[] values = new long[parts.Length];
-			for (int i = 0; i < parts.Length; i++)
-			{
-				long.TryParse(parts[i], out values[i]);
-			}
-			return values;
 		}
 
 		/// <summary>
@@ -2383,20 +2147,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterKnownAbilityData> KnownAbilityData;
 			/// <summary>What each <see cref="CharacterPersistenceParticipant"/> fetched, for its apply.</summary>
 			public readonly IReadOnlyDictionary<CharacterPersistenceParticipant, object> ParticipantData;
-			/// <summary>Pre-fetched friend data.</summary>
-			public readonly IReadOnlyList<CharacterFriendData> FriendData;
-			/// <summary>Pre-fetched guild membership data, if any.</summary>
-			public readonly CharacterGuildData? GuildData;
-			/// <summary>Pre-fetched party membership data, if any.</summary>
-			public readonly CharacterPartyData? PartyData;
 			/// <summary>Pre-fetched hotkey bar data.</summary>
 			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
 			/// <summary>Pre-fetched active buff data.</summary>
 			public readonly IReadOnlyList<CharacterBuffData> BuffData;
-			/// <summary>Pre-fetched quest state data.</summary>
-			public readonly IReadOnlyList<CharacterQuestData> QuestData;
-			/// <summary>Pre-fetched archetype rows.</summary>
-			public readonly IReadOnlyList<CharacterArchetypeData> ArchetypeData;
 			/// <summary>Pre-fetched chat mutes, or null when they could not be read (the load fails open).</summary>
 			public readonly CharacterChatMuteState? ChatMute;
 
@@ -2414,12 +2168,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
 			/// <param name="knownAbilityData">Pre-fetched known ability and ability-event data.</param>
 			/// <param name="participantData">What each persistence participant fetched.</param>
-			/// <param name="friendData">Pre-fetched friend data.</param>
-			/// <param name="guildData">Pre-fetched guild membership data.</param>
-			/// <param name="partyData">Pre-fetched party membership data.</param>
 			/// <param name="hotkeyData">Pre-fetched hotkey bar data.</param>
 			/// <param name="buffData">Pre-fetched active buff data.</param>
-			/// <param name="questData">Pre-fetched quest state data.</param>
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
 				Guid sessionToken, long serverID,
@@ -2429,13 +2179,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAbilityData> abilityData,
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
 				IReadOnlyDictionary<CharacterPersistenceParticipant, object> participantData,
-				IReadOnlyList<CharacterFriendData> friendData,
-				CharacterGuildData? guildData,
-				CharacterPartyData? partyData,
 				IReadOnlyList<CharacterHotkeyData> hotkeyData,
 				IReadOnlyList<CharacterBuffData> buffData,
-				IReadOnlyList<CharacterQuestData> questData,
-				IReadOnlyList<CharacterArchetypeData> archetypeData,
 				CharacterChatMuteState? chatMute)
 			{
 				Connection = connection;
@@ -2449,50 +2194,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AbilityData = abilityData;
 				KnownAbilityData = knownAbilityData;
 				ParticipantData = participantData;
-				FriendData = friendData;
-				GuildData = guildData;
-				PartyData = partyData;
 				HotkeyData = hotkeyData;
 				BuffData = buffData;
-				QuestData = questData;
-				ArchetypeData = archetypeData;
 				ChatMute = chatMute;
 			}
-		}
-		/// <summary>
-		/// Drops a party membership this character cannot keep, during load.
-		/// </summary>
-		/// <remarks>
-		/// Delegated to the party system rather than deleting the row here, because removing a
-		/// member is not a single delete: leadership has to move first if the leaver led, and the
-		/// party itself has to be retired if nobody is left. Doing it inline would be a second,
-		/// divergent copy of rules that already exist.
-		/// <para>
-		/// A missing party system is not fatal to the load. The membership stays in the database
-		/// and the character simply loads without it applied, which is the same outcome the caller
-		/// wanted; the next load will try again.
-		/// </para>
-		/// </remarks>
-		/// <param name="membership">The membership row being dropped.</param>
-		/// <param name="reason">Why, for the log line.</param>
-		private async Task DropPartyMembershipAsync(CharacterPartyData membership, string reason)
-		{
-			if (Server == null ||
-				!Server.BehaviourRegistry.TryGet(out IPartySystem<NetworkConnection> partySystem))
-			{
-				await Log.Warning("CharacterSystem",
-					$"Character {membership.CharacterID} should have been removed from party {membership.PartyID} ({reason}) but the party system is unavailable.");
-				return;
-			}
-
-			/* The result is deliberately not acted on here. This runs while the character is
-			 * still loading and the caller drops the membership from the payload either way; a
-			 * refusal leaves a row that this same check finds and deletes on the character's next
-			 * load, and the party system has already logged it. */
-			await partySystem.RemoveCharacterFromPartyAsync(
-				membership.CharacterID,
-				membership.PartyID,
-				reason);
 		}
 
 	}

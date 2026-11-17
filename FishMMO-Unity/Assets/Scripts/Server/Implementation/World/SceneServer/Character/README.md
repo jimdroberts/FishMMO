@@ -869,7 +869,7 @@ could be a later session's claim. The single-row owned variants are
 | `AbilitySystem` | the crafted/purchased grant, its revoke, a forget |
 | `QuestSystem` | every quest update, turn-in and abandon |
 | `HotkeySystem` | the pump's bar (the departing bar rides the save-and-release — above) |
-| `InteractableSystem` | merchant, loot, mail and craft currency rows (`TryPersistMerchantAttributes`); a purchased known ability |
+| `InteractableSystem` | merchant, loot, mail and craft currency rows (`TryPersistCharacterAttributes`); a purchased known ability |
 | `AchievementSystem` | a known-ability reward |
 | `SceneServerSystem` (operator economy) | `/admin setgold`, `givegold`, `takegold`, `setattr` |
 | `GuildSystem` | the creation fee and its refund |

@@ -181,6 +181,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		[Header("Pack")]
 		public NPCPackSettings Pack = new NPCPackSettings();
 
+		/// <summary>
+		/// Circles (x, keep-clear radius, z) nothing from this spawner may spawn inside: the towns a wildlife area reaches into,
+		/// written by the cut (WildlifeSpawnerCut). Empty for every other spawner.
+		/// </summary>
+		[Tooltip("Circles (x, radius, z) nothing spawns inside: settlements a wildlife area overlaps. Written by the cut.")]
+		public List<Vector3> KeepOutCircles = new List<Vector3>();
+
 #if UNITY_EDITOR
 		/// <summary>
 		/// The color used to draw the spawner's gizmo in the editor.

@@ -41,6 +41,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ungate Merchant Spawner [7c14b111]'
     Position: {x: 1124.2065, y: 17.352783, z: -834.0924}
     Rotation: {x: -0, y: 0.8433914, z: -0, w: -0.53729963}
@@ -67,6 +68,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ungate Banker Spawner [7c14b111]'
     Position: {x: 1070.0217, y: 17.352783, z: -840.94946}
     Rotation: {x: -0, y: 0.8433914, z: -0, w: -0.53729963}
@@ -93,6 +95,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ungate Crafter Spawner [7c14b111]'
     Position: {x: 1092.3014, y: 17.352783, z: -829.8618}
     Rotation: {x: -0, y: 0.8433914, z: -0, w: -0.53729963}
@@ -119,6 +122,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ungate Guard Spawner [7c14b111]'
     Position: {x: 1086.0153, y: 17.352783, z: -812.3419}
     Rotation: {x: -0, y: 0.8433914, z: -0, w: -0.53729963}
@@ -144,6 +148,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ungate Townsfolk Spawner [7c14b111]'
     Position: {x: 1047.2136, y: 17.352783, z: -801.01587}
     Rotation: {x: -0, y: 0.8433914, z: -0, w: -0.53729963}
@@ -169,6 +174,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'High Liniarpunt Merchant Spawner [2bde4b35]'
     Position: {x: 224.25017, y: 3.8829346, z: -1183.0159}
     Rotation: {x: -0, y: 0.5075384, z: -0, w: 0.8616291}
@@ -195,6 +201,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'High Liniarpunt Townsfolk Spawner [2bde4b35]'
     Position: {x: 203.8263, y: 6.628296, z: -1170.996}
     Rotation: {x: -0, y: 0.5075384, z: -0, w: 0.8616291}
@@ -220,6 +227,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Marhut Merchant Spawner [332c70a7]'
     Position: {x: -683.4793, y: 4.7836914, z: -1901.1075}
     Rotation: {x: -0, y: 0.72537446, z: -0, w: -0.68835455}
@@ -246,6 +254,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Marhut Townsfolk Spawner [332c70a7]'
     Position: {x: -665.0586, y: 4.7836914, z: -1888.7405}
     Rotation: {x: -0, y: 0.72537446, z: -0, w: -0.68835455}
@@ -271,6 +280,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Rulupalisade Keep Guard Spawner [07e19067]'
     Position: {x: 14.1795025, y: 59.1781, z: -723.08026}
     Rotation: {x: -0, y: 0.95371693, z: -0, w: -0.3007058}
@@ -296,6 +306,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Rulupalisade Keep Merchant Spawner [07e19067]'
     Position: {x: 27.08684, y: 59.1781, z: -728.3002}
     Rotation: {x: -0, y: 0.95371693, z: -0, w: -0.3007058}
@@ -322,6 +333,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Hol Lair MonsterPack Spawner [5935d3f4]'
     Position: {x: 677.2517, y: 16.494873, z: 424.90182}
     Rotation: {x: -0, y: 0.92387956, z: -0, w: 0.38268343}
@@ -347,6 +359,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Hol Lair Boss Spawner [5935d3f4]'
     Position: {x: 672, y: 16.53772, z: 424}
     Rotation: {x: -0, y: 0.92387956, z: -0, w: 0.38268343}
@@ -373,6 +386,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mossaeell''s Bivouac MonsterPack Spawner [173a6272]'
     Position: {x: -271.77103, y: 36.227783, z: 987.5375}
     Rotation: {x: -0, y: 0.017452406, z: -0, w: 0.9998477}
@@ -398,6 +412,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Veloerus''s Camp MonsterPack Spawner [1b241989]'
     Position: {x: 496.76276, y: 28.76355, z: 1368.7717}
     Rotation: {x: -0, y: 0.09584575, z: -0, w: 0.9953962}
@@ -423,6 +438,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Veloerus''s Camp Elite Spawner [1b241989]'
     Position: {x: 494.32013, y: 28.806519, z: 1371.9856}
     Rotation: {x: -0, y: 0.09584575, z: -0, w: 0.9953962}
@@ -448,6 +464,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Dense Watch Guard Spawner [5cb1a082]'
     Position: {x: 1072.0012, y: 38.71582, z: 644.5786}
     Rotation: {x: -0, y: 0.333807, z: -0, w: -0.94264144}
@@ -473,6 +490,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Forest Giant Hideout MonsterPack Spawner [0d6f27ef]'
     Position: {x: 896.9686, y: 35.454224, z: 594.5859}
     Rotation: {x: -0, y: 0.9986295, z: -0, w: 0.052335974}
@@ -498,6 +516,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wil Woodyard Yew Heartwood Spawner 1 [062941f3]'
     Position: {x: -577.446, y: 47.28125, z: -781.04425}
     Rotation: {x: -0, y: 0.8257718, z: -0, w: 0.56400454}
@@ -524,6 +543,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wil Woodyard Yew Heartwood Spawner 2 [062941f3]'
     Position: {x: -596.43304, y: 47.329712, z: -761.11053}
     Rotation: {x: -0, y: 0.346971, z: -0, w: 0.9378759}
@@ -550,6 +570,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wil Woodyard Yew Heartwood Spawner 3 [062941f3]'
     Position: {x: -583.99005, y: 47.1261, z: -762.5467}
     Rotation: {x: -0, y: 0.21205035, z: -0, w: -0.9772588}
@@ -576,6 +597,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wil Woodyard Yew Heartwood Spawner 4 [062941f3]'
     Position: {x: -603.4345, y: 47.166748, z: -775.3243}
     Rotation: {x: -0, y: 0.15702505, z: -0, w: -0.9875947}
@@ -602,6 +624,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wil Woodyard Yew Heartwood Spawner 5 [062941f3]'
     Position: {x: -599.3931, y: 47.218506, z: -765.9241}
     Rotation: {x: -0, y: 0.62065035, z: -0, w: -0.78408754}
@@ -628,6 +651,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Briar Lair MonsterPack Spawner [4139bd2d]'
     Position: {x: 18.396757, y: 76.80859, z: 41.00107}
     Rotation: {x: -0, y: 0.62251467, z: -0, w: 0.78260815}
@@ -653,6 +677,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Briar Lair Elite Spawner [4139bd2d]'
     Position: {x: 19.507648, y: 76.84985, z: 38.53372}
     Rotation: {x: -0, y: 0.62251467, z: -0, w: 0.78260815}
@@ -678,6 +703,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Bri Elf-dance Silverleaf Patch Spawner 1 [5d8c36d2]'
     Position: {x: 1270, y: 100.21094, z: -327.99683}
     Rotation: {x: -0, y: 0.9434263, z: -0, w: 0.33158225}
@@ -704,6 +730,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Bri Elf-dance Silverleaf Patch Spawner 2 [5d8c36d2]'
     Position: {x: 1263.9662, y: 100.05432, z: -330.33072}
     Rotation: {x: -0, y: 0.6086602, z: -0, w: -0.79343104}
@@ -730,6 +757,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Bri Elf-dance Truffle Patch Spawner 3 [5d8c36d2]'
     Position: {x: 1259.3956, y: 99.14197, z: -324.00845}
     Rotation: {x: -0, y: 0.02939222, z: -0, w: -0.9995679}
@@ -756,6 +784,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Burying Ground of the Fern-choked Owl MonsterPack Spawner [7a469d1a]'
     Position: {x: -67.30785, y: 85.817505, z: -1097.588}
     Rotation: {x: -0, y: 0.8480481, z: -0, w: 0.52991927}
@@ -781,6 +810,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Win Kurgan MonsterPack Spawner [772664d1]'
     Position: {x: -766.2854, y: 76.499146, z: -1339.076}
     Rotation: {x: -0, y: 0.27563736, z: -0, w: -0.9612617}
@@ -806,6 +836,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Win Kurgan Elite Spawner [772664d1]'
     Position: {x: -766.36127, y: 76.393555, z: -1337.952}
     Rotation: {x: -0, y: 0.27563736, z: -0, w: -0.9612617}
@@ -831,6 +862,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Hole Sepulchre MonsterPack Spawner [544ccbbb]'
     Position: {x: -1151.2417, y: 16.108765, z: -1574.5994}
     Rotation: {x: -0, y: 0.39874905, z: -0, w: -0.9170601}
@@ -856,6 +888,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Primordial War-field MonsterPack Spawner [761ff628]'
     Position: {x: 1452.7572, y: 90.09985, z: -477.98254}
     Rotation: {x: -0, y: 0.76040596, z: -0, w: 0.64944804}
@@ -881,6 +914,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ber Bone Hall MonsterPack Spawner [45669474]'
     Position: {x: -65.62189, y: 45.843628, z: 533.6896}
     Rotation: {x: -0, y: 0.90630776, z: -0, w: -0.42261833}
@@ -906,6 +940,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Oakie Shaft Iron Vein Spawner 1 [1bca82a8]'
     Position: {x: 1579.6458, y: 184.25534, z: 333.9118}
     Rotation: {x: -0, y: 0.24885352, z: -0, w: 0.96854115}
@@ -932,6 +967,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Oakie Shaft Iron Vein Spawner 2 [1bca82a8]'
     Position: {x: 1578.0823, y: 184.33162, z: 336.5801}
     Rotation: {x: -0, y: 0.94475317, z: -0, w: -0.32778275}
@@ -958,6 +994,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Sunken Hull of the High Hand Scallop Bed Spawner 1 [5f8c4dac]'
     Position: {x: -701.2581, y: -7.310791, z: 29.676636}
     Rotation: {x: -0, y: 0.43229502, z: -0, w: 0.90173227}
@@ -984,6 +1021,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Sunken Hull of the High Hand Scallop Bed Spawner 2 [5f8c4dac]'
     Position: {x: -714.7165, y: -7.661255, z: 36.91096}
     Rotation: {x: -0, y: 0.9253996, z: -0, w: -0.37899297}
@@ -1010,6 +1048,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Sunken Hull of the High Hand Scallop Bed Spawner 3 [5f8c4dac]'
     Position: {x: -695.24255, y: -7.39917, z: 44.62935}
     Rotation: {x: -0, y: 0.7660616, z: -0, w: -0.6427672}
@@ -1036,6 +1075,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Lok Sunken Hull Carrageen Spawner 1 [0544a1ee]'
     Position: {x: 581.7006, y: -9.490723, z: -31.99693}
     Rotation: {x: -0, y: 0.61422, z: -0, w: -0.78913486}
@@ -1062,6 +1102,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Lok Sunken Hull Carrageen Spawner 2 [0544a1ee]'
     Position: {x: 571.6245, y: -9.461548, z: -31.223217}
     Rotation: {x: -0, y: 0.85791767, z: -0, w: -0.51378715}
@@ -1088,6 +1129,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Verow Elm MonsterPack Spawner [79372d48]'
     Position: {x: 1567.8499, y: 18.768433, z: -1333.8016}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
@@ -1113,6 +1155,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Verow Elm Elite Spawner [79372d48]'
     Position: {x: 1567.6649, y: 18.768433, z: -1338.2051}
     Rotation: {x: -0, y: 0.5877852, z: -0, w: -0.80901706}
@@ -1138,6 +1181,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Verie Fair Merchant Spawner [59f02610]'
     Position: {x: -200.6004, y: 39.41638, z: 470.67334}
     Rotation: {x: -0, y: 0.9563047, z: -0, w: 0.29237178}
@@ -1164,6 +1208,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mos Den MonsterPack Spawner [3d2c852c]'
     Position: {x: 1470.7207, y: 143.30054, z: -21.903109}
     Rotation: {x: -0, y: 0.46174866, z: -0, w: -0.8870108}
@@ -1189,6 +1234,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Mos Den Elite Spawner [3d2c852c]'
     Position: {x: 1470.174, y: 143.30054, z: -23.054203}
     Rotation: {x: -0, y: 0.46174866, z: -0, w: -0.8870108}
@@ -1214,6 +1260,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Greo Outcrop Iron Vein Spawner 1 [67407a30]'
     Position: {x: 1460.3281, y: 52.888306, z: -890.1958}
     Rotation: {x: -0, y: 0.37412146, z: -0, w: -0.9273798}
@@ -1240,6 +1287,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Greo Outcrop Iron Vein Spawner 2 [67407a30]'
     Position: {x: 1459.4939, y: 52.86902, z: -888.1107}
     Rotation: {x: -0, y: 0.8148597, z: -0, w: 0.5796584}
@@ -1266,6 +1314,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Greo Outcrop Iron Vein Spawner 3 [67407a30]'
     Position: {x: 1452.3201, y: 53.12146, z: -884.46924}
     Rotation: {x: -0, y: 0.4444108, z: -0, w: 0.8958232}
@@ -1292,6 +1341,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Greo Outcrop Iron Vein Spawner 4 [67407a30]'
     Position: {x: 1451.4702, y: 53.0094, z: -888.88947}
     Rotation: {x: -0, y: 0.9587244, z: -0, w: 0.28433743}
@@ -1318,6 +1368,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Greo Outcrop Iron Vein Spawner 5 [67407a30]'
     Position: {x: 1458.4683, y: 52.883667, z: -886.37683}
     Rotation: {x: -0, y: 0.45659792, z: -0, w: 0.88967323}
@@ -1344,6 +1395,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Taiishi''s Father Oak Yew Heartwood Spawner 1 [1e2597d6]'
     Position: {x: -383.4403, y: 101.84192, z: -1311.2467}
     Rotation: {x: -0, y: 0.890082, z: 0, w: 0.45580044}
@@ -1370,6 +1422,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Taiishi''s Father Oak Yew Heartwood Spawner 2 [1e2597d6]'
     Position: {x: -384.78806, y: 101.25488, z: -1322.5768}
     Rotation: {x: -0, y: 0.3265887, z: -0, w: -0.9451666}
@@ -1396,6 +1449,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Taiishi''s Father Oak Yew Heartwood Spawner 3 [1e2597d6]'
     Position: {x: -379.52777, y: 101.392456, z: -1312.487}
     Rotation: {x: -0, y: 0.7095835, z: -0, w: -0.70462143}
@@ -1422,6 +1476,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Taiishi''s Father Oak Yew Heartwood Spawner 4 [1e2597d6]'
     Position: {x: -382.00104, y: 101.04797, z: -1326.81}
     Rotation: {x: -0, y: 0.7483655, z: 0, w: 0.66328657}
@@ -1448,6 +1503,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Taiishi''s Father Oak Yew Heartwood Spawner 5 [1e2597d6]'
     Position: {x: -377.8949, y: 101.85779, z: -1321.146}
     Rotation: {x: -0, y: 0.84423834, z: 0, w: 0.53596807}
@@ -1474,6 +1530,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wila Herbwood Wild Garlic Spawner 1 [7c16ce0b]'
     Position: {x: -369.75626, y: 44.815063, z: 89.34539}
     Rotation: {x: -0, y: 0.9980079, z: -0, w: -0.063088715}
@@ -1500,6 +1557,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wila Herbwood Wild Garlic Spawner 2 [7c16ce0b]'
     Position: {x: -365.21225, y: 45.04016, z: 94.043175}
     Rotation: {x: -0, y: 0.96412516, z: -0, w: 0.2654478}
@@ -1526,6 +1584,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Wila Herbwood Foxfire Wood Spawner 3 [7c16ce0b]'
     Position: {x: -370.26437, y: 44.017822, z: 83.27087}
     Rotation: {x: -0, y: 0.9963914, z: -0, w: -0.08487764}
@@ -1552,6 +1611,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ivy Bar Guard Spawner [77cb2814]'
     Position: {x: 56.473404, y: 14.692871, z: -1614.255}
     Rotation: {x: -0, y: 0.92050487, z: -0, w: 0.39073122}
@@ -1577,6 +1637,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Ivy Bar Merchant Spawner [77cb2814]'
     Position: {x: 60.63168, y: 14.322876, z: -1611.0319}
     Rotation: {x: -0, y: 0.92050487, z: -0, w: 0.39073122}
@@ -1603,14 +1664,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Wolf den (WolfDen)
     Position: {x: 1472, y: 143.31, z: -24}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 15
+    MaxSpawnCount: 15
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1629,14 +1691,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Bear cave den
     Position: {x: 1618.2477, y: 206.13916, z: 242.43689}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 8
+    MaxSpawnCount: 8
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1655,14 +1718,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1616, y: 73.49, z: 248}
   - Name: Wildlife Area 1,0
     Position: {x: -1116, y: 19.330872, z: -2039}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 12
+    MaxSpawnCount: 12
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -1686,14 +1751,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -656, y: 131.53, z: -1896}
   - Name: Wildlife Area 2,0
     Position: {x: -604, y: 8.499695, z: -2039}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 11
+    MaxSpawnCount: 11
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1712,14 +1779,16 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -656, y: 131.53, z: -1896}
   - Name: Wildlife Area 3,0
     Position: {x: -92, y: 17.466125, z: -2039}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 10
+    MaxSpawnCount: 10
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1738,14 +1807,15 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 0,1
     Position: {x: -1564, y: 12.901672, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 19
+    MaxSpawnCount: 19
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1764,14 +1834,15 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 1,1
     Position: {x: -1116, y: 40.27997, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 23
+    MaxSpawnCount: 23
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -1795,6 +1866,8 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -656, y: 131.53, z: -1896}
   - Name: Wildlife Area 2,1
     Position: {x: -604, y: 53.539246, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -1826,14 +1899,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -656, y: 131.53, z: -1896}
   - Name: Wildlife Area 3,1
     Position: {x: -92, y: 54.303223, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 12
+    MaxSpawnCount: 12
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -1857,14 +1932,18 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 208, y: 135.3, z: -1176}
+    - {x: 112, y: 71.83, z: -1448}
+    - {x: 57.25, y: 70.61, z: -1613.33}
   - Name: Wildlife Area 4,1
     Position: {x: 420, y: 9.454163, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 23
+    MaxSpawnCount: 23
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1883,14 +1962,18 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 208, y: 135.3, z: -1176}
+    - {x: 112, y: 71.83, z: -1448}
+    - {x: 57.25, y: 70.61, z: -1613.33}
   - Name: Wildlife Area 6,1
     Position: {x: 1444, y: 16.665283, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 14
+    MaxSpawnCount: 14
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -1909,14 +1992,15 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 7,1
     Position: {x: 1728, y: 16.00769, z: -1591}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 15
+    MaxSpawnCount: 15
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -1940,14 +2024,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 1,2
     Position: {x: -1116, y: 47.66339, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 23
+    MaxSpawnCount: 23
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -1971,14 +2056,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 2,2
     Position: {x: -604, y: 63.73639, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 22
+    MaxSpawnCount: 22
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2002,14 +2088,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 3,2
     Position: {x: -92, y: 57.06128, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 13
+    MaxSpawnCount: 13
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2033,14 +2120,18 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 208, y: 135.3, z: -1176}
+    - {x: 16, y: 90.82, z: -728}
+    - {x: 112, y: 71.83, z: -1448}
   - Name: Wildlife Area 4,2
     Position: {x: 420, y: 51.342407, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 19
+    MaxSpawnCount: 19
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2064,14 +2155,18 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 208, y: 135.3, z: -1176}
+    - {x: 16, y: 90.82, z: -728}
+    - {x: 112, y: 71.83, z: -1448}
   - Name: Wildlife Area 6,2
     Position: {x: 1444, y: 28.611084, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 10
+    MaxSpawnCount: 10
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2095,14 +2190,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1056, y: 226.4, z: -824}
   - Name: Wildlife Area 7,2
     Position: {x: 1728, y: 20.763062, z: -1079}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 8
+    MaxSpawnCount: 8
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2126,6 +2223,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 1,3
     Position: {x: -1116, y: 20.352234, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -2152,14 +2250,15 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 2,3
     Position: {x: -604, y: 33.816467, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2183,6 +2282,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 3,3
     Position: {x: -92, y: 53.187866, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -2214,14 +2314,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 16, y: 90.82, z: -728}
   - Name: Wildlife Area 4,3
     Position: {x: 420, y: 51.04718, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 13
+    MaxSpawnCount: 13
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2245,14 +2347,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 16, y: 90.82, z: -728}
   - Name: Wildlife Area 5,3
     Position: {x: 932, y: 53.298035, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 16
+    MaxSpawnCount: 16
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2276,14 +2380,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1056, y: 226.4, z: -824}
   - Name: Wildlife Area 6,3
     Position: {x: 1444, y: 72.11914, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 19
+    MaxSpawnCount: 19
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2307,14 +2413,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1056, y: 226.4, z: -824}
   - Name: Wildlife Area 7,3
     Position: {x: 1728, y: 69.75189, z: -567}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 19
+    MaxSpawnCount: 19
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2338,14 +2446,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 2,4
     Position: {x: -604, y: 26.765503, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 24
+    MaxSpawnCount: 24
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2369,6 +2478,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 3,4
     Position: {x: -92, y: 56.566956, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -2400,14 +2510,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 4,4
     Position: {x: 420, y: 55.77948, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 9
+    MaxSpawnCount: 9
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2431,14 +2542,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,4
     Position: {x: 932, y: 79.90289, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 24
+    MaxSpawnCount: 24
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2462,14 +2574,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 6,4
     Position: {x: 1444, y: 147.8634, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 11
+    MaxSpawnCount: 11
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2493,6 +2606,8 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1616, y: 73.49, z: 248}
   - Name: Wildlife Area 7,4
     Position: {x: 1728, y: 116.80609, z: -55}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -2524,14 +2639,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1616, y: 73.49, z: 248}
   - Name: Wildlife Area 2,5
     Position: {x: -604, y: 26.765503, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 20
+    MaxSpawnCount: 20
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2555,14 +2672,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -208, y: 83.44, z: 472}
   - Name: Wildlife Area 3,5
     Position: {x: -92, y: 54.852234, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 12
+    MaxSpawnCount: 12
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2586,6 +2705,8 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: -208, y: 83.44, z: 472}
   - Name: Wildlife Area 4,5
     Position: {x: 420, y: 55.11725, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -2617,14 +2738,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,5
     Position: {x: 932, y: 79.90289, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 17
+    MaxSpawnCount: 17
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2648,14 +2770,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1072, y: 73.95, z: 648}
   - Name: Wildlife Area 6,5
     Position: {x: 1444, y: 158.74548, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 16
+    MaxSpawnCount: 16
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2679,14 +2803,17 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1072, y: 73.95, z: 648}
+    - {x: 1616, y: 73.49, z: 248}
   - Name: Wildlife Area 7,5
     Position: {x: 1728, y: 193.97241, z: 457}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 8
-    MaxSpawnCount: 8
+    InitialSpawnCount: 10
+    MaxSpawnCount: 10
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2710,14 +2837,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1616, y: 73.49, z: 248}
   - Name: Wildlife Area 2,6
     Position: {x: -604, y: 23.097534, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 17
+    MaxSpawnCount: 17
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2741,14 +2870,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 3,6
     Position: {x: -92, y: 46.00836, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2772,14 +2902,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 4,6
     Position: {x: 420, y: 58.109802, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 18
+    MaxSpawnCount: 18
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2803,14 +2934,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,6
     Position: {x: 932, y: 79.20398, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2834,14 +2966,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1072, y: 73.95, z: 648}
   - Name: Wildlife Area 6,6
     Position: {x: 1444, y: 107.67798, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 9
+    MaxSpawnCount: 9
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2865,14 +2999,16 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles:
+    - {x: 1072, y: 73.95, z: 648}
   - Name: Wildlife Area 7,6
     Position: {x: 1728, y: 111.820435, z: 969}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 10
+    MaxSpawnCount: 10
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2896,14 +3032,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 3,7
     Position: {x: -92, y: 36.007812, z: 1481}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 14
+    MaxSpawnCount: 14
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2927,14 +3064,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 4,7
     Position: {x: 420, y: 43.77545, z: 1481}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 17
+    MaxSpawnCount: 17
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2958,14 +3096,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,7
     Position: {x: 932, y: 62.09369, z: 1481}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -2989,14 +3128,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 6,7
     Position: {x: 1444, y: 56.70569, z: 1481}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -3020,14 +3160,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 7,7
     Position: {x: 1728, y: 35.3786, z: 1481}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 22
+    MaxSpawnCount: 22
     UniqueSpawnables: 0
     SpawnType: 0
     PrewarmPool: 1
@@ -3046,14 +3187,15 @@ MonoBehaviour:
       FocusTargeting: 0
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,8
     Position: {x: 932, y: 43.835022, z: 1984}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 16
-    MaxSpawnCount: 16
+    InitialSpawnCount: 21
+    MaxSpawnCount: 21
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -3077,14 +3219,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 6,8
     Position: {x: 1444, y: 42.70331, z: 1984}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 24
-    MaxSpawnCount: 24
+    InitialSpawnCount: 15
+    MaxSpawnCount: 15
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -3108,14 +3251,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 5,9
     Position: {x: 932, y: 25.426453, z: 2240}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 12
-    MaxSpawnCount: 12
+    InitialSpawnCount: 17
+    MaxSpawnCount: 17
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -3139,14 +3283,15 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Wildlife Area 6,9
     Position: {x: 1444, y: 22.537903, z: 2240}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
     OrConditions: []
     TrueConditions: []
     InitialRespawnTime: 0
-    InitialSpawnCount: 20
-    MaxSpawnCount: 20
+    InitialSpawnCount: 11
+    MaxSpawnCount: 11
     UniqueSpawnables: 0
     SpawnType: 2
     PrewarmPool: 1
@@ -3170,6 +3315,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   references:
     version: 2
     RefIds:

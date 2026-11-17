@@ -256,7 +256,7 @@ namespace FishMMO.Shared
 		/// <item><description>AbilityController.Networking.cs — ReadPayload/WritePayload (server sync).</description></item>
 		/// <item><description>NPC.cs — server-side NPC initialisation.</description></item>
 		/// <item><description>CharacterSystem.Loading.cs — server-side character loading from DB.</description></item>
-		/// <item><description>InteractableSystem.AbilityCraft.cs — server-side ability crafting.</description></item>
+		/// <item><description>AbilityCraftingSystem.Craft.cs (the Ability Crafting module) — server-side ability crafting.</description></item>
 		/// </list>
 		/// If a new call site is added that is reachable from client-controlled input
 		/// (e.g., a broadcast handler), it MUST perform its own server-side validation

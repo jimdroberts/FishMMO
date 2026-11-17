@@ -37,8 +37,8 @@ namespace FishMMO.UnitTests
 	{
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string GuiRoot = "Assets/Scripts/Client/GUI/World/";
-		private const float PanelWidth = 1200f;
-		private const int PanelHeight = 675;
+		private const float PanelWidth = 1280f;
+		private const int PanelHeight = 960;
 
 		/// <summary>The first bar's distance from the bottom edge: <c>.hotkey-bar</c>'s padding.</summary>
 		private const float FirstBarBottom = 24f;

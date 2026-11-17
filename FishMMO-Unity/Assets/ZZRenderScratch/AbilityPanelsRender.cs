@@ -33,7 +33,6 @@ namespace FishMMO.RenderScratch
 		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ABILITIES_UXML = "Assets/Scripts/Client/GUI/World/Ability/UIAbilities.uxml";
-		private const string CRAFT_UXML = "Assets/Scripts/Client/GUI/World/Ability/Crafting/UIAbilityCraft.uxml";
 		private const string TOOLTIP_UXML = "Assets/Scripts/Client/GUI/Shared/Tooltip/UITooltip.uxml";
 		private const int WIDTH = 1000;
 		private const int HEIGHT = 640;
@@ -49,6 +48,10 @@ namespace FishMMO.RenderScratch
 		}
 
 		private static readonly List<Job> queue = new List<Job>();
+
+		/// <summary>Modules' ability windows, rendered after the core's (the Ability Crafting module adds the crafter).</summary>
+		public static readonly List<(string label, string uxml, Action<GameObject, UIDocument> populate)> ExtraJobs =
+			new List<(string label, string uxml, Action<GameObject, UIDocument> populate)>();
 		private static GameObject host;
 		private static UIDocument document;
 		private static PanelSettings settings;
@@ -68,9 +71,11 @@ namespace FishMMO.RenderScratch
 				queue.Add(new Job { Label = "UIAbilities-abilities", Uxml = ABILITIES_UXML, Populate = (h, d) => AbilityPanels.Abilities(h, d, AbilityTabType.Ability) });
 				queue.Add(new Job { Label = "UIAbilities-knowledge", Uxml = ABILITIES_UXML, Populate = (h, d) => AbilityPanels.Abilities(h, d, AbilityTabType.Knowledge) });
 				queue.Add(new Job { Label = "UIAbilities-knowledge-effects", Uxml = ABILITIES_UXML, Populate = (h, d) => AbilityPanels.Abilities(h, d, AbilityTabType.Knowledge, KnowledgeFilterType.Effects) });
-				queue.Add(new Job { Label = "UIAbilityCraft-populated", Uxml = CRAFT_UXML, Populate = (h, d) => AbilityPanels.Craft(h, d, populated: true) });
-				queue.Add(new Job { Label = "UIAbilityCraft-empty", Uxml = CRAFT_UXML, Populate = (h, d) => AbilityPanels.Craft(h, d, populated: false) });
 				queue.Add(new Job { Label = "UITooltip-ability", Uxml = TOOLTIP_UXML, Populate = AbilityPanels.Tooltip });
+				foreach ((string label, string uxml, Action<GameObject, UIDocument> populate) in ExtraJobs)
+				{
+					queue.Add(new Job { Label = label, Uxml = uxml, Populate = populate });
+				}
 
 				EditorApplication.update -= Pump;
 				EditorApplication.update += Pump;
@@ -349,50 +354,6 @@ namespace FishMMO.RenderScratch
 			SelectFirstEntry(panel, tab, filter);
 		}
 
-		/// <summary>
-		/// The crafting panel, optionally with a recipe already assembled.
-		/// </summary>
-		/// <param name="populated">
-		/// True to build a fireball with a movement effect and a fire-damage effect, which is what
-		/// the preview and its deltas exist to show.
-		/// </param>
-		public static void Craft(GameObject h, UIDocument d, bool populated)
-		{
-			PlayerCharacter character = BuildCharacter(h);
-
-			UITKAbilityCraft panel = h.AddComponent<UITKAbilityCraft>();
-			panel.Document = d;
-			panel.StartOpen = false;
-			panel.CurrencyTemplateID = AbilityFixtures.CurrencyTemplateID();
-			Awake(panel);
-
-			panel.Show();
-			panel.SetCharacter(character);
-
-			if (populated)
-			{
-				AbilityTemplate fireball = AbilityFixtures.Base("Lesser Fireball");
-				List<ITooltip> chosen = new List<ITooltip>
-				{
-					AbilityFixtures.Effect("Giant"),
-					AbilityFixtures.Effect("Swiftfire"),
-					null,
-				};
-
-				/* Reflection, because the recipe is private state the panel owns and the shipped
-				 * way in is a modal selector this harness cannot drive. The panel is then asked to
-				 * redraw itself exactly as it would after a selection. */
-				Set(panel, "selectedMain", fireball);
-				Set(panel, "selectedSlotCount", fireball != null ? (int)fireball.AdditionalEventSlots : 0);
-
-				var events = (List<ITooltip>)Field(panel, "selectedEvents").GetValue(panel);
-				events.Clear();
-				events.AddRange(chosen);
-			}
-
-			Invoke(panel, "ApplySelection");
-		}
-
 		/// <summary>The cursor tooltip, showing a crafted ability.</summary>
 		public static void Tooltip(GameObject h, UIDocument d)
 		{
@@ -422,7 +383,7 @@ namespace FishMMO.RenderScratch
 		}
 
 		/// <summary>Builds the character both panels read from.</summary>
-		private static PlayerCharacter BuildCharacter(GameObject h)
+		public static PlayerCharacter BuildCharacter(GameObject h)
 		{
 			PlayerCharacter character = Rig.Build(h);
 			FakeAbilities abilities = new FakeAbilities(character);
@@ -532,23 +493,23 @@ namespace FishMMO.RenderScratch
 		}
 
 		/// <summary>Runs the private Awake every panel uses to register itself.</summary>
-		private static void Awake(UITKControl panel)
+		public static void Awake(UITKControl panel)
 		{
 			MethodInfo awake = typeof(UITKControl).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic);
 			awake?.Invoke(panel, null);
 		}
 
-		private static FieldInfo Field(object target, string name)
+		public static FieldInfo Field(object target, string name)
 		{
 			return target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
 		}
 
-		private static void Set(object target, string name, object value)
+		public static void Set(object target, string name, object value)
 		{
 			Field(target, name)?.SetValue(target, value);
 		}
 
-		private static void Invoke(object target, string name)
+		public static void Invoke(object target, string name)
 		{
 			MethodInfo method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
 			method?.Invoke(target, null);

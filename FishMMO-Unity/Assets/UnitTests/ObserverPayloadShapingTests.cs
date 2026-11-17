@@ -101,15 +101,6 @@ namespace FishMMO.UnitTests
 			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
 		}
 
-		private ArchetypeTemplate NewArchetype(string name)
-		{
-			ArchetypeTemplate template = ScriptableObject.CreateInstance<ArchetypeTemplate>();
-			template.name = name;
-			template.AddToCache(name);
-			temporaries.Add(template);
-			return template;
-		}
-
 		private T NewBehaviour<T>(string hostName, ICharacter character) where T : CharacterBehaviour
 		{
 			GameObject host = new GameObject(hostName);
@@ -124,44 +115,6 @@ namespace FishMMO.UnitTests
 		{
 			return type.GetMethod(name,
 				BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
-		}
-
-		// ── Defect 3: observers act on a sign, so a sign is what they are sent ───
-
-		[Test]
-		public void Archetype_RestorePath_InstallsWithoutRaisingAnything()
-		{
-			ArchetypeTemplate template = NewArchetype("ObserverShaping_Archetype");
-			RecordingCharacter character = new RecordingCharacter(6);
-			ArchetypeController controller = NewBehaviour<ArchetypeController>("ArchetypeRestore", character);
-
-			bool changed = false;
-			controller.OnArchetypeChanged += (a, b) => changed = true;
-
-			// The spawn-payload and observer-broadcast path.
-			controller.RestoreArchetype(template.ID);
-
-			Assert.AreSame(template, controller.Template, "The restore path still installs the value.");
-			Assert.IsFalse(changed, "A stranger streaming into range must not raise this character's archetype event on the onlooker.");
-			Assert.AreEqual(0, character.InvokeCount, "Nor run that character's ECA triggers on the onlooker's machine.");
-		}
-
-		[Test]
-		public void Archetype_AnnouncingPath_DispatchesEcaOnlyOnTheAuthoritativePeer()
-		{
-			ArchetypeTemplate template = NewArchetype("ObserverShaping_ArchetypeAnnounce");
-			RecordingCharacter character = new RecordingCharacter(7);
-			ArchetypeController controller = NewBehaviour<ArchetypeController>("ArchetypeAnnounce", character);
-
-			bool changed = false;
-			controller.OnArchetypeChanged += (a, b) => changed = true;
-
-			controller.SetArchetype(template);
-
-			Assert.AreSame(template, controller.Template);
-			Assert.IsTrue(changed, "The UI-facing event stays on every peer that changed its own archetype.");
-			Assert.AreEqual(0, character.InvokeCount,
-				"This controller is not server-initialized, so the ECA dispatch must be gated off — actions are free to damage, grant and move.");
 		}
 
 		// ── Defect 1 / 6: state that is not on the wire at all ───────────────────

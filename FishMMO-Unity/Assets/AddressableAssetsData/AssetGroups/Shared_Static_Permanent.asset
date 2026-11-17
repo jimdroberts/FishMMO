@@ -5923,6 +5923,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 20b4093803e145a78fb83411b2b2f709
+    m_Address: Pet Slots
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5f87d00b3b784153bd3e7f11b538d739
     m_Address: Sea Giant
     m_ReadOnly: 0

@@ -154,6 +154,45 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>
+		/// No animal spawns inside a town. An area's box is placed clear of settlements but is hundreds of metres wide and its
+		/// animals spawn anywhere in it, so each area carries the settlement circles it reaches into and the spawner refuses
+		/// points inside them.
+		/// </summary>
+		[Test]
+		public void TownsAreKeptOutOfEverySpawnPoint()
+		{
+			var circles = new List<Vector3> { new Vector3(500f, 100f, 500f), new Vector3(3000f, 50f, 3000f) };
+			List<Vector3> near = WildlifePlanner.KeepOutsFor(circles, new Vector3(800f, 0f, 500f), new Vector3(512f, 40f, 512f));
+			LogAssert.AreEqual(1, near.Count, "only the town that reaches into the box is kept");
+			LogAssert.IsTrue(near[0] == circles[0], "the near town");
+
+			LogAssert.IsTrue(WildlifePlanner.InsideKeepOut(near, new Vector3(560f, 7f, 520f)), "a point in the town square is refused");
+			LogAssert.IsFalse(WildlifePlanner.InsideKeepOut(near, new Vector3(650f, 7f, 500f)), "a point outside the town is fine");
+			LogAssert.IsFalse(WildlifePlanner.InsideKeepOut(null, Vector3.zero), "a spawner with no circles refuses nothing");
+
+			WildlifeTemplate wolf = Species(WildlifeRole.Predator, BiomeHabitat.Forest, 50f);
+			var species = new List<WildlifePlanner.Species> { new WildlifePlanner.Species(null, wolf) };
+			var pois = new List<PointOfInterestRecord> { new PointOfInterestRecord { Kind = POIType.Village, Position = new Vector3(600f, 5f, 600f), Radius = 40f } };
+			List<WildlifeArea> plan = WildlifePlanner.Plan("Test", World, HalfForest, pois, null, null, species, Limits());
+			bool carried = false;
+			foreach (WildlifeArea area in plan)
+			{
+				// The village's keep-clear circle: its radius plus the catalogue's settlement clearance.
+				float radius = 40f + Limits().SettlementClearance;
+				float dx = Mathf.Max(Mathf.Abs(600f - area.Center.x) - area.Size.x * 0.5f, 0f);
+				float dz = Mathf.Max(Mathf.Abs(600f - area.Center.z) - area.Size.z * 0.5f, 0f);
+				bool reaches = dx * dx + dz * dz < radius * radius;
+				if (reaches)
+				{
+					LogAssert.IsTrue(area.KeepOuts.Count == 1 && WildlifePlanner.InsideKeepOut(area.KeepOuts, new Vector3(600f, 5f, 600f)),
+						$"{area.Name} reaches the village and keeps it out");
+					carried = true;
+				}
+			}
+			LogAssert.IsTrue(carried, "at least one area reaches the village");
+		}
+
 		[Test]
 		public void DensGetAGroupAndComeBeforeTheCap()
 		{

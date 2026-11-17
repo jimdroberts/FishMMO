@@ -340,7 +340,7 @@ namespace FishMMO.UnitTests
 			int spawn = loading.IndexOf("ServerManager.Spawn(character.NetworkObject", StringComparison.Ordinal);
 			LogAssert.IsTrue(link > 0 && mute > link && hotkeys > link && apply > link, "the entity exists before any loaded state is put on it");
 			LogAssert.IsTrue(spawn > apply, "and everything is in place before the character spawns");
-			LogAssert.IsTrue(loading.Contains("CharacterFetch fetched = await participant.FetchAsync(this, characterID);"), "the participants fetch in the load");
+			LogAssert.IsTrue(loading.Contains("CharacterFetch fetched = await participant.FetchAsync(this, charData);"), "the participants fetch in the load");
 			LogAssert.IsTrue(loading.Contains("await AbandonLoadAfterFetchFailure(participant.Name, fetched.ErrorCode, fetched.ErrorMessage);"),
 				"and a failed fetch abandons the load, so nothing is saved over unloaded state");
 		}

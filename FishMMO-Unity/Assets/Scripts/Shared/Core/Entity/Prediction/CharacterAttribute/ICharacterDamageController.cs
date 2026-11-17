@@ -15,6 +15,17 @@ namespace FishMMO.Shared.Core
 		static Action<ICharacter, ICharacter, int, DamageAttributeTemplate> OnDamaged;
 
 		/// <summary>
+		/// Server: an attack the harm rule allowed reached a live character and did no damage: armour or negation took all of
+		/// it, it was evaded, parried, blocked, or the target is immortal. Parameters: attacker, defender.
+		/// </summary>
+		/// <remarks>
+		/// Separate from <see cref="OnDamaged"/> so achievements, combat reports and damage numbers never see a zero hit. Threat
+		/// listens to both: being attacked is being attacked, whatever it cost, so a pet defends its owner and an NPC answers
+		/// a hit its armour swallowed. A wolf's 5-point Punch against 5 Armor used to raise nothing at all.
+		/// </remarks>
+		static Action<ICharacter, ICharacter> OnAttackAbsorbed;
+
+		/// <summary>
 		/// Event invoked when a character is killed. Parameters: killer, victim.
 		/// </summary>
 		static Action<ICharacter, ICharacter> OnKilled;

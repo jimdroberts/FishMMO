@@ -1443,19 +1443,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			position = Definition.Position;
 			PhysicsScene physics = Scene.GetPhysicsScene();
 
+			/* Never inside a town (Definition.KeepOutCircles, from the cut): the area's box is placed clear of settlements, but
+			 * it is hundreds of metres wide and a point anywhere in it, or beside a herd at its edge, could be a village square.
+			 * A herd spot inside one falls through to the random tries, which refuse it too. */
 			if (TryFindHerdAnchor(settings, species, out Vector3 anchor))
 			{
 				Vector2 offset = new Vector2(DeterministicRNG.Shared.Range(-1f, 1f), DeterministicRNG.Shared.Range(-1f, 1f)) * HerdSpread;
 				Vector3 origin = anchor + new Vector3(offset.x, 20f, offset.y);
+				Vector3 herdSpot = anchor;
 				if (physics.IsValid() &&
 					physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, 40f, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
 				{
-					position = hit.point;
-					position.y += settings.YOffset;
+					herdSpot = hit.point;
+					herdSpot.y += settings.YOffset;
+				}
+				if (!WildlifePlanner.InsideKeepOut(Definition.KeepOutCircles, herdSpot))
+				{
+					position = herdSpot;
 					return true;
 				}
-				position = anchor;
-				return true;
 			}
 
 			/* Only on ground the cast actually hit. ResolveSpawnPosition falls back to the spawner's own position when it
@@ -1464,7 +1470,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * waits for the next check. */
 			for (int attempt = 0; attempt < HabitatTries; ++attempt)
 			{
-				if (TryCastToGround(settings, out Vector3 candidate) && LivesAt(species, candidate))
+				if (TryCastToGround(settings, out Vector3 candidate) && LivesAt(species, candidate) &&
+					!WildlifePlanner.InsideKeepOut(Definition.KeepOutCircles, candidate))
 				{
 					position = candidate;
 					return true;

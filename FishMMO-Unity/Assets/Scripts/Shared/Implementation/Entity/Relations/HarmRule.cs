@@ -45,6 +45,12 @@ namespace FishMMO.Shared
 		/// is the relation that refused it. Each relation hears it.
 		/// </summary>
 		void OnRefusedAttack(ICharacter attacker, ICharacter defender, long castKey, IHarmRelation refusedBy);
+
+		/// <summary>
+		/// True when this relation's refusal is lifted by the attacking side turning its aggression toggle on (the factions'
+		/// "not an enemy" refusal). False for refusals no toggle changes: an arena's teams, a pack, companions.
+		/// </summary>
+		bool AggressionLiftsRefusal => false;
 	}
 
 	/// <summary>A relation that also says who are companions: never harmed, never drawn hostile, whatever anyone's toggle says.</summary>
@@ -95,6 +101,18 @@ namespace FishMMO.Shared
 		public static bool MayHarm(ICharacter attacker, ICharacter defender, out ICharacter aggressor)
 		{
 			return Judge(attacker, defender, out aggressor, out _);
+		}
+
+		/// <summary>
+		/// True when <paramref name="attacker"/> may not harm <paramref name="defender"/> now, and the only thing in the way is
+		/// the attacking side's aggression toggle being off (see <see cref="IHarmRelation.AggressionLiftsRefusal"/>). An order
+		/// that names such a target (a pet sent at a neutral) can turn the toggle on and go ahead; companions, an arena's teams
+		/// and a pack are never this.
+		/// </summary>
+		public static bool RefusedForWantOfAggression(ICharacter attacker, ICharacter defender)
+		{
+			return !Judge(attacker, defender, out _, out IHarmRelation refusedBy) &&
+				refusedBy != null && refusedBy.AggressionLiftsRefusal;
 		}
 
 		/// <summary>

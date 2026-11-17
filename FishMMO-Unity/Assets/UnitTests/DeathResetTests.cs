@@ -58,12 +58,12 @@ namespace FishMMO.UnitTests
 				"PetSystem must unsubscribe from the kill event on shutdown");
 
 			int handler = pets.IndexOf("private void DamageController_OnKilled(ICharacter killer, ICharacter victim)", StringComparison.Ordinal);
-			int dismiss = pets.IndexOf("DismissPet(owner, petController, conn);", handler, StringComparison.Ordinal);
+			int dismiss = pets.IndexOf("DismissAllPets(owner, petController, conn);", handler, StringComparison.Ordinal);
 			LogAssert.IsTrue(handler >= 0 && dismiss > handler,
-				"a dead owner's pet must go through the shared DismissPet path");
+				"a dead owner's pets must all go through the shared DismissPet path");
 
 			int release = pets.IndexOf("private void OnPetReleaseBroadcastReceived(", StringComparison.Ordinal);
-			int releaseDismiss = pets.IndexOf("DismissPet(player, petController, conn);", release, StringComparison.Ordinal);
+			int releaseDismiss = pets.IndexOf("DismissAllPets(player, petController, conn);", release, StringComparison.Ordinal);
 			LogAssert.IsTrue(release >= 0 && releaseDismiss > release,
 				"the voluntary release must use the same DismissPet path, so the two cannot drift apart");
 		}

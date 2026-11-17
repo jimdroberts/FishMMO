@@ -64,7 +64,12 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheAdminsTemperatureLimit_IsWhatTheClimateApplies()
 		{
 			Assert.AreEqual((float)(SceneClimate.MaxOffsetScale * ClimateModel.KelvinPerUnit), SceneClimate.MaxOffsetKelvin, 1e-4f);
-			string admin = ProjectFiles.ReadAllText("Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.AdminCommands.Weather.cs");
+			const string AdminWeatherPath = "Assets/Modules/Staff/Server/StaffSystem.AdminCommands.Weather.cs";
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), AdminWeatherPath)))
+			{
+				Assert.Ignore("The Staff module (the /admin weather commands) is not installed.");
+			}
+			string admin = ProjectFiles.ReadAllText(AdminWeatherPath);
 			StringAssert.Contains("SceneClimate.MaxOffsetKelvin", admin, "/admin weather air clamps to the limit the climate applies");
 		}
 	}

@@ -26,6 +26,10 @@ namespace FishMMO.Database.Npgsql.Entities
 			builder.Property(e => e.TemplateID)
 				.IsRequired();
 
+			builder.Property(e => e.Slot)
+				.IsRequired()
+				.HasDefaultValue(0);
+
 			builder.Property(e => e.RemainingTime)
 				.IsRequired()
 				.HasDefaultValue(0d);
@@ -42,8 +46,8 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(0);
 
-			// Unique constraint: one buff template per character pet
-			builder.HasIndex(e => new { e.CharacterID, e.TemplateID })
+			// Unique constraint: one buff template per pet (the character's pet in that slot)
+			builder.HasIndex(e => new { e.CharacterID, e.Slot, e.TemplateID })
 				.IsUnique();
 
 			// Foreign key relationship

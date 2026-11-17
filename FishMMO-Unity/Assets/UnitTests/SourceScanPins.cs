@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests
 	/// see it.
 	/// </para>
 	/// </remarks>
-	internal static class SourceScanPins
+	public static class SourceScanPins
 	{
 		/// <summary>A file's text with line endings normalised, relative to the Unity project.</summary>
 		public static string ReadSource(string relativePath)

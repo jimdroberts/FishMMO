@@ -94,10 +94,10 @@ namespace FishMMO.Database.Npgsql.Services
 				var sql = $@"
 					WITH upserted AS (
 						INSERT INTO {TableName}
-							(character_id, template_id, version, value, current_value, time_created, deleted, time_deleted)
+							(character_id, slot, template_id, version, value, current_value, time_created, deleted, time_deleted)
 						VALUES
-							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
-						ON CONFLICT (character_id, template_id)
+							({{0}}, {{6}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, FALSE, NULL)
+						ON CONFLICT (character_id, slot, template_id)
 						DO UPDATE SET
 							value = EXCLUDED.value,
 							current_value = EXCLUDED.current_value,
@@ -113,7 +113,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { attributeData.CharacterID, attributeData.TemplateID, attributeData.Version, attributeData.Value, attributeData.CurrentValue, now },
+					new object[] { attributeData.CharacterID, attributeData.TemplateID, attributeData.Version, attributeData.Value, attributeData.CurrentValue, now, attributeData.Slot },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -167,7 +167,7 @@ namespace FishMMO.Database.Npgsql.Services
 			int suppliedRows = list.Count;
 			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
 			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
-			list = BulkBatch.KeepNewest(list, attribute => (attribute.CharacterID, attribute.TemplateID), attribute => attribute.Version);
+			list = BulkBatch.KeepNewest(list, attribute => (attribute.CharacterID, attribute.Slot, attribute.TemplateID), attribute => attribute.Version);
 
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
@@ -192,12 +192,14 @@ namespace FishMMO.Database.Npgsql.Services
 				var versionArray = activeAttributes.Select(a => a.Version).ToArray();
 				var valueArray = activeAttributes.Select(a => a.Value).ToArray();
 				var currentValueArray = activeAttributes.Select(a => a.CurrentValue).ToArray();
+				var slotArray = activeAttributes.Select(a => a.Slot).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
-						(character_id, template_id, version, value, current_value, time_created, deleted, time_deleted)
+						(character_id, slot, template_id, version, value, current_value, time_created, deleted, time_deleted)
 					SELECT
 						u.character_id,
+						u.slot,
 						u.template_id,
 						u.version,
 						u.value,
@@ -210,9 +212,10 @@ namespace FishMMO.Database.Npgsql.Services
 						{{1}}::integer[],
 						{{2}}::bigint[],
 						{{3}}::integer[],
-						{{4}}::real[]
-					) AS u(character_id, template_id, version, value, current_value)
-					ON CONFLICT (character_id, template_id)
+						{{4}}::real[],
+						{{6}}::integer[]
+					) AS u(character_id, template_id, version, value, current_value, slot)
+					ON CONFLICT (character_id, slot, template_id)
 					DO UPDATE SET
 						value = EXCLUDED.value,
 						current_value = EXCLUDED.current_value,
@@ -226,7 +229,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					activeAttributes.Count,
-					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, currentValueArray, now },
+					new object[] { characterIdArray, templateIdArray, versionArray, valueArray, currentValueArray, now, slotArray },
 					"One or more pet attributes were rejected due to a stale Version.",
 					cancellationToken,
 					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
@@ -294,6 +297,7 @@ namespace FishMMO.Database.Npgsql.Services
 					id: a.ID,
 					version: a.Version,
 					characterID: a.CharacterID,
+					slot: a.Slot,
 					templateID: a.TemplateID,
 					value: a.Value,
 					currentValue: a.CurrentValue

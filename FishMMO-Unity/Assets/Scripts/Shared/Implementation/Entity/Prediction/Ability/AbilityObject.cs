@@ -1997,6 +1997,20 @@ namespace FishMMO.Shared
 		/// has ended, or because it was deflected and is no longer on the line those hits were
 		/// gathered along.
 		/// </returns>
+		/// <summary>
+		/// Server: a parry or a shield turned this object's hit away. Still an attack, which threat hears
+		/// (<see cref="ICharacterDamageController.OnAttackAbsorbed"/>): a pet defends its owner and an NPC answers. Only an
+		/// attack the harm rule would have let through.
+		/// </summary>
+		private void NoteAbsorbedAttack(ICharacter target)
+		{
+			if (Caster == null || target == null || ReferenceEquals(Caster, target) || !HarmRule.MayHarm(Caster, target, out _))
+			{
+				return;
+			}
+			ICharacterDamageController.OnAttackAbsorbed?.Invoke(Caster, target);
+		}
+
 		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal, Vector3 localPoint, bool isAuthoritativeEcho = false)
 		{
 			/* Once per target for this object's whole life, keyed on the character where there is one
@@ -2041,6 +2055,7 @@ namespace FishMMO.Shared
 					{
 						BroadcastHitToObservers(hitCharacter, point, normal,
 							deflected: true, deflectHeading: deflectedHeading);
+						NoteAbsorbedAttack(hitCharacter);
 					}
 					else
 					{
@@ -2072,6 +2087,7 @@ namespace FishMMO.Shared
 				{
 					if (isServer)
 					{
+						NoteAbsorbedAttack(hitCharacter);
 						/* Told as a BLOCK, and that bit is the whole point of it.
 						 *
 						 * This used to travel as an ordinary impact, and an observer cannot tell the

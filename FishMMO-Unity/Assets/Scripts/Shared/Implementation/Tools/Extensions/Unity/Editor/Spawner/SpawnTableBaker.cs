@@ -253,6 +253,7 @@ namespace FishMMO.Shared
 				BoundingBoxSize = spawner.BoundingBoxSize,
 				// A copy, like everything else here: the table must not change when the scene does.
 				Pack = spawner.Pack != null ? spawner.Pack.Clone() : new NPCPackSettings(),
+				KeepOutCircles = spawner.KeepOutCircles != null ? new List<Vector3>(spawner.KeepOutCircles) : new List<Vector3>(),
 			};
 
 			/* Copies, never the scene's own instances. A [SerializeReference] object cannot be

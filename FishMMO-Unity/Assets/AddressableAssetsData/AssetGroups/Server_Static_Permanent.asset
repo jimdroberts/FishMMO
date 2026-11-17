@@ -58,9 +58,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 188aa9244eeba18cca6f90abf9bee2b2
-    m_Address: Assets/Prefabs/Server/SceneServer/PartySystem.asset
+    m_Address: PartySystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -79,9 +80,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 1ddb895a482c4e468cfe73d9abc8fd7a
-    m_Address: Assets/Prefabs/Server/SceneServer/TradeSystem.asset
+    m_Address: TradeSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -194,6 +196,7 @@ MonoBehaviour:
     m_Address: HousingSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -250,6 +253,14 @@ MonoBehaviour:
     m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 52ef08c5dede4a28a7f5ace1fa154157
+    m_Address: AbilityCraftingSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -416,9 +427,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 8b035132fe06520f09c29d98026d2a36
-    m_Address: Assets/Prefabs/Server/SceneServer/FriendSystem.asset
+    m_Address: FriendSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -426,6 +438,14 @@ MonoBehaviour:
     m_Address: Brute Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 90b48942acce419d84afeb70ea0d9629
+    m_Address: MatchmakingSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -576,6 +596,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b71d544e6e804f67b627311bd0c067bb
+    m_Address: StaffSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b80bc0482ed9646928250918c4f9a266
     m_Address: Enemy - Brute
     m_ReadOnly: 0
@@ -713,6 +741,7 @@ MonoBehaviour:
     m_Address: QuestSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -786,6 +815,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: ef6aed104b62476db55d84a3e4622ab4
+    m_Address: CommerceSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f31f7444f35b6ffee4ed41a0418e0b05
     m_Address: Pathetic Personality
     m_ReadOnly: 0
@@ -801,9 +838,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: f854f419ab83b93908afd02eb77367aa
-    m_Address: Assets/Prefabs/Server/SceneServer/GuildSystem.asset
+    m_Address: GuildSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 

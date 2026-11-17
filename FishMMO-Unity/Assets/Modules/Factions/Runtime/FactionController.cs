@@ -1570,7 +1570,7 @@ namespace FishMMO.Shared
 			// Is aggression toggled on either?
 			/* Wildlife stands outside the factions (WildlifeRules decides who it may harm, and its nameplate its look). The
 			 * builder cloned the wildlife prefabs from "an orc", race included, so without this a deer took the Orc Horde's
-			 * standing: an Enemy to everyone hostile to orcs, out of reach of a cleanse (Jim, 11-16: Dispel must free
+			 * standing: an Enemy to everyone hostile to orcs, out of reach of a cleanse (Dispel must free
 			 * wildlife) and a target for guards. Neutral, widened to Enemy only by the aggression toggle like anyone. */
 			if (WildlifeRules.RoleOf(Character) != WildlifeRole.None || WildlifeRules.RoleOf(otherFactionController.Character) != WildlifeRole.None)
 			{

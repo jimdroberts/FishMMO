@@ -572,6 +572,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			ICharacterDamageController.OnDamaged += OnCharacterDamaged;
+			ICharacterDamageController.OnAttackAbsorbed += OnCharacterAttackAbsorbed;
 			ICharacterDamageController.OnHealed += OnCharacterHealed;
 			ICharacterDamageController.OnKilled += OnCharacterKilled;
 
@@ -606,6 +607,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			{
 				state.HandleDamaged(attacker, amount);
 			}
+		}
+
+		/// <summary>Threat for an attack that did no damage (<see cref="ICharacterDamageController.OnAttackAbsorbed"/>).</summary>
+		public const int AbsorbedAttackThreat = 1;
+
+		/// <summary>
+		/// An allowed attack that armour, a parry or a shield took all of: delivered like a hit for
+		/// <see cref="AbsorbedAttackThreat"/>, so the defender answers it and a pet defends its owner (or itself).
+		/// </summary>
+		private static void OnCharacterAttackAbsorbed(ICharacter attacker, ICharacter defender)
+		{
+			OnCharacterDamaged(attacker, defender, AbsorbedAttackThreat, null);
 		}
 
 		/// <summary>

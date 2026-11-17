@@ -126,9 +126,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public event Action<NetworkConnection, IPlayerCharacter> OnDespawnCharacter;
 		/// <summary>
-		/// Triggered immediately after a pet is killed.
+		/// Triggered immediately after a pet is killed: the owner's connection, the owner, and the pet.
 		/// </summary>
-		public event Action<NetworkConnection, IPlayerCharacter> OnPetKilled;
+		public event Action<NetworkConnection, IPlayerCharacter, ICharacter> OnPetKilled;
 
 		/// <summary>
 		/// Initializes the character system, registers event handlers, and sets up character authentication and broadcast handling.

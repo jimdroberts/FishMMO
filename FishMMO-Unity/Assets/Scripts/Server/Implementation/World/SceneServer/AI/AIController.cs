@@ -496,6 +496,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// The current target for the AI (e.g., enemy, destination).
 		/// Setting this property updates the agent's destination.
 		/// </summary>
+		/// <summary>Server: a pet's AI took a new target (the pet, the target). PetSystem tells the owner.</summary>
+		public static event System.Action<Pet, ICharacter> OnPetTargetChanged;
+
 		public Transform Target
 		{
 			get { return target; }
@@ -517,6 +520,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				 * whose answer only changes when the target does. */
 				cachedTargetCharacter = value != null ? value.GetComponent<ICharacter>() : null;
 				cachedTargetCharacterID = cachedTargetCharacter != null ? cachedTargetCharacter.ID : 0;
+
+				// A pet's owner hears what it went for (PetSystem: "Defending you from a wolf, master.").
+				if (cachedPet != null && cachedTargetCharacter != null)
+				{
+					OnPetTargetChanged?.Invoke(cachedPet, cachedTargetCharacter);
+				}
 
 				/* The aim ramp and the velocity estimate are both properties of *this* engagement.
 				 * Carrying either across a target change would hand a freshly acquired target the

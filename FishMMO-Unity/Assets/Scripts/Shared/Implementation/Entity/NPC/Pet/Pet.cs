@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 				/* Clients: only the server ever assigned this (PetSystem), so on every client a pet had no owner.
 				 * HarmRule.Principal(pet) then answered the pet itself, the companion relation could not see an owner and
 				 * its own pet as one side, and with aggression on the owner's client predicted hits on its own pet that
-				 * the server refused (Jim, 11-16). The owner's ID is in the spawn payload; the owner may spawn after the
+				 * the server refused. The owner's ID is in the spawn payload; the owner may spawn after the
 				 * pet, so it is resolved here, lazily, and re-checked so a pooled object reused as somebody else is
 				 * never kept. */
 				if (payloadOwnerID != 0 && (petOwner == null || petOwner.ID != payloadOwnerID))
@@ -108,6 +108,12 @@ namespace FishMMO.Shared
 		/// <see cref="WritePayload"/>.
 		/// </remarks>
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
+
+		/// <summary>
+		/// Which of its owner's pet slots this pet holds, for as long as it is out; the database stores the pet under it.
+		/// See <see cref="PetSlotRules"/>. The server assigns it; the owner learns it from <c>PetAddBroadcast</c>.
+		/// </summary>
+		public int Slot { get; set; }
 
 		/// <summary>
 		/// The list of ability template IDs that this pet has learned.
@@ -276,6 +282,7 @@ namespace FishMMO.Shared
 			Stance = PetStance.Defensive;
 			MovementOrder = PetMovementOrder.Follow;
 			AttackPriority = PetAttackPriority.Default;
+			Slot = 0;
 
 			/* Replace rather than Clear. PetAbilityIDs is assigned by reference when a pet is
 			 * restored from the database, so clearing it here would empty the caller's list too —

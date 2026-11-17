@@ -19,10 +19,9 @@ namespace FishMMO.RenderScratch
 	/// <para>
 	/// Each panel keeps its own UIDocument, exactly as in the World GUI scene, and all of them
 	/// share ONE PanelSettings clone pointed at a RenderTexture. That matters: PanelSettings uses
-	/// ScaleWithScreenSize with match = WIDTH, so the panel is always exactly 1200 units wide and
-	/// its height is 1200 * (screenH / screenW) — 675 at 16:9, 800 at 16:10. Every vertical offset
-	/// in the HUD is therefore aspect-dependent, which is why the height is a command-line
-	/// argument and why this has to be run more than once.
+	/// ScaleWithScreenSize, reference 1280x960, Expand: the whole 1280x960 always fits and a wider screen adds width. At a
+	/// viewport 960 high and at least 1280 wide the scale is exactly 1, so pixels are panel units: run 1280 (4:3), 1707
+	/// (16:9) and 2240 (21:9) wide with -hudWidth (and -hudHeight 960, the default).
 	/// </para>
 	/// <para>
 	/// Measuring the panel root would be useless: several HUD roots fill the viewport and only
@@ -35,12 +34,12 @@ namespace FishMMO.RenderScratch
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ROOT = "Assets/Scripts/Client/GUI/World/";
-		private const int WIDTH = 1200;
+		private static int WIDTH = 1280;
 		private const int SETTLE_FRAMES = 40;
 		private static readonly string OUT_DIR = ProbeOutput.Path("HudProbe");
 
 		/// <summary>One panel to mount, and the element inside it that actually draws.</summary>
-		private sealed class Mount
+		public sealed class Mount
 		{
 			public string Name;
 			public string Uxml;
@@ -50,6 +49,8 @@ namespace FishMMO.RenderScratch
 			public bool LayoutOnly;
 			/// <summary>Measured, but excluded from the overlap matrix — see the crosshair mount.</summary>
 			public bool IgnoreOverlap;
+			/// <summary>Fills the started panel with fixture data (the party frame mounts a full party).</summary>
+			public Action<UITKControl> Populate;
 		}
 
 		/// <summary>A mounted panel and its resolved drawing rectangle.</summary>
@@ -73,7 +74,8 @@ namespace FishMMO.RenderScratch
 			public int Groups;
 		}
 
-		private static readonly List<Mount> mounts = new List<Mount>
+		/// <summary>The HUD measured. Modules add theirs (Social adds the party frame).</summary>
+		public static readonly List<Mount> Mounts = new List<Mount>
 		{
 			new Mount { Name = "UIHealthBar",  Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", Selector = "bar-root",        PanelType = typeof(UITKHealthBar) },
 			new Mount { Name = "UIManaBar",    Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", Selector = "bar-root",        PanelType = typeof(UITKManaBar) },
@@ -97,13 +99,8 @@ namespace FishMMO.RenderScratch
 			new Mount { Name = "UICrosshair",  Uxml = ROOT + "Crosshair/UICrosshair.uxml",      Selector = "crosshair-icon",  PanelType = typeof(UITKCrosshair), LayoutOnly = true, IgnoreOverlap = true },
 			new Mount { Name = "UITarget",     Uxml = ROOT + "Target/UITarget.uxml",            Selector = "target-root",     PanelType = typeof(UITKTarget) },
 			new Mount { Name = "UIToast",      Uxml = ROOT + "Toast/UIToast.uxml",              Selector = "toast-stack",     PanelType = typeof(UITKToast) },
-			/* IgnoreOverlap: the party frame must show EVERY member at full height and is allowed
-			 * to overlap other panels to do it. It is judged on that instead — see the roster
-			 * section of the log — with a full six-member party mounted. */
-			new Mount { Name = "UIParty",      Uxml = ROOT + "Party/UIParty.uxml",              Selector = "party-root",      PanelType = typeof(UITKParty), IgnoreOverlap = true },
 			new Mount { Name = "UIChat",       Uxml = ROOT + "Chat/UIChat.uxml",                Selector = "chat-root",       PanelType = typeof(UITKChat) },
 			new Mount { Name = "UIPetControl", Uxml = ROOT + "Pet/UIPetControl.uxml",          Selector = "pet-root",        PanelType = typeof(UITKPetControl) },
-			new Mount { Name = "UIArenaHud",   Uxml = ROOT + "Arena/UIArenaHud.uxml",           Selector = "arenahud-root",   PanelType = typeof(UITKArenaHud) },
 		};
 
 		private static PanelSettings settings;
@@ -113,7 +110,7 @@ namespace FishMMO.RenderScratch
 		private static readonly List<Strip> strips = new List<Strip>();
 
 		private static readonly StringBuilder log = new StringBuilder();
-		private static int height = 800;
+		private static int height = 960;
 		private static int frames;
 		private static int stage;
 
@@ -136,7 +133,7 @@ namespace FishMMO.RenderScratch
 				settings.clearColor = true;
 				settings.colorClearValue = new Color(0.055f, 0.059f, 0.059f, 1.0f);
 
-				foreach (Mount mount in mounts)
+				foreach (Mount mount in Mounts)
 				{
 					MountPanel(mount);
 				}
@@ -152,7 +149,7 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		/// <summary>Viewport height comes from the command line; the width is always 1200.</summary>
+		/// <summary>Viewport width and height come from the command line (-hudWidth, -hudHeight; default 1280x960).</summary>
 		private static void ReadArguments()
 		{
 			string[] args = Environment.GetCommandLineArgs();
@@ -162,6 +159,11 @@ namespace FishMMO.RenderScratch
 					int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed))
 				{
 					height = parsed;
+				}
+				if (string.Equals(args[i], "-hudWidth", StringComparison.Ordinal) &&
+					int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsedWidth))
+				{
+					WIDTH = parsedWidth;
 				}
 			}
 		}
@@ -191,14 +193,7 @@ namespace FishMMO.RenderScratch
 					control.OnStarting();
 				}
 
-				// The largest party the server allows (PartySystem.maxPartySize).
-				if (control is UITKParty party)
-				{
-					for (int i = 0; i < 6; ++i)
-					{
-						party.OnPartyAddMember(Seed.People[i].id, i == 0 ? FishMMO.Shared.PartyRank.Leader : FishMMO.Shared.PartyRank.Member, 1.0f);
-					}
-				}
+				mount.Populate?.Invoke(control);
 
 				panel.Root = document.rootVisualElement;
 
@@ -325,7 +320,7 @@ namespace FishMMO.RenderScratch
 		private static void Log(string what)
 		{
 			log.AppendLine($"===== {what} =====");
-			log.AppendLine($"viewport {WIDTH}x{height}  (panel width is always {WIDTH}; height is aspect dependent)");
+			log.AppendLine($"viewport {WIDTH}x{height}  (reference 1280x960, Expand: at height 960 the scale is 1 and pixels are panel units)");
 			log.AppendLine();
 
 			log.AppendLine("-- measured rects --");

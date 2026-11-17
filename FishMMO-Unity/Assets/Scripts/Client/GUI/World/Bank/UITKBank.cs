@@ -1,4 +1,6 @@
-﻿using FishNet.Transporting;
+using System;
+using System.Collections.Generic;
+using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 
@@ -39,52 +41,49 @@ namespace FishMMO.Client
 		/// <inheritdoc/>
 		protected override InventoryType OwnInventoryType => InventoryType.Bank;
 
-		private const string VAULT_BUTTON_NAME = "bank-vault-button";
-		private const string VAULT_BUTTON_HIDDEN = "bank-vault-button--hidden";
+		private const string MODULE_LINKS_NAME = "bank-module-links";
+		private const string MODULE_LINK_CLASS = "bank-module-link";
+		private const string MODULE_LINK_HIDDEN = "bank-module-link--hidden";
+
+		/// <summary>One button per <see cref="BankWindowLinks"/> entry, in the footer.</summary>
+		private readonly List<(BankWindowLinks.Link link, Button button)> moduleLinks = new List<(BankWindowLinks.Link, Button)>();
 
 		/// <summary>
-		/// Wires the house vault button. It only shows while the vault holds something; the vault is
-		/// asked every time the bank opens (<see cref="OnAfterShow"/>).
+		/// Builds the modules' link buttons (the Housing module's house vault). Each starts hidden; its module shows it
+		/// when there is something behind it, asked every time the bank opens (<see cref="OnAfterShow"/>).
 		/// </summary>
 		public override void OnStarting()
 		{
 			base.OnStarting();
-			Button vault = Root?.Q<Button>(VAULT_BUTTON_NAME);
-			if (vault != null)
+			VisualElement container = Root?.Q(MODULE_LINKS_NAME);
+			moduleLinks.Clear();
+			if (container == null)
 			{
-				vault.clicked += OpenVault;
+				return;
 			}
-			UITKHousingVault.OnVaultKnown += SetVaultButton;
+			container.Clear();
+			foreach (BankWindowLinks.Link link in BankWindowLinks.All)
+			{
+				BankWindowLinks.Link captured = link;
+				Button button = new Button(() => captured.OnClick?.Invoke()) { text = link.Label };
+				button.AddToClassList("fish-button");
+				button.AddToClassList("fish-button--ghost");
+				button.AddToClassList(MODULE_LINK_CLASS);
+				button.AddToClassList(MODULE_LINK_HIDDEN);
+				container.Add(button);
+				moduleLinks.Add((link, button));
+			}
 		}
 
-		/// <inheritdoc />
-		public override void OnDestroying()
-		{
-			UITKHousingVault.OnVaultKnown -= SetVaultButton;
-			base.OnDestroying();
-		}
-
-		/// <summary>Hides the vault button and asks whether the vault holds anything.</summary>
+		/// <summary>Hides each module link and asks its module whether to show it.</summary>
 		protected override void OnAfterShow()
 		{
 			base.OnAfterShow();
-			SetVaultButton(false);
-			if (Client != null)
+			for (int i = 0; i < moduleLinks.Count; ++i)
 			{
-				UITKHousingVault.Request();
-			}
-		}
-
-		private void SetVaultButton(bool holdsSomething)
-		{
-			Root?.Q(VAULT_BUTTON_NAME)?.EnableInClassList(VAULT_BUTTON_HIDDEN, !holdsSomething);
-		}
-
-		private void OpenVault()
-		{
-			if (UIManager.TryGetTK(UITKHousingVault.ControlName, out UITKHousingVault vault))
-			{
-				vault.Open();
+				Button button = moduleLinks[i].button;
+				button.AddToClassList(MODULE_LINK_HIDDEN);
+				moduleLinks[i].link.OnBankShown?.Invoke(visible => button.EnableInClassList(MODULE_LINK_HIDDEN, !visible));
 			}
 		}
 

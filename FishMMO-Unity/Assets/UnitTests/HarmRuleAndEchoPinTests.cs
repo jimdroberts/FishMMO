@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 			}
 
 			string pets = Read("Server/Implementation/World/SceneServer/Pet/PetSystem.cs");
-			LogAssert.IsTrue(pets.Contains("!HarmRule.MayHarm(petController.Pet, target, out _)"),
+			LogAssert.IsTrue(pets.Contains("!HarmRule.MayHarm(pet, target, out _)"),
 				"a pet is sent only at what its owner may harm");
 		}
 

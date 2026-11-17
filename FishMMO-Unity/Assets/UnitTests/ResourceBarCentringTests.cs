@@ -67,7 +67,7 @@ namespace FishMMO.UnitTests
 			UITKPanelScale.Register(settings);
 			UITKPanelScale.Apply(scale);
 			LogAssert.AreEqual(
-				new Vector2Int(Mathf.RoundToInt(1200 / scale), Mathf.RoundToInt(800 / scale)),
+				new Vector2Int(Mathf.RoundToInt(1280 / scale), Mathf.RoundToInt(960 / scale)),
 				settings.referenceResolution,
 				$"UITKPanelScale.Apply({scale}) must rewrite the reference resolution of the registered panel");
 
@@ -139,9 +139,12 @@ namespace FishMMO.UnitTests
 						yield return null;
 					}
 
+					// Expand on a 1280x960 reference (divided by the interface scale): the whole reference fits, width follows.
+					float fit = Mathf.Min(width / (1280f / scale), height / (960f / scale));
+					float expectedWidth = width / fit;
 					float panelWidth = documents[0].rootVisualElement.layout.width;
-					LogAssert.IsTrue(Mathf.Abs(panelWidth - 1200f / scale) < 1f,
-						$"at scale {scale} the panel must be {1200f / scale} units wide; it resolved to {panelWidth}");
+					LogAssert.IsTrue(Mathf.Abs(panelWidth - expectedWidth) < 1f,
+						$"at {width}x{height}, scale {scale}, the panel must be {expectedWidth} units wide; it resolved to {panelWidth}");
 
 					float minX = float.MaxValue;
 					float maxX = float.MinValue;

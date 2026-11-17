@@ -121,36 +121,11 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void TheMailPanelWiresItsButtonsOnce()
-		{
-			string code = CodeOnly(Read(Gui + "World/Mail/UITKMail.cs"));
-			LogAssert.AreEqual(1, CountOccurrences(code, "WireControls();"), "WireControls is called from exactly one place; every call adds another handler to the same buttons");
-			LogAssert.IsTrue(MethodBody(code, "public override void OnStarting()").Contains("WireControls();"), "and that place is OnStarting, which runs once per tree");
-		}
-
-		[Test]
-		public void ReopeningThePartyPanelRefreshesRowsInPlace()
-		{
-			string code = CodeOnly(Read(Gui + "World/Party/UITKParty.cs"));
-			string show = MethodBody(code, "protected override void OnAfterShow()");
-			LogAssert.IsFalse(show.Contains("RebuildRosterView"), "OnAfterShow must not rebuild the roster: it throws away every row and buff icon on every open");
-			LogAssert.IsTrue(show.Contains("ApplyModelToRow(model)"), "it re-reads each row from its model instead");
-		}
-
-		[Test]
 		public void AHiddenReconnectDisplayDoesNotClaimTheCursor()
 		{
 			string code = CodeOnly(Read(Gui + "Login/UITKReconnectDisplay.cs"));
 			string body = MethodBody(code, "protected override void OnAfterStarting()");
 			LogAssert.IsTrue(body.Contains("if (Visible)"), "OnAfterStarting runs at scene load for a hidden panel; ApplyState claims the cursor and must wait for the panel to be shown");
-		}
-
-		[Test]
-		public void TheDungeonFinderPublicToggleIsResetForEveryEntrance()
-		{
-			string code = CodeOnly(Read(Gui + "World/DungeonFinder/UITKDungeonFinder.cs"));
-			LogAssert.AreEqual(2, CountOccurrences(code, "publicToggle?.SetValueWithoutNotify(false);"), "the toggle persists with the tree, so both a fresh open and a cleared dungeon put it back to private");
-			LogAssert.IsTrue(MethodBody(code, "private void ClearDungeon()").Contains("publicToggle?.SetValueWithoutNotify(false);"), "ClearDungeon resets it");
 		}
 
 		[Test]

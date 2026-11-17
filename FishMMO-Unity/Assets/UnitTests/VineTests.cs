@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Vines and ivy (VineMeshes, VineAtlas, VineRules, VineBiomes; Jim, 2026-10-12): valid, deterministic single-sub-mesh
+	/// Vines and ivy (VineMeshes, VineAtlas, VineRules, VineBiomes): valid, deterministic single-sub-mesh
 	/// levels within budget that keep their leaf cover as they step down; each form sitting where it is placed from (a
 	/// curtain under its edge, a mat in front of its face, a spill on the ground); climbers built on and moving with their
 	/// tree's trunk; and the placement rules: headroom under a cave's lintel, the occasional curtained mouth, no mat across a

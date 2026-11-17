@@ -41,6 +41,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Orc 2
     Position: {x: -101.91, y: 17.7, z: 26.68}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -69,6 +70,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: Orc 3
     Position: {x: -93.273, y: 17.7, z: 22.58}
     Rotation: {x: -0, y: -0, z: -0, w: 1}
@@ -97,6 +99,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   references:
     version: 2
     RefIds:

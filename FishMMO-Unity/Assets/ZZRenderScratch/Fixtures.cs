@@ -26,7 +26,6 @@ namespace FishMMO.RenderScratch
 			Items(character);
 			Attributes(character);
 			Achievements(character);
-			Friends(character);
 			// Modules' fixtures (Factions adds its standings).
 			ExtraFixtures?.Invoke(character);
 		}
@@ -194,17 +193,6 @@ namespace FishMMO.RenderScratch
 				controller.SetAchievement(t.ID, tier, value);
 				tier = (byte)((tier + 1) % 3);
 				value = value * 4 + 13;
-			}
-		}
-
-		// ── Friends ─────────────────────────────────────────────────
-
-		private static void Friends(ICharacter character)
-		{
-			if (!character.TryGet(out IFriendController controller)) { return; }
-			foreach ((long id, string _) in Seed.People)
-			{
-				if (id != 1001) { controller.AddFriend(id); }
 			}
 		}
 	}

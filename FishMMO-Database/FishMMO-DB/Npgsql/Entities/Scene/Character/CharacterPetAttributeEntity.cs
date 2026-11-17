@@ -20,6 +20,8 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// </summary>
 		public long CharacterID { get; set; }
 		public CharacterEntity Character { get; set; }
+		/// <summary>Which of the character's pets this is: 0 for the first, and the only one a character with one pet slot has.</summary>
+		public int Slot { get; set; }
 		/// <summary>
 		/// Template identifier for this pet attribute.
 		/// </summary>

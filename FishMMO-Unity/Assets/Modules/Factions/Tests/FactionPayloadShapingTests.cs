@@ -102,15 +102,6 @@ namespace FishMMO.UnitTests
 			return template;
 		}
 
-		private ArchetypeTemplate NewArchetype(string name)
-		{
-			ArchetypeTemplate template = ScriptableObject.CreateInstance<ArchetypeTemplate>();
-			template.name = name;
-			template.AddToCache(name);
-			temporaries.Add(template);
-			return template;
-		}
-
 		private T NewBehaviour<T>(string hostName, ICharacter character) where T : CharacterBehaviour
 		{
 			GameObject host = new GameObject(hostName);
@@ -413,8 +404,6 @@ namespace FishMMO.UnitTests
 		{
 			Assert.IsNull(DeclaredMethod(typeof(FactionController), "BroadcastToObserversOnly"),
 				"The hand-rolled loop serialised the struct once per connection; ObserverBroadcastScope writes it once.");
-			Assert.IsNull(DeclaredMethod(typeof(ArchetypeController), "BroadcastToObserversOnly"),
-				"Both copies of that loop are gone, not just one.");
 			Assert.IsNotNull(DeclaredMethod(typeof(ObserverBroadcastScope), "BroadcastToObserversExceptOwner"));
 		}
 

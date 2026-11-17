@@ -90,7 +90,6 @@ namespace FishMMO.RenderScratch
 			Register<IAchievementController>(behaviours, new FakeAchievements(character));
 			// Modules' fakes (Factions registers its own: Assets/Modules/Factions/Editor/RenderScratch).
 			ExtraFakes?.Invoke(character, behaviours);
-			Register<IFriendController>(behaviours, new FakeFriends(character));
 			Register<IPetController>(behaviours, new FakePet(character));
 
 			Fixtures.Apply(character);

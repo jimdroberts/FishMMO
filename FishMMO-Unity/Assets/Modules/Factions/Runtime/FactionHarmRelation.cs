@@ -27,6 +27,9 @@ namespace FishMMO.Shared
 
 		public int Order => RelationOrder;
 
+		/// <summary>Its refusal ("not an enemy") is exactly what the attacker's aggression toggle lifts (AllowAsAggressor).</summary>
+		public bool AggressionLiftsRefusal => true;
+
 		public HarmJudgement Judge(ICharacter attackerSide, ICharacter defenderSide)
 		{
 			if (!attackerSide.TryGet(out IFactionController attackerFaction) || !defenderSide.TryGet(out IFactionController defenderFaction))

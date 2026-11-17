@@ -181,7 +181,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// One type rather than eight parallel lists threaded through five save paths. Each new
-		/// sub-entity (achievements, waypoints, factions, archetypes) had to be added to every
+		/// sub-entity (achievements, waypoints, factions, archetypes; all participants now) had to be added to every
 		/// one of those paths by hand, and factions were simply missed for the life of the
 		/// project — fetched on login, never written back. With the capture and the saves in one
 		/// place there is one list to extend and no path that can forget a table.
@@ -194,7 +194,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<CharacterAttributeData> Attributes;
 			public readonly List<CharacterAbilityData> Abilities;
 			public readonly List<PetSnapshot> Pets;
-			public readonly List<CharacterArchetypeData> Archetypes;
 			public readonly List<CharacterKnownAbilityData> KnownAbilities;
 			/// <summary>
 			/// A departing character's whole hotkey bar, or nothing. Captured only by the departure
@@ -235,7 +234,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Attributes = new List<CharacterAttributeData>(n * 16);
 				Abilities = new List<CharacterAbilityData>(n * 8);
 				Pets = new List<PetSnapshot>(n);
-				Archetypes = new List<CharacterArchetypeData>(n);
 				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
 				Hotkeys = new List<CharacterHotkeyData>();
 				KnowledgeVersions = new Dictionary<long, long>(n);
@@ -289,7 +287,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes);
 					Abilities.AddRange(other.Abilities);
 					Pets.AddRange(other.Pets);
-					Archetypes.AddRange(other.Archetypes);
 					KnownAbilities.AddRange(other.KnownAbilities);
 					Hotkeys.AddRange(other.Hotkeys);
 				}
@@ -298,7 +295,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Attributes.AddRange(other.Attributes.Where(r => !conflicting.Contains(r.CharacterID)));
 					Abilities.AddRange(other.Abilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Pets.AddRange(other.Pets.Where(r => !conflicting.Contains(r.Pet.CharacterID)));
-					Archetypes.AddRange(other.Archetypes.Where(r => !conflicting.Contains(r.CharacterID)));
 					KnownAbilities.AddRange(other.KnownAbilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Hotkeys.AddRange(other.Hotkeys.Where(r => !conflicting.Contains(r.CharacterID)));
 				}
@@ -360,7 +356,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				participants[i].Capture(character, snapshot.RowsFor(participants[i]));
 			}
-			AppendArchetypeData(character, snapshot.Archetypes);
 			AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions);
 		}
 
@@ -476,7 +471,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					EnqueuePersistence(() => writer.SaveAsync(this, rows, claims));
 				}
 			}
-			if (s.Archetypes.Count > 0) EnqueuePersistence(() => SaveArchetypesAsync(s.Archetypes, claims));
 			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims));
 			if (s.Hotkeys.Count > 0)
 			{
@@ -542,7 +536,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					done &= await SaveWithRetryAsync(() => writer.SaveAsync(this, rows, claims), writer.Name, characterID);
 				}
 			}
-			if (s.Archetypes.Count > 0) done &= await SaveWithRetryAsync(() => SaveArchetypesAsync(s.Archetypes, claims), "archetype", characterID);
 			if (s.KnownAbilities.Count > 0) done &= await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims), "known abilities", characterID);
 			if (s.Hotkeys.Count > 0) done &= await SaveWithRetryAsync(() => SaveHotkeysAsync(s.Hotkeys, claims), "hotkey bar", characterID);
 			return done;
@@ -2119,7 +2112,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// One character's complete pet state, captured together.
+		/// One pet's complete state, captured together. A character with several pets out has one each.
 		/// </summary>
 		/// <remarks>
 		/// The three pet tables are snapshotted and written as a unit because they share a
@@ -2147,9 +2140,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Appends a snapshot of the character's live pet — the pet row, its attributes and its
-		/// buffs — so a pet survives a logout or a scene-server handover with the health and
-		/// effects it actually had.
+		/// Appends a snapshot of each of the character's live pets — the pet row, its attributes and
+		/// its buffs, under the pet's slot — so every pet survives a logout or a scene-server handover
+		/// with the health and effects it actually had.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -2173,8 +2166,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// to know an attribute this one does not.
 		/// </para>
 		/// </remarks>
-		/// <param name="character">The character whose pet to snapshot.</param>
-		/// <param name="pets">Destination for the snapshot.</param>
+		/// <param name="character">The character whose pets to snapshot.</param>
+		/// <param name="pets">Destination for the snapshots.</param>
 		private void AppendPetData(IPlayerCharacter character, List<PetSnapshot> pets)
 		{
 			if (!character.TryGet(out IPetController petController))
@@ -2182,15 +2175,25 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			Pet pet = petController.Pet;
-			if (pet == null)
+			/* No pet out, nothing to say. Whatever a pet row holds is already correct — it was
+			 * written to spawned = false by whichever path dismissed or killed that pet — and
+			 * writing a row here would only be able to say "no template", which is not a state
+			 * the schema can express. The same holds per slot: an empty slot is left alone. */
+			for (int i = 0; i < petController.Pets.Count; ++i)
 			{
-				/* No pet out, nothing to say. Whatever the pet row holds is already correct —
-				 * it was written to spawned = false by whichever path dismissed or killed the
-				 * pet — and writing a row here would only be able to say "no template", which
-				 * is not a state the schema can express. */
-				return;
+				Pet pet = petController.Pets[i];
+				if (pet != null)
+				{
+					AppendOnePetData(character, pet, pets);
+				}
 			}
+		}
+
+		/// <summary>
+		/// Appends one pet's snapshot; see <see cref="AppendPetData"/>.
+		/// </summary>
+		private void AppendOnePetData(IPlayerCharacter character, Pet pet, List<PetSnapshot> pets)
+		{
 
 			/* Zero is "no template", and nothing else is. Template ids are signed deterministic
 			 * hashes, so a negative one is as valid as a positive one — refusing everything below
@@ -2227,15 +2230,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				id: 0,
 				version: version,
 				characterID: character.ID,
+				slot: pet.Slot,
 				templateID: templateID,
 				abilities: pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>(),
 				spawned: IsPetOut(currentHealth, character.IsFlagged(CharacterFlags.IsDead)));
 
 			var attributeData = new List<CharacterPetAttributeData>(16);
-			AppendPetAttributeData(character.ID, version, petAttributeController, attributeData);
+			AppendPetAttributeData(character.ID, pet.Slot, version, petAttributeController, attributeData);
 
 			var buffData = new List<CharacterPetBuffData>(4);
-			AppendPetBuffData(character.ID, version, pet, buffData);
+			AppendPetBuffData(character.ID, pet.Slot, version, pet, buffData);
 
 			pets.Add(new PetSnapshot(petData, attributeData, buffData));
 		}
@@ -2266,11 +2270,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// a pet has. The stamped version comes from the character instead.
 		/// </remarks>
 		/// <param name="characterID">The owning character.</param>
+		/// <param name="slot">The pet's slot.</param>
 		/// <param name="version">Version to stamp every row with.</param>
 		/// <param name="attributeController">The pet's attribute controller, or null.</param>
 		/// <param name="attributes">Destination for the rows.</param>
 		private static void AppendPetAttributeData(
 			long characterID,
+			int slot,
 			long version,
 			ICharacterAttributeController attributeController,
 			List<CharacterPetAttributeData> attributes)
@@ -2286,6 +2292,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					id: 0,
 					version: version,
 					characterID: characterID,
+					slot: slot,
 					templateID: kvp.Key,
 					value: kvp.Value.Value,
 					currentValue: 0.0f));
@@ -2297,6 +2304,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					id: 0,
 					version: version,
 					characterID: characterID,
+					slot: slot,
 					templateID: kvp.Key,
 					value: kvp.Value.Value,
 					currentValue: kvp.Value.CurrentValue));
@@ -2308,10 +2316,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// same way the owner's buffs are converted.
 		/// </summary>
 		/// <param name="characterID">The owning character.</param>
+		/// <param name="slot">The pet's slot.</param>
 		/// <param name="version">Version to stamp every row with.</param>
 		/// <param name="pet">The pet.</param>
 		/// <param name="buffs">Destination for the rows.</param>
-		private void AppendPetBuffData(long characterID, long version, Pet pet, List<CharacterPetBuffData> buffs)
+		private void AppendPetBuffData(long characterID, int slot, long version, Pet pet, List<CharacterPetBuffData> buffs)
 		{
 			if (!pet.TryGet(out IBuffController buffController) || buffController.Buffs.Count == 0)
 			{
@@ -2344,6 +2353,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					id: 0,
 					version: version,
 					characterID: characterID,
+					slot: slot,
 					templateID: buff.Template.ID,
 					remainingTime: remainingTicks > 0 ? remainingTicks * tickDelta : 0f,
 					tickTime: nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f,
@@ -2353,7 +2363,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Persists pet state — row, attributes and buffs — for every snapshotted character.
+		/// Persists pet state — row, attributes and buffs — for every snapshotted pet.
 		/// </summary>
 		/// <remarks>
 		/// The pet row goes first. If the two dependent writes fail after it, the restore path's
@@ -2772,81 +2782,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					abilityController.KnowledgeVersion == captured.Value)
 				{
 					abilityController.KnowledgeDirty = false;
-				}
-			}
-		}
-
-		/// <summary>
-		/// Appends the character's archetype row when it has changed since the database last
-		/// confirmed it. Main-thread only.
-		/// </summary>
-		private void AppendArchetypeData(IPlayerCharacter character, List<CharacterArchetypeData> archetypes)
-		{
-			if (!character.TryGet(out IArchetypeController archetypeController) ||
-				!archetypeController.PersistenceDirty ||
-				archetypeController.Template == null)
-			{
-				return;
-			}
-
-			archetypeController.Version++;
-			archetypes.Add(new CharacterArchetypeData(
-				id: 0,
-				version: archetypeController.Version,
-				characterID: character.ID,
-				templateID: archetypeController.Template.ID));
-		}
-
-		/// <summary>
-		/// Persists archetype rows asynchronously.
-		/// </summary>
-		/// <param name="archetypes">The rows.</param>
-		/// <param name="claims">The claims the rows were captured under. See <see cref="AppendSubEntities"/>.</param>
-		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveArchetypesAsync(List<CharacterArchetypeData> archetypes, IReadOnlyCollection<CharacterSessionLeaseData> claims)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterArchetypeService>(out var archetypeService))
-				{
-					return true;
-				}
-
-				DatabaseResult<BulkWriteResult> result = await archetypeService.PersistOwnedAsync(archetypes, claims);
-				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Archetype save", result);
-
-				if (BulkWriteReporting.MayClearDirtyMarks(result))
-				{
-					TryEnqueueMainThread(() => MarkArchetypesPersisted(archetypes));
-				}
-
-				return written || !result.IsTransient;
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("CharacterSystem", $"SaveArchetypesAsync failed: {ex}");
-				return false;
-			}
-		}
-
-		/// <summary>
-		/// Clears the dirty mark on every archetype a completed write covered. Main thread.
-		/// </summary>
-		private void MarkArchetypesPersisted(List<CharacterArchetypeData> archetypes)
-		{
-			if (archetypes == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < archetypes.Count; ++i)
-			{
-				CharacterArchetypeData saved = archetypes[i];
-				if (TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) &&
-					character.TryGet(out IArchetypeController archetypeController))
-				{
-					archetypeController.MarkPersisted(saved.Version);
 				}
 			}
 		}

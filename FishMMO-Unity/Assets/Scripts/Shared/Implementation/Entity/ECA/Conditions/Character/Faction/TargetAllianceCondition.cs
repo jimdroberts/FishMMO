@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// With a single level, turning aggression on made every neutral player an Enemy to a heal or cleanse that reaches
-		/// neutral players, so Lesser Heal and Dispel Magic stopped landing on them (Jim, 11-16). Damage that reaches enemies and
+		/// neutral players, so Lesser Heal and Dispel Magic stopped landing on them. Damage that reaches enemies and
 		/// neutrals passes either way; damage that reaches enemies only still widens to neutrals with the toggle.
 		/// </remarks>
 		public bool Passes(FactionAllianceLevel allianceLevel, FactionAllianceLevel standing, bool defenderIsPlayer)

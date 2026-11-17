@@ -73,7 +73,7 @@ namespace FishMMO.Client
 
 			if (character.TryGet(out IGuildController guildController))
 			{
-				guildController.OnAddGuildMember += Guild_OnAddMember;
+				guildController.OnGuildMemberAdded += Guild_OnAddMember;
 				guildController.OnRemoveGuildMember += Guild_OnRemoveMember;
 				guildController.OnValidateGuildMembers += Guild_OnValidateMembers;
 				guildController.OnLeaveGuild += Guild_OnLeave;
@@ -97,7 +97,7 @@ namespace FishMMO.Client
 
 				if (tracked.TryGet(out IGuildController guildController))
 				{
-					guildController.OnAddGuildMember -= Guild_OnAddMember;
+					guildController.OnGuildMemberAdded -= Guild_OnAddMember;
 					guildController.OnRemoveGuildMember -= Guild_OnRemoveMember;
 					guildController.OnValidateGuildMembers -= Guild_OnValidateMembers;
 					guildController.OnLeaveGuild -= Guild_OnLeave;
@@ -198,10 +198,10 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>Adds a guild member.</summary>
-		/// <param name="broadcast">The add broadcast carrying the member's character ID.</param>
-		private static void Guild_OnAddMember(GuildAddBroadcast broadcast)
+		/// <param name="characterID">The member's character ID.</param>
+		private static void Guild_OnAddMember(long characterID)
 		{
-			guildMembers.Add(broadcast.Member.CharacterID);
+			guildMembers.Add(characterID);
 		}
 
 		/// <summary>Removes a guild member.</summary>

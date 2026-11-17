@@ -102,7 +102,7 @@ namespace FishMMO.AbilityContent
 			});
 			AbilityOnHitEvent cleanse = SaveEvent<AbilityOnHitEvent>(DispelEventFolder, "Dispel Magic Cleanse", ev =>
 			{
-				/* Not the heals' rule (Jim, 11-16, later): a cleanse lifts harmful magic from you, allies and ANY neutral
+				/* Not the heals' rule a cleanse lifts harmful magic from you, allies and ANY neutral
 				 * character, so neutral NPCs, other players' pets and wildlife are freed too. Only enemies are left out; they
 				 * get the purge. */
 				ev.TargetSelector = Cleansable(new TargetedEntitySelector { MaximumRange = DispelRange });

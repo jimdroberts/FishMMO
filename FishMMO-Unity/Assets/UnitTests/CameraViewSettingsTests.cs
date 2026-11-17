@@ -134,7 +134,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheZoomLimit_ReachesDoubleTheAuthoredOne()
 		{
-			// Jim (2026-11-15): "Max Zoom distance should be configurable up to double what it is now". The authored
+			// "Max Zoom distance should be configurable up to double what it is now". The authored
 			// camera stops at 10 m (ClientPreboot) and over the shoulder at 4 m.
 			LogAssert.AreEqual(2f * ClientCameraSettings.DefaultMaxZoom, ClientCameraSettings.MaximumMaxZoom,
 				"third person reaches double the authored limit");
@@ -220,8 +220,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void OverTheShoulder_TheLaunchLineStartsAtTheCharacter_AsInThirdPerson()
 		{
-			/* Jim (2026-11-15): the over-the-shoulder projectile spawned out where the camera's view line passes, not
-			 * from the character as in third and first person. The camera's ray runs through the shoulder pivot; the
+			/* The camera's ray runs through the shoulder pivot; the
 			 * owner takes the shoulder's displacement back out before stating the line (KCCPlayer.ResolveOwnerAim). */
 			Vector3 eye = new Vector3(10f, 2f, 10f);
 			Vector3 forward = Quaternion.Euler(12f, 30f, 0f) * Vector3.forward;

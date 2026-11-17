@@ -35,12 +35,13 @@ namespace FishMMO.UnitTests
 			{
 				order.Add(relation.GetType());
 			}
-			int arena = order.IndexOf(typeof(ArenaHarmRelation));
+			// The arena's relation is the Matchmaking module's; by name, and only when that module is installed.
+			int arena = order.FindIndex(t => t.Name == "ArenaHarmRelation");
 			int wildlife = order.IndexOf(typeof(WildlifeHarmRelation));
 			int companions = order.IndexOf(typeof(CompanionHarmRelation));
 			int factions = order.IndexOf(typeof(FactionHarmRelation));
-			LogAssert.IsTrue(arena >= 0 && wildlife >= 0 && companions >= 0 && factions >= 0, "the four shipped relations are discovered");
-			LogAssert.IsTrue(arena < wildlife && wildlife < companions && companions < factions,
+			LogAssert.IsTrue(wildlife >= 0 && companions >= 0 && factions >= 0, "the shipped relations are discovered");
+			LogAssert.IsTrue((arena < 0 || arena < wildlife) && wildlife < companions && companions < factions,
 				"arena, then wildlife, then companions, then factions: aggression is never friendly fire");
 
 			string rule = Read("Shared/Implementation/Entity/Relations/HarmRule.cs");
@@ -48,8 +49,12 @@ namespace FishMMO.UnitTests
 				"a pet answers as its owner, attacking and attacked");
 			LogAssert.IsTrue(rule.Contains("party.ID != 0 && party.ID == otherParty.ID") && rule.Contains("guild.ID != 0 && guild.ID == otherGuild.ID"),
 				"companions are the same non-zero party or guild");
-			LogAssert.IsTrue(Read("Shared/Implementation/Entity/Arena/ArenaHarmRelation.cs").Contains("ArenaTeamRegistry.TryResolveAlliance(attackerSide, defenderSide, out FactionAllianceLevel arenaLevel)"),
-				"inside an arena the match's sides decide");
+			const string ArenaRelationPath = "Assets/Modules/Matchmaking/Runtime/ArenaHarmRelation.cs";
+			if (ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), ArenaRelationPath)))
+			{
+				LogAssert.IsTrue(ProjectFiles.ReadAllText(ArenaRelationPath).Contains("ArenaTeamRegistry.TryResolveAlliance(attackerSide, defenderSide, out FactionAllianceLevel arenaLevel)"),
+					"inside an arena the match's sides decide");
+			}
 			string faction = ReadModule("Runtime/FactionHarmRelation.cs");
 			LogAssert.IsTrue(faction.Contains("defenderFaction.AggressionEnabled") && faction.Contains("attackerFaction.AggressionEnabled"),
 				"either side's aggression opens neutrals (the defender's is how a struck neutral fights back)");

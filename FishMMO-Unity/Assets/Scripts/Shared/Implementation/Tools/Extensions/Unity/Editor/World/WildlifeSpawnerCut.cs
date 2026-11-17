@@ -152,6 +152,7 @@ namespace FishMMO.Shared
 				spawner.PrewarmHeadroom = 0;
 				spawner.RandomRespawnTime = true;
 				spawner.Pack = WildlifePlanner.PackSettings(hunts);
+				spawner.KeepOutCircles = new List<Vector3>(area.KeepOuts);
 				EditorUtility.SetDirty(spawner);
 				if (area.Den)
 				{
@@ -175,6 +176,56 @@ namespace FishMMO.Shared
 			var notes = new List<string>();
 			PlaceInScene(SceneManager.GetActiveScene(), notes);
 			Debug.Log("[Wildlife spawners]\n  " + string.Join("\n  ", notes));
+		}
+
+		/// <summary>
+		/// <c>-executeMethod FishMMO.Shared.WildlifeSpawnerCut.PlaceFromCommandLine</c>: for each world scene in
+		/// <c>FISHMMO_WILDLIFE_SCENES</c> (project paths, ';'-separated) re-places its wildlife spawners, saves the scene and
+		/// re-bakes its spawn table. Exits 0 when every scene was done, in batch mode.
+		/// </summary>
+		public static void PlaceFromCommandLine()
+		{
+			int code = 1;
+			try
+			{
+				string list = System.Environment.GetEnvironmentVariable("FISHMMO_WILDLIFE_SCENES") ?? string.Empty;
+				int done = 0, asked = 0;
+				foreach (string raw in list.Split(';'))
+				{
+					string path = raw.Trim();
+					if (path.Length == 0)
+					{
+						continue;
+					}
+					asked++;
+					Scene scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+					var notes = new List<string>();
+					int placed = PlaceInScene(scene, notes);
+					if (placed <= 0 || !EditorSceneManager.SaveScene(scene))
+					{
+						Debug.LogError($"[Wildlife spawners] '{path}': nothing placed or the scene did not save.\n  " + string.Join("\n  ", notes));
+						continue;
+					}
+					var problems = new List<string>();
+					SceneSpawnTable table = SpawnTableBaker.BakeScene(scene, problems);
+					AssetDatabase.SaveAssets();
+					foreach (string problem in problems)
+					{
+						Debug.LogWarning("[Wildlife spawners] " + problem);
+					}
+					Debug.Log($"[Wildlife spawners] '{path}': {placed} placed, table {(table != null ? table.Spawners.Count + " spawner(s)" : "none")}.\n  " + string.Join("\n  ", notes));
+					done++;
+				}
+				code = asked > 0 && done == asked ? 0 : 1;
+			}
+			catch (System.Exception ex)
+			{
+				Debug.LogException(ex);
+			}
+			if (Application.isBatchMode)
+			{
+				EditorApplication.Exit(code);
+			}
 		}
 
 		/// <summary>Re-places one open world scene's wildlife spawners from its biome map; the number placed (0 when it is not a world scene).</summary>

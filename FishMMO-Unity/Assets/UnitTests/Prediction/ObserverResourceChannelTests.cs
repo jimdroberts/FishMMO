@@ -496,24 +496,6 @@ namespace FishMMO.UnitTests
 				"and never for the owner, whose own reconcile is authoritative every tick");
 		}
 
-		// ── DEFECT 5: your own party row ───────────────────────────────────
-
-		/// <summary>The exact local value outranks the quantised copy of itself.</summary>
-		/// <remarks>
-		/// The scene server includes the recipient's own row so the miss counter that greys a member
-		/// out stays intact — absence is the signal — but the three fractions on that row are a
-		/// byte-quantised copy of a number the panel has just derived exactly from the local
-		/// reconciled controller.
-		/// </remarks>
-		[Test]
-		public void YourOwnPartyRowKeepsItsExactValues()
-		{
-			Assert.IsTrue(UITKParty.ShouldApplyBroadcastVitals(hasLocalVitals: false),
-				"Another member, or your own row before the controller resolves: the payload is the only source.");
-			Assert.IsFalse(UITKParty.ShouldApplyBroadcastVitals(hasLocalVitals: true),
-				"Once the exact fraction has been read locally, the quantised copy may not overwrite it.");
-		}
-
 		// ── DEFECTS 6 and 7: pooling and per-observer serialisation ────────
 
 		/// <summary>

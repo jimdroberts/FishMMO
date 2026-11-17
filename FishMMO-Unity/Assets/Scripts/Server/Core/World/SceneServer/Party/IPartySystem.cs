@@ -130,5 +130,34 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// a caller that was clearing the way for something else must not proceed.
 		/// </returns>
 		Task<bool> RemoveCharacterFromPartyAsync(long characterID, long partyID, string reason);
+
+		/// <summary>
+		/// Makes a membership the database already holds true on this server: the character's party and rank, the
+		/// local member tracker, and the owner's roster row. Main thread.
+		/// </summary>
+		/// <remarks>
+		/// For a caller outside the party system that put a character into a party (the group finder, before it moves
+		/// a matched player), so the client's own controller is right before the panel it opens on arrival consults it.
+		/// Does nothing when the character is already in <paramref name="partyID"/>: a second add would double the
+		/// roster row on the client.
+		/// </remarks>
+		/// <param name="conn">The character's connection, told of the membership.</param>
+		/// <param name="character">The character.</param>
+		/// <param name="partyID">The party it now belongs to.</param>
+		/// <param name="rank">Its rank there.</param>
+		void ShowMembership(TConnection conn, IPlayerCharacter character, long partyID, PartyRank rank);
+
+		/// <summary>
+		/// Clears a membership <see cref="RemoveCharacterFromPartyAsync"/> has removed, on this server: the character's
+		/// party and rank, and the owner is told it left. Main thread.
+		/// </summary>
+		/// <remarks>
+		/// Only while the character is still in <paramref name="partyID"/>: a character that has since joined another
+		/// party keeps it.
+		/// </remarks>
+		/// <param name="conn">The character's connection; its first object is the character.</param>
+		/// <param name="partyID">The party the character was removed from.</param>
+		/// <returns>True when the character's membership was cleared here.</returns>
+		bool ClearMembership(TConnection conn, long partyID);
 	}
 }

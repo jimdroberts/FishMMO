@@ -1,0 +1,26 @@
+{
+    "name": "FishMMO.Social.RenderScratch",
+    "rootNamespace": "",
+    "references": [
+        "FishMMO.Render.Scratch",
+        "FishMMO.Social",
+        "FishMMO.Social.Client",
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "FishMMO.Shared.Tools.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

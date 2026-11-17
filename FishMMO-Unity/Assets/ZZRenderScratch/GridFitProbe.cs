@@ -28,13 +28,12 @@ namespace FishMMO.RenderScratch
 			(1200, 675), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3440, 1440), (3840, 2160),
 		};
 
-		private static readonly (string uxml, Action<GameObject, UIDocument> populate)[] windows =
+		/// <summary>The windows checked. Modules add theirs (Social adds the party frame).</summary>
+		public static readonly List<(string uxml, Action<GameObject, UIDocument> populate)> Windows = new List<(string uxml, Action<GameObject, UIDocument> populate)>
 		{
 			(ROOT + "Inventory/UIInventory.uxml", Panels.Inventory),
 			(ROOT + "Bank/UIBank.uxml", Panels.Bank),
 			(ROOT + "CharacterSheet/UICharacterSheet.uxml", Panels.Equipment),
-			(ROOT + "Party/UIParty.uxml", Panels.Party),
-			(ROOT + "Trade/UITrade.uxml", (h, d) => TradePanelPopulator.Trade(h, d)),
 			(ROOT + "Achievement/UIAchievements.uxml", Panels.Achievements),
 		};
 
@@ -110,7 +109,7 @@ namespace FishMMO.RenderScratch
 			settings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
 
 			int order = 100;
-			foreach ((string uxml, Action<GameObject, UIDocument> populate) in windows)
+			foreach ((string uxml, Action<GameObject, UIDocument> populate) in Windows)
 			{
 				GameObject host = new GameObject("Grid_" + Path.GetFileNameWithoutExtension(uxml)) { hideFlags = HideFlags.HideAndDontSave };
 				hosts.Add(host);

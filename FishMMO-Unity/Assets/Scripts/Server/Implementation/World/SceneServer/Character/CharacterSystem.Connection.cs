@@ -651,7 +651,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							NetworkObject ownerObject = petOwner.NetworkObject;
 							if (ownerObject != null)
 							{
-								OnPetKilled?.Invoke(ownerObject.Owner, petOwner);
+								OnPetKilled?.Invoke(ownerObject.Owner, petOwner, pet);
 							}
 						}
 

@@ -41,6 +41,17 @@ namespace FishMMO.Shared
 		public List<AbilityOnSummonEvent> OnSummonEvents = new List<AbilityOnSummonEvent>();
 
 		/// <summary>
+		/// How many pets this spell may keep out at once.
+		/// </summary>
+		/// <remarks>
+		/// The character's pet slots cap it: one, unless an archetype grants more. A summon past either limit replaces the
+		/// oldest pet in its way (<see cref="PetSlotRules.IndexToReplace"/>).
+		/// </remarks>
+		[Tooltip("How many pets this spell can keep out at once. The character's pet slots (one unless an archetype grants more) cap it; a summon past the limit replaces the oldest pet.")]
+		[Min(1)]
+		public int MaxPets = 1;
+
+		/// <summary>
 		/// The bounding box for spawning the pet.
 		/// </summary>
 		public Vector3 SpawnBoundingBox;

@@ -2355,14 +2355,15 @@ namespace FishMMO.Shared
 			// Pet state is broadcast-synced, not reconciled. During replay the pet
 			// reference may be stale. Check here as a best-effort pre-filter. NOTE the
 			// server does NOT reject a re-summon — CanActivate has no pet check and
-			// PetSystem replaces the existing pet (despawn-then-assign) — so this filter
-			// is the only thing refusing to queue one; remove it and re-summoning works.
+			// PetSystem replaces the oldest pet in the way (PetSlotRules) — so this filter
+			// is the only thing refusing to queue one while every pet slot is taken; remove
+			// it and re-summoning works. A free slot lets the summon through.
 			if (validatedAbility != null)
 			{
 				PetAbilityTemplate petAbilityTemplate = validatedAbility.Template as PetAbilityTemplate;
 				if (petAbilityTemplate != null &&
 					Character.TryGet(out IPetController petController) &&
-					petController.Pet != null)
+					petController.Pets.Count >= PetSlotRules.ClampSlots(petController.PetSlots))
 				{
 					return false;
 				}

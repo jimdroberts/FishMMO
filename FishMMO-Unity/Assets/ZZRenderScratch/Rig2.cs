@@ -137,34 +137,7 @@ namespace FishMMO.RenderScratch
 		}
 	}
 
-	/// <summary>Friend controller fake — the friend list reads <c>Friends</c>.</summary>
-	public sealed class FakeFriends : IFriendController
-	{
-		public FakeFriends(ICharacter character) { Character = character; }
-
-		public ICharacter Character { get; private set; }
-		public bool Initialized => true;
-		public void InitializeOnce(ICharacter character) { Character = character; }
-		public void OnStartCharacter() { }
-		public void OnStopCharacter() { }
-
-		public event Action<long, bool> OnAddFriend;
-		public event Action<long> OnRemoveFriend;
-
-		public HashSet<long> Friends { get; } = new HashSet<long>();
-
-		public void AddFriend(long friendID)
-		{
-			if (Friends.Add(friendID)) { OnAddFriend?.Invoke(friendID, true); }
-		}
-
-		public void RemoveFriend(long friendID)
-		{
-			if (Friends.Remove(friendID)) { OnRemoveFriend?.Invoke(friendID); }
-		}
-	}
-
-	/// <summary>Pet controller fake — the pet panel reads <c>Pet</c>, stance and movement order.</summary>
+	/// <summary>Pet controller fake — the pet panel reads <c>Pets</c>, stance and movement order.</summary>
 	public sealed class FakePet : IPetController
 	{
 		public FakePet(ICharacter character) { Character = character; }
@@ -175,12 +148,20 @@ namespace FishMMO.RenderScratch
 		public void OnStartCharacter() { }
 		public void OnStopCharacter() { }
 
-		public Pet Pet { get; set; }
+		private readonly List<Pet> pets = new List<Pet>();
+		public IReadOnlyList<Pet> Pets => pets;
+		public int PetSlots => PetSlotRules.DefaultSlots;
+		public bool AddPet(Pet pet) { if (pet == null || pets.Contains(pet)) return false; pets.Add(pet); return true; }
+		public bool RemovePet(Pet pet) => pets.Remove(pet);
+		public void ClearPets() => pets.Clear();
 		public PetStance Stance { get; set; } = PetStance.Defensive;
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
 		public int AttackPriority { get; set; } = PetAttackPriority.Default;
 
 		public event Action<IPetController, ICharacter> OnOwnerAttacked;
+#pragma warning disable 0067
+		public event Action<IPetController> OnPetSlotsReduced;
+#pragma warning restore 0067
 
 		public List<Trigger> OnPetSummonTriggers { get; } = new List<Trigger>();
 		public List<Trigger> OnPetDismissTriggers { get; } = new List<Trigger>();

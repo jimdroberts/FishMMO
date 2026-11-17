@@ -130,7 +130,7 @@ namespace FishMMO.DiscordBot.Modules
 					.Include(c => c.Abilities)
 					.Include(c => c.KnownAbilities)
 					.Include(c => c.Archetypes)
-					.Include(c => c.Pet)
+					.Include(c => c.Pets)
 					.FirstOrDefaultAsync(c => c.Name == characterName);
 
 				if (character == null)
@@ -180,11 +180,12 @@ namespace FishMMO.DiscordBot.Modules
 					mainEmbed.AddField("Party", $"ID: {character.Party.PartyID} (Rank: {character.Party.Rank})", true);
 				}
 
-				// Pet info
-				if (character.Pet != null && !character.Pet.Deleted)
+				// Pet info: one line per pet slot.
+				var pets = character.Pets?.Where(p => !p.Deleted).OrderBy(p => p.Slot).ToList();
+				if (pets != null && pets.Count > 0)
 				{
-					string petStatus = character.Pet.Spawned ? "Spawned" : "Stored";
-					mainEmbed.AddField("Pet", $"Template={character.Pet.TemplateID} ({petStatus})", true);
+					string petLines = string.Join("\n", pets.Select(p => $"Slot {p.Slot}: Template={p.TemplateID} ({(p.Spawned ? "Spawned" : "Stored")})"));
+					mainEmbed.AddField(pets.Count == 1 ? "Pet" : "Pets", petLines, true);
 				}
 
 				mainEmbed.WithTimestamp(DateTimeOffset.UtcNow);

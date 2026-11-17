@@ -9,8 +9,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Wildlife stands outside the factions. The wildlife prefabs were cloned from "an orc", race included, so a deer took the
-	/// Orc Horde's standing: an Enemy to anyone hostile to orcs, out of reach of Dispel's cleanse (Jim, 11-16: Dispel must
-	/// free wildlife) and a target for guards.
+	/// Orc Horde's standing: an Enemy to anyone hostile to orcs, out of reach of Dispel's cleanse and a target for guards.
 	/// </summary>
 	[TestFixture]
 	public class FactionWildlifeStandingTests

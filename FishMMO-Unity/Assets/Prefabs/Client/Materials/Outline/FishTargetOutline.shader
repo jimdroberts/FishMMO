@@ -10,14 +10,12 @@ Shader "Hidden/FishMMO/TargetOutline"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-        TEXTURE2D(_FishOutlineDepth);
+        // The mask's depth texture, colour and parameters, and its fragment (shared with shaders that draw their own mask).
+        #include "FishTargetOutlineMask.hlsl"
+
         TEXTURE2D(_FishOutlineMask);
         TEXTURE2D(_FishOutlineNearest);
 
-        // Mask pass: rgb the outline colour (linear), a its width / _FishOutlineSize.y.
-        float4 _FishOutlineMaskColor;
-        // x: 1 to draw the whole silhouette over whatever is in front of it.
-        float4 _FishOutlineMaskParams;
         // The pixels the screen passes work in: x min, y min, x max, y max (max exclusive).
         float4 _FishOutlineRect;
         // x: search radius in pixels, y: the width a mask alpha of 1 holds, z: target width, w: target height.
@@ -65,27 +63,7 @@ Shader "Hidden/FishMMO/TargetOutline"
 
             half4 MaskFrag(MaskVaryings input) : SV_Target
             {
-                if (_FishOutlineMaskParams.x < 0.5)
-                {
-                    float scene = LOAD_TEXTURE2D(_FishOutlineDepth, uint2(input.positionCS.xy)).r;
-                    float self = input.positionCS.z;
-                    if (unity_OrthoParams.w > 0.5)
-                    {
-                        #if UNITY_REVERSED_Z
-                        if (scene - self > 1e-4) discard;
-                        #else
-                        if (self - scene > 1e-4) discard;
-                        #endif
-                    }
-                    else
-                    {
-                        // Its own surface is in the depth texture too: a little slack for the copy and for MSAA edges.
-                        float sceneEye = LinearEyeDepth(scene, _ZBufferParams);
-                        float selfEye = LinearEyeDepth(self, _ZBufferParams);
-                        if (selfEye > sceneEye * 1.005 + 0.05) discard;
-                    }
-                }
-                return half4(_FishOutlineMaskColor);
+                return FishOutlineMaskFragment(input.positionCS);
             }
             ENDHLSL
         }

@@ -136,7 +136,7 @@ namespace FishMMO.UnitTests.AI
 			LogAssert.IsTrue(panel.Contains("priority.clicked += OnTogglePriorityPanel;") &&
 				panel.Contains("priorityUpButtons[i].clicked += () => OnPriorityMoveUp(slot);") &&
 				panel.Contains("attackPriority = PetAttackPriority.MoveUp(attackPriority, slot);") &&
-				panel.Contains("ReplayStoredPriority(pet);") &&
+				panel.Contains("ReplayStoredPriority(first.Pet);") &&
 				panel.Contains("Configuration.GlobalSettings.Set(PRIORITY_SETTING_KEY, priority.ToString());"),
 				"the panel must open the rows, reorder on the arrow, remember the order in the settings and replay it on summon");
 

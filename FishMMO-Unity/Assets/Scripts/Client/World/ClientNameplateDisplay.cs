@@ -341,6 +341,19 @@ namespace FishMMO.Client
 			return (target.position - origin.position).sqrMagnitude;
 		}
 
+		/// <summary>True when <paramref name="pet"/> is one of <paramref name="pets"/>' pets.</summary>
+		private static bool ContainsPet(IPetController pets, Pet pet)
+		{
+			for (int i = 0; i < pets.Pets.Count; ++i)
+			{
+				if (ReferenceEquals(pets.Pets[i], pet))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>
 		/// The standing colour and mark a viewer gives a character: one rule for the overhead plate and both target cards.
 		/// </summary>
@@ -362,7 +375,7 @@ namespace FishMMO.Client
 			{
 				return NameplateMark.None;
 			}
-			if (viewer.TryGet(out IPetController pets) && pets.Pet != null && ReferenceEquals(pets.Pet, character))
+			if (character is Pet pet && viewer.TryGet(out IPetController pets) && ContainsPet(pets, pet))
 			{
 				bool aggressive = ownFaction.AggressionEnabled;
 				tint = aggressive ? ColorVision.Hostile : ColorVision.Friendly;

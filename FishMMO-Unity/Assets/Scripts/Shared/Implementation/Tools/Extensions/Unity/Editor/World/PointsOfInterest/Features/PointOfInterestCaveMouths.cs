@@ -132,8 +132,7 @@ namespace FishMMO.Shared.WorldDesign
 					props += Strew(context, system, mouth, m, growth, random, lush);
 				}
 				// Ivy and creepers over the lintel and down the jambs, now and then a curtain across the whole opening, and on
-				// the rock round it (Jim, 2026-10-12: "occasionally curtain cave entrances, and around the cave entrances");
-				// visual only, no colliders. A sea cave's rock is the sea's edge: none there.
+				// the rock round it; visual only, no colliders. A sea cave's rock is the sea's edge: none there.
 				if (ground != null)
 				{
 					vines += VinePlacement.DrapeCaveMouth(context, system, mouth, vineHabitat, random, ground);

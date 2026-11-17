@@ -14,12 +14,12 @@ namespace FishMMO.Shared
 	/// Represents a player-controlled character in the game world, with inventory, abilities, and networked state.
 	/// Implements IPlayerCharacter and extends BaseCharacter with player-specific logic, hotkeys, and event-driven behaviour.
 	///
-	/// <para><b>Coupling note:</b> This class uses 21 <see cref="RequireComponent"/> attributes, creating strong
-	/// coupling between <see cref="PlayerCharacter"/> and its component dependencies. All required components
-	/// are tightly bound to this class and cannot be removed/replaced without modifying this declaration block.
-	/// If a more modular composition approach is desired in the future (e.g., optional components registered
-	/// at runtime), this set of RequireComponent attributes would need to be refactored into a dynamic
-	/// registration system.</para>
+	/// <para><b>Composition:</b> the <see cref="RequireComponent"/> attributes below are the predicted core
+	/// (attributes, targeting, cooldowns, items, abilities, buffs, damage, prediction) and its visuals, which stay
+	/// in the core until prediction goes through Core components (Phase 6 of the core and modules plan). Module
+	/// features are not listed here: friends, party, guild, factions, waypoints, quests and archetypes are
+	/// character parts their modules add at wake (<c>[assembly: CharacterPart]</c>), so a removed module leaves
+	/// no component behind.</para>
 	/// </summary>
 	[RequireComponent(typeof(CharacterAttributeController))]
 	[RequireComponent(typeof(TargetController))]
@@ -30,12 +30,7 @@ namespace FishMMO.Shared
 	[RequireComponent(typeof(AbilityController))]
 	[RequireComponent(typeof(AchievementController))]
 	[RequireComponent(typeof(BuffController))]
-	[RequireComponent(typeof(QuestController))]
 	[RequireComponent(typeof(CharacterDamageController))]
-	[RequireComponent(typeof(GuildController))]
-	[RequireComponent(typeof(PartyController))]
-	[RequireComponent(typeof(FriendController))]
-	[RequireComponent(typeof(ArchetypeController))]
 	[RequireComponent(typeof(CharacterPredictionController))]
 	[RequireComponent(typeof(BodyVisibilityManager))]
 	[RequireComponent(typeof(CharacterAppearanceManager))]

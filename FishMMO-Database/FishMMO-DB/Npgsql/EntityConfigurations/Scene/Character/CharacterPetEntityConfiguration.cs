@@ -35,14 +35,18 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(false);
 
-			// Unique constraint: one pet per character
-			builder.HasIndex(e => e.CharacterID)
+			builder.Property(e => e.Slot)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			// Unique constraint: one pet per slot. A character has one slot unless an archetype grants more.
+			builder.HasIndex(e => new { e.CharacterID, e.Slot })
 				.IsUnique();
 
 			// Foreign key relationship
 			builder.HasOne(e => e.Character)
-				.WithOne(c => c.Pet)
-				.HasForeignKey<CharacterPetEntity>(e => e.CharacterID)
+				.WithMany(c => c.Pets)
+				.HasForeignKey(e => e.CharacterID)
 				.OnDelete(DeleteBehavior.NoAction);
 		}
 	}

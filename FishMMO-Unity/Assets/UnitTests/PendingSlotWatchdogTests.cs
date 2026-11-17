@@ -44,11 +44,11 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class PendingSlotWatchdogTests
 	{
-		private const string LootPath = "Assets/Scripts/Client/GUI/World/Loot/UITKLoot.cs";
+		private const string LootPath = "Assets/Modules/Commerce/Client/UITKLoot.cs";
 		private const string ContainerPath = "Assets/Scripts/Client/GUI/World/Container/UITKContainer.cs";
 		private const string SharedSetPath = "Assets/Scripts/Client/GUI/World/ItemContainers/ItemSlotPendingSet.cs";
 		private const string GuardPath = "Assets/Scripts/Client/GUI/Core/PendingReplyGuard.cs";
-		private const string MerchantPath = "Assets/Scripts/Client/GUI/World/Merchant/UITKMerchant.cs";
+		private const string MerchantPath = "Assets/Modules/Commerce/Client/UITKMerchant.cs";
 		private const string GuiRoot = "Assets/Scripts/Client/GUI";
 
 		/// <summary>The scaled clock, and only it — <c>Time.timeScale</c> must not match.</summary>
@@ -120,7 +120,23 @@ namespace FishMMO.UnitTests
 
 			List<string> files = new List<string>(Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories));
 			LogAssert.IsTrue(files.Count > 0, "the GUI tree must contain sources to scan");
+
+			// Modules' windows too (Assets/Modules/<Name>/Client): the loot and merchant windows are the Commerce module's.
+			string modules = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Modules");
+			if (Directory.Exists(modules))
+			{
+				foreach (string client in Directory.GetDirectories(modules, "Client", SearchOption.AllDirectories))
+				{
+					files.AddRange(Directory.GetFiles(client, "*.cs", SearchOption.AllDirectories));
+				}
+			}
 			return files;
+		}
+
+		/// <summary>True when <paramref name="path"/> exists: a module's window is pinned only while the module is installed.</summary>
+		private static bool Installed(string path)
+		{
+			return ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), path));
 		}
 
 		[Test]
@@ -129,16 +145,19 @@ namespace FishMMO.UnitTests
 			/* The duplication itself. Both panels must hold the shared set rather than a private
 			 * slot-to-timestamp dictionary, because a private one is where the clock can drift out
 			 * of agreement again without anybody noticing. */
-			string loot = CodeOnly(ReadSource(LootPath));
 			string container = CodeOnly(ReadSource(ContainerPath));
+			// The loot window is the Commerce module's.
+			if (Installed(LootPath))
+			{
+				string loot = CodeOnly(ReadSource(LootPath));
+				LogAssert.IsTrue(loot.Contains("new ItemSlotPendingSet()"),
+					"the loot panel must track pending slots with the shared set");
+				LogAssert.IsFalse(SlotTimestampMap.IsMatch(loot),
+					"the loot panel must not keep its own slot-to-send-time map");
+			}
 
-			LogAssert.IsTrue(loot.Contains("new ItemSlotPendingSet()"),
-				"the loot panel must track pending slots with the shared set");
 			LogAssert.IsTrue(container.Contains("new ItemSlotPendingSet()"),
 				"the container panel must track pending slots with the shared set");
-
-			LogAssert.IsFalse(SlotTimestampMap.IsMatch(loot),
-				"the loot panel must not keep its own slot-to-send-time map");
 			LogAssert.IsFalse(SlotTimestampMap.IsMatch(container),
 				"the container panel must not keep its own slot-to-send-time map");
 		}
@@ -150,18 +169,24 @@ namespace FishMMO.UnitTests
 			 * helper struct does not slip past. A panel is allowed to hold no pending set at all —
 			 * the inventory-side panels share the static ones in ItemOperationTracker — but it is
 			 * not allowed to hold a map from slot to a timestamp. */
-			AssertNoHandRolledPendingMap(typeof(UITKLoot));
 			AssertNoHandRolledPendingMap(typeof(UITKContainer));
-
-			LogAssert.IsTrue(HasFieldOfType(typeof(UITKLoot), typeof(ItemSlotPendingSet)),
-				"UITKLoot must hold an ItemSlotPendingSet");
 			LogAssert.IsTrue(HasFieldOfType(typeof(UITKContainer), typeof(ItemSlotPendingSet)),
 				"UITKContainer must hold an ItemSlotPendingSet");
+
+			// The loot window is the Commerce module's.
+			Type lootPanel = Type.GetType("FishMMO.Client.UITKLoot, FishMMO.Commerce.Client");
+			if (lootPanel == null)
+			{
+				return;
+			}
+			AssertNoHandRolledPendingMap(lootPanel);
+			LogAssert.IsTrue(HasFieldOfType(lootPanel, typeof(ItemSlotPendingSet)),
+				"UITKLoot must hold an ItemSlotPendingSet");
 
 			/* The bulk watchdog — take-all and currency — is one wait rather than a set of them, so
 			 * it is a bare guard. What matters is that it is the SAME guard type, and therefore the
 			 * same clock, and not a float sentinel compared against a timestamp again. */
-			LogAssert.IsTrue(HasFieldOfType(typeof(UITKLoot), typeof(PendingReplyGuard)),
+			LogAssert.IsTrue(HasFieldOfType(lootPanel, typeof(PendingReplyGuard)),
 				"UITKLoot's take-all and currency wait must use PendingReplyGuard, not a float sentinel");
 		}
 
@@ -238,7 +263,10 @@ namespace FishMMO.UnitTests
 			 * somebody else is emptying and have always used 5s. Every claim must therefore pass the
 			 * constant explicitly — an argument-less TryBegin here is a behaviour change disguised as
 			 * a cleanup. */
-			AssertTimeoutIsPassedExplicitly(LootPath);
+			if (Installed(LootPath))
+			{
+				AssertTimeoutIsPassedExplicitly(LootPath);
+			}
 			AssertTimeoutIsPassedExplicitly(ContainerPath);
 		}
 
@@ -286,6 +314,10 @@ namespace FishMMO.UnitTests
 			 * both are polled in the same OnTick. So the asymmetry was never a decision — it was the
 			 * default leaking in through a missing argument, which is exactly the kind of change a
 			 * one-word constant rename would hide. */
+			if (!Installed(MerchantPath))
+			{
+				Assert.Ignore("The Commerce module (the merchant window) is not installed.");
+			}
 			AssertTimeoutIsPassedExplicitly(MerchantPath, "TRANSACTION_TIMEOUT_SECONDS");
 
 			string code = CodeOnly(ReadSource(MerchantPath));

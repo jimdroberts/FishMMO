@@ -299,10 +299,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			ChatHelper.OnCommandRefused += ChatHelper_OnElevatedCommandRefused;
 			ChatHelper.OnElevatedCommand += ChatHelper_OnElevatedCommand;
 
-			/* Player support commands: /report, /bug, /helpme, /tickets. Registered at Player
-			 * level and removed again in OnDeinitialize. See ChatSystem.SupportCommands.cs. */
-			RegisterSupportCommands();
-
 			/* /help lists the commands the caller may run, decided here from their own access
 			 * level. Player level, so not audited. See ChatSystem.Help.cs. */
 			RegisterHelpCommand();
@@ -399,7 +395,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * They outlive a play-session restart in the editor while this object does not, and
 			 * InitializeOnce's latch meant the second session kept the first session's handlers.
 			 * Individual slash commands are removed by the systems that registered them. */
-			UnregisterSupportCommands();
 			UnregisterHelpCommand();
 			ChatHelper.ResetChannelCommands();
 

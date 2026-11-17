@@ -40,7 +40,7 @@ namespace FishMMO.RenderScratch
 				Scale > 0f ? "-scale" + Scale.ToString("0.00", CultureInfo.InvariantCulture) : "");
 		}
 
-		private sealed class HudMount
+		public sealed class HudMount
 		{
 			public string Uxml;
 			public Type PanelType;
@@ -48,7 +48,8 @@ namespace FishMMO.RenderScratch
 			public Action<GameObject, UIDocument> Populate;
 		}
 
-		private static readonly HudMount[] hud =
+		/// <summary>The HUD mounted for each size. Modules add theirs (Social adds the party frame).</summary>
+		public static readonly List<HudMount> Hud = new List<HudMount>
 		{
 			new HudMount { Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", PanelType = typeof(UITKHealthBar) },
 			new HudMount { Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", PanelType = typeof(UITKManaBar) },
@@ -61,9 +62,7 @@ namespace FishMMO.RenderScratch
 			new HudMount { Uxml = ROOT + "Crosshair/UICrosshair.uxml", PanelType = typeof(UITKCrosshair), LayoutOnly = true },
 			new HudMount { Uxml = ROOT + "Target/UITarget.uxml", PanelType = typeof(UITKTarget) },
 			new HudMount { Uxml = ROOT + "Toast/UIToast.uxml", PanelType = typeof(UITKToast) },
-			new HudMount { Uxml = ROOT + "Party/UIParty.uxml", Populate = Panels.Party },
 			new HudMount { Uxml = ROOT + "Chat/UIChat.uxml", PanelType = typeof(UITKChat) },
-			new HudMount { Uxml = ROOT + "Arena/UIArenaHud.uxml", PanelType = typeof(UITKArenaHud) },
 		};
 
 		private static readonly List<Job> jobs = new List<Job>();
@@ -179,7 +178,7 @@ namespace FishMMO.RenderScratch
 
 			if (job.Scene == "hud")
 			{
-				foreach (HudMount mount in hud)
+				foreach (HudMount mount in Hud)
 				{
 					Mount(mount.Uxml, 0, (h, d) =>
 					{

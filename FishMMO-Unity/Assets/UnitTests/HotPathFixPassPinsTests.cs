@@ -19,9 +19,9 @@ namespace FishMMO.UnitTests
 	public class HotPathFixPassPinsTests
 	{
 		private const string AuthenticatorPath = "Assets/Scripts/Server/Implementation/Authentication/BaseServerAuthenticator.cs";
-		private const string ArenaMatchPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.ArenaMatch.cs";
+		private const string ArenaMatchPath = "Assets/Modules/Matchmaking/Server/MatchmakingSystem.ArenaMatch.cs";
 		private const string ServerPath = "Assets/Scripts/Server/Implementation/Server.cs";
-		private const string HousingTaxPath = "Assets/Scripts/Server/Implementation/World/SceneServer/Housing/HousingSystem.Tax.cs";
+		private const string HousingTaxPath = "Assets/Modules/Housing/Server/HousingSystem.Tax.cs";
 
 		private static string ReadSource(string relativePath)
 		{
@@ -108,6 +108,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void GoingLive_VacatesDroppedSeats()
 		{
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), ArenaMatchPath)))
+			{
+				Assert.Ignore("The Matchmaking module is not installed.");
+			}
 			string body = MethodBody(ReadSource(ArenaMatchPath),
 				"private void GoLive(ArenaMatchState state)",
 				"PersistArenaStatus(state, ArenaMatchStatus.Live);");
@@ -174,6 +178,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void HousingTax_FirstSweepRunsSoonAfterStartup()
 		{
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), HousingTaxPath)))
+			{
+				Assert.Ignore("The Housing module is not installed.");
+			}
 			string source = ReadSource(HousingTaxPath);
 
 			string phases = MethodBody(source, "private void RandomiseSweepPhases()", "private bool IsTaxEnabled");

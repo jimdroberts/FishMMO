@@ -84,18 +84,18 @@ namespace FishMMO.UnitTests
 				{ EntryPointKey, 1 },
 
 				// Earlier consolidations, each with live callers. Candidates for a later pass.
-				{ "Implementation/World/SceneServer/Guild/GuildSystem.Ranks.cs", 1 },
-				{ "Implementation/World/SceneServer/Housing/HousingSystem.Network.cs", 1 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Corpse.cs", 2 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.DungeonFinder.cs", 2 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Arena.cs", 1 },
-				{ "Implementation/World/SceneServer/Trade/TradeSystem.Handlers.cs", 4 },
+				{ "Modules/Social/Server/GuildSystem.Ranks.cs", 1 },
+				{ "Modules/Housing/Server/HousingSystem.Network.cs", 1 },
+				{ "Modules/Commerce/Server/CommerceSystem.CorpseLoot.cs", 2 },
+				{ "Modules/Matchmaking/Server/MatchmakingSystem.DungeonFinder.cs", 2 },
+				{ "Modules/Matchmaking/Server/MatchmakingSystem.Arena.cs", 1 },
+				{ "Modules/Commerce/Server/Trade/TradeSystem.Handlers.cs", 4 },
 
 				// Handlers that answer each refusal with its own reason.
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.AbilityCraft.cs", 1 },
+				{ "Modules/AbilityCrafting/Server/AbilityCraftingSystem.Craft.cs", 1 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Container.cs", 1 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Mailbox.cs", 3 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Merchant.cs", 2 },
+				{ "Modules/Commerce/Server/CommerceSystem.Mail.cs", 3 },
+				{ "Modules/Commerce/Server/CommerceSystem.Merchant.cs", 2 },
 				{ "Modules/Travel/Server/WaypointTravelSystem.cs", 1 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.cs", 1 },
 
@@ -106,17 +106,17 @@ namespace FishMMO.UnitTests
 				{ "Implementation/World/SceneServer/Naming/NamingSystem.cs", 2 },
 
 				// Post-commit achievement increments on the async path, not handler preambles.
-				{ "Implementation/World/SceneServer/Friend/FriendSystem.cs", 1 },
+				{ "Modules/Social/Server/FriendSystem.cs", 1 },
 				/* Five, not three: guild create and guild join each re-resolve twice on their async
 				 * continuation — once to build the self roster entry for the GuildAddBroadcast and once
 				 * for the achievement increment. These run AFTER the database call returns, where the
 				 * handler-entry helper has nothing to offer: the request was admitted long ago and what
 				 * is wanted is the character as it stands now. Raised deliberately when the join path
 				 * gained the same pair the create path already had. */
-				{ "Implementation/World/SceneServer/Guild/GuildSystem.cs", 5 },
-				{ "Implementation/World/SceneServer/Party/PartySystem.cs", 3 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.ArenaMatch.cs", 1 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.GroupFinder.cs", 1 },
+				{ "Modules/Social/Server/GuildSystem.cs", 5 },
+				{ "Modules/Social/Server/PartySystem.cs", 3 },
+				{ "Modules/Matchmaking/Server/MatchmakingSystem.ArenaMatch.cs", 1 },
+				{ "Modules/Matchmaking/Server/MatchmakingSystem.GroupFinder.cs", 1 },
 			};
 		}
 
@@ -242,7 +242,7 @@ namespace FishMMO.UnitTests
 			{
 				/* Filing a player report changes no game state, and the reporter is often dead or
 				 * stunned by the person they are reporting (issue #252). */
-				{ "Implementation/World/SceneServer/Chat/ChatSystem.ReportPlayer.cs", "files a support ticket" },
+				{ "Modules/Staff/Server/StaffSystem.ReportPlayer.cs", "files a support ticket" },
 				/* Reading a leaderboard page is a database read that changes nothing and leads to
 				 * nothing, and a dead or stunned player may still look (issue #261). */
 				{ "Modules/Leaderboards/Server/LeaderboardSystem.cs", "reads a leaderboard page" },
@@ -306,10 +306,14 @@ namespace FishMMO.UnitTests
 
 				LogAssert.AreEqual(total, guarded,
 					$"every TryBeginPlayerRequest in {entry.Key} must be used as a refusal, not called and ignored");
-				callSites += guarded;
+				// The floor counts the core's own handlers: a module's handlers leave with the module.
+				if (!entry.Key.StartsWith("Modules/", StringComparison.Ordinal))
+				{
+					callSites += guarded;
+				}
 			}
 
-			LogAssert.IsTrue(callSites >= 38,
+			LogAssert.IsTrue(callSites >= 11,
 				"the migrated handlers must still go through the shared entry point");
 		}
 

@@ -618,5 +618,40 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		#endregion
+
+		/// <summary>
+		/// This scene server's lock and shutdown state, and every world's it has read, as report lines (what the
+		/// staff tools' <c>/admin server status</c> prints): what the process is doing now, which after a control
+		/// change is the question worth asking, because the row and the process agree only after the next pulse.
+		/// </summary>
+		public IReadOnlyList<string> DescribeServerControl()
+		{
+			// The countdowns run on the monotonic clock from the database's measure. See ShutdownCountdown.
+			double now = FishMMO.Server.Core.MonotonicClock.NowSeconds;
+			long sceneServerID = Server.DataContainerRegistry.TryGet<ISceneServerRuntimeData>(out var runtimeData)
+				? runtimeData.ID
+				: 0;
+
+			var lines = new List<string>
+			{
+				$"Scene server {sceneServerID}: {(IsLockedNow() ? "LOCKED" : "open")}" +
+				(sceneShutdownCountdown.IsScheduled
+					? $", shutting down in {sceneShutdownCountdown.SecondsRemaining(now):F0}s"
+					: ", no shutdown scheduled") + ".",
+			};
+			if (worldControlStates.Count == 0)
+			{
+				lines.Add("No world control state has been read yet.");
+				return lines;
+			}
+			foreach (var kvp in worldControlStates)
+			{
+				lines.Add($"World {kvp.Key}: {(kvp.Value.Locked ? "LOCKED" : "open")}" +
+					(worldShutdownCountdowns.TryGetValue(kvp.Key, out var countdown) && countdown.IsScheduled
+						? $", shutting down in {countdown.SecondsRemaining(now):F0}s"
+						: ", no shutdown scheduled") + ".");
+			}
+			return lines;
+		}
 	}
 }

@@ -273,14 +273,19 @@
     flex-shrink: 0;
 }
 
-/* The house vault's door: pushed to the footer's far end, and gone entirely while the vault is empty. */
-.bank-vault-button {
+/* Modules' links (the house vault's door): pushed to the footer's far end; each gone entirely while it has nothing to offer. */
+.bank-module-links {
     margin-left: auto;
+    flex-direction: row;
+    flex-shrink: 0;
+}
+
+.bank-module-link {
     height: 20px;
     min-width: 92px;
     flex-shrink: 0;
 }
 
-.bank-vault-button--hidden {
+.bank-module-link--hidden {
     display: none;
 }

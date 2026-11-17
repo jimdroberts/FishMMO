@@ -11,8 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The pet panel's attack priority rows on a live panel (Jim, 11-16: "Clicking one of the Pet Priority buttons doesn't
-	/// appear to change anything on the UI").
+	/// The pet panel's attack priority rows on a live panel.
 	/// </summary>
 	[TestFixture]
 	public class PetPriorityPanelTests
@@ -79,6 +78,44 @@ namespace FishMMO.UnitTests
 			{
 				submit.target = button;
 				button.SendEvent(submit);
+			}
+		}
+
+		/// <summary>The six commands sit two to a row, not in one column (which made the panel 426 units tall).</summary>
+		[UnityTest]
+		public IEnumerator TheCommandsAreTwoToARow()
+		{
+			RenderTexture texture = new RenderTexture(1280, 960, 24, RenderTextureFormat.ARGB32);
+			texture.Create();
+			try
+			{
+				settings.targetTexture = texture;
+				panel.Show();
+				for (int frame = 0; frame < 10; ++frame)
+				{
+					yield return null;
+				}
+
+				VisualElement commands = document.rootVisualElement.Q("pet-commands");
+				Button attack = document.rootVisualElement.Q<Button>("pet-attack");
+				Button follow = document.rootVisualElement.Q<Button>("pet-follow");
+				LogAssert.IsNotNull(commands, "the command block is in the tree");
+				string measured = $"commands content {commands.contentRect.width:0.#} wide; attack {attack.layout.width:0.#} wide " +
+					$"(margins {attack.resolvedStyle.marginLeft:0.#}/{attack.resolvedStyle.marginRight:0.#}) at y {attack.layout.y:0.#}; " +
+					$"follow at y {follow.layout.y:0.#}, x {follow.layout.x:0.#}";
+				LogAssert.IsTrue(Mathf.Abs(attack.layout.y - follow.layout.y) < 0.5f && follow.layout.x > attack.layout.x,
+					"Attack and Follow share a row: " + measured);
+
+				Button passive = document.rootVisualElement.Q<Button>("pet-stance-passive");
+				Button aggressive = document.rootVisualElement.Q<Button>("pet-stance-aggressive");
+				LogAssert.IsTrue(Mathf.Abs(passive.layout.y - aggressive.layout.y) < 0.5f,
+					$"the three stances share a row: passive at y {passive.layout.y:0.#}, aggressive at y {aggressive.layout.y:0.#}");
+			}
+			finally
+			{
+				settings.targetTexture = texture;
+				texture.Release();
+				Object.DestroyImmediate(texture);
 			}
 		}
 

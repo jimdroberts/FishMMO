@@ -1,0 +1,31 @@
+{
+    "name": "FishMMO.Matchmaking.Server",
+    "rootNamespace": "FishMMO.Server",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Server",
+        "FishMMO.Matchmaking",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "KinematicCharacterController",
+        "WebTransport"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

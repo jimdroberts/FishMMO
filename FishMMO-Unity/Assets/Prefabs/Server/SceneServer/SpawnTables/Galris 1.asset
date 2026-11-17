@@ -41,6 +41,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 2 [019b8bd8]'
     Position: {x: -324.09042, y: -21.765564, z: 276.9211}
     Rotation: {x: -0, y: 0.6553352, z: -0, w: -0.7553383}
@@ -67,6 +68,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 3 [019b8bd8]'
     Position: {x: -326.7596, y: -21.866379, z: 278.46243}
     Rotation: {x: -0, y: 0.7548345, z: -0, w: 0.6559154}
@@ -93,6 +95,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 4 [019b8bd8]'
     Position: {x: -324.0285, y: -21.857208, z: 284.18295}
     Rotation: {x: -0, y: 0.9213075, z: -0, w: 0.3888349}
@@ -119,6 +122,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 5 [019b8bd8]'
     Position: {x: -328.1199, y: -22.087341, z: 274.21576}
     Rotation: {x: -0, y: 0.22513783, z: -0, w: 0.97432697}
@@ -145,6 +149,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   references:
     version: 2
     RefIds:

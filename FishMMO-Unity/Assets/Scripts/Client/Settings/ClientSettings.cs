@@ -455,10 +455,19 @@ namespace FishMMO.Client
 		// ── Bounds ──────────────────────────────────────────────────
 
 		/// <summary>Smallest interface scale offered, as a multiplier of the authored size.</summary>
-		public const float MinimumUIScale = 0.75f;
+		/// <remarks>
+		/// 50%: the panel is 1200 reference units wide whatever the screen, so on a wide browser window the interface grows
+		/// with it, and 75% was still too large for some web resolutions (11-16).
+		/// </remarks>
+		public const float MinimumUIScale = 0.5f;
 
 		/// <summary>Interface scale a fresh install uses.</summary>
-		public const float DefaultUIScale = 0.75f;
+		/// <remarks>
+		/// 100%: the interface is laid out for a 1280x960 (4:3) screen and fitted to the window (PanelSettings: reference
+		/// 1280x960, Expand), so at 100% it is exactly that size on a 4:3 screen and a wider window only adds room at the
+		/// sides. The old 75% made up for matching the panel's WIDTH, which grew everything with a wide browser window.
+		/// </remarks>
+		public const float DefaultUIScale = 1.0f;
 		/// <summary>Largest interface scale offered, as a multiplier of the authored size.</summary>
 		public const float MaximumUIScale = 1.5f;
 

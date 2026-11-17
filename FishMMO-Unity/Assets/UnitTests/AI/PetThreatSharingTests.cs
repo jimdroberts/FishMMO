@@ -29,6 +29,41 @@ namespace FishMMO.UnitTests.AI
 		[TearDown]
 		public void TearDown() => AggressionDispatcher.Clear();
 
+		/// <summary>
+		/// An attack the defender's armour, parry or shield took all of is still an attack: threat hears it, so the pet defends
+		/// its owner (and itself) and the struck NPC answers. A wolf's 5-point Punch against 5 Armor raised nothing at all, and
+		/// the pet stood by. An evading NPC (leash return) still raises nothing.
+		/// </summary>
+		[Test]
+		public void AnAttackThatDidNoDamage_StillReachesThreat()
+		{
+			string damage = File.ReadAllText(ProjectFiles.Path("Assets/Scripts/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs"));
+			int method = damage.IndexOf("public int Damage(ICharacter attacker, int amount", System.StringComparison.Ordinal);
+			int evade = damage.IndexOf("if (Immortal || IsEvading())", method, System.StringComparison.Ordinal);
+			int harm = damage.IndexOf("if (!HarmRule.Allows(attacker, Character))", method, System.StringComparison.Ordinal);
+			int blocked = damage.IndexOf("if (amount < 1)", method, System.StringComparison.Ordinal);
+			int raised = damage.IndexOf("RaiseAttackAbsorbed(attacker);", blocked, System.StringComparison.Ordinal);
+			int consume = damage.IndexOf("ResourceInstance.Consume(amount);", blocked, System.StringComparison.Ordinal);
+			LogAssert.IsTrue(method >= 0 && harm > method && blocked > harm && raised > blocked && raised < consume,
+				"a hit the rule allowed and armour or negation took all of raises OnAttackAbsorbed");
+			LogAssert.IsTrue(damage.IndexOf("RaiseAttackAbsorbed", evade, System.StringComparison.Ordinal) > harm,
+				"an evading or immortal target raises nothing: the leash return must not re-aggro");
+
+			string dispatcher = File.ReadAllText(ProjectFiles.Path("Assets/Scripts/Server/Implementation/World/SceneServer/AI/AggressionDispatcher.cs"));
+			LogAssert.IsTrue(dispatcher.Contains("ICharacterDamageController.OnAttackAbsorbed += OnCharacterAttackAbsorbed;") &&
+				dispatcher.Contains("OnCharacterDamaged(attacker, defender, AbsorbedAttackThreat, null);"),
+				"the dispatcher delivers an absorbed attack like a hit, so pets and the defender react");
+			LogAssert.IsTrue(AggressionDispatcher.AbsorbedAttackThreat > 0, "an absorbed attack carries some threat");
+
+			string ability = File.ReadAllText(ProjectFiles.Path("Assets/Scripts/Shared/Implementation/Entity/Prediction/Ability/AbilityObject.cs"));
+			int deflect = ability.IndexOf("if (DamageMitigation.TryDeflect(hitCharacter", System.StringComparison.Ordinal);
+			int block = ability.IndexOf("if (DamageMitigation.TryBlockAtVolume(hitCharacter", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(deflect >= 0 && block > deflect &&
+				ability.IndexOf("NoteAbsorbedAttack(hitCharacter);", deflect, System.StringComparison.Ordinal) < block &&
+				ability.IndexOf("NoteAbsorbedAttack(hitCharacter);", block, System.StringComparison.Ordinal) > block,
+				"a parried or shield-blocked hit is an attack too");
+		}
+
 		[Test]
 		public void HittingThePetThreatensTheOwner()
 		{

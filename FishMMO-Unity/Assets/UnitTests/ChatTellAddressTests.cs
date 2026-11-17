@@ -201,11 +201,17 @@ namespace FishMMO.UnitTests
 		{
 			foreach (string path in new[]
 			{
-				"Assets/Scripts/Client/GUI/World/Party/UITKParty.cs",
-				"Assets/Scripts/Client/GUI/World/Guild/UITKGuild.cs",
-				"Assets/Scripts/Client/GUI/World/FriendList/UITKFriendList.cs",
+				"Assets/Modules/Social/Client/UITKParty.cs",
+				"Assets/Modules/Social/Client/UITKGuild.cs",
+				"Assets/Modules/Social/Client/UITKFriendList.cs",
 			})
 			{
+				// The friend list is the Social module's; without the module there is no button to check.
+				if (path.StartsWith("Assets/Modules/", StringComparison.Ordinal) &&
+					!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), path)))
+				{
+					continue;
+				}
 				string code = SourceScanPins.ReadCode(path);
 				Func<string, string> check = c =>
 				{

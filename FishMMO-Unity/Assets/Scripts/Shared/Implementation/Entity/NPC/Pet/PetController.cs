@@ -12,39 +12,108 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class PetController : CharacterBehaviour, IPetController
 	{
-		/// <summary>
-		/// Backing field for <see cref="Pet"/>.
-		/// </summary>
-		private Pet pet;
+		/// <summary>Backing list for <see cref="Pets"/>, oldest first.</summary>
+		private readonly List<Pet> pets = new List<Pet>();
+
+		/// <inheritdoc />
+		/// <remarks>
+		/// Changes go through <see cref="AddPet"/> and <see cref="RemovePet"/>, which drive the server's damage subscription:
+		/// see <see cref="UpdateDamageSubscription"/>.
+		/// </remarks>
+		public IReadOnlyList<Pet> Pets => pets;
 
 		/// <summary>
-		/// The pet instance managed by this controller.
+		/// The character attribute that holds the pet slots. Zero: the "Pet Slots" asset (<see cref="PetSlotRules.DefaultAttributeID"/>).
 		/// </summary>
+		[TemplateReference(typeof(CharacterAttributeTemplate))]
+		[Tooltip("The character attribute that holds this character's pet slots. Empty: the \"Pet Slots\" attribute.")]
+		public int PetSlotsTemplateID;
+
+		/// <summary>The template ID <see cref="PetSlots"/> reads.</summary>
+		public int PetSlotsAttributeID => PetSlotsTemplateID != 0 ? PetSlotsTemplateID : PetSlotRules.DefaultAttributeID;
+
+		/// <inheritdoc />
 		/// <remarks>
-		/// Assignment drives the server's damage subscription — see
-		/// <see cref="UpdateDamageSubscription"/>.
+		/// Read from the attribute every time, never cached: equipment, buffs and (later) archetypes move it through the
+		/// attribute's modifiers, and the saved base value is the character's own.
 		/// </remarks>
-		public Pet Pet
+		public int PetSlots
 		{
-			get { return pet; }
-			set
+			get
 			{
-				pet = value;
-				UpdateDamageSubscription();
+				CharacterAttribute attribute = null;
+				bool has = Character != null &&
+					Character.TryGet(out ICharacterAttributeController attributes) &&
+					attributes.TryGetAttribute(PetSlotsAttributeID, out attribute);
+				return PetSlotRules.SlotsFrom(has, has ? attribute.FinalValue : 0);
 			}
 		}
 
+		/// <inheritdoc />
+		public event Action<IPetController> OnPetSlotsReduced;
+
+		/// <summary>The Pet Slots attribute this controller is listening to on the server, while it has pets.</summary>
+		private CharacterAttribute subscribedSlots;
+
+		/// <inheritdoc />
+		public bool AddPet(Pet pet)
+		{
+			if (pet == null || pets.Contains(pet))
+			{
+				return false;
+			}
+			pets.Add(pet);
+			UpdateDamageSubscription();
+			return true;
+		}
+
+		/// <inheritdoc />
+		/// <remarks>By reference, so a pet whose object Unity has already destroyed can still be unlisted.</remarks>
+		public bool RemovePet(Pet pet)
+		{
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (ReferenceEquals(pets[i], pet))
+				{
+					pets.RemoveAt(i);
+					UpdateDamageSubscription();
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <inheritdoc />
+		public void ClearPets()
+		{
+			pets.Clear();
+			UpdateDamageSubscription();
+		}
+
+		/// <summary>True when <paramref name="character"/> is one of this controller's pets.</summary>
+		private bool IsOurPet(ICharacter character)
+		{
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (ReferenceEquals(pets[i], character))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>
-		/// The pet's combat stance as this peer currently understands it.
+		/// The pets' combat stance as this peer currently understands it.
 		/// </summary>
 		/// <remarks>
-		/// Mirrored here as well as on <see cref="Pet"/> so the UI has something to bind to
+		/// Mirrored here as well as on each pet so the UI has something to bind to
 		/// between a pet being dismissed and re-summoned.
 		/// </remarks>
 		public PetStance Stance { get; set; } = PetStance.Defensive;
 
 		/// <summary>
-		/// The pet's movement order as this peer currently understands it.
+		/// The pets' movement order as this peer currently understands it.
 		/// </summary>
 		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
 
@@ -110,7 +179,9 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private void UpdateDamageSubscription()
 		{
-			bool wanted = pet != null && base.IsServerStarted;
+			bool wanted = pets.Count > 0 && base.IsServerStarted;
+
+			UpdateSlotsSubscription(wanted);
 
 			if (wanted == subscribedToDamage)
 			{
@@ -143,6 +214,7 @@ namespace FishMMO.Shared
 		{
 			ReleaseDamageSubscription();
 			OnOwnerAttacked = null;
+			OnPetSlotsReduced = null;
 
 			base.OnDestroying();
 		}
@@ -152,12 +224,55 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ReleaseDamageSubscription()
 		{
+			UpdateSlotsSubscription(false);
+
 			if (!subscribedToDamage)
 			{
 				return;
 			}
 			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
 			subscribedToDamage = false;
+		}
+
+		/// <summary>
+		/// Listens to the Pet Slots attribute on the server for as long as there is a pet, so a slot count that falls under
+		/// a pet (an item taken off, a buff ending) can dismiss it. Per character, so it costs nothing to anyone else.
+		/// </summary>
+		private void UpdateSlotsSubscription(bool wanted)
+		{
+			CharacterAttribute target = null;
+			if (wanted && Character != null && Character.TryGet(out ICharacterAttributeController attributes))
+			{
+				attributes.TryGetAttribute(PetSlotsAttributeID, out target);
+			}
+
+			if (ReferenceEquals(target, subscribedSlots))
+			{
+				return;
+			}
+			if (subscribedSlots != null)
+			{
+				subscribedSlots.OnAttributeUpdated -= OnPetSlotsAttributeUpdated;
+			}
+			subscribedSlots = target;
+			if (subscribedSlots != null)
+			{
+				subscribedSlots.OnAttributeUpdated += OnPetSlotsAttributeUpdated;
+			}
+		}
+
+		/// <summary>Raises <see cref="OnPetSlotsReduced"/> when the new slot count leaves a pet outside it.</summary>
+		private void OnPetSlotsAttributeUpdated(CharacterAttribute attribute)
+		{
+			int slots = PetSlots;
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (pets[i] != null && pets[i].Slot >= slots)
+				{
+					OnPetSlotsReduced?.Invoke(this);
+					return;
+				}
+			}
 		}
 
 		/// <summary>
@@ -175,8 +290,8 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Never turn the pet on its own owner.
-			if (pet != null && ReferenceEquals(attacker, pet))
+			// Never turn a pet on its own owner.
+			if (IsOurPet(attacker))
 			{
 				return;
 			}
@@ -197,7 +312,7 @@ namespace FishMMO.Shared
 			 * UpdateDamageSubscription's IsServerStarted test would decline to touch a
 			 * subscription that is still held — and the handler would outlive the pet, the
 			 * character, and this controller's usefulness. */
-			pet = null;
+			pets.Clear();
 			ReleaseDamageSubscription();
 
 			Stance = PetStance.Defensive;
@@ -220,6 +335,7 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<PetStanceBroadcast>(OnClientPetStanceBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetMovementOrderBroadcast>(OnClientPetMovementOrderBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
+				ClientManager.RegisterBroadcast<PetActionBroadcast>(OnClientPetActionBroadcastReceived);
 			}
 		}
 
@@ -238,20 +354,22 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PetStanceBroadcast>(OnClientPetStanceBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PetMovementOrderBroadcast>(OnClientPetMovementOrderBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
+				ClientManager.UnregisterBroadcast<PetActionBroadcast>(OnClientPetActionBroadcastReceived);
 			}
 		}
 
-		/// <summary>The pet the server announced whose object has not reached this client yet; see <see cref="OnClientPetAddBroadcastReceived"/>.</summary>
-		private PetAddBroadcast? pendingPetAdd;
+		/// <summary>Pets the server announced whose objects have not reached this client yet; see <see cref="OnClientPetAddBroadcastReceived"/>.</summary>
+		private readonly List<PetAddBroadcast> pendingPetAdds = new List<PetAddBroadcast>();
 
 		/// <summary>
-		/// Handles the broadcast when a pet is added. Sets the pet reference and invokes the OnPetSummoned event.
+		/// Handles the broadcast when a pet is added. Lists the pet and invokes the OnPetSummoned event.
 		/// </summary>
 		/// <remarks>
 		/// The pet object may not be here yet. After a scene change the server spawns the pet in the new scene and announces
 		/// it at once, but the pet reaches this client through the observer system, which can deliver it a moment later.
 		/// The announcement used to be dropped then: the client never learned it had a pet, so the pet panel kept the old
 		/// scene's pet and its controls did nothing. It is now held until the pet registers (<see cref="SceneObject.Registered"/>).
+		/// Several can wait at once: every pet that was out comes back together.
 		/// </remarks>
 		/// <param name="msg">The broadcast message containing the pet ID and orders.</param>
 		/// <param name="channel">The network channel.</param>
@@ -260,74 +378,146 @@ namespace FishMMO.Shared
 			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject) &&
 				sceneObject != null && sceneObject.GameObject != null && sceneObject.GameObject.TryGetComponent(out Pet pet))
 			{
-				ClearPendingPetAdd();
+				RemovePendingPetAdd(msg.ID);
 				ApplyPetAdd(msg, pet);
 				return;
 			}
-			pendingPetAdd = msg;
+			RemovePendingPetAdd(msg.ID);
+			pendingPetAdds.Add(msg);
 			SceneObject.Registered -= SceneObject_Registered;
 			SceneObject.Registered += SceneObject_Registered;
 		}
 
 		private void SceneObject_Registered(ISceneObject sceneObject)
 		{
-			if (pendingPetAdd == null || sceneObject == null || sceneObject.ID != pendingPetAdd.Value.ID ||
-				sceneObject.GameObject == null || !sceneObject.GameObject.TryGetComponent(out Pet pet))
+			if (sceneObject == null || sceneObject.GameObject == null)
 			{
 				return;
 			}
-			PetAddBroadcast msg = pendingPetAdd.Value;
-			ClearPendingPetAdd();
-			ApplyPetAdd(msg, pet);
+			for (int i = 0; i < pendingPetAdds.Count; ++i)
+			{
+				if (pendingPetAdds[i].ID != sceneObject.ID)
+				{
+					continue;
+				}
+				if (!sceneObject.GameObject.TryGetComponent(out Pet pet))
+				{
+					return;
+				}
+				PetAddBroadcast msg = pendingPetAdds[i];
+				RemovePendingPetAdd(msg.ID);
+				ApplyPetAdd(msg, pet);
+				return;
+			}
+		}
+
+		/// <summary>Forgets a held announcement; stops listening for registrations once none is held.</summary>
+		private void RemovePendingPetAdd(long id)
+		{
+			for (int i = pendingPetAdds.Count - 1; i >= 0; --i)
+			{
+				if (pendingPetAdds[i].ID == id)
+				{
+					pendingPetAdds.RemoveAt(i);
+				}
+			}
+			if (pendingPetAdds.Count == 0)
+			{
+				SceneObject.Registered -= SceneObject_Registered;
+			}
 		}
 
 		private void ClearPendingPetAdd()
 		{
-			pendingPetAdd = null;
+			pendingPetAdds.Clear();
 			SceneObject.Registered -= SceneObject_Registered;
 		}
 
 		private void ApplyPetAdd(PetAddBroadcast msg, Pet pet)
 		{
-			Pet = pet;
+			AddPet(pet);
 
 			Stance = msg.Stance;
 			MovementOrder = msg.MovementOrder;
 			AttackPriority = PetAttackPriority.Normalize(msg.AttackPriority);
-			Pet.Stance = msg.Stance;
-			Pet.MovementOrder = msg.MovementOrder;
-			Pet.AttackPriority = AttackPriority;
+			pet.Slot = msg.Slot;
+			pet.Stance = msg.Stance;
+			pet.MovementOrder = msg.MovementOrder;
+			pet.AttackPriority = AttackPriority;
 
-			IPetController.OnPetSummoned?.Invoke(Pet);
-			Trigger.InvokeAll(onPetSummonTriggers, new PetEventData(Character, Pet));
+			IPetController.OnPetSummoned?.Invoke(pet);
+			Trigger.InvokeAll(onPetSummonTriggers, new PetEventData(Character, pet));
+		}
+
+		/// <summary>The listed pet with this ID, or null.</summary>
+		public Pet FindPet(long id)
+		{
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (pets[i] != null && pets[i].ID == id)
+				{
+					return pets[i];
+				}
+			}
+			return null;
 		}
 
 		/// <summary>
-		/// Handles the broadcast when a pet is removed. Clears the pet reference and invokes the OnPetDestroyed event.
+		/// Handles the broadcast when a pet is removed. Unlists it (every pet for ID 0) and invokes the OnPetDestroyed event.
 		/// </summary>
 		/// <param name="msg">The broadcast message for pet removal.</param>
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPetRemoveBroadcastReceived(PetRemoveBroadcast msg, Channel channel)
 		{
-			ClearPendingPetAdd();
-			Pet = null;
-			IPetController.OnPetDestroyed?.Invoke();
+			if (msg.ID == 0)
+			{
+				ClearPendingPetAdd();
+				ClearPets();
+				IPetController.OnPetDestroyed?.Invoke(null);
+				Trigger.InvokeAll(onPetDismissTriggers, new PetEventData(Character, null));
+				return;
+			}
+
+			RemovePendingPetAdd(msg.ID);
+			Pet pet = FindPet(msg.ID);
+			if (pet != null)
+			{
+				RemovePet(pet);
+			}
+			IPetController.OnPetDestroyed?.Invoke(pet);
 			Trigger.InvokeAll(onPetDismissTriggers, new PetEventData(Character, null));
 		}
 
+		/// <summary>The first pet, or null: what the order-changed event carries.</summary>
+		private Pet FirstPet => pets.Count > 0 ? pets[0] : null;
+
 		/// <summary>
-		/// Applies the server's authoritative stance so the UI reflects what the pet is really doing.
+		/// Applies the server's authoritative stance so the UI reflects what the pets are really doing.
 		/// </summary>
 		/// <param name="msg">The stance broadcast.</param>
 		/// <param name="channel">The network channel.</param>
 		public void OnClientPetStanceBroadcastReceived(PetStanceBroadcast msg, Channel channel)
 		{
 			Stance = msg.Stance;
-			if (Pet != null)
+			for (int i = 0; i < pets.Count; ++i)
 			{
-				Pet.Stance = msg.Stance;
+				pets[i].Stance = msg.Stance;
 			}
-			IPetController.OnPetOrdersChanged?.Invoke(Pet);
+			IPetController.OnPetOrdersChanged?.Invoke(FirstPet);
+		}
+
+		/// <summary>Client: one of the owner's pets started doing something (<see cref="PetActionBroadcast"/>): the pet, the action, the target's ID.</summary>
+		public static event System.Action<Pet, PetAction, long> OnClientPetAction;
+
+		/// <summary>Client: tells the panel what a pet has just started doing, so the pet can say it in chat.</summary>
+		public void OnClientPetActionBroadcastReceived(PetActionBroadcast msg, Channel channel)
+		{
+			Pet pet = FindPet(msg.PetID);
+			if (pet == null)
+			{
+				return;
+			}
+			OnClientPetAction?.Invoke(pet, (PetAction)msg.Action, msg.TargetID);
 		}
 
 		/// <summary>
@@ -336,11 +526,11 @@ namespace FishMMO.Shared
 		public void OnClientPetAttackPriorityBroadcastReceived(PetAttackPriorityBroadcast msg, Channel channel)
 		{
 			AttackPriority = PetAttackPriority.Normalize(msg.Priority);
-			if (Pet != null)
+			for (int i = 0; i < pets.Count; ++i)
 			{
-				Pet.AttackPriority = AttackPriority;
+				pets[i].AttackPriority = AttackPriority;
 			}
-			IPetController.OnPetOrdersChanged?.Invoke(Pet);
+			IPetController.OnPetOrdersChanged?.Invoke(FirstPet);
 		}
 
 		/// <summary>
@@ -351,11 +541,11 @@ namespace FishMMO.Shared
 		public void OnClientPetMovementOrderBroadcastReceived(PetMovementOrderBroadcast msg, Channel channel)
 		{
 			MovementOrder = msg.MovementOrder;
-			if (Pet != null)
+			for (int i = 0; i < pets.Count; ++i)
 			{
-				Pet.MovementOrder = msg.MovementOrder;
+				pets[i].MovementOrder = msg.MovementOrder;
 			}
-			IPetController.OnPetOrdersChanged?.Invoke(Pet);
+			IPetController.OnPetOrdersChanged?.Invoke(FirstPet);
 		}
 #endif
 	}

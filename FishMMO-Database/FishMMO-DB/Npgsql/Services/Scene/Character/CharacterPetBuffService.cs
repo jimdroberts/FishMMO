@@ -103,10 +103,10 @@ namespace FishMMO.Database.Npgsql.Services
 				var sql = $@"
 					WITH upserted AS (
 						INSERT INTO {TableName}
-							(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
+							(character_id, slot, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
 						VALUES
-							({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, FALSE, NULL)
-						ON CONFLICT (character_id, template_id)
+							({{0}}, {{8}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}, FALSE, NULL)
+						ON CONFLICT (character_id, slot, template_id)
 						DO UPDATE SET
 							remaining_time = EXCLUDED.remaining_time,
 							tick_time = EXCLUDED.tick_time,
@@ -124,7 +124,7 @@ namespace FishMMO.Database.Npgsql.Services
 				var id = await ExecuteScalarLongAsync(
 					dbContext,
 					sql,
-					new object[] { buffData.CharacterID, buffData.TemplateID, buffData.Version, buffData.RemainingTime, buffData.TickTime, buffData.Stacks, buffData.TickCount, now },
+					new object[] { buffData.CharacterID, buffData.TemplateID, buffData.Version, buffData.RemainingTime, buffData.TickTime, buffData.Stacks, buffData.TickCount, now, buffData.Slot },
 					cancellationToken).ConfigureAwait(false);
 
 				if (id <= 0)
@@ -178,7 +178,7 @@ namespace FishMMO.Database.Npgsql.Services
 			int suppliedRows = list.Count;
 			// One row per key, the newest version: see BulkBatch.KeepNewest. An upsert cannot touch one
 			// row twice, and an UPDATE ... FROM matching one row twice is ambiguous.
-			list = BulkBatch.KeepNewest(list, buff => (buff.CharacterID, buff.TemplateID), buff => buff.Version);
+			list = BulkBatch.KeepNewest(list, buff => (buff.CharacterID, buff.Slot, buff.TemplateID), buff => buff.Version);
 
 
 			return await ExecuteTransactionAsync<BulkWriteResult>(async dbContext =>
@@ -205,12 +205,14 @@ namespace FishMMO.Database.Npgsql.Services
 				var tickTimeArray = activeBuffs.Select(b => b.TickTime).ToArray();
 				var stacksArray = activeBuffs.Select(b => b.Stacks).ToArray();
 				var tickCountArray = activeBuffs.Select(b => b.TickCount).ToArray();
+				var slotArray = activeBuffs.Select(b => b.Slot).ToArray();
 
 				var sql = $@"
 					INSERT INTO {TableName}
-						(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
+						(character_id, slot, template_id, version, remaining_time, tick_time, stacks, tick_count, time_created, deleted, time_deleted)
 					SELECT
 						u.character_id,
+						u.slot,
 						u.template_id,
 						u.version,
 						u.remaining_time,
@@ -227,9 +229,10 @@ namespace FishMMO.Database.Npgsql.Services
 						{{3}}::double precision[],
 						{{4}}::double precision[],
 						{{5}}::integer[],
-						{{6}}::integer[]
-					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count)
-					ON CONFLICT (character_id, template_id)
+						{{6}}::integer[],
+						{{8}}::integer[]
+					) AS u(character_id, template_id, version, remaining_time, tick_time, stacks, tick_count, slot)
+					ON CONFLICT (character_id, slot, template_id)
 					DO UPDATE SET
 						remaining_time = EXCLUDED.remaining_time,
 						tick_time = EXCLUDED.tick_time,
@@ -245,7 +248,7 @@ namespace FishMMO.Database.Npgsql.Services
 					dbContext,
 					sql,
 					activeBuffs.Count,
-					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, tickCountArray, now },
+					new object[] { characterIdArray, templateIdArray, versionArray, remainingTimeArray, tickTimeArray, stacksArray, tickCountArray, now, slotArray },
 					"One or more pet buffs were rejected due to a stale Version.",
 					cancellationToken,
 					BulkVersionConflictPolicy.SkipStaleRows).ConfigureAwait(false);
@@ -313,6 +316,7 @@ namespace FishMMO.Database.Npgsql.Services
 					id: b.ID,
 					version: b.Version,
 					characterID: b.CharacterID,
+					slot: b.Slot,
 					templateID: b.TemplateID,
 					remainingTime: b.RemainingTime,
 					tickTime: b.TickTime,

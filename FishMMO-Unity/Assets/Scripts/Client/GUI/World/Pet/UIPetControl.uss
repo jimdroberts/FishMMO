@@ -2,9 +2,9 @@
     UIPetControl.uss
     Layout for the pet control panel. Colours come from FishMMO-Theme.uss.
 
-    A nameplate with a health bar and four commands. Release is destructive
-    and sits last, away from Follow and Stay, which are the two a player hits
-    mid-fight without looking.
+    A row per pet (name and health bar) and the commands, which go to every
+    pet. Release is destructive and sits last, away from Follow and Stay,
+    which are the two a player hits mid-fight without looking.
 */
 
 /*
@@ -56,11 +56,61 @@
     padding: 8px;
 }
 
+/*
+    The pets, one row each, in slot order. A row is a button in all but name:
+    clicking it pins that pet to the target frame, and the pinned pet's row
+    carries the brand border. Each row is the pet's name, then its health bar
+    beside it. A long name is cut with an ellipsis (the row's tooltip has it
+    whole), and the bar never narrows past 32px.
+*/
+.pet-list {
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.pet-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 2px 3px;
+    margin-bottom: 3px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.pet-row:hover {
+    background-color: var(--overlay-soft);
+}
+
+.pet-row--pinned {
+    border-color: var(--brand-border);
+}
+
+.pet-row__name {
+    font-size: 10px;
+    margin: 0 4px 0 0;
+    padding: 0;
+    -unity-text-align: middle-left;
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 45%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    -unity-text-overflow-position: end;
+}
+
 /* Health track. The fill and the numeric overlay both sit inside it. */
 .pet-health {
     height: 14px;
     position: relative;
+    flex-grow: 1;
     flex-shrink: 0;
+    flex-basis: 32px;
+    min-width: 32px;
+    overflow: hidden;
 }
 
 .pet-health-fill {
@@ -93,10 +143,17 @@
 }
 
 .pet-cmd {
-    width: 46%;
+    width: 48%;
     height: 22px;
     margin-top: 3px;
     margin-bottom: 3px;
+    /*
+        No side margins: the row's space-between makes the gap. Unity's default button keeps 4 units each side, and two
+        46% buttons plus those came to 192.6 units in a 192-unit row, so every command wrapped onto its own line and the
+        panel stood 426 units tall (11-16).
+    */
+    margin-left: 0;
+    margin-right: 0;
     flex-shrink: 0;
 }
 
@@ -111,7 +168,7 @@
 }
 
 .pet-stance {
-    width: 31%;
+    width: 32%;
     font-size: 10px;
 }
 
@@ -158,3 +215,62 @@
     margin-left: 2px;
     flex-shrink: 0;
 }
+
+/*
+    The arrows are an ASCII less-than turned to point up or down, not the triangle characters U+25B2 and U+25BC:
+    the game font has no glyph for those, the browser has no system font to fall back on, and the buttons drew
+    empty (11-16). The editor did fall back, which is why it looked right there.
+*/
+.pet-priority__up {
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+}
+
+.pet-priority__glyph {
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--abyss-100);
+    margin: 0;
+    padding: 0;
+}
+
+.pet-priority__glyph--up {
+    rotate: 90deg;
+}
+
+.pet-priority__glyph--down {
+    rotate: -90deg;
+}
+
+/*
+    Each stance has its colour: Aggressive the danger red, Defensive the warning amber, Passive the calm teal (theme tokens,
+    so the colour-vision palettes carry over). The buttons show it as a coloured edge, the chosen one is filled in its colour,
+    and the header badge takes the stance's colour while the word stays, so colour is never the only cue.
+*/
+.pet-stance--aggressive { border-color: var(--danger); }
+.pet-stance--defensive  { border-color: var(--warn); }
+.pet-stance--passive    { border-color: var(--teal); }
+
+.pet-stance--aggressive.pet-stance--active {
+    background-color: var(--danger-fill);
+    border-color: var(--danger);
+    color: var(--text-bright);
+}
+
+.pet-stance--defensive.pet-stance--active {
+    background-color: rgba(216, 149, 42, 0.28);
+    border-color: var(--warn);
+    color: var(--text-bright);
+}
+
+.pet-stance--passive.pet-stance--active {
+    background-color: var(--teal-mid);
+    border-color: var(--teal);
+    color: var(--text-bright);
+}
+
+.pet-status.pet-stance--aggressive { color: var(--danger); border-color: var(--danger); }
+.pet-status.pet-stance--defensive  { color: var(--warn); border-color: var(--warn); }
+.pet-status.pet-stance--passive    { color: var(--teal); border-color: var(--teal); }

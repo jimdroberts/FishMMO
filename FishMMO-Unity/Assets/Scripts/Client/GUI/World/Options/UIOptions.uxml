@@ -273,7 +273,7 @@
                 <ui:Label text="LAYOUT" class="fish-attr-category options-section" />
                 <ui:VisualElement class="options-row">
                     <ui:Label text="Interface Scale" class="fish-label options-row-label" />
-                    <ui:Slider name="ui-scale-slider" low-value="0.75" high-value="1.5" class="options-row-field" />
+                    <ui:Slider name="ui-scale-slider" low-value="0.5" high-value="1.5" class="options-row-field" />
                     <ui:Label name="ui-scale-value" text="75%" class="fish-hint options-row-value" />
                 </ui:VisualElement>
                 <ui:VisualElement class="options-row">

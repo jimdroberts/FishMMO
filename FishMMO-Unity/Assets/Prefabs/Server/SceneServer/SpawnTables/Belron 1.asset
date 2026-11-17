@@ -41,6 +41,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 2 [401713be]'
     Position: {x: -159.31126, y: 425.7918, z: 341.8308}
     Rotation: {x: -0, y: 0.99646944, z: -0, w: -0.083956644}
@@ -67,6 +68,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 3 [401713be]'
     Position: {x: 92.72009, y: 431.58328, z: 337.71613}
     Rotation: {x: -0, y: 0.44953898, z: -0, w: -0.8932608}
@@ -93,6 +95,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 4 [401713be]'
     Position: {x: 3.7867737, y: 403.71805, z: 344.36203}
     Rotation: {x: -0, y: 0.18711759, z: -0, w: -0.98233753}
@@ -119,6 +122,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'Volor Black Glass Emberglass Cluster Spawner 5 [401713be]'
     Position: {x: -192.8782, y: 438.32693, z: 408.39655}
     Rotation: {x: -0, y: 0.81298923, z: -0, w: 0.5822787}
@@ -145,6 +149,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   - Name: 'The Golden Crypt MonsterPack Spawner [2859d984]'
     Position: {x: -58.836952, y: 383.13824, z: 313.11154}
     Rotation: {x: -0, y: 0.76040596, z: -0, w: -0.64944804}
@@ -170,6 +175,7 @@ MonoBehaviour:
       FocusTargeting: 1
       TacticOrbitRadius: 5
       KiteRotationSpeed: 30
+    KeepOutCircles: []
   references:
     version: 2
     RefIds:

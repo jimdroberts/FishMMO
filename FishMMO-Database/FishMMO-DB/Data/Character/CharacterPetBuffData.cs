@@ -20,6 +20,8 @@ namespace FishMMO.Database.Data
 		public readonly long Version;
 		/// <summary>Character that owns the pet carrying this buff.</summary>
 		public readonly long CharacterID;
+		/// <summary>Which of the character's pets: 0 for the first. See <c>CharacterPetEntity.Slot</c>.</summary>
+		public readonly int Slot;
 		/// <summary>Buff template ID.</summary>
 		public readonly int TemplateID;
 		/// <summary>Remaining buff duration, in seconds.</summary>
@@ -36,13 +38,14 @@ namespace FishMMO.Database.Data
 
 		long IVersioned<CharacterPetBuffData>.Version => Version;
 
-		public CharacterPetBuffData(long id, long characterID, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
-			: this(id, version: 0, characterID, templateID, remainingTime, tickTime, stacks, tickCount)
+		public CharacterPetBuffData(long id, long characterID, int slot, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
+			: this(id, version: 0, characterID, slot, templateID, remainingTime, tickTime, stacks, tickCount)
 		{
 		}
 
-		public CharacterPetBuffData(long id, long version, long characterID, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
+		public CharacterPetBuffData(long id, long version, long characterID, int slot, int templateID, double remainingTime, double tickTime, int stacks, int tickCount)
 		{
+			Slot = slot;
 			ID = id;
 			Version = version;
 			CharacterID = characterID;
@@ -55,7 +58,7 @@ namespace FishMMO.Database.Data
 
 		public CharacterPetBuffData WithVersion(long newVersion)
 		{
-			return new CharacterPetBuffData(ID, newVersion, CharacterID, TemplateID, RemainingTime, TickTime, Stacks, TickCount);
+			return new CharacterPetBuffData(ID, newVersion, CharacterID, Slot, TemplateID, RemainingTime, TickTime, Stacks, TickCount);
 		}
 	}
 }

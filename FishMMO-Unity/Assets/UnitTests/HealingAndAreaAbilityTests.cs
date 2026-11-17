@@ -226,7 +226,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void FriendlyAreas_ReachTheCasterAndAllies_Only()
 		{
-			// The area heal: you, allies and neutral players. The area buffs: you and allies only (Jim, 11-16).
+			// The area heal: you, allies and neutral players. The area buffs: you and allies only.
 			TargetAllianceCondition heal = Load(AbilityPaths[2]).OnHitEvents.Single().TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
 			Assert.That(heal.ApplyToSelf && heal.ApplyToAllies && heal.ApplyToNeutral && heal.NeutralPlayersOnly && !heal.ApplyToEnemy, Is.True, "area heal");
 			foreach (string path in new[] { AbilityPaths[4], AbilityPaths[5] })
@@ -250,7 +250,7 @@ namespace FishMMO.UnitTests
 			Assert.That(healable.Passes(FactionAllianceLevel.Ally, defenderIsPlayer: false), Is.True, "an ally's side is not narrowed");
 			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, defenderIsPlayer: true), Is.False, "a hostile player (aggression on)");
 
-			// The toggle widens HOSTILE reach only (Jim, 11-16): a neutral player read as Enemy because aggression is on is still
+			// The toggle widens HOSTILE reach only a neutral player read as Enemy because aggression is on is still
 			// healable and cleansable; one whose standing is hostile is not.
 			Assert.That(healable.Passes(FactionAllianceLevel.Enemy, FactionAllianceLevel.Neutral, defenderIsPlayer: true), Is.True,
 				"a neutral player while aggression is on");

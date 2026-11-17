@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// A pet's owner on a client: only the server ever assigned <see cref="Pet.PetOwner"/>, so on every client a pet had no
 	/// owner, <see cref="HarmRule.Principal"/> answered the pet itself, and with aggression on the owner's client predicted
-	/// hits on its own pet that the server refused (Jim, 11-16). The owner's ID rides the pet's spawn payload.
+	/// hits on its own pet that the server refused. The owner's ID rides the pet's spawn payload.
 	/// </summary>
 	[TestFixture]
 	public class PetOwnerClientResolutionTests

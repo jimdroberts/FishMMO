@@ -62,14 +62,19 @@ namespace FishMMO.UnitTests
 				"an open inventory must not be touched — not hidden, not re-shown, not re-ordered");
 		}
 
-		[TestCase("Assets/Scripts/Client/GUI/World/Merchant/UITKMerchant.cs", true)]
+		[TestCase("Assets/Modules/Commerce/Client/UITKMerchant.cs", true)]
 		[TestCase("Assets/Scripts/Client/GUI/World/Bank/UITKBank.cs", true)]
 		[TestCase("Assets/Scripts/Client/GUI/World/NPCDialogue/UITKNPCDialogue.cs", false)]
-		[TestCase("Assets/Scripts/Client/GUI/World/Mail/UITKMail.cs", false)]
+		[TestCase("Assets/Modules/Commerce/Client/UITKMail.cs", false)]
 		[TestCase("Assets/Scripts/Client/GUI/World/Container/UITKContainer.cs", false)]
-		[TestCase("Assets/Scripts/Client/GUI/World/Loot/UITKLoot.cs", false)]
+		[TestCase("Assets/Modules/Commerce/Client/UITKLoot.cs", false)]
 		public void EveryInteractPanelHasTheToggle_WithTheAgreedDefault(string path, bool defaultOn)
 		{
+			if (path.StartsWith("Assets/Modules/", StringComparison.Ordinal) &&
+				!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), path)))
+			{
+				Assert.Ignore($"{path}'s module is not installed.");
+			}
 			string source = ReadSource(path);
 			LogAssert.IsTrue(source.Contains($"private bool openInventoryOnShow = {(defaultOn ? "true" : "false")};"),
 				$"{path} must expose the toggle with default {(defaultOn ? "on" : "off")} (shop and bank on, everything else off)");

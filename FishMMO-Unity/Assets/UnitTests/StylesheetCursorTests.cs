@@ -218,7 +218,11 @@ namespace FishMMO.UnitTests
 			List<string> names = sheets.ConvertAll(Path.GetFileName);
 
 			LogAssert.IsTrue(names.Contains(ThemeSheet), $"the theme must be swept; looked in {GuiRoot}");
-			LogAssert.IsTrue(names.Contains(GuildSheet), $"{GuildSheet} must be swept; looked in {GuiRoot}");
+			// The guild window is the Social module's (Assets/Modules/Social/Client); swept wherever it is installed.
+			if (Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Assets/Modules/Social")))
+			{
+				LogAssert.IsTrue(names.Contains(GuildSheet), $"{GuildSheet} must be swept; looked in {GuiRoot} and the modules");
+			}
 			LogAssert.IsTrue(names.Contains("UIAchievements.uss"), "a panel sheet must be swept");
 
 			/* A floor rather than an exact count: sheets are added, and this should never be the test

@@ -22,6 +22,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>The character with <paramref name="characterID"/>, while it is resident here.</summary>
 		bool TryGetResidentCharacter(long characterID, out IPlayerCharacter character);
+
+		/// <summary>A server system on this server, by its contract (a party participant reaches the party system).</summary>
+		bool TryGetSystem<T>(out T system) where T : class, FishMMO.Server.Core.IServerBehaviour;
 	}
 
 	/// <summary>One participant's rows in a save snapshot: rows of one or many characters, each row knowing its character.</summary>
@@ -128,6 +131,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		public abstract Task<CharacterFetch> FetchAsync(ICharacterPersistenceHost host, long characterID);
 
 		/// <summary>
+		/// Fetches the character's saved state, knowing the character's own row (its world server, its scene). Worker
+		/// thread, during the load. The load calls this one; by default it is <see cref="FetchAsync(ICharacterPersistenceHost, long)"/>.
+		/// </summary>
+		public virtual Task<CharacterFetch> FetchAsync(ICharacterPersistenceHost host, CharacterData character)
+		{
+			return FetchAsync(host, character.ID);
+		}
+
+		/// <summary>
 		/// Puts what <see cref="FetchAsync"/> returned on the character, restored as persisted (nothing dirty).
 		/// Main thread, after the character's Core entity exists and before it spawns.
 		/// </summary>
@@ -217,5 +229,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		bool ICharacterPersistenceHost.TryGetResidentCharacter(long characterID, out IPlayerCharacter character) =>
 			TryGetResidentCharacter(characterID, out character);
+
+		bool ICharacterPersistenceHost.TryGetSystem<T>(out T system)
+		{
+			system = null;
+			return Server?.BehaviourRegistry != null && Server.BehaviourRegistry.TryGet(out system);
+		}
 	}
 }

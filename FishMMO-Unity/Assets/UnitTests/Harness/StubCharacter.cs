@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests.Harness
 	/// wanders into unimplemented territory should say so loudly rather than quietly observing a
 	/// default that means nothing.
 	/// </remarks>
-	internal sealed class StubCharacter : ICharacter, IEntityLinked
+	public sealed class StubCharacter : ICharacter, IEntityLinked
 	{
 		/// <summary>The Core entity this stub stands for; none unless a test links one.</summary>
 		public EntityLink CoreLink { get; set; }

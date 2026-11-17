@@ -487,7 +487,7 @@ namespace FishMMO.Shared
 	/// The confirmation, not just the refusal. The panel removes the row on this message rather than
 	/// on the click, so a forget that was refused leaves the ability where it was and the player is
 	/// told why — the same contract the craft panel keeps with
-	/// <see cref="AbilityCraftResultBroadcast"/>.
+	/// <c>AbilityCraftResultBroadcast</c>.
 	/// </remarks>
 	public struct AbilityForgetResultBroadcast : IBroadcast
 	{

@@ -98,35 +98,6 @@ namespace FishMMO.UnitTests
 			Assert.IsTrue(attribute.PersistenceDirty);
 		}
 
-		// ── Archetype ────────────────────────────────────────────────────────────
-
-		[Test]
-		public void ArchetypeController_RestoreIsClean_ResetForgets()
-		{
-			GameObject host = new GameObject("ArchetypeHost");
-			temporaries.Add(host);
-			ArchetypeController controller = host.AddComponent<ArchetypeController>();
-			controller.InitializeOnce(new MockCharacter(3));
-
-			UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
-			try
-			{
-				// No template registered under this id: the row restores as "no archetype" but keeps its version.
-				controller.Restore(987654, 5);
-			}
-			finally
-			{
-				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
-			}
-			Assert.AreEqual(5, controller.Version);
-			Assert.IsFalse(controller.PersistenceDirty, "A restored row is what the database holds.");
-
-			controller.ResetState(true);
-			Assert.AreEqual(0, controller.Version);
-			Assert.IsFalse(controller.PersistenceDirty);
-			Assert.IsNull(controller.Template);
-		}
-
 		// ── The prefab contract ──────────────────────────────────────────────────
 
 
@@ -145,7 +116,7 @@ namespace FishMMO.UnitTests
 			{
 				typeof(CharacterAttributeController), typeof(AbilityController), typeof(AchievementController),
 				typeof(BuffController), typeof(InventoryController), typeof(BankController),
-				typeof(EquipmentController), typeof(QuestController), typeof(ArchetypeController),
+				typeof(EquipmentController),
 			})
 			{
 				Assert.IsTrue(required.Contains(type), $"PlayerCharacter must require {type.Name}: the load and save legs address it, and a prefab without it silently loses that table.");

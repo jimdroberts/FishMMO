@@ -91,6 +91,27 @@ Shader "FishMMO/Wildlife"
             ENDHLSL
         }
 
+        // The target outline's mask, drawn in the pose (TargetOutlineFeature uses a material's own "FishOutlineMask" pass
+        // when it has one). With the generic mask the outline was the unposed mesh: a dead animal's outline stood up.
+        Pass
+        {
+            Name "FishOutlineMask"
+            Tags { "LightMode" = "FishOutlineMask" }
+            ZTest Always ZWrite Off Cull Off
+            Blend Off
+
+            HLSLPROGRAM
+            #pragma use_dxc vulkan
+            #pragma target 3.5
+            #pragma vertex WildlifeOutlineVertex
+            #pragma fragment WildlifeOutlineFragment
+
+            #define FISH_WILDLIFE_PASS_OUTLINE
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "FishWildlife.hlsl"
+            ENDHLSL
+        }
+
         Pass
         {
             Name "DepthNormals"

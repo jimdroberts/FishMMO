@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 		/// <summary>How tall the model is exported, metres.</summary>
 		public const float ExportedHeight = 1.8f;
 
-		/// <summary>How tall it is imported, metres: a playable character's capsule (Jim's call: the model meets the capsule).</summary>
+		/// <summary>How tall it is imported, metres: a playable character's capsule.</summary>
 		public const float Height = 1.6f;
 
 		/// <summary>The clips that cycle (a sit and a guard are a slow breath held round); the punches, the cast, the roll and

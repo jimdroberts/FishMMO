@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			return petController.Pet != null;
+			return petController.Pets.Count > 0;
 		}
 	}
 }

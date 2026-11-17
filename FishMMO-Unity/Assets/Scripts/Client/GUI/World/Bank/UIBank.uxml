@@ -91,10 +91,8 @@
                           class="fish-chip__value bank-currency__value"
                           text="0" />
             </ui:VisualElement>
-            <!-- Shown only while the house vault holds something (UITKBank asks on every open). -->
-            <ui:Button name="bank-vault-button"
-                       class="fish-button fish-button--ghost bank-vault-button bank-vault-button--hidden"
-                       text="House vault" />
+            <!-- Modules' links from the bank (the Housing module's house vault), one button each; see BankWindowLinks. -->
+            <ui:VisualElement name="bank-module-links" class="bank-module-links" />
         </ui:VisualElement>
 
     </ui:VisualElement>

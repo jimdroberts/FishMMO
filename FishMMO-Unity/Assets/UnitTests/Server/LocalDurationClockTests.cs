@@ -67,30 +67,30 @@ namespace FishMMO.UnitTests
 				"clearedFlags, charData.Version + 1, DateTime.UtcNow);",
 				"ChatMutePolicy.ResolveUntilTicks(ctx.ChatMute.Value, DateTime.UtcNow, out string muteReason);"),
 			// The update pump reads the database's clock with each fetch (O39), so none is left here.
-			new ClockCase(SceneServer + "Party/PartySystem.cs"),
-			new ClockCase(SceneServer + "Party/PartySystemRuntimeData.cs",
+			new ClockCase("Assets/Modules/Social/Server/PartySystem.cs"),
+			new ClockCase("Assets/Modules/Social/Server/PartySystemRuntimeData.cs",
 				"LastFetchTime = DateTime.UtcNow;",
 				"LastFetchTime = DateTime.UtcNow;"),
-			new ClockCase(SceneServer + "Guild/GuildSystem.cs",
+			new ClockCase("Assets/Modules/Social/Server/GuildSystem.cs",
 				// The guild log entry's persisted stamp.
 				"detail ?? string.Empty,\n\t\t\t\t\t\tDateTime.UtcNow);"),
-			new ClockCase(SceneServer + "Guild/GuildSystemRuntimeData.cs",
+			new ClockCase("Assets/Modules/Social/Server/GuildSystemRuntimeData.cs",
 				"LastFetchTime = DateTime.UtcNow;",
 				"LastFetchTime = DateTime.UtcNow;"),
-			new ClockCase(SceneServer + "Housing/HousingSystem.Plots.cs"),
-			new ClockCase(SceneServer + "Interactable/InteractableSystem.GroupFinder.cs"),
+			new ClockCase("Assets/Modules/Housing/Server/HousingSystem.Plots.cs"),
+			new ClockCase("Assets/Modules/Matchmaking/Server/MatchmakingSystem.GroupFinder.cs"),
 			// Deserter locks are a duration the database adds to its own now, and read back as the
 			// seconds it measures (O40), so neither file keeps a wall-clock read.
-			new ClockCase(SceneServer + "Interactable/InteractableSystem.Arena.cs"),
-			new ClockCase(SceneServer + "Interactable/InteractableSystem.ArenaMatch.cs"),
+			new ClockCase("Assets/Modules/Matchmaking/Server/MatchmakingSystem.Arena.cs"),
+			new ClockCase("Assets/Modules/Matchmaking/Server/MatchmakingSystem.ArenaMatch.cs"),
 			new ClockCase(SceneServer + "Naming/NamingSystem.cs"),
 			new ClockCase(SceneServer + "Naming/NamingSystemRuntimeData.cs"),
 			new ClockCase(SceneServer + "CharacterInventory/CharacterInventorySystem.cs"),
 			new ClockCase(SceneServer + "SceneServer/SceneServerSystem.cs"),
-			new ClockCase(SceneServer + "SceneServer/SceneServerSystem.StaffConsole.cs",
+			new ClockCase("Assets/Modules/Staff/Server/StaffSystem.StaffConsole.cs",
 				// The roster's "muted" flag, against a mute's persisted "until".
 				"long now = DateTime.UtcNow.Ticks;\n\n\t\t\tvar rows = new List<StaffRosterEntry>();"),
-			new ClockCase(SceneServer + "Chat/ChatSystem.ReportPlayer.cs"),
+			new ClockCase("Assets/Modules/Staff/Server/StaffSystem.ReportPlayer.cs"),
 			new ClockCase(SceneServer + "Chat/ChatSystem.cs",
 				// The line's legal receipt stamp, persisted with it. The persist retry window is measured
 				// on each line's monotonic first-queued time (O42).
@@ -121,6 +121,12 @@ namespace FishMMO.UnitTests
 			foreach (ClockCase clockCase in Cases)
 			{
 				ClockCase c = clockCase;
+				// A module's file whose module is not installed (the party system is the Social module's).
+				if (c.Path.StartsWith("Assets/Modules/", StringComparison.Ordinal) &&
+					!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), c.Path)))
+				{
+					continue;
+				}
 				SourceScanPins.HoldsAndFires(c.Path, SourceScanPins.ReadCode(c.Path),
 					code => UnlistedWallClockRead(code, c.WallClockSnippets),
 					// The defect put back: one of the file's own monotonic readings taken from the host clock.

@@ -39,10 +39,10 @@ namespace FishMMO.UnitTests
 			"Assets/Scripts/Server/Implementation/World/SceneServer/Ability/AbilitySystem.cs";
 
 		private const string CraftPath =
-			"Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.AbilityCraft.cs";
+			"Assets/Modules/AbilityCrafting/Server/AbilityCraftingSystem.Craft.cs";
 
 		private const string MerchantPath =
-			"Assets/Scripts/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.Merchant.cs";
+			"Assets/Modules/Commerce/Server/CommerceSystem.Merchant.cs";
 
 		private const string SavingPath =
 			"Assets/Scripts/Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs";
@@ -50,6 +50,12 @@ namespace FishMMO.UnitTests
 		/// <summary>The ability upsert, which decides whether a save of a gone row can come back.</summary>
 		private const string AbilityServicePath =
 			"../FishMMO-Database/FishMMO-DB/Npgsql/Services/Scene/Character/CharacterAbilityService.cs";
+
+		/// <summary>True when <paramref name="path"/> exists: a module's code is pinned only while the module is installed.</summary>
+		private static bool Installed(string path)
+		{
+			return ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), path));
+		}
 
 		/// <summary>Source text with line endings normalised, so bounds do not depend on checkout.</summary>
 		private static string ReadSource(string relativePath)
@@ -137,13 +143,21 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(complete.Contains("abilityController.LearnAbility(request.Ability)"),
 				"the continuation is what learns the ability, and it is what has the identity");
 
-			string craft = CodeOnly(ReadSource(CraftPath));
-			LogAssert.IsFalse(craft.Contains("LearnAbility("),
-				"the craft handler must not learn anything itself — it cannot know the row key yet");
+			// Crafting is the Ability Crafting module's.
+			if (Installed(CraftPath))
+			{
+				string craft = CodeOnly(ReadSource(CraftPath));
+				LogAssert.IsFalse(craft.Contains("LearnAbility("),
+					"the craft handler must not learn anything itself — it cannot know the row key yet");
+			}
 
-			string merchant = CodeOnly(ReadSource(MerchantPath));
-			LogAssert.IsFalse(merchant.Contains("LearnAbility(character"),
-				"and neither may the merchant's premade-ability purchase, which used the same helper");
+			// The merchant is the Commerce module's.
+			if (ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), MerchantPath)))
+			{
+				string merchant = CodeOnly(ReadSource(MerchantPath));
+				LogAssert.IsFalse(merchant.Contains("LearnAbility(character"),
+					"and neither may the merchant's premade-ability purchase, which used the same helper");
+			}
 		}
 
 		[Test]
@@ -159,11 +173,14 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(body.Contains("TryGetDbService<ICharacterAbilityService>(out _)"),
 				"a server with no ability service must refuse the grant rather than grant without a write-back");
 
-			string craft = ReadSource(CraftPath);
-			LogAssert.IsTrue(craft.Contains("Server.BehaviourRegistry.TryGet(out IAbilitySystem abilitySystem)"),
-				"and the craft must resolve the system before it charges the player, not after");
-			LogAssert.IsTrue(craft.Contains("AbilityCraftFailure.Unavailable"),
-				"refusing to charge for a craft that cannot be recorded needs its own answer");
+			if (Installed(CraftPath))
+			{
+				string craft = ReadSource(CraftPath);
+				LogAssert.IsTrue(craft.Contains("Server.BehaviourRegistry.TryGet(out IAbilitySystem abilitySystem)"),
+					"and the craft must resolve the system before it charges the player, not after");
+				LogAssert.IsTrue(craft.Contains("AbilityCraftFailure.Unavailable"),
+					"refusing to charge for a craft that cannot be recorded needs its own answer");
+			}
 		}
 
 		[Test]
@@ -188,6 +205,10 @@ namespace FishMMO.UnitTests
 		{
 			/* Two owners would be worse than none: the handler's finally would release a guard the
 			 * grant is still using, letting a second craft past while the first is in flight. */
+			if (!Installed(CraftPath))
+			{
+				Assert.Ignore("The Ability Crafting module is not installed.");
+			}
 			string source = ReadSource(CraftPath);
 
 			LogAssert.IsTrue(source.Contains("releaseGuard: () => EndIngressGuard(guardKey)"),

@@ -95,7 +95,7 @@ namespace FishMMO.Shared.Core
 		/// The standing between the two as it is, without the aggression toggle: <see cref="GetAllianceLevel"/> reads any pair
 		/// where either side's aggression is on as Enemy (so hostile effects reach neutrals), and that widening is for HOSTILE
 		/// reach only. Beneficial targeting (a heal or cleanse that reaches neutral players) reads this, so turning aggression
-		/// on does not stop a player healing the neutral player beside them (Jim, 11-16).
+		/// on does not stop a player healing the neutral player beside them.
 		/// </summary>
 		FactionAllianceLevel GetStandingAllianceLevel(IFactionController otherFactionController) => GetAllianceLevel(otherFactionController);
 	}

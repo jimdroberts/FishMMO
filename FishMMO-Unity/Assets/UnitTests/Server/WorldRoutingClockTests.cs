@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 		private const string TimedCacheSource = "Assets/Scripts/Server/Core/Collections/TimedCache.cs";
 		private const string WorldServer = "Assets/Scripts/Server/Implementation/World/WorldServer/WorldServer/WorldServerSystem.cs";
 		private const string SceneServerControl = "Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.ServerControl.cs";
-		private const string SceneServerAdmin = "Assets/Scripts/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.AdminCommands.cs";
+		private const string SceneServerAdmin = "Assets/Modules/Staff/Server/StaffSystem.AdminCommands.cs";
 
 		// ── ExpiringKeyTracker on the monotonic clock ─────────────────────────────────────────
 
@@ -133,13 +133,18 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(MethodBody(scene, "private bool ProcessControlState(").Contains("double now = MonotonicClock.NowSeconds"),
 				"on the monotonic clock");
 
-			string report = MethodBody(CodeOnly(Read(SceneServerAdmin)), "private void ReportStatus(");
+			// /admin status prints these lines (the Staff module's command; the scene server describes its own state).
+			string report = MethodBody(scene, "public IReadOnlyList<string> DescribeServerControl(");
 			LogAssert.AreEqual(0, CountOccurrences(report, "DateTime.UtcNow"), "and /admin status reports the countdown the process is actually running");
 		}
 
 		[Test]
 		public void RelativeShutdownRequests_AreTimedByTheDatabaseClock()
 		{
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), SceneServerAdmin)))
+			{
+				Assert.Ignore("The Staff module (/admin shutdown) is not installed.");
+			}
 			string admin = CodeOnly(Read(SceneServerAdmin));
 			foreach (string signature in new[] { "private void ScheduleWorldShutdown(", "private void ScheduleSceneShutdown(" })
 			{

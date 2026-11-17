@@ -301,18 +301,21 @@
 
 .eq-footer {
     flex-direction: column;
-    max-height: 200px;
+    max-height: 320px;
     padding-left: 12px;
     padding-right: 12px;
     padding-bottom: 8px;
 
     /*
-        The one part of the panel allowed to lose height when .eq-panel hits its cap. Yoga will
-        not shrink a flex child below its content unless min-height is cleared, so both are
-        needed; the ScrollView inside absorbs the loss.
+        The one part of the panel allowed to lose height when .eq-panel hits its cap; the ScrollView inside absorbs the
+        loss. It used to be allowed to lose ALL of it (min-height 0): on a 16:9 screen in the old width-matched layout the
+        panel was 675 units tall, the cap left the footer two rows, and the attribute list was barely visible (11-16).
+        The floor keeps the heading and five rows (rows are ~20 units). Header 40 + body 320 + status 28 + this 150
+        is ~538, which still fits the 84% cap on a 640-unit-tall panel (1280x960 at the 150% interface scale), and the
+        ceiling lets the list use the room the 1280x960 layout gives (about fourteen rows).
     */
     flex-shrink: 1;
-    min-height: 0;
+    min-height: 150px;
 }
 
 /* Sits directly under .eq-divider, which already carries the gap. */

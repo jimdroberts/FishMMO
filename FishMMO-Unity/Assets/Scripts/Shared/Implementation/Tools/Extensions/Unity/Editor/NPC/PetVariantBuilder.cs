@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Builds "a fire elemental", the pet Summon Fire Elemental calls: "a lesser fire elemental" a quarter bigger and with
-	/// half as much health again. Summon Fire Elemental used to call the lesser prefab itself (Jim, 11-16).
+	/// half as much health again. Summon Fire Elemental used to call the lesser prefab itself.
 	/// </summary>
 	/// <remarks>
 	/// Made through <see cref="NPCPrefabFactory"/>, so the copy gets its own GUID, FishNet prefab entry, Addressables entry and

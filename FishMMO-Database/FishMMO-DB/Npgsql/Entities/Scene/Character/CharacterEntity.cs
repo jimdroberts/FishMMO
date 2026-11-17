@@ -208,7 +208,7 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// <summary>Navigation collection of pet buff entries.</summary>
 		public ICollection<CharacterPetBuffEntity> PetBuffs { get; set; }
 		/// <summary>Navigation reference to the character's pet.</summary>
-		public CharacterPetEntity Pet { get; set; }
+		public ICollection<CharacterPetEntity> Pets { get; set; }
 		/// <summary>Navigation collection of character quest progress entries.</summary>
 		public ICollection<CharacterQuestEntity> Quests { get; set; }
 		/// <summary>Navigation collection of character skill entries.</summary>

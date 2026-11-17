@@ -412,6 +412,16 @@ namespace FishMMO.Shared
 		/// </remarks>
 		/// <param name="attacker">The character whose hit was refused.</param>
 		/// <param name="damageAttribute">The refused hit's damage type; the caster's prediction pairs on it.</param>
+		/// <summary>Server: tells threat an allowed attack landed for no damage (<see cref="ICharacterDamageController.OnAttackAbsorbed"/>).</summary>
+		private void RaiseAttackAbsorbed(ICharacter attacker)
+		{
+			if (attacker == null || !base.IsServerStarted || ReferenceEquals(attacker, Character))
+			{
+				return;
+			}
+			ICharacterDamageController.OnAttackAbsorbed?.Invoke(attacker, Character);
+		}
+
 		private void ReportRefusal(ICharacter attacker, DamageAttributeTemplate damageAttribute)
 		{
 			if (attacker == null || !base.IsServerStarted)
@@ -1465,7 +1475,11 @@ namespace FishMMO.Shared
 				 * attacked you, and returning before EnterCombat would let a blocking player leave
 				 * combat, regenerate and expire the attacker's loot rights mid-fight. Nothing else
 				 * runs: no damage was dealt, so there is no combat event, no contribution and no
-				 * death check. */
+				 * death check.
+				 *
+				 * But it is an attack, and threat hears it (OnAttackAbsorbed): a pet defends its owner and an NPC answers.
+				 * A wolf's 5-point Punch against 5 Armor used to raise nothing, so the player's pet never moved. */
+				RaiseAttackAbsorbed(attacker);
 				EnterCombat();
 				if (attacker != null &&
 					attacker.TryGet(out ICharacterDamageController blockedAttackerDamageController))

@@ -132,6 +132,37 @@ namespace FishMMO.UnitTests
 		/// its uneven margins pulled it off centre — a control run with that box restored fails
 		/// both, while every name still fits.
 		/// </remarks>
+		/// <summary>
+		/// The attribute list keeps room for several rows. The footer was the one part of the sheet allowed to shrink to
+		/// nothing, and on a 16:9 screen it was left two rows tall: "barely visible" (11-16).
+		/// </summary>
+		[UnityTest]
+		public IEnumerator TheAttributeListShowsSeveralRows()
+		{
+			RenderTexture texture = new RenderTexture(1707, 960, 24, RenderTextureFormat.ARGB32);
+			texture.Create();
+			try
+			{
+				settings.targetTexture = texture;
+				for (int frame = 0; frame < 10; ++frame)
+				{
+					yield return null;
+				}
+
+				ScrollView list = Live.Q<ScrollView>("attribute-list");
+				LogAssert.IsNotNull(list, "the attribute list is in the tree");
+				float height = list.layout.height;
+				LogAssert.IsTrue(height >= 100f,
+					$"the attribute list must show about five rows (>= 100 units) on a 16:9 window; it is {height} units tall");
+			}
+			finally
+			{
+				settings.targetTexture = null;
+				texture.Release();
+				Object.DestroyImmediate(texture);
+			}
+		}
+
 		[UnityTest]
 		public IEnumerator EverySocketLabelIsTheFullSlotNameAndFits()
 		{

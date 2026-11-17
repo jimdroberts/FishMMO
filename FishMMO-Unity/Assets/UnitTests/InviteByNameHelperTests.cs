@@ -48,9 +48,9 @@ namespace FishMMO.UnitTests
 		/// <summary>The base class that owns the shared prompt and target helpers.</summary>
 		private const string ControlPath = "Assets/Scripts/Client/GUI/UITKControl.cs";
 
-		private const string GuildPath = "Assets/Scripts/Client/GUI/World/Guild/UITKGuild.cs";
-		private const string PartyPath = "Assets/Scripts/Client/GUI/World/Party/UITKParty.cs";
-		private const string FriendListPath = "Assets/Scripts/Client/GUI/World/FriendList/UITKFriendList.cs";
+		private const string GuildPath = "Assets/Modules/Social/Client/UITKGuild.cs";
+		private const string PartyPath = "Assets/Modules/Social/Client/UITKParty.cs";
+		private const string FriendListPath = "Assets/Modules/Social/Client/UITKFriendList.cs";
 
 		/// <summary>Every GUI source file, which is the population the sweeps below run over.</summary>
 		private static string GuiRoot =>
@@ -64,6 +64,13 @@ namespace FishMMO.UnitTests
 		/// matching on a Windows checkout and the assertion then reports the code as missing while it
 		/// sits there unchanged.
 		/// </remarks>
+		/// <summary>True for a module's file whose module is not installed: the friend list is the Social module's.</summary>
+		private static bool ModuleAbsent(string relativePath)
+		{
+			return relativePath.StartsWith("Assets/Modules/", StringComparison.Ordinal) &&
+				!ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), relativePath));
+		}
+
 		private static string ReadSource(string relativePath)
 		{
 			string path = Path.Combine(Directory.GetCurrentDirectory(), relativePath);
@@ -281,6 +288,10 @@ namespace FishMMO.UnitTests
 
 			foreach ((string path, string signature, string broadcast) panel in panels)
 			{
+				if (ModuleAbsent(panel.path))
+				{
+					continue;
+				}
 				string body = MethodBody(StripComments(ReadSource(panel.path)), panel.signature);
 
 				LogAssert.IsTrue(body.Contains("PromptForCharacterID("),
@@ -311,6 +322,10 @@ namespace FishMMO.UnitTests
 
 			foreach ((string path, string signature, string message) panel in panels)
 			{
+				if (ModuleAbsent(panel.path))
+				{
+					continue;
+				}
 				string body = MethodBody(StripComments(ReadSource(panel.path)), panel.signature);
 
 				LogAssert.IsTrue(body.Contains(panel.message),

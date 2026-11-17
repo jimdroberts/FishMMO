@@ -39,6 +39,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>Player-ticks scheduled, and those spent on the idle interval (for the simulate report).</summary>
 		private long scheduledPlayerTicks, idleIntervalPlayerTicks;
 
+		/// <summary>Ticks between a scheduled player's sends, as this server runs them (the simulation tools report it).</summary>
+		public long ScheduledPlayerTicks => scheduledPlayerTicks;
+
+		/// <summary>Ticks between an idle player's sends (the simulation tools report it).</summary>
+		public long IdleIntervalPlayerTicks => idleIntervalPlayerTicks;
+
 		private void ApplyNetworkScheduleConfiguration()
 		{
 			if (Server?.Configuration != null)

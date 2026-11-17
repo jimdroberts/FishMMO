@@ -32,6 +32,8 @@ namespace FishMMO.RenderScratch
 		private static readonly string OUTPUT_DIR = ProbeOutput.Path("PanelRenders");
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string GUI_ROOT = "Assets/Scripts/Client/GUI";
+		/// <summary>Modules' windows live in their own folders (Assets/Modules/&lt;Name&gt;/Client).</summary>
+		private const string MODULES_ROOT = "Assets/Modules";
 		private const int WIDTH = 1200;
 		private const int HEIGHT = 900;
 		private const int SETTLE_FRAMES = 24;
@@ -69,7 +71,7 @@ namespace FishMMO.RenderScratch
 					populators[extra.Key] = extra.Value;
 				}
 
-				foreach (string path in AssetDatabase.FindAssets("t:VisualTreeAsset", new[] { GUI_ROOT })
+				foreach (string path in AssetDatabase.FindAssets("t:VisualTreeAsset", new[] { GUI_ROOT, MODULES_ROOT })
 					.Select(AssetDatabase.GUIDToAssetPath)
 					.Where(p => p.EndsWith(".uxml"))
 					.OrderBy(p => p))
@@ -77,11 +79,13 @@ namespace FishMMO.RenderScratch
 					string name = Path.GetFileNameWithoutExtension(path);
 					populators.TryGetValue(name, out var populate);
 
-					if (name == "UIGuild")
+					// A module's window captured more than once (the guild's tabs).
+					if (ExtraCaptures.TryGetValue(name, out List<(string label, Action<GameObject, UIDocument> populate)> captures))
 					{
-						queue.Add(Make("UIGuild-Roster", path, (h, d) => Panels.Guild(h, d, "guild-tab-roster")));
-						queue.Add(Make("UIGuild-Info", path, (h, d) => Panels.Guild(h, d, "guild-tab-info")));
-						queue.Add(Make("UIGuild-Log", path, (h, d) => Panels.Guild(h, d, "guild-tab-log")));
+						foreach ((string label, Action<GameObject, UIDocument> capture) in captures)
+						{
+							queue.Add(Make(label, path, capture));
+						}
 						continue;
 					}
 					/* One UXML, two windows. The equipment panel and the inspect window mount the same
@@ -154,11 +158,14 @@ namespace FishMMO.RenderScratch
 		/// <summary>Modules' panels (Factions adds UIFactions).</summary>
 		public static readonly Dictionary<string, Action<GameObject, UIDocument>> ExtraPopulators = new Dictionary<string, Action<GameObject, UIDocument>>();
 
+		/// <summary>Modules' windows captured several times, one capture per (label, populator): the guild's tabs.</summary>
+		public static readonly Dictionary<string, List<(string label, Action<GameObject, UIDocument> populate)>> ExtraCaptures =
+			new Dictionary<string, List<(string label, Action<GameObject, UIDocument> populate)>>();
+
 		private static Dictionary<string, Action<GameObject, UIDocument>> Populators()
 		{
 			return new Dictionary<string, Action<GameObject, UIDocument>>
 			{
-				{ "UIParty",          Panels.Party },
 				{ "UIChat",           Panels.Chat },
 				{ "UITooltip",        Panels.Tooltip },
 				{ "UIContextMenu",    Panels.ContextMenu },
@@ -170,10 +177,7 @@ namespace FishMMO.RenderScratch
 				{ "UIInventory",      Panels.Inventory },
 				{ "UIBank",           Panels.Bank },
 				{ "UIAchievements",   Panels.Achievements },
-				{ "UIFriendList",     Panels.FriendList },
-				{ "UIDungeonFinder",  Panels.DungeonFinder },
 				{ "UIInstance",       Panels.InstancePanel },
-				{ "UITrade",          (h, d) => TradePanelPopulator.Trade(h, d) },
 			};
 		}
 

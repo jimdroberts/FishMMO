@@ -131,9 +131,9 @@ namespace FishMMO.UnitTests
 			string source = CodeOnly(SaveSources());
 			LogAssert.IsFalse(source.Contains("Filtered == 0"),
 				"every mark clear goes through BulkWriteReporting.MayClearDirtyMarks, not a hand-written test");
-			// Factions' save is the Factions module's participant now (FactionPersistenceAuditTests pins it there).
-			LogAssert.AreEqual(5, Occurrences(source, "BulkWriteReporting.MayClearDirtyMarks(result)"),
-				"attributes, abilities, achievements, known abilities and archetypes");
+			// Factions' and archetypes' saves are their modules' participants now (each module's tests pin them there).
+			LogAssert.AreEqual(4, Occurrences(source, "BulkWriteReporting.MayClearDirtyMarks(result)"),
+				"attributes, abilities, achievements and known abilities");
 		}
 
 		#endregion
@@ -161,7 +161,7 @@ namespace FishMMO.UnitTests
 			foreach (string service in new[]
 			{
 				"attrService", "abilityService", "achievementService", "knownAbilityService",
-				"archetypeService", "petService", "petAttributeService", "petBuffService", "hotkeyService",
+				"petService", "petAttributeService", "petBuffService", "hotkeyService",
 			})
 			{
 				LogAssert.IsTrue(source.Contains($"await {service}.PersistOwnedAsync("), $"{service} writes through the ownership gate");
@@ -259,25 +259,29 @@ namespace FishMMO.UnitTests
 					"abilityService.DeleteAbilityOwnedAsync(characterID, abilityID, long.MaxValue, claim, admitReleased: true)",
 				},
 				new[] { "abilityService.PersistAsync(", "abilityService.DeleteAbilityAsync(" });
-			AssertOwned("Quest/QuestSystem.cs",
+			AssertModuleOwned("Assets/Modules/Quests/Server/QuestSystem.cs",
 				new[] { "service.PersistOwnedAsync(new[] { dto }, claims)", "service.DeleteQuestOwnedAsync(characterID, templateID, version, claim)" },
 				new[] { "service.PersistAsync(", "service.DeleteQuestAsync(" });
 			AssertOwned("Hotkey/HotkeySystem.cs",
 				new[] { "hotkeyService.PersistOwnedAsync(hotkeys, ClaimsOf(claim))" },
 				new[] { "hotkeyService.PersistAsync(" });
-			AssertOwned("Interactable/InteractableSystem.Merchant.cs",
-				new[] { "knownAbilityService.PersistOwnedAsync(", "service.PersistOwnedAsync(dtos, ClaimsOf(claim))" },
-				new[] { "knownAbilityService.PersistAsync(", "service.PersistAsync(dtos)" });
+			AssertModuleOwned("Assets/Modules/Commerce/Server/CommerceSystem.Merchant.cs",
+				new[] { "knownAbilityService.PersistOwnedAsync(" },
+				new[] { "knownAbilityService.PersistAsync(" });
+			// The spend-and-payout attribute save every currency path shares (merchants, crafting, mail, loot).
+			AssertModuleOwned("Assets/Scripts/Server/Implementation/ServerBehaviour.Currency.cs",
+				new[] { "service.PersistOwnedAsync(dtos, ClaimsOf(claim))" },
+				new[] { "service.PersistAsync(dtos)" });
 			AssertOwned("Achievement/AchievementSystem.cs",
 				new[] { "service.PersistOwnedAsync(" },
 				new[] { "service.PersistAsync(" });
-			AssertOwned("SceneServer/SceneServerSystem.AdminCommands.Economy.cs",
+			AssertModuleOwned("Assets/Modules/Staff/Server/StaffSystem.AdminCommands.Economy.cs",
 				new[] { "attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim))" },
 				new[] { "attributeService.PersistAsync(" });
-			AssertOwned("Guild/GuildSystem.cs",
+			AssertModuleOwned("Assets/Modules/Social/Server/GuildSystem.cs",
 				new[] { "attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim))" },
 				new[] { "attributeService.PersistAsync(" });
-			AssertOwned("Housing/HousingSystem.Plots.cs",
+			AssertModuleOwned("Assets/Modules/Housing/Server/HousingSystem.Plots.cs",
 				new[] { "attributeService.PersistOwnedAsync(dtos, ClaimsOf(claim))" },
 				new[] { "attributeService.PersistAsync(" });
 			AssertOwned("Pet/PetSystem.cs",
@@ -291,7 +295,12 @@ namespace FishMMO.UnitTests
 			/* The one per-character write left ungated on purpose: it bills an owner who has logged
 			 * out, from the stored row, and the ownership assertion before it proves — under the row
 			 * lock, for the whole transaction — that NO server holds a claim. There is none to quote. */
-			string body = CodeOnly(MethodBody(ReadSource(SceneServerRoot + "Housing/HousingSystem.Tax.cs"),
+			const string TaxPath = "Assets/Modules/Housing/Server/HousingSystem.Tax.cs";
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), TaxPath)))
+			{
+				Assert.Ignore("The Housing module is not installed.");
+			}
+			string body = CodeOnly(MethodBody(ReadSource(TaxPath),
 				"private async Task<OfflineChargeOutcome> TryChargeWonPeriodFromRowAsync(",
 				"private enum OnlineChargeOutcome"));
 			AssertOrdered(body, "ownershipService.AssertOwnershipAsync(characterID, default, allowUnclaimed: true)",
@@ -310,15 +319,25 @@ namespace FishMMO.UnitTests
 			AssertOrdered(forget, "TryCaptureSessionClaim(characterID, out CharacterSessionLeaseData claim)", "TryEnqueueAsyncWork(",
 				"and a forget, answered as the write failing");
 
-			string merchant = CodeOnly(MethodBody(ReadSource(SceneServerRoot + "Interactable/InteractableSystem.Merchant.cs"),
-				"private MerchantPurchaseFailure LearnAbilityGeneric<", "private async Task PersistKnownAbilityAsync("));
-			AssertOrdered(merchant, "TryCaptureSessionClaim(charID, out CharacterSessionLeaseData claim)", "learnFunc(abilityController,",
-				"a purchase is refused before anything is learned or charged");
+			// A merchant's teaching is the Commerce module's (CommerceSystem.Merchant); pinned only when it is installed.
+			const string MerchantPath = "Assets/Modules/Commerce/Server/CommerceSystem.Merchant.cs";
+			if (ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), MerchantPath)))
+			{
+				string merchant = CodeOnly(MethodBody(ReadSource(MerchantPath),
+					"private MerchantPurchaseFailure LearnAbilityGeneric<", "private async Task PersistKnownAbilityAsync("));
+				AssertOrdered(merchant, "TryCaptureSessionClaim(charID, out CharacterSessionLeaseData claim)", "learnFunc(abilityController,",
+					"a purchase is refused before anything is learned or charged");
+			}
 
-			string economy = CodeOnly(MethodBody(ReadSource(SceneServerRoot + "SceneServer/SceneServerSystem.AdminCommands.Economy.cs"),
-				"private void ChangeCurrency(", "private void GiveItem("));
-			AssertOrdered(economy, "TryCaptureSessionClaim(target.ID, out _)", "currency.SetValue(",
-				"an operator's balance change is refused before the balance moves");
+			// The operator's balance change is the Staff module's (StaffSystem.AdminCommands.Economy); pinned only when it is installed.
+			const string EconomyPath = "Assets/Modules/Staff/Server/StaffSystem.AdminCommands.Economy.cs";
+			if (ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), EconomyPath)))
+			{
+				string economy = CodeOnly(MethodBody(ReadSource(EconomyPath),
+					"private void ChangeCurrency(", "private void GiveItem("));
+				AssertOrdered(economy, "TryCaptureSessionClaim(target.ID, out _)", "currency.SetValue(",
+					"an operator's balance change is refused before the balance moves");
+			}
 		}
 
 		[Test]
@@ -433,6 +452,24 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(gate.Contains("FOR SHARE OF c"), "the revoke's admission holds the same share lock");
 			LogAssert.IsTrue(gate.Contains("c.session_state <> @p3") && gate.Contains("c.session_owner_server_id = 0"),
 				"and admits an unclaimed character by the ownership assertion's own definition, nothing wider");
+		}
+
+		/// <summary><see cref="AssertOwned"/> for a module's system, skipped when the module is not installed.</summary>
+		private static void AssertModuleOwned(string assetPath, string[] owned, string[] ungated)
+		{
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), assetPath)))
+			{
+				return;
+			}
+			string source = CodeOnly(ReadSource(assetPath));
+			foreach (string call in owned)
+			{
+				LogAssert.IsTrue(source.Contains(call), $"{assetPath} writes through the ownership gate: {call}");
+			}
+			foreach (string call in ungated)
+			{
+				LogAssert.IsFalse(source.Contains(call), $"{assetPath} no longer writes through the ungated {call}");
+			}
 		}
 
 		private static void AssertOwned(string relativeToSceneServer, string[] owned, string[] ungated)

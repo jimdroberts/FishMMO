@@ -8,8 +8,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A pet sent at a neutral NPC by an owner with aggression on (Jim, 11-16: "Pets don't attack our pinned target when
-	/// clicking Attack. The target is neutral but we have Aggression enabled"). The pet answers as its owner.
+	/// A pet sent at a neutral NPC by an owner with aggression on. The pet answers as its owner.
 	/// </summary>
 	[TestFixture]
 	public class FactionPetCommandTests
@@ -73,6 +72,34 @@ namespace FishMMO.UnitTests
 			SetAggression(ownerFactions, true);
 			Assert.IsTrue(HarmRule.MayHarm(owner, neutral, out _), "the owner may harm a neutral with aggression on");
 			Assert.IsTrue(HarmRule.MayHarm(pet, neutral, out _), "and so may the pet it sends, answering as its owner");
+		}
+
+		/// <summary>
+		/// Sending a pet at a neutral turns the owner's aggression on but only where the toggle is all that stands
+		/// in the way: never at a companion, which no toggle makes a target.
+		/// </summary>
+		[Test]
+		public void OnlyARefusalTheToggleLifts_QualifiesForTurningAggressionOn()
+		{
+			PlayerCharacter owner = NewCharacter<PlayerCharacter>("PetAggressOwner", 9511);
+			Pet pet = NewCharacter<Pet>("PetAggressPet", -9512);
+			pet.PetOwner = owner;
+			Pet secondPet = NewCharacter<Pet>("PetAggressSecondPet", -9513);
+			secondPet.PetOwner = owner;
+			NPC neutral = NewCharacter<NPC>("PetAggressNeutral", -9514);
+
+			FactionController ownerFactions = FactionsOf(owner);
+			FactionsOf(pet);
+			FactionsOf(secondPet);
+			FactionsOf(neutral);
+
+			Assert.IsTrue(HarmRule.RefusedForWantOfAggression(pet, neutral), "a neutral is refused only for want of aggression");
+			Assert.IsFalse(HarmRule.RefusedForWantOfAggression(pet, secondPet), "the owner's other pet is a companion: no toggle makes it a target");
+
+			SetAggression(ownerFactions, true);
+			Assert.IsTrue(HarmRule.MayHarm(pet, neutral, out _), "once on, the pet may attack the neutral");
+			Assert.IsFalse(HarmRule.RefusedForWantOfAggression(pet, neutral), "and nothing is refused any more");
+			Assert.IsFalse(HarmRule.MayHarm(pet, secondPet, out _), "the companion stays off limits with the toggle on");
 		}
 	}
 }

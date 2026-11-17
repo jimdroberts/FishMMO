@@ -49,14 +49,12 @@ namespace FishMMO.Shared.Core
 		Transform PinnedTarget { get; }
 
 		/// <summary>
-		/// Strict toggle: releases a held pin whatever is under the pointer, and otherwise pins the
-		/// hovered character. Owning client only.
+		/// The pin key: pins the hovered character, MOVING a held pin straight to it; releases the pin when the pointer is on
+		/// the pinned character itself, on nothing, or on something that cannot be pinned. Owning client only.
 		/// </summary>
 		/// <remarks>
-		/// A release always wins. Making the key contextual instead — releasing only when the
-		/// pointer happened to be on the pinned character or on nothing — meant a player with an
-		/// enemy under the crosshair had no way to let go of a pin, and re-pinning silently moved
-		/// it. Moving a pin therefore takes two presses; dropping one always takes exactly one.
+		/// One press per change (11-16). The strict toggle it replaced always released a held pin first, so moving a pin took
+		/// two presses.
 		/// </remarks>
 		/// <returns>True when a target is pinned after the call.</returns>
 		bool TogglePinnedTarget();

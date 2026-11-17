@@ -11,6 +11,18 @@ namespace FishMMO.Server.Core.World.SceneServer
 	public interface IInteractableSystem : IServerBehaviour
 	{
 		/// <summary>
+		/// Raised for every interaction the system accepts — validated, in range, rate limited — before the
+		/// interactable's own triggers run.
+		/// </summary>
+		/// <remarks>
+		/// How a module handles an interaction kind the interactable carries intrinsically rather than through
+		/// a trigger list: the Commerce module opens a corpse's loot window here, so any NPC that can die is
+		/// lootable without a content author having to remember a trigger, and a game without Commerce has
+		/// corpses nobody can open. Handlers run on the main thread and must not throw.
+		/// </remarks>
+		event System.Action<IPlayerCharacter, IInteractable> OnPlayerInteracting;
+
+		/// <summary>
 		/// Handles a player interacting with an NPC.
 		/// </summary>
 		/// <param name="character">The player character initiating the interaction.</param>

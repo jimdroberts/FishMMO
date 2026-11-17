@@ -182,6 +182,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 					});
 				}
 			}
+			// Towns stay out of reach of every spawn, not only of the areas' centres.
+			for (int i = 0; i < result.Count; ++i)
+			{
+				result[i].KeepOuts = KeepOutsFor(settlements, result[i].Center, result[i].Size);
+			}
 			return result;
 		}
 
@@ -223,6 +228,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				RandomRespawnTime = true,
 				PrewarmHeadroom = 0,
 				Pack = PackSettings(hunts),
+				KeepOutCircles = new List<Vector3>(area.KeepOuts),
 			};
 			definition.Spawnables.AddRange(Spawnables(area));
 			return definition;
@@ -303,6 +309,47 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			return true;
 		}
 
+		/// <summary>The settlement circles (x, radius, z) that reach into a box centred on <paramref name="center"/>.</summary>
+		public static List<Vector3> KeepOutsFor(IReadOnlyList<Vector3> circles, Vector3 center, Vector3 size)
+		{
+			var result = new List<Vector3>();
+			if (circles == null)
+			{
+				return result;
+			}
+			float halfX = size.x * 0.5f, halfZ = size.z * 0.5f;
+			for (int i = 0; i < circles.Count; ++i)
+			{
+				Vector3 c = circles[i];
+				float dx = Mathf.Max(Mathf.Abs(c.x - center.x) - halfX, 0f);
+				float dz = Mathf.Max(Mathf.Abs(c.z - center.z) - halfZ, 0f);
+				if (dx * dx + dz * dz < c.y * c.y)
+				{
+					result.Add(c);
+				}
+			}
+			return result;
+		}
+
+		/// <summary>True when <paramref name="point"/> is inside any of the circles (x, radius, z) on the ground plane.</summary>
+		public static bool InsideKeepOut(IReadOnlyList<Vector3> circles, Vector3 point)
+		{
+			if (circles == null)
+			{
+				return false;
+			}
+			for (int i = 0; i < circles.Count; ++i)
+			{
+				Vector3 c = circles[i];
+				float dx = point.x - c.x, dz = point.z - c.z;
+				if (dx * dx + dz * dz < c.y * c.y)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// <summary>Settlement points of interest as (x, keep-clear radius, z).</summary>
 		private static List<Vector3> Settlements(IReadOnlyList<PointOfInterestRecord> pois, float clearance)
 		{
@@ -362,6 +409,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		public Vector3 Size;
 		public List<WildlifeWeight> Species = new List<WildlifeWeight>();
 		public int Count;
+
+		/// <summary>
+		/// Settlements overlapping this area, as (x, keep-clear radius, z): no animal spawns inside one (see
+		/// <see cref="InsideKeepOut"/>). The area's box is placed clear of towns, but it is hundreds of metres wide and its animals
+		/// spawn anywhere in it.
+		/// </summary>
+		public List<Vector3> KeepOuts = new List<Vector3>();
 		/// <summary>True for a den or a cave mouth (one species, small), false for an open-country area.</summary>
 		public bool Den;
 	}

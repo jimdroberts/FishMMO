@@ -382,9 +382,10 @@ namespace FishMMO.Shared.Core
 	{
 		/// <summary>
 		/// Told of every <see cref="InvokeAll"/> call, empty lists included, before anything runs: lets tests pin
-		/// that a path dispatches no triggers at all. Null outside tests.
+		/// that a path dispatches no triggers at all. Null outside tests. Public so a module's own test assembly can pin
+		/// its controllers the same way (it was internal to the core tests before modules had tests of their own).
 		/// </summary>
-		internal static System.Action<List<Trigger>, EventData> DispatchObserved;
+		public static System.Action<List<Trigger>, EventData> DispatchObserved;
 
 		/// <summary>
 		/// Executes each trigger in <paramref name="triggers"/> with <paramref name="eventData"/>, in order.

@@ -1442,7 +1442,7 @@ namespace FishMMO.UnitTests
 		/// The model swap deactivates every old child of the mesh root and Destroys it (deferred to the end of the frame), then
 		/// raises OnModelReady in the same frame. A buff FX caught in the swap is not null yet, and it must still be re-created:
 		/// after a scene change the race model is cached, the swap lands right after the payload restored the buffs, and the
-		/// speed buff's ankle effect vanished for good (Jim, 11-16).
+		/// speed buff's ankle effect vanished for good.
 		/// </summary>
 		[Test]
 		public void BuffFX_CaughtInTheModelSwap_IsRecreatedOnModelReady()

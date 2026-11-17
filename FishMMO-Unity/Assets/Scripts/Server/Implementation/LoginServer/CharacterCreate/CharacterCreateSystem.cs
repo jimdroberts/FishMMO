@@ -428,6 +428,50 @@ namespace FishMMO.Server.Implementation.LoginServer
 					return;
 				}
 
+				// --- The account's access level, read now ---
+				/* A new character takes its account's access level: a staff account's characters are
+				 * staff characters. Read from the account row at creation rather than from the login
+				 * session's copy, so an account demoted since it logged in does not create a character
+				 * at the level it no longer has. A read that fails refuses the create, as a failed count
+				 * does, rather than silently creating at Player. */
+				if (services == null || !services.TryGet<IAccountService>(out IAccountService accountService))
+				{
+					await Log.Error("CharacterCreateSystem", $"IAccountService unavailable; cannot read the access level of account '{accountName}'.");
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.Error,
+							}, true, Channel.Reliable);
+						}
+					});
+					return;
+				}
+				var accountResult = await accountService.FetchForLoginAsync(accountName);
+				if (!accountResult.IsSuccess)
+				{
+					await Log.Error("CharacterCreateSystem", $"Failed to read account '{accountName}' for its access level: [{accountResult.ErrorCode}] {accountResult.ErrorMessage}");
+					TryEnqueueMainThread(() =>
+					{
+						if (conn != null && conn.IsActive)
+						{
+							Server.NetworkWrapper.Broadcast(conn, new CharacterCreateResultBroadcast()
+							{
+								Result = CharacterCreateResult.Error,
+							}, true, Channel.Reliable);
+						}
+					});
+					return;
+				}
+				byte accountAccessLevel = accountResult.Data.AccessLevel;
+				if (!Enum.IsDefined(typeof(AccessLevel), accountAccessLevel) || (AccessLevel)accountAccessLevel == AccessLevel.Banned)
+				{
+					// A banned account cannot log in, and an unknown level is not one to hand a character.
+					accountAccessLevel = (byte)AccessLevel.Player;
+				}
+
 				// --- Build all DTOs (immutable template data, safe off main thread) ---
 
 				var characterData = new CharacterData(
@@ -460,7 +504,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 					rotY: preparedSpawn.RotY,
 					rotZ: preparedSpawn.RotZ,
 					rotW: preparedSpawn.RotW,
-					accessLevel: (byte)AccessLevel.Player,
+					accessLevel: accountAccessLevel,
 					online: false,
 					flags: 0,
 					version: 0,

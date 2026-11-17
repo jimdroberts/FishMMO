@@ -381,13 +381,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				_ = Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
 			}
 
-			// In-game operator commands. See SceneServerSystem.AdminCommands.
-			RegisterAdminCommands();
-			RegisterGameMasterCommands();
-
 			// World clock and weather. See SceneServerSystem.Weather.
 			InitializeNetworkSchedule(characterSystem);
-			InitializeGameMasterPresence(characterSystem);
 			InitializeWeather(characterSystem, characterMappingData);
 
 			// Periodic callbacks
@@ -461,11 +456,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			UnregisterAdminCommands();
-			UnregisterGameMasterCommands();
 			DeinitializeWeather();
 			DeinitializeNetworkSchedule();
-			DeinitializeGameMasterPresence();
 
 			// A shutdown that has been carried out must not still be pending in the database, or
 			// an automatic restart stops again immediately. See ClearConsumedShutdownOnTeardown.
@@ -498,7 +490,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			// Last, so the scene cleanup has the shutdown budget first: a bounded final bandwidth sample.
-			DespawnSimulatedPlayers();
 			trafficBreakdown?.Stop();
 			trafficBreakdown = null;
 			NetworkSendSchedule.Reset(Server?.NetworkWrapper?.NetworkManager, asServer: true);
@@ -530,7 +521,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			DrainMainThreadQueue(drainAll: false);
 			UpdateWeather(deltaTime);
-			UpdateSimulationRun(deltaTime);
 		}
 
 		/// <summary>

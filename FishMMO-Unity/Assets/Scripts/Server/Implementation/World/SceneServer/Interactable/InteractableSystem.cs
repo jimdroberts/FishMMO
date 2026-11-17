@@ -18,7 +18,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
-	/// Validates and processes client interactions with interactable objects including merchants, crafting, and dungeon finders.
+	/// Validates and processes client interactions with interactable objects: dialogue, containers and portals; modules handle their own kinds through <see cref="OnPlayerInteracting"/>.
 	/// </summary>
 	[CreateAssetMenu(fileName = "InteractableSystem", menuName = "FishMMO/Server/SceneServer/Interactable System", order = 1)]
 	[RequiresDataContainer(typeof(InteractableSystemMainThreadQueueData))]
@@ -67,19 +67,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		/// which is the standard Unity pattern for editor-assigned asset dependencies.
 		/// </summary>
 		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
-		/// <summary>
-		/// Maximum number of crafted abilities a character may learn.
-		/// </summary>
-		[SerializeField] [Min(1)] private int maxAbilityCount = 25;
-		/// <summary>
-		/// Maximum number of ability events allowed per craft request.
-		/// Defense-in-depth cap to prevent processing oversized payloads.
-		/// </summary>
-		[SerializeField] [Min(1)] private int maxAbilityCraftEvents = 32;
-		/// <summary>
-		/// Currency attribute required to buy merchant items and abilities.
-		/// </summary>
-		[SerializeField] private CharacterAttributeTemplate currencyTemplate;
 
 		/// <summary>
 		/// Initializes the InteractableSystem: validates dependencies, registers all network broadcast handlers,
@@ -114,43 +101,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived, true);
 			/* Three requests, not one. The finder browses, opens and joins, and each is
 			 * authorised on its own terms — DungeonFinderBroadcast is now purely the server's
 			 * message opening the panel and is not accepted from a client at all. */
-			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderListBroadcast>(OnServerDungeonFinderListBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderCreateBroadcast>(OnServerDungeonFinderCreateBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<DungeonFinderJoinBroadcast>(OnServerDungeonFinderJoinBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<MailClaimAttachmentBroadcast>(OnServerMailClaimAttachmentBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<CorpseLootTakeAllBroadcast>(OnServerCorpseLootTakeAllBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived, true);
 
 			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
 
 			/* Registered here rather than beside /leaveinstance on the character system, because
 			 * closing an instance is dungeon-finder business: it has to resolve the party's
 			 * instance the same way an entry request does. See OnCloseDungeonCommand. */
-			ChatHelper.AddCommands(new Dictionary<string, ChatCommand>()
-			{
-				{ "/closedungeon", OnCloseDungeonCommand },
-				{ "/closeinstance", OnCloseDungeonCommand },
-			});
-			ChatHelper.SetCommandHelp("/closedungeon", new ChatCommandHelp()
-			{
-				Category = "Instance",
-				Summary = "Party leader: closes your party's dungeon so you can start another.",
-				Aliases = new[] { "/closeinstance" },
-			});
-
 			/* The dialogue choice cache is memory-only and keyed by character ID. Without these
 			 * two hooks it has no idea who is still playing, which is what made its capacity
 			 * sweep evict a connected player's one-time choices; and nothing ever removed an
@@ -160,15 +121,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				dialogueCharacterSystem.OnAfterLoadCharacter += CharacterSystem_OnDialogueCharacterLoaded;
 				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnDialogueCharacterDisconnected;
-				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnGroupFinderCharacterDisconnected;
 			}
 			else
 			{
 				Log.Warning("InteractableSystem", "InitializeOnce: ICharacterSystem not found; cached dialogue choices will not be released on disconnect, and group finder rows will outlive their characters until the stale sweep.");
 			}
-
-			// Group finder: its two requests, its pump, and its tunables. See InteractableSystem.GroupFinder.cs.
-			InitializeGroupFinder();
 
 			// Waypoints' fast travel and discovery hooks moved to the Travel module (WaypointTravelSystem).
 
@@ -208,42 +165,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MerchantPurchaseBroadcast>(OnServerMerchantPurchaseBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MerchantSellBroadcast>(OnServerMerchantSellBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<AbilityCraftBroadcast>(OnServerAbilityCraftBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderListBroadcast>(OnServerDungeonFinderListBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderCreateBroadcast>(OnServerDungeonFinderCreateBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<DungeonFinderJoinBroadcast>(OnServerDungeonFinderJoinBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MailFetchBroadcast>(OnServerMailFetchBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MailSendBroadcast>(OnServerMailSendBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MailDeleteBroadcast>(OnServerMailDeleteBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<MailClaimAttachmentBroadcast>(OnServerMailClaimAttachmentBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeItemBroadcast>(OnServerCorpseLootTakeItemBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeCurrencyBroadcast>(OnServerCorpseLootTakeCurrencyBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootTakeAllBroadcast>(OnServerCorpseLootTakeAllBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<CorpseLootCloseBroadcast>(OnServerCorpseLootCloseBroadcastReceived);
 
 			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
-
-			// Static registry: a command left behind outlives this ScriptableObject.
-			ChatHelper.RemoveCommands(new[] { "/closedungeon", "/closeinstance" });
 
 			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
 				dialogueCharacterSystem != null)
 			{
 				dialogueCharacterSystem.OnAfterLoadCharacter -= CharacterSystem_OnDialogueCharacterLoaded;
 				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnDialogueCharacterDisconnected;
-				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnGroupFinderCharacterDisconnected;
 			}
 
-			DeinitializeGroupFinder();
-
 			DeinitializePortals();
-
-			// Corpse loot cleanup
-			ClearCorpseSubscriptions();
 
 			// Dialogue session cleanup
 			activeDialogueSessions.Clear();
@@ -482,16 +416,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 					return;
 				}
 				{
-					/* Corpse looting is handled directly rather than through a trigger, because it
-					 * is intrinsic to any NPC that can die: an NPC whose prefab has no interact
-					 * triggers configured must still be lootable, and a content author must not be
-					 * able to make a creature silently unlootable by forgetting a list entry. The
-					 * ECA triggers below still run, so per-NPC extras (achievements, quest
-					 * updates, dialogue) compose on top of it. */
-					if (interactable is ILootableCorpse corpse)
-					{
-						OpenCorpseLoot(conn, character, corpse);
-					}
+					/* Interaction kinds intrinsic to the interactable (a corpse's loot, in the Commerce
+					 * module) are handled by whoever subscribes, before the ECA triggers below; the
+					 * triggers still run, so per-NPC extras (achievements, quest updates, dialogue)
+					 * compose on top. A throwing handler does not stop the interaction. */
+					RaisePlayerInteracting(character, interactable);
 
 					interactable.ExecuteOnInteract(new PlayerInteractionEventData(character, interactable,
 					(ch, inv, item) => SendNewItemBroadcast(ch.Owner, ch, inv, item)));
@@ -500,6 +429,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			finally
 			{
 				EndIngressGuard(guardKey);
+			}
+		}
+
+		/// <inheritdoc/>
+		public event Action<IPlayerCharacter, IInteractable> OnPlayerInteracting;
+
+		private void RaisePlayerInteracting(IPlayerCharacter character, IInteractable interactable)
+		{
+			Action<IPlayerCharacter, IInteractable> handlers = OnPlayerInteracting;
+			if (handlers == null)
+			{
+				return;
+			}
+			foreach (Action<IPlayerCharacter, IInteractable> handler in handlers.GetInvocationList())
+			{
+				try
+				{
+					handler(character, interactable);
+				}
+				catch (Exception ex)
+				{
+					Log.Error("InteractableSystem", $"An interaction handler threw for CharID={character?.ID}: {ex}");
+				}
 			}
 		}
 

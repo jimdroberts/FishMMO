@@ -93,9 +93,6 @@ namespace FishMMO.Shared
 				"Assets/Templates/Entity/CharacterAttributes",
 				"FishMMO/Character/Attribute/Character Attribute");
 
-			list.Add<QuestTemplate>("Quests", "Character",
-				"Assets/Templates/Entity/Quests",
-				"FishMMO/Character/Quest/Quest");
 
 			list.Add(new TemplateCategory
 			{
