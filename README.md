@@ -838,7 +838,7 @@ Both `/latest_version` forms send a weak `ETag`, `Cache-Control: public, max-age
 
 ### Constants.cs — Client Domains
 
-The file [`FishMMO-Unity/Assets/Scripts/Shared/Implementation/Constants.cs`](FishMMO-Unity/Assets/Scripts/Shared/Implementation/Constants.cs) contains domain endpoints used by the client to connect to your infrastructure.
+The file [`FishMMO-Unity/Assets/FishMMO/Shared/Implementation/Constants.cs`](FishMMO-Unity/Assets/FishMMO/Shared/Implementation/Constants.cs) contains domain endpoints used by the client to connect to your infrastructure.
 
 These values are **not literals in `Constants.cs`** — each one reads from `HostConfig`, a tracked class whose sentinel defaults are overridden by the gitignored, generated `HostConfig.generated.cs` (written by the dashboard, or substituted at build time by CI or the FishMMO-Installer). A fresh clone has no generated file and still compiles; the sentinel values are intentionally invalid, and the build validator blocks release builds that still contain them.
 
@@ -2297,7 +2297,7 @@ deliberate acts rather than windows a player flicks in and out of.
 
 ### Client TLS Certificate Pinning
 
-The client pins TLS certificates to prevent man-in-the-middle attacks on API and WebTransport connections. Pins are **IL-embedded at compile time** via `FishMMO-Unity/Assets/Scripts/Client/Security/CertificatePins.generated.cs` -- no separate configuration file is needed.
+The client pins TLS certificates to prevent man-in-the-middle attacks on API and WebTransport connections. Pins are **IL-embedded at compile time** via `FishMMO-Unity/Assets/FishMMO/Client/Security/CertificatePins.generated.cs` -- no separate configuration file is needed.
 
 > **Development builds:** Empty pins are allowed (TOFU / trust-on-first-use mode).
 > **Release builds:** At least 2 pins (active + backup) are **required**. The build will fail if fewer than 2 valid pins are configured or if sentinel placeholders are still present.
@@ -2629,7 +2629,7 @@ Key guarantee: **RuntimeDataContainers are always initialized before ServerBehav
 
 Combat and movement run through one prediction pipeline rather than per-subsystem ones. The
 details are in
-[`Assets/Scripts/Shared/Implementation/Entity/Prediction/README.md`](FishMMO-Unity/Assets/Scripts/Shared/Implementation/Entity/Prediction/README.md);
+[`Assets/FishMMO/Shared/Implementation/Entity/Prediction/README.md`](FishMMO-Unity/Assets/FishMMO/Shared/Implementation/Entity/Prediction/README.md);
 the shape is:
 
 | Layer | What it does |
@@ -2642,7 +2642,7 @@ the shape is:
 | **Server-only physics** | A physics query is not reproducible across peers, so every target selector and hit action runs on the server, inside the caster's rewound world, and caps its result only after ranking and per-body dedupe. |
 
 Behaviour is pinned by roughly **2,100 test methods across 221 fixtures**
-([`Assets/UnitTests/README.md`](FishMMO-Unity/Assets/UnitTests/README.md)), including a
+([`Assets/FishMMO/Tests/UnitTests/README.md`](FishMMO-Unity/Assets/FishMMO/Tests/UnitTests/README.md)), including a
 closed-loop fixture that composes both halves of the lag-compensation derivation across a spread
 of round-trip times and asserts the server resolves to the position the shooter was rendering.
 

@@ -90,7 +90,7 @@ Shader "FishMMO/Water/Lava Light"
             // Set by WaterSurface when the pipeline makes a depth texture; without one there is
             // nothing to project onto and the pass adds nothing.
             #pragma multi_compile_fragment _ _WATER_DEPTH
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"

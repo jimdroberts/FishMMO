@@ -108,7 +108,7 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
  * never sees the globals), with placeholders and _FishFloraInfo.x = 0 when nothing is published, so every blade is then
  * what it was. The blades' vertex shader (FishGrassBlades.hlsl) asks the same patch from the same root for the colour,
  * width and curl, so nothing new rides the record. The patch and salt must match GRASS_FLORA_PATCH / _SALT there. */
-#include "FishFlora.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 #include "FishGrassLookCache.hlsl"
 /* The burn mosaic (2026-10-25, I2t; FishBurn.hlsl, BurnMosaicTable.BindCompute): where a veld fire passed, blades stand as
  * stubble and regrow through the green flush, and an after-burn type (fire lilies, GRASS_ROW_MORE w) grows only in its weeks.
@@ -497,7 +497,7 @@ float4 _GrassSnowDeep;                       // _FishSnowDeep
 Texture2D<float> _GrassSnowField;            // _FishSnowFieldTex
 float4 _GrassSnowFieldRect;                  // _FishSnowFieldRect
 
-#include "FishSnowLine.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishSnowLine.hlsl"
 
 // The climate field at a point, bilinear by hand: K against the middle's.
 float GrassSnowFieldAt(float2 xz)
@@ -872,7 +872,7 @@ uint2 GrassActiveChannelsAt(uint terrain, float2 local)
 
 // Last frame's depth pyramid (FishDepthPyramid, 2026-10-21): a blade wholly behind a hill, a rock or a wall is not drawn in
 // the camera's view; its shadow still is (only the main lists ask).
-#include "FishHiZOcclusion.hlsl"
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
 
 bool GrassSphereVisible(float3 c, float r)
 {

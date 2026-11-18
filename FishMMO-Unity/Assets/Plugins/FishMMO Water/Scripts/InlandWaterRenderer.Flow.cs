@@ -71,7 +71,7 @@ namespace FishMMO.Water
 				WorldSceneSettings settings = root.GetComponentInChildren<WorldSceneSettings>(true);
 				if (settings != null)
 				{
-					map = settings.BiomeMap;
+					map = settings.BiomeMap();
 					break;
 				}
 			}

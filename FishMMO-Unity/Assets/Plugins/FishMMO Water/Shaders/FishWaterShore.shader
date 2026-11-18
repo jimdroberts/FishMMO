@@ -64,8 +64,8 @@ Shader "FishMMO/Water/Shore"
             #pragma target 3.5
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl"
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             // Set by WaterSurface when the pipeline makes a depth texture; without one there is
             // no ground to project onto.
             #pragma multi_compile_fragment _ _WATER_DEPTH

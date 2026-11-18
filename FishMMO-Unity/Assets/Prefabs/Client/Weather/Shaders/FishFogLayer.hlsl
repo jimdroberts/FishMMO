@@ -327,7 +327,7 @@ float FishFogPhase(float cosAngle, float g)
 }
 
 // The terrain's shadow over the air (FishTerrainSunlit): FishTerrainShade.hlsl, which the ground's lighting shares.
-#include "FishTerrainShade.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishTerrainShade.hlsl"
 
 /// <summary>
 /// The light a point in the fog scatters toward the eye, per unit of its scattering: the light's own

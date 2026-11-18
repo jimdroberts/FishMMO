@@ -39,7 +39,7 @@ Shader "FishMMO/Cave Cover"
             #pragma fragment CoverForwardFragment
 
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
             // The cave's lanterns, torches and crystal lights (CoverForwardFragment).
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP

@@ -1,6 +1,6 @@
 #ifndef FISH_GRASS_LOOK_CACHE_INCLUDED
 #define FISH_GRASS_LOOK_CACHE_INCLUDED
-#include "FishFlora.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 // The record's extra word keeps its type bit (0). Bits 1..8 cache the palette biome,
 // 9..12 its variant, and 13 marks a valid cache. Bits 14..17 hold the flower variant
 // when bit 18 is set. No extra storage or quantized shape data.

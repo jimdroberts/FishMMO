@@ -1,0 +1,47 @@
+{
+    "name": "FishMMO.AmbientLife.Tests",
+    "rootNamespace": "FishMMO.UnitTests",
+    "references": [
+        "FishMMO.Core",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "FishMMO.UnitTests",
+        "FishMMO.Water",
+        "FishMMO.AmbientLife",
+        "FishMMO.AmbientLife.Client",
+        "FishMMO.AmbientLife.Editor",
+        "FishMMO.Client.Weather.Editor",
+        "FishMMO.Shared.Tools.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "FishMMO-AuthShared.dll",
+        "FishMMO-ClientAuth.dll",
+        "FishMMO-ServerAuth.dll",
+        "FishMMO-Logger.dll",
+        "FishMMO-SharedUtility.dll",
+        "FishMMO-DB.dll",
+        "srp.dll",
+        "BouncyCastle.Cryptography.dll",
+        "Otp.NET.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

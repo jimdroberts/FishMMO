@@ -1,0 +1,21 @@
+{
+    "name": "FishMMO.Naming",
+    "rootNamespace": "FishMMO.Shared.NameGeneration",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "KinematicCharacterController"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

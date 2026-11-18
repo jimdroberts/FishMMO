@@ -46,8 +46,8 @@ Shader "FishMMO/Weather/Precipitation Splash"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             // The ground's own weather (and FishWeather.hlsl through it), so a ring goes exactly where
             // the ground draws a puddle.
-            #include "FishSurface.hlsl"
-            #include "FishAmbient.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 
             // Set on the field's own copy of the material each draw (PrecipitationSplashField), in UnityPerMaterial so the
             // draw stays in the SRP Batcher.

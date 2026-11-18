@@ -1,0 +1,712 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Rendering;
+using FishMMO.Shared;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
+using FishMMO.Shared.Biomes;
+using UnityEngine.SceneManagement;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// Draws the steam off a scene's hot ground: each fumarole's plume, each hot spring's smoking pool, and
+	/// each geyser — a faint wisp while it waits, a column of water and steam while it plays, the steam
+	/// drifting off after it.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>Where and when</b> are <see cref="GeothermalVents"/>': the sites from the scene's biome map, the
+	/// eruptions from the shared world clock (<see cref="WorldMotion.Seconds"/>), so every player sees the
+	/// same geyser go off at the same moment and a late joiner finds it mid-play. Nothing is networked.
+	/// </para>
+	/// <para>
+	/// <b>How much steam</b> is <see cref="SteamPhysics"/>': a plume is visible until dilution has evaporated
+	/// it, and how much dilution that takes is set by how cold and how dry the air is. So the same vent is a
+	/// wisp a few metres tall on a dry summer afternoon and a column a hundred metres tall on a winter
+	/// morning, and it leans over in the wind by its own rise against the wind's speed. The air is read at
+	/// each site's own half-kilometre block every <see cref="AirSeconds"/> of world time
+	/// (<see cref="WeatherField.SampleAtSeconds"/>), never at the camera, so two players see the same plume.
+	/// </para>
+	/// <para>
+	/// Reuses the volcanic plume's machinery: its shader (populations 4 and 5 of FishVolcanicPlume.shader),
+	/// its material on the render profile, its kind of field of quads, and its two-layer pace on the shared clock
+	/// (<see cref="VolcanicPlumePresenter.PaceWindowSeconds"/>), so a plume whose visible length changes with
+	/// the weather never scrubs. No particle system, no compute: WebGL2 runs it.
+	/// </para>
+	/// </remarks>
+	public sealed class GeothermalSteamPresenter : MonoBehaviour, IWeatherPresenter
+	{
+		/// <summary>
+		/// Quads in this presenter's field: a plume draws a share of them. A quarter of the volcanic field — no
+		/// steam plume wants more than a few hundred puffs, and every draw runs the vertex shader over the whole
+		/// field (the undrawn quads collapse to a point), so the smaller field is four times cheaper a draw.
+		/// </summary>
+		public const int Particles = 512;
+		/// <summary>The most sites drawn at once, the nearest.</summary>
+		public const int MaxDrawn = 24;
+		/// <summary>Sites further than this from the camera are not drawn, m.</summary>
+		public const float Reach = 1500f;
+		/// <summary>How far the camera may move before the sites round it are searched again, m.</summary>
+		private const float Refind = 60f;
+		/// <summary>World seconds between readings of the air over a site.</summary>
+		public const double AirSeconds = 5.0;
+		/// <summary>The air is read once per block this wide, m: every site in it leans on the same wind.</summary>
+		public const float AirBlockMetres = 500f;
+		/// <summary>The jet's half-angle, rad: a geyser's column is a narrow cone.</summary>
+		private const float JetHalfAngle = 0.07f;
+		/// <summary>How fast steam widens per metre along it: a top-hat buoyant plume's 6/5 α with α ≈ 0.1 (Morton, Taylor and Turner).</summary>
+		private const float PlumeSpread = 0.12f;
+		/// <summary>A pool's steam spreads faster: it rises slowly and is torn sideways by the lightest air.</summary>
+		private const float PoolSpread = 0.2f;
+		/// <summary>Steam's own colour when the ground names no substance: a cloud's white.</summary>
+		public static readonly Color SteamWhite = new Color(0.96f, 0.97f, 0.98f, 1f);
+		/// <summary>A geyser's water: white with spray.</summary>
+		public static readonly Color WaterWhite = new Color(0.9f, 0.93f, 0.95f, 1f);
+		/// <summary>A mud pot's spatter: wet grey clay.</summary>
+		public static readonly Color MudGrey = new Color(0.42f, 0.4f, 0.37f, 1f);
+		/// <summary>How much deeper than its own funnel a spring's water may stand and still be its own pool, m.</summary>
+		private const float OwnPoolSlack = 0.5f;
+
+		private const int SteamPopulation = 4;
+		private const int WaterPopulation = 5;
+		/// <summary>The plume shader's airless fountain (grains on ballistic arcs) and its frost collar (flakes lying round a lip).</summary>
+		private const int FountainPopulation = 3;
+		private const int CollarPopulation = 6;
+		/// <summary>An airless or thin-aired fume jet's frost collar (decision 84: SO₂ frost; water frost round an ice moon's jets).</summary>
+		public static readonly Color FrostWhite = new Color(0.95f, 0.96f, 0.97f, 1f);
+		/// <summary>A jet's cone, rad: a fissure's narrow jet; a fumarole's wider fume.</summary>
+		private const float JetCone = 0.14f, FumeCone = 0.22f;
+
+		private static readonly int VentId = Shader.PropertyToID("_PlumeVent");
+		private static readonly int FormId = Shader.PropertyToID("_PlumeForm");
+		private static readonly int RiseId = Shader.PropertyToID("_PlumeRise");
+		private static readonly int LeanId = Shader.PropertyToID("_PlumeLean");
+		private static readonly int DriftId = Shader.PropertyToID("_PlumeDrift");
+		private static readonly int BallisticId = Shader.PropertyToID("_PlumeBallistic");
+		private static readonly int ColorId = Shader.PropertyToID("_PlumeColor");
+		private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+		private static readonly int PaceId = Shader.PropertyToID("_PlumePace");
+		private static readonly int HeldId = Shader.PropertyToID("_PlumeHeld");
+
+		/// <summary>The air over one block, as last read.</summary>
+		private struct Air
+		{
+			public float AirC, DewPointC, BoilingC;
+			public Vector2 Wind;
+		}
+
+		/// <summary>A site found round the camera, with the ground it stands on.</summary>
+		private struct Found
+		{
+			public GeothermalSite Site;
+			public float Ground;
+			public float Distance;
+		}
+
+		/// <summary>A site's visible steam lengths in the air last read: at rest, and erupting (a geyser's flash steam).</summary>
+		private struct Lengths
+		{
+			public double At;
+			public float Quiet, Erupting;
+		}
+
+		private WeatherPresentation presentation;
+		private WeatherContext context;
+		private bool hasContext;
+		private Mesh mesh;
+		private Material fallbackMaterial;
+		// One copy of the plume material for each draw this camera, each with its own numbers: a property block would take
+		// every one of these draws out of the SRP Batcher. drawSlot counts this camera's draws.
+		private readonly DrawMaterials materials = new DrawMaterials("Steam");
+		private int drawSlot;
+		private float intoA, intoB;
+		private long windowA, windowB;
+		private double motionSeconds;
+
+		private readonly List<GeothermalSite> sites = new List<GeothermalSite>();
+		private readonly List<Found> found = new List<Found>();
+		private Vector2 foundAt = new Vector2(float.MaxValue, float.MaxValue);
+		private SceneHandle foundScene = SceneHandle.None;
+		private float foundTime = float.NegativeInfinity;
+		/// <summary>How often an empty search is tried again, real seconds.</summary>
+		private const float RetrySeconds = 2f;
+		private readonly Dictionary<Vector2Int, Air> airByBlock = new Dictionary<Vector2Int, Air>();
+		private double airAt = double.NaN;
+		private readonly Dictionary<uint, Lengths> lengths = new Dictionary<uint, Lengths>();
+		private readonly Dictionary<uint, WorldMotion.HeldValue[]> held = new Dictionary<uint, WorldMotion.HeldValue[]>();
+		private static readonly System.Comparison<Found> Nearest = (a, b) => a.Distance.CompareTo(b.Distance);
+
+		private void Awake()
+		{
+			presentation = GetComponent<WeatherPresentation>();
+			WeatherClient.RegisterPresenter(this);
+			RenderPipelineManager.beginCameraRendering += OnBeginCamera;
+		}
+
+		private void OnDestroy()
+		{
+			WeatherClient.UnregisterPresenter(this);
+			RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+			if (mesh != null)
+			{
+				Destroy(mesh);
+			}
+			if (fallbackMaterial != null)
+			{
+				Destroy(fallbackMaterial);
+			}
+			materials.Dispose();
+		}
+
+		public void Apply(in WeatherFrame frame, in WeatherContext ctx)
+		{
+			context = ctx;
+			hasContext = true;
+		}
+
+		public void Reset()
+		{
+			hasContext = false;
+			held.Clear();
+			lengths.Clear();
+			airByBlock.Clear();
+			found.Clear();
+			foundScene = SceneHandle.None;
+		}
+
+		private void Update()
+		{
+			// The shared motion clock, as the volcanic plumes run on: the same puff and the same eruption on
+			// every player's screen.
+			motionSeconds = WorldMotion.Seconds;
+			double window = VolcanicPlumePresenter.PaceWindowSeconds;
+			double half = 0.5 * window;
+			windowA = (long)System.Math.Floor(motionSeconds / window);
+			windowB = (long)System.Math.Floor((motionSeconds + half) / window);
+			intoA = (float)(motionSeconds - windowA * window);
+			intoB = (float)(motionSeconds + half - windowB * window);
+		}
+
+		private Material ResolveMaterial(WeatherRenderProfile profile)
+		{
+			if (profile != null && profile.PlumeMaterial != null)
+			{
+				return profile.PlumeMaterial;
+			}
+			if (fallbackMaterial == null)
+			{
+				Shader shader = ShaderLookup.Find(VolcanicPlumePresenter.ShaderName);
+				if (shader != null)
+				{
+					fallbackMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+				}
+			}
+			return fallbackMaterial;
+		}
+
+		/// <summary>This hook's own time in the profiler (render-pipeline callbacks otherwise show only as
+		/// RenderPipeline.BeginCameraRendering's self time). In a class of its own so the marker, an engine object, is made
+		/// when the hook first runs, not when the type is first touched (tests outside Unity use these types' pure parts).</summary>
+		private static class HookProfiling
+		{
+			public static readonly Unity.Profiling.ProfilerMarker Marker = new Unity.Profiling.ProfilerMarker("GeothermalSteamPresenter.BeginCamera");
+		}
+
+		private void OnBeginCamera(ScriptableRenderContext renderContext, Camera camera)
+		{
+			using var hookMarkerScope = HookProfiling.Marker.Auto();
+			if (!hasContext || camera == null || context.Timeline == null || context.Timeline.SceneMode != WeatherSceneMode.Own)
+			{
+				return;
+			}
+			Camera wanted = presentation != null && presentation.TargetCamera != null ? presentation.TargetCamera : Camera.main;
+			if (camera != wanted)
+			{
+				return;
+			}
+			PlanetAir planet = context.Sample.Planet;
+			// The vents' timing reads the shared clock and the sky the glows read (2026-10-25, I2q-b; VentTiming): the same for every player.
+			sky = VentSky.Of(motionSeconds, GlowSky.Current);
+			map = context.Settings != null ? context.Settings.BiomeMap() : null;
+			/* Steam is buoyant in air and seen by the air it mixes into: with none, nothing hangs. But a fumarole and a jet still throw
+			 * their gas out (2026-10-25, I2q-b, decision 84): in no air a short straight jet of grains that falls back, laying a frost
+			 * collar round its lip. */
+			bool rises = VolcanicPlume.CanRise(planet);
+			Vector3 viewer = camera.transform.position;
+			var viewer2 = new Vector2(viewer.x, viewer.z);
+			FindSites(viewer2);
+			if (rises)
+			{
+				FindHearths(viewer);
+			}
+			if (found.Count == 0 && (!rises || hearths.Count == 0))
+			{
+				return;
+			}
+			WeatherRenderProfile profile = presentation != null ? presentation.Profile : WeatherRenderProfile.Active;
+			Material material = ResolveMaterial(profile);
+			if (material == null)
+			{
+				return;
+			}
+			if (mesh == null)
+			{
+				mesh = VolcanicPlumePresenter.BuildMesh(Particles);
+			}
+			drawSlot = 0;
+
+			double airTime = System.Math.Floor(context.Timeline.WorldSecondsAt((uint)context.Tick) / AirSeconds) * AirSeconds;
+			if (airTime != airAt)
+			{
+				airAt = airTime;
+				airByBlock.Clear();
+			}
+			float gravity = planet.Gravity > 0f ? planet.Gravity : SurfacePhysics.EarthGravity;
+			thin = VolcanicPlume.IsThin(planet);
+			for (int i = 0; i < found.Count; i++)
+			{
+				Found f = found[i];
+				f.Distance = (f.Site.Position - viewer2).magnitude;
+				found[i] = f;
+			}
+			found.Sort(Nearest);
+			for (int i = 0, drawn = 0; i < found.Count && drawn < MaxDrawn; i++)
+			{
+				if (found[i].Distance > Reach)
+				{
+					break;
+				}
+				if (!rises)
+				{
+					drawn += DrawAirless(found[i], gravity, camera, material, profile) ? 1 : 0;
+					continue;
+				}
+				DrawSite(found[i], AirAt(found[i], planet), gravity, camera, material, profile);
+				drawn++;
+			}
+			if (rises)
+			{
+				DrawHearths(planet, camera, material, profile);
+			}
+		}
+
+		// ── Hearth smoke (2026-10-11) ────────────────────────────────
+
+		/// <summary>The most chimneys and fires smoking at once, the nearest.</summary>
+		public const int MaxHearths = 32;
+		/// <summary>Hearths further than this are not drawn, m: a wisp of chimney smoke is lost past it.</summary>
+		public const float HearthReach = 450f;
+		private readonly List<SceneEmitter> hearths = new List<SceneEmitter>();
+		private Vector3 hearthsAt = new Vector3(float.MaxValue, 0f, 0f);
+		private int hearthsVersion = -1;
+		private static readonly int NightLightsId = Shader.PropertyToID("_FishNightLights");
+		private static readonly Color ChimneySmoke = new Color(0.62f, 0.6f, 0.58f, 0f);
+		private static readonly Color FireSmoke = new Color(0.5f, 0.48f, 0.46f, 0f);
+		/// <summary>What a fire the rain or snow has caught gives off: steam, paler and thicker than its smoke.</summary>
+		private static readonly Color DousedSteam = new Color(0.8f, 0.8f, 0.82f, 0f);
+
+		/// <summary>The chimneys and fires round the camera (SceneSiteEmitters), again when it has moved far or the scenes changed.</summary>
+		private void FindHearths(Vector3 viewer)
+		{
+			if (SceneSiteEmitters.Version == hearthsVersion && (viewer - hearthsAt).sqrMagnitude < Refind * Refind)
+			{
+				return;
+			}
+			hearthsVersion = SceneSiteEmitters.Version;
+			hearthsAt = viewer;
+			RefindHearths(viewer);
+		}
+
+		/// <summary>The hearths about the viewer, found again (its own method, so the lambda's closure is made only when it runs).</summary>
+		private void RefindHearths(Vector3 viewer)
+		{
+			SceneSiteEmitters.Near(viewer, HearthReach + Refind, k => k == SceneEmitterKind.Smoke || k == SceneEmitterKind.Fire, MaxHearths * 2, hearths);
+			// No smoke column off a fire underground (a camp in a cave's cavern): it would rise out through the hill. Nor off a
+			// fire indoors (a hall's fire pit, a temple's braziers): it rose through the roof; a building's smoke leaves by
+			// its chimney, whose top is a Smoke emitter of its own (2026-10-12).
+			TerrainSet terrains = TerrainSet.Current;
+			hearths.RemoveAll(e => (terrains.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f)
+				|| (e.Kind == SceneEmitterKind.Fire && SceneSiteEmitters.InRoom(e.Position)));
+		}
+
+		/// <summary>
+		/// Hearth smoke: a thin grey ribbon off a chimney, leaning with the wind (most chimneys, not all; more in the cold and
+		/// at mealtimes and evening), and a campfire's smoke with its glow underneath. Drawn as the steam is, but smoke does not
+		/// evaporate in dry air: its length is its own, a dozen metres or so before it thins to nothing.
+		/// </summary>
+		private void DrawHearths(in PlanetAir planet, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			if (hearths.Count == 0)
+			{
+				return;
+			}
+			Vector3 eye = camera.transform.position;
+			float night = Shader.GetGlobalFloat(NightLightsId);
+			// Mealtimes: the morning and evening fires, from the local day's own clock.
+			float hour = (float)(context.LocalTime01 % 1.0) * 24f;
+			float meal = Mathf.Max(Mathf.Exp(-Mathf.Pow((hour - 7.5f) / 1.5f, 2f)), Mathf.Exp(-Mathf.Pow((hour - 18.5f) / 2f, 2f)));
+			int drawn = 0;
+			foreach (SceneEmitter e in hearths)
+			{
+				if (drawn >= MaxHearths || (e.Position - eye).sqrMagnitude > HearthReach * HearthReach)
+				{
+					break;
+				}
+				var site = new GeothermalSite { Position = new Vector2(e.Position.x, e.Position.z), Seed = e.Seed };
+				Air air = AirAt(new Found { Site = site, Ground = e.Position.y }, planet);
+				float cold = Mathf.InverseLerp(14f, -4f, air.AirC);
+				bool fire = e.Kind == SceneEmitterKind.Fire;
+				float strength;
+				// A fire the weather has caught (SiteFireState): it hisses and steams while it smoulders, and once it is out
+				// only a wisp rises off the wet char; its glow goes with its flames.
+				SiteFireState.State state = fire ? SiteFireState.Of(e) : SiteFireState.State.Lit;
+				float steaming = state.Doused * (1f - state.Burn);
+				float glow = fire ? 1.4f * state.Burn : 0f;
+				Color colour = fire ? Color.Lerp(FireSmoke, DousedSteam, steaming) : ChimneySmoke;
+				if (fire)
+				{
+					float smoulder = state.Burn > 0.03f ? 1f : 0.2f;
+					strength = Mathf.Max(0.55f * state.Burn, 0.9f * steaming * smoulder);
+					if (strength < 0.02f)
+					{
+						continue;
+					}
+				}
+				else
+				{
+					// Which chimneys are lit today: about two in three, more when it is cold.
+					float lit = (e.Seed & 0xFFFF) / 65535f;
+					if (lit > 0.55f + 0.35f * cold)
+					{
+						continue;
+					}
+					strength = 0.25f + 0.25f * cold + 0.2f * Mathf.Max(meal, night);
+				}
+				float length = (fire ? 9f : 12f) * (1f + 0.6f * cold);
+				DrawSteam(site, e.Position, length, fire ? 0.35f : 0.22f, 0.13f, fire ? 1.4f : 1.1f, air.Wind, strength, 0, colour,
+					camera, material, profile, true, 0f, glow);
+				drawn++;
+			}
+		}
+
+		/// <summary>The sites round the camera, and the ground each stands on: again whenever the camera has moved far enough.</summary>
+		private void FindSites(Vector2 viewer)
+		{
+			SceneHandle scene = context.Scene.IsValid() ? context.Scene.handle : SceneHandle.None;
+			// Searched again when the camera has moved, and now and then while nothing was found: asked before
+			// the biomes or the terrain have loaded, every candidate reads as plain ground.
+			bool retry = found.Count == 0 && Time.unscaledTime - foundTime > RetrySeconds;
+			if (scene == foundScene && (viewer - foundAt).sqrMagnitude < Refind * Refind && !retry)
+			{
+				return;
+			}
+			foundScene = scene;
+			foundAt = viewer;
+			foundTime = Time.unscaledTime;
+			GeothermalVents.Near(context.Settings, viewer, Reach + Refind, sites);
+			found.Clear();
+			TerrainSet terrains = TerrainSet.Current;
+			bool sea = SurfaceWater.TryGetLevel(out float seaLevel);
+			foreach (GeothermalSite site in sites)
+			{
+				if (!terrains.TryHeight(site.Position.x, site.Position.y, out float ground))
+				{
+					continue;
+				}
+				// A vent under the sea or a lake puts its heat into the water, not the air.
+				if (sea && ground < seaLevel)
+				{
+					continue;
+				}
+				if (SurfaceWater.TryGetInlandSurfaceAt(site.Position.x, site.Position.y, out float lake) && lake > ground + 0.3f)
+				{
+					/* Unless the water is the spring's own pool, which the cut dug and flooded under it (2026-10-18, I2q,
+					 * GeothermalVents.PoolDepth), or a sulphur pond's melt (2026-10-25, I2q-b): then it fumes off the pool's surface. */
+					if (!GeothermalVents.IsPool(site.Kind) || lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack)
+					{
+						continue;
+					}
+					ground = lake;
+				}
+				found.Add(new Found { Site = site, Ground = ground });
+			}
+		}
+
+		/// <summary>The air over a site's block at the last whole <see cref="AirSeconds"/> of world time: the same air for every player.</summary>
+		private Air AirAt(in Found site, in PlanetAir planet)
+		{
+			var key = new Vector2Int(Mathf.FloorToInt(site.Site.Position.x / AirBlockMetres), Mathf.FloorToInt(site.Site.Position.y / AirBlockMetres));
+			if (airByBlock.TryGetValue(key, out Air air))
+			{
+				return air;
+			}
+			var centre = new Vector3((key.x + 0.5f) * AirBlockMetres, site.Ground, (key.y + 0.5f) * AirBlockMetres);
+			WeatherSample sample = WeatherField.SampleAtSeconds(context.Timeline, context.Settings, context.Scene, centre, airAt);
+			float scaleHeight = Mathf.Max(1000f, planet.ScaleHeight);
+			float pressure = planet.SurfacePressure * Mathf.Exp(-Mathf.Max(0f, site.Ground) / scaleHeight);
+			air = new Air
+			{
+				AirC = sample.Column.SurfaceKelvin - 273.15f,
+				DewPointC = Mathf.Min(sample.Column.SurfaceKelvin, sample.Column.DewPointKelvin) - 273.15f,
+				BoilingC = SteamPhysics.BoilingC(pressure),
+				Wind = sample.Air.Wind,
+			};
+			airByBlock[key] = air;
+			return air;
+		}
+
+		/// <summary>A site's visible steam lengths in this air, worked out once per reading of it.</summary>
+		private Lengths LengthsOf(in GeothermalSite site, in Air air)
+		{
+			if (lengths.TryGetValue(site.Seed, out Lengths known) && known.At == airAt)
+			{
+				return known;
+			}
+			if (lengths.Count > 512)
+			{
+				lengths.Clear();
+			}
+			float source = GeothermalVents.SourceC(site, air.BoilingC);
+			var result = new Lengths
+			{
+				At = airAt,
+				Quiet = SteamPhysics.VisibleLength(GeothermalVents.VirtualSource(site), source, air.AirC, air.DewPointC),
+				Erupting = site.Kind == GeothermalKind.Geyser
+					? SteamPhysics.VisibleLength(GeothermalVents.VirtualSource(site, true), air.BoilingC, air.AirC, air.DewPointC)
+					: 0f,
+			};
+			lengths[site.Seed] = result;
+			return result;
+		}
+
+		private void DrawSite(in Found here, in Air air, float gravity, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			GeothermalSite site = here.Site;
+			var vent = new Vector3(site.Position.x, here.Ground, site.Position.y);
+			Lengths visible = LengthsOf(site, air);
+			Color steam = SteamColour(site);
+			float radius = GeothermalVents.SourceRadius(site);
+			float spread = GeothermalVents.IsPool(site.Kind) ? PoolSpread : PlumeSpread;
+			// How strong it is now on its biome's timing (2026-10-25, I2q-b; 1 for every steady vent, as before).
+			float timed = Timed(site);
+
+			if (thin && (site.Kind == GeothermalKind.Fumarole || site.Kind == GeothermalKind.Jet))
+			{
+				/* Thin air (2026-10-25, I2q-b, decisions 53/84): a fume is a short straight jet that thins out within a few metres (a
+				 * fissure's jet higher), leaning downwind as the thin wind takes it, and its gas freezes round the lip. */
+				float jet = FumeJetMetres(site);
+				DrawSteam(site, vent, jet, radius, 0.5f * PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.85f * timed, 0, steam, camera, material, profile, true);
+				DrawCollar(site, vent, camera, material, profile);
+				return;
+			}
+
+			if (site.Kind == GeothermalKind.MudPot)
+			{
+				// A thin steam off the mud, and its plops on the shared clock (GeothermalVents.Plop): every player sees the same one.
+				DrawSteam(site, vent, visible.Quiet, radius, PoolSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.45f * timed, 0, steam, camera, material, profile, true);
+				for (int lane = 0; lane < GeothermalVents.PlopLanes; lane++)
+				{
+					MudPlop plop = GeothermalVents.Plop(site, motionSeconds, lane);
+					if (!plop.Bursting)
+					{
+						continue;
+					}
+					float speed = Mathf.Sqrt(2f * gravity * plop.Height);
+					float flight = Mathf.Max(plop.Flight, 2f * speed / gravity);
+					var at = new Vector3(vent.x + plop.Offset.x, vent.y, vent.z + plop.Offset.y);
+					var bounds = new Bounds(at + Vector3.up * (0.5f * plop.Height), new Vector3(2f, plop.Height + 1f, 2f));
+					Draw(material, profile, camera, bounds, at, WaterPopulation, 0.06f, 0.8f,
+						new Vector4(0.12f, 0f, 0f, 0f), Vector4.zero, new Vector4(plop.Since, plop.Duration, 0f, 0f),
+						new Vector4(speed, gravity, 0.5f, 1.1f * flight), new Color(MudGrey.r, MudGrey.g, MudGrey.b, 0f), Vector4.zero);
+				}
+				return;
+			}
+
+			if (site.Kind != GeothermalKind.Geyser)
+			{
+				// A sulphur pond fumes thinly off its melt (decision 84); a spring smokes; a vent, a jet or a smoker jets.
+				float strength = site.Kind == GeothermalKind.HotSpring ? 0.7f : site.Kind == GeothermalKind.SulphurPool ? 0.4f : 0.85f;
+				DrawSteam(site, vent, visible.Quiet, radius, spread, GeothermalVents.RiseSpeed(site), air.Wind, strength * timed, 0, steam, camera, material, profile, true);
+				return;
+			}
+
+			GeyserMoment moment = GeothermalVents.Moment(site, motionSeconds);
+			if (moment.Steam <= 0f)
+			{
+				// Waiting: the vent breathes a little steam off the water standing in it.
+				DrawSteam(site, vent, visible.Quiet, radius, PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.4f * timed, 0, steam, camera, material, profile, true);
+				return;
+			}
+
+			float column = GeothermalVents.ColumnMetres(site, gravity);
+			if (moment.Erupting)
+			{
+				// The water: launched at √(2gH) for the column's full height, each drop at the speed the
+				// eruption had when it left; the launch period outlasts the longest flight.
+				float speed = Mathf.Sqrt(2f * gravity * column);
+				float flight = 2f * speed / gravity;
+				float wind = air.Wind.magnitude;
+				Vector2 down = wind > 0.1f ? air.Wind / wind : Vector2.zero;
+				float puff = 0.8f + 0.12f * column;
+				var bounds = new Bounds(vent + Vector3.up * (0.5f * column), new Vector3(column + 2f * puff + wind * flight, column + 4f * puff, column + 2f * puff + wind * flight));
+				Draw(material, profile, camera, bounds, vent, WaterPopulation, 1f, 0.55f,
+					new Vector4(puff, 0f, 0f, 0f), new Vector4(0f, 0f, down.x, down.y), new Vector4(moment.Since, moment.Duration, wind, 0f),
+					new Vector4(speed, gravity, JetHalfAngle, 1.1f * flight), new Color(WaterWhite.r, WaterWhite.g, WaterWhite.b, 0f), Vector4.zero);
+			}
+			// The steam boiling off the column while it plays, and drifting off after: at least as tall as the
+			// column, longer when the air holds it, shrinking and thinning as it dies away. Its pace is fixed for
+			// the site (the full length over the eruption's rise), so the puffs stretch with it rather than scrub.
+			float full = Mathf.Max(visible.Erupting, 1.2f * column);
+			float rise = GeothermalVents.RiseSpeed(site, true);
+			float length = full * Mathf.Lerp(0.4f, 1f, moment.Steam);
+			DrawSteam(site, vent, length, radius + 0.1f * column, PlumeSpread, rise, air.Wind, moment.Steam, 1, steam, camera, material, profile, false,
+				full / Mathf.Max(0.5f, rise));
+		}
+
+		// ── Vents' timing, airless fumes and frost collars (2026-10-25, phase I2q-b) ──
+
+		private VentSky sky;
+		private SceneBiomeMap map;
+		private bool thin;
+
+		/// <summary>A site's strength now on its biome's timing (VentTiming; 1 for a steady one): the Great Plume never under its floor.</summary>
+		private float Timed(in GeothermalSite site)
+		{
+			if (site.Timing == BiomeVentTiming.Steady)
+			{
+				return 1f;
+			}
+			return VentTiming.Strength(site.Timing, sky, site.Seed, site.Bearing, site.Episodes, GeothermalVents.IsGreatPlume(map, site));
+		}
+
+		/// <summary>What a site fumes: its biome's fume tint, else its steam's own colour, else a cloud's white.</summary>
+		private static Color SteamColour(in GeothermalSite site)
+		{
+			if (site.Fume.a > 0f)
+			{
+				return new Color(site.Fume.r, site.Fume.g, site.Fume.b, 1f);
+			}
+			return site.Substance != null ? site.Substance.Tint : SteamWhite;
+		}
+
+		/// <summary>How high an airless or thin-aired fume reaches, m (decision 84: a fumarole's 3–8 m; decision 53: a fissure's jet 20–60 m).</summary>
+		public static float FumeJetMetres(in GeothermalSite site)
+		{
+			float u = Mathf.Clamp01(site.Size);
+			return site.Kind == GeothermalKind.Jet ? 20f + 40f * u : 3f + 5f * u;
+		}
+
+		/// <summary>
+		/// A fumarole's or a jet's fume with no air (decision 84 (c)): grains on ballistic arcs to <see cref="FumeJetMetres"/>, as strong as
+		/// its timing has it now, and its frost collar. False for any other kind (a pool or a pot puts nothing up into no air).
+		/// </summary>
+		private bool DrawAirless(in Found here, float gravity, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			GeothermalSite site = here.Site;
+			if (site.Kind != GeothermalKind.Fumarole && site.Kind != GeothermalKind.Jet)
+			{
+				return false;
+			}
+			var vent = new Vector3(site.Position.x, here.Ground, site.Position.y);
+			float timed = Timed(site);
+			DrawCollar(site, vent, camera, material, profile);
+			if (timed <= 0.01f)
+			{
+				return true;
+			}
+			float height = FumeJetMetres(site);
+			float speed = Mathf.Sqrt(2f * gravity * height);
+			float cone = site.Kind == GeothermalKind.Jet ? JetCone : FumeCone;
+			float reach = speed * speed * Mathf.Sin(2f * cone) / Mathf.Max(0.01f, gravity) + 1f;
+			float puff = 0.25f + 0.02f * height;
+			var bounds = new Bounds(vent + Vector3.up * (0.5f * height), new Vector3(2f * reach + 2f * puff, height + 2f * puff, 2f * reach + 2f * puff));
+			Color tint = SteamColour(site);
+			Draw(material, profile, camera, bounds, vent, FountainPopulation, Mathf.Clamp(0.15f + 0.3f * timed, 0.06f, 0.6f), 0.3f * timed,
+				new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, new Vector4(speed, gravity, cone, 0.3f), new Color(tint.r, tint.g, tint.b, 0f), Vector4.zero);
+			return true;
+		}
+
+		/// <summary>The frost collar round a fume's lip (decision 84 (c)): flakes lying flat a ring out from its mouth.</summary>
+		private void DrawCollar(in GeothermalSite site, Vector3 vent, Camera camera, Material material, WeatherRenderProfile profile)
+		{
+			float inner = GeothermalVents.SourceRadius(site);
+			float outer = inner + 1.5f + 2f * Mathf.Clamp01(site.Size);
+			var bounds = new Bounds(vent, new Vector3(2f * outer + 1f, 1f, 2f * outer + 1f));
+			Draw(material, profile, camera, bounds, vent, CollarPopulation, 0.25f, 0.65f, new Vector4(inner, outer, 0.35f, 0f), Vector4.zero, Vector4.zero, Vector4.zero,
+				new Color(FrostWhite.r, FrostWhite.g, FrostWhite.b, 0f), Vector4.zero);
+		}
+
+		/// <summary>
+		/// One steam plume: <paramref name="length"/> m along an axis climbing at <paramref name="rise"/> m/s and
+		/// carried by the wind, so it leans by their ratio.
+		/// </summary>
+		private void DrawSteam(in GeothermalSite site, Vector3 vent, float length, float radius, float spread, float rise, Vector2 wind, float strength, int layer,
+			Color colour, Camera camera, Material material, WeatherRenderProfile profile, bool holdPace, float fixedPeriod = 0f, float glow = 0f)
+		{
+			if (length < 0.5f || strength <= 0.001f)
+			{
+				return;
+			}
+			float u = wind.magnitude;
+			float speed = Mathf.Sqrt(rise * rise + u * u);
+			float up = length * rise / Mathf.Max(0.01f, speed);
+			Vector2 sideways = u > 0.01f ? wind / u * (length * u / Mathf.Max(0.01f, speed)) : Vector2.zero;
+			float period = Mathf.Max(1f, length / Mathf.Max(0.05f, speed));
+			Vector4 periods = holdPace ? Held(site.Seed, layer, period) : new Vector4(Mathf.Max(1f, fixedPeriod), Mathf.Max(1f, fixedPeriod), 0f, 0f);
+			// More puffs for a longer plume: about one per metre and a half, within the field's share.
+			float share = Mathf.Clamp(length / 1.5f / Particles, 0.06f, 0.6f);
+			float wide = radius + spread * length;
+			Vector3 end = vent + new Vector3(sideways.x, up, sideways.y);
+			Vector3 min = Vector3.Min(vent, end) - new Vector3(wide, 2f, wide) * 1.6f;
+			Vector3 max = Vector3.Max(vent, end) + new Vector3(wide, wide, wide) * 1.6f;
+			var bounds = new Bounds((min + max) * 0.5f, max - min);
+			Draw(material, profile, camera, bounds, vent, SteamPopulation, share, 0.35f,
+				new Vector4(length, radius, spread, period), new Vector4(sideways.x, sideways.y, up, Mathf.Clamp01(strength)), Vector4.zero, Vector4.zero,
+				new Color(colour.r, colour.g, colour.b, glow), periods);
+		}
+
+		/// <summary>The periods a site's two layers hold for one of its plumes this frame (see <see cref="VolcanicPlumePresenter.PaceWindowSeconds"/>).</summary>
+		private Vector4 Held(uint seed, int layer, float period)
+		{
+			if (!held.TryGetValue(seed, out WorldMotion.HeldValue[] periods))
+			{
+				if (held.Count > 256)
+				{
+					held.Clear();
+				}
+				periods = new WorldMotion.HeldValue[4];
+				held[seed] = periods;
+			}
+			float a = periods[layer * 2].Hold(period, windowA);
+			float b = periods[layer * 2 + 1].Hold(period, windowB);
+			return new Vector4(a, b, 0f, 0f);
+		}
+
+		private void Draw(Material material, WeatherRenderProfile profile, Camera camera, Bounds bounds, Vector3 vent, int population, float share, float opacity,
+			Vector4 rise, Vector4 lean, Vector4 drift, Vector4 ballistic, Color colour, Vector4 heldPeriods)
+		{
+			Material copy = materials.For(material, drawSlot++);
+			// The material's own texture when the profile has no atlas, as an emptied block left it.
+			copy.SetTexture(MainTexId, profile != null && profile.PrecipitationAtlas != null ? profile.PrecipitationAtlas : material.GetTexture(MainTexId));
+			copy.SetVector(VentId, new Vector4(vent.x, vent.y, vent.z, (float)WorldMotion.Repeat(motionSeconds, WorldMotion.ShaderWrapSeconds)));
+			copy.SetVector(FormId, new Vector4(population, share, opacity, VolcanicPlumePresenter.AshRow));
+			copy.SetVector(RiseId, rise);
+			copy.SetVector(LeanId, lean);
+			copy.SetVector(DriftId, drift);
+			copy.SetVector(BallisticId, ballistic);
+			copy.SetColor(ColorId, colour);
+			copy.SetVector(PaceId, new Vector4(intoA, intoB, (float)VolcanicPlumePresenter.PaceWindowSeconds, 0f));
+			copy.SetVector(HeldId, heldPeriods);
+			var rp = new RenderParams(copy)
+			{
+				camera = camera,
+				worldBounds = bounds,
+				shadowCastingMode = ShadowCastingMode.Off,
+				receiveShadows = false,
+				layer = camera.gameObject.layer,
+			};
+			Graphics.RenderMesh(rp, mesh, 0, Matrix4x4.identity);
+		}
+	}
+}

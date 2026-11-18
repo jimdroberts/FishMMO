@@ -1,0 +1,64 @@
+// The core world passes' compute (FishWorldPassesFeature, Phase 4 of the core and modules plan, 2026-11-17): the depth
+// pyramid every occlusion test reads (FishDepthPyramid, FishHiZOcclusion.hlsl) and the WebGPU light table every lit pass
+// reads (AdditionalLightTable, FishLightTableGather.hlsl). They lived in the terrain's culling compute
+// (FishTerrainInstancing.compute) only so that one asset carried them; a game without the terrain keeps both.
+//
+// Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics, no readbacks.
+
+#pragma kernel FishHiZCopy
+#pragma kernel FishHiZReduce
+#pragma kernel FishLightTableGather
+#pragma use_dxc vulkan
+
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
+
+// ── The depth pyramid's levels (FishDepthPyramid) ─────────────────────
+Texture2D<float> _FishHiZSource;       // the camera's depth texture (raw)
+RWTexture2D<float> _FishHiZAtlas;      // the pyramid's atlas, read and written
+float4 _FishHiZSourceSize;             // xy the depth texture's size
+float4 _FishHiZZBuffer;                // the camera's _ZBufferParams
+uint _FishHiZLevel;                    // the level a reduce writes
+
+// Level 0: each texel the farthest linear eye depth of the two-by-two of pixels it covers.
+[numthreads(8, 8, 1)]
+void FishHiZCopy(uint3 id : SV_DispatchThreadID)
+{
+    int2 size = FishHiZBaseSize();
+    if (any((int2)id.xy >= size))
+    {
+        return;
+    }
+    int2 source = int2(_FishHiZSourceSize.xy) - 1;
+    float farthest = 0.0;
+    [unroll] for (int k = 0; k < 4; k++)
+    {
+        int2 pixel = min(int2(id.xy) * 2 + int2(k & 1, k >> 1), source);
+        float raw = _FishHiZSource.Load(int3(pixel, 0));
+        farthest = max(farthest, 1.0 / (_FishHiZZBuffer.z * raw + _FishHiZZBuffer.w));
+    }
+    _FishHiZAtlas[id.xy] = farthest;
+}
+
+// Level l from level l − 1: the farthest of the two-by-two under each texel.
+[numthreads(8, 8, 1)]
+void FishHiZReduce(uint3 id : SV_DispatchThreadID)
+{
+    int level = (int)_FishHiZLevel;
+    int2 size = FishHiZSize(level);
+    if (any((int2)id.xy >= size))
+    {
+        return;
+    }
+    int2 below = FishHiZSize(level - 1);
+    int2 from = FishHiZOrigin(level - 1);
+    float farthest = 0.0;
+    [unroll] for (int k = 0; k < 4; k++)
+    {
+        int2 texel = min(int2(id.xy) * 2 + int2(k & 1, k >> 1), below - 1);
+        farthest = max(farthest, _FishHiZAtlas[from + texel]);
+    }
+    _FishHiZAtlas[FishHiZOrigin(level) + int2(id.xy)] = farthest;
+}
+
+// ── The light table (AdditionalLightTable, WebGPU): URP's per-light arrays into one storage buffer, once per camera ──
+#include "Assets/FishMMO/Shaders/FishLightTableGather.hlsl"

@@ -35,8 +35,8 @@ Shader "FishMMO/Wildlife"
             #pragma vertex WildlifeVertex
             #pragma fragment WildlifeForwardFragment
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #include_with_pragmas "FishShadowVariants.hlsl"
-            #include_with_pragmas "FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHTS
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"

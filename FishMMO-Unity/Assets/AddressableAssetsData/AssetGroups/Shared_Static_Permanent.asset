@@ -2059,6 +2059,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 20b4093803e145a78fb83411b2b2f709
+    m_Address: Pet Slots
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 20c9155e222cf949ab71e3af8877f74d
     m_Address: IceCave - Camp (Small)
     m_ReadOnly: 0
@@ -5918,13 +5925,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 5f83904fcedd0864fbb6162f45fbeb9e
     m_Address: Currency
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 20b4093803e145a78fb83411b2b2f709
-    m_Address: Pet Slots
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

@@ -1,0 +1,32 @@
+{
+    "name": "FishMMO.Shared.Tools.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "Unity.Splines",
+        "Unity.Mathematics",
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager",
+        "FishMMO.Shared.Map.Editor",
+        "FishMMO.Water",
+        "Unity.AI.Navigation",
+        "Unity.ScriptableBuildPipeline.Editor",
+        "Unity.ScriptableBuildPipeline",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

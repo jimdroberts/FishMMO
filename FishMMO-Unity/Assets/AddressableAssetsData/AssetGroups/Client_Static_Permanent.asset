@@ -465,6 +465,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 4621f570b0b3485c8f7f13bff1531c27
+    m_Address: Ambient Life Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4859a0b1c2d3e4f5061728394a5b6c04
     m_Address: GroundSand
     m_ReadOnly: 0
@@ -1060,6 +1067,13 @@ MonoBehaviour:
     m_Address: FishTerrainIndexBake
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a5b182d1c65c40518a6748788690fb3d
+    m_Address: Terrain Render Profile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: a805c1e22b45b882bbc02a288629234c

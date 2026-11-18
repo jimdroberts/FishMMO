@@ -35,7 +35,7 @@
 // terrain shades it (FishTerrainSunlit, FishFogLayer.hlsl: a mountain's evening shadow kilometres long).
 
 // The fine ground map and FishMistGroundAt: FishGroundMap.hlsl.
-#include "FishGroundMap.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 // x how far short of saturation the air over open ground stays (K, GroundMist.Deficit), y how much of the
 // mist the wind leaves (0..1), z how much the night chills the ground (0..1, GroundMist.NightCalm), w how
 // far the mist is drawn (m).

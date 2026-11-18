@@ -145,8 +145,8 @@ namespace FishMMO.Water
 			SimulatedTide.Drive = DriveTide;
 			SimulatedTide.Amplification = CoastalAmplification;
 			SimulatedTide.MaximumMetres = MaximumTideMetres;
-			SimulatedTide.Latitude = here != null ? here.Latitude : 0f;
-			SimulatedTide.Longitude = here != null ? here.Longitude : 0f;
+			SimulatedTide.Latitude = here != null ? here.Latitude() : 0f;
+			SimulatedTide.Longitude = here != null ? here.Longitude() : 0f;
 			SimulatedTide.Body = SceneTime.BodyOf(here);
 			SimulatedTide.Invalidate();
 		}
@@ -218,8 +218,8 @@ namespace FishMMO.Water
 			 * entry — or a preview of another world — had Earth's 9.81 and a sea that looked the
 			 * same on every body in the system. */
 			WorldBody body = WorldDayNightCycle.BodyFor(settings);
-			float latitude = settings != null ? settings.Latitude : 0f;
-			float longitude = settings != null ? settings.Longitude : 0f;
+			float latitude = settings != null ? settings.Latitude() : 0f;
+			float longitude = settings != null ? settings.Longitude() : 0f;
 
 			if (DriveGravity)
 			{
@@ -314,22 +314,22 @@ namespace FishMMO.Water
 		/// hours of wind over kilometres of fetch and does not answer a gust. The world's own air where the scene has no
 		/// weather registered (an editor preview).
 		/// </summary>
-		private bool AirAt(double worldSeconds, out WeatherDriver.Synoptic air)
+		private bool AirAt(double worldSeconds, out WeatherAir air)
 		{
 			var position = new Vector2(transform.position.x, transform.position.z);
-			if (WeatherQuery.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline)
+			if (WeatherTimelines.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline)
 				&& WeatherField.OpenAirWithOffsets(timeline, settings, position, worldSeconds, out air))
 			{
 				return true;
 			}
-			float latitude = settings != null ? settings.Latitude : 0f;
+			float latitude = settings != null ? settings.Latitude() : 0f;
 			air = WeatherDriver.Sample(WeatherDriver.WorldSeed, position, worldSeconds, latitude, 0.5f);
 			return true;
 		}
 
 		private Vector2 WindAtKnot(long knot, double spacing)
 		{
-			uint revision = WeatherQuery.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline) ? timeline.Revision : 0u;
+			uint revision = WeatherTimelines.TryGetTimeline(gameObject.scene, out WeatherTimeline timeline) ? timeline.Revision : 0u;
 			if (spacing != windKnotSeconds || revision != windRevision || windAtKnot.Count > 4 * MemoryKnots)
 			{
 				// Another memory, or the scene's air was changed: what was kept was of another wind.
@@ -339,7 +339,7 @@ namespace FishMMO.Water
 			}
 			if (!windAtKnot.TryGetValue(knot, out Vector2 wind))
 			{
-				AirAt(knot * spacing, out WeatherDriver.Synoptic air);
+				AirAt(knot * spacing, out WeatherAir air);
 				wind = air.Wind;
 				windAtKnot[knot] = wind;
 			}
@@ -394,7 +394,7 @@ namespace FishMMO.Water
 			state.Heading = HeadingOverride >= 0f ? Mathf.Repeat(HeadingOverride, 360f)
 				: way.sqrMagnitude > 1e-6f ? Mathf.Repeat(Mathf.Atan2(way.x, way.y) * Mathf.Rad2Deg, 360f) : 0f;
 
-			AirAt(worldSeconds, out WeatherDriver.Synoptic now);
+			AirAt(worldSeconds, out WeatherAir now);
 			/* An unstable, low-pressure sky is a rough sea. Wave height and steepness both go up, which is the
 			 * difference between a swell and a storm running: the same wind under a settled high makes a far gentler
 			 * sea than under a deepening low. */
@@ -528,8 +528,8 @@ namespace FishMMO.Water
 			/* The atlas radius, the globe scenes are cut from: a kilometre of fetch is a kilometre
 			 * of the sea the scene's own coast faces, measured on the same ground. */
 			double radiusKm = PlanetSurface.SceneRadiusKm(body);
-			double latitude = scene.Latitude * Mathf.Deg2Rad;
-			double longitude = scene.Longitude * Mathf.Deg2Rad;
+			double latitude = scene.Latitude() * Mathf.Deg2Rad;
+			double longitude = scene.Longitude() * Mathf.Deg2Rad;
 			// Upwind: the heading is where the wind blows TOWARD.
 			double bearing = (windHeading + 180.0) * Mathf.Deg2Rad;
 

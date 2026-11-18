@@ -1,0 +1,225 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace FishMMO.Shared.Celestial
+{
+	/// <summary>
+	/// The whole solar system as data: its stars, planets and moons, the home world and the
+	/// world calendar. Loaded on server and client alike, so both agree about every sunrise.
+	/// </summary>
+	/// <remarks>
+	/// Comets are bodies (<see cref="CometBody"/>) in <see cref="Bodies"/>. Meteor showers and
+	/// asteroid belts are plain data here; the sky renderer draws them, within <see cref="Limits"/>.
+	/// </remarks>
+	[CreateAssetMenu(fileName = "Solar System", menuName = "FishMMO/World/Solar System", order = 9)]
+	public class SolarSystemProfile : CachedScriptableObject<SolarSystemProfile>, ICachedObject
+	{
+		[Tooltip("Stars, planets and moons. The first star is the primary.")]
+		public List<CelestialBody> Bodies = new List<CelestialBody>();
+		[Tooltip("The world the calendar belongs to.")]
+		public WorldBody HomeWorld;
+		[Tooltip("The seed the world's weather grows from. Every high, low and front is a function of this and the world clock, so the same seed gives the same weather on the server and on every client, and the same weather again after a restart. Changing it gives the world a different climate history.")]
+		public uint WeatherSeed = 238;
+		[Tooltip("The seed the night sky is scattered from. The stars belong to the system: every world and moon in it sees these same constellations, each from the angle its own axis gives it. Change it and the whole system gets a different sky; two systems with different seeds have different skies.")]
+		public uint StarSeed = 238;
+		[Tooltip("Roughly how long one weather system takes to pass, in world hours, at an ordinary wind. Judge it against the day length rather than against a real day: at 6 hours a day, five hours a system means the weather turns over about once a day. Lower it and the sky changes its mind several times a day; raise it for long settled spells. It sets how big the systems are, not how hard the wind blows, so the clouds keep moving at the same speed either way.")]
+		[Min(0.25f)] public float WeatherSystemHours = 5f;
+		public CalendarProfile Calendar;
+		[Header("Small bodies")]
+		public List<MeteorShower> MeteorShowers = new List<MeteorShower>();
+		[Tooltip("Meteors per hour on any night, outside the showers.")]
+		[Min(0f)] public float SporadicMeteorsPerHour = 6f;
+		public List<AsteroidBelt> AsteroidBelts = new List<AsteroidBelt>();
+
+		[Header("Sky")]
+		public SkyLimits Limits = new SkyLimits();
+		[Tooltip("Share of the visible sky, in percent, above which a body is drawn with its texture.")]
+		/// <remarks>
+		/// <para>
+		/// 0.002, not 0.1. <c>SkyFraction</c> is <c>1 − cos(θ/2)</c>, the share of the visible
+		/// <em>hemisphere</em> a disc covers — and that is a far smaller number than it looks. A
+		/// full Moon spans half a degree and covers <b>0.001%</b> of the sky; the old threshold of
+		/// 0.1% needed a body <b>5.1° across, ten Moons wide</b>, so in practice nothing was ever
+		/// textured and every planet and moon drew as a flat disc however good its bake was.
+		/// </para>
+		/// <para>
+		/// 0.002% is about 0.7°, a little larger than a full Moon — the point at which a flat disc
+		/// starts to look wrong and a surface is worth binding a texture for.
+		/// </para>
+		/// </remarks>
+		[Range(0.001f, 5f)] public float TextureAboveSkyPercent = 0.002f;
+
+		/// <summary>
+		/// The system the game is set in: the one the world atlas names, or failing that the first found.
+		/// </summary>
+		/// <remarks>
+		/// A project can hold several systems — one to ship and others to try things in — and "the
+		/// first one loaded" is then whichever the asset loader happened to reach first. The atlas is
+		/// the one asset that already says which system its scenes stand in, so it decides. With no
+		/// atlas, or an atlas that names none, this is what it always was.
+		/// </remarks>
+		public static SolarSystemProfile Active
+		{
+			get
+			{
+				FishMMO.Shared.Atlas.WorldAtlas atlas = FishMMO.Shared.Atlas.WorldAtlas.Active;
+				return atlas != null && atlas.SolarSystem != null ? atlas.SolarSystem : GetFirst<SolarSystemProfile>();
+			}
+		}
+
+		/// <summary>
+		/// THE answer to "which solar system": the body's own, else the atlas's, else the loaded one,
+		/// else (in the editor, out of play mode) the first system asset by path.
+		/// </summary>
+		/// <param name="body">The body being asked about, if there is one. Null asks about the world as a whole.</param>
+		/// <remarks>
+		/// <para>
+		/// <b>One lookup, because three disagreed.</b> The scene generator and the globe bake took the
+		/// first system by asset NAME, the world-map capture the first by PATH after the loaded one,
+		/// and the running game <see cref="Active"/> — the atlas's. With two systems in a project, a
+		/// globe could be baked under one sun and the scene cut from it lit by another. Every tool now
+		/// asks here.
+		/// </para>
+		/// <para>
+		/// <b>The body's own system first</b>, found as the system that lists it (or names it home):
+		/// a body's starlight, orbit and tides only mean anything in the system it orbits in.
+		/// Loaded systems are searched before assets, so in play mode the game's own state decides.
+		/// </para>
+		/// <para>
+		/// <b>Assets only in edit mode.</b> In play mode and in a build the answer is what the game has
+		/// loaded, exactly as <see cref="Active"/>; the asset search exists for tools working on a
+		/// project nothing has loaded, and is ordered by path so two bakes agree on "first".
+		/// Runtime code that wants only the loaded state — and must read null in an EditMode test that
+		/// loaded nothing — keeps reading <see cref="Active"/>, which is this lookup's loaded tier.
+		/// </para>
+		/// </remarks>
+		public static SolarSystemProfile Resolve(CelestialBody body = null)
+		{
+			if (body != null)
+			{
+				Dictionary<int, SolarSystemProfile> loaded = GetCache<SolarSystemProfile>();
+				if (loaded != null)
+				{
+					foreach (SolarSystemProfile candidate in loaded.Values)
+					{
+						if (candidate != null && candidate.Contains(body))
+						{
+							return candidate;
+						}
+					}
+				}
+			}
+			SolarSystemProfile active = Active;
+			if (active != null)
+			{
+				return active;
+			}
+#if UNITY_EDITOR
+			if (!Application.isPlaying)
+			{
+				return ResolveFromAssets(body);
+			}
+#endif
+			return null;
+		}
+
+		/// <summary>True when <paramref name="body"/> is one of this system's bodies or its home world.</summary>
+		public bool Contains(CelestialBody body)
+		{
+			if (body == null)
+			{
+				return false;
+			}
+			if (HomeWorld != null && HomeWorld == body)
+			{
+				return true;
+			}
+			return Bodies != null && Bodies.Contains(body);
+		}
+
+#if UNITY_EDITOR
+		/// <summary>The edit-mode tiers of <see cref="Resolve"/>: body's system, atlas's, first, all from assets by path.</summary>
+		private static SolarSystemProfile ResolveFromAssets(CelestialBody body)
+		{
+			List<SolarSystemProfile> systems = AssetsByPath<SolarSystemProfile>();
+			if (body != null)
+			{
+				foreach (SolarSystemProfile candidate in systems)
+				{
+					if (candidate.Contains(body))
+					{
+						return candidate;
+					}
+				}
+			}
+			foreach (FishMMO.Shared.Atlas.WorldAtlas atlas in AssetsByPath<FishMMO.Shared.Atlas.WorldAtlas>())
+			{
+				if (atlas.SolarSystem != null)
+				{
+					return atlas.SolarSystem;
+				}
+			}
+			return systems.Count > 0 ? systems[0] : null;
+		}
+
+		private static List<T> AssetsByPath<T>() where T : Object
+		{
+			var paths = new List<string>();
+			foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + typeof(T).Name))
+			{
+				paths.Add(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+			}
+			paths.Sort(global::System.StringComparer.Ordinal);
+			var assets = new List<T>(paths.Count);
+			foreach (string path in paths)
+			{
+				T asset = UnityEditor.AssetDatabase.LoadAssetAtPath<T>(path);
+				if (asset != null)
+				{
+					assets.Add(asset);
+				}
+			}
+			return assets;
+		}
+#endif
+
+		/// <summary>The first star in <see cref="Bodies"/>, or null.</summary>
+		public StarBody PrimaryStar
+		{
+			get
+			{
+				foreach (CelestialBody body in Bodies)
+				{
+					if (body is StarBody star)
+					{
+						return star;
+					}
+				}
+				return null;
+			}
+		}
+
+		public int DaysPerYear => Calendar != null ? Mathf.Max(1, Calendar.DaysPerYear) : 365;
+
+		public long EpochUnixSeconds => Calendar != null ? Calendar.WorldEpochUnixSeconds : CalendarProfile.DefaultEpochUnixSeconds;
+
+		/// <summary>The active system's epoch, or the default without one: what the core's world clock counts from.</summary>
+		private static long ActiveEpochUnixSeconds()
+		{
+			SolarSystemProfile system = Active;
+			return system != null ? system.EpochUnixSeconds : WorldEpoch.DefaultUnixSeconds;
+		}
+
+		/// <summary>Installs the world calendar's epoch as the core's (<see cref="WorldEpoch.Source"/>), at load.</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void InstallEpoch()
+		{
+			WorldEpoch.Source = ActiveEpochUnixSeconds;
+		}
+
+#if UNITY_EDITOR
+		[UnityEditor.InitializeOnLoadMethod]
+		private static void InstallEpochInEditor() => InstallEpoch();
+#endif
+	}
+}

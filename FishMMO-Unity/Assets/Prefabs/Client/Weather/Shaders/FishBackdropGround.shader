@@ -78,11 +78,11 @@ Shader "FishMMO/Backdrop Ground"
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
-            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
             #pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
-            #include_with_pragmas "FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"

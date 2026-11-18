@@ -1,0 +1,49 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="UIFactions.uss" />
+    <ui:VisualElement name="faction-root" class="fish-panel faction-panel">
+        <ui:VisualElement name="panel-header" class="fish-panel__header faction-header">
+            <ui:VisualElement class="fish-panel__icon faction-header__icon" />
+            <ui:VisualElement class="faction-header__titles">
+                <ui:Label text="REPUTATION" class="fish-panel__title" />
+                <ui:Label name="faction-subtitle" text="" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="faction-count" text="0" class="fish-badge faction-count" />
+            <ui:Button name="close-button" class="fish-close-btn faction-close-btn" text="✕" />
+        </ui:VisualElement>
+        <!--
+            Three sections, in FactionAllianceLevel's own numeric order: Ally, Neutral, Enemy.
+            UITKFactions resolves them by looping that enum, so this file and the enum cannot
+            drift apart in either name or order.
+
+            Each is authored carrying the empty modifier class, so a freshly opened panel does
+            not stack three headings over the empty placeholder before the first standing
+            arrives.
+
+            The rows containers are what the panel files rows into, and what the header count
+            badge counts. See UITKFactions.CountRows.
+        -->
+        <!-- The aggression toggle: off, abilities harm only enemies; on, neutrals too, and anyone outside your party and guild may harm you. Party and guild are never harmed. -->
+        <ui:VisualElement name="faction-aggression-row" class="faction-aggression">
+            <ui:Toggle name="faction-aggression" label="Aggression" class="fish-toggle faction-aggression__toggle" />
+            <ui:Label name="faction-aggression-hint" text="Off: you can only harm enemies." class="fish-label fish-label--muted faction-aggression__hint" />
+        </ui:VisualElement>
+        <ui:ScrollView name="faction-scroll" class="fish-scroll faction-scroll">
+            <ui:VisualElement name="faction-list" class="faction-list">
+                <ui:VisualElement name="faction-section-ally" class="faction-section faction-section--empty">
+                    <ui:Label text="ALLIES" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-ally" class="faction-section__rows" />
+                </ui:VisualElement>
+                <ui:VisualElement name="faction-section-neutral" class="faction-section faction-section--empty">
+                    <ui:Label text="NEUTRAL" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-neutral" class="faction-section__rows" />
+                </ui:VisualElement>
+                <ui:VisualElement name="faction-section-enemy" class="faction-section faction-section--empty">
+                    <ui:Label text="ENEMIES" class="fish-attr-category faction-section__header" />
+                    <ui:VisualElement name="faction-section-rows-enemy" class="faction-section__rows" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="faction-empty" text="No factions encountered yet." class="fish-empty faction-empty" />
+        </ui:ScrollView>
+    </ui:VisualElement>
+</ui:UXML>

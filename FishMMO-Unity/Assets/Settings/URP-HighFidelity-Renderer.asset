@@ -16,7 +16,6 @@ MonoBehaviour:
   CloudMaterial: {fileID: 2100000, guid: 77d2de1e9c99042cb99592565ec65216, type: 2}
   ResolveCompute: {fileID: 7200000, guid: 3b2660716b1e3d805bd009750d8229fc, type: 3}
   WeatherMapCompute: {fileID: 7200000, guid: bf9ab77ea08b4895b37b4a406d0a1a8f, type: 3}
-  ShadowCacheMergeShader: {fileID: 4800000, guid: 7cd1178ee61344528d1a4b89f8d8adcd, type: 3}
 --- !u!114 &-4741990852112749387
 MonoBehaviour:
   m_ObjectHideFlags: 1
@@ -83,6 +82,7 @@ MonoBehaviour:
     probeSamplingDebugTexture: {fileID: 0}
     probeVolumeBlendStatesCS: {fileID: 0}
   m_RendererFeatures:
+  - {fileID: 2516678209638487213}
   - {fileID: -1878332245247344467}
   - {fileID: -7701297074616943999}
   - {fileID: -4741990852112749387}
@@ -90,7 +90,7 @@ MonoBehaviour:
   - {fileID: 6170018510113121889}
   - {fileID: -3557911437828643653}
   - {fileID: 2836747913097421093}
-  m_RendererFeatureMap: adc0de57c6d2eee581bab3251d7f1f95b5ecaab3711031be32700ee560cc1c4361a6e010254fa055bba4ecdd65c29fce25a1807d32275e27l
+  m_RendererFeatureMap: add4776b7f09ed22adc0de57c6d2eee581bab3251d7f1f95b5ecaab3711031be32700ee560cc1c4361a6e010254fa055bba4ecdd65c29fce25a1807d32275e27l
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
   m_AssetVersion: 3
@@ -196,3 +196,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.ColorVisionFeature
   m_Active: 1
   CorrectionShader: {fileID: 4800000, guid: 8c5afc26aacf449c89cfa9108b8886d1, type: 3}
+--- !u!114 &2516678209638487213
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd3022d7a5dd47ac8070e31982f8f4e2, type: 3}
+  m_Name: Fish World Passes
+  m_EditorClassIdentifier: FishMMO.Client::FishMMO.Client.FishWorldPassesFeature
+  m_Active: 1
+  ShadowCacheMergeShader: {fileID: 4800000, guid: 7cd1178ee61344528d1a4b89f8d8adcd, type: 3}
+  PassesCompute: {fileID: 7200000, guid: 0c5b8d73523e405580ac28628027c8d3, type: 3}

@@ -10,7 +10,7 @@ namespace FishMMO.WebShared
 {
     /// <summary>
     /// Verifies the <c>X-FishMMO-Client</c> signature on incoming requests.
-    /// See <c>FishMMO-Unity/Assets/Scripts/Client/Launcher/ClientApiSigner.cs</c>
+    /// See <c>FishMMO-Unity/Assets/FishMMO/Client/Launcher/ClientApiSigner.cs</c>
     /// for the matching client-side producer and the canonical-string format.
     ///
     /// <para>

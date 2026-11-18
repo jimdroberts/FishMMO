@@ -41,7 +41,7 @@ Shader "FishMMO/Portal"
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "FishAmbient.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 
             TEXTURECUBE(_PortalCube);
             SAMPLER(sampler_PortalCube);

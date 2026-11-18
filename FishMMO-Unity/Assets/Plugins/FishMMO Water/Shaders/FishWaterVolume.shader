@@ -423,7 +423,7 @@ Shader "FishMMO/Water/Underwater"
              * needs the shadow at points in the water, which only the shadow map has. No soft
              * variant either — sixteen steps of one hardware-filtered tap is the softening. */
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             ENDHLSL
         }
 
@@ -445,7 +445,7 @@ Shader "FishMMO/Water/Underwater"
             #pragma fragment FragGeometry
             #pragma target 3.5
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             ENDHLSL
         }
     }

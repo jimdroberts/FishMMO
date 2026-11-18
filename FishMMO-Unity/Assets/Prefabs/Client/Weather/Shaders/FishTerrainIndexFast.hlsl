@@ -2,7 +2,7 @@
 #define FISH_TERRAIN_INDEX_FAST_INCLUDED
 // Preserve the general 16-candidate merge as the reference and boundary path.
 #define FishIndexFilter FishIndexFilterFull
-#include "FishTerrainIndexMap.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishTerrainIndexMap.hlsl"
 #undef FishIndexFilter
 // Diagnostic control only: zero (the default) uses the common-layer path.
 float _FishIndexFullFilter;

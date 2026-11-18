@@ -16,7 +16,7 @@
 #ifndef FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
 #define FISHMMO_WEATHER_TERRAIN_ARRAY_PASSES_INCLUDED
 
-#include "FishSurface.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 // FishMMO edit: the snow lift thins to nothing at a hole's edge, where a cave's or a canyon wall's rock is the ground.
 #include "FishTerrainSnowHoles.hlsl"
 // FishMMO edit: the moss a waterfall's spray grows on this ground (FishMoss.hlsl FishFallMoss), the same textured moss as
@@ -24,13 +24,13 @@
 // own sampler (repeat, trilinear, anisotropic), bound wherever the albedo array is read: no sampler state of its own.
 #define FISH_MOSS_FALL_ONLY
 #define FISH_MOSS_SAMPLER sampler_FishAlbedoArray
-#include "FishMoss.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishMoss.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DBuffer.hlsl"
 // FishMMO edit: the ground reflects the sky on the true curve, not URP's (FishGroundLighting.hlsl).
-#include "FishGroundLighting.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishGroundLighting.hlsl"
 #if !defined(FISH_TERRAIN_BACKDROP)
 // FishMMO edit (2026-10-25, I2t): the burn mosaic's ground (burnt veld, flame line, brimstone's blue fire; FishBurn.hlsl).
 #include "FishBurn.hlsl"
@@ -446,7 +446,7 @@ float3 _LightPosition;
 #if defined(FISH_TERRAIN_GPU)
 // The heightmap draw has one set of bounds round the scene, so URP puts it in every cascade: each patch is culled per
 // cascade here, as the GPU-driven casters are (FishCasterCulling.hlsl).
-#include "FishCasterCulling.hlsl"
+#include "Assets/FishMMO/Shaders/FishCasterCulling.hlsl"
 #endif
 
 struct AttributesLean

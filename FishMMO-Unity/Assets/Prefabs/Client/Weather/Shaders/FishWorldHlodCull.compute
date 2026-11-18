@@ -1,6 +1,6 @@
 #pragma kernel CullHlod
 #pragma use_dxc vulkan
-#include "FishHiZOcclusion.hlsl"
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
 struct HlodPart { float4 sphere; uint cluster; uint3 padding; };
 StructuredBuffer<HlodPart> _HlodParts;
 StructuredBuffer<uint> _HlodSelected;

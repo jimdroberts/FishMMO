@@ -5,19 +5,19 @@
 #ifndef FISHMMO_WEATHER_TERRAIN_PASSES_INCLUDED
 #define FISHMMO_WEATHER_TERRAIN_PASSES_INCLUDED
 
-#include "FishSurface.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 // ── FishMMO edit 1 of 3, its moss: what a waterfall's spray grows on this ground (FishMoss.hlsl FishFallMoss), the
 // same textured moss as the rock's. The spray's alone: the ground has no moss material of its own. Its textures are
 // read with the first layer's sampler, which every splat program binds (SplatmapMix): no sampler state of its own. ──
 #define FISH_MOSS_FALL_ONLY
 #define FISH_MOSS_SAMPLER sampler_Splat0
-#include "FishMoss.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishMoss.hlsl"
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/GBufferOutput.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DBuffer.hlsl"
 // ── FishMMO edit 3 of 3: the ground reflects the sky on the true curve, not URP's (FishGroundLighting.hlsl). ──
-#include "FishGroundLighting.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishGroundLighting.hlsl"
 
 struct Attributes
 {

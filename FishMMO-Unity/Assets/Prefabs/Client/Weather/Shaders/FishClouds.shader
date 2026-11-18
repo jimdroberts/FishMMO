@@ -14,7 +14,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudMarch"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -227,7 +227,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudTemporal"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -316,7 +316,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             Name "CloudComposite"
             Blend One SrcAlpha            // scattered light added, what is behind kept by transmittance
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -326,7 +326,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             // The fine ground map: the clouds, the mist and the god rays stay out of a cave (FishOpenAir).
-            #include "FishGroundMap.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 
             TEXTURE2D(_FishCloudBuffer);
             SAMPLER(sampler_FishCloudBuffer);
@@ -688,7 +688,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudShadow"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -749,7 +749,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudGodRays"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -963,7 +963,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             Name "CloudGodRayComposite"
             Blend One SrcAlpha, Zero One
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -973,7 +973,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             // The fine ground map: no shafts over a cave's own air (FishOpenAir), as the clouds' composite.
-            #include "FishGroundMap.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 
             TEXTURE2D(_FishGodRayBuffer);
             SAMPLER(sampler_FishGodRayBuffer);
@@ -1047,7 +1047,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudShadowSoften"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -1108,7 +1108,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudOverhead"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -1153,7 +1153,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudLightVolume"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -1204,7 +1204,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudFieldTile"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag
@@ -1253,7 +1253,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudFarBand"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -1506,7 +1506,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             ZTest Always
             Cull Off
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma vertex Vert
             #pragma fragment Frag
             #pragma target 3.5
@@ -1683,7 +1683,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         {
             Name "CloudFarImposter"
             HLSLPROGRAM
-            #include_with_pragmas "FishShaderDiagnostics.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShaderDiagnostics.hlsl"
             #pragma use_dxc vulkan
             #pragma vertex Vert
             #pragma fragment Frag

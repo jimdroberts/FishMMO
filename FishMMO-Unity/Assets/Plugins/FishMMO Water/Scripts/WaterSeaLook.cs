@@ -203,7 +203,7 @@ namespace FishMMO.Water
 				WorldSceneSettings settings = root.GetComponentInChildren<WorldSceneSettings>(true);
 				if (settings != null)
 				{
-					return settings.BiomeMap;
+					return settings.BiomeMap();
 				}
 			}
 			return null;

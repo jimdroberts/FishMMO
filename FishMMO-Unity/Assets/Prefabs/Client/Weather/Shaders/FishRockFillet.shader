@@ -62,10 +62,10 @@ Shader "FishMMO/Rock Fillet"
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
-            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
-            #include_with_pragmas "FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             #pragma multi_compile _ _LIGHT_LAYERS
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
@@ -73,18 +73,18 @@ Shader "FishMMO/Rock Fillet"
 
             // At WebGPU's 32 texture parameters with every feature on (33 before): the trail map left out (FishWeather.hlsl).
             #define FISH_NO_TRAILS
-            #include "FishWeatherLitInput.hlsl"
-            #include "FishSurface.hlsl"
-            #include "FishGroundColour.hlsl"
-            #include "FishRockContact.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundColour.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishRockContact.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "FishGroundLighting.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundLighting.hlsl"
             // The fine ground map through the core's inline sampler, as the rock's forward pass reads it.
             #define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
-            #include "FishGroundMap.hlsl"
-            #include "FishMoss.hlsl"
-            #include "FishGroundContactLit.hlsl"
-            #include "FishIndoor.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishMoss.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundContactLit.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishIndoor.hlsl"
             // FishWeatherLitForwardPass.hlsl's share of the sky's ambient a room's inside loses.
             #define FISH_INDOOR_DIM 0.65h
             #define FISH_FILLET_PASS_FORWARD
@@ -108,9 +108,9 @@ Shader "FishMMO/Rock Fillet"
             #pragma fragment FishFilletShadowFragment
             #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-            #include "FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
-            #include "FishSurface.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
             #define FISH_FILLET_PASS_SHADOW
             #include "FishRockFilletPass.hlsl"
             ENDHLSL
@@ -130,8 +130,8 @@ Shader "FishMMO/Rock Fillet"
             #pragma vertex FishFilletDepthVertex
             #pragma fragment FishFilletDepthFragment
 
-            #include "FishWeatherLitInput.hlsl"
-            #include "FishSurface.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
             #define FISH_FILLET_PASS_DEPTH
             #include "FishRockFilletPass.hlsl"
             ENDHLSL
@@ -151,8 +151,8 @@ Shader "FishMMO/Rock Fillet"
             #pragma fragment FishFilletDepthNormalsFragment
             #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
-            #include "FishWeatherLitInput.hlsl"
-            #include "FishSurface.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
             #define FISH_FILLET_PASS_DEPTHNORMALS
             #include "FishRockFilletPass.hlsl"
             ENDHLSL

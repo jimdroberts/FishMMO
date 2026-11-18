@@ -20,8 +20,8 @@
 // darkening toward the root (dense grass shades itself), a low narrow specular, light through the
 // blade only when it is backlit, the weather's cover and damp through FishWeatherFoliage.
 
-#include "FishSurface.hlsl"
-#include "FishAmbient.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 
 #define GRASS_RINGS 6
 
@@ -81,7 +81,7 @@ float4 _GrassParams6;   // terrain texture colour: x unused (the strength is per
 float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z bend kept at the end (0..1); w top-down lay (sine of its angle)
 
 // The ground colour map (GroundColourMap; same globals FishVegetationPasses.hlsl reads).
-#include "FishGroundColour.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishGroundColour.hlsl"
 
 /* The biome's looks (BiomeLooks, published by FloraPaletteMap; FishFlora.hlsl): each patch of ground takes one of its
  * biome's twelve looks, and the grass standing in it wears that look's colours, width and curl. The compute grew the
@@ -89,7 +89,7 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
  * and GRASS_FLORA_SALT must match), so nothing new rides the record. Flowers take theirs from larger drifts with their own
  * salt, so a drift of bloom does not end where a patch of grass does. _FishFloraInfo.x = 0 (nothing published, the A/B
  * off): every look is invalid and every blade is drawn as it was. */
-#include "FishFlora.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 #include "FishGrassLookCache.hlsl"
 // The grass's patches are FishFlora.hlsl's own: the terrain's living ground reads the same, so the sward under a patch is
 // the patch's colour too.
@@ -959,7 +959,7 @@ float3 _LightPosition;
 // Per-cascade caster culling (2026-10-21), as the trees' and rocks' casters have (FishCasterCulling.hlsl): every blade was
 // drawn into every cascade, its curve built four times over. A blade is known by a sphere round its root standing taller
 // than the tallest blade, so nothing a cascade shows is ever dropped.
-#include "FishCasterCulling.hlsl"
+#include "Assets/FishMMO/Shaders/FishCasterCulling.hlsl"
 #define GRASS_CASTER_RADIUS 2.5
 #endif
 #endif

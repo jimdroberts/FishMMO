@@ -756,7 +756,7 @@ void FishScatterPack(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
 // Visibility is refreshed independently of generation: cached candidates may become visible again next frame.
 // Seven storage buffers, and the eighth the culled list packed for the batch group (a one-word buffer while it is off);
 // shadow lists and their counts are copied without camera occlusion.
-#include "FishHiZOcclusion.hlsl"
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
 RWStructuredBuffer<FishVisible> _ScatterCulledVisible;
 RWByteAddressBuffer _ScatterCulledCounts;
 RWByteAddressBuffer _ScatterCulledPacked;

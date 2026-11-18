@@ -1,0 +1,2839 @@
+﻿using FishNet.Object;
+using FishNet.Transporting;
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using FishNet.Object.Prediction;
+using UnityEngine;
+using FishMMO.Logging;
+using FishMMO.Shared.Core;
+using FishMMO.Shared.Weather;
+
+namespace FishMMO.Shared
+{
+	/// <summary>
+	/// Partial class for AbilityController handling activation logic, including starting, processing,
+	/// spawning, validating, cancelling abilities, and consumable activation.
+	/// </summary>
+	public partial class AbilityController
+	{
+		/// <summary>
+		/// Invoked on both client and server after a consumable is successfully consumed via this
+		/// controller's activation pipeline. Server-side subscribers should send the appropriate
+		/// <see cref="InventorySetItemBroadcast"/> or <see cref="InventoryRemoveItemBroadcast"/>
+		/// to the owning client. Client-side subscribers can use this for UI feedback or validation.
+		/// Parameters: (character, consumableTemplateID, inventorySlot).
+		/// </summary>
+		public event Action<ICharacter, int, int> OnConsumableUsed;
+
+		/// <summary>Server: a consumable use ended without consuming; the character and the slot it was using.</summary>
+		public event Action<ICharacter, int> OnConsumableUseCancelled;
+
+		/// <summary>True once the use in progress has consumed its charge (FinishConsumable), until it ends.</summary>
+		private bool consumableUseCompleted;
+
+		/// <summary>
+		/// Fired when a consumable has changed the inventory row that held it: the stack was
+		/// reduced, or the item was used up and its slot emptied.
+		/// </summary>
+		/// <remarks>
+		/// Arguments: the character, the item (still carrying its identity and version even when
+		/// destroyed), the slot it occupied, and whether it was destroyed. This is the persistence
+		/// hook: <see cref="OnConsumableUsed"/> fires after the slot has been cleared and names only
+		/// a template, so nothing could write the row from it, and a potion drunk was only ever
+		/// recorded by the next full snapshot — a crash before that refunded it.
+		/// </remarks>
+		public event Action<ICharacter, Item, int, bool> OnConsumableItemChanged;
+
+		/// <summary>
+		/// Gets the current ability type, considering any type override.
+		/// </summary>
+		/// <returns>The current <see cref="AbilityType"/> if an ability is active, otherwise <see cref="AbilityType.None"/>.</returns>
+		public AbilityType GetCurrentAbilityType()
+		{
+			if (currentAbilityID != NO_ABILITY &&
+				KnownAbilities.TryGetValue(currentAbilityID, out Ability currentAbility))
+			{
+				return currentAbility.EffectiveType;
+			}
+			return AbilityType.None;
+		}
+
+		/// <summary>
+		/// Gets the appropriate attribute template for activation speed reduction based on the ability type.
+		/// Physical variants (including <see cref="AbilityType.None"/>) use
+		/// <see cref="AttackSpeedReductionTemplate"/>; all other variants use
+		/// <see cref="CastSpeedReductionTemplate"/>.
+		/// </summary>
+		/// <param name="ability">The ability to check.</param>
+		/// <returns>The attribute template for speed reduction.</returns>
+		public CharacterAttributeTemplate GetActivationAttributeTemplate(Ability ability)
+		{
+			switch (ability.EffectiveType)
+			{
+				case AbilityType.None:
+				case AbilityType.Physical:
+				case AbilityType.GroundedPhysical:
+				case AbilityType.AerialPhysical:
+					return AttackSpeedReductionTemplate;
+				default:
+					return CastSpeedReductionTemplate;
+			}
+		}
+
+		/// <summary>
+		/// Calculates the speed reduction factor for ability activation based on the given attribute.
+		/// </summary>
+		/// <param name="attribute">The attribute template to use for calculation.</param>
+		/// <returns>The speed reduction multiplier (1.0 = no reduction).</returns>
+		/// <remarks>
+		/// DESYNC RISK: This method reads live attribute values from
+		/// <see cref="ICharacterAttributeController"/>. During prediction replay,
+		/// the attribute controller may have reconciled in a different order than
+		/// the ability controller. If a buff/debuff modifies cast/attack speed
+		/// mid-cast, the <c>remainingTicks</c> computed here during prediction may
+		/// differ from the server's value. This is corrected by the reconcile data
+		/// which includes <see cref="CharacterReconcileData.RemainingTicks"/> — the
+		/// desync is limited to the prediction window.
+		/// </remarks>
+		public float CalculateSpeedReduction(CharacterAttributeTemplate attribute)
+		{
+			if (attribute != null &&
+				cachedAttributeController != null)
+			{
+				CharacterAttribute speedReduction;
+				if (cachedAttributeController.TryGetAttribute(attribute.ID, out speedReduction))
+				{
+					return 1.0f - (attribute.InitialValueAsPct - speedReduction.FinalValueAsPct.Clamp(0.0f, 0.9f));
+				}
+			}
+			return 1.0f;
+		}
+
+		/// <summary>
+		/// The weather multiplier for one of this ability's numbers, at the moment of the cast (Q16).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Exactly 1 — and free — for an ability with no weather rules on it, which is nearly all of
+		/// them: the check for whether any rule exists happens before anything is sampled. That
+		/// matters because this sits on the cast path, which runs inside the replicate and is
+		/// replayed on every reconcile.
+		/// </para>
+		/// <para>
+		/// <b>Predictable, unlike the attribute read above it.</b> <see cref="CalculateSpeedReduction"/>
+		/// carries a documented desync risk because it reads live attributes that may have
+		/// reconciled in a different order. This does not: the weather is a pure function of a tick
+		/// and a position, the tick is mapped into the synchronised domain by
+		/// <see cref="WeatherExposureTick"/>, and the position is already reconciled — so the owner
+		/// and the server reach the same multiplier, and a replay reaches it again.
+		/// </para>
+		/// </remarks>
+		private float WeatherScaling(Ability ability, uint inputTick, AbilityScalingTarget target)
+		{
+			return AbilityModifiers.Multiplier(ability, this, Character, inputTick, target);
+		}
+
+		/// <summary>
+		/// Returns true if the given ability requires held input (channeled or charged).
+		/// AI should pass the result as the isHeld parameter when calling Activate().
+		/// </summary>
+		/// <param name="abilityID">The ability ID to check.</param>
+		public bool RequiresHeld(long abilityID)
+		{
+			if (!KnownAbilities.TryGetValue(abilityID, out Ability ability))
+				return false;
+
+			if (ChanneledTemplate != null && ability.HasAbilityEvent(ChanneledTemplate.ID))
+				return true;
+
+			if (ChargedTemplate != null && ability.HasAbilityEvent(ChargedTemplate.ID))
+				return true;
+
+			// A staged charge is held to choose its stage (AbilityTemplate.ChargeStages).
+			if (ability.IsStagedCharge)
+				return true;
+
+			return false;
+		}
+
+		/// <summary>
+		/// Processes an interrupt flag from the activation data. Returns true if an interrupt
+		/// was processed and the caller should return immediately.
+		/// OnCancel is suppressed during interrupt because <see cref="OnInterrupt"/> already
+		/// fires — UI subscribers that handle both events would otherwise flicker or double-reset.
+		/// </summary>
+		private bool ProcessInterrupt(AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.Interrupt))
+			{
+				Log.Debug("AbilityController", "Interrupting");
+				// Only fire UI/audio events on the first execution, not during reconcile replay.
+				if (state.IsTickedCreated())
+				{
+					OnInterrupt?.Invoke();
+				}
+				Cancel(state, true);
+				/* The Cancel key also stops a charge already under way (a rush, KCCController.BeginMotion): cancelling during
+				 * the run-up used to leave the character sliding on to the end of it. Here, inside the replicate, on both
+				 * peers and again on every replay (the flag is in the input), so the stop needs no remembering. */
+				if (PlayerCharacter != null && PlayerCharacter.CharacterController != null)
+				{
+					PlayerCharacter.CharacterController.EndMotion();
+				}
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Attempts to start a new ability from the queued activation data. Sets the current
+		/// ability, remaining time, and held state. Returns true if an ability was started.
+		/// </summary>
+		/// <remarks>
+		/// <c>remainingTicks</c> is computed once here using the current speed attribute
+		/// and never updated mid-cast. If a speed buff is applied or expires during the
+		/// cast, the actual cast duration won't change — only the UI cast bar in
+		/// <see cref="UpdateActivation"/> will show a different <c>totalTime</c> because
+		/// it recomputes from the current attribute each tick. This is intentional:
+		/// locking the tick count at cast start keeps client and server deterministic
+		/// without needing to reconcile a changing duration.
+		/// </remarks>
+		private bool TryStartAbility(AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			if (CanActivate(activationData.QueuedAbilityID, activationData.GetTick(), out Ability newAbility))
+			{
+				//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
+				currentAbilityID = newAbility.ID;
+				hasLastCastTick = false;
+				// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+				// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+				remainingTicks = ComputeActivationTicks(newAbility, activationData.GetTick());
+				newAbility.ChargeStage = 0;
+				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
+				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+				{
+					replicatedFlags.EnableBit(AbilityActivationFlags.IsHeld);
+				}
+				else
+				{
+					replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);
+				}
+				// Only fire the activate ECA on the authoritative first-execution tick.
+				// Without the !ContainsReplayed gate, every reconcile replay would re-invoke
+				// the trigger graph, double-firing achievements, sound, or DB writes wired
+				// into onAbilityActivateTriggers.
+				if (base.IsServerStarted && !state.ContainsReplayed())
+				{
+					AbilityEventData aed = new AbilityEventData(Character, currentAbilityID);
+					aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
+					Trigger.InvokeAll(onAbilityActivateTriggers, aed);
+				}
+
+				/* Trigger animation for this ability type on the first authoritative tick.
+				 * Avoids replay flicker.
+				 *
+				 * OWNER-LOCAL ONLY. This used to claim observers saw it "via NetworkAnimator
+				 * sync"; there is no NetworkAnimator on any character prefab, the property on
+				 * BaseCharacter is never assigned, and every method on CharacterAnimationController
+				 * is compiled out of a server build — so nothing was ever synchronised. What
+				 * observers get instead is BroadcastCastState below, which carries the ability type
+				 * an observer-side animation hook would need. */
+				if (!state.ContainsReplayed())
+				{
+					TriggerAbilityAnimation(newAbility.EffectiveType);
+				}
+
+				// Tell observers this character has started casting.
+				BroadcastCastState(state, started: true, referenceID: newAbility.ID, isConsumable: false);
+
+				return true;
+			}
+			return false;
+		}
+
+		/// <summary>
+		/// Raises a channelled ability's activation window to at least one tick.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A channel's per-tick spawns happen in <see cref="UpdateActivation"/>, which is reached
+		/// only while <c>remainingTicks &gt; 0</c>. An ability authored with
+		/// <c>ActivationTime = 0</c> and a Channeled event therefore never reached it at all: the
+		/// activation completed inside the same replicate call that started it and the whole
+		/// channel collapsed to the single closing spawn from <see cref="FinishAbility"/>, with no
+		/// error and nothing to see. The author asked for a channel; this gives them the shortest
+		/// one that exists rather than silently turning it into an instant.
+		/// </para>
+		/// <para>
+		/// Pure and deterministic — it reads only the ability's events and this tick's input
+		/// flags, both of which the server and the owner agree on — so both sides compute the same
+		/// <c>remainingTicks</c> and the reconcile stays quiet. Applies only while the ability is
+		/// actually held: a channelled ability activated without the hold flag is a one-shot cast
+		/// and keeps its instant timing.
+		/// </para>
+		/// </remarks>
+		/// <param name="ability">The ability being started.</param>
+		/// <param name="activationFlags">This tick's activation flags.</param>
+		/// <param name="ticks">The activation window computed from the ability's activation time.</param>
+		/// <returns>The activation window to use.</returns>
+		private uint ApplyChannelActivationFloor(Ability ability, int activationFlags, uint ticks)
+		{
+			if (ticks > 0u ||
+				ChanneledTemplate == null ||
+				!activationFlags.IsFlagged(AbilityActivationFlags.IsHeld) ||
+				!ability.HasAbilityEvent(ChanneledTemplate.ID))
+			{
+				return ticks;
+			}
+			return 1u;
+		}
+
+		/// <summary>
+		/// Validates that the character is still in a valid state to continue an already-started
+		/// ability activation. Lighter than <see cref="CanActivate"/> — skips cooldown, resource,
+		/// pet, and activation-condition checks that are only relevant at start.
+		/// Retains the grounding check because the player can jump/fall mid-cast.
+		/// </summary>
+		/// <remarks>
+		/// NOTE: Resource depletion mid-channel does not interrupt the cast by design.
+		/// Channeled abilities consume resources each tick via <see cref="SpawnChanneledAbility"/>,
+		/// but this method intentionally does not re-check resource availability. A character
+		/// that runs out of mana mid-channel will continue channeling. If this behavior should
+		/// change, add a resource check here and in <see cref="ProcessActiveAbility"/>.
+		/// // NOTE(cross-ref): keep this in sync with ProcessActiveAbility — if either
+		/// // gains a mid-cast resource check, the other must be updated to match.
+		/// </remarks>
+		private bool ValidateActiveCast(out Ability validatedAbility)
+		{
+			validatedAbility = null;
+			if (currentAbilityID == NO_ABILITY) return false;
+			if (!CanManipulate()) return false;
+			if (!KnownAbilities.TryGetValue(currentAbilityID, out validatedAbility)) return false;
+			if (cachedDamageController == null || !cachedDamageController.IsAlive) return false;
+
+			if (!PassesGroundingCheck(validatedAbility.EffectiveType)) return false;
+
+			return true;
+		}
+
+		/// <summary>
+		/// Processes the currently active ability each tick. Handles the activation countdown,
+		/// held/channeled ability updates, charged ability hold, and final ability spawning.
+		/// </summary>
+		private void ProcessActiveAbility(AbilityActivationReplicateData activationData, ReplicateState state, float deltaTime)
+		{
+			if (!IsActivating)
+			{
+				return;
+			}
+
+			if (!ValidateActiveCast(out Ability validatedAbility))
+			{
+				Cancel(state);
+				return;
+			}
+
+			if (!AccountMissedCastTicks(activationData.GetTick()))
+			{
+				return;
+			}
+
+			if (remainingTicks > 0)
+			{
+				UpdateActivation(activationData, state, validatedAbility, deltaTime);
+				return;
+			}
+
+			// Return immediately if we are charging our attack.
+			// Both replicatedFlags (previous tick's authoritative state) and
+			// activationData.ActivationFlags (current tick's input) must have
+			// IsHeld set. This is not redundant — each comes from a different
+			// state source. Requiring both prevents a one-tick window where
+			// the flag was cleared in one source but not the other from
+			// accidentally continuing the hold.
+			if (ChargedTemplate != null &&
+				validatedAbility.HasAbilityEvent(ChargedTemplate.ID) &&
+				replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld) &&
+				activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+			{
+				// Enforce a maximum hold duration (2x normal activation time, floored — see
+				// ComputeMaxHoldTicks) to prevent clients from holding charged abilities
+				// indefinitely. Track hold ticks separately since remainingTicks is already 0
+				// when the ability finished charging.
+				// One for this tick, and any ticks of the hold whose inputs never arrived (counted by number, as the countdown is).
+				chargedHoldTicks += 1u + missedHoldTicks;
+				missedHoldTicks = 0u;
+				uint maxHoldTicks = ComputeMaxHoldTicks(validatedAbility.ActivationTime, (float)base.TimeManager.TickDelta);
+				if (chargedHoldTicks >= maxHoldTicks)
+				{
+					chargedHoldTicks = 0;
+					// Pass the real state: with Invalid, a replayed tick would clear the
+					// player's live localInputFlags and reset the animator mid-replay.
+					Cancel(state, true);
+				}
+				return;
+			}
+			chargedHoldTicks = 0;
+
+			// A staged charge held to the end fires at its last stage, by itself.
+			validatedAbility.ChargeStage = validatedAbility.IsStagedCharge ? validatedAbility.Template.ChargeStages : (byte)0;
+
+			// Activation complete — spawn the ability and finish
+			FinishAbility(validatedAbility, activationData, state);
+		}
+
+		/// <summary>
+		/// The cast's length in ticks: its activation time, scaled by the activation-speed attribute and the weather, rounded
+		/// up. The one formula the cast start and a staged charge's release both use.
+		/// </summary>
+		private uint ComputeActivationTicks(Ability ability, uint inputTick)
+		{
+			// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+			// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+			float activationTimeSec = ability.ActivationTime
+				* CalculateSpeedReduction(GetActivationAttributeTemplate(ability))
+				* WeatherScaling(ability, inputTick, AbilityScalingTarget.ActivationTime);
+			return (uint)(int)Math.Ceiling(activationTimeSec / (double)base.TimeManager.TickDelta);
+		}
+
+		/// <summary>
+		/// The stage a staged charge released with <paramref name="remainingTicks"/> of <paramref name="totalTicks"/> left
+		/// has reached, from 1. The stages before the last divide the charge evenly; the last is only the full charge.
+		/// With three: under half is 1, from half is 2, complete is 3.
+		/// </summary>
+		/// <remarks>Pure and integer-only, so every peer (and every replay) names the same stage.</remarks>
+		public static byte ResolveChargeStage(uint remainingTicks, uint totalTicks, int stages)
+		{
+			if (stages <= 1)
+			{
+				return 1;
+			}
+			if (totalTicks == 0u || remainingTicks == 0u)
+			{
+				return (byte)Mathf.Min(stages, byte.MaxValue);
+			}
+			uint elapsed = remainingTicks >= totalTicks ? 0u : totalTicks - remainingTicks;
+			// floor(elapsed / total × (stages - 1)), in integers.
+			long stage = 1L + (long)elapsed * (stages - 1) / totalTicks;
+			return (byte)Mathf.Clamp((int)stage, 1, stages - 1);
+		}
+
+		/// <summary>
+		/// Minimum charged-hold window, in seconds, applied when 2x the ability's activation
+		/// time would be shorter. See <see cref="ComputeMaxHoldTicks"/>.
+		/// </summary>
+		internal const float MinimumChargedHoldSeconds = 1f;
+
+		/// <summary>
+		/// Ticks a charged ability may be held past full charge before the server cancels it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The cap is 2x the activation time, floored at <see cref="MinimumChargedHoldSeconds"/>
+		/// and never below one tick. The floor exists because the raw formula collapses for
+		/// instant abilities: an ability authored at <c>ActivationTime = 0</c> (Punch is) produced
+		/// <c>maxHoldTicks = 0</c>, and since the hold counter increments before the comparison,
+		/// the charge was cancelled on the very first held tick — a charged event on a fast
+		/// ability was silently unusable rather than briefly holdable.
+		/// </para>
+		/// <para>
+		/// Pure and static, with <c>Math.Ceiling</c> rather than <c>Mathf</c>, because this runs
+		/// inside the predicted replicate on every peer — both sides must compute the identical
+		/// tick count or the client predicts a cancel the server does not perform.
+		/// </para>
+		/// </remarks>
+		/// <param name="activationTime">The ability's activation (charge) time in seconds.</param>
+		/// <param name="tickDelta">Fixed seconds per tick.</param>
+		/// <returns>The hold cap in ticks, always at least 1.</returns>
+		/// <remarks>
+		/// Public because the observer's cast nameplate has to know it: a charged ability may be
+		/// HELD for this long after its activation window has elapsed, so an expiry sized from the
+		/// activation time alone dropped the row two-thirds of the way through a fully charged cast.
+		/// </remarks>
+		public static uint ComputeMaxHoldTicks(float activationTime, float tickDelta)
+		{
+			if (tickDelta <= 0f)
+			{
+				return 1u;
+			}
+
+			float capSeconds = Mathf.Max(activationTime * 2f, MinimumChargedHoldSeconds);
+			uint ticks = (uint)(int)Math.Ceiling(capSeconds / (double)tickDelta);
+			return ticks < 1u ? 1u : ticks;
+		}
+
+		/// <summary>The tick number of the last input a running cast was counted on, and whether there is one.</summary>
+		private uint lastCastTick;
+		private bool hasLastCastTick;
+
+		/// <summary>
+		/// The most ticks of a cast that are made up for inputs that never arrived. Enough for a burst of loss that takes
+		/// every packet an input travelled in; small, because the tick is the owner's own counter and making up more would
+		/// let a counter stepped forward shorten a cast by as much.
+		/// </summary>
+		internal const uint MaximumMissedCastTicks = 6;
+
+		/// <summary>
+		/// Counts a running cast in TICK NUMBERS, not in how many inputs happened to be run: the ticks between the last
+		/// input counted and this one are taken off first. False when this number was already counted.
+		/// </summary>
+		/// <remarks>
+		/// The owner counts a cast down once a tick. The server counted it once per input RUN, which is the same thing only
+		/// while every input arrives once: an input lost on the way (every packet it travelled in) left the server a tick
+		/// behind for the rest of the cast, finishing on a later input than the owner did, with that input's aim and
+		/// without the launch line the owner sent on its own last tick. Counted by number, both finish on the same input
+		/// whatever went missing before it. A number at or below the last one counted (an input run a second time) counts
+		/// nothing.
+		/// </remarks>
+		private bool AccountMissedCastTicks(uint inputTick)
+		{
+			missedHoldTicks = 0u;
+			if (!hasLastCastTick)
+			{
+				hasLastCastTick = true;
+				lastCastTick = inputTick;
+				missedTicksBudget = MaximumMissedCastTicks;
+				return true;
+			}
+			int delta = unchecked((int)(inputTick - lastCastTick));
+			if (delta <= 0)
+			{
+				return false;
+			}
+			lastCastTick = inputTick;
+			uint missed = (uint)(delta - 1);
+			/* A budget for the CAST, not a limit per input: the tick is the owner's own counter, and a modified client that
+			 * stamped every input a few ticks past the last took that many ticks off its cast each time (a three second
+			 * cast finished in under half a second). An honest one loses a handful of inputs in a cast at most. */
+			if (missed > missedTicksBudget)
+			{
+				missed = missedTicksBudget;
+			}
+			missedTicksBudget -= missed;
+			if (missed > 0u)
+			{
+				uint taken = remainingTicks < missed ? remainingTicks : missed;
+				remainingTicks -= taken;
+				// Whatever the countdown had no room for falls in the hold that follows it (a charged ability at full charge).
+				missedHoldTicks = missed - taken;
+			}
+			return true;
+		}
+
+		/// <summary>The made-up ticks a cast may still take (see <see cref="AccountMissedCastTicks"/>).</summary>
+		private uint missedTicksBudget;
+
+		/// <summary>Made-up ticks of the last input that fell past the countdown, into a charged hold.</summary>
+		private uint missedHoldTicks;
+
+		/// <summary>
+		/// Updates an ability that is still activating (remainingTicks > 0). Handles UI updates,
+		/// held ability release checks, and channeled ability spawning during activation.
+		/// </summary>
+		private void UpdateActivation(AbilityActivationReplicateData activationData, ReplicateState state, Ability validatedAbility, float deltaTime)
+		{
+			//Log.Debug($"2 Activating {validatedAbility.ID} State: {state}");
+
+			// Handle ability updates here, display cast bar, display hitbox telegraphs, etc
+			// NOTE: totalTime is recomputed from the current speed attribute, while
+			// remainingTicks was locked at cast start. If speed changed mid-cast the
+			// bar progress will drift. To fix, cache totalTicks in TryStartAbility
+			// and use (remainingTicks / (float)totalTicks) * totalTime here.
+			if (state.IsTickedCreated())
+			{
+				float tickDelta = (float)base.TimeManager.TickDelta;
+				/* Scaled too, or the bar would be drawn against the ability's unmodified time and
+				 * would visibly disagree with the cast it is showing in any weather at all.
+				 *
+				 * Recomputed from the CURRENT weather, not from what was sampled at cast start — so
+				 * if the weather changes mid-cast the bar drifts, exactly as the NOTE above says it
+				 * already does for the speed attribute. Only the bar: remainingTicks was locked in
+				 * TryStartAbility and is what the cast actually runs on, on both peers. */
+				float totalTime = validatedAbility.ActivationTime
+					* CalculateSpeedReduction(GetActivationAttributeTemplate(validatedAbility))
+					* WeatherScaling(validatedAbility, activationData.GetTick(), AbilityScalingTarget.ActivationTime);
+				OnUpdate?.Invoke(validatedAbility.Name, remainingTicks * tickDelta, totalTime);
+			}
+
+			/* A STAGED CHARGE fires on release, at the stage reached, where any other held cast released early is cancelled
+			 * (below). Tested on this tick's input alone, so a tap released before its cast even began (the input never
+			 * carried IsHeld) fires at stage 1 on its first tick. Both peers reach the same stage: it is a pure function of
+			 * the countdown, which is reconciled, and the cast's own length. */
+			if (validatedAbility.IsStagedCharge &&
+				!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+			{
+				uint totalTicks = ComputeActivationTicks(validatedAbility, activationData.GetTick());
+				validatedAbility.ChargeStage = ResolveChargeStage(remainingTicks, totalTicks, validatedAbility.Template.ChargeStages);
+				FinishAbility(validatedAbility, activationData, state);
+				return;
+			}
+
+			// Handle held ability updates
+			if (replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+			{
+				// The Held ability hotkey was released or the character can no longer activate the ability
+				if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+				{
+					// Applied on replay too — see the remarks on FinishAbility: a reconcile for a
+					// tick before the release wipes this cooldown, and only the replay restores it.
+					AddCooldown(validatedAbility, activationData.GetPredictionTick());
+					// Reset ability data
+					Cancel(state);
+					return;
+				}
+
+				// Channeled abilities like beam effects or a charge rush that are continuously updating or spawning objects should be handled here
+				if (ChanneledTemplate != null &&
+					validatedAbility.HasAbilityEvent(ChanneledTemplate.ID))
+				{
+					SpawnChanneledAbility(validatedAbility, activationData, state);
+				}
+			}
+
+			remainingTicks = remainingTicks > 0 ? remainingTicks - 1 : 0;
+		}
+
+		/// <summary>
+		/// Resolves targeting, spawns the ability object, and unconditionally advances
+		/// the deterministic RNG seed. Aim comes from the REPLICATED input cached in
+		/// <c>ReplicateInternal</c> (<c>replicatedAimOrigin</c>/<c>replicatedAimDirection</c>), never
+		/// from a live controller — see the note in the body. During reconcile replay the visual
+		/// spawn is skipped but the seed is still advanced to keep client/server RNG in lockstep.
+		/// </summary>
+		private void ResolveTargetAndSpawn(Ability ability, AbilityActivationReplicateData activationData, ReplicateState state, bool isChannelTick = false)
+		{
+			// During reconcile replay, spawned objects were already destroyed by
+			// DestroyAbilityObjectsAfterTick. Skip the visual spawn but still
+			// advance the seed below so RNG state stays deterministic.
+			if (!state.ContainsReplayed())
+			{
+				if (cachedTargetController != null)
+				{
+					/* Trace from the aim that was REPLICATED for this tick, not from whatever the
+					 * live controller holds right now.
+					 *
+					 * Reading the controller was wrong on both sides of the wire. For a player it
+					 * meant the owner traced with its exact local camera while the server and every
+					 * observer traced with the value that survived quantisation, so a deterministic
+					 * simulation produced a different shot on each peer. For an NPC it meant reading
+					 * AIController, which disables itself off the server, so every client traced
+					 * from a default-initialised controller — origin at the world origin, direction
+					 * +Z — and NPC shots went nowhere near their targets. */
+					TargetInfo targetInfo = cachedTargetController.UpdateTarget(replicatedAimOrigin,
+																			replicatedAimDirection,
+																			ability.Range);
+
+					/* Told to observers BEFORE the spawn, not after it. The spawn runs the ability's spawn chain, and a hitscan or
+					 * area action in it publishes its hits as it resolves them (AbilityObject.PublishActionHit): sent ahead of the
+					 * activation on the same ordered channel, each reached observers before the copy it belonged to existed, and
+					 * was dropped. The activation needs nothing from the spawned object. */
+					BroadcastAbilityActivated(ability, targetInfo, activationData.GetPredictionTick(), isChannelTick);
+
+					AbilityObject spawned = AbilityObject.Spawn(ability, Character, AbilitySpawner, targetInfo,
+						replicatedAimOrigin, replicatedAimDirection, currentSeed, activationData.GetPredictionTick(),
+						pose: null, launch: replicatedLaunch);
+
+					/* The server resolved no object where the owner may well have.
+					 *
+					 * Spawn returns null when the ability requires a target and this peer's trace
+					 * found none. The owner traces against its own view and can easily disagree, and
+					 * nothing else in the reconcile expresses the difference: the seed still advances
+					 * below, the cost and cooldown still apply, and no denial is raised — so the
+					 * owner's object had no reason to be rolled back and flew its full lifetime
+					 * hitting nothing. Flagging it lets the reconcile take that object back.
+					 *
+					 * Gated on SpawnsWorldObject, because Spawn also returns null for pet, self-target
+					 * and prefab-less templates — deterministically, on every peer, from the template
+					 * alone. The owner spawned nothing for those either, so there is nothing to take
+					 * back; flagging them stamped NoSpawn onto every completed self-buff or summon
+					 * cast, and the owner-side NoSpawn handling then destroyed CONFIRMED objects the
+					 * owner had predicted on later ticks. Only a target-miss can differ per peer. */
+					if (spawned == null && base.IsServerStarted && AbilityObject.SpawnsWorldObject(ability.Template))
+					{
+						/* Stamped with the tick it happened on, not raised as a bare flag. The
+						 * reconcile built after this tick's replicates only carries it if the two
+						 * ticks match — see ShouldFlagNoSpawn for why a mismatch must be dropped
+						 * rather than reported against whatever tick the reconcile ends up on. */
+						serverSpawnedNothingTick = activationData.GetPredictionTick().Value;
+					}
+
+					/* Tell observers what happened, as one message per cast.
+					 *
+					 * Observers currently learn about this spawn only because the owner's whole
+					 * input stream is relayed to them thirty times a second. That relay is what
+					 * makes 100-200 players unaffordable, and it is switched off by disabling state
+					 * forwarding — at which point this broadcast is the only thing that reaches
+					 * them. The ability simulation is deterministic, so the tuple below is all an
+					 * observer needs to reproduce the identical object for its whole lifetime.
+					 *
+					 * Safe to send while forwarding is still on: an observer receiving both paths
+					 * spawns once, because AbilityContainerAllocator treats a matching seed+tick as
+					 * a duplicate and replaces it rather than adding a second object. */
+				}
+				else if (base.IsServerStarted && !warnedMissingTargetController)
+				{
+					/* Silent otherwise: the seed still advances below, resources are still
+					 * consumed and the cooldown still starts, but nothing ever spawns and
+					 * observers are never told. Say so once per controller. */
+					warnedMissingTargetController = true;
+					Log.Warning("AbilityController",
+						$"'{gameObject.name}' has no ITargetController; its abilities will never spawn objects.");
+				}
+			}
+			else if (ability.Template != null && ability.Template.AbilitySpawnTarget == AbilitySpawnTarget.Self)
+			{
+				/* A replayed tick makes no object, but a self-cast ability has none: its effect is on the caster, the
+				 * correction has just taken it back, and this is the tick that puts it back (RunSelfTargetEffects). */
+				AbilityObject.RunSelfTargetEffects(ability, Character, currentSeed, activationData.GetPredictionTick(), isReplay: true);
+			}
+			else if (ability.Template != null)
+			{
+				// Any other ability: what its spawn chain did to the caster (RunSpawnEffectsOnReplay).
+				AbilityObject.RunSpawnEffectsOnReplay(ability, Character, AbilitySpawner, currentSeed, activationData.GetPredictionTick());
+			}
+
+			// Always advance seed regardless of replay state, which path was taken,
+			// or whether a spawn actually occurred — maintains deterministic RNG
+			// state across client and server.
+			currentSeed = abilitySeedGenerator.Next();
+		}
+
+		/// <summary>True once the missing-target-controller warning has been logged for this controller.</summary>
+		private bool warnedMissingTargetController;
+
+		/// <summary>
+		/// Sends this activation to everyone observing the caster.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server only, and server authored. The client supplied a direction through its replicate
+		/// input; the server validated the activation, resolved the target with its own raycast, and
+		/// this reports the result. Nothing in the message is taken from the client on trust —
+		/// <c>TargetObjectID</c> in particular is the server's resolution, never a victim the client
+		/// named.
+		/// </para>
+		/// <para>
+		/// Scoped to the caster's observers and excluding its owner, so the interest management
+		/// already in place bounds this traffic without any extra work. A one-off cast and the
+		/// FIRST spawn of a channel go reliably — a cast is a rare, event-driven message and the
+		/// ability object is client-local with no state channel behind it, so a dropped activation
+		/// was a projectile that observer never saw at all. The second and later per-tick spawns of
+		/// a channel go unreliably; see the channel-cost note in the body. Either way a late
+		/// message still lands correctly, because the receiver fast-forwards by the measured
+		/// transit delay rather than assuming the message was instant.
+		/// </para>
+		/// </remarks>
+		/// <param name="isChannelTick">
+		/// True when this spawn is one of a channelled ability's per-tick spawns rather than a
+		/// one-off cast. See the channel-cost note below.
+		/// </param>
+		private void BroadcastAbilityActivated(Ability ability, TargetInfo targetInfo, PredictionTick spawnTick, bool isChannelTick = false)
+		{
+			if (!base.IsServerStarted || base.NetworkManager == null || base.NetworkObject == null)
+			{
+				return;
+			}
+
+			/* Nothing to reproduce: pets, self-target and prefab-less abilities spawn no world
+			 * object, and a required target that was not found spawned nothing here either. */
+			if (!AbilityObject.SpawnsWorldObject(ability.Template) ||
+				(ability.Template.RequiresTarget && targetInfo.Target == null))
+			{
+				return;
+			}
+
+			/* Forwarded objects reproduce the cast from the relayed input instead.
+			 *
+			 * Their observers run the replicate and spawn the object themselves, so this message
+			 * would be the same spawn a second time. The allocator would collapse the duplicate, but
+			 * the receiving handler also fast-forwards what it is given, and fast-forwarding an
+			 * object that is already simulating jumps it ahead of the server's copy.
+			 * See ObserverSyncMode. */
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+
+			int targetObjectID = -1;
+			if (targetInfo.Target != null)
+			{
+				NetworkObject targetNob = targetInfo.Target.GetComponentInParent<NetworkObject>();
+				if (targetNob != null)
+				{
+					targetObjectID = targetNob.ObjectId;
+				}
+			}
+
+			// The pose the server spawned with — see AbilitySpawnPose for why it travels.
+			AbilitySpawnPose pose = AbilityObject.ResolveSpawnPose(Character, ability, AbilitySpawner, targetInfo,
+				replicatedAimOrigin, replicatedAimDirection, replicatedLaunch);
+
+			/* To observers only.
+			 *
+			 * The owner is always one of its own object's observers, and used to receive this and
+			 * discard it on arrival (it predicted the cast and owns the authoritative copy through
+			 * the reconcile).
+			 *
+			 * CHANNEL COST. A one-off cast goes reliably: it is a rare, event-driven message with
+			 * no recovery path of its own — the object is client-local, so a dropped activation
+			 * used to be a projectile that observer never saw, for its whole lifetime. A
+			 * channelled ability is a different shape. It re-broadcasts every tick it is held,
+			 * thirty a second, and each of those spawns is one short-lived visual among many; a
+			 * lost one is a gap in a beam nobody can point to, while paying reliable delivery for
+			 * all of them puts a retransmit queue behind a stream that is already continuous. So
+			 * the FIRST spawn of a channel is reliable — that is the one that tells an observer a
+			 * channel started at all — and the per-tick spawns after it are unreliable. The
+			 * counter resets in TryStartAbility and Cancel, so every new channel pays for its own
+			 * opening message.
+			 *
+			 * The fast-forward on the receiving side already accounts for however long a message
+			 * took to arrive, so a retransmitted or late one still lands in the right place. */
+			/* Reliable for EVERY spawn, the per-tick spawns of a channel included.
+			 *
+			 * The second and later channel spawns used to go unreliably, to save bandwidth while a
+			 * beam was held. That broke an invariant the hit and destroy messages depend on: they
+			 * are reliable and ordered against the activation, so a reliable destroy for a channel
+			 * object that collided on its first tick could overtake its own unreliable activation,
+			 * find no container, and drop — after which the activation landed and spawned an object
+			 * nothing would ever end. It flew its full lifetime on that observer and detonated in
+			 * empty air. An unreliable duplicate arriving after the object died also respawned it
+			 * with a fresh lifetime. Ordering is a correctness requirement here and the reliable
+			 * channel is the only thing that provides it; a channel's per-tick message is ~40 bytes
+			 * and bounded by how long the key is held. */
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new AbilityActivatedBroadcast
+			{
+				CasterObjectID = base.NetworkObject.ObjectId,
+				AbilityID = ability.ID,
+				Seed = currentSeed,
+				SpawnTick = spawnTick.Value,
+				SpawnMode = (byte)ability.Template.AbilitySpawnTarget,
+				AimOrigin = replicatedAimOrigin,
+				PackedAimDirection = AimDirectionCompression.Encode(replicatedAimDirection),
+				TargetObjectID = targetObjectID,
+				SpawnPosition = pose.Position,
+				SpawnRotation = pose.Rotation,
+				ServerTick = base.TimeManager.LocalTick,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Ticks an observer should fast-forward a freshly reproduced ability object by, so it
+		/// sits where the server's copy is <i>as the observer renders its peers</i>.
+		/// </summary>
+		/// <remarks>
+		/// Observers render other characters <paramref name="interpolationTicks"/> behind the
+		/// server, so the object is placed that far behind the server's copy too — a projectile
+		/// that ran level with the server would visibly lead the interpolated caster that fired
+		/// it. Negative differences (an estimate that lags the spawn) clamp to zero.
+		/// </remarks>
+		/// <param name="estimatedServerTick">The observer's estimate of the current server tick (<c>TimeManager.Tick</c>).</param>
+		/// <param name="serverSpawnTick">Server tick the object spawned on.</param>
+		/// <param name="interpolationTicks">Ticks the observer renders its peers behind the server.</param>
+		/// <remarks>
+		/// Public rather than internal because the client's cast nameplate needs the same answer:
+		/// a cast bar started from the raw message would run a round trip behind the projectile the
+		/// same cast spawned. One implementation is what keeps the two agreeing.
+		/// </remarks>
+		public static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks)
+		{
+			return ComputeObserverFastForwardTicks(estimatedServerTick, serverSpawnTick, interpolationTicks, latencyTicks: 0u);
+		}
+
+		/// <summary>
+		/// Ticks to advance a reproduced object by, so it sits level with the caster <i>as this
+		/// observer renders it</i>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The latency term is the whole correction.</b> The client's <c>TimeManager.Tick</c> is
+		/// FishNet's estimate of the server's PRESENT — one-way latency plus a one-tick read bias on
+		/// top of the last packet's tick — so for a message that has just arrived,
+		/// <c>Tick − ServerTick</c> is not "how late the message is"; it IS the transit delay. The
+		/// rendered caster, meanwhile, comes through NetworkTransform and is drawn one-way latency
+		/// plus the interpolation buffer behind the server. Subtracting only the buffer therefore
+		/// re-added the transit delay it should have removed, and every observed projectile led its
+		/// caster by the one-way trip: level at 60 ms, a third of a second out of the muzzle at 200.
+		/// </para>
+		/// <para>
+		/// With the latency removed a fresh message advances zero ticks — the object spawns at the
+		/// muzzle on arrival, a constant <paramref name="interpolationTicks"/> ahead of the rendered
+		/// caster regardless of ping — and the advance is spent only where it is owed: a message that
+		/// genuinely arrived late, and the in-flight objects a new observer is handed on entry.
+		/// Negative differences clamp to zero rather than holding the spawn, because a held object
+		/// cannot receive the hit or destroy message that may already be in flight for it.
+		/// </para>
+		/// </remarks>
+		/// <param name="estimatedServerTick">The observer's estimate of the current server tick (<c>TimeManager.Tick</c>).</param>
+		/// <param name="serverSpawnTick">Server tick the object spawned on.</param>
+		/// <param name="interpolationTicks">Ticks the observer renders its peers behind the server.</param>
+		/// <param name="latencyTicks">One-way latency in ticks, plus the estimator's one-tick read bias.</param>
+		public static uint ComputeObserverFastForwardTicks(uint estimatedServerTick, uint serverSpawnTick, uint interpolationTicks, uint latencyTicks)
+		{
+			long elapsed = (int)(estimatedServerTick - serverSpawnTick);
+			elapsed -= interpolationTicks;
+			elapsed -= latencyTicks;
+			return elapsed > 0 ? (uint)elapsed : 0u;
+		}
+
+		/// <summary>
+		/// The catch-up an observer owes a reproduced object, read from the live clock.
+		/// </summary>
+		/// <remarks>
+		/// One place for the three readers — the live activation, the in-flight replay a new observer
+		/// receives, and the cast nameplate — so the projectile and the "Casting" row agree about when
+		/// a cast began. Half the measured round trip is the one-way estimate; the added tick is the
+		/// <c>socketReadDelay</c> FishNet bakes into its own tick estimate.
+		/// </remarks>
+		/// <param name="timeManager">The client's time manager.</param>
+		/// <param name="serverTick">The server tick stamped on the message.</param>
+		public static uint ComputeObserverCatchUpTicks(FishNet.Managing.Timing.TimeManager timeManager, uint serverTick)
+		{
+			if (timeManager == null || serverTick == 0u)
+			{
+				return 0u;
+			}
+
+			double tickDelta = timeManager.TickDelta;
+			uint latencyTicks = 1u;
+			if (tickDelta > 0d)
+			{
+				double oneWaySeconds = timeManager.RoundTripTime / 2000d;
+				latencyTicks += (uint)System.Math.Round(oneWaySeconds / tickDelta);
+			}
+
+			return ComputeObserverFastForwardTicks(timeManager.Tick, serverTick,
+				LagCompensationTick.SpectatorInterpolationTicks, latencyTicks);
+		}
+
+		/// <summary>True once this client has registered the shared activation handler.</summary>
+		/// <remarks>
+		/// Registered once per client rather than per character, for the same reason the resource
+		/// handler is: a per-character registration would run one delegate per character in the
+		/// scene for every cast anyone makes.
+		/// </remarks>
+		private static bool activationBroadcastRegistered;
+
+		/// <summary>Registers the shared activation handler for this client.</summary>
+		internal static void RegisterActivationBroadcast(FishNet.Managing.NetworkManager networkManager)
+		{
+			if (activationBroadcastRegistered || networkManager == null)
+			{
+				return;
+			}
+			networkManager.ClientManager.RegisterBroadcast<AbilityActivatedBroadcast>(OnAbilityActivatedBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectHitBroadcast>(OnAbilityObjectHitBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectRedirectBroadcast>(OnAbilityObjectRedirectBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityObjectDestroyedBroadcast>(OnAbilityObjectDestroyedBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityLearnedObserverBroadcast>(OnAbilityLearnedObserverBroadcast);
+			networkManager.ClientManager.RegisterBroadcast<AbilityForgottenObserverBroadcast>(OnAbilityForgottenObserverBroadcast);
+			// A second handler beside the nameplate's (FishNet keeps a list per broadcast): the caster's body acts it out.
+			networkManager.ClientManager.RegisterBroadcast<CharacterCastBroadcast>(OnCastAnimationBroadcast);
+			OnObservedActivationCatchUp += OnCastAnimationCatchUp;
+			// Observed casts are acted out when the playback clock reaches them (DrainObservedCasts), every frame.
+			observedCastClock = networkManager.TimeManager;
+			if (observedCastClock != null)
+			{
+				observedCastClock.OnUpdate += DrainObservedCasts;
+			}
+			/* The queue is static and the client keeps one NetworkManager across servers: a cast still waiting when the
+			 * client left a scene server stayed at the head, and on the next server (whose tick counter is unrelated) held
+			 * every later cast behind it until that counter passed the stale tick. */
+			networkManager.ClientManager.OnClientConnectionState += OnObservedCastConnectionState;
+			activationBroadcastRegistered = true;
+		}
+
+		/// <summary>A cast another character began or ended: its body swings, casts, guards or rolls (<see cref="AnimateObservedCast"/>).</summary>
+		private static void OnCastAnimationBroadcast(CharacterCastBroadcast msg, Channel channel)
+		{
+			if (DefersObservedCast(msg))
+			{
+				pendingObservedCasts.Enqueue(msg);
+				return;
+			}
+			AnimateObservedCast(msg, live: true);
+		}
+
+		/// <summary>Casts the server has reported that the playback clock has not reached yet, oldest first.</summary>
+		private static readonly Queue<CharacterCastBroadcast> pendingObservedCasts = new Queue<CharacterCastBroadcast>();
+
+		/// <summary>The client's time manager, for the playback clock; null before the handlers are registered.</summary>
+		private static FishNet.Managing.Timing.TimeManager observedCastClock;
+
+		/// <summary>
+		/// True when an observed cast has to wait for the playback clock: the caster is DRAWN a few ticks in the past, on
+		/// the clock every observed character shares (NetworkTransform.PlaybackDrawTick), and acting the cast out as its
+		/// message arrived raised the hand before the body got there, ahead of the projectile that now appears on that
+		/// clock too. Order is kept: nothing overtakes a cast that is still waiting.
+		/// </summary>
+		private static bool DefersObservedCast(CharacterCastBroadcast msg)
+		{
+			if (!AbilityObject.ObservedPlayback || observedCastClock == null || msg.ServerTick == 0u ||
+				!FishNet.Component.Transforming.NetworkTransform.TimedPlayback)
+			{
+				return false;
+			}
+			double drawTick = FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(observedCastClock, LagCompensationTick.SpectatorInterpolationTicks);
+			if (drawTick <= 0d)
+			{
+				// No clock to wait on: nothing may be left waiting for one either.
+				FlushObservedCasts();
+				return false;
+			}
+			if (!ObservedCastIsNear(msg.ServerTick, drawTick, observedCastClock.TickRate))
+			{
+				return false;
+			}
+			if (pendingObservedCasts.Count > 0)
+			{
+				return true;
+			}
+			return msg.ServerTick > drawTick;
+		}
+
+		/// <summary>
+		/// True when a cast written on <paramref name="serverTick"/> is close enough ahead of the playback clock to be worth
+		/// waiting for: the clock runs a few ticks behind the newest data, never seconds. A tick further ahead than
+		/// <see cref="MaximumObservedCastWaitSeconds"/> is not from this clock at all (it was written by another server,
+		/// whose counter is unrelated), and waiting on it would hold every cast behind it for as long as the two counters
+		/// differ.
+		/// </summary>
+		internal static bool ObservedCastIsNear(uint serverTick, double drawTick, int tickRate)
+		{
+			return serverTick - drawTick <= MaximumObservedCastWaitSeconds * System.Math.Max(1, tickRate);
+		}
+
+		/// <summary>The longest an observed cast waits for the playback clock, seconds.</summary>
+		internal const double MaximumObservedCastWaitSeconds = 2d;
+
+		/// <summary>Drops every observed cast still waiting: the connection they were written on is gone.</summary>
+		private static void ClearObservedCasts()
+		{
+			pendingObservedCasts.Clear();
+		}
+
+		/// <summary>Acts out every observed cast still waiting, in order, without the clock.</summary>
+		private static void FlushObservedCasts()
+		{
+			while (pendingObservedCasts.Count > 0)
+			{
+				AnimateObservedCast(pendingObservedCasts.Dequeue(), live: true);
+			}
+		}
+
+		/// <summary>The client's connection changed state: casts waiting from the old one belong to a clock that no longer runs.</summary>
+		private static void OnObservedCastConnectionState(FishNet.Transporting.ClientConnectionStateArgs args)
+		{
+			ClearObservedCasts();
+		}
+
+		/// <summary>Every frame: acts out the observed casts the playback clock has reached.</summary>
+		private static void DrainObservedCasts()
+		{
+			if (pendingObservedCasts.Count == 0 || observedCastClock == null)
+			{
+				return;
+			}
+			double drawTick = FishNet.Component.Transforming.NetworkTransform.PlaybackDrawTick(observedCastClock, LagCompensationTick.SpectatorInterpolationTicks);
+			if (drawTick <= 0d)
+			{
+				return;
+			}
+			while (pendingObservedCasts.Count > 0)
+			{
+				uint headTick = pendingObservedCasts.Peek().ServerTick;
+				// Reached, or not this clock's to reach (see ObservedCastIsNear): either way it does not wait.
+				if (headTick > drawTick && ObservedCastIsNear(headTick, drawTick, observedCastClock.TickRate))
+				{
+					break;
+				}
+				AnimateObservedCast(pendingObservedCasts.Dequeue(), live: true);
+			}
+		}
+
+		/// <summary>A cast already running when this client began watching its caster: only a held guard is still worth showing.</summary>
+		private static void OnCastAnimationCatchUp(CharacterCastBroadcast msg)
+		{
+			AnimateObservedCast(msg, live: false);
+		}
+
+		/// <summary>
+		/// Acts out, on a client that only watches the caster, what <see cref="TryStartAbility"/> acts out on the caster's own
+		/// peers (<see cref="TriggerAbilityAnimation"/>): the ability's type picks a swing, a cast, the guard or a roll.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>From the cast broadcast every observer already receives</b> (sent from the activation state machine for every
+		/// start and every ending, self-buffs and instants included), so nothing new goes on the wire. The type is READ from
+		/// the ability this client holds for the caster, as the nameplate reads its name and duration.
+		/// </para>
+		/// <para>
+		/// An ability this client cannot resolve (learned before it started watching and not yet announced, or an NPC's set it
+		/// never received) still shows: as a swing, the commonest thing anyone does. An ending lowers a guard; a consumable
+		/// plays nothing (there is no drinking clip yet). A cast caught up part-way (<paramref name="live"/> false) only raises
+		/// a guard still being held: replaying a swing that has finished would be a second swing.
+		/// </para>
+		/// </remarks>
+		internal static void AnimateObservedCast(CharacterCastBroadcast msg, bool live)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted || msg.IsConsumable)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null || controller.Character == null ||
+				!controller.Character.TryGet(out ICharacterAnimationController animation))
+			{
+				return;
+			}
+			if (!msg.Started)
+			{
+				animation.SetBlocking(false);
+				return;
+			}
+			AbilityType type = controller.TryGetAbilityForVisuals(msg.ReferenceID, out Ability ability)
+				? ability.EffectiveType
+				: AbilityType.Physical;
+			if (!live && type != AbilityType.Block)
+			{
+				return;
+			}
+			ActOut(animation, type);
+		}
+
+		/// <summary>The animation an ability of <paramref name="type"/> plays on its caster.</summary>
+		internal static void ActOut(ICharacterAnimationController animation, AbilityType type)
+		{
+			switch (type)
+			{
+				case AbilityType.Physical:
+				case AbilityType.GroundedPhysical:
+				case AbilityType.AerialPhysical:
+					animation.TriggerAttack();
+					break;
+				case AbilityType.Magic:
+				case AbilityType.GroundedMagic:
+				case AbilityType.AerialMagic:
+					animation.TriggerCast();
+					break;
+				case AbilityType.Block:
+					animation.SetBlocking(true);
+					break;
+				case AbilityType.Roll:
+					animation.TriggerRoll();
+					break;
+				default:
+					break;
+			}
+		}
+
+		/// <summary>
+		/// Applies a hit the server resolved to this client's copy of an ability object.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The counterpart to <c>AbilityObject.ResolveSweptHits</c>'s peer gate: a third-party
+		/// observer no longer decides what a projectile hit, because it holds every character
+		/// interpolated against its own latency and the server resolves inside a rewind to the
+		/// CASTER'S view. It is told instead, and plays the impact where the server measured it.
+		/// </para>
+		/// <para>
+		/// The victim is resolved back through the spawned map rather than re-traced, for the same
+		/// reason <see cref="OnAbilityActivatedBroadcast"/> resolves its target that way: re-tracing
+		/// would reintroduce exactly the divergence this removes. A victim id of zero is a hit on
+		/// scenery and is applied with no target character, which is what an authored impact decal
+		/// or sound needs; a NON-zero id this client cannot resolve is a victim it is not observing,
+		/// and is dropped rather than downgraded to a scenery hit, which would fire target-less
+		/// effects for a character that is really there.
+		/// </para>
+		/// <para>
+		/// A copy already gone — the lifetime got there first, or a destroy message overtook this —
+		/// is simply not found, exactly as for the destroy broadcast.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityObjectHitBroadcast(AbilityObjectHitBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			/* A DEFLECTION is not a hit and is applied first, because it applies even when the
+			 * victim cannot be resolved.
+			 *
+			 * The server ran no OnHit events for it, spent no hit count and dealt no damage — the
+			 * only thing that happened is that the object changed direction, and that is the one
+			 * consequence a receiver must reproduce whether or not it can see who caused it.
+			 * The heading is carried ABSOLUTE rather than re-derived from msg.Normal, so applying it
+			 * to the caster's own client — which predicted the same deflection and receives this
+			 * message like everybody else — is a no-op instead of a second mirror that would send
+			 * the object straight back at the defender. */
+			/* The server tick this message was written on: when what it reports happened. A copy that runs on the
+			 * playback clock applies it when the clock gets there (AbilityObject, Presentation); the owner's own copy and
+			 * any copy off the clock apply it now, as before. */
+			uint eventTick = ObservedEventTick(nm);
+
+			if (msg.Deflected)
+			{
+				abilityObject.ApplyObservedDeflection(AimDirectionCompression.Decode(msg.PackedDeflectHeading), eventTick);
+				return;
+			}
+
+			ICharacter hitCharacter = null;
+			bool victimResolved = true;
+			if (msg.VictimObjectID != 0)
+			{
+				if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.VictimObjectID, out NetworkObject victimNob) ||
+					victimNob == null ||
+					!victimNob.TryGetComponent(out hitCharacter))
+				{
+					/* A character this client is not observing. Dropping the HIT is right: applying
+					 * it target-less would run the OnHit events as though it had struck scenery,
+					 * firing impact effects for a body that is really there.
+					 *
+					 * The trajectory change those events would have produced is NOT lost with it:
+					 * a fork's post-chain heading arrives separately in
+					 * AbilityObjectRedirectBroadcast (reliable, same ordered channel, so always
+					 * after this message) and is applied whether or not the victim resolved. The
+					 * skipped RNG draw still walks this copy's generator out of step, but nothing
+					 * peer-visible is derived from it any more — headings come from the wire, and
+					 * damage rolls are server-authoritative.
+					 *
+					 * The END is not lost with it either — see the tail of this method. */
+					victimResolved = false;
+				}
+			}
+
+			if (victimResolved)
+			{
+				/* A BLOCK is not an impact, and telling them apart is what this bit is for.
+				 *
+				 * The mitigation gate inside ApplyHit is deliberately skipped for an authoritative
+				 * echo — the peer that RESOLVED the hit already asked whether a shield stopped it —
+				 * so a blocked shot arriving as an ordinary impact fell straight through to the
+				 * OnHit chain and every observer ran the whole thing for a hit the server had
+				 * rejected. The dedupe entry is still recorded, so a later report of the same body
+				 * is absorbed; the shield impact rides the destroy chain the Ended bit triggers
+				 * below. */
+				if (msg.Blocked)
+				{
+					abilityObject.ApplyObservedBlock(hitCharacter, eventTick);
+				}
+				/* An impact a hitscan or area ACTION resolved takes the undeduped path.
+				 *
+				 * It has no hit-set entry and spends no hit count on any peer, so putting it through
+				 * the swept path would silence every pulse of a repeating area effect after the first —
+				 * see AbilityObjectHitBroadcast.DirectImpact, which also explains why these reach
+				 * observers only. */
+				else if (msg.DirectImpact)
+				{
+					abilityObject.ApplyObservedActionHit(hitCharacter, msg.Point, msg.Normal, eventTick);
+					return;
+				}
+				else
+				{
+					abilityObject.ApplyObservedHit(hitCharacter, msg.Point, msg.Normal, eventTick);
+				}
+			}
+
+			/* The server said this hit ENDED the object, so no destroy message is coming.
+			 *
+			 * Applied even when the victim could not be resolved: dropping the hit is right, but
+			 * dropping the END would leave this client flying a copy the server no longer has for
+			 * the rest of its lifetime — the exact ghost the destroy broadcast was added to
+			 * prevent, and the reason that message still exists for every end no hit precedes.
+			 * Idempotent, because the object may have ended here already (the owner predicted it,
+			 * or the local lifetime got there first). */
+			if (msg.Ended)
+			{
+				abilityObject.EndObserved(eventTick);
+			}
+		}
+
+		/// <summary>
+		/// The server tick the message being handled was written on (FishNet reads every message against it, and a tick
+		/// marker keeps it right when two ticks share a packet): when the event it reports happened. Zero when unknown.
+		/// </summary>
+		private static uint ObservedEventTick(FishNet.Managing.NetworkManager networkManager)
+		{
+			FishNet.Managing.Timing.TimeManager timeManager = networkManager != null ? networkManager.TimeManager : null;
+			if (timeManager == null)
+			{
+				return 0u;
+			}
+			uint tick = timeManager.LastPacketTick.LastRemoteTick;
+			return tick == FishNet.Managing.Timing.TimeManager.UNSET_TICK ? 0u : tick;
+		}
+
+		/// <summary>
+		/// Puts every member of a freshly reproduced cast on the playback clock, its leg starting on
+		/// <paramref name="serverStartTick"/> (AbilityObject.BeginObservedPlayback).
+		/// </summary>
+		/// <returns>False when there is no clock to run on; the caller then catches the cast up by estimate, as before.</returns>
+		private static bool BeginObservedPlayback(Ability ability, AbilityObject root, uint serverStartTick, bool lateJoin = false)
+		{
+			if (root == null || !root.BeginObservedPlayback(serverStartTick, lateJoin))
+			{
+				return false;
+			}
+			Dictionary<int, AbilityObject> container = null;
+			ability?.Objects?.TryGetValue(root.ContainerID, out container);
+			if (container != null)
+			{
+				foreach (AbilityObject member in container.Values)
+				{
+					if (member != null && !ReferenceEquals(member, root))
+					{
+						member.BeginObservedPlayback(serverStartTick, lateJoin);
+					}
+				}
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Applies a server-resolved fork redirect to this client's copy of the object.
+		/// </summary>
+		/// <remarks>
+		/// Resolved exactly like the hit message, and deliberately WITHOUT needing the victim: the
+		/// whole reason this message exists is the receiver that could not resolve the victim and
+		/// dropped the hit. <c>ApplyObservedRedirect</c> compares before turning, so a peer that
+		/// already ran the fork itself treats this as confirmation rather than a second turn.
+		/// </remarks>
+		private static void OnAbilityObjectRedirectBroadcast(AbilityObjectRedirectBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			// The redirect states its own tick; a copy on the playback clock turns when the clock reaches it.
+			abilityObject.ApplyObservedRedirect(AimDirectionCompression.Decode(msg.PackedHeading),
+				ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick),
+				msg.ServerTick != 0u ? msg.ServerTick : ObservedEventTick(nm));
+		}
+
+		/// <summary>
+		/// Files an ability a peer learned while this client was already observing it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Without this, an observer's knowledge of a peer's abilities was frozen at the moment it
+		/// started observing: <c>ReadPayload</c> was the only source, so every cast of an ability
+		/// crafted afterwards resolved to nothing and drew nothing, permanently.
+		/// </para>
+		/// <para>
+		/// The ability lands in <c>KnownAbilities</c>, the same container the owner uses — see
+		/// <c>AbilityController.RegisterObservedAbility</c>, which explains why the parallel
+		/// observer-only store it used to go into was the wrong shape. The security boundary is
+		/// that method's OWNER CHECK, not a container split: this message only ever describes
+		/// somebody else, so it refuses on our own character. The owner is excluded by the sender
+		/// and skipped again here; it has its own <c>AbilityAddBroadcast</c>.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityLearnedObserverBroadcast(AbilityLearnedObserverBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			AbilityTemplate template = AbilityTemplate.Get<AbilityTemplate>(msg.TemplateID);
+			if (template == null)
+			{
+				Log.Warning("AbilityController",
+					$"Observed learn for ability {msg.AbilityID} names unknown template {msg.TemplateID}; " +
+					"its casts will not be drawn.");
+				return;
+			}
+
+			List<int> events = msg.Events != null && msg.Events.Length > 0 ? new List<int>(msg.Events) : null;
+			controller.RegisterObservedAbility(msg.AbilityID, template, events);
+		}
+
+		/// <summary>
+		/// Drops an ability an observed character no longer has.
+		/// </summary>
+		/// <remarks>
+		/// The counterpart to <see cref="OnAbilityLearnedObserverBroadcast"/>, with the same owner
+		/// guard on the same reasoning: this only ever describes somebody else, and our own
+		/// character's abilities are removed by the authoritative forget result the server sends us.
+		/// Running it here as well would be a second, weaker writer of the same dictionary.
+		/// <para>
+		/// A caster we are no longer observing is simply not found — an observer that despawned the
+		/// character between the forget and this message has nothing left to correct.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityForgottenObserverBroadcast(AbilityForgottenObserverBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null)
+			{
+				return;
+			}
+
+			controller.RemoveAbility(msg.AbilityID);
+		}
+
+		/// <summary>
+		/// Destroys the local copy of an ability object the server ended by collision.
+		/// </summary>
+		/// <remarks>
+		/// Runs for the owner as well as observers — the owner's predicted collision can miss a
+		/// hit the server landed just as an observer's can. A copy already gone (the local
+		/// collision or lifetime got there first) is simply not found.
+		/// </remarks>
+		private static void OnAbilityObjectDestroyedBroadcast(AbilityObjectDestroyedBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null ||
+				!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability) ||
+				ability.Objects == null ||
+				!ability.Objects.TryGetValue(msg.ContainerID, out Dictionary<int, AbilityObject> container) ||
+				!container.TryGetValue(msg.ObjectID, out AbilityObject abilityObject) ||
+				abilityObject == null)
+			{
+				return;
+			}
+
+			abilityObject.EndObserved(ObservedEventTick(nm));
+		}
+
+		/// <summary>
+		/// Reproduces a broadcast activation on an observing client.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Skipped on the server, which already spawned the object, and on the owner, which
+		/// predicted it. Everyone else rebuilds it from the seed and tick — the same inputs the
+		/// server used, so the same object.
+		/// </para>
+		/// <para>
+		/// The target is resolved back through the spawned map rather than re-raycast. Re-tracing
+		/// here would reintroduce exactly the divergence this whole design removes: an observer
+		/// holds its peers interpolated, so the same ray against stale colliders can select a
+		/// different character than the server chose.
+		/// </para>
+		/// </remarks>
+		private static void OnAbilityActivatedBroadcast(AbilityActivatedBroadcast msg, Channel channel)
+		{
+			FishNet.Managing.NetworkManager nm = FishNet.InstanceFinder.NetworkManager;
+			if (nm == null || nm.ClientManager == null || nm.IsServerStarted)
+			{
+				return;
+			}
+			if (!nm.ClientManager.Objects.Spawned.TryGetValue(msg.CasterObjectID, out NetworkObject casterNob) ||
+				casterNob == null || casterNob.IsOwner)
+			{
+				return;
+			}
+
+			AbilityController controller = casterNob.GetComponent<AbilityController>();
+			if (controller == null || controller.Character == null)
+			{
+				return;
+			}
+			/* Both sources, not just KnownAbilities. An ability the caster learned after this
+			 * client started observing it is never in KnownAbilities — the payload that filled
+			 * that dictionary predates the learn — and dropping the cast here is what made such
+			 * abilities permanently invisible. AbilityLearnedObserverBroadcast files those in the
+			 * observer-only store this consults second. */
+			if (!controller.TryGetAbilityForVisuals(msg.AbilityID, out Ability ability))
+			{
+				return;
+			}
+
+			Transform target = null;
+			if (msg.TargetObjectID >= 0 &&
+				nm.ClientManager.Objects.Spawned.TryGetValue(msg.TargetObjectID, out NetworkObject targetNob) &&
+				targetNob != null)
+			{
+				target = targetNob.transform;
+			}
+
+			Vector3 aimDirection = AimDirectionCompression.Decode(msg.PackedAimDirection);
+
+			/* Camera spawns re-derive their pose; every other mode was sent one.
+			 *
+			 * A Camera pose is a pure function of the aim origin, the aim direction and the
+			 * template's range, all of which are on the wire or on the template, so passing null
+			 * here lets ResolveSpawnPose reproduce the server's own arithmetic exactly. The other
+			 * modes read the caster's motor, collider or spawner transform, which this peer holds
+			 * interpolated several hundred milliseconds behind the server, so resolving them
+			 * locally would put the object on a parallel, offset trajectory for its whole life. */
+			bool derivesPose = msg.SpawnMode == (byte)AbilitySpawnTarget.Camera;
+			AbilitySpawnPose? pose = derivesPose ? (AbilitySpawnPose?)null : new AbilitySpawnPose(msg.SpawnPosition, msg.SpawnRotation);
+
+			/* TargetInfo's hit position no longer travels: the only thing that read it was the
+			 * Target-mode branch of ResolveSpawnPose, and that mode now receives its resolved pose
+			 * outright. The target transform itself still matters — RequiresTarget templates refuse
+			 * to spawn without one, and ability behaviours track it. */
+			TargetInfo targetInfo = new TargetInfo(target, msg.SpawnPosition);
+
+			/* Whether this cast is already running here decides if the message is news.
+			 *
+			 * A duplicate reaches this handler two ways: a retransmit, or — if forwarding is ever
+			 * enabled without the guard on the sender — the locally simulated spawn arriving first.
+			 * The allocator collapses the duplicate and hands back the object that already exists,
+			 * so spawning is safe; fast-forwarding is not, because that object has been simulating
+			 * since it was created and advancing it again puts it ahead of the server's copy. */
+			PredictionTick spawnTick = new PredictionTick(msg.SpawnTick);
+			bool alreadyRunning = AbilityContainerAllocator.IsSpawnAlreadyRunning(ability, msg.Seed, spawnTick);
+
+			/* Catch-up is computed BEFORE the spawn, because Spawn runs the object's OnSpawn chain —
+			 * muzzle flash, cast sound — and a message late enough that the object has already
+			 * lived out its whole lifetime on the server used to play all of that at the origin
+			 * and then die quietly one call later, with no impact to follow. Such a message is
+			 * dropped whole. The duplicate case is exempt: the running object is the truth there. */
+			uint fastForward = ComputeObserverCatchUpTicks(nm.TimeManager, msg.ServerTick);
+			if (!alreadyRunning && nm.TimeManager != null && ability.LifeTime > 0.0f &&
+				fastForward * nm.TimeManager.TickDelta >= ability.LifeTime)
+			{
+				return;
+			}
+
+			AbilityObject spawned = AbilityObject.Spawn(ability, controller.Character, controller.AbilitySpawner, targetInfo,
+				msg.AimOrigin, aimDirection, msg.Seed, spawnTick, pose);
+
+			if (alreadyRunning)
+			{
+				return;
+			}
+
+			/* See ComputeObserverFastForwardTicks: zero for a fresh message, positive only for a
+			 * late one. Applied to the whole container rather than the returned root — see
+			 * CatchUpSpawnedContainer. */
+			/* On the clock observed characters are drawn on, where there is one: the copy then appears as the drawn
+			 * caster releases it and meets the drawn victim where the server's met the real one. Without a clock (no
+			 * data yet, timed playback off) it is advanced by the estimated transit, as it always was. */
+			if (!BeginObservedPlayback(ability, spawned, msg.ServerTick))
+			{
+				CatchUpSpawnedContainer(ability, spawned, consumeTicks: 0u, fastForwardTicks: fastForward);
+			}
+		}
+
+		/// <summary>
+		/// Charges a catch-up against every live member of a just-reproduced spawn, not only its root.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>AbilityObject.Spawn</c> returns the ROOT, and the OnSpawn chain that ran inside it may
+		/// have created siblings: <c>AbilitySpawnMultiplyAction</c> builds each child through
+		/// <c>AbilityObject.InitializeSpawnedChildObject</c>, which gives it zero elapsed ticks and
+		/// the source's UN-charged remaining lifetime. Charging the root alone therefore left every
+		/// pellet of a multi-shot ability sitting at the launch point with a full life while the root
+		/// was correctly placed — on the in-flight replay path the catch-up can be seconds, so the
+		/// children flew a transit delay behind the server's for the rest of their lives and then
+		/// outlived them, running their OnDestroy chain where nothing had happened. That is exactly
+		/// the failure <c>AbilityObject.PreRedirectElapsedTicks</c> was added to remove for the root,
+		/// and per-object hit broadcasts correct none of it: they name objects, not positions.
+		/// </para>
+		/// <para>
+		/// The container is COPIED before it is walked. Both operations can destroy a member whose
+		/// own remaining life is shorter than the catch-up — which is the right outcome, it no longer
+		/// exists on the server — and destruction removes that member from the very dictionary being
+		/// enumerated. A member's OnDestroy chain is authored content and may end others.
+		/// </para>
+		/// <para>
+		/// Lifetime is charged before the trajectory clock is advanced, and the destroyed check sits
+		/// between them, so a member that dies to the first never runs the second.
+		/// </para>
+		/// </remarks>
+		/// <param name="ability">The ability the spawn belongs to, or null.</param>
+		/// <param name="root">The object <c>Spawn</c> returned, or null when nothing spawned.</param>
+		/// <param name="consumeTicks">Lifetime ticks flown on legs this client is not reproducing.</param>
+		/// <param name="fastForwardTicks">Ticks the server has already simulated for this spawn.</param>
+		private static void CatchUpSpawnedContainer(Ability ability, AbilityObject root,
+			uint consumeTicks, uint fastForwardTicks)
+		{
+			if (root == null)
+			{
+				return;
+			}
+
+			Dictionary<int, AbilityObject> container = null;
+			ability?.Objects?.TryGetValue(root.ContainerID, out container);
+			CatchUpSpawnedMembers(container, root, consumeTicks, fastForwardTicks);
+		}
+
+		/// <summary>
+		/// The container walk itself, separated from the lookup so it can be asserted directly.
+		/// </summary>
+		/// <remarks>
+		/// See <see cref="CatchUpSpawnedContainer"/> for why the whole container is charged. Taking
+		/// the dictionary rather than the <c>Ability</c> is what lets a test build a root and a child
+		/// without a spawned network object behind them.
+		/// </remarks>
+		/// <param name="container">The spawn's container, or null when it cannot be resolved.</param>
+		/// <param name="root">The object <c>Spawn</c> returned; the fallback when the container is null.</param>
+		/// <param name="consumeTicks">Lifetime ticks flown on legs this client is not reproducing.</param>
+		/// <param name="fastForwardTicks">Ticks the server has already simulated for this spawn.</param>
+		internal static void CatchUpSpawnedMembers(Dictionary<int, AbilityObject> container, AbilityObject root,
+			uint consumeTicks, uint fastForwardTicks)
+		{
+			if (consumeTicks == 0u && fastForwardTicks == 0u)
+			{
+				return;
+			}
+
+			/* The overwhelmingly common shape: one root and no children. Walked directly, so an
+			 * ordinary cast pays neither a copy nor an allocation. */
+			if (container == null || container.Count <= 1)
+			{
+				CatchUpSpawnedObject(root, consumeTicks, fastForwardTicks);
+				return;
+			}
+
+			AbilityObject[] members = new AbilityObject[container.Count];
+			container.Values.CopyTo(members, 0);
+			for (int i = 0; i < members.Length; ++i)
+			{
+				CatchUpSpawnedObject(members[i], consumeTicks, fastForwardTicks);
+			}
+		}
+
+		/// <summary>Charges one member's share of a catch-up. See <see cref="CatchUpSpawnedContainer"/>.</summary>
+		private static void CatchUpSpawnedObject(AbilityObject abilityObject, uint consumeTicks, uint fastForwardTicks)
+		{
+			if (abilityObject == null || abilityObject.IsDestroyed)
+			{
+				return;
+			}
+
+			abilityObject.ConsumeLifetime(consumeTicks);
+			if (!abilityObject.IsDestroyed)
+			{
+				abilityObject.FastForward(fastForwardTicks);
+			}
+		}
+
+		/// <summary>
+		/// Tells this character's observers that an activation started or ended.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Server only, and only on a tick that actually happened — a reconcile replays the start
+		/// of a cast that is already running, and re-sending it would restart every observer's bar
+		/// once per replayed tick.
+		/// </para>
+		/// <para>
+		/// Sent to observers except the owner. The owner does not need it and must not have it: it
+		/// drives its own cast bar from the predicted activation, which is ahead of anything the
+		/// server can tell it, and feeding it this message would replace a correct local bar with a
+		/// stale one arriving a round trip late.
+		/// </para>
+		/// <para>
+		/// Reliable, and it has to be: the receiver keys a stop on the caster, and a character casts
+		/// one thing at a time, so an unreliable stop from cast N that reordered behind the start of
+		/// cast N+1 cleared the wrong row — reachable at instant-attack cadence. Two small messages
+		/// per cast is nothing against a reorder that a player can see; the receiver's expiry
+		/// remains as a safety net for a disconnect mid-cast, not for loss.
+		/// </para>
+		/// <para>
+		/// <b>An instant cast pays for one message, not two.</b> See
+		/// <see cref="SuppressesRedundantCastStop"/>.
+		/// </para>
+		/// </remarks>
+		/// <param name="state">The replicate state, used to skip replayed ticks.</param>
+		/// <param name="started">True for the start of an activation, false for its end.</param>
+		/// <param name="referenceID">The ability instance id, or the item template id for a consumable.</param>
+		/// <param name="isConsumable">True when an item is being used.</param>
+		private void BroadcastCastState(ReplicateState state, bool started, long referenceID, bool isConsumable)
+		{
+			if (!base.IsServerStarted ||
+				state.ContainsReplayed() ||
+				base.NetworkObject == null)
+			{
+				return;
+			}
+
+			uint tick = base.TimeManager != null ? base.TimeManager.Tick : 0u;
+
+			/* The tick the running activation began on, recorded whichever observer mode is active:
+			 * the spawn payload carries it so an observer that arrives mid-cast learns the cast it
+			 * missed (see WritePayload), and the suppression rule below reads it. Captured before it
+			 * is overwritten, because a stop is judged against the START's tick. */
+			uint startTick = castStartServerTick;
+			castStartServerTick = started ? tick : FishNet.Managing.Timing.TimeManager.UNSET_TICK;
+
+			if (!ObserverSyncMode.ShouldBroadcastToObservers(base.NetworkObject))
+			{
+				return;
+			}
+
+			if (!started &&
+				SuppressesRedundantCastStop(startTick, tick,
+					replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld)))
+			{
+				return;
+			}
+
+			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterCastBroadcast
+			{
+				CasterObjectID = base.NetworkObject.ObjectId,
+				ReferenceID = referenceID,
+				IsConsumable = isConsumable,
+				ServerTick = tick,
+				Started = started,
+			}, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Whether the stop for an activation that began and ended on the same server tick may be
+		/// left unsent.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The case this exists for.</b> <see cref="TryStartAbility"/> computes
+		/// <c>remainingTicks = ceil(ActivationTime / TickDelta)</c>, which is ZERO for an ability
+		/// authored at <c>ActivationTime 0</c> — 17 of the 37 authored abilities, the default attack
+		/// among them, and every NPC casts through this same controller. The activation then
+		/// completes inside the replicate call that started it, so the start and the stop are
+		/// written back to back on one tick and every observer pays for both.
+		/// </para>
+		/// <para>
+		/// <b>Why the stop says nothing the receiver does not already have.</b> The duration is not
+		/// sent and never was: <c>ClientCastNameplateDisplay.ResolveDuration</c> reads it off the
+		/// template against the caster's own speed attribute, and for a zero-activation ability that
+		/// is zero on every peer. The row's whole life is
+		/// <c>ClientCastNameplateDisplay.MinimumDwellSeconds</c>, which the receiver applies to a
+		/// stop anyway — so all the stop changed was which of two timers dropped a row that was
+		/// going to be dropped either way. The receiver sizes a zero-duration row from the dwell
+		/// rather than the grace, which is the other half of this fix.
+		/// </para>
+		/// <para>
+		/// <b>Why a HELD activation always keeps its stop.</b> A charged or channelled ability runs
+		/// past its activation window for as long as the player holds it, bounded only by
+		/// <see cref="ComputeMaxHoldTicks"/>; the receiver's <c>HeldAllowance</c> can size an expiry
+		/// from that cap but cannot say when the player actually let go. Only the stop can. An
+		/// instant ability with a Charged event reaches this method on the same tick it started —
+		/// <see cref="ApplyChannelActivationFloor"/> raises a channel to one tick but a charge is
+		/// not floored — so the hold flag, not the tick equality, is what has to decide it.
+		/// </para>
+		/// <para>
+		/// Pure, so the table can be asserted without a NetworkManager, in the style of
+		/// <c>ServerCancelsDirectly</c> and <c>ResolveInterruptDisposition</c>:
+		/// </para>
+		/// <list type="table">
+		/// <item><description>unset start, any stop, not held → SEND (no start was announced to match)</description></item>
+		/// <item><description>start 100, stop 100, not held → SUPPRESS (the instant case)</description></item>
+		/// <item><description>start 100, stop 101, not held → SEND (a real cast ended)</description></item>
+		/// <item><description>start 100, stop 100, held → SEND (a charge released on its first tick)</description></item>
+		/// <item><description>start 100, stop 130, held → SEND</description></item>
+		/// </list>
+		/// </remarks>
+		/// <param name="startTick">The server tick the start was announced on, or <c>TimeManager.UNSET_TICK</c>.</param>
+		/// <param name="stopTick">The server tick the stop would be announced on.</param>
+		/// <param name="isHeld">Whether the activation carried the held flag.</param>
+		/// <returns>True when the stop may be omitted.</returns>
+		internal static bool SuppressesRedundantCastStop(uint startTick, uint stopTick, bool isHeld)
+		{
+			if (isHeld)
+			{
+				return false;
+			}
+			if (startTick == FishNet.Managing.Timing.TimeManager.UNSET_TICK)
+			{
+				return false;
+			}
+			return startTick == stopTick;
+		}
+
+		/// <summary>
+		/// Spawns a channeled ability object during activation (e.g., beam effects, continuous damage).
+		/// Delegates to <see cref="ResolveTargetAndSpawn"/> which handles replay skipping and seed advance.
+		/// </summary>
+		private void SpawnChanneledAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			ResolveTargetAndSpawn(validatedAbility, activationData, state, isChannelTick: true);
+
+			// Channeled abilities consume resources every tick, on replay too — see FinishAbility:
+			// the reconcile restored the pre-tick resource value, so the replay must re-drain it.
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+		}
+
+		/// <summary>
+		/// Completes an ability activation: spawns the final ability object, consumes resources,
+		/// adds cooldown, and resets ability state.
+		/// </summary>
+		/// <remarks>
+		/// Resource consumption and the cooldown are applied on replay as well. A reconcile
+		/// restores the server's state <b>at the reconcile tick</b>, and for roughly one RTT after
+		/// a cast the owner keeps receiving reconciles for ticks that PRECEDE the cast — each of
+		/// which wipes the predicted cooldown and refunds the cost. The replay of the cast tick
+		/// is the only thing that can put them back, and it is not a double application: the
+		/// restore already removed them, <see cref="CooldownInstance"/> is keyed by ability and
+		/// immutable so re-adding it is idempotent, and a reconcile at or after the cast tick never
+		/// replays the cast at all. (Skipping them on replay made the cooldown overlay and the
+		/// resource bar flicker back for one RTT per cast and let a second press predict a second,
+		/// server-denied cast.)
+		/// </remarks>
+		private void FinishAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			// Spawn the final ability object (skipped during replay; seed still advanced).
+			ResolveTargetAndSpawn(validatedAbility, activationData, state);
+
+			//Log.Debug($"6 Consumed On Tick: {activationData.GetTick()} State: {state}");
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+			AddCooldown(validatedAbility, activationData.GetPredictionTick());
+
+			// Server-side ECA triggers fire once per real tick; the server never replays.
+			if (!state.ContainsReplayed() && base.IsServerStarted)
+			{
+				AbilityEventData aed = new AbilityEventData(Character, validatedAbility.ID);
+				aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
+				Trigger.InvokeAll(onAbilityCompleteTriggers, aed);
+			}
+
+			// Reset ability data
+			Cancel(state);
+		}
+
+		/// <summary>
+		/// Validates that the currently active consumable is still in a valid state to continue.
+		/// Resolves the consumable template from <see cref="currentAbilityID"/>.
+		/// Named to match the <see cref="ValidateActiveCast"/> convention for abilities.
+		/// </summary>
+		/// <param name="consumable">The resolved consumable template, or null if validation fails.</param>
+		/// <returns>True if the active consumable is still valid, false otherwise.</returns>
+		private bool ValidateActiveConsumable(out ConsumableTemplate consumable)
+		{
+			consumable = null;
+
+			// This method is only called from ProcessActiveConsumable, which already
+			// returns early if !IsActivating. No need to check or warn again here.
+
+			if (!CanManipulate())
+			{
+				return false;
+			}
+
+			if (currentAbilityID < int.MinValue || currentAbilityID > int.MaxValue)
+			{
+				return false;
+			}
+
+			consumable = BaseItemTemplate.Get<ConsumableTemplate>((int)currentAbilityID);
+			if (consumable == null)
+			{
+				return false;
+			}
+
+			if (cachedDamageController == null ||
+				!cachedDamageController.IsAlive)
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Attempts to start a consumable activation from the queued replicate data.
+		/// Validates the consumable template, cooldown, and item availability.
+		/// Locks the inventory slot for the duration of activation.
+		/// </summary>
+		/// <param name="activationData">The replicate data for this tick.</param>
+		/// <returns>True if the consumable activation was started, false otherwise.</returns>
+		/// <param name="state">
+		/// The replicate state. Carried only so the observer cast message can skip replayed ticks,
+		/// exactly as the ability start does — a reconcile replays a use that is already running,
+		/// and re-announcing it would restart every observer's bar.
+		/// </param>
+		private bool TryStartConsumable(AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			if (activationData.QueuedAbilityID < int.MinValue || activationData.QueuedAbilityID > int.MaxValue)
+			{
+				return false;
+			}
+
+			int templateID = (int)activationData.QueuedAbilityID;
+			if (templateID == NO_ABILITY)
+			{
+				return false;
+			}
+
+			// Consumables are only supported for player characters.
+			// NPCs do not have an inventory; FinishConsumable requires PlayerCharacter.
+			if (PlayerCharacter == null)
+			{
+				return false;
+			}
+
+			// Deterministic path: only CanManipulate(), not CanManipulateAuthoritative().
+			// External handlers (UI MouseMode, etc.) are non-deterministic and must not
+			// run during Replicate/replay. The client pre-filter in ActivateConsumable()
+			// already checks external handlers before queuing.
+			if (!CanManipulate())
+			{
+				return false;
+			}
+
+			ConsumableTemplate consumable = BaseItemTemplate.Get<ConsumableTemplate>(templateID);
+			if (consumable == null)
+			{
+				return false;
+			}
+
+			if (cachedDamageController == null ||
+				!cachedDamageController.IsAlive)
+			{
+				return false;
+			}
+
+			if (cachedCooldownController != null &&
+				cachedCooldownController.IsOnCooldown(consumable.ID, activationData.GetTick()))
+			{
+				return false;
+			}
+
+			uint useTick = activationData.GetTick();
+			/* A replay of a use this owner already predicted. The predicted use took the charge (or the last item), and a
+			 * reconcile restores resources but not the inventory, so the item checks below would now refuse the very use
+			 * being replayed and its effect would never be re-applied. Never true on the server, which does not replay. */
+			bool replayOfPredictedUse = state.ContainsReplayed() &&
+				predictedConsumableStarts.TryGetValue(useTick, out int predictedID) && predictedID == templateID;
+
+			// Both client and server validate the item exists in inventory.
+			// Deterministic: both iterate the same slot order, finding the same item.
+			Item item = FindConsumableItem(consumable.ID);
+			if (item == null && !replayOfPredictedUse)
+			{
+				return false;
+			}
+
+			// SECURITY: Re-validate via CanConsume on both client and server.
+			// ActivateConsumable (client-side queue) already calls CanConsume,
+			// but the server must also check because a crafted replicate packet
+			// could bypass the client-side check. CanConsume verifies stackable
+			// status, sufficient charges, and cooldown state.
+			if (item != null && !consumable.CanConsume(PlayerCharacter, item, useTick) && !replayOfPredictedUse)
+			{
+				return false;
+			}
+			if (!state.ContainsReplayed() && base.IsOwner && !base.IsServerStarted)
+			{
+				RecordPredictedConsumableStart(useTick, templateID);
+			}
+
+			// Set all logical state before the side-effecting LockSlot call.
+			// If an exception occurred between LockSlot and setting currentAbilityID,
+			// Cancel() would see consumableSlot set but currentAbilityID == NO_ABILITY,
+			// leaving the controller in an inconsistent state.
+			currentAbilityID = templateID;
+			hasLastCastTick = false;
+			replicatedFlags.EnableBit(AbilityActivationFlags.IsConsumable);
+			// DETERMINISM: (int)Math.Ceiling avoids platform-specific float rounding differences
+			// between x86 and ARM that Mathf.CeilToInt is susceptible to.
+			remainingTicks = (uint)(int)Math.Ceiling(consumable.ActivationTime / (double)base.TimeManager.TickDelta);
+
+			// Lock the inventory slot to prevent movement during activation.
+			// consumableSlot is assigned AFTER LockSlot so that if LockSlot throws,
+			// Cancel() won't try to unlock a slot that was never locked.
+			// A replayed use whose item the prediction already removed has no slot to lock.
+			if (item != null)
+			{
+				if (cachedInventoryController != null)
+				{
+					cachedInventoryController.LockSlot(item.Slot);
+				}
+				consumableSlot = item.Slot;
+			}
+
+			// Observers see a consumable being used exactly as they see an ability being cast.
+			BroadcastCastState(state, started: true, referenceID: consumable.ID, isConsumable: true);
+
+			return true;
+		}
+
+		/// <summary>
+		/// Processes the currently active consumable each tick. Handles the activation countdown
+		/// and finishes the consumable when activation time expires.
+		/// Consumables do not support channeling, charging, or held-state early cancellation.
+		/// Unlike abilities (which can be released mid-cast via the IsHeld flag in
+		/// <see cref="UpdateActivation"/>), consumables always run to completion once started.
+		/// This is intentional: potions and similar items should not be interruptible by
+		/// releasing the activation key. Interrupts via <see cref="ProcessInterrupt"/> still
+		/// apply (e.g., stun, explicit cancel).
+		/// </summary>
+		/// <param name="activationData">The replicate data for this tick.</param>
+		/// <param name="state">The prediction state.</param>
+		/// <param name="deltaTime">Tick delta time.</param>
+		private void ProcessActiveConsumable(AbilityActivationReplicateData activationData, ReplicateState state, float deltaTime)
+		{
+			if (!IsActivating)
+			{
+				return;
+			}
+
+			if (!ValidateActiveConsumable(out ConsumableTemplate consumable))
+			{
+				Cancel(state);
+				return;
+			}
+
+			// NOTE: Interrupt is already handled by ProcessInterrupt in Replicate()
+			// before this method is called. No duplicate check needed here.
+
+			if (!AccountMissedCastTicks(activationData.GetTick()))
+			{
+				return;
+			}
+
+			if (remainingTicks > 0)
+			{
+				if (state.IsTickedCreated())
+				{
+					float tickDelta = (float)base.TimeManager.TickDelta;
+					OnUpdate?.Invoke(consumable.Name, remainingTicks * tickDelta, consumable.ActivationTime);
+				}
+				remainingTicks--;
+				return;
+			}
+
+			// Activation complete — consume the item and finish
+			FinishConsumable(consumable, activationData, state);
+		}
+
+		/// <summary>
+		/// Records a consumable use this owner predicted, so a reconcile replay of its tick starts it again (see
+		/// <see cref="predictedConsumableStarts"/>). Drops entries more than <see cref="PredictedConsumableHistoryTicks"/>
+		/// old, far beyond any replay window.
+		/// </summary>
+		private void RecordPredictedConsumableStart(uint tick, int templateID)
+		{
+			if (predictedConsumableStarts.Count > 8)
+			{
+				predictedConsumableStartsPruneScratch.Clear();
+				foreach (uint recorded in predictedConsumableStarts.Keys)
+				{
+					if (tick - recorded > PredictedConsumableHistoryTicks)
+					{
+						predictedConsumableStartsPruneScratch.Add(recorded);
+					}
+				}
+				for (int i = 0; i < predictedConsumableStartsPruneScratch.Count; ++i)
+				{
+					predictedConsumableStarts.Remove(predictedConsumableStartsPruneScratch[i]);
+				}
+			}
+			predictedConsumableStarts[tick] = templateID;
+		}
+
+		/// <summary>How long a predicted use is remembered, in ticks: ten seconds at 30 Hz, far beyond any replay.</summary>
+		private const uint PredictedConsumableHistoryTicks = 300;
+		private readonly List<uint> predictedConsumableStartsPruneScratch = new List<uint>();
+
+		/// <summary>
+		/// Completes a consumable activation. Both client and server execute the same code path
+		/// for prediction parity: invoke the consumable (handles cooldown, charge reduction,
+		/// item destruction, and the consumable effect), then clean up the inventory slot.
+		/// During reconcile replay the inventory mutation and event are skipped — the reconcile does
+		/// not roll the inventory back, so re-applying them would double-consume the item and fire
+		/// duplicate events — but the EFFECT (<see cref="ConsumableTemplate.ReplayEffect"/>: a
+		/// potion's restored resources, which the reconcile DID roll back) and the COOLDOWN are re-applied,
+		/// exactly as <see cref="FinishAbility"/> re-applies its cooldown and cost: every reconcile
+		/// for a tick BEFORE the use carries no entry for this consumable, so the restore wipes the
+		/// predicted cooldown, and the replay of the use tick is the only thing that can put it
+		/// back. Skipping it left the hotkey overlay dark for ~1 RTT per use and let a second press
+		/// pass the deterministic cooldown check and predict a use the server denies.
+		/// </summary>
+		/// <remarks>
+		/// NOTE: <see cref="OnConsumableUsed"/> has no server-side subscriber, and it fires only
+		/// when the server actually consumes — on the success path client and server mutated
+		/// identically, so no correction is needed there. The case that DOES need one, a DENIED
+		/// predicted use, is corrected where the denial is known:
+		/// <c>AbilityController.SendConsumableDenialCorrection</c> sends the owner the slot's
+		/// authoritative state.
+		/// </remarks>
+		/// <param name="consumable">The consumable template being activated.</param>
+		/// <param name="activationData">The replicate data for this tick, used for tick-based cooldown checks.</param>
+		/// <param name="state">The prediction state, forwarded to Cancel for replay guarding.</param>
+		private void FinishConsumable(ConsumableTemplate consumable, AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			// During reconcile replay, skip the entire effect body.
+			// Cooldown re-validation, Invoke, inventory slot removal, and OnConsumableUsed
+			// are all authoritative operations that must not be replayed.
+			// NOTE: The cooldown re-validation below could produce a divergent Cancel
+			// during replay (server cooldown state may differ from the predicted state),
+			// but the replay guard makes this moot — the check is never reached.
+			if (!state.ContainsReplayed())
+			{
+				// Re-validate: an external effect could have put this consumable on
+				// cooldown during the activation window (e.g., debuff or another source).
+				if (cachedCooldownController != null &&
+					cachedCooldownController.IsOnCooldown(consumable.ID, activationData.GetTick()))
+				{
+					Cancel(state);
+					return;
+				}
+
+				if (PlayerCharacter != null &&
+					consumableSlot >= 0 &&
+					cachedInventoryController != null &&
+					cachedInventoryController.TryGetItem(consumableSlot, out Item item) &&
+					item.Template.ID == consumable.ID)
+				{
+					int slot = consumableSlot;
+					if (consumable.Invoke(PlayerCharacter, item, activationData.GetTick()))
+					{
+						consumableUseCompleted = true;
+						bool destroyed = !item.IsStackable || item.Stackable.Amount < 1;
+
+						// If the item was fully consumed, clean up the inventory slot.
+						// Stackable is not nulled by Item.Destroy(), so this check is safe.
+						if (destroyed)
+						{
+							// Unlock before setting null so the SetItemSlot call is not blocked.
+							cachedInventoryController.UnlockSlot(slot);
+							// Prevent double-unlock: Cancel() also unlocks consumableSlot.
+							// Setting to -1 here ensures the subsequent Cancel() is a no-op
+							// for slot unlocking. If SetItemSlot below throws,
+							// currentAbilityID is still set — the subsequent Cancel(state)
+							// will clear it, but the slot is already unlocked and cleaned
+							// up correctly. This ordering is intentional.
+							consumableSlot = -1;
+							cachedInventoryController.SetItemSlot(null, slot);
+						}
+
+						OnConsumableItemChanged?.Invoke(Character, item, slot, destroyed);
+						OnConsumableUsed?.Invoke(Character, consumable.ID, slot);
+					}
+				}
+			}
+			else
+			{
+				/* The effect too: the reconcile restored this character's resources to a tick before the use, so without
+				 * this the potion's restore vanished for about a round trip and came back with the server's reconcile.
+				 * Only the effect: the charge and the item stay as the predicted use left them. */
+				if (PlayerCharacter != null)
+				{
+					consumable.ReplayEffect(PlayerCharacter);
+				}
+			}
+			if (state.ContainsReplayed() && consumable.Cooldown > 0.0f && cachedCooldownController != null)
+			{
+				/* Replay re-applies the cooldown (and, above, the effect) — see the summary. AddCooldown
+				 * is an indexer write, so re-adding the same (tick, duration) entry is idempotent; the
+				 * inventory mutation and OnConsumableUsed stay replay-guarded because the restore
+				 * did not undo them. */
+				cachedCooldownController.AddCooldown(consumable.ID, new CooldownInstance(
+					activationData.GetTick(), consumable.Cooldown, (float)base.TimeManager.TickDelta));
+			}
+
+			Cancel(state);
+		}
+
+		/// <summary>
+		/// Searches the character's inventory for the first item matching the given template ID.
+		/// </summary>
+		/// <param name="templateID">The consumable template ID to search for.</param>
+		/// <returns>The first matching <see cref="Item"/>, or null if not found.</returns>
+		/// <remarks>
+		/// DETERMINISM: This method iterates <see cref="IInventoryController.Items"/> by
+		/// index (0..Count-1). Both client and server must iterate the same backing
+		/// collection in the same order. If <c>Items</c> is backed by a slot-indexed
+		/// <c>List&lt;Item&gt;</c> where index == slot, this is deterministic. If the
+		/// backing collection ever changes to a non-deterministic type (e.g.,
+		/// <c>Dictionary.Values</c>), client and server may find different items,
+		/// causing a reconcile mismatch on every consumable use.
+		/// </remarks>
+		private Item FindConsumableItem(int templateID)
+		{
+			if (cachedInventoryController == null)
+			{
+				return null;
+			}
+
+			// IItemContainer.Items is declared as List<Item> — the compile-time type
+			// guarantees index-stable iteration required for deterministic lookup.
+			// Runtime assertion: if the interface ever returns a different collection type
+			// (e.g., via a shim or mock), catch the determinism break immediately.
+			List<Item> items = cachedInventoryController.Items;
+			if (items == null)
+			{
+				Log.Warning("AbilityController", "FindConsumableItem: IInventoryController.Items returned null — determinism contract violated.");
+				return null;
+			}
+			for (int i = 0; i < items.Count; ++i)
+			{
+				Item item = items[i];
+				/* An item with no identity is one the database has not written yet, and it is
+				 * held unusable until it has been — the server locks its slot until the row lands,
+				 * and every request the owner can make refuses it. Skipping it here keeps the
+				 * consumable path on the same rule, deterministically: the owner sees the zero
+				 * until the server re-sends the slot with the assigned id, so it never queues an
+				 * activation the server would refuse. */
+				/* A locked slot is reserved by something else — a consumable already
+				 * activating out of it, a granted item awaiting its identity, or an item on a
+				 * trade table. The activation would lock it a second time and its completion
+				 * would then unlock the OTHER operation's reservation; skipping it keeps the
+				 * finder on the same rule as every other path that touches a slot, and picks
+				 * another stack of the same template when the player holds one. Deterministic:
+				 * the owner locks offered slots from the authoritative trade state, and the
+				 * server refuses a consumable the owner predicted out of a locked slot. */
+				if (item != null && item.ID > 0 && item.Template.ID == templateID &&
+					!cachedInventoryController.IsSlotLocked(i))
+				{
+					return item;
+				}
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Deterministic activation check used inside <see cref="Replicate"/> on both client
+		/// and server. Every condition here MUST read only from reconciled or deterministic
+		/// state so that client replay produces the same result as the server.
+		///
+		/// Determinism classification of each check:
+		///   - CanManipulate: reads Character null/IsTeleporting/IsSpawned — safe (server-set flags)
+		///   - KnownAbilities: synced via payload — safe
+		///   - IsAlive: derived from health attribute CurrentValue — reconciled
+		///   - Cooldowns: tick-based, reconciled via CooldownReconcileEntry[]
+		///   - PassesGroundingCheck: reads KCC motor state, predicted on OnTick before OnPostTick — safe
+		///   - MeetsActivationConditions/HasResource: reads attributes/buffs — reconciled
+		///
+		/// NOT included here (non-deterministic / client-only):
+		///   - canManipulateHandlers (external Func delegates, e.g. UI MouseMode) — use CanActivateOptimistic
+		///   - Pet check (broadcast-synced, not reconciled) — use CanActivateOptimistic
+		/// </summary>
+		private bool CanActivate(long abilityID, uint currentTick, out Ability validatedAbility)
+		{
+			validatedAbility = null;
+
+			if (abilityID == NO_ABILITY)
+			{
+				return false;
+			}
+			if (!CanManipulate())
+			{
+				return false;
+			}
+			if (!KnownAbilities.TryGetValue(abilityID, out validatedAbility))
+			{
+				return false;
+			}
+			if (cachedDamageController == null ||
+				!cachedDamageController.IsAlive)
+			{
+				return false;
+			}
+			if (cachedCooldownController != null &&
+				cachedCooldownController.IsOnCooldown(validatedAbility.ID, currentTick))
+			{
+				return false;
+			}
+
+			AbilityType abilityType = validatedAbility.EffectiveType;
+			if (!PassesGroundingCheck(abilityType))
+			{
+				return false;
+			}
+
+			if (!validatedAbility.MeetsActivationConditions(Character, ref cachedCheckEventData) ||
+				!validatedAbility.HasResource(Character, BloodResourceConversionTemplate))
+			{
+				return false;
+			}
+
+			/* No target/range check here, deliberately. ITargetController.Current is not
+			 * deterministic: on the owner it is rewritten every 50 ms from the mouse ray, on the
+			 * server it is whatever the previous cast's raycast left behind, and during replay it
+			 * is simply "now". Gating on it made owner and server disagree about activations and
+			 * produced spurious denials. Range is enforced authoritatively by the raycast in
+			 * ResolveTargetAndSpawn (ability.Range is the ray length); the cheap client-side
+			 * pre-filter lives in CanActivateOptimistic. */
+			return true;
+		}
+
+		/// <summary>
+		/// Client-side pre-filter: cheap, best-effort, not authoritative.
+		/// Runs all deterministic checks from <see cref="CanActivate"/> PLUS non-deterministic
+		/// checks that should prevent obviously invalid activations from being queued:
+		///   - External canManipulateHandlers (e.g. UI MouseMode gating)
+		///   - Pet existence (broadcast-synced, not reconciled)
+		///
+		/// If this passes but the server denies, reconcile will correct the prediction.
+		/// The important insight: letting the client be wrong occasionally is fine —
+		/// that's what reconcile is for. Avoiding the client being so conservative
+		/// it never predicts is the goal.
+		/// </summary>
+		private bool CanActivateOptimistic(long abilityID, uint currentTick, out Ability validatedAbility)
+		{
+			if (!CanActivate(abilityID, currentTick, out validatedAbility))
+			{
+				return false;
+			}
+
+			// Non-deterministic external handlers (e.g., UI MouseMode gating).
+			// These are client-only checks that the server never evaluates.
+			// Excluding them from CanActivate prevents divergence during replay.
+			// Reverse iteration so a handler unsubscribing itself does not skip the next entry.
+			for (int i = canManipulateHandlers.Count - 1; i >= 0; i--)
+			{
+				if (!canManipulateHandlers[i].Invoke())
+				{
+					return false;
+				}
+			}
+
+			// Pet state is broadcast-synced, not reconciled. During replay the pet
+			// reference may be stale. Check here as a best-effort pre-filter. NOTE the
+			// server does NOT reject a re-summon — CanActivate has no pet check and
+			// PetSystem replaces the oldest pet in the way (PetSlotRules) — so this filter
+			// is the only thing refusing to queue one while every pet slot is taken; remove
+			// it and re-summoning works. A free slot lets the summon through.
+			if (validatedAbility != null)
+			{
+				PetAbilityTemplate petAbilityTemplate = validatedAbility.Template as PetAbilityTemplate;
+				if (petAbilityTemplate != null &&
+					Character.TryGet(out IPetController petController) &&
+					petController.Pets.Count >= PetSlotRules.ClampSlots(petController.PetSlots))
+				{
+					return false;
+				}
+
+				/* Target and range pre-filter. Client-only and best-effort: it reads the live
+				 * (mouse-driven) target, which is exactly why it cannot live in CanActivate. It
+				 * stops the cast bar and resource prediction from starting for a cast the server's
+				 * raycast will find nothing for — a required target that is missing, or a target
+				 * clearly beyond the ability's reach.
+				 *
+				 * Players only. An NPC has no mouse: its controller's Current is whatever the LAST
+				 * cast's acquisition trace left behind, which is stale the moment the brain
+				 * switches targets or the old target moves. Reading it here refused a ranged NPC's
+				 * every activation once its previous victim was out of reach — and since only a
+				 * successful cast rewrites Current, nothing could ever clear the refusal. The brain
+				 * has already decided reach for its live target (AIAbilityReach) before it calls
+				 * Activate; the server's own trace in ResolveTargetAndSpawn is the authority. */
+				/* Only for an ability that needs a target. One that does not (a projectile fired forward) is spawned by the
+				 * server whatever the trace finds, so nothing here may refuse it. And the reach is measured to the point the
+				 * ray hit, not to the hit object's origin: aiming at the ground "targets" a terrain tile, whose origin is its
+				 * far corner, and measuring to that refused every ranged cast aimed anywhere but at a creature. */
+				if (cachedTargetController != null && PlayerCharacter != null && validatedAbility.Template.RequiresTarget)
+				{
+					TargetInfo current = cachedTargetController.Current;
+					if (current.Target == null)
+					{
+						return false;
+					}
+
+					float abilityRange = validatedAbility.Range;
+					if (abilityRange > 0f)
+					{
+						/* From the EYE, which is where the cast's own trace measures its reach from on both peers
+						 * (ResolveTargetAndSpawn). Measured from the feet, a target at chest height read up to 40 cm
+						 * farther than it is, and a melee ability well inside its range was refused here and never
+						 * sent. */
+						float distSqr = (CharacterAimOrigin.Resolve(Character) - current.HitPosition).sqrMagnitude;
+						if (distSqr > abilityRange * abilityRange)
+						{
+							return false;
+						}
+					}
+				}
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// Cancels the current ability activation and resets all related state.
+		/// Unlocks the consumable inventory slot if one was locked.
+		/// Clears persistent flags from both local input and replicated state.
+		/// </summary>
+		/// <param name="state">
+		/// Optional replicate state. When provided, UI events are suppressed during
+		/// reconcile replay to prevent flickering. Callers without a state (e.g.,
+		/// ResetState) omit this parameter and events fire normally.
+		/// </param>
+		/// <param name="suppressCancelEvent">
+		/// When true, <see cref="OnCancel"/> is not invoked. Used by
+		/// <see cref="ProcessInterrupt"/> which fires <see cref="OnInterrupt"/> instead,
+		/// preventing double UI events on the interrupt path.
+		/// </param>
+		/// <summary>
+		/// Public parameterless Cancel required by <see cref="IAbilityController"/>.
+		/// Delegates to the internal implementation with default parameters.
+		/// </summary>
+		public void Cancel() => Cancel(ReplicateState.Invalid, false);
+
+		internal void Cancel(ReplicateState state = ReplicateState.Invalid, bool suppressCancelEvent = false)
+		{
+			//Log.Debug("Cancel");
+
+			/* Tell observers the activation is over, whatever ended it.
+			 *
+			 * Emitted here rather than at each of the endings — finish, interrupt, explicit cancel,
+			 * death, a failed re-validation — because every one of them funnels through this
+			 * method, and an ending that forgot to send would leave a nameplate reading "Casting"
+			 * for as long as that character stayed in view. Read BEFORE the state below is
+			 * cleared, since currentAbilityID is what says there was anything to end. */
+			if (currentAbilityID != NO_ABILITY)
+			{
+				/* The same reference the start carried: currentAbilityID holds the ability instance
+				 * id, or the consumable's template id when this was an item. The receiver keys on
+				 * the caster — a character has one activation at a time — but naming what ended
+				 * keeps the two messages describing the same thing. */
+				BroadcastCastState(state, started: false, referenceID: currentAbilityID,
+					isConsumable: replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable));
+			}
+
+			/* Server: a use that ends without consuming (stunned, killed, cancelled, refused on re-validation). The owner may have
+			 * predicted the finish already and taken the charge, and nothing else would ever give it back: the inventory is
+			 * not part of the reconcile. The inventory system sends the slot as the server holds it (OnConsumableUseCancelled). */
+			if (base.IsServerStarted && consumableSlot >= 0 && !consumableUseCompleted &&
+				replicatedFlags.IsFlagged(AbilityActivationFlags.IsConsumable))
+			{
+				OnConsumableUseCancelled?.Invoke(Character, consumableSlot);
+			}
+			consumableUseCompleted = false;
+
+			// Unlock the consumable slot before resetting state.
+			if (consumableSlot >= 0 &&
+				Character != null &&
+				cachedInventoryController != null)
+			{
+				cachedInventoryController.UnlockSlot(consumableSlot);
+			}
+			consumableSlot = -1;
+
+			currentAbilityID = NO_ABILITY;
+			remainingTicks = 0;
+			chargedHoldTicks = 0;
+
+			// Clear persistent activation flags from replicated state.
+			replicatedFlags.DisableBit(AbilityActivationFlags.IsHeld);
+			replicatedFlags.DisableBit(AbilityActivationFlags.IsConsumable);
+			replicatedFlags.DisableBit(AbilityActivationFlags.IsMount);
+
+			// Only clear persistent bits from local input on non-replay execution.
+			// During replay these bits are not cleared, so any input queued
+			// between ticks (e.g., a consumable activation) naturally persists
+			// until the next real tick processes it. Clearing here during
+			// non-replay is what actually consumes the flags.
+			if (!state.ContainsReplayed())
+			{
+				localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
+				localInputFlags.DisableBit(AbilityActivationFlags.IsConsumable);
+				localInputFlags.DisableBit(AbilityActivationFlags.IsMount);
+			}
+
+			// Only fire UI events on the first execution or non-prediction callers.
+			// During reconcile replay the UI should not flicker.
+			// Suppressed during interrupt (ProcessInterrupt fires OnInterrupt instead).
+			if (!suppressCancelEvent && (state == ReplicateState.Invalid || state.IsTickedCreated()))
+			{
+				OnCancel?.Invoke();
+			}
+
+			// Reset persistent animation state when any ability ends.
+			// Safe to call unconditionally on non-replay ticks.
+			if (!state.ContainsReplayed())
+			{
+				cachedAnimationController?.SetBlocking(false);
+			}
+		}
+
+		/// <summary>
+		/// Adds a cooldown for the given ability using the cooldown controller.
+		/// </summary>
+		/// <param name="ability">The ability to add a cooldown for.</param>
+		/// <param name="currentTick">The deterministic replicate tick at the moment of activation.</param>
+		internal void AddCooldown(Ability ability, PredictionTick currentTick)
+		{
+			if (ability.Cooldown > 0.0f &&
+				cachedCooldownController != null)
+			{
+				float cooldownReduction = CalculateSpeedReduction(CooldownReductionTemplate);
+				float cooldown = ability.Cooldown * cooldownReduction
+					* WeatherScaling(ability, currentTick, AbilityScalingTarget.Cooldown);
+
+				// The cooldown controller caches the tick delta once OnStartNetwork has run (and a
+				// test can seed it); fall back to the TimeManager only when it does not hold one.
+				float tickDelta = cachedCooldownController is CooldownController cooldownController
+					? cooldownController.TickDelta
+					: (float)base.TimeManager.TickDelta;
+				// PredictionTick implicitly converts to uint for CooldownInstance.
+				cachedCooldownController.AddCooldown(ability.ID, new CooldownInstance(currentTick, cooldown, tickDelta));
+			}
+		}
+
+		/// <summary>
+		/// Queues a consumable item for activation through the replicate pipeline.
+		/// Sets the IsConsumable flag and stores the consumable template ID in the ability queue.
+		/// Validates that the consumable can be used before queuing.
+		/// </summary>
+		/// <param name="item">The consumable item to activate.</param>
+		public void ActivateConsumable(Item item)
+		{
+			if (item == null) return;
+
+			ConsumableTemplate consumable = item.Template as ConsumableTemplate;
+			if (consumable == null) return;
+
+			if (!CanManipulate()) return;
+
+			// Client-side pre-filter: check external handlers (e.g. UI MouseMode).
+			// Reverse iteration so a handler unsubscribing itself does not skip the next entry.
+			for (int i = canManipulateHandlers.Count - 1; i >= 0; i--)
+			{
+				if (!canManipulateHandlers[i].Invoke())
+				{
+					return;
+				}
+			}
+
+
+			// Validate the consumable can be used (charges, cooldown, etc.)
+			// LocalTick is correct here: this is a client-side input pre-filter that QUEUES
+			// the activation for the next replicate tick. The server re-validates authoritatively
+			// in OnReplicate using the simulated tick — so this is not part of the deterministic
+			// state machine and may use the live wall-clock tick safely.
+			if (!consumable.CanConsume(PlayerCharacter, item, base.TimeManager.LocalTick)) return;
+
+			// Ensure we are not already activating an ability or an interrupt is waiting to be processed
+			if (!AbilityQueued &&
+				!IsActivating &&
+				!localInputFlags.IsFlagged(AbilityActivationFlags.Interrupt))
+			{
+				queuedAbilityID = consumable.ID;
+				localInputFlags.EnableBit(AbilityActivationFlags.IsConsumable);
+			}
+		}
+
+		/// <summary>
+		/// Interrupts the current ability: through the input stream where this peer writes it,
+		/// and directly where it does not.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The queued half only works for the peer that produces this character's input.</b>
+		/// <c>localInputFlags</c> is read by <c>HandleCharacterInput</c>, which runs only from
+		/// <c>PopulateInput</c>, which <see cref="CharacterPredictionController"/> invokes only
+		/// where <c>HasInputAuthority</c> — the owning client for a player, the server for an AI
+		/// character or a pet. That covers a player interrupting itself and every server-side AI
+		/// call site, and it is the better path for them: the cancel then happens inside the
+		/// deterministic replicate and is reconciled like any other predicted state.
+		/// </para>
+		/// <para>
+		/// <b>It did nothing at all for the case the mechanic exists for.</b>
+		/// <c>InterruptAction</c> is server-only and its target is normally a PLAYER — which is
+		/// neither server-driven nor owned by the server, so the bit was set on a peer that never
+		/// reads it, never cleared (only <c>HandleCharacterInput</c> clears it), and the cast simply
+		/// ran to completion. Cast interruption worked against NPCs and pets and failed silently
+		/// against players.
+		/// </para>
+		/// <para>
+		/// So the server cancels directly when it is not the peer that writes this character's
+		/// input. It is authoritative for the activation either way — <c>currentAbilityID</c>,
+		/// <c>remainingTicks</c>, <c>chargedHoldTicks</c> and <c>replicatedFlags</c> all ride
+		/// <see cref="CharacterReconcileData"/> — so the owner's next reconcile carries the cleared
+		/// state and its prediction is corrected by the same machinery that corrects a denied
+		/// activation. The owner's cast bar is cleared by <c>ReconcilePredictedHistory</c>, which
+		/// already fires <c>OnCancel</c> when it predicted an ability the server does not have.
+		/// </para>
+		/// <para>
+		/// No cooldown is added, matching <see cref="ProcessInterrupt"/>: an interrupted cast is
+		/// lost, not put on cooldown. <c>OnCancel</c> is suppressed for the reason it is suppressed
+		/// there too — <c>OnInterrupt</c> is the event UI subscribers pair with, and firing both
+		/// makes a cast bar flicker.
+		/// </para>
+		/// </remarks>
+		/// <param name="attacker">The character causing the interrupt (not used).</param>
+		public void Interrupt(ICharacter attacker)
+		{
+			Interrupt(base.IsServerStarted, HasInputAuthority);
+		}
+
+		/// <summary>
+		/// The body of <see cref="Interrupt(ICharacter)"/>, with the two peer facts as arguments.
+		/// </summary>
+		/// <remarks>
+		/// Separated so the rule can be exercised without a NetworkManager: both facts come from
+		/// <see cref="FishNet.Object.NetworkBehaviour"/> state that only exists on a spawned object,
+		/// and the case that was broken is precisely the one an edit-mode test cannot otherwise
+		/// reach — the server acting on a character it does not own.
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		internal void Interrupt(bool isServerStarted, bool hasInputAuthority)
+		{
+			switch (ResolveInterruptDisposition(isServerStarted, hasInputAuthority))
+			{
+				case InterruptDisposition.Applied:
+					OnInterrupt?.Invoke();
+					Cancel(ReplicateState.Invalid, suppressCancelEvent: true);
+					return;
+
+				case InterruptDisposition.Queued:
+					localInputFlags.EnableBit(AbilityActivationFlags.Interrupt);
+					return;
+
+				default:
+					return;
+			}
+		}
+
+		/// <summary>What an <see cref="Interrupt(ICharacter)"/> does on one peer.</summary>
+		internal enum InterruptDisposition : byte
+		{
+			/// <summary>This peer neither writes the input nor owns the decision. Nothing happens.</summary>
+			Ignored = 0,
+
+			/// <summary>Raised as a one-shot input flag, read out of the replicate on the next tick.</summary>
+			Queued = 1,
+
+			/// <summary>Cancelled here and now, because no input stream will carry it.</summary>
+			Applied = 2,
+		}
+
+		/// <summary>
+		/// The whole rule <see cref="Interrupt(ICharacter)"/> turns on, as a pure function.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>The Interrupt bit is a ONE-SHOT flag, and only one peer drains it.</b>
+		/// <c>HandleCharacterInput</c> copies <c>localInputFlags</c> into the replicate and clears
+		/// the bit in the same breath — but it returns early for a peer with no input authority,
+		/// BEFORE that clear. So raising the bit anywhere else does not queue anything: it latches,
+		/// for the object's whole life, and the guards in <see cref="Activate"/> then read a flag
+		/// that can never go down again. That is why the third state exists. It used to be raised
+		/// unconditionally, ahead of the branch, on every peer.
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>Server, no input authority</b> — a player interrupted by something the server
+		/// resolved. <see cref="InterruptDisposition.Applied"/>: nobody would read a queued flag,
+		/// and nobody would clear one either.</item>
+		/// <item><b>Server, input authority</b> — an NPC or a pet, whose input the server writes.
+		/// <see cref="InterruptDisposition.Queued"/>: the flag is read on the very next tick and
+		/// the cancel then happens inside the deterministic replicate, which is strictly better.</item>
+		/// <item><b>Owning client</b> — a player interrupting its own cast.
+		/// <see cref="InterruptDisposition.Queued"/>, same reason.</item>
+		/// <item><b>Observer</b> — no authority over anything and no input stream.
+		/// <see cref="InterruptDisposition.Ignored"/>; it is told what happened.</item>
+		/// </list>
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		internal static InterruptDisposition ResolveInterruptDisposition(bool isServerStarted, bool hasInputAuthority)
+		{
+			if (ServerCancelsDirectly(isServerStarted, hasInputAuthority))
+			{
+				return InterruptDisposition.Applied;
+			}
+
+			/* Queued only where HandleCharacterInput will actually drain it. An observer reaches
+			 * neither branch: it has no input stream to carry the flag and no authority to cancel. */
+			return hasInputAuthority ? InterruptDisposition.Queued : InterruptDisposition.Ignored;
+		}
+
+		/// <summary>
+		/// Whether an interrupt has to be applied here and now rather than queued as input.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The whole rule <see cref="Interrupt(ICharacter)"/> turns on, as a pure function, so the
+		/// truth table can be asserted directly instead of inferred. Both inputs matter and neither
+		/// alone is sufficient.
+		/// </para>
+		/// <list type="bullet">
+		/// <item><b>Server, no input authority</b> — a player being interrupted by something the
+		/// server resolved. TRUE: nobody would ever read the queued flag, which is the defect this
+		/// exists to close.</item>
+		/// <item><b>Server, input authority</b> — an NPC or a pet, whose input the server writes.
+		/// FALSE: the queued flag is read on the very next tick and the cancel then happens inside
+		/// the deterministic replicate, which is strictly better.</item>
+		/// <item><b>Owning client</b> — a player interrupting its own cast. FALSE, same reason.</item>
+		/// <item><b>Observer</b> — no authority over anything. FALSE; it is told what happened.</item>
+		/// </list>
+		/// </remarks>
+		/// <param name="isServerStarted">Whether this peer is the server.</param>
+		/// <param name="hasInputAuthority">Whether this peer writes this character's replicate input.</param>
+		/// <returns>True when the interrupt must be applied directly.</returns>
+		internal static bool ServerCancelsDirectly(bool isServerStarted, bool hasInputAuthority)
+		{
+			return isServerStarted && !hasInputAuthority;
+		}
+
+		/// <summary>
+		/// Releases the held state for the current ability. For charged abilities this
+		/// triggers the release (fire). For channeled abilities this stops the channel early.
+		/// </summary>
+		public void Release()
+		{
+			localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
+		}
+
+		/// <summary>
+		/// Attempts to queue an ability by reference ID and held state, if all conditions are met.
+		/// </summary>
+		/// <remarks>
+		/// Queues into the input this peer drains on its next replicate — the owning client for a
+		/// player, the server for an AI character (see <c>HandleCharacterInput</c>). The result
+		/// says whether anything was queued; the activation itself is decided in the replicate.
+		/// </remarks>
+		/// <param name="referenceID">The ability reference ID to activate.</param>
+		/// <param name="isHeld">Whether the activation key is held.</param>
+		/// <returns>True when the ability was queued for the next replicate; false otherwise.</returns>
+		public bool Activate(long referenceID, bool isHeld)
+		{
+			// Client-side pre-filter: cheap, best-effort, not authoritative.
+			// The server will re-validate in Replicate(). If this passes but the
+			// server denies, reconcile will correct the prediction.
+			if (!CanActivateOptimistic(referenceID, base.TimeManager.LocalTick, out _))
+			{
+				return false;
+			}
+
+			// Ensure we are not already activating an ability or an interrupt is waiting to be processed
+			if (AbilityQueued ||
+				IsActivating ||
+				localInputFlags.IsFlagged(AbilityActivationFlags.Interrupt))
+			{
+				return false;
+			}
+
+			//Log.Debug("Activating " + referenceID);
+			queuedAbilityID = referenceID;
+			// The id queued is an ability's: whatever kind an earlier press left behind does not apply to it.
+			localInputFlags.DisableBit(AbilityActivationFlags.IsConsumable);
+			if (isHeld)
+			{
+				localInputFlags.EnableBit(AbilityActivationFlags.IsHeld);
+			}
+			else
+			{
+				localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
+			}
+			return true;
+		}
+
+		/// <summary>
+		/// Checks if the character is in a valid state to manipulate abilities (not teleporting, not despawned, etc).
+		/// </summary>
+		/// <returns>True if the character can manipulate abilities, false otherwise.</returns>
+		public bool CanManipulate()
+		{
+			if (Character == null ||
+				Character.IsTeleporting ||
+				!Character.IsSpawned)
+				return false;
+
+			/* Crowd control. ValidateActiveCast calls this every tick of an active activation, so
+			 * a stun landing mid-cast now cancels the cast rather than letting it finish; Activate
+			 * and ActivateConsumable call it before queueing, so a new activation is refused for
+			 * the duration. Runs on both client and server: the client prediction refuses locally
+			 * and the server refuses authoritatively, which keeps the two in agreement instead of
+			 * producing a reconcile correction on every attempt. */
+			if (CharacterIncapacitation.IsIncapacitated(Character))
+				return false;
+
+			return true;
+		}
+
+		/// <summary>
+		/// Checks whether the player character's grounding status is compatible with
+		/// the given ability type. Grounded abilities require stable ground, aerial
+		/// abilities require the character to be airborne. NPCs (no PlayerCharacter)
+		/// always pass this check.
+		/// </summary>
+		/// <param name="abilityType">The effective ability type to validate.</param>
+		/// <returns>True if grounding requirements are met, false otherwise.</returns>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private bool PassesGroundingCheck(AbilityType abilityType)
+		{
+			if (PlayerCharacter == null)
+			{
+				return true;
+			}
+
+			if (abilityType == AbilityType.GroundedPhysical ||
+				abilityType == AbilityType.GroundedMagic)
+			{
+				return PlayerCharacter.Motor.GroundingStatus.IsStableOnGround;
+			}
+			if (abilityType == AbilityType.AerialPhysical ||
+				abilityType == AbilityType.AerialMagic)
+			{
+				return !PlayerCharacter.Motor.GroundingStatus.IsStableOnGround;
+			}
+			return true;
+		}
+	}
+}

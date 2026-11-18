@@ -6,7 +6,7 @@
 // The animal faces +Z and stands on y = 0.
 
 #if defined(FISH_WILDLIFE_PASS_FORWARD)
-#include "FishAmbient.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 #endif
 
 CBUFFER_START(UnityPerMaterial)

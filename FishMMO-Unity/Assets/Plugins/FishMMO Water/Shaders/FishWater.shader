@@ -109,8 +109,8 @@ Shader "FishMMO/Water/Ocean"
 
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl"
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishShadowVariants.hlsl"
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
 
             /* Set from C# against what the running URP asset actually provides, so a pipeline with
              * no depth or no opaque copy never samples a texture that is not there. Sampling one

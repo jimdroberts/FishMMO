@@ -50,7 +50,7 @@ Shader "FishMMO/Weather/Volcanic Plume"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "FishAmbient.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);

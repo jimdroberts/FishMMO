@@ -177,11 +177,11 @@ Shader "FishMMO/World HLOD"
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
             #pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
-            #include_with_pragmas "FishShadowVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishShadowVariants.hlsl"
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
             #pragma multi_compile_fragment _ _SCREEN_SPACE_IRRADIANCE
             #pragma multi_compile_fragment _ _DBUFFER_MRT1 _DBUFFER_MRT2 _DBUFFER_MRT3
-            #include_with_pragmas "FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
             #pragma multi_compile _ _LIGHT_LAYERS
             #pragma multi_compile _ _CLUSTER_LIGHT_LOOP
             #include_with_pragmas "Packages/com.unity.render-pipelines.core/ShaderLibrary/FoveatedRenderingKeywords.hlsl"
@@ -212,7 +212,7 @@ Shader "FishMMO/World HLOD"
 
             #define _FISH_LOOK_ARRAY 1
             #define _FISH_LOOK_TABLE 1
-            #include "FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
             #include "FishWorldHlodForward.hlsl"
             ENDHLSL
         }
@@ -228,7 +228,7 @@ Shader "FishMMO/World HLOD"
             #pragma fragment DepthOnlyFragment
             #pragma multi_compile_instancing
             #pragma instancing_options procedural:FishWorldHlodSetup
-            #include "FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
             #include "FishWorldHlodSetup.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl"
             ENDHLSL
@@ -250,7 +250,7 @@ Shader "FishMMO/World HLOD"
             #pragma multi_compile_instancing
             #pragma instancing_options procedural:FishWorldHlodSetup
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
-            #include "FishWeatherLitInput.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitInput.hlsl"
             #include "FishWorldHlodSetup.hlsl"
             #include "FishWorldHlodDepthNormals.hlsl"
             ENDHLSL

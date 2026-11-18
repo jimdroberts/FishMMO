@@ -1,0 +1,163 @@
+#if UNITY_EDITOR
+using System;
+using FishMMO.Shared.Core;
+using FishNet.Component.Prediction;
+using FishNet.Object;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Scripting.APIUpdating;
+
+namespace FishMMO.Shared.WorldDesign
+{
+	/// <summary>
+	/// A <see cref="Region"/> over the site that shows its name when a player walks in (2026-10-10: settlements
+	/// get a name-toast region).
+	/// </summary>
+	/// <remarks>
+	/// <para>The region is a networked scene object (NetworkObject + <see cref="NetworkTrigger"/>, like every region in
+	/// the shipped scenes) named after the site, because the toast shows <see cref="Region.Name"/>, the GameObject's
+	/// name. Its enter list gets the shipped <c>AreaOfInterestDisplayNameAction</c> trigger.</para>
+	/// <para>Other features ride the same region (<see cref="Ensure"/>): the exploration feature adds its discovery
+	/// trigger to it.</para>
+	/// </remarks>
+	[Serializable]
+	[MovedFrom(false, sourceAssembly: "FishMMO.Shared.Tools.Editor")]
+	public class RegionFeature : PointOfInterestFeature
+	{
+		/// <summary>Layers a region's trigger reacts to; the shipped regions use Default and Player.</summary>
+		public static int TriggerLayers => LayerMask.GetMask("Default", "Player");
+
+		[Tooltip("The region's half-width as a share of the site's footprint radius.")]
+		[Min(0.1f)]
+		public float RadiusShare = 1.25f;
+
+		[Tooltip("The region's height, metres.")]
+		[Min(4.0f)]
+		public float Height = 60.0f;
+
+		[Tooltip("Show the site's name on entry.")]
+		public bool ShowName = true;
+
+		public override void Build(PointOfInterestSiteContext context)
+		{
+			Region region = Ensure(context, RadiusShare, Height);
+			if (region == null || !ShowName)
+			{
+				return;
+			}
+			Trigger toast = PointOfInterestFeatureKit.Load<Trigger>(context, PointOfInterestFeatureKit.RegionNameTriggerPath);
+			if (toast != null && !region.OnRegionEnter.Contains(toast))
+			{
+				region.OnRegionEnter.Add(toast);
+				EditorUtility.SetDirty(region);
+			}
+		}
+
+		/// <summary>The site's region, made (with the default size) if no feature has made it yet.</summary>
+		/// <summary>
+		/// A site's outline's extent in its own frame (x to its right, y ahead; metres from its anchor): the square of its radius
+		/// for a disc.
+		/// </summary>
+		public static Rect Extent(PointOfInterestRecord record)
+		{
+			if (!PointOfInterestOutline.Drawn(record.Outline))
+			{
+				return Rect.MinMaxRect(-record.Radius, -record.Radius, record.Radius, record.Radius);
+			}
+			float minX = float.PositiveInfinity, minZ = float.PositiveInfinity, maxX = float.NegativeInfinity, maxZ = float.NegativeInfinity;
+			int n = record.Outline.Length;
+			for (int k = 0; k < n; k++)
+			{
+				// Bearing k turned into the site's frame: its heading is 0.
+				float a = k * (2.0f * Mathf.PI / n) - record.Yaw * Mathf.Deg2Rad;
+				float x = Mathf.Sin(a) * record.Outline[k], z = Mathf.Cos(a) * record.Outline[k];
+				minX = Mathf.Min(minX, x);
+				maxX = Mathf.Max(maxX, x);
+				minZ = Mathf.Min(minZ, z);
+				maxZ = Mathf.Max(maxZ, z);
+			}
+			return Rect.MinMaxRect(minX, minZ, maxX, maxZ);
+		}
+
+		public static Region Ensure(PointOfInterestSiteContext context, float radiusShare = 1.25f, float height = 60.0f)
+		{
+			Region existing = context.Root.GetComponentInChildren<Region>(true);
+			if (existing != null)
+			{
+				return existing;
+			}
+
+			// Named after the site: Region.Name is the GameObject's name, and that is what the toast shows.
+			GameObject host = context.AddChild(PointOfInterestFeatureKit.SiteName(context));
+			host.transform.SetPositionAndRotation(context.Record.Position, Quaternion.Euler(0.0f, context.Record.Yaw, 0.0f));
+			NetworkObject networkObject = PointOfInterestFeatureKit.AddNetworkObject(host);
+
+			// The box round the site's outline in its own frame (its disc's square where it has none), grown by the share.
+			Rect extent = Extent(context.Record);
+			float halfX = Mathf.Max(8.0f, extent.width * 0.5f * radiusShare), halfZ = Mathf.Max(8.0f, extent.height * 0.5f * radiusShare);
+			BoxCollider box = host.AddComponent<BoxCollider>();
+			box.isTrigger = true;
+			box.size = new Vector3(halfX * 2.0f, height, halfZ * 2.0f);
+			box.center = new Vector3(extent.center.x, height * 0.25f, extent.center.y);
+
+			Region region = host.AddComponent<Region>();
+			region.Collider = box;
+			NetworkTrigger trigger = host.GetComponent<NetworkTrigger>();
+			if (trigger == null)
+			{
+				trigger = host.AddComponent<NetworkTrigger>();
+			}
+			// Layers 0 detects nothing, silently (fishnet-networkcollider-layers-trap).
+			trigger.SetLayers(TriggerLayers);
+
+			PointOfInterestFeatureKit.AssignSceneId(networkObject, context, 0x4E61);
+			EditorUtility.SetDirty(region);
+			EditorUtility.SetDirty(trigger);
+			return region;
+		}
+	}
+
+	/// <summary>
+	/// Counts the site once per character towards the "Places Discovered" exploration achievement, on its first entry
+	/// into the site's region (<see cref="DiscoverSiteAction"/>).
+	/// </summary>
+	/// <remarks>
+	/// Rides the site's region (made if no <see cref="RegionFeature"/> has), marks it with the site's unlock index
+	/// (<see cref="PointOfInterestDiscovery"/>), and adds the shared "Site Discovered" trigger, which
+	/// <see cref="PointOfInterestGameplayContent.EnsureDiscoveryContent"/> creates on first use.
+	/// </remarks>
+	[Serializable]
+	[MovedFrom(false, sourceAssembly: "FishMMO.Shared.Tools.Editor")]
+	public class ExplorationFeature : PointOfInterestFeature, IPointOfInterestUnlockFeature
+	{
+		public override void Build(PointOfInterestSiteContext context)
+		{
+			int index = PointOfInterestFeatureKit.UnlockIndex(context, "discovery trigger");
+			if (index < 0)
+			{
+				return;
+			}
+			Trigger discovered = PointOfInterestGameplayContent.EnsureDiscoveryContent();
+			if (discovered == null)
+			{
+				PointOfInterestFeatureKit.Note(context, "the Site Discovered trigger could not be made; no discovery.");
+				return;
+			}
+
+			Region region = RegionFeature.Ensure(context);
+			PointOfInterestDiscovery site = region.GetComponent<PointOfInterestDiscovery>();
+			if (site == null)
+			{
+				site = region.gameObject.AddComponent<PointOfInterestDiscovery>();
+			}
+			site.SiteIndex = index;
+			if (!region.OnRegionEnter.Contains(discovered))
+			{
+				region.OnRegionEnter.Add(discovered);
+			}
+			EditorUtility.SetDirty(site);
+			EditorUtility.SetDirty(region);
+		}
+	}
+}
+#endif

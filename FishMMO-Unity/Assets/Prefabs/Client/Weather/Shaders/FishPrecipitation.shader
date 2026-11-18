@@ -40,8 +40,8 @@ Shader "FishMMO/Weather/Precipitation"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "FishWeather.hlsl"
-            #include "FishAmbient.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeather.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
             // The fog's layer, for the fog between a drop and the camera: the layer is drawn before the
             // transparent queue, behind everything drawn here.
             #include "FishFogLayer.hlsl"

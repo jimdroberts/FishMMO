@@ -56,7 +56,7 @@ Shader "FishMMO/Weather/Curtain"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             // The storms' own cloud (the weather map), which what falls from a storm hangs from.
             #include "FishSkyCommon.hlsl"
-            #include "FishAmbient.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 
             // Per curtain, set on the presenter's own copy of the material for each curtain drawn (CurtainPresenter): in
             // UnityPerMaterial, not from a property block, so every curtain's draw stays in the SRP Batcher.

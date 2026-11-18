@@ -1,0 +1,208 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using FishMMO.Shared.Biomes;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
+
+namespace FishMMO.Shared.Atlas
+{
+	/// <summary>
+	/// One scene's place in the world: the body and layer it is on, where on the globe, which way
+	/// it faces, and the world settings that follow from that.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// The atlas owns this data; <see cref="WorldSceneSettings"/> in the scene reads it. Climate,
+	/// biome map and client cap are optional here: empty means the value authored in the scene.
+	/// </para>
+	/// <para>
+	/// The whole scene shares one time: its time of day is taken at <see cref="Longitude"/>, or
+	/// at the overridden time zone.
+	/// </para>
+	/// </remarks>
+	[CreateAssetMenu(fileName = "New Atlas Scene", menuName = "FishMMO/World/Atlas Scene", order = 16)]
+	public class WorldAtlasScene : CachedScriptableObject<WorldAtlasScene>, ICachedObject, IWorldSceneEntry
+	{
+		[Tooltip("The scene's name, as in the build settings.")]
+		public string SceneName;
+
+		[Header("Placement")]
+		[Tooltip("Off: the scene waits in the designer's library.")]
+		public bool Placed;
+		[Tooltip("The planet or moon. Empty: the home world.")]
+		public WorldBody Body;
+		public WorldAtlasLayer Layer;
+		[Tooltip("Latitude of the scene's centre, in degrees.")]
+		public double Latitude;
+		[Tooltip("Longitude of the scene's centre, in degrees.")]
+		public double Longitude;
+		[Tooltip("Which way the scene's +Z faces, clockwise from north, in degrees.")]
+		public float HeadingDegrees;
+		[Tooltip("The scene's size in km (X, Z), read from its boundaries by the designer.")]
+		public Vector2 SizeKm = new Vector2(1f, 1f);
+		[Tooltip("The atlas radius, in km, this scene's terrain was cut from the globe at. 0: its terrain was not generated. " +
+			"While any scene on a body has one, the body's atlas radius stays put, because moving it would move the globe out from under the terrain.")]
+		public float CutRadiusKm;
+
+		[Tooltip("How deep erosion cuts this scene's ground when it is generated or re-cut: rivers, glaciers and rain together. 1 is the default; 0 cuts the planet's ground exactly as the globe has it.")]
+		[Range(0f, 3f)] public float ErosionStrength = 1f;
+
+		[Tooltip("The scene's points of interest: whether it holds the capital, how dense its sites are, per-kind overrides. Asked before every cut; empty = never cut with points of interest.")]
+		public PointOfInterestSettings PointsOfInterest;
+
+		[Header("Time")]
+		public bool OverrideTimeZone;
+		[Tooltip("Hours from longitude 0. Used when overridden.")]
+		[Range(-12, 12)] public int TimeZoneHours;
+		public bool OverrideSunLatitude;
+		[Tooltip("Latitude the sun path and auroras use. Used when overridden.")]
+		[Range(-90f, 90f)] public float SunLatitude;
+		[Tooltip("World follows the body's rotation and sun. Fixed is developer-only, for authored scenes.")]
+		public SceneTimeMode TimeMode = SceneTimeMode.World;
+		[Range(0f, 1f)] public float FixedTimeOfDay01 = 0.5f;
+
+		[Header("Climate")]
+		[Tooltip("Empty: the scene's own, else the body's base climate.")]
+		public ClimateSettings Climate;
+		[Tooltip("Empty: the scene's own.")]
+		public SceneBiomeMap BiomeMap;
+		[Tooltip("Where the scene keeps the rain off (roofs, rock shelters, bridges, caves), baked by the cut from its collision. Fires stay lit under it.")]
+		public SceneShelterMap Shelter;
+		[Tooltip("Biomes painted in place of the ones the planet chose: applied when the scene is cut, re-cut or its biomes are repainted. A rule naming its From wins over a catch-all (From empty), which replaces every land biome the climate chose.")]
+		public List<BiomeOverride> BiomeOverrides = new List<BiomeOverride>();
+
+		[Header("Weather")]
+		[Tooltip("Auto: the layer's default, and then dungeons get none and everything else its own.")]
+		public WeatherSceneMode Weather = WeatherSceneMode.Auto;
+		[Tooltip("Added to this scene's air, always: extra cold or heat, damp or dryness, a higher or lower pressure, more or less stable air, more wind, more or less pull. The weather is then worked out from that air like anywhere else. All zero is the world as it is.")]
+		public AirOffsets Air;
+		[Tooltip("Let the automatic director start storm cells here.")]
+		public bool WeatherDirector = true;
+
+		[Header("Population")]
+		[Tooltip("0: the scene's own setting.")]
+		[Range(0, WorldSceneSettings.MaximumClientsPerScene)] public int MaxClients;
+
+		[Header("Cartography")]
+		[Tooltip("Reveal pieces across the scene, for the in-game atlas.")]
+		public Vector2Int RevealGrid = new Vector2Int(4, 4);
+		public bool DiscoveredByDefault;
+
+		/// <summary>The time zone: derived from the longitude unless overridden.</summary>
+		public int TimeZone => OverrideTimeZone ? TimeZoneHours : AtlasGeometry.TimeZoneOf(Longitude);
+
+		/// <summary>The longitude the scene's time of day is taken at.</summary>
+		public double TimeLongitude => OverrideTimeZone ? TimeZoneHours * 15.0 : Longitude;
+
+		/// <summary>The latitude the sun path uses.</summary>
+		public double EffectiveSunLatitude => OverrideSunLatitude ? SunLatitude : Latitude;
+
+		/// <summary>The weather mode after the layer's default.</summary>
+		public WeatherSceneMode EffectiveWeather => Weather != WeatherSceneMode.Auto || Layer == null ? Weather : Layer.DefaultWeather;
+
+		// ── The core's view of the entry (IWorldSceneEntry) ───────────
+
+		int IWorldSceneEntry.MaxClients => MaxClients;
+
+		/// <summary>
+		/// Which way the planet's north lies at a position in the scene, degrees clockwise from its +Z: the scene sits on its
+		/// planet turned by <see cref="HeadingDegrees"/>, and near a pole north turns across a scene
+		/// (<see cref="AtlasGeometry.NorthBearing"/>). 0 for an entry not placed on the globe.
+		/// </summary>
+		public float NorthBearingAt(Vector3 position)
+		{
+			return Placed ? AtlasGeometry.NorthBearing(AtlasFootprint.Of(this), position.x / 1000.0, position.z / 1000.0, CutRadiusKm) : 0f;
+		}
+
+		/// <summary>Installs the atlas as the core's world scene entries (<see cref="WorldSceneEntries.Lookup"/>), at load.</summary>
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void InstallEntries()
+		{
+			WorldSceneEntries.Lookup = Find;
+		}
+
+#if UNITY_EDITOR
+		[UnityEditor.InitializeOnLoadMethod]
+		private static void InstallEntriesInEditor() => InstallEntries();
+#endif
+
+		// ── Lookup by scene name ──────────────────────────────────────
+
+		private static readonly Dictionary<string, WorldAtlasScene> byName = new Dictionary<string, WorldAtlasScene>(StringComparer.Ordinal);
+
+		public override void OnLoad(string typeName, string resourceName, int resourceID)
+		{
+			base.OnLoad(typeName, resourceName, resourceID);
+			if (!string.IsNullOrEmpty(SceneName))
+			{
+				byName[SceneName] = this;
+			}
+		}
+
+		public override void OnUnload(string typeName, string resourceName, int resourceID)
+		{
+			base.OnUnload(typeName, resourceName, resourceID);
+			if (!string.IsNullOrEmpty(SceneName) && byName.TryGetValue(SceneName, out WorldAtlasScene current) && current == this)
+			{
+				byName.Remove(SceneName);
+			}
+		}
+
+		/// <summary>
+		/// The atlas entry of a scene, or null. At runtime, from the loaded assets; in the editor
+		/// outside play mode, from the project.
+		/// </summary>
+		public static WorldAtlasScene Find(string sceneName)
+		{
+			if (string.IsNullOrEmpty(sceneName))
+			{
+				return null;
+			}
+			if (byName.TryGetValue(sceneName, out WorldAtlasScene entry) && entry != null)
+			{
+				return entry;
+			}
+#if UNITY_EDITOR
+			if (!Application.isPlaying)
+			{
+				return EditorLookup.Find(sceneName);
+			}
+#endif
+			return null;
+		}
+
+#if UNITY_EDITOR
+		/// <summary>Project-wide lookup for edit mode, rebuilt whenever the project changes.</summary>
+		public static class EditorLookup
+		{
+			private static Dictionary<string, WorldAtlasScene> map;
+
+			[UnityEditor.InitializeOnLoadMethod]
+			private static void Hook()
+			{
+				UnityEditor.EditorApplication.projectChanged += Invalidate;
+			}
+
+			public static void Invalidate() => map = null;
+
+			public static WorldAtlasScene Find(string sceneName)
+			{
+				if (map == null)
+				{
+					map = new Dictionary<string, WorldAtlasScene>(StringComparer.Ordinal);
+					foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + nameof(WorldAtlasScene)))
+					{
+						var asset = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldAtlasScene>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+						if (asset != null && !string.IsNullOrEmpty(asset.SceneName) && !map.ContainsKey(asset.SceneName))
+						{
+							map.Add(asset.SceneName, asset);
+						}
+					}
+				}
+				return map.TryGetValue(sceneName, out WorldAtlasScene entry) && entry != null ? entry : null;
+			}
+		}
+#endif
+	}
+}

@@ -24,8 +24,8 @@
 // prototype's resident instances: an instance appears at most once per level per view, even inside a
 // fade band (where it is in two different levels).
 //
-// Not culling, but here so the profile's compute carries it (as the depth pyramid's kernels are): FishLightTableGather, the
-// WebGPU light table (AdditionalLightTable, FishLightTableGather.hlsl).
+// The depth pyramid's and the WebGPU light table's kernels, which lived here, are core (Assets/FishMMO/Shaders/
+// FishWorldPasses.compute, Phase 4 2026-11-17); the culling still reads the pyramid (FishHiZOcclusion.hlsl).
 //
 // Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics; atomics only on a
 // RWByteAddressBuffer and on groupshared counters (appends are counted per thread group); no readbacks.
@@ -35,10 +35,7 @@
 #pragma kernel FishFinalize
 #pragma kernel FishCopyInstances
 #pragma kernel FishArgsFence
-#pragma kernel FishHiZCopy
-#pragma kernel FishHiZReduce
 #pragma kernel FishDotsInstances
-#pragma kernel FishLightTableGather
 #pragma use_dxc vulkan
 
 struct FishInstance { float4 row0; float4 row1; float4 row2; };            // 48 bytes
@@ -104,7 +101,7 @@ bool FishSphereVisible(float3 c, float r)
 }
 
 // ── Occlusion (FishDepthPyramid): shared with the grass (FishHiZOcclusion.hlsl) ──
-#include "FishHiZOcclusion.hlsl"
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
 
 // The sphere swept along the light by length l: outside a plane only when both ends are.
 bool FishSweptSphereVisible(float3 c, float r, float3 d, float l)
@@ -495,55 +492,3 @@ void FishArgsFence(uint3 id : SV_DispatchThreadID)
         _FishCounts.Store(0, 0u);
     }
 }
-
-
-// ── The depth pyramid's levels (FishDepthPyramid) ─────────────────────
-Texture2D<float> _FishHiZSource;       // the camera's depth texture (raw)
-RWTexture2D<float> _FishHiZAtlas;      // the pyramid's atlas, read and written
-float4 _FishHiZSourceSize;             // xy the depth texture's size
-float4 _FishHiZZBuffer;                // the camera's _ZBufferParams
-uint _FishHiZLevel;                    // the level a reduce writes
-
-// Level 0: each texel the farthest linear eye depth of the two-by-two of pixels it covers.
-[numthreads(8, 8, 1)]
-void FishHiZCopy(uint3 id : SV_DispatchThreadID)
-{
-    int2 size = FishHiZBaseSize();
-    if (any((int2)id.xy >= size))
-    {
-        return;
-    }
-    int2 source = int2(_FishHiZSourceSize.xy) - 1;
-    float farthest = 0.0;
-    [unroll] for (int k = 0; k < 4; k++)
-    {
-        int2 pixel = min(int2(id.xy) * 2 + int2(k & 1, k >> 1), source);
-        float raw = _FishHiZSource.Load(int3(pixel, 0));
-        farthest = max(farthest, 1.0 / (_FishHiZZBuffer.z * raw + _FishHiZZBuffer.w));
-    }
-    _FishHiZAtlas[id.xy] = farthest;
-}
-
-// Level l from level l − 1: the farthest of the two-by-two under each texel.
-[numthreads(8, 8, 1)]
-void FishHiZReduce(uint3 id : SV_DispatchThreadID)
-{
-    int level = (int)_FishHiZLevel;
-    int2 size = FishHiZSize(level);
-    if (any((int2)id.xy >= size))
-    {
-        return;
-    }
-    int2 below = FishHiZSize(level - 1);
-    int2 from = FishHiZOrigin(level - 1);
-    float farthest = 0.0;
-    [unroll] for (int k = 0; k < 4; k++)
-    {
-        int2 texel = min(int2(id.xy) * 2 + int2(k & 1, k >> 1), below - 1);
-        farthest = max(farthest, _FishHiZAtlas[from + texel]);
-    }
-    _FishHiZAtlas[FishHiZOrigin(level) + int2(id.xy)] = farthest;
-}
-
-// ── The light table (AdditionalLightTable, WebGPU): URP's per-light arrays into one storage buffer, once per camera ──
-#include "FishLightTableGather.hlsl"

@@ -1508,6 +1508,7 @@ GameObject:
   m_Component:
   - component: {fileID: 473463840}
   - component: {fileID: 473463839}
+  - component: {fileID: 473463841}
   m_Layer: 0
   m_Name: World Scene Settings
   m_TagString: Untagged
@@ -1530,10 +1531,21 @@ MonoBehaviour:
   maxClients: 200
   MapDefinition: {fileID: 0}
   SceneTransitionImage: {fileID: 0}
-  climate: {fileID: 11400000, guid: 706a75aad517420f8dde51790ac44689, type: 2}
-  biomeMap: {fileID: 0}
-  RuntimeTemperatureOffset: 0
-  RuntimeHumidityOffset: 0
+  ClientBackdrop: 0
+--- !u!114 &473463841
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 473463838}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 984e75c6b5aa4834be4285913f80d216, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.WorldSceneClimate
+  Climate: {fileID: 11400000, guid: 706a75aad517420f8dde51790ac44689, type: 2}
+  BiomeMap: {fileID: 0}
 --- !u!4 &473463840
 Transform:
   m_ObjectHideFlags: 0

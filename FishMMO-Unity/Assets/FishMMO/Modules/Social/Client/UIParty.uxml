@@ -1,0 +1,37 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="/Assets/FishMMO/Client/GUI/World/Buff/UIBuffContainer.uss" />
+    <Style src="UIParty.uss" />
+    <ui:VisualElement name="party-root" class="fish-panel fish-panel--floating party-panel">
+
+        <ui:VisualElement name="panel-header" class="fish-panel__header party-header">
+            <ui:VisualElement class="fish-panel__icon party-header__icon" />
+            <ui:VisualElement class="party-header__titles">
+                <ui:Label text="PARTY" class="fish-panel__title" />
+                <ui:Label name="party-subtitle" text="Not in a party" class="fish-panel__subtitle" />
+            </ui:VisualElement>
+            <ui:Label name="party-count" text="0/6" class="fish-badge party-count" />
+            <ui:Button name="close-button" class="fish-close-btn party-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="party-columns" class="party-columns">
+            <ui:Label text="MEMBER" class="fish-col-head party-col party-col--identity" />
+            <ui:Label text="VITALS" class="fish-col-head party-col party-col--bars" />
+            <ui:Label text="OUTPUT" class="fish-col-head party-col party-col--meters" />
+            <ui:Label text="EFFECTS" class="fish-col-head party-col party-col--effects" />
+        </ui:VisualElement>
+
+        <ui:ScrollView name="party-scroll" class="fish-scroll party-scroll">
+            <ui:VisualElement name="party-member-list" class="party-member-list" />
+            <ui:Label name="party-empty" text="You are not in a party."
+                      class="fish-empty party-empty" />
+        </ui:ScrollView>
+
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer party-footer">
+            <ui:Button name="party-create" text="Create" class="fish-button party-action" />
+            <ui:Button name="party-invite" text="Invite" class="fish-button fish-button--primary party-action" />
+            <ui:Button name="party-leave" text="Leave" class="fish-button fish-button--danger party-action" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

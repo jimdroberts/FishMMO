@@ -1,0 +1,1619 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using FishMMO.Client;
+using FishMMO.Shared;
+using FishMMO.Shared.Celestial;
+using FishMMO.Shared.Weather;
+using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Biomes;
+
+namespace FishMMO.TestHarness.World
+{
+	/// <summary>
+	/// The world test bed: one scene that stands anywhere in the solar system, at any date and time,
+	/// under any weather, and draws exactly what the game would draw there.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// This was two beds. They were separate when the sky was one thing and the weather another, and
+	/// they stopped being separate some time ago: cloud cover comes from the weather, cloud shadows
+	/// fall on weather-lit ground, the height a cloud's base sits at is read from a weather channel,
+	/// and the aurora is gated on temperature. Keeping two scenes meant every change to any of that
+	/// had to be judged twice, in two places that had drifted apart — and the parts that only one bed
+	/// had (a terrain to lie snow on; a solar system to stand on another moon of) were exactly the
+	/// parts the other one needed to show its own work honestly.
+	/// </para>
+	/// <para>
+	/// There is one camera, one clock, one set of scene settings and one presentation here, which is
+	/// the whole point: two of any of them was the reason they could not simply be put in the same
+	/// scene. The weather runs on the real timeline through the real model, the way the server would
+	/// drive it, and the sky's own sliders can take that over directly when what is wanted is a
+	/// particular sky rather than a particular forecast.
+	/// </para>
+	/// </remarks>
+	[DefaultExecutionOrder(-50)]
+	public sealed class WorldSimController : MonoBehaviour
+	{
+		[Header("Scene")]
+		public Camera Camera;
+		public WorldDayNightCycle DayNight;
+		public WorldSceneSettings Settings;
+
+		[Header("Assets")]
+		public WeatherRenderProfile Profile;
+		[Tooltip("Cached here, because the test bed loads no addressables.")]
+		public SolarSystemProfile SolarSystem;
+		[Tooltip("Sky profiles that can be forced on any body, on top of the body's own.")]
+		public List<SkyProfile> SkyProfiles = new List<SkyProfile>();
+		[Tooltip("The weather substances, cached because the bed loads no addressables: what the physics picks from for what falls and what the ground lets loose.")]
+		public List<WeatherSubstance> Substances = new List<WeatherSubstance>();
+
+		[Header("Start")]
+		[Tooltip("World hours per real second while the clock runs (0.05 is 180 times real time).")]
+		[UnityEngine.Serialization.FormerlySerializedAs("TimeScale")]
+		[SerializeField] private float timeScale = 0.05f;
+		/// <summary>
+		/// The pace past which lightning is thinned (SkySchedule.RateScale): bolts are scheduled in world time, so at a
+		/// hundred and eighty times real time a storm's whole night would fire in a few seconds.
+		/// </summary>
+		private const float LightningPace = 12f;
+		[Min(1f)] public float TickRate = 30f;
+		[Tooltip("What is added to the air when the scene starts. Zero starts with the air as it is.")]
+		public AirOffsets StartAir;
+
+		private readonly WeatherTimeline timeline = new WeatherTimeline();
+		/// <summary>The scene's ground figure, worked out from the world time as the server's is (SceneCover).</summary>
+		private readonly SceneCover sceneCover = new SceneCover();
+		private readonly List<ICachedObject> registered = new List<ICachedObject>();
+		private WeatherPresentation presentation;
+		private ushort nextCell = 1;
+		private float presentTimer;
+		private float coverTimer;
+		private bool forcing;
+		private WeatherSample lastSample;
+
+		/// <summary>
+		/// The bed's tick: FishNet's stand-in offline, counting at <see cref="TickRate"/> a real second
+		/// whatever the world's pace, and driving the shared world clock as a scene server does.
+		/// </summary>
+		private LocalWorldClock clock;
+		private const double StartTimeOfDay = 0.35;
+		private float dayOfYear = 172f;
+		private float latitude = 25f;
+		private float longitude;
+		private float heading;
+		private WorldBody body;
+		private SkyProfile skyOverride;
+		private WeatherCover? coverOverride;
+
+		/// <summary>Every planet and moon in the system, in the order the system lists them.</summary>
+		public readonly List<WorldBody> Bodies = new List<WorldBody>();
+
+		/// <summary>Raised after every frame is presented, for the panel's readout.</summary>
+		public event Action<WorldSimController> Presented;
+
+		// ── The sky ───────────────────────────────────────────────────
+
+		public WorldBody Body
+		{
+			get => body;
+			set
+			{
+				body = value;
+				WorldDayNightCycle.PreviewBody = value;
+			}
+		}
+
+		// ── Travel between scenes ─────────────────────────────────────
+
+		/// <summary>
+		/// True when the bed stands in a cut scene (one placed on the atlas): there the ground is that body's, so another
+		/// body is reached by travelling to a scene cut on it, not by changing the sky over this ground. False in the bed's
+		/// own neutral scene, which stands on whatever body is chosen.
+		/// </summary>
+		public bool InCutScene => Settings != null && Settings.AtlasEntry() != null && Settings.AtlasEntry().Placed;
+
+		/// <summary>A scene cut on a body: its name and project path.</summary>
+		public readonly struct CutScene
+		{
+			public readonly string Name;
+			public readonly string Path;
+
+			public CutScene(string name, string path)
+			{
+				Name = name;
+				Path = path;
+			}
+		}
+
+		private static Dictionary<WorldBody, List<CutScene>> cutScenes;
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void ResetTravel()
+		{
+			cutScenes = null;
+			handoff = null;
+		}
+
+		/// <summary>
+		/// The scenes cut on a body, by name: every placed atlas entry on it whose scene exists in the project. Found once a
+		/// play session (editor only; a player has none). Empty for a body nothing has been cut on.
+		/// </summary>
+		public static IReadOnlyList<CutScene> ScenesOn(WorldBody target)
+		{
+			if (target == null)
+			{
+				return Array.Empty<CutScene>();
+			}
+#if UNITY_EDITOR
+			if (cutScenes == null)
+			{
+				cutScenes = new Dictionary<WorldBody, List<CutScene>>();
+				foreach (string guid in UnityEditor.AssetDatabase.FindAssets("t:" + nameof(WorldAtlasScene)))
+				{
+					var entry = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldAtlasScene>(UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
+					if (entry == null || entry.Body == null || !entry.Placed || string.IsNullOrEmpty(entry.SceneName))
+					{
+						continue;
+					}
+					string path = null;
+					foreach (string sceneGuid in UnityEditor.AssetDatabase.FindAssets($"t:Scene {entry.SceneName}"))
+					{
+						string candidate = UnityEditor.AssetDatabase.GUIDToAssetPath(sceneGuid);
+						// The scene of that very name (not a LOCAL copy or one whose name merely contains it).
+						if (System.IO.Path.GetFileNameWithoutExtension(candidate) == entry.SceneName && !candidate.StartsWith("Assets/LOCAL", StringComparison.Ordinal))
+						{
+							path = candidate;
+							break;
+						}
+					}
+					if (path == null)
+					{
+						continue;
+					}
+					if (!cutScenes.TryGetValue(entry.Body, out List<CutScene> list))
+					{
+						list = new List<CutScene>();
+						cutScenes[entry.Body] = list;
+					}
+					list.Add(new CutScene(entry.SceneName, path));
+				}
+				foreach (List<CutScene> list in cutScenes.Values)
+				{
+					list.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+				}
+			}
+			return cutScenes.TryGetValue(target, out List<CutScene> found) ? found : (IReadOnlyList<CutScene>)Array.Empty<CutScene>();
+#else
+			return Array.Empty<CutScene>();
+#endif
+		}
+
+		/// <summary>What the bed carries into the scene it travels to: the moment, and whether and how fast it runs.</summary>
+		private sealed class Handoff
+		{
+			public double WorldSeconds;
+			public bool Paused;
+			public float TimeScale;
+		}
+
+		private static Handoff handoff;
+
+		/// <summary>
+		/// Travels to a scene cut on another body (or another scene on this one): loads it in place of this one, and the
+		/// bed there picks up at this same moment of the world clock, running or held as it is here. Play mode only.
+		/// </summary>
+		public void Travel(CutScene scene)
+		{
+			if (!Application.isPlaying || string.IsNullOrEmpty(scene.Path))
+			{
+				return;
+			}
+			handoff = new Handoff
+			{
+				WorldSeconds = clock != null ? clock.WorldSeconds : 0.0,
+				Paused = Paused,
+				TimeScale = timeScale,
+			};
+#if UNITY_EDITOR
+			UnityEditor.SceneManagement.EditorSceneManager.LoadSceneInPlayMode(scene.Path, new LoadSceneParameters(LoadSceneMode.Single));
+#else
+			SceneManager.LoadScene(scene.Name, LoadSceneMode.Single);
+#endif
+		}
+
+		/// <summary>
+		/// Local time of day where the bed stands, 0.5 noon. Setting it moves the world clock to the
+		/// nearest moment that has it (<see cref="JumpTo"/>): the sun, the weather and everything else
+		/// move together, as they do in the game. (It used to pin only where the sun was drawn while
+		/// paused, a second clock the weather never saw.)
+		/// </summary>
+		public double TimeOfDay
+		{
+			get
+			{
+				CelestialState state = State;
+				if (state != null)
+				{
+					return state.LocalTime01;
+				}
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				return system != null && body != null ? CelestialMath.LocalTime01(system, body, Hours, longitude) : StartTimeOfDay;
+			}
+			set => JumpTo(value);
+		}
+
+		/// <summary>The home calendar day within its year: the season.</summary>
+		public float DayOfYear
+		{
+			get => dayOfYear;
+			set
+			{
+				dayOfYear = Mathf.Clamp(value, 0f, DaysPerYear - 0.0001f);
+				ComposeHours();
+			}
+		}
+
+		/// <summary>
+		/// Which year of the world clock, counted from its start. With the day, this is the whole
+		/// date, and the whole date is what it takes to have a moment back.
+		/// </summary>
+		/// <remarks>
+		/// The day alone never was. The weather is a function of the world's seconds, so the same day
+		/// of another year is another sky entirely; and no moon, planet or comet goes round in a whole
+		/// fraction of the year, so day 172 finds them somewhere different every time — an eclipse
+		/// that falls on it in year three does not in year four. The bed only ever had year nought,
+		/// and a sky reported from a server that had been up longer than that could not be set up here.
+		/// </remarks>
+		public int Year
+		{
+			get => year;
+			set
+			{
+				year = Mathf.Max(0, value);
+				ComposeHours();
+			}
+		}
+
+		private int year;
+
+		private static int DaysPerYear => SolarSystemProfile.Active != null ? SolarSystemProfile.Active.DaysPerYear : 365;
+
+		/// <summary>Moves the clock to a day of this year, keeping the hour of the day it is at.</summary>
+		public void SetDay(float day)
+		{
+			float hourOfDay = dayOfYear - Mathf.Floor(dayOfYear);
+			DayOfYear = Mathf.Floor(Mathf.Clamp(day, 0f, DaysPerYear - 1f)) + hourOfDay;
+		}
+
+		/// <summary>The world hours at a day of the year the bed is in.</summary>
+		public double HoursOfDay(float day) => ((double)year * DaysPerYear + day) * DayHours;
+
+		/// <summary>
+		/// The day of this year on which the body stood on comes nearest a season, where the camera
+		/// is: 0 midwinter, 0.25 spring, 0.5 midsummer, 0.75 autumn.
+		/// </summary>
+		/// <remarks>
+		/// Searched for, because it cannot be known: when a body's midsummer falls follows which way
+		/// its axis leans and how long its year is, and south of the equator it is the other half of
+		/// the year. The season buttons used to jump to fixed fractions of the home calendar, which
+		/// was the right day for no body at all — the home world's own midsummer fell a quarter of a
+		/// year after the one the button chose.
+		/// </remarks>
+		public float DayOfSeason(float season01)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || Body == null)
+			{
+				return Mathf.Repeat(season01, 1f) * DaysPerYear;
+			}
+			// The figure is the northern hemisphere's; the southern has the opposite season.
+			float wanted = Mathf.Repeat(season01 + (latitude < 0f ? 0.5f : 0f), 1f);
+			float best = 0f, bestDistance = float.MaxValue;
+			for (int day = 0; day < DaysPerYear; day++)
+			{
+				float season = CelestialMath.Season01(system, Body, HoursOfDay(day + 0.5f));
+				float distance = Mathf.Abs(Mathf.DeltaAngle(season * 360f, wanted * 360f));
+				if (distance < bestDistance)
+				{
+					bestDistance = distance;
+					best = day;
+				}
+			}
+			return best;
+		}
+
+		/// <summary>Sets the clock to a world hour outright, and the date to match.</summary>
+		public void JumpToHours(double worldHours)
+		{
+			SetHours(worldHours);
+		}
+
+		/// <summary>Sets the world clock outright, to the millisecond, keeping its pace.</summary>
+		public void SetWorldSeconds(double worldSeconds)
+		{
+			SetHours(worldSeconds / 3600.0);
+		}
+
+		/// <summary>Moves the world clock on (or back) by world seconds, held or running.</summary>
+		public void StepWorld(double worldSeconds)
+		{
+			SetHours(Hours + worldSeconds / 3600.0);
+		}
+
+		/// <summary>Sets the clock, and reads the calendar back from it.</summary>
+		private void SetHours(double worldHours)
+		{
+			clock?.SetWorldSeconds(Math.Max(0.0, worldHours) * 3600.0);
+			ReadCalendar();
+		}
+
+		/// <summary>
+		/// The next eclipse from now, as seen from where the camera stands: the world hour of first
+		/// contact, handed to <paramref name="found"/> (null when there is none). Searched, a few
+		/// minutes at a time, over the next few years; run it as a coroutine.
+		/// </summary>
+		/// <remarks>
+		/// With the discs as they are drawn, so what is found is what will be seen; and a solar
+		/// eclipse only counts with the sun up, since one below the horizon is not an eclipse to
+		/// anybody here. A lunar one counts with the moon up.
+		/// </remarks>
+		public System.Collections.IEnumerator SearchNextEclipse(bool solar, Action<double?> found, Action<float> progress = null)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || Body == null)
+			{
+				found(null);
+				yield break;
+			}
+			// Two-minute steps over four years is a quarter of a million sky computations: seconds of
+			// a frozen editor in one go, so the search is spread over frames a few milliseconds at a time.
+			var probe = new CelestialState();
+			WorldBody body = Body;
+			float sunScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.SunScale : 1f;
+			float bodyScale = Sky != null && Sky.ActiveSky != null ? Sky.ActiveSky.BodyScale : 1f;
+			double step = 2.0 / 60.0;
+			double now = Hours;
+			double limit = now + CelestialMath.YearHours(system) * 4.0;
+			bool wasIn = true;
+			var watch = System.Diagnostics.Stopwatch.StartNew();
+			for (double at = now; at < limit; at += step)
+			{
+				probe.Compute(system, body, at, latitude, longitude, heading);
+				bool isIn = solar
+					? probe.Sun >= 0 && probe.SunAltitude > -0.5f && probe.SolarEclipseAsDrawn(sunScale, bodyScale).Obscuration > 0f
+					: probe.Moon >= 0 && probe.Bodies[probe.Moon].AltitudeDegrees > -0.5f && probe.LunarPhase != LunarEclipsePhase.None;
+				if (isIn && !wasIn)
+				{
+					found(at);
+					yield break;
+				}
+				wasIn = isIn;
+				if (watch.Elapsed.TotalMilliseconds >= EclipseSearchMilliseconds)
+				{
+					progress?.Invoke((float)((at - now) / (limit - now)));
+					yield return null;
+					watch.Restart();
+				}
+			}
+			found(null);
+		}
+
+		/// <summary>How much of a frame the eclipse search takes.</summary>
+		private const double EclipseSearchMilliseconds = 6.0;
+
+		/// <summary>The date into the clock. In double: a float day stops holding the hour after a few years.</summary>
+		private void ComposeHours()
+		{
+			clock?.SetWorldSeconds(((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
+		}
+
+		/// <summary>The clock into the date, after anything that moved the clock itself.</summary>
+		private void ReadCalendar()
+		{
+			double days = Hours / Math.Max(1e-6, DayHours);
+			year = Math.Max(0, (int)Math.Floor(days / DaysPerYear));
+			dayOfYear = (float)(days - (double)year * DaysPerYear);
+		}
+
+		public float Latitude
+		{
+			get => latitude;
+			set
+			{
+				latitude = Mathf.Clamp(value, -90f, 90f);
+				WorldDayNightCycle.PreviewLatitude = latitude;
+			}
+		}
+
+		public float Longitude
+		{
+			get => longitude;
+			set
+			{
+				longitude = Mathf.Repeat(value + 180f, 360f) - 180f;
+				WorldDayNightCycle.PreviewLongitude = longitude;
+			}
+		}
+
+		/// <summary>Which way the scene's +Z faces, clockwise from north.</summary>
+		public float Heading
+		{
+			get => heading;
+			set
+			{
+				heading = Mathf.Repeat(value, 360f);
+				WorldDayNightCycle.PreviewHeading = heading;
+			}
+		}
+
+		/// <summary>A sky profile forced on whatever body is selected, or null for the body's own.</summary>
+		public SkyProfile SkyOverride
+		{
+			get => skyOverride;
+			set
+			{
+				skyOverride = value;
+				// The same event a region's ECA action raises on the owning client.
+				new ChangeSkyProfileAction { Profile = value, BlendSeconds = 0.5f }.Execute(null, null);
+			}
+		}
+
+		/// <summary>
+		/// Whether the world is held. Held, the world clock stands still — sun, sky, weather, the sea and
+		/// everything on the world's motion — while the tick goes on counting, exactly as an admin's
+		/// <c>/admin time hold</c> does on a live server.
+		/// </summary>
+		public bool Paused
+		{
+			get => clock == null || clock.Held;
+			set
+			{
+				if (clock == null)
+				{
+					return;
+				}
+				bool started = clock.Held && !value;
+				if (value)
+				{
+					clock.Hold();
+				}
+				else
+				{
+					clock.SetRate(RunRate);
+				}
+				if (started)
+				{
+					BeginRunTrace();
+				}
+			}
+		}
+
+		/// <summary>World hours per real second while the clock runs (held or not, what Run runs at).</summary>
+		public float TimeScale
+		{
+			get => timeScale;
+			set
+			{
+				timeScale = Mathf.Max(0f, value);
+				if (clock != null && !clock.Held)
+				{
+					clock.SetRate(RunRate);
+				}
+			}
+		}
+
+		/// <summary>World seconds per real second while running: <see cref="TimeScale"/> in the world clock's own terms.</summary>
+		public double RunRate
+		{
+			get => Math.Max(1e-6, timeScale * 3600.0);
+			set => TimeScale = (float)(Math.Max(0.0, value) / 3600.0);
+		}
+
+		/// <summary>The world clock's pace now: 0 held, else <see cref="RunRate"/>.</summary>
+		public double Rate => clock != null ? clock.Rate : 0.0;
+
+		/// <summary>World seconds since the epoch now.</summary>
+		public double WorldSeconds => clock != null ? clock.WorldSeconds : 0.0;
+
+		// ── The run trace ─────────────────────────────────────────────
+		// What the sky was doing, frame by frame, for the first seconds after Run is pressed. A
+		// cloud that swells and shrinks in that second was explained twice by reading the code and
+		// both explanations were wrong; this writes down every number that decides how much cloud
+		// is drawn and how tall, so the next explanation is read off a file instead.
+
+		/// <summary>Where the last run's trace was written, under the project's Logs folder.</summary>
+		public const string RunTracePath = "Logs/WorldSimRunTrace.csv";
+		private const float RunTraceSeconds = 8f;
+		private System.Text.StringBuilder runTrace;
+		private float runTraceElapsed;
+
+		private void BeginRunTrace()
+		{
+			runTrace = new System.Text.StringBuilder(64 * 1024);
+			runTraceElapsed = 0f;
+			runTrace.AppendLine("t,dt,timeOfDay,clockLocal01,hours,driftX,driftZ,"
+				+ "fieldCover,fieldFog,fieldRain,shownCover,shownFog,shownRain,instability,humidity,pressure,"
+				+ "skyCover,base,tops,towersTo,vigour,towerHere,climb,shellBottom,shellTop,"
+				+ "lowCover,lowBase,midCover,highCover,measuredSolid,measuredAny");
+		}
+
+		private void WriteRunTrace(float dt)
+		{
+			if (runTrace == null)
+			{
+				return;
+			}
+			runTraceElapsed += dt;
+			SkySystem sky = SkySystem.Instance;
+			CelestialState state = State;
+			WeatherFrame shown = presentation != null ? presentation.Shown : lastSample.Frame;
+			var culture = System.Globalization.CultureInfo.InvariantCulture;
+			string F(double v) => v.ToString("0.#####", culture);
+			float Cover(SkySystem s, int index) => s != null && s.CloudBands != null && index < s.CloudBands.Count ? s.CloudBands[index].Coverage : 0f;
+			runTrace.Append(F(runTraceElapsed)).Append(',').Append(F(dt)).Append(',')
+				.Append(F(TimeOfDay)).Append(',').Append(F(state != null ? state.LocalTime01 : -1)).Append(',').Append(F(Hours)).Append(',')
+				.Append(F(sky != null ? sky.CloudDrift.x : 0)).Append(',').Append(F(sky != null ? sky.CloudDrift.y : 0)).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.CloudCover])).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.FogDensity])).Append(',')
+				.Append(F(lastSample.Background[WeatherChannel.Precipitation])).Append(',')
+				.Append(F(shown[WeatherChannel.CloudCover])).Append(',').Append(F(shown[WeatherChannel.FogDensity])).Append(',')
+				.Append(F(shown[WeatherChannel.Precipitation])).Append(',')
+				.Append(F(lastSample.Air.Instability)).Append(',').Append(F(lastSample.Air.Humidity)).Append(',').Append(F(lastSample.Air.Pressure)).Append(',');
+			if (sky != null)
+			{
+				AirColumn column = sky.CloudViewerColumn;
+				runTrace.Append(F(sky.CloudCover)).Append(',').Append(F(column.Base)).Append(',').Append(F(column.Top)).Append(',')
+					.Append(F(column.TowerCeiling)).Append(',').Append(F(column.Vigour)).Append(',')
+					.Append(F(sky.CloudTowerAtCamera)).Append(',').Append(F(sky.CloudClimbHeight)).Append(',')
+					.Append(F(sky.CloudShellBottom)).Append(',').Append(F(sky.CloudShellTop)).Append(',')
+					.Append(F(Cover(sky, 0))).Append(',').Append(F(column.Base)).Append(',')
+					.Append(F(Cover(sky, 1))).Append(',').Append(F(Cover(sky, 2))).Append(',');
+			}
+			else
+			{
+				runTrace.Append("0,0,0,0,0,0,0,0,0,0,0,0,0,");
+			}
+			runTrace.Append(F(CloudStats.MeasuredCover)).Append(',').Append(F(CloudStats.MeasuredAnyCloud)).AppendLine();
+			if (runTraceElapsed >= RunTraceSeconds || Paused)
+			{
+				try
+				{
+					System.IO.Directory.CreateDirectory("Logs");
+					System.IO.File.WriteAllText(RunTracePath, runTrace.ToString());
+					Debug.Log($"[World Sim] Run trace written: {RunTracePath} ({runTraceElapsed:0.0} s).");
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning($"[World Sim] Could not write the run trace: {e.Message}");
+				}
+				runTrace = null;
+			}
+		}
+
+		/// <summary>
+		/// Draws every disc bigger than life, the way most games flatter the sky. Off is what this
+		/// world ships: a moon is as big as its radius and distance make it. Only for this session;
+		/// the sky profile assets are not touched.
+		/// </summary>
+		public bool LargerThanLife
+		{
+			get => SkyProfile.LargerThanLifeOverride ?? false;
+			set => SkyProfile.LargerThanLifeOverride = value;
+		}
+
+		/// <summary>World hours since the epoch, as shown: the bed's clock.</summary>
+		public double Hours => clock != null ? clock.WorldSeconds / 3600.0 : 0.0;
+
+		public SkySystem Sky => SkySystem.Instance;
+
+		public CelestialState State => DayNight != null ? DayNight.State : null;
+
+		private static double DayHours => SolarSystemProfile.Active != null ? CelestialMath.HomeSolarDayHours(SolarSystemProfile.Active) : 6.0;
+
+		/// <summary>The solar day of the body being stood on, in real hours.</summary>
+		public double BodyDayHours
+		{
+			get
+			{
+				SolarSystemProfile system = SolarSystemProfile.Active;
+				return system != null && body != null ? CelestialMath.SolarDayHours(system, body) : DayHours;
+			}
+		}
+
+		/// <summary>
+		/// Moves the world clock to a time of day within the current day, and the sun with it.
+		/// </summary>
+		/// <remarks>
+		/// Separate from setting <see cref="TimeOfDay"/>, which only says where the sun is drawn. The
+		/// weather driver reads the world clock, so the panel's slider has to move the clock or
+		/// scrubbing the time slides the sun across a sky whose weather never changes. It cannot be
+		/// folded into the property, though: the probe sets a *fractional* day — a precise moment
+		/// found by searching for a moonlit night — and then sets the time of day, and a property
+		/// that rewrote the day from the time threw that search away and landed on whatever moment
+		/// happened to share the hour. Once, that was a total lunar eclipse, and the moon the stage
+		/// existed to photograph was not there at all.
+		/// </remarks>
+		public void ScrubTo(double localTime01)
+		{
+			dayOfYear = Mathf.Floor(dayOfYear) + Mathf.Repeat((float)localTime01, 1f);
+			ComposeHours();
+		}
+
+		/// <summary>Moves the clock to a time of day (0.5 noon) on the current date.</summary>
+		/// <remarks>
+		/// To the nearest moment that has it, held or not: the one world clock moves, and with it the sun,
+		/// the weather and everything else. (When <see cref="TimeOfDay"/> only pinned where the sky drew
+		/// its sun, the weather stayed at the day's start — on Arthis one in the morning — and a probe's
+		/// "noon" had a night's weather under a noon sun.)
+		/// </remarks>
+		public void JumpTo(double localTime01)
+		{
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system == null || body == null)
+			{
+				ScrubTo(localTime01);
+				return;
+			}
+			double now = Hours;
+			double local = CelestialMath.LocalTime01(system, body, now, longitude);
+			double shift = Mathf.Repeat((float)localTime01, 1f) - local;
+			shift -= Math.Round(shift);
+			double day = CelestialMath.SolarDayHours(system, body);
+			if (!double.IsInfinity(day))
+			{
+				SetHours(now + shift * day);
+			}
+		}
+
+		/// <summary>Points the camera at a direction in the scene, keeping it level.</summary>
+		public void LookAt(Vector3 direction)
+		{
+			if (Camera == null || direction.sqrMagnitude < 1e-6f)
+			{
+				return;
+			}
+			// Through the camera's own controls when it has them: it keeps its own yaw and pitch, and
+			// set behind its back the next right-drag snapped the view back to where it was.
+			if (Camera.TryGetComponent(out WorldSimCamera controls))
+			{
+				controls.Face(direction);
+				return;
+			}
+			Camera.transform.rotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+		}
+
+
+		// ── The weather ───────────────────────────────────────────────
+
+		public WeatherTimeline Timeline => timeline;
+		public WeatherSample LastSample => lastSample;
+		public WeatherPresentation Presentation => presentation;
+		/// <summary>The bed's tick, whole (the local clock's, which never changes pace).</summary>
+		public uint Tick => clock != null ? (uint)clock.Tick : 0u;
+
+		/// <summary>The bed's tick, fractional: where the storms are drawn this frame.</summary>
+		public double PreciseTick => clock != null ? clock.Tick : 0.0;
+
+		/// <summary>
+		/// What is added to the scene's air at runtime — the same thing an admin's
+		/// <c>/admin weather air</c> sets. Additions, never a replacement: zero is the air as it is.
+		/// </summary>
+		/// <remarks>
+		/// There is no other way to ask this bed for weather. It used to take presets, layers and
+		/// channels set straight — "this much cloud, this much rain" — and every one of those could
+		/// ask for weather the air could not have made. Now it asks the air to be different, and
+		/// everything the sky, the rain and the ground do follows from that air, exactly as in game.
+		/// </remarks>
+		public AirOffsets Air
+		{
+			get => timeline.Air.To;
+			set => SetAir(value, 0f);
+		}
+
+		/// <summary>
+		/// Moves every runtime air entry, past ones included, by <paramref name="delta"/> (<see cref="WeatherTimeline.ShiftAir"/>):
+		/// what authoring part of the runtime air into the scene takes back off it.
+		/// </summary>
+		public void ShiftAir(AirOffsets delta)
+		{
+			timeline.ShiftAir(delta);
+			timeline.Revision++;
+			ApplyClimate();
+			if (SkySystem.Instance != null)
+			{
+				SkySystem.Instance.RebuildCloudAir();
+			}
+		}
+
+		/// <summary>Moves what is added to the air to new values over a transition.</summary>
+		public void SetAir(AirOffsets offsets, float seconds)
+		{
+			// In world time, as the server's are: a transition holds while the world is held.
+			double now = WorldSeconds;
+			// Carrying on from where the old wind had taken the air, so the clouds do not jump when it changes.
+			timeline.ReplaceAir(WeatherField.NextAir(timeline, Settings, offsets, now, now + Mathf.Max(0f, seconds)));
+			timeline.Revision++;
+			ApplyClimate();
+			if (seconds <= 0f && SkySystem.Instance != null)
+			{
+				// All at once: the sky shows the new air now, not a slice of it at a time.
+				SkySystem.Instance.RebuildCloudAir();
+			}
+		}
+
+		/// <summary>
+		/// Whether the drifting weather field runs under the air. On, the air is the world's own
+		/// weather — highs, lows, fronts — plus what is added; off, it is a still, ordinary air plus
+		/// what is added, which is what a probe measuring one air wants.
+		/// </summary>
+		public bool FieldDriven
+		{
+			get => timeline.Driver;
+			set => timeline.Driver = value;
+		}
+
+		/// <summary>
+		/// What the body stood on adds to the scene's temperature and humidity, now: see <see cref="ApplyClimate"/>. On a
+		/// scene's own body that is the season alone (the place's mean is already in its climate); on a body the bed
+		/// stands the scene on, the body's whole offset.
+		/// </summary>
+		public float BodyTemperature { get; private set; }
+
+		/// <summary>The year's mean temperature on the ground under the camera, K: the place's climate, no season or weather.</summary>
+		public float AnnualKelvinHere { get; private set; }
+
+		/// <summary>True when <see cref="BodyTemperature"/> is only the season (the scene stands on its own body).</summary>
+		public bool BodyTemperatureIsSeason => Settings != null && Settings.Body() == Body;
+		public float BodyHumidity { get; private set; }
+
+		/// <summary>
+		/// The scene's runtime climate: the warmth added to its air — authored and here — plus what
+		/// the body stood on gets from its suns. The same sum the server and the client make in the
+		/// game.
+		/// </summary>
+		private void ApplyClimate()
+		{
+			// The settings get the one sum the server and the client make (SceneClimate), on the bed's body and latitude;
+			// its body share is shown on the panel.
+			timeline.BodyOverride = Body;
+			timeline.LatitudeDegrees = latitude;
+			SceneClimate.BodyShareAt(Settings, timeline, timeline.WorldSecondsAt(Tick), out float bodyTemperature, out float bodyHumidity);
+			BodyTemperature = bodyTemperature;
+			BodyHumidity = bodyHumidity;
+			SceneClimate.Apply(Settings, timeline, timeline.WorldSecondsAt(Tick));
+			/* And the season foliage shows, from the place's climate on the bed's clock: in the game ClientWeather publishes
+			 * it, but the bed presents its own weather, so without this the shaders never had a season and the season
+			 * buttons left grass, flowers and leaves as they were (healthy, in bloom, in leaf). */
+			FoliageKnown = SceneClimate.Foliage(Settings, Hours, out SceneClimate.FoliageState season, timeline);
+			Foliage = season;
+			// At the camera's height: what the plants round it read (each its own height's, FishSeasonGrowing).
+			float here = Camera != null ? Camera.transform.position.y : 0f;
+			FoliageCelsius = season.CelsiusAt(here);
+			FoliageGrowing = SceneClimate.GrowingAt(FoliageCelsius);
+			FoliageWinter = SceneClimate.WinterAt(season.ColdestCelsius - Mathf.Max(0f, here) * season.CoolingPerMetre);
+			if (FoliageKnown)
+			{
+				WeatherShaderGlobals.ApplySeason(season, Settings.RuntimeHumidityOffset());
+			}
+			else
+			{
+				WeatherShaderGlobals.ClearSeason();
+			}
+		}
+
+		/// <summary>Whether the plants were given a season (<see cref="SceneClimate.Foliage(WorldSceneSettings, double, out float, out float, out float, out float)"/>).</summary>
+		public bool FoliageKnown { get; private set; }
+
+		/// <summary>The season the plants were given, at sea level, with the cooling up from it.</summary>
+		public SceneClimate.FoliageState Foliage { get; private set; }
+
+		/// <summary>The season at the camera's height: −1 dormant … 1 growing.</summary>
+		public float FoliageGrowing { get; private set; }
+
+		/// <summary>How hard the winter is at the camera's height: 0 none … 1 strips a deciduous tree.</summary>
+		public float FoliageWinter { get; private set; }
+
+		/// <summary>The season's air at the camera's height, °C (no day or weather): what the plants round it read.</summary>
+		public float FoliageCelsius { get; private set; }
+
+		/// <summary>
+		/// Where the season's snowpack lies now (<see cref="GroundCover.SnowLine"/>): false with none. The heights are world y,
+		/// metres above the sea: where it starts and where it is whole.
+		/// </summary>
+		public bool SnowLine(out float startY, out float wholeY)
+		{
+			startY = wholeY = 0f;
+			if (timeline == null || Settings == null)
+			{
+				return false;
+			}
+			GroundCover.Forcing forcing = GroundCover.ForcingAt(timeline, Settings, gameObject.scene, GroundCover.StepOf(timeline.WorldSecondsAt(Tick)));
+			return GroundCover.SnowLine(forcing, out startY, out wholeY, out _, out _);
+		}
+
+		/// <summary>The biome the bed stands on in place of its own ground (<see cref="StandOn"/>), or null on its own.</summary>
+		public BiomeTemplate StoodOn { get; private set; }
+
+		private SceneBiomeMap standMap;
+		private SceneBiomeMap ownGround;
+		private bool ownGroundKept;
+
+		/// <summary>
+		/// Stands the bed on one biome — a map of that biome alone, a hundred kilometres round the camera — or back on its
+		/// own ground when <paramref name="biome"/> is null. The bed's own ground is no biome at all: nothing on it is
+		/// loose, so a haboob or a dust devil lifts nothing over it, and nothing on it emits. Storms already running keep
+		/// the air they were read in; the next one started reads the new ground.
+		/// </summary>
+		public void StandOn(BiomeTemplate biome)
+		{
+			if (Settings == null)
+			{
+				return;
+			}
+			if (!ownGroundKept)
+			{
+				ownGround = Settings.BiomeMap();
+				ownGroundKept = true;
+			}
+			StoodOn = biome;
+			if (biome == null || Camera == null)
+			{
+				StoodOn = null;
+				Settings.SetBiomeMap(ownGround);
+				return;
+			}
+			int id = BiomeRegistry.IDOf(biome);
+			if (!BiomeRegistry.TryGetByID(id, out _))
+			{
+				BiomeRegistry.Register(biome);
+			}
+			if (standMap == null)
+			{
+				standMap = ScriptableObject.CreateInstance<SceneBiomeMap>();
+				standMap.hideFlags = HideFlags.DontSave;
+			}
+			Vector3 at = Camera.transform.position;
+			standMap.Set(1, 1, new[] { id }, new Vector2(at.x - 50000f, at.z - 50000f), new Vector2(100000f, 100000f));
+			Settings.SetBiomeMap(standMap);
+		}
+
+		/// <summary>
+		/// Starts a storm of a kind upwind, drifting over the camera — or, <paramref name="overhead"/>,
+		/// standing on it. Its size and life come from the air where it starts unless a radius is given,
+		/// and its pace is the steering wind's unless one is given (a haboob runs at its outflow's own).
+		/// </summary>
+		/// <returns>What was started and when it arrives, or why nothing will show.</returns>
+		public string SpawnCell(StormKind kind, float radius = 0f, float speed = -1f, bool overhead = false)
+		{
+			if (Camera == null)
+			{
+				return "There is no camera to start a storm at.";
+			}
+			Vector3 at = Camera.transform.position;
+			float angle = (Tick % 360) * Mathf.Deg2Rad;
+			var direction = new Vector2(Mathf.Sin(angle), Mathf.Cos(angle));
+			uint now = Tick;
+			WeatherSample here = WeatherField.Sample(timeline, Settings, gameObject.scene, at, now);
+			// The game's rule (WeatherHost.SpawnCell): no air, no storm of any kind.
+			if (!StormPhysics.CanForm(here.Planet))
+			{
+				return "No storm forms here: the world has no air to make one.";
+			}
+			StormPhysics.Dimensions(kind, here.OpenColumn, 0.5f, 0.5f, out float airRadius, out float extent, out float life);
+			if (radius > 0f)
+			{
+				extent *= radius / Mathf.Max(1f, airRadius);
+			}
+			else
+			{
+				radius = airRadius;
+			}
+			if (speed < 0f)
+			{
+				// A haboob is a density current and runs at its own pace, not the steering wind's.
+				speed = kind == StormKind.Haboob ? Mathf.Max(3f, StormPhysics.OutflowSpeed(here.OpenColumn, StormPhysics.OutflowDepth(here.OpenColumn))) : 6f;
+			}
+			/* How far it has to start to come in from clear of the camera: a front advances across its
+			 * line, so what has to clear is its depth across it (StormCell.FrontCoverage: 0.45 of its
+			 * radius ahead, 1.6 behind), not its length along it. Measured by its length, a haboob 30 km
+			 * long started 45 km off and took two hours to arrive. */
+			float reach = StormPhysics.ShapeOf(kind) == StormCellShape.Front ? radius * 1.6f : Mathf.Max(radius, extent);
+			float distance = overhead ? 0f : reach * 1.5f;
+			if (overhead || kind == StormKind.Eruption)
+			{
+				// Nor does a vent travel: an eruption stays put and its plume is what the wind carries.
+				speed = 0f;
+			}
+			// Long enough to cross the camera and go, and no longer than the storm would live.
+			// In world seconds, as the server's storms are: it holds with the world, and races with it.
+			double lifetime = overhead ? Mathf.Max(600f, life) : Mathf.Min(life * 2f, (distance * 2f) / Mathf.Max(0.5f, speed) + 30f);
+			// Born already grown, so it shows at once: a storm born now under a held clock had no
+			// strength and never gained any (its growth is in world seconds, and those stand still).
+			double born = WorldSeconds;
+			double grow = overhead ? 0.1 : 10.0;
+			timeline.UpsertCell(new StormCell
+			{
+				ID = nextCell++,
+				Kind = kind,
+				Seed = (uint)(now * 2654435761u),
+				OriginX = at.x - direction.x * distance,
+				OriginZ = at.z - direction.y * distance,
+				VelocityX = direction.x * speed,
+				VelocityZ = direction.y * speed,
+				RadiusMeters = radius,
+				ExtentMeters = extent,
+				Shape = StormPhysics.ShapeOf(kind),
+				PeakIntensity = 1f,
+				MeanderMeters = 20f,
+				MotionSeconds = born,
+				BirthSeconds = born - grow,
+				MatureSeconds = born,
+				DecaySeconds = born + lifetime - 10.0,
+				DeathSeconds = born + lifetime,
+			});
+			timeline.Revision++;
+
+			string name = StormPhysics.NameOf(kind);
+			bool lifts = kind == StormKind.Haboob || kind == StormKind.DustDevil;
+			if (lifts && (here.Ground.Loose == null || here.Ground.Water))
+			{
+				return $"{name} started, but it is only the dust it lifts and nothing here is loose: stand on loose ground (Ground tab) to see one.";
+			}
+			if (kind == StormKind.Eruption && here.Ground.Emits == null)
+			{
+				return $"{name} started, but the ground here emits nothing: stand on ground that does (Ground tab) to see one.";
+			}
+			if (distance <= 0f || speed <= 0f)
+			{
+				return $"{name} started overhead.";
+			}
+			return $"{name} started {distance / 1000f:0.0} km upwind at {speed:0} m/s: over the camera in about {distance / speed / 60f:0} world minutes.";
+		}
+
+		// ── Storms by hand ────────────────────────────────────────────
+		// A storm is not an object in the scene: it is a StormCell in the timeline, the record the
+		// server sends, and everything that draws or feels it reads that list. These edit the record,
+		// as the admin commands do on a server (WeatherHost.SteerCell/RetireCell).
+
+		/// <summary>The storms that are running: the timeline's cells.</summary>
+		public IReadOnlyList<StormCell> Storms => timeline.Cells;
+
+		/// <summary>The held storms, each with the world second it was last held at.</summary>
+		private readonly Dictionary<ushort, double> heldStorms = new Dictionary<ushort, double>();
+
+		/// <summary>Whether a storm is held: standing where it is, at the strength it has, while the world runs on.</summary>
+		public bool IsStormHeld(ushort id) => heldStorms.ContainsKey(id);
+
+		/// <summary>Holds a storm where it is and as it is, or lets it go on from there.</summary>
+		public void HoldStorm(ushort id, bool held)
+		{
+			if (held)
+			{
+				heldStorms[id] = WorldSeconds;
+			}
+			else
+			{
+				heldStorms.Remove(id);
+			}
+		}
+
+		/// <summary>
+		/// Keeps each held storm as it was: its motion and its whole life move on with the clock, so where it stands
+		/// and how strong it is are those of the moment it was held. Through a jump of the clock too.
+		/// </summary>
+		private void KeepHeldStorms()
+		{
+			if (heldStorms.Count == 0)
+			{
+				return;
+			}
+			double now = WorldSeconds;
+			bool changed = false;
+			var ids = new List<ushort>(heldStorms.Keys);
+			foreach (ushort id in ids)
+			{
+				if (!timeline.TryGetCell(id, out int index))
+				{
+					heldStorms.Remove(id);
+					continue;
+				}
+				double shift = now - heldStorms[id];
+				heldStorms[id] = now;
+				if (shift == 0.0)
+				{
+					continue;
+				}
+				StormCell cell = timeline.Cells[index];
+				cell.MotionSeconds += shift;
+				cell.BirthSeconds += shift;
+				cell.MatureSeconds += shift;
+				cell.DecaySeconds += shift;
+				cell.DeathSeconds += shift;
+				timeline.Cells[index] = cell;
+				changed = true;
+			}
+			if (changed)
+			{
+				timeline.Revision++;
+			}
+		}
+
+		/// <summary>Ends a storm at once.</summary>
+		public void RemoveStorm(ushort id)
+		{
+			if (timeline.TryGetCell(id, out int index))
+			{
+				timeline.Cells.RemoveAt(index);
+				heldStorms.Remove(id);
+				timeline.Revision++;
+			}
+		}
+
+		/// <summary>Ends every storm, leaving the air and the ground as they are.</summary>
+		public void RemoveAllStorms()
+		{
+			timeline.Cells.Clear();
+			heldStorms.Clear();
+			timeline.Revision++;
+		}
+
+		/// <summary>
+		/// Re-bases a storm's motion where it stands now, as WeatherHost.SteerCell does, so a change of course or pace
+		/// moves it on from there rather than from where it started.
+		/// </summary>
+		private static void Rebase(ref StormCell cell, double now)
+		{
+			Vector2 from = cell.CentreAtSeconds(now);
+			cell.OriginX = from.x;
+			cell.OriginZ = from.y;
+			cell.MotionSeconds = now;
+			cell.MeanderMeters = 0f;
+		}
+
+		private bool EditStorm(ushort id, RefCell edit)
+		{
+			if (!timeline.TryGetCell(id, out int index))
+			{
+				return false;
+			}
+			StormCell cell = timeline.Cells[index];
+			edit(ref cell);
+			timeline.Cells[index] = cell;
+			timeline.Revision++;
+			return true;
+		}
+
+		private delegate void RefCell(ref StormCell cell);
+
+		/// <summary>Turns a storm toward the camera at its own pace (6 m/s if it was standing).</summary>
+		public void SteerStormHere(ushort id)
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			Vector3 at = Camera.transform.position;
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				Rebase(ref cell, now);
+				float speed = new Vector2(cell.VelocityX, cell.VelocityZ).magnitude;
+				Vector2 way = new Vector2(at.x - cell.OriginX, at.z - cell.OriginZ);
+				Vector2 velocity = way.sqrMagnitude > 1f ? way.normalized * (speed > 0.01f ? speed : 6f) : Vector2.zero;
+				cell.VelocityX = velocity.x;
+				cell.VelocityZ = velocity.y;
+			});
+		}
+
+		/// <summary>Stands a storm on the camera, keeping its course and pace.</summary>
+		public void MoveStormHere(ushort id)
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			Vector3 at = Camera.transform.position;
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				cell.OriginX = at.x;
+				cell.OriginZ = at.z;
+				cell.MotionSeconds = now;
+				cell.MeanderMeters = 0f;
+			});
+		}
+
+		/// <summary>A storm's pace along its course, m/s. A front's facing is its course, so a standing one keeps a crawl to keep it.</summary>
+		public void SetStormSpeed(ushort id, float speed)
+		{
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				Rebase(ref cell, now);
+				Vector2 course = cell.Facing;
+				float pace = Mathf.Max(0.001f, speed);
+				cell.VelocityX = course.x * pace;
+				cell.VelocityZ = course.y * pace;
+			});
+		}
+
+		/// <summary>A storm's peak strength, 0..1.</summary>
+		public void SetStormStrength(ushort id, float strength) =>
+			EditStorm(id, (ref StormCell cell) => cell.PeakIntensity = Mathf.Clamp01(strength));
+
+		/// <summary>A storm's size: its radius, with its second measure kept in proportion.</summary>
+		public void SetStormRadius(ushort id, float radius) =>
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				float to = Mathf.Max(1f, radius);
+				cell.ExtentMeters *= to / Mathf.Max(1f, cell.RadiusMeters);
+				cell.RadiusMeters = to;
+			});
+
+		/// <summary>Gives a storm more life: it holds at full strength that much longer before it fades.</summary>
+		public void ExtendStorm(ushort id, double seconds)
+		{
+			double now = WorldSeconds;
+			EditStorm(id, (ref StormCell cell) =>
+			{
+				double fade = Math.Max(10.0, cell.DeathSeconds - cell.DecaySeconds);
+				// A storm already fading comes back to full from now.
+				double from = Math.Max(cell.DecaySeconds, now);
+				cell.DecaySeconds = from + seconds;
+				cell.DeathSeconds = cell.DecaySeconds + fade;
+			});
+		}
+
+		/// <summary>The bed's reset: the air back to the world's own, no storms, bare ground.</summary>
+		public void ClearAll(float seconds)
+		{
+			// The transition runs in world seconds, so under a held clock it never ran and the air
+			// stayed as it was: held, the reset is immediate.
+			SetAir(default, Paused ? 0f : seconds);
+			RemoveAllStorms();
+			// Clear means clear: the ground goes back to bare as well. Weather stopping does not dry
+			// the ground — that takes a quarter of an hour, and the panel can fast-forward it — but
+			// this button is the bed's reset, not a forecast.
+			ResetCover();
+		}
+
+		/// <summary>
+		/// The ground the weather made, with nothing held over it. The ground is the world clock's (GroundCover): it
+		/// cannot be set bare and left to the weather, only shown as the weather of its moment left it.
+		/// </summary>
+		public void ResetCover()
+		{
+			CoverOverride = null;
+			UpdateSceneCover(Tick);
+		}
+
+		/// <summary>The scene's ground figure of this moment, unless one is held.</summary>
+		private void UpdateSceneCover(uint tick)
+		{
+			if (timeline.Area.width <= 0f && SceneCoverSampling.TryGetArea(Settings, gameObject.scene, out Rect area))
+			{
+				timeline.Area = area;
+			}
+			if (!CoverOverride.HasValue)
+			{
+				sceneCover.Update(timeline, Settings, gameObject.scene, timeline.WorldSecondsAt(tick));
+			}
+		}
+
+		/// <summary>
+		/// Snow, wet, ash and sand held at a chosen depth instead of accumulating. Cover takes
+		/// fifteen minutes of weather to build, which is no way to look at a wet street or a snowed
+		/// -in courtyard: set this and the surfaces show that depth at once.
+		/// </summary>
+		public WeatherCover? CoverOverride
+		{
+			get => coverOverride;
+			set
+			{
+				coverOverride = value;
+				// The ground is drawn from the cover map, not from this figure, so holding a depth
+				// has to reach the map or nothing changes on screen.
+				if (Presentation != null && Presentation.CoverMap != null)
+				{
+					if (value.HasValue)
+					{
+						timeline.Cover = value.Value;
+						Presentation.CoverMap.Hold(value.Value);
+					}
+					else
+					{
+						// Let it settle: the ground of the moment again.
+						Presentation.CoverMap.Release();
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Snow this deep past the white blanket everywhere at once, metres — only where the ground is white, so hold
+		/// the snow cover first. Shown as height only on the tier that lifts the ground under snow; the weather builds
+		/// and melts it from there.
+		/// </summary>
+		public void HoldDeepSnow(float metres)
+		{
+			if (Presentation != null && Presentation.CoverMap != null)
+			{
+				Presentation.CoverMap.HoldDeepSnow(metres);
+			}
+		}
+
+		/// <summary>
+		/// Moves the world on by <paramref name="seconds"/> and brings the ground through them at once — the panel's
+		/// "+15 min" and the probe's settle. The ground keeps the world's one clock, so fast-forwarding it means
+		/// fast-forwarding the world: the storms move on and the sun with them, and the cover is what that weather
+		/// left (it was the cover alone, run on under the weather standing still).
+		/// </summary>
+		public void FastForward(float seconds)
+		{
+			StepWorld(seconds);
+			ForcePresent();
+			UpdateSceneCover(Tick);
+			WeatherCoverMap map = Presentation != null ? Presentation.CoverMap : null;
+			map?.CatchUp();
+		}
+
+		// ── Life ──────────────────────────────────────────────────────
+
+		/// <summary>Leaves the world moving: the rate is global, and the game runs at 1.</summary>
+		private void OnDisable()
+		{
+			if (standingDown)
+			{
+				return;
+			}
+			WorldMotion.FollowClock(1.0);
+		}
+
+		/// <summary>
+		/// True when this bed found a networked game running and took itself out (<see cref="Awake"/>): it then
+		/// touches nothing, on the way in or out.
+		/// </summary>
+		private bool standingDown;
+
+		/// <summary>
+		/// A client or server is running: the world's clock, weather and presentation belong to the game.
+		/// </summary>
+		/// <remarks>
+		/// The scene generator dresses every generated scene with this bed (GeneratedSceneDressing), and the
+		/// shipped world scenes kept it. Loaded by a game client it replaced the server's world clock with its own
+		/// held one (<see cref="LocalWorldClock"/>, <c>Hold</c>), its tick and an empty timeline, so the sky, the
+		/// weather, the wind, the sea and the grass all stood still in a web build (2026-11-08). The bed is for a
+		/// scene opened on its own (play in the editor, the benchmark players), where no network is started.
+		/// </remarks>
+		private static bool NetworkedGame()
+		{
+			FishNet.Managing.NetworkManager manager = FishNet.InstanceFinder.NetworkManager;
+			return manager != null && (manager.IsClientStarted || manager.IsServerStarted);
+		}
+
+		private void Awake()
+		{
+			if (NetworkedGame())
+			{
+				standingDown = true;
+				Debug.Log($"[World Sim] '{gameObject.scene.name}' was loaded by a running game: the test bed stands down (the server's clock and weather drive it).");
+				gameObject.SetActive(false);
+				return;
+			}
+			Cache();
+			/* The bed's own tick, standing in for FishNet's: it drives the shared world clock, so the sky,
+			 * the weather, the sea and the storms all read the time down the game's own path. Held at
+			 * the start, as the bed always was. */
+			// Arrived from another scene (Travel): at the moment it left, not at this scene's own start.
+			Handoff arrived = handoff;
+			handoff = null;
+			clock = new LocalWorldClock(TickRate, arrived != null ? arrived.WorldSeconds : ((double)year * DaysPerYear + dayOfYear) * DayHours * 3600.0);
+			LocalWorldClock.Activate(clock);
+			clock.Hold();
+			// No preview pins: the cycle reads the local clock (WorldTime), as it reads the server's in game.
+			WorldDayNightCycle.PreviewHours = null;
+			WorldDayNightCycle.PreviewLocalTime01 = null;
+			/* Stands where the scene stands: on its own body, at its own place on the atlas. It used
+			 * to start on the home world at 25° whatever scene it was dressed into, so a generated
+			 * scene on an airless moon was simulated under the home world's wet air — rain and snow
+			 * on Seli Waste. Only the bed's own scene, which has no atlas entry, starts at the
+			 * defaults. */
+			WorldAtlasScene placed = Settings != null ? Settings.AtlasEntry() : null;
+			Body = body != null ? body : ScenePlacementClimate.ResolveBody(SolarSystemProfile.Active, placed);
+			if (placed != null && placed.Placed)
+			{
+				latitude = (float)placed.EffectiveSunLatitude;
+				longitude = (float)placed.TimeLongitude;
+				heading = placed.HeadingDegrees;
+			}
+			Latitude = latitude;
+			Longitude = longitude;
+			Heading = heading;
+			// The bed starts life-size, whatever the profiles say, so what you see is what ships.
+			SkyProfile.LargerThanLifeOverride = false;
+			if (arrived != null)
+			{
+				timeScale = arrived.TimeScale;
+				resumeAfterArrival = !arrived.Paused;
+				// The date the panel shows, from the moment carried over.
+				double days = arrived.WorldSeconds / 3600.0 / DayHours;
+				year = Math.Max(0, (int)Math.Floor(days / DaysPerYear));
+				dayOfYear = Mathf.Clamp((float)(days - (double)year * DaysPerYear), 0f, DaysPerYear - 0.0001f);
+			}
+			else
+			{
+				// At its starting hour of the day, where the bed stands.
+				JumpTo(StartTimeOfDay);
+			}
+
+			Scene scene = gameObject.scene;
+			timeline.SceneName = scene.name;
+			timeline.SceneMode = WeatherSceneMode.Own;
+			timeline.TickDelta = 1.0 / TickRate;
+			timeline.Seed = 238;
+			WeatherQuery.TickSource = () => Tick;
+			WeatherTimelines.Register(scene, timeline);
+
+			presentation = WeatherPresentation.Ensure();
+			presentation.Profile = Profile;
+			presentation.TargetCamera = Camera;
+			// The game's camera renders post-processing, which is where the frame is tonemapped; the
+			// bed's is built from code and would otherwise show a frame the game never does.
+			SkySystem.EnablePostProcessing(Camera);
+		}
+
+		/// <summary>True when the scene travelled from was running: this one runs on from the first frame.</summary>
+		private bool resumeAfterArrival;
+
+		private void Start()
+		{
+			if (!StartAir.IsZero)
+			{
+				SetAir(StartAir, 0f);
+			}
+			if (resumeAfterArrival)
+			{
+				resumeAfterArrival = false;
+				Paused = false;
+			}
+		}
+
+		private void OnDestroy()
+		{
+			if (standingDown)
+			{
+				return;
+			}
+			if (ownGroundKept && Settings != null)
+			{
+				Settings.SetBiomeMap(ownGround);
+			}
+			if (standMap != null)
+			{
+				Destroy(standMap);
+			}
+			WorldDayNightCycle.PreviewHours = null;
+			WorldDayNightCycle.PreviewLocalTime01 = null;
+			if (LocalWorldClock.Active == clock)
+			{
+				LocalWorldClock.Activate(null);
+			}
+			// Back to the game's own: the bed scales this to its clock's pace.
+			SkySchedule.RateScale = 1f;
+			WorldDayNightCycle.PreviewLatitude = null;
+			WorldDayNightCycle.PreviewLongitude = null;
+			WorldDayNightCycle.PreviewHeading = null;
+			WorldDayNightCycle.PreviewBody = null;
+			WorldDayNightCycle.PreviewClockAdvances = true;
+			SkyProfile.LargerThanLifeOverride = null;
+			WeatherTimelines.Unregister(gameObject.scene);
+			WeatherQuery.TickSource = null;
+			WeatherClient.ResetPresenters();
+			if (presentation != null)
+			{
+				Destroy(presentation.gameObject);
+			}
+			foreach (ICachedObject cached in registered)
+			{
+				cached.RemoveFromCache();
+			}
+			registered.Clear();
+		}
+
+		/// <summary>
+		/// Puts the solar system, its bodies, the calendar, the sky profiles, the weather substances
+		/// and the scene's atlas entry in the cache the game would have loaded them into. Anything already cached (a
+		/// running client) is left be.
+		/// </summary>
+		private void Cache()
+		{
+			// Standalone test beds use the same global render-profile lookup as the client boot.
+			if (Profile != null && WeatherRenderProfile.GetFirst<WeatherRenderProfile>() == null)
+			{
+				Profile.AddToCache(Profile.name); registered.Add(Profile);
+			}
+
+			if (SolarSystem != null && SolarSystemProfile.GetFirst<SolarSystemProfile>() == null)
+			{
+				SolarSystem.AddToCache(SolarSystem.name);
+				registered.Add(SolarSystem);
+				foreach (CelestialBody celestial in SolarSystem.Bodies)
+				{
+					if (celestial != null && CelestialBody.Get<CelestialBody>(celestial.ID) != celestial)
+					{
+						celestial.AddToCache(celestial.name);
+						registered.Add(celestial);
+					}
+				}
+				if (SolarSystem.Calendar != null && CalendarProfile.Get<CalendarProfile>(SolarSystem.Calendar.ID) != SolarSystem.Calendar)
+				{
+					SolarSystem.Calendar.AddToCache(SolarSystem.Calendar.name);
+					registered.Add(SolarSystem.Calendar);
+				}
+			}
+			foreach (SkyProfile profile in SkyProfiles)
+			{
+				if (profile != null && SkyProfile.Get<SkyProfile>(profile.ID) != profile)
+				{
+					profile.AddToCache(profile.name);
+					registered.Add(profile);
+				}
+			}
+			foreach (WeatherSubstance substance in Substances)
+			{
+				if (substance != null && WeatherSubstance.Get<WeatherSubstance>(substance.ID) != substance)
+				{
+					substance.AddToCache(substance.name);
+					registered.Add(substance);
+				}
+			}
+			/* And the scene's atlas entry, which is where its body, its place, its biome map and its
+			 * authored air live. The game finds it among the addressables it loaded; the bed loads
+			 * none, so WorldAtlasScene.Find answered null in play, the scene read as unplaced, and its
+			 * weather fell back to the home world. */
+			WorldAtlasScene entry = null;
+#if UNITY_EDITOR
+			entry = WorldAtlasScene.EditorLookup.Find(gameObject.scene.name);
+#endif
+			if (entry != null && WorldAtlasScene.Find(entry.SceneName) == null)
+			{
+				entry.AddToCache(entry.name);
+				registered.Add(entry);
+			}
+			Bodies.Clear();
+			SolarSystemProfile system = SolarSystemProfile.Active;
+			if (system != null)
+			{
+				foreach (CelestialBody celestial in system.Bodies)
+				{
+					if (celestial is WorldBody world)
+					{
+						Bodies.Add(world);
+					}
+				}
+			}
+		}
+
+		private void Update()
+		{
+			/* The tick counts on at its own fixed rate, held or not, as FishNet's does; the world's pace
+			 * (held, real time, raced) is the clock's anchor, set by the panel. One clock for everything:
+			 * the sky, the weather, the storms and the sea all read it, and the world's motion (waves,
+			 * wind, what falls) follows its pace — stopped when held, slowed when slowed, but never faster
+			 * than real time (WorldMotion). */
+			clock?.Advance(Time.unscaledDeltaTime);
+			ReadCalendar();
+			KeepHeldStorms();
+
+			uint tick = Tick;
+			float dt = Time.deltaTime;
+			WriteRunTrace(dt);
+			coverTimer += dt;
+			if (coverTimer >= 1f)
+			{
+				timeline.Prune(tick);
+				// The bolts are scheduled in world time, so the bed's fast clock would fire a
+				// storm's whole night of lightning in a few seconds. Scaled back to about what it
+				// would look like at the world's own pace.
+				double pace = Rate;
+				SkySchedule.RateScale = pace <= 0.0 ? 1f : 1f / Mathf.Max(1f, (float)pace / LightningPace);
+				// The ground of the world's moment, as the server's is (GroundCover): held, nothing dries or settles;
+				// raced, it races; set, it is the ground of the new moment. To watch a road dry, slow the world.
+				UpdateSceneCover(tick);
+				coverTimer = 0f;
+			}
+			presentTimer -= dt;
+			if (presentTimer > 0f || Camera == null)
+			{
+				return;
+			}
+			presentTimer = 0.1f;
+			Present();
+		}
+
+		/// <summary>
+		/// Samples the weather where the camera stands and hands it to the presenters at once,
+		/// instead of on the next tenth of a second. A probe that changes something and renders the
+		/// very next frame needs this, or it renders the state before the change.
+		/// </summary>
+		public void ForcePresent()
+		{
+			if (Camera == null)
+			{
+				return;
+			}
+			forcing = true;
+			try
+			{
+				Present();
+			}
+			finally
+			{
+				forcing = false;
+			}
+		}
+
+		private void Present()
+		{
+			uint tick = Tick;
+			// Held cover wins over what has accumulated, and it is applied here rather than in the
+			// loop so that setting it and presenting at once shows it.
+			if (CoverOverride.HasValue)
+			{
+				timeline.Cover = CoverOverride.Value;
+			}
+			Scene scene = gameObject.scene;
+			Vector3 viewer = Camera.transform.position;
+			CelestialState now = State;
+			double localTime = now != null ? now.LocalTime01 : TimeOfDay;
+
+			// Where and when the bed is, for the weather driver. In the game these come from the
+			// world clock and the scene's place on the atlas; here they come from the panel, so
+			// dragging the clock really does drive the weather forward.
+			// The timeline's own anchor, for anything that reads it alone; the weather reads the world clock
+			// itself while one is anchored (WeatherTimeline.WorldSecondsAt), pace and all.
+			timeline.WorldSecondsAtTick = WorldClock.Shared.WorldSecondsAt(tick);
+			timeline.WorldSecondsTick = tick;
+			timeline.LatitudeDegrees = latitude;
+			timeline.LongitudeDegrees = longitude;
+			// Every time, not only when the slider moves: the body's share changes with the clock — an
+			// eccentric orbit swings a world nearer and further, a second sun comes and goes, and the
+			// season moves the sun up and down this latitude's sky.
+			ApplyClimate();
+			// And on which body, so the weather's season and hour are this body's and not the scene's.
+			timeline.BodyOverride = Body;
+
+			lastSample = WeatherField.Sample(timeline, Settings, scene, viewer, tick);
+			// The year's mean on the ground here, with nothing of the moment in it: what the place IS, beside what it is doing.
+			AnnualKelvinHere = Settings != null ? BiomeSampler.Read(viewer, Settings, 0f, 0f).Climate.KelvinOrScale : 0f;
+			WeatherFrame frame = lastSample.Frame;
+			var context = new WeatherContext
+			{
+				Scene = scene,
+				Settings = Settings,
+				Timeline = timeline,
+				ViewerPosition = viewer,
+				Tick = PreciseTick,
+				WorldHours = Hours,
+				Cover = timeline.Cover,
+				Background = lastSample.Background,
+				Sample = lastSample,
+				Shelter = lastSample.Shelter,
+				Temperature = lastSample.Temperature,
+				Substance = lastSample.Substance,
+				IsDaylight = DayNight == null || DayNight.DaylightNow,
+				LocalTime01 = localTime,
+			};
+			WeatherClient.Present(frame, context);
+			if (forcing && presentation != null)
+			{
+				// Apply only records; this is what writes the globals a render is about to read.
+				presentation.Flush();
+			}
+			Presented?.Invoke(this);
+		}
+	}
+}

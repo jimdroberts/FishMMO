@@ -25,7 +25,7 @@ Shader "Hidden/FishMMO/Weather/VolumetricFogApply"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
             // The fine ground map: no weather fog in a cave (FishOpenAir).
-            #include "FishGroundMap.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 
             TEXTURE3D(_FishVolFogVolume);
             SAMPLER(sampler_FishVolFogVolume);

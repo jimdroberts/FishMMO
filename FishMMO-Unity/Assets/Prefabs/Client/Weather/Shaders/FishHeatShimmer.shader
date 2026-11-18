@@ -35,7 +35,7 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
-            #include "FishWeather.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishWeather.hlsl"
 
             float4x4 _HeatInverseVP;   // GPU clip -> world, for the point behind each pixel
             float4x4 _HeatDirectionVP; // world direction -> clip (no translation), for the mirage's mirrored ray

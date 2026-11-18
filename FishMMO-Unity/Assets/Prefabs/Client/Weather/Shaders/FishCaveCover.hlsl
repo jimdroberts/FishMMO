@@ -178,8 +178,8 @@ CoverVaryings CoverVertexMain(CoverAttributes input)
 
 #if defined(FISH_COVER_PASS_FORWARD)
 
-#include "FishAmbient.hlsl"
-#include "FishGroundMap.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 
 float3 CoverLit(float3 L, float3 radiance, float3 albedo, float3 n, float3 V, float smoothness)
 {

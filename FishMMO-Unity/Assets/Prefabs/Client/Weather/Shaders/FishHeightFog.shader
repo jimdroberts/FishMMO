@@ -46,7 +46,7 @@ Shader "Hidden/FishMMO/Weather/HeightFog"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
             #include "FishFogLayer.hlsl"
             // The fine ground map: no weather fog in a cave (FishOpenAir).
-            #include "FishGroundMap.hlsl"
+            #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 
             float4x4 _FishFogInverseVP;
             // x the eye depth this pass starts at (m): the froxel volume's far edge where it runs, 0

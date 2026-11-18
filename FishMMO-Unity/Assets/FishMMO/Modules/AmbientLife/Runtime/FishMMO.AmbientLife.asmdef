@@ -1,0 +1,16 @@
+{
+    "name": "FishMMO.AmbientLife",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

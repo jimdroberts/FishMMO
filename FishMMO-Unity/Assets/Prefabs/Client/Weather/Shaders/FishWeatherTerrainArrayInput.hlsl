@@ -143,10 +143,10 @@ void FishTerrainGpuSelectTile(uint tileIndex)
 // thin-aired world the world's own colour. Never a patch's look: those are the grass's and the plants', and on the ground
 // they blotched the layers' own textures (2026-10-15). Texel loads only, no sampler: a pass that never reads the albedo
 // (depth, shadow, depth-normals) strips it whole, with nothing left to orphan.
-#include "FishFlora.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 
 // The index map and the layer table (FishTerrainIndexMap.hlsl): loads only, no sampler.
-#include "FishTerrainIndexMap.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishTerrainIndexMap.hlsl"
 
 #ifdef FISH_TERRAIN_BACKDROP
 // The backdrop's own control maps (SceneBackdropBuilder): channel c of map k is layer 4k + c. One sampler serves all

@@ -2,7 +2,7 @@
 #define FISHMMO_SKY_COMMON_INCLUDED
 
 // Sky state, set every frame by FishMMO.Client.SkySystem (the only writer).
-#include "FishWeather.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishWeather.hlsl"
 
 float4 _FishSkyZenith;      // rgb
 // x 1 while the sky reflection probe captures the sky (SkySystem.OnBeginCamera), y the sky's light through the cloud

@@ -47,7 +47,7 @@ Shader "FishMMO/Water/Spray"
             // Soft where it meets the water and the beach; set by WaterSurface against the URP asset.
             #pragma multi_compile_fragment _ _WATER_DEPTH
             // The cloud's shadow on the sun, read in the vertex stage where the spray is lit.
-            #include_with_pragmas "Assets/Prefabs/Client/Weather/Shaders/FishLightCookieVariants.hlsl"
+            #include_with_pragmas "Assets/FishMMO/Shaders/FishLightCookieVariants.hlsl"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"

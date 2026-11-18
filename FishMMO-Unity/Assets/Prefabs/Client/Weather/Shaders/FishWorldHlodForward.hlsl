@@ -2,7 +2,7 @@
 #define FISH_INDIRECT_INSTANCED 1
 static float FishIndirectLodFade = 0.0;
 #include "FishWorldHlodSetup.hlsl"
-#include "FishWeatherLitForwardPass.hlsl"
+#include "Assets/FishMMO/Shaders/Surface/FishWeatherLitForwardPass.hlsl"
 struct HlodAttributes
 {
     float4 positionOS : POSITION;

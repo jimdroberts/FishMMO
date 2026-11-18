@@ -1,0 +1,30 @@
+{
+    "name": "FishMMO.WorldDesign.Harness.Editor",
+    "rootNamespace": "FishMMO.TestHarness.World.Editor",
+    "references": [
+        "FishMMO.TestHarness.World",
+        "FishMMO.Client",
+        "FishMMO.Client.Weather.Editor",
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Water",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "FishMMO.TestHarness.World.Editor",
+        "FishMMO.WorldDesign.Editor",
+        "FishMMO.Naming"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
