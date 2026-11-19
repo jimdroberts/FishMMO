@@ -15,7 +15,7 @@ namespace FishMMO.Client
 	/// On WebGPU URP's lighting cbuffers are plain globals (FishShadowVariants.hlsl: the pipelines must stay within the device's
 	/// 10 dynamic uniform buffers), which put ~14 KB of arrays into each lit program's $Globals; Unity copies a program's whole
 	/// $Globals on every pass application, and that copy was the largest engine cost left in the browser
-	/// (Docs/Rendering/2026-11-03/webgpu-light-buffer).
+	/// (measured 2026-11-03).
 	/// </para>
 	/// <para>
 	/// The table is not a second account of URP's light setup. A compute kernel (FishLightTableGather, in the profile's

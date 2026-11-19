@@ -228,7 +228,7 @@ unsigned. So does a default key file that exists but cannot be read.
 ### 3. Ship the public half to clients
 
 Put the public key in `CertificatePinSet.VersionManifestPublicKeyBase64` by setting
-`values.VersionManifestPublicKeyBase64` in `Assets/Scripts/Client/Security/CertificatePins.generated.cs`. It is a **separate** key from the
+`values.VersionManifestPublicKeyBase64` in `Assets/FishMMO/Client/Security/CertificatePins.generated.cs`. It is a **separate** key from the
 certificate-pin manifest key; do not reuse one for both.
 
 ### Rollout order

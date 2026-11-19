@@ -1,28 +1,27 @@
 # FishMMO Unit Tests
 
-The FishMMO test suite. **367 fixtures / ~3,730 test methods** live here, split across two
-assemblies:
+The core's test suite: **397 fixtures / ~3,660 test methods** (counted 2026-11-19), in two assemblies:
 
-- **`FishMMO.UnitTests`** — 362 EditMode fixtures, all running without a NetworkManager, a
+- **`FishMMO.UnitTests`**: 390 EditMode fixtures, all running without a NetworkManager, a
   physics simulation, or a live server.
-- **`FishMMO.UnitTests.PlayMode`** — 5 fixtures that drive the simulation harness in
+- **`FishMMO.UnitTests.PlayMode`**: 7 fixtures that drive the simulation harness in
   `Assets/FishMMO/Tests/TestHarness/` under a real player loop and a real FishNet server.
 
-A fixture here is a `.cs` file with at least one `[Test]`, `[UnityTest]` or `[TestCase]`
-method; the counts are regenerated from the folders, not maintained by hand.
+A fixture here is a `.cs` file with at least one `[Test]`, `[UnityTest]` or `[TestCase]` method. Each module's tests
+moved with it to `Assets/FishMMO/Modules/<Module>/Tests` (396 more fixtures); a core test that still reads a module's
+files checks `InstalledModules` and skips when the module is removed.
 
 | Area | Folder | Fixtures | What it covers |
 | --- | --- | --- | --- |
-| **Prediction & combat** | `Prediction/` | 97 | The unified prediction pipeline, delta serialization, lag compensation, the attribute ledger, buffs, cooldowns, abilities, combat refusals, observer sync/culling, bandwidth budgets |
-| **Gameplay, UI, content, server rules** | root | 168 | Auth and the login queue, UI Toolkit panels, items/trade/merchant, abilities, guild/group/arena, chat, naming & races, world map, nameplates, staff tools, persistence and hot-path pins, network statistics, prefab authoring |
-| **NPC AI** | `AI/` | 39 | Combat decisions, personalities, kiting, threat and the leash evade, packs, boss adds, scheduling and LOD, body-grid separation, pets, NavMesh bake agreement, spawners |
-| **Housing** | `Housing/` | 14 | Plot identity, ownership, access, placement, lifecycle, tax billing and routing, vault fees, the plot-sync window |
-| **Weather & sky** | `Weather/` | 13 | The weather model, storm shapes, exposure, sky and clock, presentation, the host's scheduling, the wire |
-| **World design** | `WorldDesign/`, `Celestial/` | 7 | Atlas geometry and routing, scene generation, world data, the world-systems audit, planet surfaces |
-| **Servers & operations** | `Server/` | 12 | Scene placement and instance lifetimes, world routing and its clock, the world-queue place memory, shutdown countdowns, maintenance and daemon clocks, server bandwidth |
-| **PlayMode sims** | `PlayMode/` | 5 | The four simulation scenes plus an `Update`-dispatch cost probe |
-| **Currency / Map** | `Currency/`, `Map/` | 8 | Spend/grant paths, the persisted ledger numbering, trade currency settlement, map projection, markers and the explored readout |
-| **Persistence, travel, NPC designer** | `Persistence/`, `Teleport/`, `Waypoint/`, `NPC/` | 4 | The 2026-09-07 persistence audit invariants, teleporter keys, waypoint unlock bits, the dashboard NPC designer |
+| **Prediction & combat** | `Prediction/` | 106 | The unified prediction pipeline, delta serialization, lag compensation, the attribute ledger, buffs, cooldowns, abilities, combat refusals, observer sync/culling, bandwidth budgets |
+| **Gameplay, UI, content, server rules** | root | 196 | Auth and the login queue, UI Toolkit panels, items, abilities, chat, races, world map, nameplates, persistence and hot-path pins, network statistics, prefab authoring, rendering and shader audits, the asset reference audit |
+| **NPC AI** | `AI/` | 45 | Combat decisions, personalities, kiting, threat and the leash evade, packs, boss adds, scheduling and LOD, body-grid separation, pets, NavMesh bake agreement, spawners |
+| **Plots** | `Housing/` | 6 | The plot pieces the core keeps: identity, owner, access, state (the housing system's tests are in the Housing module) |
+| **World** | `Weather/`, `WorldDesign/`, `PointsOfInterest/` | 9 | Weather exposure, the core surface and indirect shaders, terrain strippers, scene settings, floating boats, portal activation |
+| **Servers & operations** | `Server/` | 14 | Scene placement and instance lifetimes, world routing and its clock, the world-queue place memory, shutdown countdowns, maintenance and daemon clocks, server bandwidth |
+| **PlayMode sims** | `PlayMode/` | 7 | The four simulation scenes, the prediction probe, the prop collider streamer, and an `Update`-dispatch cost probe |
+| **Currency / Map** | `Currency/`, `Map/` | 8 | Spend/grant paths, the persisted ledger numbering, map projection, markers and the explored readout |
+| **Persistence, travel, NPC designer, modules** | `Persistence/`, `Teleport/`, `Waypoint/`, `NPC/`, `CoreModules/` | 6 | The 2026-09-07 persistence audit invariants, teleporter keys, waypoint unlock bits, the dashboard NPC designer, the core's own modules |
 
 The suite is a **regression ledger** as much as a test suite: a large share of the
 `Prediction/` fixtures are named after the audit that found the defect
@@ -122,7 +121,7 @@ regexes.
 | Unity batch mode (headless) | Supported | `-runTests -testPlatform EditMode`; see [Running](#running). |
 | Player builds | Not applicable | Both assemblies carry the `UNITY_INCLUDE_TESTS` define constraint. |
 
-Requirements: Unity 6.3 LTS, the `FishMMO-Auth` DLLs present in `Assets/Dependencies/`, and the Unity Test Framework package.
+Requirements: Unity 6.6 (6000.6.8f1), the `FishMMO-Auth` DLLs present in `Assets/Dependencies/`, and the Unity Test Framework package.
 
 `FishMMO.UnitTests.asmdef` is `"includePlatforms": ["Editor"]` with
 `"defineConstraints": ["UNITY_INCLUDE_TESTS", "!UNITY_SERVER"]` — the `!UNITY_SERVER`

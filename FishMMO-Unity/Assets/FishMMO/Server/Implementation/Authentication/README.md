@@ -110,7 +110,7 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 | Linux    | Yes       | Fully supported as a server host |
 | WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting backend:** IL2CPP
 
 ## Features
@@ -172,7 +172,7 @@ Workers enqueue `Action` delegates into a `ConcurrentQueue<Action>` held by `Bas
 
 This module is an integrated part of the FishMMO Unity project. The server authenticator classes are compiled as part of the server assembly and depend on `FishMMO-AuthShared.dll` and `FishMMO-ServerAuth.dll` (auto-copied to `Assets/Dependencies/` by the FishMMO-Auth build) for all crypto service classes, core types and authenticator cores.
 
-1. Open the FishMMO-Unity project in Unity 6.3 LTS.
+1. Open the FishMMO-Unity project in Unity 6.6 (6000.6.8f1).
 2. Ensure FishNet, SecureRemotePassword, `FishMMO-AuthShared.dll`, `FishMMO-ServerAuth.dll`, and all database service assemblies are present in the project.
 3. The authenticator components (`ServerAuthenticator`, `TokenServerAuthenticator`) are attached to server prefabs and configured via the Unity Inspector.
 4. Build using IL2CPP scripting backend for production deployment.

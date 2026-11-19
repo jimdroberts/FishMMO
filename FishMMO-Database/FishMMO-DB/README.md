@@ -38,7 +38,7 @@ This document describes the project layout, the supported platforms, and — at 
 |---|---|
 | .NET Standard 2.1 (this library) | Yes |
 | .NET 8.0 hosts (LoginServer / WorldServer / SceneServer launchers, web services) | Yes |
-| Unity 6.3 LTS (Editor + headless server builds) | Yes |
+| Unity 6.6 (Editor + headless server builds) | Yes |
 | Linux / Windows / macOS | All supported |
 
 | Backing Store | Notes |

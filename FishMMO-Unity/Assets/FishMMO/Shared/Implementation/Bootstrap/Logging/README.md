@@ -59,7 +59,7 @@ Both `UnityConsoleLogger` and `UnityConsoleFormatter` use shared column widths f
 
 | Requirement    | Version / Detail |
 |----------------|------------------|
-| Unity          | 6.3 LTS          |
+| Unity          | 6.6 (6000.6.8f1)          |
 | Scripting Backend | IL2CPP        |
 
 ## Features
@@ -80,7 +80,7 @@ Both `UnityConsoleLogger` and `UnityConsoleFormatter` use shared column widths f
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend.
+- Unity 6.6 (6000.6.8f1) with IL2CPP scripting backend.
 - The `FishMMO.Logging` framework must be present in the project (provides `Log`, `ILogger`, `IConsoleFormatter`, `ILoggerConfig`, `LogEntry`, `LogLevel`, and `ConsoleFormatterHelpers`).
 - `UnityEngine` assemblies (provides `Debug`, `ILogHandler`, `LogType`).
 

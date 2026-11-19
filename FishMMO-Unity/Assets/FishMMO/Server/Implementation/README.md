@@ -48,45 +48,36 @@ The Implementation layer sits between the abstract `Server.Core` interfaces and 
 
 ### Scene-Server System Inventory
 
-Everything under `World/SceneServer/`. All are `ServerBehaviour` ScriptableObject assets except
-the two noted otherwise. Each has its own README with the detail; this table is the index.
+Everything under `World/SceneServer/`. All are `ServerBehaviour` ScriptableObject assets listed in `SceneServer.unity`,
+except where noted. Each folder has its own README with the detail; this table is the index.
 
 | System | Type | Notes |
 |---|---|---|
-| Scene server lifecycle | `SceneServerSystem` (+ `.AdminCommands*`, `.GameMasterCommands*`, `.OperatorCommands`, `.StaffConsole`, `.ServerControl`, `.Weather` partials) | Scene load/unload, instance placement via `SceneServerPlacementPolicy`, instance lifetimes (`SceneInstanceLifetime`); `.Weather` hosts `WeatherHost`. |
-| Character | `CharacterSystem` (+ `.Connection`, `.Loading`, `.Saving`, `.Social`, `.Instance`, `.CombatLogout`, `.Unstuck` partials) | Spawn/despawn, persistence, combat-logout. |
-| Character inventory | `CharacterInventorySystem` | Inventory/equipment/bank/bag operations and the exchange funnel. |
-| Interactable | `InteractableSystem` (+ 11 partials) | Merchants, containers, dialogue, mailbox, corpses, ability crafting, waypoints — **and arenas and the group/dungeon finders** (see below). |
-| Chat | `ChatSystem` (+ `.LocalChat`, `.WorldChat`, `.TellChat`, `.GroupChat`, `.ArenaChat`, `.SupportCommands`, `.Help`, `.Audit`, `.ReportPlayer`, `.FloodMute` partials) | Per-sender rate gate (`ChatRateGate`) and flood mute (`ChatFloodMute`). |
-| Guild | `GuildSystem` (+ `.Authority`, `.Ranks`, `.Recruitment` partials) | Rank ladder, authority checks, invites/applications. |
-| Party | `PartySystem` | Membership, plus `PartyCombatMeterData` server-side meters. |
-| Friend | `FriendSystem` | |
-| Trade | `TradeSystem` (+ `.Handlers`, `.Commit` partials) | Player-to-player trade; commits through `ICharacterInventorySystem.TryRunExchange`, which enqueues `CharacterInventorySystem.RunExchangeAsync`. |
-| Housing | `HousingSystem` (+ `.Access`, `.Building`, `.Network`, `.Plots`, `.Sync`, `.Tax`, `.Vault` partials) | **Server-only, and off by default** (see below). |
-| Quest | `QuestSystem` | |
-| Achievement | `AchievementSystem` | |
+| Scene server lifecycle | `SceneServerSystem` (+ `.NetworkSchedule`, `.ServerControl`, `.WorldClock` partials) | Scene load/unload, instance placement via `SceneServerPlacementPolicy`, instance lifetimes (`SceneInstanceLifetime`), server lock and shutdown, the world clock. Starts the modules' `ISceneServerModuleService`s (`SceneServerModuleServices`). Hosts the operator command contracts (`OperatorCommandContracts.cs`, `OperatorCommandParsing.cs`). |
+| Character | `CharacterSystem` (+ `.Connection`, `.Loading`, `.Saving`, `.Social`, `.Instance`, `.CombatLogout`, `.Unstuck`, `.CloudWorld` partials) | Spawn/despawn, load and save (modules join through `CharacterPersistenceParticipant`), combat-logout. |
+| Character inventory | `CharacterInventorySystem` | Inventory/equipment/bank/bag operations and the exchange funnel (`TryRunExchange`). |
+| Interactable | `InteractableSystem` (+ `.Container`, `.Dialogue`, `.Portal` partials) | Containers, dialogue, portals; raises `OnPlayerInteracting` for modules. |
+| Chat | `ChatSystem` (+ `.LocalChat`, `.WorldChat`, `.TellChat`, `.GroupChat`, `.ArenaChat`, `.Help`, `.Audit`, `.FloodMute` partials) | Per-sender rate gate (`ChatRateGate`) and flood mute (`ChatFloodMute`); `OnSendSystemMessage` for modules. |
+| Achievement | `AchievementSystem`, `AchievementPersistence` | Counts `Accomplishments.Record` and grants tier rewards. |
 | Pet | `PetSystem` | |
 | Hotkey | `HotkeySystem` | |
 | Naming | `NamingSystem` | Name resolution/caching for IDs the client has not seen. |
 | Scene channel | `SceneChannelSystem` | |
-| Ability | `AbilitySystem` | Granting and forgetting crafted abilities. |
+| Ability | `AbilitySystem` | Granting and forgetting abilities (`TryGrantAbility`). |
 | AI | `AISystem` | Runs the process's one `AIBrainHost`; NPC brains, packs (`NPCGroup`) and the AI tick. |
 | Spawner | `SpawnerSystem` | Populates each loaded world scene from its baked spawn table and drives respawns. |
-| Leaderboard | `LeaderboardSystem` | PvP and PvE boards read from the database, cached briefly per page. |
-| Waypoint | `WaypointPersistence`, `WaypointSceneAudit` (static helpers, not behaviours) | Discovered-waypoint pages, OR-merged; the audit compares live `WaypointRegistry` indices against baked `WorldSceneDetails.Waypoints` once per loaded scene. |
-| Scene-server auth | `SceneServerAuthenticator` | Not a behaviour — a `TokenServerAuthenticator` subclass attached to the `NetworkManager`. |
+| Navigation | `NavMeshSystem` | |
+| Clock | `WorldClockHost` (not a behaviour; `SceneServerSystem.WorldClock` runs it) | The shared world clock. |
+| Waypoint | `WaypointSceneAudit` (static, not a behaviour) | Compares live `WaypointRegistry` indices against baked `WorldSceneDetails.Waypoints` once per loaded scene. |
+| Scene-server auth | `SceneServerAuthenticator` | Not a behaviour: a `TokenServerAuthenticator` subclass attached to the `NetworkManager`. |
 
-**Arenas and the group/dungeon finder are not separate systems.** They are partials of
-`InteractableSystem`: `InteractableSystem.Arena.cs`, `InteractableSystem.ArenaMatch.cs`,
-`InteractableSystem.GroupFinder.cs` and `InteractableSystem.DungeonFinder.cs`. There is no
-`ArenaSystem` or `GroupFinderSystem` type. Arenas do have a client UI (`Client/GUI/World/Arena/`).
-
-**Housing ships disabled and has no client UI.** `HousingSystem.ownershipMode` defaults to
-`HousingOwnershipMode.Neither`, so `IsHousingEnabled` is false and `InitializeOnce` returns
-early — a stock server runs no housing at all. The system is in `SceneServer.unity`'s behaviour
-list, with its asset left at `Neither`, so enabling housing is a change to that one field. There is no housing UI anywhere under
-`Assets/FishMMO/Client/`; the system is server-side plumbing (plots, building, taxes, vaults,
-access lists) with no way for a player to reach it yet.
+**Module systems** are not in `SceneServer.unity`'s list. Each module's asset carries the `SceneServer_Systems`
+Addressables label and the scene server adopts it at start (`Server.AdoptModuleSystems`): `AbilityCraftingSystem`,
+`CommerceSystem` and `TradeSystem` (Commerce), `FactionSystem`, `HousingSystem`, `LeaderboardSystem`,
+`MatchmakingSystem` (group finder, dungeon finder, arenas), `QuestSystem`, `FriendSystem` / `PartySystem` /
+`GuildSystem` (Social), `StaffSystem` (the `/gm` and `/admin` commands, the staff console, support), and
+`WaypointTravelSystem` (Travel). World Simulation adds `WeatherServerService` as a scene server module service. See
+[Assets/FishMMO/README.md](../../README.md#modules).
 
 ## Supported Platforms
 
@@ -99,7 +90,7 @@ access lists) with no way for a player to reach it yet.
 
 | Requirement | Version |
 |---|---|
-| Unity | 6.3 LTS |
+| Unity | 6.6 (6000.6.8f1) |
 | Scripting Backend | IL2CPP |
 | FishNet | Runtime dependency |
 
@@ -137,7 +128,7 @@ access lists) with no way for a player to reach it yet.
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend.
+- Unity 6000.6 (the project's editor version is in `ProjectSettings/ProjectVersion.txt`) with the IL2CPP scripting backend.
 - FishNet networking framework (imported via Plugins).
 - KinematicCharacterController package.
 - PostgreSQL database (configured via `appsettings.json`).
@@ -149,11 +140,26 @@ access lists) with no way for a player to reach it yet.
 
 This is an integrated module within the FishMMO Unity project. No separate installation is required.
 
-1. Open the FishMMO-Unity project in Unity 6.3 LTS.
+1. Open the FishMMO-Unity project in Unity.
 2. Ensure all dependencies (FishNet, KCC, ZString, Addressables) are imported.
 3. Configure `appsettings.json` for database connection strings.
-4. Build server executables via Unity Build Settings with the desired server scenes.
+4. Build the server through **FishMMO Dashboard → Build** (it runs the build steps and the Addressables build; a plain Unity Build Settings build skips them).
 5. Alternatively, enter Play Mode with the `ServerLauncher` bootstrap scene to run locally.
+
+### Database assemblies in IL2CPP server builds
+
+UnityLinker strips constructors that EF Core and Microsoft.Extensions.DependencyInjection create by reflection, and the
+server then fails before it registers (2026-10-25: `SingletonOptionsInitializer` lost its constructor).
+`ServerDatabaseLinkerProcessor` (an `IUnityLinkerProcessor`, in the dashboard's `CustomBuildTool/Linker/`) writes
+`Library/FishMMO/Linker/ServerDatabase.link.xml` for **dedicated-server builds only**, preserving the runtime EF Core,
+Npgsql, naming-convention, FishMMO database and DI/configuration/cache/logging assemblies. It reads the build report's
+standalone subtarget, not the editor's `UNITY_SERVER` symbol, returns nothing for clients, WebGL or mobile, and lives
+outside `Assets` so client builds never pick it up. Editing XML cannot repair an already built `GameAssembly.so`: rebuild
+the server.
+
+Npgsql itself is a patched build (`FishMMO-Dependencies/ThirdParty/Npgsql.UnityAot`): Unity's AOT expression interpreter
+cannot build Npgsql's `ref`-parameter validator delegates, and IL2CPP reports a non-blocking connect as
+`SocketError.InProgress`, which the stock driver did not accept. See that folder's README.
 
 ## Quick Start Guides
 
@@ -354,17 +360,14 @@ flowchart TD
    │ · LoginQueue │  │ · WorldScene   │  │ · Character          │
    │ · AcctCreate │  │ · Auth         │  │ · CharacterInventory │
    │ · CharCreate │  │                │  │ · Interactable       │
-   │ · CharSelect │  └────────────────┘  │    (+ Arena,         │
-   │ · ServerSel  │                      │     Group/Dungeon    │
-   └──────────────┘                      │     Finder partials) │
-                                         │ · Chat / Guild       │
-   KickRequestSystem polls the database  │ · Party / Friend     │
-   for kick rows and disconnects the     │ · Trade              │
-   matching accounts. It lives at        │ · Quest / Achievement│
-   Implementation/KickRequest/.          │ · Pet / Hotkey       │
-                                         │ · Naming             │
+   │ · CharSelect │  └────────────────┘  │ · Chat / Achievement │
+   │ · ServerSel  │                      │ · Pet / Hotkey       │
+   └──────────────┘                      │ · Naming             │
                                          │ · SceneChannel       │
-                                         │ · Housing (disabled) │
+   KickRequestSystem polls the database  │ · AI / Spawner       │
+   for kick rows and disconnects the     │ + module systems     │
+   matching accounts. It lives at        │   (SceneServer_      │
+   Implementation/KickRequest/.          │    Systems label)    │
                                          └──────────────────────┘
 ```
 
@@ -434,40 +437,31 @@ Implementation/
 │   └── ServerSelect/                            #   Server selection workflow
 │
 └── World/                                       # World and scene server systems
-    ├── SceneServer/                             #   Scene-server-specific systems
+    ├── SceneServer/                             #   Scene-server-specific systems (module systems live in their modules)
     │   ├── Ability/                             #     AbilitySystem
-    │   ├── Achievement/                         #     AchievementSystem
+    │   ├── Achievement/                         #     AchievementSystem, AchievementPersistence
     │   ├── AI/                                  #     AISystem, AIBrainHost, brains, packs (NPCGroup)
     │   ├── Authentication/                      #     SceneServerAuthenticator
-    │   ├── Character/                           #     CharacterSystem + 7 partials
-    │   ├── CharacterInventory/                  #     CharacterInventorySystem, ItemContainerMapping
-    │   ├── Chat/                                #     ChatSystem + 10 partials, ChatRateGate, ChatFloodMute
-    │   ├── Friend/                              #     FriendSystem
-    │   ├── Guild/                               #     GuildSystem + Authority/Ranks/Recruitment, GuildAuthority
+    │   ├── Character/                           #     CharacterSystem + 8 partials, CharacterPersistence (participants)
+    │   ├── CharacterInventory/                  #     CharacterInventorySystem
+    │   ├── Chat/                                #     ChatSystem + 8 partials, ChatRateGate, ChatFloodMute, ChatMutePolicy
+    │   ├── Clock/                               #     WorldClockHost
     │   ├── Hotkey/                              #     HotkeySystem
-    │   ├── Housing/                             #     HousingSystem + 7 partials (off by default, no client UI)
-    │   ├── Interactable/                        #     InteractableSystem + 11 partials
-    │   │                                        #       (Merchant, Container, Dialogue, Mailbox, Corpse,
-    │   │                                        #        AbilityCraft, Waypoint, Arena, ArenaMatch,
-    │   │                                        #        GroupFinder, DungeonFinder)
-    │   ├── Leaderboard/                         #     LeaderboardSystem
+    │   ├── Interactable/                        #     InteractableSystem + Container, Dialogue, Portal partials
     │   ├── Naming/                              #     NamingSystem
-    │   ├── Party/                               #     PartySystem, PartyCombatMeterData
+    │   ├── Navigation/                          #     NavMeshSystem
     │   ├── Pet/                                 #     PetSystem
-    │   ├── Quest/                               #     QuestSystem
     │   ├── SceneChannel/                        #     SceneChannelSystem
     │   ├── Spawner/                             #     SpawnerSystem, spawn tables, pooling
-    │   ├── Trade/                               #     TradeSystem + Handlers/Commit, TradeSession, TradeExchange
-    │   ├── Waypoint/                            #     WaypointPersistence, WaypointSceneAudit (static helpers)
-    │   ├── Weather/                             #     WeatherHost (driven by SceneServerSystem.Weather)
+    │   ├── Waypoint/                            #     WaypointSceneAudit (static helper)
     │   └── SceneServer/                         #     Scene server lifecycle
     │       ├── SceneServerSystem.cs
-    │       ├── SceneServerSystem.AdminCommands*.cs      # + .Character, .Economy, .Weather
-    │       ├── SceneServerSystem.GameMasterCommands*.cs # + .Moderation, .Support, .World
-    │       ├── SceneServerSystem.OperatorCommands.cs
-    │       ├── SceneServerSystem.StaffConsole.cs
+    │       ├── SceneServerSystem.NetworkSchedule.cs
     │       ├── SceneServerSystem.ServerControl.cs
-    │       ├── SceneServerSystem.Weather.cs
+    │       ├── SceneServerSystem.WorldClock.cs
+    │       ├── SceneServerModuleServices.cs     # ISceneServerModuleService host
+    │       ├── OperatorCommandContracts.cs      # OperatorCommand, IOperatorCommandHost, OperatorCommandProvider
+    │       ├── OperatorCommandParsing.cs
     │       ├── SceneServerPlacementPolicy.cs
     │       ├── SceneServerRuntimeData.cs
     │       ├── SceneServerSystemMainThreadQueueData.cs
@@ -504,14 +498,16 @@ ScriptableObject
     ├── ServerSelectSystem
     ├── WorldServerSystem
     ├── WorldSceneSystem
-    ├── SceneServerSystem            (partial: .AdminCommands, .ServerControl)
+    ├── SceneServerSystem            (partial: .NetworkSchedule, .ServerControl, .WorldClock)
     ├── KickRequestSystem
     ├── ServerWindowTitleUpdater
-    └── (scene-server systems: CharacterSystem, CharacterInventorySystem, InteractableSystem,
-         ChatSystem, GuildSystem, PartySystem, FriendSystem, TradeSystem, HousingSystem,
-         QuestSystem, AchievementSystem, PetSystem, HotkeySystem, NamingSystem,
-         SceneChannelSystem, AbilitySystem, AISystem, SpawnerSystem, LeaderboardSystem —
-         several of them `partial`)
+    ├── (scene-server systems: CharacterSystem, CharacterInventorySystem, InteractableSystem,
+    │    ChatSystem, AchievementSystem, PetSystem, HotkeySystem, NamingSystem,
+    │    SceneChannelSystem, AbilitySystem, AISystem, SpawnerSystem, NavMeshSystem —
+    │    several of them `partial`)
+    └── (module systems, in Assets/FishMMO/Modules: AbilityCraftingSystem, CommerceSystem,
+         TradeSystem, FactionSystem, HousingSystem, LeaderboardSystem, MatchmakingSystem,
+         QuestSystem, FriendSystem, PartySystem, GuildSystem, StaffSystem, WaypointTravelSystem)
 
 RuntimeDataContainer : IRuntimeDataContainer
 ├── LoginServerRuntimeData

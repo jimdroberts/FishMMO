@@ -59,5 +59,5 @@ Unity's AOT profile; the compatibility driver passed both framework-profile prob
 and actual standalone dedicated-server Mono and IL2CPP players. Checks include all
 77 EF entity models, registry reads, asynchronous EF queries, tracked synthetic-row
 materialization, ten parameter roundtrips and validator exception propagation.
-No application rows were modified. Evidence is under
-`FishMMO-Unity/Docs/ServerDatabaseLinking/2026-10-25` in the repository root.
+No application rows were modified. The result files were not kept;
+`FishMMO-Dependencies/Tools/DatabaseRuntimeProbe` reruns the checks.

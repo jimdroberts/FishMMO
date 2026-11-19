@@ -61,7 +61,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 
 | Requirement       | Version / Detail |
 |-------------------|------------------|
-| Unity             | 6.3 LTS          |
+| Unity             | 6.6 (6000.6.8f1)          |
 | Scripting Backend | IL2CPP           |
 
 ## Features
@@ -90,7 +90,7 @@ Every AES-GCM encrypt/decrypt call inside the core is wrapped in `try/catch (Cry
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend.
+- Unity 6.6 (6000.6.8f1) with IL2CPP scripting backend.
 - FishNet Networking framework (`FishNet.Authenticating.Authenticator` base class, `NetworkManager`, `ClientManager`, `Broadcast` system).
 - `SecureRemotePassword` library — provides `SrpClient`, `SrpParameters`, `SrpEphemeral`, `SrpSession` for 2048-bit SHA-512 SRP-6a.
 - The FishMMO-Auth libraries, built as three DLLs: `FishMMO-AuthShared.dll` (everything below), `FishMMO-ClientAuth.dll` (`ClientAuthenticatorCore`), and `FishMMO-ServerAuth.dll`, which the client does not use:

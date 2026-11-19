@@ -50,7 +50,7 @@ A **client** build runs, around the addressables step:
 **Server builds skip both**, which is what keeps map images out of server bundles; the group name
 carries "Client" so that a group which somehow lingered would still be excluded by substring. A
 bake that throws is logged and does not fail the build — the world map falls back to a plain
-background. `BakeWorldMaps` / `CleanWorldMaps` in `CustomBuildTool` are the two hooks.
+background. `WorldMapBuildStep` / `WorldMapCleanupStep` (`Shared/Implementation/Tools/Extensions/Unity/Editor/WorldMapBuildSteps.cs`, Order 300) are the two hooks.
 
 The bake writes no scene. It reads the loading image off `WorldSceneSettings` rather than moving
 it, and it never assigns the definition back onto the component — a scene that must share one map

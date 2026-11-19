@@ -3,13 +3,14 @@
 
 # FishMMO
 
-A modular, open-source MMO framework built on **Unity 6.4**, **FishNet**, **QUIC/WebTransport**, and **PostgreSQL**.
+A modular, open-source MMO framework built on **Unity 6.6**, **FishNet**, **QUIC/WebTransport**, and **PostgreSQL**.
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+  - [Core and modules](#core-and-modules)
 - [Supported Platforms](#supported-platforms)
 - [Prerequisites](#prerequisites)
 - [Installation Guide](#installation-guide)
@@ -76,12 +77,12 @@ FishMMO is a complete multiplayer online game framework consisting of:
 
 | Component | Description |
 |---|---|
-| **FishMMO-Unity** | Unity project containing client, server, and shared game code (1,247 C# files) — a unified client-side prediction pipeline with lag-compensated hit resolution, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
+| **FishMMO-Unity** | Unity project containing client, server, and shared game code (about 3,600 C# files: the core and 18 optional modules) — a unified client-side prediction pipeline with lag-compensated hit resolution, modular character visuals, tick-driven archetype AI with threat and pet systems, ECA trigger system |
 | **FishMMO-Auth** | Transport-agnostic .NET authentication library (SRP-6a, X25519 ECDH, token auth, TOTP 2FA) |
-| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (55 entities/tables, 55 services) |
+| **FishMMO-Database (FishMMO-DB)** | PostgreSQL data-access layer using Entity Framework Core + Npgsql (74 tables, 74 services) |
 | **FishMMO-WebTransport** | C++ native library wrapping MsQuic (QUIC/HTTP3) — P/Invoked from C# as a FishNet transport plugin |
 | **FishMMO-Installer** | Cross-platform .NET 8 console tool that automates dependency installation |
-| **FishMMO-Dependencies** | Centralised NuGet dependency aggregator (43 packages, netstandard2.1) — copies DLLs to Unity |
+| **FishMMO-Dependencies** | Centralised NuGet dependency aggregator (42 packages, netstandard2.1) — copies DLLs to Unity |
 | **FishMMO-Logger** | Flexible logging library with file, email, and console backends |
 | **FishMMO-SharedUtility** | Pure C# utility library shared between client and server projects |
 | **FishMMO-AppHealthMonitor** | Daemon that monitors, auto-restarts, and health-checks server processes |
@@ -98,6 +99,41 @@ The server architecture uses three server types:
 - **SceneServer** — Runs gameplay simulation for individual world scenes (chat, combat, inventory, guilds, etc.).
 
 All three are launched from a single `GameServer` executable with a command-line argument (`LOGIN`, `WORLD`, or `SCENE`).
+
+### Core and modules
+
+The Unity code is split into a **core** and optional **modules**. The core is what every game needs: log in, create a
+character, enter a world scene, move, fight, chat and save. A module is a feature a game may leave out: delete its
+folder under `FishMMO-Unity/Assets/FishMMO/Modules/` and the game still compiles, builds and runs. Its database tables
+and rows stay in place, unused. The core never names a module; modules plug in through assembly attributes
+(`GameModule`, `CharacterPart`, `CharacterPersistence`, `HarmRelation`, `OperatorCommandProvider`) and Addressables
+labels (`SceneServer_Systems` for server systems, `ClientWorldGUI_Panels` for windows).
+
+| Module | What it is | Remove together with |
+|---|---|---|
+| Ability Crafting | Crafting new abilities at an ability crafter | |
+| Archetypes | A player's archetype: set, announced, saved, checked | |
+| Commerce | Merchants, mail, corpse loot, player trade | |
+| Factions | Faction standings, the aggression toggle | |
+| Housing | Plots, building, rent, guests, the house vault | |
+| Leaderboards | PvP and PvE boards | |
+| Matchmaking | Group finder, dungeon finder and instances, arenas | |
+| Quests | Quests, the quest log, quest givers | |
+| Social | Friends, party, guild | |
+| Staff and Support | `/gm`, `/admin`, the staff console, reports and tickets | |
+| Travel | Waypoint discovery and fast travel | |
+| World Simulation | Sky, time, weather, climate, biomes, the atlas | All world modules |
+| Water | Sea, shores, rivers, lakes, lava | All world modules |
+| Terrain | GPU drawing of trees, props, grass and scatter | World Test Bed, World Design, Naming |
+| Ambient Life | Birds, sea life, motes, leaves, site effects | |
+| Naming | The name generator | World Design |
+| World Design | The world generator and its editor tools (editor only) | |
+| World Test Bed | The world test bed's probes (development only) | World Design, Naming |
+
+Without the world modules a world scene is lit by its own sun under a plain sky colour, and the scene's Unity terrain
+draws itself. Each module's README lists the seams it uses and what it leaves in the core; the layout, the seams and the
+removal check (the module gate) are in
+[FishMMO-Unity/Assets/FishMMO/README.md](FishMMO-Unity/Assets/FishMMO/README.md).
 
 ### Networking Architecture
 
@@ -152,7 +188,7 @@ For the complete end-to-end connection flow, see [CONNECTION_PIPELINE.md](CONNEC
 
 - **Git** for cloning the repository
 - **.NET 8.0 SDK**
-- **Unity Hub** with **Unity 6.4** (the installer can install these for you)
+- **Unity Hub** with **Unity 6.6 (6000.6.8f1)** (the installer can install these for you)
 - **CMake 3.20+** and a C++17 compiler (for building the WebTransport native library)
 - **OpenSSL 3+** development headers (libssl-dev / openssl-devel)
 - **PostgreSQL 14+** (the installer can install this for you)
@@ -519,7 +555,7 @@ After building all C# projects and the WebTransport native library, open the Uni
 
 1. Open **Unity Hub**
 2. Click **ADD** → Select the `FishMMO-Unity` directory
-3. Open the project with **Unity 6.4**
+3. Open the project with **Unity 6.6 (6000.6.8f1)**
 4. Wait for the initial asset import and script compilation to complete
 5. Follow the [Unity Project Setup](#unity-project-setup) section below
 
@@ -956,6 +992,37 @@ PrivateKeyPath=/etc/fishmmo/certs/privkey.pem
 | macOS | `/usr/local/share/fishmmo/certs/fullchain.pem` |
 | Other | `certs/fullchain.pem` (relative to working directory) |
 
+#### Editing the CFGs from the Build dashboard
+
+**FishMMO Dashboard → Build → Server CFG Setup** edits the three templates of the selected Working Environment
+(`FishMMO-Setup/<environment>/LoginServer.cfg`, `WorldServer.cfg`, `SceneServer.cfg`). It edits those same files; there
+is no separate copy of CFG values in EditorPrefs.
+
+- **Keys come from the templates**, so a new CFG setting appears without a new dashboard control. Booleans are toggles,
+  numbers are numeric fields, everything else is text. Comments become tooltips, and a search box filters the names.
+- **Secrets are masked:** password, HMAC and secret values, even when they look like numbers.
+- **Add setting** takes optional or custom keys. **Remove** deletes every duplicate spelling of a key, so an older
+  duplicate cannot take effect again.
+- **Saving:** a valid change saves when a toggle flips or an edit is committed (Enter or focus loss). An invalid value
+  reports an error and leaves the file alone. **Reload from disk** discards pending changes; edits made outside the
+  dashboard are detected, not overwritten.
+- **The file stays as written:** comments, key order, blank lines, newline style and the UTF-8 BOM are kept, and the
+  file is replaced atomically. Parsing matches the servers: `#`/`;` comments, split on the first `=`, keys
+  case-insensitive, the last duplicate wins.
+- **Checks:** basic port and client-count checks, and Production cannot turn on `AutoVerifyAccounts` (the same rule the
+  server enforces at startup). The servers' own startup validation is still the full check.
+- The **Fast registration: auto-verify accounts** toggle writes `AutoVerifyAccounts` in LoginServer.cfg. It skips
+  verification for new registrations in development; it does not create accounts at login.
+
+**Existing server builds:** choose the build folder that holds the three CFGs (the default is
+`Builds/Server/Linux Server/FishMMO GameServer Linux`), then **Apply CFGs to existing server build**. Every setting and
+destination file is checked before anything is copied. Restart the servers afterwards; a CFG-only change needs no
+player rebuild. Pick the environment that matches the build. If you change `ServerName`, change AppHealthMonitor's
+`PulseServerName` to match (the field's tooltip says so; the dashboard does not edit the monitor's JSON).
+
+The section covers only the three game-server CFGs. Web server `appsettings*.json`, the monitor's JSON and the generated
+client host, certificate and secret settings keep their own tools. Tests: `Assets/FishMMO/Tests/UnitTests/ServerCfgDashboardTests.cs`.
+
 ### Logging Configuration
 
 `logging.json` at [`FishMMO-Setup/logging.json`](FishMMO-Setup/logging.json) is the canonical copy. Five .NET projects copy it into their output directory as part of the build — AppHealthMonitor, IpFetchServer, Patcher, WebGLServer and FishMMO-Installer — and the Unity **server** builds copy it alongside the `.cfg` files via `BuildExecutor.CopyConfigurationFiles()`. FishMMO-ControlPanel and FishMMO-DiscordBot do **not** pick it up; configure their logging separately.
@@ -1168,7 +1235,7 @@ The authentication library's security limits (in `BaseAuthenticatorCore` and `Sr
 
 2. **Install Required Modules:**
    - Go to the **Installs** tab.
-   - Click the gear icon next to your Unity 6.4 version → **Add Modules**.
+   - Click the gear icon next to your Unity 6.6 version → **Add Modules**.
    - Install:
      - **Linux Build Support (IL2CPP and Mono)**
      - **Linux Dedicated Server Build Support**
@@ -2007,7 +2074,7 @@ lifecycle control gated on `AccessLevel`.
 > database command queue the AppHealthMonitor polls), and platform health, secrets and queues.
 > There is no fake login and no fixture mode: the design mock was deleted. Authorization fails
 > closed, and every privileged write and staff read is recorded in `admin_audit_log`. See
-> [CONTROL_PANEL_DESIGN.md](CONTROL_PANEL_DESIGN.md) for the design.
+> [the Control Panel README](FishMMO-WebServers/FishMMO-ControlPanel/README.md) for the design.
 
 ```bash
 cd FishMMO-WebServers/FishMMO-ControlPanel

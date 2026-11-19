@@ -59,7 +59,7 @@ The edit path's grant check compares only the bits being **added** against the a
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -100,7 +100,7 @@ The edit path's grant check compares only the bits being **added** against the a
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `IGuildSystem`, `IGuildSystemRuntimeData`, `IGuildSystemMainThreadQueueData`, `IGuildCharacterMappingData`, `ICharacterSystem`, `AsyncWorkerData`, `IngressGuard`, `RepeatingFaultLog`, `MonotonicClock` and `ChatHelper`; `UpdatePumpWatermark` lives beside the party system (`../Party/`), which shares it
 - **FishMMO Shared** — provides `IGuildController`, `GuildPermissions`, `GuildRankDefaults`, `GuildTextLimits`, `GuildLogEventType`, `GuildResultType`, `CharacterAttributeTemplate`, `CharacterCurrency`, `AchievementTemplate`, `Authentication`, and the broadcast types (`GuildCreateBroadcast`, `GuildInviteBroadcast`, `GuildAcceptInviteBroadcast`, `GuildDeclineInviteBroadcast`, `GuildLeaveBroadcast`, `GuildRemoveBroadcast`, `GuildChangeRankBroadcast`, `GuildSetMessageOfTheDayBroadcast`, `GuildSetNoticeBroadcast`, `GuildTransferLeadershipBroadcast`, `GuildDisbandBroadcast`, `GuildLogRequestBroadcast`, `GuildRankListRequestBroadcast`, `GuildEditRankBroadcast`, `GuildCreateRankBroadcast`, `GuildDeleteRankBroadcast`, `GuildSetMemberNoteBroadcast`, `GuildSetRecruitmentBroadcast`, `GuildDirectoryRequestBroadcast`, `GuildApplyBroadcast`, `GuildApplicationListRequestBroadcast`, `GuildResolveApplicationBroadcast`, and the outbound `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `GuildRosterDeltaBroadcast`, `GuildAddEntry`, `GuildRankListBroadcast`, `GuildRankEntry`, `GuildInfoBroadcast`, `GuildRecruitmentInfoBroadcast`, `GuildDirectoryBroadcast`, `GuildApplicationListBroadcast`, `GuildLogBroadcast`, `GuildCreationCostBroadcast`, `GuildResultBroadcast`)

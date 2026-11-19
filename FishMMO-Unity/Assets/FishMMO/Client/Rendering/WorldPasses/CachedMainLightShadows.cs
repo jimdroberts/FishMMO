@@ -60,8 +60,8 @@ namespace FishMMO.Client
 		/// everywhere until its merge is right. 2026-11-06: with URP's three cascades in the browser, the cache's image has dark
 		/// areas the live map has nowhere (the live map with one cascade has none either), and the merge alone, with nothing
 		/// cached (harness `shadowCacheDrawNothing`), still changed ~8% of the close view's pixels: on WebGPU the merge writes
-		/// depth that no caster put there. The editor (Vulkan) merge wrote nothing in the same state (RenderDoc). See
-		/// Docs/Rendering/2026-11-05/round-2.
+		/// depth that no caster put there. The editor (Vulkan) merge wrote nothing in the same state (RenderDoc; measured
+		/// 2026-11-05).
 		/// </summary>
 		public const bool DefaultOn = false;
 

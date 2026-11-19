@@ -62,7 +62,7 @@ Before processing any `RequestServerListBroadcast`, the system verifies the conn
 | Linux | Yes | |
 | WebGL | N/A | Server-only subsystem |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting Backend:** IL2CPP
 
 ## Features

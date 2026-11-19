@@ -51,7 +51,7 @@ The broader server authentication architecture (which consumes these core types)
 
 | Requirement       | Version / Detail |
 |-------------------|------------------|
-| Unity             | 6.3 LTS          |
+| Unity             | 6.6 (6000.6.8f1)          |
 | Scripting Backend | IL2CPP           |
 
 ## Features
@@ -96,7 +96,7 @@ These features are implemented by the concrete authenticators that consume the c
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend.
+- Unity 6.6 (6000.6.8f1) with IL2CPP scripting backend.
 - FishNet Networking framework (`Authenticator` base class, `NetworkConnection`, `Channel`, `Broadcast` system).
 - The FishMMO-Auth libraries — `ConnectionEncryptionData` for per-connection AES keys, nonce counters, and sequence tracking (`FishMMO.Auth.Implementation`, in `FishMMO-AuthShared.dll`); `IAccountManager<TConnection>`, `ISrpAccountManager<TConnection>`, `ITokenAccountManager<TConnection>` (`FishMMO.Auth.Core`, in `FishMMO-ServerAuth.dll`).
 - `IRuntimeDataContainer` interface — marker for runtime data lifecycle integration.

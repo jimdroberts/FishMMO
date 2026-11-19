@@ -35,7 +35,7 @@ The Item system is a component-based, template-driven framework for items, inven
 | Linux    | Yes       | Full server and client support |
 | WebGL    | Yes       | Client only |
 
-**Engine:** Unity 6.3 LTS  
+**Engine:** Unity 6.6 (6000.6.8f1)  
 **Backend:** IL2CPP
 
 ## Features
@@ -56,7 +56,7 @@ The Item system is a component-based, template-driven framework for items, inven
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — NetworkBehaviour, Reader/Writer, Broadcasts
 - **FishMMO Shared Core** — `CharacterBehaviour`, `CachedScriptableObject`, `CharacterAttribute`, `BaseCondition`
 

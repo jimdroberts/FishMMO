@@ -57,7 +57,7 @@ namespace FishMMO.Client
 		/// (FishWeatherLitInput.hlsl, FishIndirectInstancing.hlsl), which brought the lit fragment from 13 uniform buffers to
 		/// within WebGPU's guaranteed 12 (WebGpuUniformBudgetTests). On WebGPU every RenderMeshIndirect submission re-applies
 		/// its whole pass, re-uploading every constant buffer through a linear scratch-page scan; the batch group's draws go
-		/// through the SRP Batcher instead (Docs/Rendering/2026-11-01/webgpu-constants).
+		/// through the SRP Batcher instead (measured 2026-11-01).
 		/// </remarks>
 		public static bool SupportsBrg(GraphicsDeviceType api, bool compute, BatchBufferTarget target)
 			=> compute && target == BatchBufferTarget.RawBuffer;

@@ -28,7 +28,7 @@ The SceneServer Authentication system is a pass-through gate for the shared toke
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -40,7 +40,7 @@ The SceneServer Authentication system is a pass-through gate for the shared toke
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework (provides `Authenticator`, `NetworkConnection`)
 - **FishMMO Server Core** — provides `BaseServerAuthenticator`, `TokenServerAuthenticator`
 - **FishMMO Shared** — provides `ClientAuthenticationResult` enum (`LoginSuccess`, `SceneLoginSuccess`)

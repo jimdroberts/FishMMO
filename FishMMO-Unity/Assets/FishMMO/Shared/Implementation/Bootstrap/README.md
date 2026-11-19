@@ -39,7 +39,7 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 
 | Requirement       | Version / Detail |
 |-------------------|------------------|
-| Unity             | 6.3 LTS          |
+| Unity             | 6.6 (6000.6.8f1)          |
 | Scripting Backend | IL2CPP           |
 
 ## Features
@@ -66,7 +66,7 @@ The Logging subsystem (`Logging/` subdirectory) provides Unity-specific integrat
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend.
+- Unity 6.6 (6000.6.8f1) with IL2CPP scripting backend.
 - Addressables package configured with valid asset groups and load paths.
 - `FishMMO.Logging` assembly (provides `Log`, `ILogger`, `IConsoleFormatter`, `ILoggerConfig`, `LogEntry`, `LogLevel`, `ConsoleFormatterHelpers`).
 - `AddressableLoadProcessor` / `AddressableLoadBatch` — shared utility for queuing and draining Addressable loads, and the per-caller completion handle it hands back.

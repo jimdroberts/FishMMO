@@ -1,6 +1,6 @@
-# FishMMO Water
+# Water module
 
-An ocean for URP 17: an FFT sea in world metres that hands over to breakers of its own at the coast,
+**Short description:** An ocean for URP 17: an FFT sea in world metres that hands over to breakers of its own at the coast,
 shaded as water rather than as a tinted plane, and honest about what the render pipeline will and
 will not give it.
 
@@ -9,6 +9,30 @@ convention this plugin can ignore. Deep-water waves travel at `√(g/k)`, so a 6
 10 m/s and a 4 m chop at 2.5 m/s, and the long waves visibly overtake the short ones. At any other
 scale the dispersion is wrong and the sea moves like a bath.
 
+| | |
+|---|---|
+| **Module id** | None: it has no `GameModule`; its components start from the scene |
+| **Assemblies** | `FishMMO.Water` (`Scripts/`), `FishMMO.Water.Editor`, `FishMMO.Water.RenderScratch` (the water probes), `FishMMO.Water.Tests` |
+| **Depends on** | World Simulation (the sky, the weather and the scene's water bodies) |
+| **Depended on by** | World Simulation's, Terrain's, Ambient Life's and Naming's tests; World Design; the World Test Bed |
+| **Remove together with** | All seven world modules (World Simulation's tests reference it, and World Simulation takes the rest) |
+| **Moved** | From `Assets/Plugins/FishMMO Water` in Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18; the assemblies keep their names |
+
+## Core seams it uses
+
+| Seam | What the module does |
+|---|---|
+| `SurfaceWater` (core) | `WaterSurface` registers as the scene's surface source: level, wave height, whether a point is under it, the waves and the daylight under water. The inland renderers read the scene's inland surfaces and currents from it. |
+| `WaterQuery.RegisterSea` (core) | `WaterEnvironment` registers the scene's simulated tide (and a lava sea), which swimming, wading and drowning read. |
+
+The core reaches the water only through these two and references no water assembly.
+
+## Removing it
+
+Delete the seven world modules together (see [World Simulation](../WorldSimulation/README.md#removing-it) and
+[the gate](../../README.md#removing-a-module-the-gate)). World scenes then draw no sea, rivers, lakes or lava, and no sea
+registers with the core's water queries.
+
 ## What is here
 
 | File | What it does |
@@ -16,7 +40,7 @@ scale the dispersion is wrong and the sea moves like a bath.
 | `Scripts/WaterWaves.cs` | The sea state: wind in, Gerstner waves out. Evaluated identically on the CPU and in the shader. |
 | `Scripts/WaterMesh.cs` | The camera-centred disc the sea is drawn on, with rings spaced so each is about as wide on screen wherever it is. |
 | `Scripts/WaterSurface.cs` | The component. Holds the sea level, follows the camera, publishes the waves, and turns off what the pipeline cannot support. |
-| `Shaders/FishWater.hlsl` | The wave sum, the ripple slopes and the one shared material constant buffer. |
+| `Shaders/FishWaterWaves.hlsl`, `Shaders/FishWaterInput.hlsl` | The wave sum shared with whatever rides the sea; the one material constant buffer every pass declares. |
 | `Shaders/FishWater.shader` | `FishMMO/Water/Ocean`. |
 | `Scripts/WaterShoreField.cs` | The depth and distance-to-shore field, built from the scene's terrains: cached under `Library/FishMMO/ShoreField` in the editor, embedded in the scene by a player build (`Editor/WaterShoreFieldBuildEmbed.cs`), built live off the main thread otherwise. |
 | `Scripts/WaterShore.cs` | The swash up the beach, its clock (which the breakers keep time with) and the foam memory. |
@@ -25,6 +49,8 @@ scale the dispersion is wrong and the sea moves like a bath.
 | `Shaders/FishWaterShading.hlsl` | How the sea is lit and foamed — shared by the ocean and the breakers, so they cannot differ where they meet. |
 | `Shaders/FishWaterBreaker.shader`, `Shaders/FishWaterSpray.shader` | `FishMMO/Water/Breaker` and `FishMMO/Water/Spray`. |
 | `Materials/OceanWater.mat` | The default sea material — the breakers included. |
+| `Scripts/InlandWaterRenderer*.cs`, `Shaders/FishInlandWater.shader` | Rivers, lakes and waterfalls: channels, flow, falls, wakes. |
+| `Scripts/LavaRibbonRenderer.cs`, `Scripts/LavaMask.cs`, `Shaders/FishLava*.shader` | Lava, drawn by the same renderers. |
 
 ## Using it
 
@@ -147,17 +173,9 @@ exists to show through.
 - **Cloud shadow is an input, not a lookup.** `WaterSurface.CloudShadow` is there for the weather
   system to drive; nothing drives it yet.
 
-## Licence
+## License
 
 FishMMO Water is first-party FishMMO code, licensed under the MIT licence in the repository root's
-`LICENSE`. It sits under `Assets/Plugins` beside third-party plugins, but it is not one of them and
-as far as is known contains no third-party code. Third-party components used by FishMMO are listed in
+`LICENSE`. It contains no third-party code as far as is known. Third-party components used by FishMMO are listed in
 `THIRD-PARTY-NOTICES.md` at the repository root.
 
-## As a FishMMO module
-
-Moved from `Assets/Plugins/FishMMO Water` to `Assets/FishMMO/Modules/Water` in Phase 4 of the core and modules plan
-(2026-11-18); its assemblies keep their names (FishMMO.Water, FishMMO.Water.Editor), with FishMMO.Water.RenderScratch (the
-water probes) and FishMMO.Water.Tests beside them. It depends on the World Simulation module (the sky, the weather and the
-scene's water bodies); the core reaches the water only through `WaterQuery` and `SurfaceWater`, and references no water
-assembly.

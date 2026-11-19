@@ -96,7 +96,7 @@ namespace FishMMO.TestHarness.World.Editor
 				int jobs = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_JOBS"),out int requestedJobs) ? Mathf.Clamp(requestedJobs,1,16) : 2;
 				PlayerSettings.SetAdditionalIl2CppArgs((original.il2cppArgs + " --jobs=" + jobs + " --bee-jobs=" + jobs).Trim());
 				// FISHMMO_PERF_BUILD_STRICT_VARIANTS=1: a missing variant is an error and draws the error shader instead of
-				// the nearest variant, which proves a stripping rule against real frames (Docs/Rendering/2026-11-03/shader-compile-cost).
+				// the nearest variant, which proves a stripping rule against real frames (measured 2026-11-03).
 				PlayerSettings.strictShaderVariantMatching = Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_STRICT_VARIANTS") == "1" || original.strict;
 				BuildOptions options = Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_DEVELOPMENT") == "1" ? BuildOptions.Development : BuildOptions.None;
 				var result = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = Path.Combine(output, "FishRenderingBenchmark.x86_64"), target = BuildTarget.StandaloneLinux64, subtarget = (int)StandaloneBuildSubtarget.Player, options = options });

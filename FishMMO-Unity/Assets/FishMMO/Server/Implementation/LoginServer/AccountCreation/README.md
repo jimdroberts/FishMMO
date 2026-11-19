@@ -40,7 +40,7 @@ The request pipeline follows four stages:
 
 | Requirement      | Version / Detail |
 |------------------|------------------|
-| Unity            | 6.3 LTS          |
+| Unity            | 6.6 (6000.6.8f1)          |
 | Scripting Backend| IL2CPP           |
 
 ## Features

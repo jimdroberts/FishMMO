@@ -35,7 +35,7 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -72,7 +72,7 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `IPartySystem`, `IPartySystemRuntimeData`, `IPartySystemMainThreadQueueData`, `IPartyCharacterMappingData`, broadcast types (`PartyCreateBroadcast`, `PartyInviteBroadcast`, `PartyAcceptInviteBroadcast`, `PartyDeclineInviteBroadcast`, `PartyLeaveBroadcast`, `PartyRemoveBroadcast`, `PartyChangeRankBroadcast`, `PartyAddBroadcast`, `PartyAddMultipleBroadcast`, `ChatBroadcast`), `IngressGuard`, `AsyncWorkerData`, and `ChatHelper`
 - **FishMMO Database** — provides `IPartyService`, `ICharacterPartyService`, `IPartyUpdateService`, `CharacterPartyData`, `PartyUpdateData`, and `DatabaseResult<T>`

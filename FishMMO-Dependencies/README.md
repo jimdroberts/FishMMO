@@ -46,7 +46,7 @@ server, the database, and Unity all link against the same binaries.
 | Target | Status |
 |---|---|
 | .NET Standard 2.1 | Yes |
-| Unity 6.3 LTS | Yes (via DLL copy) |
+| Unity 6.6 | Yes (via DLL copy) |
 | .NET 8.0 servers | Yes (via `PackageReference` instead of DLL copy when possible) |
 
 ---

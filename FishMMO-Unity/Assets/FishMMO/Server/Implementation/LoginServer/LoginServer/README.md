@@ -34,7 +34,7 @@ On shutdown the system performs an orderly cleanup: it zeros the in-memory signi
 | Linux    | Yes       | Fully supported as a server host |
 | WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-**Engine:** Unity 6.3 LTS  
+**Engine:** Unity 6.6 (6000.6.8f1)  
 **Scripting backend:** IL2CPP
 
 ## Features
@@ -53,7 +53,7 @@ On shutdown the system performs an orderly cleanup: it zeros the in-memory signi
 
 ## Prerequisites
 
-- Unity 6.3 LTS (IL2CPP scripting backend)
+- Unity 6.6 (6000.6.8f1) (IL2CPP scripting backend)
 - FishNet networking framework (for `ServerManager` / `ServerAuthenticator`)
 - FishMMO server core assemblies (`FishMMO.Server.Core`, `FishMMO.Server.Core.LoginServer`)
 - FishMMO database layer (`FishMMO.Database`, `FishMMO.Database.Npgsql`) with a reachable PostgreSQL instance

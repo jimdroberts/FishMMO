@@ -1009,7 +1009,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The billboard used to start at 0.1, close enough that its flatness showed, then at 0.08. Since the
 		/// billboard is lit by its own normals like the meshes and takes its plant's size (2026-11-06) it
 		/// starts at 0.16: the owner's A/B at High, settlement view, GPU 9.24 → 8.26 ms for 4.8% of the
-		/// frame's pixels changed, the residue being a single picture's shape (Docs/Rendering/2026-11-05/round-2).
+		/// frame's pixels changed, the residue being a single picture's shape (measured 2026-11-05).
 		/// </para>
 		/// <para>
 		/// The cull height is set far past the terrain's tree distance on purpose: a terrain tree is

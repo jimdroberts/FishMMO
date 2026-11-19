@@ -38,7 +38,7 @@ A runtime-data processing gate (`Interlocked.CompareExchange`) prevents overlapp
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features

@@ -12,7 +12,7 @@ namespace FishMMO.WebServers.Tools.Tests
 	/// <remarks>
 	/// Every "verifies" assertion below runs the REAL
 	/// <c>FishMMO.Client.Security.Ed25519ManifestVerifier</c>, compiled from
-	/// <c>Assets/Scripts/Client/Security/Ed25519ManifestVerifier.cs</c> by source link. Nothing
+	/// <c>Assets/FishMMO/Client/Security/Ed25519ManifestVerifier.cs</c> by source link. Nothing
 	/// here re-implements the client side.
 	/// </remarks>
 	public static class Program
@@ -24,7 +24,7 @@ namespace FishMMO.WebServers.Tools.Tests
 		{
 			Console.WriteLine("ManifestSigning round-trip harness");
 			Console.WriteLine("  server signer : Patcher/Signing/ManifestSigning.cs (linked)");
-			Console.WriteLine("  client verifier: Assets/Scripts/Client/Security/Ed25519ManifestVerifier.cs (linked)");
+			Console.WriteLine("  client verifier: Assets/FishMMO/Client/Security/Ed25519ManifestVerifier.cs (linked)");
 			Console.WriteLine();
 
 			Section("Ed25519 primitive");

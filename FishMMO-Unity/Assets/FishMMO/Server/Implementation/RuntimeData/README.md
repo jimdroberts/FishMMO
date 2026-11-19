@@ -35,7 +35,7 @@ Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRunt
 | Linux    | Yes       | Fully supported as a server host |
 | WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting backend:** IL2CPP
 
 ## Features
@@ -57,7 +57,7 @@ Concrete per-system containers (e.g., `PartySystemRuntimeData`, `GuildSystemRunt
 
 ## Prerequisites
 
-- Unity 6.3 LTS (IL2CPP scripting backend)
+- Unity 6.6 (6000.6.8f1) (IL2CPP scripting backend)
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`, `FishNet.Managing.Server.ServerManager`)
 - FishMMO server core assemblies (`FishMMO.Server.Core` — `IRuntimeDataContainer`, `IRuntimeDataContainerFactory`, `IRuntimeDataContainerRegistry`, `IServerComponent`, `IServerComponentRegistry`, `ServerComponentRegistry`, `RequiresDataContainerAttribute`, `IAsyncWorkerData`, `IMainThreadQueueData`)
 - FishMMO logging (`FishMMO.Logging.Log`)

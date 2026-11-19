@@ -42,7 +42,7 @@ The Ability system is a server-authoritative, template-driven framework for abil
 | Linux    | ✅ Supported | Server and client builds |
 | WebGL    | ✅ Supported | Via Unity WebGL export |
 
-Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
+Built with **Unity 6.6 (6000.6.8f1)** using **IL2CPP** scripting backend.
 
 ## Features / Capabilities / Security Features
 
@@ -77,7 +77,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 ## Prerequisites
 
-- **Unity 6.3 LTS** (or compatible version)
+- **Unity 6.6 (6000.6.8f1)** (or compatible version)
 - **FishNetworking** with Prediction V2 support (Replicate/Reconcile)
 - **FishMMO Shared Core** — interfaces (`IAbilityController`, `IAbilityKnowledgeController`, `ICooldownController`), `CharacterBehaviour`, `CachedScriptableObject`, `IntBitExtensions`
 - **FishMMO Character Attribute System** — `CharacterAttributeTemplate`, `CharacterAttributeController` for speed/cooldown reduction
@@ -87,7 +87,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 The Ability system is an integral part of the **FishMMO Unity project**. There is no separate installation step.
 
 1. Clone or update the FishMMO repository.
-2. Open the project in Unity 6.3 LTS.
+2. Open the project in Unity 6.6 (6000.6.8f1).
 3. The Ability system is located at `Assets/FishMMO/Shared/Implementation/Entity/Prediction/Ability/`.
 4. Ensure all FishMMO dependencies (FishNetworking, Shared Core) are present in the project.
 

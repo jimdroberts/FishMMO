@@ -40,7 +40,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -69,7 +69,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Teleport flow: teleporter validation, scene unload, immortality, position/scene update, instance flag removal, save-then-release with reconnect through world routing
 - Transfer watchdog: a connection whose character has been handed off is force-disconnected after `TransferDisconnectGrace` (15s) if the client never reports its scene unload, so a crashed or modified client cannot idle on a server that no longer holds its character
 - Residency watchdog: a connection that authenticated but still has no character after `CharacterResidencyTimeout` (60s) is disconnected with `ServerError`, bounding every load path that can fail without delivering its own disconnect
-- Scene-handshake watchdog: a character parked in `WaitingSceneLoadCharacters` that never acknowledges its scene within `SceneLoadHandshakeTimeout` (90s) is disconnected with `SceneHandshakeTimedOut`, so its session claim is released instead of being held for the life of the socket
+- Scene-handshake watchdog: a character parked in `WaitingSceneLoadCharacters` that never acknowledges its scene within the scene-load watchdog (120 s without a progress heartbeat, `SceneLoadStallTimeoutSeconds`; 900 s at most, `SceneLoadMaxSeconds`) is disconnected with `SceneHandshakeTimedOut`, so its session claim is released instead of being held for the life of the socket
 - Death/respawn: player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
@@ -92,7 +92,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework (ServerManager, SceneManager, NetworkObject, NetworkConnection, object pooling)
 - **FishMMO Server Core** — provides `ServerBehaviour`, `ICharacterSystem`, `ICharacterMappingData`, `ICharacterSystemRuntimeData`, `ICharacterSystemMainThreadQueueData`, `ISceneServerSystem`, `ISceneServerRuntimeData`, `IAsyncWorkerData`, `CharacterSessionInfo`, `SceneServerAuthenticator`, broadcast types (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, `GuildAddBroadcast`, `GuildAddMultipleBroadcast`, `PartyAddBroadcast`, `PartyAddMultipleBroadcast`, `FriendAddBroadcast`, `FriendAddMultipleBroadcast`, `KnownAbilityAddBroadcast`, `KnownAbilityAddMultipleBroadcast`, `KnownAbilityEventAddBroadcast`, `KnownAbilityEventAddMultipleBroadcast`, `AchievementUpdateBroadcast`, `AchievementUpdateMultipleBroadcast`, `InventorySetItemBroadcast`, `InventorySetMultipleItemsBroadcast`, `BankSetItemBroadcast`, `BankSetMultipleItemsBroadcast`, `HotkeySetBroadcast`, `HotkeySetMultipleBroadcast`), `WorldSceneDetails`, `SceneTeleporterDetails`, `CharacterRespawnPositionDetails`, and `IPeriodicUpdateSystem`
 - **FishMMO Database** — provides `ICharacterService`, `IUnitOfWorkService`, `ICharacterSessionOwnershipService`, `ICharacterItemService`, `ICharacterAttributeService`, `ICharacterAbilityService`, `ICharacterKnownAbilityService`, `ICharacterAchievementService`, `ICharacterWaypointService`, `ICharacterFriendService`, `ICharacterGuildService`, `ICharacterPartyService`, `IPartyService`, `ICharacterHotkeyService`, `ICharacterBuffService`, `ICharacterFactionService`, `ICharacterArchetypeService`, `ICharacterQuestService`, `CharacterData`, `BulkWriteResult`, and all sub-entity data DTOs
@@ -140,7 +140,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `TransferDisconnectSweepIntervalSeconds` | 5.0 | Interval between transfer watchdog sweeps |
 | `CharacterResidencyTimeout` | 60s | How long an authenticated connection may go without a character before the residency watchdog disconnects it |
 | `CharacterResidencySweepIntervalSeconds` | 10.0 | Interval between residency watchdog sweeps |
-| `SceneLoadHandshakeTimeout` | 90s | How long a character in `WaitingSceneLoadCharacters` has to acknowledge its scene load |
+| `SceneLoadStallTimeoutSeconds` / `SceneLoadMaxSeconds` (cfg) | 120 s / 900 s | How long a character in `WaitingSceneLoadCharacters` may go without a load-progress heartbeat, and the absolute cap on acknowledging its scene load |
 | `SceneLoadTimeoutSweepIntervalSeconds` | 10.0 | Interval between scene-handshake watchdog sweeps |
 | `DefaultSessionLeaseDuration` | 2 min | Database-side lease duration (`CharacterService`), the backstop that frees a claim held by a dead server |
 
@@ -319,13 +319,8 @@ refusing to let their combat timer lapse.
 | Bank items | `BankSetMultipleItemsBroadcast` |
 | Hotkeys | `HotkeySetMultipleBroadcast` |
 
-**Async social payloads** (`SendAllCharacterDataAsync`):
-
-| Payload | Broadcast Type |
-|---|---|
-| Guild members | `GuildAddMultipleBroadcast` |
-| Party members | `PartyAddMultipleBroadcast` |
-| Friend online status | `FriendAddMultipleBroadcast` |
+**Module payloads.** Friends, party and guild rosters are sent by the Social module's systems, each to a spawned
+player, not by `CharacterSystem` (see `Assets/FishMMO/Modules/Social`).
 
 ### Session Ownership and Release
 
@@ -370,7 +365,7 @@ A character whose capture throws is skipped for that pass and reported through a
 
 `SubEntitySnapshot` is one type rather than eight parallel lists threaded through five save paths. Each new sub-entity had to be added to every one of those paths by hand, and factions were simply missed for the life of the project — fetched on login, never written back. With the capture and the saves in one place there is one list to extend and no path that can forget a table.
 
-**A dirty mark is cleared only by a write that landed.** Each `SaveXAsync` clears its marks (`MarkAttributesPersisted`, `MarkAbilitiesPersisted`, `MarkAchievementsPersisted`, `MarkFactionsPersisted`, `MarkArchetypesPersisted`, `MarkKnowledgePersisted`) back on the main thread, and only when `BulkWriteReporting.MayClearDirtyMarks` holds: the write succeeded and reports `Filtered == 0`. Rows the ownership gate refused are filtered (`Unowned`), and a batch it refused whole is a `Forbidden` failure, so a refused write never clears a mark. Every mark resolves lingering bodies as well as connected characters (`TryGetResidentCharacter`); abilities used to look only in `CharactersByID`, so a lingering body's abilities were rewritten every pass. A failed write leaves everything marked so the next pass carries it — the periodic path has no other retry. Filtered rows are why the outcome matters rather than the boolean alone: a row the service declined to attempt never reached the database, and clearing it would retire a value that was never stored. Superseded rows are the opposite and safe to clear, because the database already holds something newer.
+**A dirty mark is cleared only by a write that landed.** Each `SaveXAsync` clears its marks (`MarkAttributesPersisted`, `MarkAbilitiesPersisted`, `MarkKnowledgePersisted`; a persistence participant such as achievements, factions or archetypes clears its own in its `SaveAsync`) back on the main thread, and only when `BulkWriteReporting.MayClearDirtyMarks` holds: the write succeeded and reports `Filtered == 0`. Rows the ownership gate refused are filtered (`Unowned`), and a batch it refused whole is a `Forbidden` failure, so a refused write never clears a mark. Every mark resolves lingering bodies as well as connected characters (`TryGetResidentCharacter`); abilities used to look only in `CharactersByID`, so a lingering body's abilities were rewritten every pass. A failed write leaves everything marked so the next pass carries it — the periodic path has no other retry. Filtered rows are why the outcome matters rather than the boolean alone: a row the service declined to attempt never reached the database, and clearing it would retire a value that was never stored. Superseded rows are the opposite and safe to clear, because the database already holds something newer.
 
 Saving does not touch session leases. `PersistAsync` previously extended the lease for any row whose session was `Online` without checking which server was writing, which let a stale save from a released character extend the *new* owner's lease.
 
@@ -617,11 +612,11 @@ OnClientValidatedSceneBroadcastReceived(conn, msg, channel)
 ├─ ServerManager.Spawn(nob, conn, scene)
 ├─ OnSpawnCharacter(conn, character, scene)
 ├─ OnConnect(conn, character)
-├─ SendNonDbCharacterData (immediate, main thread):
-│    knownAbilities, knownAbilityEvents, achievements,
-│    inventory, bank, hotkeys
-└─ EnqueueAsyncWork → SendAllCharacterDataAsync:
-       guildMembers, partyMembers, friendOnlineStatus
+└─ SendNonDbCharacterData (immediate, main thread):
+     knownAbilities, knownAbilityEvents, achievements,
+     inventory, bank, hotkeys
+   (module systems answer OnSpawnCharacter with their own payloads:
+    friends, party and guild rosters, quests, …)
 ```
 
 ### Disconnect + Save
@@ -706,9 +701,10 @@ OnPeriodicSave(deltaTime)
 │      │    each written row's buff set replaced in the same transaction)
 │      └─ finally: EndSave (release guard)
 └─ EnqueueSubEntitySaves (one lane per non-empty list)
-       ├─ SaveAttributesAsync   ├─ SaveAbilitiesAsync
-       ├─ SavePetsAsync         ├─ SaveAchievementsAsync ├─ SaveWaypointsAsync
-       ├─ SaveFactionsAsync     ├─ SaveArchetypesAsync   └─ SaveKnownAbilitiesAsync
+       ├─ SaveAttributesAsync   ├─ SaveAbilitiesAsync    ├─ SavePetsAsync
+       ├─ SaveKnownAbilitiesAsync                       ├─ SaveHotkeysAsync
+       ├─ each CharacterPersistenceParticipant.SaveAsync (achievements, and the modules':
+       │    factions, archetypes, waypoints, …)
        └─ each: written && Filtered == 0 → MarkXPersisted on the main thread
 ```
 

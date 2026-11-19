@@ -29,7 +29,7 @@ The Friend system manages player friend lists in FishMMO. It provides a simple I
 | Linux    | Yes       | Full server and client support |
 | WebGL    | Yes       | Client only |
 
-- **Engine:** Unity 6.3 LTS
+- **Engine:** Unity 6.6 (6000.6.8f1)
 - **Backend:** IL2CPP
 
 ## Features
@@ -48,7 +48,7 @@ The Friend system manages player friend lists in FishMMO. It provides a simple I
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** (FishNet) — NetworkBehaviour, broadcast infrastructure
 - **FishMMO Shared Core** — `CharacterBehaviour`, `IPlayerCharacter`, broadcast structs, database service interfaces
 

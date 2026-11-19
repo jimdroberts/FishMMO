@@ -1,13 +1,19 @@
 # World Simulation module
 
-**Short description:** The world's sky, weather, climate and biomes, simulated on the shared clock and presented on the client:
-the solar system and calendar, the day-night cycle and sky, the weather timelines, storms and the director, precipitation,
-clouds and fog, the biome templates and maps, the world atlas, and the weather's sounds.
+**Short description:** The world's sky, weather, climate and biomes, simulated on the shared clock and presented on the
+client: the solar system and calendar, the day-night cycle and sky, the weather timelines, storms and the director,
+precipitation, clouds and fog, the biome templates and maps, the world atlas, and the weather's sounds.
 
-Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), moved 2026-11-18. Sky and Time,
-Climate and Weather, Biomes and the atlas reference each other in a cycle, so they are one module (Jim, 2026-11-18).
+| | |
+|---|---|
+| **Module id** | `world-simulation` (`WorldSimulationModule`) |
+| **Assemblies** | `FishMMO.WorldSimulation`, `.Server`, `.Client`, `.Editor`, `.Tests`; editor `FishMMO.Client.Weather.Editor`, `FishMMO.Shared.Biomes.Editor` |
+| **Depends on** | The core; its tests reference Water |
+| **Depended on by** | Water, Terrain, Ambient Life, Naming, World Design, World Test Bed |
+| **Remove together with** | All six: the seven world modules go together |
+| **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18. Sky and Time, Climate and Weather, Biomes and the atlas referenced each other in a cycle, so they are one module (Jim, 2026-11-18). |
 
-## Project Structure
+## Folders
 
 ```
 Assets/FishMMO/Modules/WorldSimulation/
@@ -15,7 +21,7 @@ Assets/FishMMO/Modules/WorldSimulation/
 │                                              ECA/ (weather actions and conditions, ChangeSkyProfileAction),
 │                                              SceneData/ (WorldDayNightCycle, glow modes and places, sea hall vents,
 │                                              mill rotors, generated landforms and geothermal ground, shelter map)
-├── Client/   FishMMO.WorldSimulation.Client   Weather/ (presentation, sky, the four render features), Looks/ (flora
+├── Client/   FishMMO.WorldSimulation.Client   Weather/ (presentation, sky, the four module render passes), Looks/ (flora
 │                                              palette, glow, burn and ground glow tables, site fires and lights, cave
 │                                              skylights), Audio/ (world audio, thunder, wind, drips, footsteps)
 ├── Server/   FishMMO.WorldSimulation.Server   WeatherHost, WeatherServerService, WorldSimulationOperatorCommands
@@ -29,7 +35,7 @@ Assets/FishMMO/Modules/WorldSimulation/
 └── README.md
 ```
 
-## How it plugs in
+## Core seams it uses
 
 | Seam | Where (core) | What the module does |
 |---|---|---|
@@ -43,17 +49,24 @@ Assets/FishMMO/Modules/WorldSimulation/
 | Operator commands | `OperatorCommandProvider` | `/gm weather`, `/gm clock`, `/admin weather`. |
 | Map capture | `WorldMapCaptureContext.Resolver` | Places the scene and lights the map at the equinox noon. |
 | World systems audit | `WorldSystemsHooks` | Checks each scene's atlas entry, climate and sky with the scene details cache. |
-| Module list | `[assembly: GameModule]` (Core) | `WorldSimulationModule` ("world-simulation"). |
+| Server preload | `ServerPreloadLabels` | Registers the biomes label, so the server loads the biome templates at start. |
+| Module list | `[assembly: GameModule]` | `WorldSimulationModule` ("world-simulation"). |
 
 ## What stays in the core
 
-The world contracts (clock, tick, weather reading, water query, climbing), the core surface shaders and their neutral
-defaults, the terrain material shaders, weather exposure, the race and wildlife templates (biome affinity by id, habitat
-flags), and the scene object namer.
+The world contracts (`WorldClock`, `WorldTick`, `WeatherQuery`, `WaterQuery`, `ShelterQuery`, `BiomeHabitatQuery`,
+climbing), the core surface shaders and their neutral defaults, the terrain material shaders, weather exposure, the race
+and wildlife templates (biome affinity by id, habitat flags), the scene object namer, `FogComposer`, and the module render
+pass host (`FishModulePassesFeature`) on the three URP renderers.
 
-## Depends on it
+## Removing it
 
-Terrain, Ambient Life, Naming, World Design, the World Test Bed and Water. Its gate removes all seven.
+Delete the seven world modules: `WorldSimulation`, `Water`, `Terrain`, `AmbientLife`, `Naming`, `WorldDesign` and
+`WorldTestBed` (to check it, follow [the gate](../../README.md#removing-a-module-the-gate)). World scenes then have no
+sky, weather, clouds or fog: the camera clears to a plain sky colour (`CoreSkyColour`), the scene's own directional light
+lights it, and the weather reads calm everywhere. World scenes built with the module keep missing scripts that point into
+it; a core-only game uses scenes made without it, such as the Core Gate world
+(`Tests/TestHarness/Editor/CoreGateSceneGenerator.cs`).
 
 ## License
 

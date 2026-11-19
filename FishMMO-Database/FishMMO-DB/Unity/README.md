@@ -26,7 +26,7 @@ Production-ready Unity MonoBehaviour for comprehensive database monitoring in Un
 > complete, reviewed MonoBehaviour that is **entirely inside a comment block**. FishMMO-DB targets
 > .NET Standard 2.1 and cannot reference `UnityEngine.dll`, so nothing in this file is built by any
 > configuration today, and no scene contains the component. To use it, copy the file into the Unity
-> project (the header suggests `Assets/Scripts/Server/Implementation/DatabaseHealthService.cs`),
+> project (the header suggests `Assets/FishMMO/Server/Implementation/DatabaseHealthService.cs`),
 > remove the enclosing comment block, and reference the FishMMO-Database assembly from the server
 > asmdef. Everything below describes the code as written, not something currently running.
 
@@ -36,9 +36,9 @@ Production-ready Unity MonoBehaviour for comprehensive database monitoring in Un
 
 | Target | Status |
 |---|---|
-| Unity 6.3 LTS — headless Linux server build | Yes (recommended) |
-| Unity 6.3 LTS — headless Windows server build | Yes |
-| Unity 6.3 LTS — Editor (Play Mode) | Yes (for development) |
+| Unity 6.6 — headless Linux server build | Yes (recommended) |
+| Unity 6.6 — headless Windows server build | Yes |
+| Unity 6.6 — Editor (Play Mode) | Yes (for development) |
 
 | Requirement | Notes |
 |---|---|

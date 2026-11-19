@@ -29,7 +29,7 @@ The Achievement system is a data-driven, template-based framework for tracking p
 | Linux    | ✅ Supported | Server and client builds |
 | WebGL    | ✅ Supported | Via Unity WebGL export |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Backend:** IL2CPP
 
 ## Features
@@ -39,7 +39,7 @@ The Achievement system is a data-driven, template-based framework for tracking p
 - **Tier-based rewards** — Each tier can grant abilities, ability events, items, buffs, and titles upon completion.
 - **FishNet network synchronization** — Server-authoritative state broadcast to clients via `AchievementUpdateBroadcast` and `AchievementUpdateMultipleBroadcast`.
 - **Fire-and-forget database persistence** — Reward persistence (abilities, items) uses async services marshalled back to the main thread.
-- **Progress persistence** — `Achievement.PersistenceDirty` / `MarkChanged` / `MarkPersisted` track what the database has not confirmed; `CharacterSystem.Saving.AppendAchievementData` writes dirty rows on the periodic save, at despawn (before the session release) and for lingering combat-logout bodies. Before this leg existed, progress was fetched on login and never written back. `Version` is bumped by **every mutation**, not only by the save snapshot — that is what lets `MarkPersisted(persistedVersion)` refuse to clear a row changed while its write was in flight, the trap the attribute and ability tables fell into. The load path passes `skipEvent`, which doubles as "this is a restore" and leaves the restored rows clean, so a login does not rewrite every achievement a character owns.
+- **Progress persistence** — `Achievement.PersistenceDirty` / `MarkChanged` / `MarkPersisted` track what the database has not confirmed; `AchievementPersistence` (a `CharacterPersistenceParticipant`, `Server/Implementation/World/SceneServer/Achievement`) writes dirty rows on the periodic save, at despawn (before the session release) and for lingering combat-logout bodies. Before this leg existed, progress was fetched on login and never written back. `Version` is bumped by **every mutation**, not only by the save snapshot — that is what lets `MarkPersisted(persistedVersion)` refuse to clear a row changed while its write was in flight, the trap the attribute and ability tables fell into. The load path passes `skipEvent`, which doubles as "this is a restore" and leaves the restored rows clean, so a login does not rewrite every achievement a character owns.
 - **Static events** — `OnCompleteAchievement` and `OnUpdateAchievement` allow any system to react to achievement progress and completion.
 - **ScriptableObject templates** — `AchievementTemplate` blueprints are configured in the Unity Editor with icon, category, description, and tier definitions.
 - **Inventory/bank fallback** — Item rewards attempt inventory first, falling back to bank if inventory lacks space.
@@ -48,7 +48,7 @@ The Achievement system is a data-driven, template-based framework for tracking p
 
 | Dependency | Purpose |
 |------------|---------|
-| Unity 6.3 LTS | Game engine |
+| Unity 6.6 (6000.6.8f1) | Game engine |
 | FishNetworking | Networking layer (NetworkBehaviour, broadcasts) |
 | FishMMO Shared Core | `CharacterBehaviour`, `CachedScriptableObject`, `ICharacter`, base templates |
 

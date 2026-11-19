@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
-const source = fs.readFileSync('Assets/Scripts/Client/WebGL/WebGpuCapabilities.jslib','utf8');
+const source = fs.readFileSync('Assets/FishMMO/Client/WebGL/WebGpuCapabilities.jslib','utf8');
 const cases = [
   ['no WebGPU module',{},0],
   ['no device',{WebGPU:{}},0],

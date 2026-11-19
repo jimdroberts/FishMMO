@@ -30,7 +30,7 @@ Its one kind of DB write, a known-ability reward row, goes through `EnqueuePersi
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -47,7 +47,7 @@ Its one kind of DB write, a known-ability reward row, goes through `EnqueuePersi
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `IAchievementSystem`, controller interfaces, broadcast types, and `IAsyncWorkerData`
 

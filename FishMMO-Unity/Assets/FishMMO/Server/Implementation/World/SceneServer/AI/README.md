@@ -55,7 +55,7 @@ Because the decision is a pure function over plain floats, an archetype's behavi
 | Linux | Yes | Dedicated server only; not compiled into clients |
 | WebGL | N/A | Server-only system |
 
-- **Unity Version:** Unity 6.3 LTS
+- **Unity Version:** Unity 6.6 (6000.6.8f1)
 - **Scripting Backend:** IL2CPP
 
 ## Features
@@ -163,7 +163,7 @@ An `NPCGroup` is a pack: NPCs that share a focus, answer each other's fights and
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **Unity AI Navigation** — `NavMeshAgent`, `NavMesh`
 - **FishNetworking** — `NetworkObject`, `TimeManager`, object pooling
 - **FishMMO Shared Core** — `ICharacter`, `INPCBrain`, `IAbilityController`, `ICooldownController`, `ICharacterDamageController`, `IFactionController`

@@ -46,7 +46,7 @@ Originally based on the open-source project by Mathieu Le Ber (MIT License, 2017
 
 | Requirement | Version |
 |---|---|
-| Unity | 6.3 LTS |
+| Unity | 6.6 (6000.6.8f1) |
 | Scripting Backend | IL2CPP |
 
 ## Features
@@ -67,7 +67,7 @@ Originally based on the open-source project by Mathieu Le Ber (MIT License, 2017
 
 ## Prerequisites
 
-- **Unity 6.3 LTS** (or newer) with IL2CPP scripting backend.
+- **Unity 6.6 (6000.6.8f1)** (or newer) with IL2CPP scripting backend.
 - The module is part of the FishMMO shared codebase — no external package dependencies.
 
 ## Installation / Build

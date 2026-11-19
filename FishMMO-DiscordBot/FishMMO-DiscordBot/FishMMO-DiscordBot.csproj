@@ -31,7 +31,7 @@
     and of every other project dependency so that it can be shared this way.
   -->
   <ItemGroup>
-    <Compile Include="..\..\FishMMO-Unity\Assets\Scripts\Shared\Implementation\Network\Chat\ChatSanitizer.cs"
+    <Compile Include="..\..\FishMMO-Unity\Assets\FishMMO\Shared\Implementation\Network\Chat\ChatSanitizer.cs"
              Link="Shared\ChatSanitizer.cs" />
   </ItemGroup>
 

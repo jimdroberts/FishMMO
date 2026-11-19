@@ -736,7 +736,7 @@ cover the whole phase, each picking up where the previous one stops:
 | Watchdog | Covers | Bound | On expiry |
 |---|---|---|---|
 | Residency (`characterResidencyDeadlines`) | Armed on the auth callback; cleared once the character reaches `WaitingSceneLoadCharacters` **or** `ConnectionCharacters` | `CharacterResidencyTimeout` (60 s) | `ServerError`, non-terminal — the client's reconnect loop returns through the world server and is routed again |
-| Scene handshake (`sceneLoadDeadlines`) | Armed when the character enters `WaitingSceneLoadCharacters`; cleared by `ClientValidatedSceneBroadcast` | `SceneLoadHandshakeTimeout` (90 s) | `SceneHandshakeTimedOut` — releases the session claim instead of holding it for the life of the socket |
+| Scene handshake (`sceneLoadDeadlines`) | Armed when the character enters `WaitingSceneLoadCharacters`; cleared by `ClientValidatedSceneBroadcast` | the scene-load watchdog (120 s without progress, `SceneLoadStallTimeoutSeconds`; 900 s at most, `SceneLoadMaxSeconds`) | `SceneHandshakeTimedOut` — releases the session claim instead of holding it for the life of the socket |
 | Transfer (`pendingTransferDisconnects`) | Armed when a character is handed off to another scene server and the client is expected to leave on its own | `TransferDisconnectGrace` (15 s) | `conn.Disconnect(false)` |
 
 The residency watchdog is the one that makes the others safe to rely on. `LoadCharacterAsync`
@@ -1694,7 +1694,7 @@ Application wants to quit
 | `saveRate` | 30s (configurable) | `CharacterSystem.cs` |
 | `TransferDisconnectGrace` | 15s | `CharacterSystem.Connection.cs` |
 | `CharacterResidencyTimeout` | 60s | `CharacterSystem.Loading.cs` |
-| `SceneLoadHandshakeTimeout` | 90s | `CharacterSystem.Loading.cs` |
+| `SceneLoadStallTimeoutSeconds` / `SceneLoadMaxSeconds` (cfg) | 120 s / 900 s | `CharacterSystem.Loading.cs` |
 | `AuthCallbackCooldownSeconds` | 2s | `CharacterSystem.Loading.cs` |
 | `combatLogoutLingerSeconds` | 60s (configurable) | `CharacterSystem.cs` |
 | `WorldResidencyGraceSeconds` | 90s | `WorldSceneSystem.cs` |
@@ -1742,7 +1742,7 @@ Several of these are load-bearing against each other and should be changed toget
   scene server is presumed dead an order of magnitude above its 5 s pulse rate, so a slow pulse
   or a brief database stall never evicts a healthy host — and well under the lease, so a
   conclusion drawn about liveness cannot outlive the claim it reasons about.
-- **`CharacterResidencyTimeout` (60 s) against `SceneLoadHandshakeTimeout` (90 s).** The two
+- **`CharacterResidencyTimeout` (60 s) against the scene-load watchdog (120 s without progress, `SceneLoadStallTimeoutSeconds`; 900 s at most, `SceneLoadMaxSeconds`).** The two
   watchdogs must not overlap: residency stops the moment the character is registered, which is
   the same moment the handshake watchdog starts.
 

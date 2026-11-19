@@ -136,7 +136,7 @@ namespace FishMMO.UnitTests
         /// <summary>
         /// WebGPU's maxDynamicUniformBuffersPerPipelineLayout on the tested device (and its adapter's maximum). Unity's WebGPU
         /// backend gives only a pipeline's first this-many uniform bindings a dynamic offset; every later one becomes a
-        /// dedicated buffer re-created on each pass application (Docs/Rendering/2026-11-02/webgpu-dynamic-uniforms).
+        /// dedicated buffer re-created on each pass application (measured 2026-11-02).
         /// </summary>
         const int WebGpuDynamicUniformBuffersPerPipeline = 10;
         /// <summary>The cbuffers URP's LIGHT_SHADOWS_NO_CBUFFER turns into plain globals (FishShadowVariants.hlsl on WebGPU).</summary>

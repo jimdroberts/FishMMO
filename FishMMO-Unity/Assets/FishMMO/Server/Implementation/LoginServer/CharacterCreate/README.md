@@ -36,7 +36,7 @@ All Unity object access (templates, prefabs, `SpawnablePrefabs`) occurs on the m
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -66,7 +66,7 @@ All Unity object access (templates, prefabs, `SpawnablePrefabs`) occurs on the m
 
 ## Prerequisites
 
-- Unity 6.3 LTS with IL2CPP scripting backend
+- Unity 6.6 (6000.6.8f1) with IL2CPP scripting backend
 - FishNet networking framework (FishNet.Runtime)
 - FishMMO Server Core and Shared assemblies
 - PostgreSQL database with Npgsql services:

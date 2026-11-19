@@ -51,7 +51,7 @@ that the patcher service exposes to the operator dashboard.
 |---|---|
 | .NET Standard 2.1 | Yes |
 | .NET 8.0 servers | Yes (via netstandard2.1 multi-target) |
-| Unity 6.3 LTS | Yes (referenced as a managed DLL in `Assets/Dependencies/`) |
+| Unity 6.6 | Yes (referenced as a managed DLL in `Assets/Dependencies/`) |
 
 | Dependency | Notes |
 |---|---|

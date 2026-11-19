@@ -48,7 +48,7 @@ the Unity managed scripts. Its scope is intentionally narrow:
 | Target | Status |
 |---|---|
 | .NET Standard 2.1 | Yes |
-| Unity 6.3 LTS (IL2CPP / Mono) | Yes (via `Assets/Dependencies/`) |
+| Unity 6.6 (IL2CPP / Mono) | Yes (via `Assets/Dependencies/`) |
 | .NET 8.0 server projects | Yes |
 
 | Requirement | Version |

@@ -44,7 +44,7 @@ Rows are versioned by `NextHotkeyVersion` (UTC ticks, monotonic). Every slot is 
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -65,7 +65,7 @@ Rows are versioned by `NextHotkeyVersion` (UTC ticks, monotonic). Every slot is 
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `IHotkeySystem`, `IngressGuard`, broadcast types, and `IHotkeySystemRuntimeData`
 

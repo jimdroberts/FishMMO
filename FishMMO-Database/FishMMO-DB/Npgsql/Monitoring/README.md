@@ -25,7 +25,7 @@ The `Monitoring/` namespace provides the observability layer for `FishMMO.Databa
 |---|---|
 | .NET Standard 2.1 (FishMMO-DB.csproj) | Yes |
 | .NET 8.0 host (servers, tools) | Yes |
-| Unity 6.3 LTS | Yes (via `Unity/DatabaseHealthService`) |
+| Unity 6.6 | Yes (via `Unity/DatabaseHealthService`) |
 
 | Requirement | Notes |
 |---|---|

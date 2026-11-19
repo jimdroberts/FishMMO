@@ -45,7 +45,7 @@ The five collections are:
 | Linux | Yes | Primary deployment platform |
 | WebGL | N/A | Server-only module — not applicable |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting Backend:** IL2CPP
 
 ## Features
@@ -61,7 +61,7 @@ The five collections are:
 
 ## Prerequisites
 
-- Unity 6.3 LTS (or newer)
+- Unity 6.6 (6000.6.8f1) (or newer)
 - FishMMO project (these classes are compiled as part of the server assemblies)
 - No external NuGet packages or third-party dependencies required
 

@@ -36,7 +36,7 @@ This separation avoids blocking frame/update loops during normal operation while
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -56,7 +56,7 @@ This separation avoids blocking frame/update loops during normal operation while
 
 ## Prerequisites
 
-- Unity 6.3 LTS (or later)
+- Unity 6.6 (6000.6.8f1) (or later)
 - FishNet networking framework
 - FishMMO Server Core assemblies (`FishMMO.Server.Core`)
 - FishMMO Database layer with Npgsql services (`FishMMO.Database`, `FishMMO.Database.Npgsql`)

@@ -29,7 +29,7 @@ The Target system provides raycast-based targeting for FishMMO characters. It ha
 | Linux    | Yes       | Full client and server support |
 | WebGL    | Yes       | Client-side targeting only |
 
-- **Unity Version:** Unity 6.3 LTS
+- **Unity Version:** Unity 6.6 (6000.6.8f1)
 - **Scripting Backend:** IL2CPP
 
 ## Features
@@ -47,7 +47,7 @@ The Target system provides raycast-based targeting for FishMMO characters. It ha
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — Network transport and `CharacterBehaviour` base class
 - **FishMMO Shared Core** — `PlayerCharacter`, `CharacterBehaviour`, scene/physics infrastructure
 

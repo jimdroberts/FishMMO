@@ -39,7 +39,7 @@ Database and polling work run asynchronously via `AsyncWorkerData`, while all Fi
 | Linux    | Yes       | Fully supported as a server host |
 | WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting backend:** IL2CPP
 
 ## Features
@@ -58,7 +58,7 @@ Database and polling work run asynchronously via `AsyncWorkerData`, while all Fi
 
 ## Prerequisites
 
-- Unity 6.3 LTS (IL2CPP scripting backend)
+- Unity 6.6 (6000.6.8f1) (IL2CPP scripting backend)
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`)
 - FishMMO Database layer with an `IKickRequestService` implementation
 - FishMMO Server Core (`ServerBehaviour`, `RuntimeDataContainer`, `AsyncWorkerData`, `SystemMainThreadQueueData`)

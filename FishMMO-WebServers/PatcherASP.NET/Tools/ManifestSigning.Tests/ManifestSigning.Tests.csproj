@@ -55,7 +55,7 @@
     </Compile>
 
     <!-- CLIENT side, shipping source. This is the whole point of the harness. -->
-    <Compile Include="..\..\..\..\FishMMO-Unity\Assets\Scripts\Client\Security\Ed25519ManifestVerifier.cs">
+    <Compile Include="..\..\..\..\FishMMO-Unity\Assets\FishMMO\Client\Security\Ed25519ManifestVerifier.cs">
       <Link>Linked\Client\Ed25519ManifestVerifier.cs</Link>
     </Compile>
   </ItemGroup>

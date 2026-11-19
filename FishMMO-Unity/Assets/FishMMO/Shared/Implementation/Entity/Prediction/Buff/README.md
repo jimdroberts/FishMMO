@@ -35,7 +35,7 @@ The Buff system is a data-driven, template-based framework for applying temporar
 | Linux    | ✅ Supported | Server and client builds |
 | WebGL    | ✅ Supported | Via Unity WebGL export |
 
-Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
+Built with **Unity 6.6 (6000.6.8f1)** using **IL2CPP** scripting backend.
 
 ## Features / Capabilities / Security Features
 
@@ -67,7 +67,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 ## Prerequisites
 
-- Unity 6.3 LTS
+- Unity 6.6 (6000.6.8f1)
 - FishNetworking (FishNet)
 - FishMMO Shared Core
 

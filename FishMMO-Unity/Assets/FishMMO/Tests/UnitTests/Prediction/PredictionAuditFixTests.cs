@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The pure rules added by the eighth prediction audit (PREDICTION_AUDIT_REPORT.md): each is the smallest statement
+	/// The pure rules added by the eighth prediction audit (2026-11-14; the Prediction README lists them): each is the smallest statement
 	/// of a fix, tested without a server.
 	/// </summary>
 	public class PredictionAuditFixTests

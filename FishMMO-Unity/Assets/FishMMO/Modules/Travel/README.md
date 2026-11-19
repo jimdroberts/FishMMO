@@ -1,29 +1,51 @@
 # Travel module
 
-Discovering waypoints and fast travel between them (Phase 2 module). Everything the feature is lives in this folder;
-deleting it removes the feature while the game still builds and runs, and the `character_waypoints` table and its rows
-stay as they are.
+**Short description:** Discovering waypoints and fast travel between them.
+
+| | |
+|---|---|
+| **Module id** | `travel` (`TravelModule`) |
+| **Assemblies** | `FishMMO.Travel`, `.Server`, `.Tests` |
+| **Depends on** | The core (the `Waypoint` scene objects and their baked details) |
+| **Depended on by** | None |
+| **Remove together with** | Nothing |
+| **Moved** | Phase 2 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-16 |
+
+## Folders
 
 ```
 Assets/FishMMO/Modules/Travel/
-├── Runtime/   FishMMO.Travel          WaypointController (a CharacterPart), WaypointTravel (the rule), broadcasts,
-│                                      UnlockWaypointAction, TeleportToWaypointAction, TravelModule
-├── Server/    FishMMO.Travel.Server   WaypointTravelSystem (+ asset), WaypointPersistence + its save participant
+├── Runtime/   FishMMO.Travel          WaypointController (a CharacterPart), WaypointTravel (the rule), WaypointBroadcasts,
+│                                      WaypointEventData, UnlockWaypointAction, TeleportToWaypointAction, TravelModule
+├── Server/    FishMMO.Travel.Server   WaypointTravelSystem (+ asset), WaypointPersistence and its save participant
 ├── Templates/                         Waypoint Interact (the discovery trigger)
 ├── Tests/     FishMMO.Travel.Tests    TravelWaypointTests, TravelModuleTests
 └── README.md
 ```
 
-How it plugs in, with nothing outside the folder naming it:
+## Core seams it uses
 
-| Seam | Where (core) | What the module does |
-|---|---|---|
-| Per-character record | `CharacterPart` / `[assembly: CharacterPart]` | `WaypointController` is added to every player at wake; its spawn state rides the character's payload. No prefab carries it. |
-| Interface the map reads | `IWaypointController` (Shared/Core) | The controller implements it, including `RequestTravel`. Without the module the map finds no controller: nothing unlocked, no travel. |
-| Discovery on use | `InteractableTriggers` | `WaypointTravelSystem` attaches `Waypoint Interact` to every `Waypoint`; the core waypoint prefab names no trigger. |
-| Server system | `Server.AdoptModuleSystems` | `WaypointTravelSystem.asset` carries the `SceneServer_Systems` label. |
-| Save and load | `[assembly: CharacterPersistence]` | `WaypointPersistenceParticipant` over `character_waypoints`. |
+| Seam | What the module does |
+|---|---|
+| `[assembly: CharacterPart]` | `WaypointController` is added to every player at wake; its spawn state rides the character's payload. No prefab carries it. |
+| `IWaypointController` (core contract) | The controller implements it, including `RequestTravel`; the map reads it. |
+| `InteractableTriggers` | `WaypointTravelSystem` attaches `Waypoint Interact` to every `Waypoint`; the core waypoint prefab names no trigger. |
+| `SceneServer_Systems` label | `WaypointTravelSystem.asset` is adopted by the scene server. |
+| `[assembly: CharacterPersistence]` | `WaypointPersistenceParticipant` over `character_waypoints`. |
+| `[assembly: GameModule]` | `TravelModule` ("travel"). |
 
-Stays in core, because the world uses it without fast travel: the `Waypoint` scene object and its baked details
+## What stays in the core
+
+The world uses waypoints without fast travel, so the core keeps the `Waypoint` scene object and its baked details
 (rescue points, cloud landings, the map's landmarks), `WaypointUnlockMask` (portals), `WaypointRegistry`,
 `WaypointTravelPolicy`, `WaypointSceneAudit` and the "Waypoint Travel" arrival trigger.
+
+## Removing it
+
+Delete `Assets/FishMMO/Modules/Travel` (to check it, follow [the gate](../../README.md#removing-a-module-the-gate)).
+The map then finds no controller: nothing is unlocked and there is no fast travel. The `character_waypoints` table and
+its rows stay as they are.
+
+## License
+
+This project is subject to the FishMMO project license.

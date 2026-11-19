@@ -29,7 +29,7 @@ The Interactable system is a server-authoritative, template-driven framework for
 | Linux    | Yes       | Full server and client support |
 | WebGL    | Yes       | Client only |
 
-- **Engine:** Unity 6.3 LTS
+- **Engine:** Unity 6.6 (6000.6.8f1)
 - **Backend:** IL2CPP
 
 ## Features
@@ -217,7 +217,7 @@ control points. The title defaults to `Team N Flag` or `Control Point` unless `D
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** (FishNet) — NetworkBehaviour, SyncVar, broadcast infrastructure
 - **FishMMO Shared Core** — `IInteractable`, `ISpawnable`, `CharacterBehaviour`, `CachedScriptableObject<T>`, scene-object interfaces
 

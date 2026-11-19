@@ -19,7 +19,6 @@
     <type fullname="FishMMO.Client.ClientPostbootSystem" preserve="all" />
     <type fullname="FishMMO.Client.HttpPatchServerService" preserve="all" />
     <type fullname="FishMMO.Client.LoginBackdrop" preserve="all" />
-    <type fullname="FishMMO.Client.TerrainRenderProfile" preserve="all" />
     <type fullname="FishMMO.Client.UITKAbilities" preserve="all" />
     <type fullname="FishMMO.Client.UITKAchievements" preserve="all" />
     <type fullname="FishMMO.Client.UITKBank" preserve="all" />
@@ -75,18 +74,7 @@
     <type fullname="FishMMO.Client.UITKWorldQueueDisplay" preserve="all" />
     <type fullname="FishMMO.Client.UnityHtmlContentFetcher" preserve="all" />
     <type fullname="FishMMO.Client.UnityWebRequestService" preserve="all" />
-    <type fullname="FishMMO.Client.WeatherAudioProfile" preserve="all" />
-    <type fullname="FishMMO.Client.WeatherRenderProfile" preserve="all" />
     <type fullname="FishMMO.Client.WebGLKeyHijack" preserve="all" />
-    <type fullname="FishMMO.Client.CaveCoverSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.DetailScatterSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.GrassBladeSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.PrecipitationLook" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.TerrainHeightmapSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.VolumetricCloudDiagnostics" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.VolumetricCloudSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.WeatherAudioEntry" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.WeatherTierSettings" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishMMO.Commerce.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Client.UITKLoot" preserve="all" />
@@ -142,20 +130,10 @@
     <type fullname="FishMMO.Shared.AddressableSceneProcessor" preserve="all" />
     <type fullname="FishMMO.Shared.ArenaTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.ArmorTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.Atlas.WorldAtlas" preserve="all" />
-    <type fullname="FishMMO.Shared.Atlas.WorldAtlasLayer" preserve="all" />
-    <type fullname="FishMMO.Shared.Atlas.WorldAtlasScene" preserve="all" />
     <type fullname="FishMMO.Shared.AttributeBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.AttributeTickBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.BankController" preserve="all" />
     <type fullname="FishMMO.Shared.Banker" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.BiomeTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.ClimateSettings" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.SceneBiomeMap" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.SceneHydrology" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.SceneRiverFlow" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.SceneWaterBodies" preserve="all" />
-    <type fullname="FishMMO.Shared.Biomes.TerrainProcessProfile" preserve="all" />
     <type fullname="FishMMO.Shared.BodyVisibilityManager" preserve="all" />
     <type fullname="FishMMO.Shared.BootstrapSystem" preserve="all" />
     <type fullname="FishMMO.Shared.BuffController" preserve="all" />
@@ -163,12 +141,6 @@
     <type fullname="FishMMO.Shared.CaveCoverBake" preserve="all" />
     <type fullname="FishMMO.Shared.CaveCoverSite" preserve="all" />
     <type fullname="FishMMO.Shared.CaveVisibility" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.CalendarProfile" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.CometBody" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.SkyProfile" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.SolarSystemProfile" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.StarBody" preserve="all" />
-    <type fullname="FishMMO.Shared.Celestial.WorldBody" preserve="all" />
     <type fullname="FishMMO.Shared.CharacterAnimationController" preserve="all" />
     <type fullname="FishMMO.Shared.CharacterAnimationSet" preserve="all" />
     <type fullname="FishMMO.Shared.CharacterAppearanceManager" preserve="all" />
@@ -244,7 +216,6 @@
     <type fullname="FishMMO.Shared.ScenePropCollisionSet" preserve="all" />
     <type fullname="FishMMO.Shared.SceneProps" preserve="all" />
     <type fullname="FishMMO.Shared.ScenePropSet" preserve="all" />
-    <type fullname="FishMMO.Shared.SceneShelterMap" preserve="all" />
     <type fullname="FishMMO.Shared.SceneSiteEmitters" preserve="all" />
     <type fullname="FishMMO.Shared.SceneTeleporter" preserve="all" />
     <type fullname="FishMMO.Shared.SceneTerrainBake" preserve="all" />
@@ -266,15 +237,11 @@
     <type fullname="FishMMO.Shared.WeaponTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.Weather.WeatherExposureRecipe" preserve="all" />
     <type fullname="FishMMO.Shared.Weather.WeatherExposureTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.Weather.WeatherSubstance" preserve="all" />
-    <type fullname="FishMMO.Shared.Weather.WeatherVolume" preserve="all" />
     <type fullname="FishMMO.Shared.WeatherExposureController" preserve="all" />
     <type fullname="FishMMO.Shared.WildlifeBody" preserve="all" />
     <type fullname="FishMMO.Shared.WildlifeTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.WorldDayNightCycle" preserve="all" />
     <type fullname="FishMMO.Shared.WorldItem" preserve="all" />
     <type fullname="FishMMO.Shared.WorldMapDefinition" preserve="all" />
-    <type fullname="FishMMO.Shared.WorldSceneClimate" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsCache" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsCacheReader" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneSettings" preserve="all" />
@@ -317,23 +284,10 @@
     <type fullname="FishMMO.Shared.ArenaFormat" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BindstoneAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeAffinity" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.BiomeClimateVariant" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.BiomeStructurePalette" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.PlanetClimateTableData" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.RockChute" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.TalusCone" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.TerrainProcess" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.VentLine" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BlendShapeProfile" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BlinkToHitTargetAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BuffAttributeTemplate" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CasterRushAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.CalendarMonth" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.CloudWorldStructures" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.MeteorShower" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.OrbitSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.RingSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Celestial.SkyLimits" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ChainTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ChangeFogAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CharacterAttributeTemplate/CharacterAttributeFormulaDictionary" preserve="nothing" serialized="true" />
@@ -417,14 +371,11 @@
     <type fullname="FishMMO.Shared.TeleportCasterAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.TeleporterCacheDictionary" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.TeleporterCacheEntry" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Weather.AirOffsets" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Weather.WeatherExposureIngredient" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Weather.WeatherExposureTerm" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.WildlifeBodySpec" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.WorldSceneDetails" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsDictionary" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.SceneHydrology/Lake" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.SceneHydrology/River" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CaveCoverBake/Piece" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.PointOfInterestShape" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SceneCaveLifeSpot" preserve="nothing" serialized="true" />
@@ -434,6 +385,83 @@
     <type fullname="FishMMO.Shared.FloatingBoats/Lane" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FloatingBoats/Moored" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FloatingBoats/Sailing" preserve="nothing" serialized="true" />
+  </assembly>
+  <assembly fullname="FishMMO.Social.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.UITKFriendList" preserve="all" />
+    <type fullname="FishMMO.Client.UITKGuild" preserve="all" />
+    <type fullname="FishMMO.Client.UITKParty" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Staff.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.UITKReportPlayer" preserve="all" />
+    <type fullname="FishMMO.Client.UITKStaffConsole" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Terrain.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.TerrainRenderProfile" preserve="all" />
+    <type fullname="FishMMO.Client.CaveCoverSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.DetailScatterSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.GrassBladeSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.TerrainHeightmapSettings" preserve="nothing" serialized="true" />
+  </assembly>
+  <assembly fullname="FishMMO.TestHarness, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.TestHarness.CombatSimManifest" preserve="all" />
+    <type fullname="FishMMO.TestHarness.PlatformSimHarness" preserve="all" />
+    <type fullname="FishMMO.TestHarness.RegionSimHarness" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.TestHarness.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.TestHarness.CombatSimBootstrap" preserve="all" />
+    <type fullname="FishMMO.TestHarness.InteractableSimHarness" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.TestHarness.World, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.TestHarness.World.WorldSimCamera" preserve="all" />
+    <type fullname="FishMMO.TestHarness.World.WorldSimController" preserve="all" />
+    <type fullname="FishMMO.TestHarness.World.WorldSimPanel" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Water, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Water.InlandWaterRenderer" preserve="all" />
+    <type fullname="FishMMO.Water.WaterBreakers" preserve="all" />
+    <type fullname="FishMMO.Water.WaterEnvironment" preserve="all" />
+    <type fullname="FishMMO.Water.WaterShore" preserve="all" />
+    <type fullname="FishMMO.Water.WaterShoreField" preserve="all" />
+    <type fullname="FishMMO.Water.WaterSurface" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.WorldSimulation, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Shared.Atlas.WorldAtlas" preserve="all" />
+    <type fullname="FishMMO.Shared.Atlas.WorldAtlasLayer" preserve="all" />
+    <type fullname="FishMMO.Shared.Atlas.WorldAtlasScene" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.BiomeTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.ClimateSettings" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.SceneBiomeMap" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.SceneHydrology" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.SceneRiverFlow" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.SceneWaterBodies" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.TerrainProcessProfile" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.CalendarProfile" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.CometBody" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.SkyProfile" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.SolarSystemProfile" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.StarBody" preserve="all" />
+    <type fullname="FishMMO.Shared.Celestial.WorldBody" preserve="all" />
+    <type fullname="FishMMO.Shared.SceneShelterMap" preserve="all" />
+    <type fullname="FishMMO.Shared.Weather.WeatherSubstance" preserve="all" />
+    <type fullname="FishMMO.Shared.Weather.WeatherVolume" preserve="all" />
+    <type fullname="FishMMO.Shared.WorldDayNightCycle" preserve="all" />
+    <type fullname="FishMMO.Shared.WorldSceneClimate" preserve="all" />
+    <type fullname="FishMMO.Shared.Biomes.BiomeClimateVariant" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.BiomeStructurePalette" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.PlanetClimateTableData" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.RockChute" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.TalusCone" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.TerrainProcess" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.VentLine" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.CalendarMonth" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.CloudWorldStructures" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.MeteorShower" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.OrbitSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.RingSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Celestial.SkyLimits" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Weather.AirOffsets" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.SceneHydrology/Lake" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.Biomes.SceneHydrology/River" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeAbandonedTerraces" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeCaveCrystal" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeCaveFormation" preserve="nothing" serialized="true" />
@@ -487,36 +515,18 @@
     <type fullname="FishMMO.Shared.Biomes.BedTextureLayer" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeOverride" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Social.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKFriendList" preserve="all" />
-    <type fullname="FishMMO.Client.UITKGuild" preserve="all" />
-    <type fullname="FishMMO.Client.UITKParty" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Staff.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKReportPlayer" preserve="all" />
-    <type fullname="FishMMO.Client.UITKStaffConsole" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.TestHarness, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.TestHarness.CombatSimManifest" preserve="all" />
-    <type fullname="FishMMO.TestHarness.PlatformSimHarness" preserve="all" />
-    <type fullname="FishMMO.TestHarness.RegionSimHarness" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.TestHarness.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.TestHarness.CombatSimBootstrap" preserve="all" />
-    <type fullname="FishMMO.TestHarness.InteractableSimHarness" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.TestHarness.World, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.TestHarness.World.WorldSimCamera" preserve="all" />
-    <type fullname="FishMMO.TestHarness.World.WorldSimController" preserve="all" />
-    <type fullname="FishMMO.TestHarness.World.WorldSimPanel" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Water, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Water.InlandWaterRenderer" preserve="all" />
-    <type fullname="FishMMO.Water.WaterBreakers" preserve="all" />
-    <type fullname="FishMMO.Water.WaterEnvironment" preserve="all" />
-    <type fullname="FishMMO.Water.WaterShore" preserve="all" />
-    <type fullname="FishMMO.Water.WaterShoreField" preserve="all" />
-    <type fullname="FishMMO.Water.WaterSurface" preserve="all" />
+  <assembly fullname="FishMMO.WorldSimulation.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.WeatherAudioProfile" preserve="all" />
+    <type fullname="FishMMO.Client.WeatherRenderProfile" preserve="all" />
+    <type fullname="FishMMO.Client.FishCloudsFeature" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.FishHeatShimmerFeature" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.FishHeightFogFeature" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.FishVolumetricFogFeature" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.PrecipitationLook" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.VolumetricCloudDiagnostics" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.VolumetricCloudSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.WeatherAudioEntry" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Client.WeatherTierSettings" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishNet.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishNet.Component.Prediction.NetworkTrigger" preserve="all" />

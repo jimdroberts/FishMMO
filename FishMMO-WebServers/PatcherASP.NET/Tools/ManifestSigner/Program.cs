@@ -78,7 +78,7 @@ Key placement after keygen:
                          under the service user's config directory (~/.config on Linux, %APPDATA% on
                          Windows), so  keygen --out-dir ~/.config/fishmmo/patcher  needs nothing else.
   CLIENT  public key  -> CertificatePinSet.VersionManifestPublicKeyBase64
-                         (Assets/Scripts/Client/Security/CertificatePins.generated.cs)
+                         (Assets/FishMMO/Client/Security/CertificatePins.generated.cs)
 
 The private key must never be committed, never be logged, and never leave the release host.");
 		}

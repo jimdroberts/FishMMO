@@ -6,13 +6,13 @@ in git. These sentinel templates are tracked in their place.
 
 | Template | Restored to |
 | --- | --- |
-| `HostConfig.generated.cs.template` | `Assets/Scripts/Shared/Implementation/HostConfig.generated.cs` |
-| `CertificatePins.generated.cs.template` | `Assets/Scripts/Client/Security/CertificatePins.generated.cs` |
-| `ClientApiSecret.generated.cs.template` | `Assets/Scripts/Client/Security/ClientApiSecret.generated.cs` |
+| `HostConfig.generated.cs.template` | `Assets/FishMMO/Shared/Implementation/HostConfig.generated.cs` |
+| `CertificatePins.generated.cs.template` | `Assets/FishMMO/Client/Security/CertificatePins.generated.cs` |
+| `ClientApiSecret.generated.cs.template` | `Assets/FishMMO/Client/Security/ClientApiSecret.generated.cs` |
 
 Each generated file only **overrides** values. The classes themselves are tracked —
-`HostConfig` (`Assets/Scripts/Shared/Implementation/HostConfig.cs`), `CertificatePinSet`
-and `ClientGateSecret` (`Assets/Scripts/Client/Security/`) — and hold sentinel defaults.
+`HostConfig` (`Assets/FishMMO/Shared/Implementation/HostConfig.cs`), `CertificatePinSet`
+and `ClientGateSecret` (`Assets/FishMMO/Client/Security/`) — and hold sentinel defaults.
 Each declares `static partial void Configure(Values values)`, and the generated file is
 just that method's body:
 
@@ -41,7 +41,7 @@ real values are written.
 
 ## How the files get there
 
-**Automatically, on Editor load.** `Assets/Editor/GeneratedFiles/GeneratedFileRestorer.cs`
+**Automatically, on Editor load.** `Assets/FishMMO/Editor/GeneratedFiles/GeneratedFileRestorer.cs`
 copies any missing file from its template and refreshes the AssetDatabase, so the
 dashboard always has a file to overwrite and CI a file to substitute into.
 
@@ -69,7 +69,7 @@ and report every value the template assigns that the file does not:
 
 - `restore-generated-files.sh` prints the missing values and exits `1`. It
   compares `values.<Name> =` assignments only.
-- The Editor's `Assets/Editor/GeneratedFiles/GeneratedFileDriftCheck.cs` logs them
+- The Editor's `Assets/FishMMO/Editor/GeneratedFiles/GeneratedFileDriftCheck.cs` logs them
   on load, quoting the template's line — comment included — so it can be pasted
   straight into `Configure`. It also checks the file declares the template's partial
   class, which is how a file from **before the split** shows up: it declares its own

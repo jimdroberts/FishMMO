@@ -37,7 +37,7 @@ The subsystem uses a split execution model:
 | Linux    | Yes       | Dedicated server builds |
 | WebGL    | N/A       | Server-only system; not applicable to client builds |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting backend:** IL2CPP
 
 ## Features

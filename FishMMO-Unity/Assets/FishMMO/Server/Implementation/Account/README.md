@@ -37,7 +37,7 @@ All public methods acquire `lock(syncRoot)` before accessing any internal state.
 | Linux    | Yes       | Fully supported as a server host |
 | WebGL    | N/A       | Server-only component; not applicable to browser builds |
 
-**Engine:** Unity 6.3 LTS
+**Engine:** Unity 6.6 (6000.6.8f1)
 **Scripting backend:** IL2CPP
 
 ## Features
@@ -56,7 +56,7 @@ All public methods acquire `lock(syncRoot)` before accessing any internal state.
 
 ## Prerequisites
 
-- Unity 6.3 LTS (IL2CPP scripting backend)
+- Unity 6.6 (6000.6.8f1) (IL2CPP scripting backend)
 - FishNet networking framework (`FishNet.Connection.NetworkConnection`)
 - FishMMO server core (`FishMMO.Server.Core.Collections`). The account interfaces are not in this project: they live in `FishMMO-ServerAuth.dll` (below)
 - The FishMMO-Auth libraries: `FishMMO-ServerAuth.dll` provides the generic `AccountManager<T>` / `SrpAccountManager<T>` / `TokenAccountManager<T>` base classes, `AccountData`, `ServerSrpData` and the `ArrivalOrderTracker<T>` collection (in `FishMMO.Auth.Core.Collections`); `FishMMO-AuthShared.dll` provides `ConnectionEncryptionData` and the `AuthState` enum.

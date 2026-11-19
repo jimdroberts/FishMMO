@@ -31,9 +31,9 @@ Four architectural features keep the chat pipeline responsive under extreme load
 1. **Lock-Free Incoming Chat Queue** — Network callbacks enqueue stamped messages into a `ConcurrentQueue`; the main-thread `OnUpdate` drains up to `maxIncomingChatsPerFrame` entries per frame. Each sender's token bucket and minimum gap are charged in the network callback, BEFORE the message is queued (`ChatRateGate`), so no one sender can occupy more of the queue than its rate allows. A hard cap (`maxIncomingQueueSize`, default 10,000) bounds memory; a message arriving at the cap is dropped and the drops are logged at most every ten seconds. It used to kick whichever connection arrived next — after a main-thread hitch with many busy players, an honest one (hot-path audit L2).
 
    A dequeued message whose connection has no spawned character (`FirstObject == null`) is **dropped, not kicked**. The queue is drained a frame or more after the message arrives, and a character despawns while its connection stays up on every scene transfer, bind-point respawn and channel switch — so a line typed just before one of those dequeues with no character attached. Kicking for it disconnected a player mid-transfer, with no notice, for typing. Anything genuinely trying to talk without a character is refused just as effectively by discarding what it sends.
-2. **Token Bucket Anti-Spam** — Each player carries a refillable token bucket (`ChatTokens` (double), `ChatTokenLastRefillTicks`), charged at enqueue by the pure `ChatRateGate.TryCharge`. Messages consume one token; when the bucket is empty the message is dropped. Float-precision tokens ensure fractional refill at sub-1-token/s rates accumulates correctly.
+2. **Token Bucket Anti-Spam** — Each player carries a refillable token bucket in its Core `ChatState` component (`Tokens` (double), `LastRefillTicks`; the `chat` module), charged at enqueue by the pure `ChatRateGate.TryCharge`. Messages consume one token; when the bucket is empty the message is dropped. Float-precision tokens ensure fractional refill at sub-1-token/s rates accumulates correctly.
 
-   **Flood mute.** Every refusal is counted (`ChatFloodMute`, `ChatSystem.FloodMute.cs`): `floodMuteRefusalThreshold` refusals (10) within `floodMuteWindowSeconds` (10 s) mute the sender for `floodMuteDurationSeconds` (180 s) and tell them why with one system line. Flooding on while muted pushes the end out, so the mute ends a full term after the flooding stops. Like a stored mute it silences chat and not commands, so `/helpme` and `/report` still work, and each line that still gets through the gate is answered with the time left. It is **held in memory** by the chat system, keyed by character ID, on the monotonic clock: it is the rate limit escalating, not a moderation decision, so it writes nothing to the database, leaves the stored-mute fields (`ChatMutedUntilTicks`, which the moderation commands re-read and overwrite) alone, and is not shown in the staff console. It survives a relog on the same scene server and is lost on a move to another one; entries are swept every 30 s once spent.
+   **Flood mute.** Every refusal is counted (`ChatFloodMute`, `ChatSystem.FloodMute.cs`): `floodMuteRefusalThreshold` refusals (10) within `floodMuteWindowSeconds` (10 s) mute the sender for `floodMuteDurationSeconds` (180 s) and tell them why with one system line. Flooding on while muted pushes the end out, so the mute ends a full term after the flooding stops. Like a stored mute it silences chat and not commands, so `/helpme` and `/report` (Staff module) still work, and each line that still gets through the gate is answered with the time left. It is **held in memory** by the chat system, keyed by character ID, on the monotonic clock: it is the rate limit escalating, not a moderation decision, so it writes nothing to the database, leaves the stored mute (`ChatState.MutedUntilTicks`, which the moderation commands re-read and overwrite) alone, and is not shown in the staff console. It survives a relog on the same scene server and is lost on a move to another one; entries are swept every 30 s once spent.
 3. **Batch DB Persistence** — All persist-eligible channels enqueue into a `ConcurrentQueue<PendingChatPersist>`. A periodic callback drains up to `maxPersistBatchSize` (default 2,000) entries and writes the batch via `PersistBatchAsync`, reducing DB round-trips from O(N) to ~O(N/batchSize). One flush runs at a time (`persistFlushInFlight`). A batch refused by a transient failure goes back on the queue and is retried until `persistRetryWindowSeconds` (300 s) after its receipt; one refused for its content is bisected (at most `maxPersistIsolationDepth` = 6 halvings) so only the rows the database will not take are lost.
 4. **Outbound Broadcast Batching** — World and Trade channel messages are buffered per-world in `OutboundWorldBroadcastBuffer`. A periodic callback flushes up to `maxOutboundBatchSize` messages per recipient per flush. A hard cap (`maxBufferedWorldMessages`, default 200) per world ID drops oldest messages if the buffer exceeds the limit.
 
@@ -44,7 +44,7 @@ Four architectural features keep the chat pipeline responsive under extreme load
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -86,7 +86,7 @@ Four architectural features keep the chat pipeline responsive under extreme load
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `IChatSystem`, `IChatSystemRuntimeData`, `IChatSystemMainThreadQueueData`, `IPeriodicUpdateSystem`, `ISceneServerSystem`, `ISceneServerRuntimeData`, `ICharacterMappingData<NetworkConnection>`, `ChatCommand`, `ChatCommandDetails`, `ChatHelper`, `ChatBroadcast`, `ChatChannel`, `PendingChatPersist`, `AsyncWorkerData`, and `Authentication`
 - **FishMMO Database** — provides `IChatService`, `ICharacterPartyService`, `ICharacterGuildService`, `ICharacterService`, `ChatData`, `CharacterPartyData`, `CharacterGuildData`, `CharacterData`, and `DatabaseResult<T>`
@@ -189,7 +189,7 @@ On initialization, the following channel-to-handler map is built in `IChatSystem
 5. Rich text tag sanitization (skipped when text contains no `<`).
 6. Command extraction via `ChatHelper.GetCommandAndTrim`.
 7. Non-chat command check via `ChatHelper.TryParseCommand`.
-7a. Stored mute (`ChatMutedUntilTicks`), then flood mute (`TryRefuseFloodMuted`): chat is refused with the time left; commands above already ran.
+7a. Stored mute (`ChatState.MutedUntilTicks`), then flood mute (`TryRefuseFloodMuted`): chat is refused with the time left; commands above already ran.
 8. Chat command routing via `ChatHelper.TryParseChatCommand`.
 9. Channel-specific ID prepend (Guild ID, Party ID, World ID).
 10. Post-prepend length enforcement via `Substring(0, N)`.

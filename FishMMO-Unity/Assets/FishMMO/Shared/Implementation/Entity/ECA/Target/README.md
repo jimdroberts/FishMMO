@@ -70,7 +70,7 @@ apart from a **declined** one ("this peer may not look" — still play the autho
 Two copies of that predicate drifting apart is how an observer starts resolving somebody else's
 hits.
 
-Requirements: Unity 6.3 LTS with FishNet. Selectors depend only on the shared FishMMO entity layer; no platform-specific APIs.
+Requirements: Unity 6.6 (6000.6.8f1) with FishNet. Selectors depend only on the shared FishMMO entity layer; no platform-specific APIs.
 
 ## Architecture
 

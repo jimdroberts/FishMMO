@@ -1,399 +1,138 @@
-# Faction System
-
-**Short description:** A data-driven reputation framework that tracks per-character faction standings, resolves alliance levels through a priority chain, and synchronizes reputation changes via FishNet broadcasts.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Supported Platforms](#supported-platforms)
-- [Features](#features)
-- [Prerequisites](#prerequisites)
-- [Installation / Build](#installation--build)
-- [Quick Start Guide](#quick-start-guide)
-- [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
-- [Operational Checks](#operational-checks)
-- [Flow Diagram](#flow-diagram)
-- [Project Structure](#project-structure)
-- [License](#license)
-
-## Overview
-
-The Faction system is a data-driven reputation framework for FishMMO. Each character tracks reputation values against multiple factions, which determines alliance levels (Ally, Neutral, Enemy) for gameplay interactions. The system uses a matrix-based editor for defining default inter-faction relationships, supports dynamic reputation adjustment through combat events, and synchronizes standings via FishNet broadcasts.
-
-## Supported Platforms
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Windows  | ✅ Supported | Primary development platform |
-| Linux    | ✅ Supported | Server and client builds |
-| WebGL    | ✅ Supported | Via Unity WebGL export |
-
-Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
-
-## Features
-
-- **Per-character reputation tracking** against multiple factions with integer standings
-- **Alliance level resolution** via priority chain (party → guild → aggression → faction standings)
-- **Value model** with Allied/Neutral/Hostile grouping and fast dictionary lookups
-- **Matrix-based editor** for configuring default NxN inter-faction relationships
-- **Combat-based adjustment** — Killing NPCs or players shifts faction standings proportionally
-- **NPC static relationships** — NPCs use `RaceTemplate.InitialFaction` without accumulating changes, and their roster is **derived on every peer** rather than sent
-- **Network synchronization** — Owner-targeted and observer-targeted FishNet broadcasts, on different terms: the owner gets exact values, everyone else gets a sign
-- **Dirty-set tick subscription** — the flush tick is held only while something is dirty, so a settled character costs no per-tick delegate at all
-- **Alliance coloring** — Green (Ally), Sky Blue (Neutral), Red (Enemy) for nameplates/frames
-- **Clamped reputation** — Values bounded to `[Minimum, Maximum]` (default `[-10000, 10000]`)
-- **Static events** — `OnUpdateFaction` fired on every faction change for UI and system hooks
-
-## Prerequisites
-
-- Unity 6.3 LTS
-- FishNetworking (FishNet)
-- FishMMO Shared Core
-
-## Installation / Build
-
-This system is an integrated module of the FishMMO Unity project. No separate installation is required.
-
-## Quick Start Guide
-
-1. **Define factions** — Create `FactionTemplate` ScriptableObjects via Addressables. Set icon, description, and default relationships.
-2. **Configure the matrix** — Open the `FactionMatrixTemplate` asset in the inspector. Click **Rebuild Matrix** to load all factions, edit the NxN grid, then click **Rebuild Factions** to propagate defaults.
-3. **Assign NPC factions** — Set `RaceTemplate.InitialFaction` on NPC race templates to link NPCs to their faction identity.
-4. **Runtime adjustments** — Faction standings change automatically through combat events (`CharacterDamageController.Kill()` calls `AdjustFaction()` with 1% adjustment). Direct modification is available via `SetFaction()` and `Add()`.
-5. **Query alliance** — Call `GetAllianceLevel(otherFactionController)` to determine the relationship between two characters for gameplay logic.
-
-## Configuration
-
-### Template Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `Icon` | `Sprite` | UI icon for the faction |
-| `Description` | `string` | Player-facing description text |
-| `Minimum` | `const int` | Minimum reputation value (`-10000`) |
-| `Maximum` | `const int` | Maximum reputation value (`10000`) |
-| `DefaultAllied` | `FactionHashSet` | Set of factions allied by default |
-| `DefaultNeutral` | `FactionHashSet` | Set of factions neutral by default |
-| `DefaultHostile` | `FactionHashSet` | Set of factions hostile by default |
-| `Name` | `string` | Read-only, from ScriptableObject name |
-
-### Value Model
-
-Each `Faction` instance holds a single `int Value` representing the character's reputation with that faction:
-
-| Range | Alliance Group | Meaning |
-|-------|---------------|---------|
-| `> 0` | Allied | Positive standing, faction is friendly |
-| `= 0` | Neutral | No relationship established |
-| `< 0` | Hostile | Negative standing, faction is hostile |
-
-Values are clamped to `[FactionTemplate.Minimum, FactionTemplate.Maximum]` which defaults to `[-10000, 10000]`.
-
-### Controller Dictionaries
-
-The `FactionController` maintains four dictionaries for fast lookups:
-
-| Dictionary | Contents |
-|-----------|----------|
-| `Factions` | All factions the character has standings with |
-| `Allied` | Subset with `Value > 0` |
-| `Neutral` | Subset with `Value == 0` |
-| `Hostile` | Subset with `Value < 0` |
-
-When a faction value changes, the faction is removed from its old group and inserted into the correct new group.
-
-### Alliance Level Colors
-
-| Level | Color |
-|-------|-------|
-| Ally | Green |
-| Neutral | Sky Blue |
-| Enemy | Red |
-
-### Faction Matrix
-
-The `FactionMatrixTemplate` provides an editor tool for configuring default inter-faction relationships:
-
-- **Matrix structure** — `FactionMatrix` stores a flat `FactionAllianceLevel[]` array of size `Count × Count`, indexed as `[x + y * Count]`.
-- **Rebuild Matrix** — Loads all `FactionTemplate` assets via Addressables and creates a new `Count × Count` matrix initialized to `Neutral`.
-- **Edit Matrix** — The custom inspector (`FactionMatrixEditor`) renders an NxN grid of enum dropdowns. Edits are automatically mirrored (symmetric matrix). The diagonal is always `Ally` (a faction is always allied with itself).
-- **Rebuild Factions** — Propagates the matrix values to each `FactionTemplate`'s `DefaultAllied`, `DefaultNeutral`, and `DefaultHostile` sets.
-
-## Usage Examples
-
-### Direct Modification API
-
-| Method | Behavior |
-|--------|----------|
-| `SetFaction(templateID, value)` | Sets absolute value, updates alliance group, fires event |
-| `Add(template, amount)` | Adds amount to current value, clamps to bounds, fires event |
-
-Both also call `Faction.MarkChanged()`, which sets `PersistenceDirty` **and bumps `Version`**. The
-mutation-side bump is what lets `MarkPersisted(persistedVersion)` refuse to clear a row that changed
-while its write was in flight — a version advanced only by the save snapshot cannot guard an
-in-flight change. `SetFaction(..., skipEvent: true)` is the restore path and leaves the row clean.
-
-Both methods skip adjustment for NPC characters to prevent NPCs from accumulating faction changes.
-
-### Combat-Based Adjustment
-
-`AdjustFaction(defenderFactionController, alliedPercent, hostilePercent)` is called by `CharacterDamageController.Kill()` with `(0.01, 0.01)` — 1% adjustment:
-
-```
-AdjustFaction(defender, alliedPercent, hostilePercent)
-  ├── Defender is NPC?
-  │   └── For each of defender's race InitialFaction.DefaultAllied:
-  │       → Add(-Maximum * alliedPercent) to attacker's standing  (lose rep)
-  │   └── For each of defender's race InitialFaction.DefaultHostile:
-  │       → Add(+Maximum * hostilePercent) to attacker's standing (gain rep)
-  ├── Defender is Player?
-  │   └── For each of defender's Allied factions:
-  │       → Add(-faction.Value * alliedPercent) to attacker's standing
-  │   └── For each of defender's Hostile factions:
-  │       → Add(+faction.Value * hostilePercent) to attacker's standing
-```
-
-**Effect**: Killing an NPC makes you lose standing with the NPC's allies and gain standing with the NPC's enemies. Killing a player has a proportional effect based on the victim's actual faction standings.
-
-### Network Synchronization
-
-#### Payload Serialization (FishNet Reader/Writer)
-
-The payload is framed by a byte count so `ReadPayload` can resynchronise after rejecting an
-untrustworthy one — every `NetworkBehaviour` on the object shares a single unframed buffer, so an
-abort without framing would leave every behaviour after this one reading at the wrong offset.
-
-It then writes `raceTemplateID` (unpacked — template IDs are full-range 32-bit hashes, so FishNet's
-signed-packed form would spend five bytes on the most-multiplied id in the game) and a
-**derived-roster** flag:
-
-- **Derived roster** — every ordinary NPC. Nothing further is written. Both ends call
-  `InitializeTemplateFactions()` and rebuild the table from `RaceTemplate.InitialFaction` (allied at
-  `Maximum`, neutral at 0, hostile at `Minimum`, mirroring
-  `CharacterCreateSystem.BuildStartingFactionEntries`). An NPC never changes faction, so its roster
-  is a pure function of immutable template data every peer already holds; sending it would be wasted
-  bytes and a second source of truth. `FactionController.FactionsAreTemplateDerived` reports which
-  case a controller is in.
-- **Owned roster** — a player's persisted standings, or a pet's copy of its owner's (`CopyFrom`
-  clears the derived flag). Written **per receiver**, with the shape byte on the wire so the reader
-  never guesses: the **owner** gets exact `Int32` standings, **everyone else** gets one sign byte
-  per entry. Varying by connection is safe because FishNet builds the spawn message per receiving
-  connection.
-
-`WritePayload` also seeds the per-channel baselines (`lastSentFactionValues`,
-`lastSentObserverSigns`) with what it just sent. Faction rows are installed before
-`ServerManager.Spawn`, so without that seed the first flush after every spawn re-sent the entire
-table as no-op writes.
-
-#### Client Broadcast Receivers
-
-| Broadcast | Purpose |
-|-----------|---------|
-| `FactionUpdateBroadcast` | Owner-targeted single faction update |
-| `FactionUpdateMultipleBroadcast` | Owner-targeted bulk faction update |
-| `CharacterObserverFactionUpdateBroadcast` | Observer-targeted **sign** updates with `CharacterID` routing |
-
-Observer-targeted updates resolve the destination controller through `BaseCharacter.ClientCharacters` and apply updates on the resolved `IFactionController` instance.
-
-**Observers get a sign, not a value.** `NewValue` on the observer channel carries -1, 0 or +1 and
-nothing more, and a message goes out only when a standing actually *crosses zero* — because the only
-observer-side reader of a peer's factions is `GetAllianceLevel`, which asks whether the peer's
-standing with one of the viewer's own hostile factions is greater than zero, and `UITKFactions`
-refuses to render any character but the local one. Every mob kill credits standing, so the exact
-integer used to go out reliably to every observer on every reputation tick, to be reduced to a
-boolean on arrival — and it handed a packet-inspecting client a peer's precise progression. Full
-precision stays on the owner-only `FactionUpdateBroadcast` / `FactionUpdateMultipleBroadcast`,
-which are sent whenever the exact value moves. The two audiences therefore keep their own
-baselines: a kill that nudges a standing from 4000 to 4100 is an owner message and no observer
-message at all.
-
-**The flush tick belongs to the dirty set, not to the lifetime.** `TimeManager.OnTick` is
-subscribed when something is marked dirty and dropped the moment the set drains, so a settled
-character — nearly every character, nearly all of the time — pays nothing per tick. Before this,
-every server-side character invoked an immediately-returning flush thirty times a second.
-
-### Static Events
-
-| Event | Signature | When Fired |
-|-------|-----------|------------|
-| `OnUpdateFaction` | `Action<ICharacter, Faction>` | After `SetFaction` (unless `skipEvent=true`) or `Add` |
-
-### NPC Faction Handling
-
-NPCs use a different faction path than players:
-
-- **No accumulation**: `SetFaction` and `Add` early-return for NPCs (`Character as NPC != null`) to prevent NPCs from changing standings through combat.
-- **Static relationships**: NPC faction relationships are determined by their `RaceTemplate.InitialFaction`, which references a `FactionTemplate` with pre-configured `DefaultAllied`/`DefaultHostile` sets.
-- **Derived, not transmitted**: `InitializeTemplateFactions()` builds the roster from that template — allied at `Maximum`, neutral at 0, hostile at `Minimum` — and runs on **every** peer: from `InitializeOnce` on the server and from `ReadPayload` on a client. Both ends compute the same table from the same immutable asset rather than one end being told. The values mirror `CharacterCreateSystem.BuildStartingFactionEntries`; if those diverge, an NPC and a freshly created player of the same race would disagree about the same faction.
-- **Pets are the exception**: `CopyFrom` installs the owner's standings, which no template derives, so it clears `FactionsAreTemplateDerived` and the pet's roster travels like a player's.
-- **Alliance checks**: When evaluating alliance level against an NPC, the system checks the NPC's `InitialFaction.ID` directly against the player's `Hostile` dictionary, rather than iterating the NPC's dynamic standings.
-
-### External Integration Points
-
-- **CharacterDamageController** — Calls `AdjustFaction()` on kill with 1% allied/hostile adjustment.
-- **Party System** — `GetAllianceLevel` checks party membership for Ally override.
-- **Guild System** — `GetAllianceLevel` checks guild membership for Ally override.
-- **NPC System** — NPCs use `RaceTemplate.InitialFaction` for static faction identity.
-- **Database Layer** — Factions are persisted and restored via `CharacterFactionData` DTO. Since 2026-09-07 standings are actually written back: `Faction.PersistenceDirty` / `MarkChanged` (set by `SetFaction` without `skipEvent` and by `Add`; `skipEvent: true` is the restore path) and `MarkPersisted`, with `CharacterSystem.Saving.AppendFactionData` writing dirty rows on the periodic save, at despawn before the session release, and for lingering combat-logout bodies. Before that the only writer was character creation, so every kill credit and quest reward was lost on logout.
-- **UI** — `UITKFactions` panel subscribes to `OnUpdateFaction` for real-time standing display.
-- **Target Frames** — `GetAllianceLevelColor` provides nameplate/frame coloring.
-
-## Operational Checks
-
-| Check | How to Verify | Expected Result |
-|-------|---------------|-----------------|
-| Faction creation | Create a `FactionTemplate` ScriptableObject and rebuild matrix | Template appears in matrix editor grid |
-| Matrix editing | Change a cell in the `FactionMatrixEditor` inspector | Change mirrored symmetrically; diagonal remains Ally |
-| Rebuild factions | Click **Rebuild Factions** on `FactionMatrixTemplate` | `DefaultAllied`/`DefaultNeutral`/`DefaultHostile` sets updated on each `FactionTemplate` |
-| Set faction standing | Call `SetFaction(templateID, value)` on a player | Value stored in correct dictionary group; `OnUpdateFaction` fired |
-| Add reputation | Call `Add(template, amount)` on a player | Value clamped to bounds; dictionary group updated; event fired |
-| NPC kill adjustment | Kill an NPC as a player | Lose standing with NPC's allied factions; gain standing with NPC's hostile factions |
-| Player kill adjustment | Kill a player character | Proportional faction shifts based on victim's Allied/Hostile standings |
-| NPC immunity | Trigger `SetFaction`/`Add` on an NPC | Early return; no faction change applied |
-| Alliance resolution | Call `GetAllianceLevel` between two characters | Correct level returned per priority chain (party → guild → aggression → standings) |
-| Network sync | Modify a faction on the server | `FactionUpdateBroadcast` received by owner client; observer broadcasts reach nearby clients |
-| UI update | Change a faction standing at runtime | `UITKFactions` panel reflects the new value via `OnUpdateFaction` event |
-
-## Flow Diagram
-
-### High-Level Overview
-
-```mermaid
-flowchart LR
-    Entity[Character / NPC] --> Faction[FactionSystem]
-    Faction --> Rel[Relationship matrix]
-    Rel -->|friendly / neutral / hostile| Combat[Combat eligibility]
-    Rel --> AI[NPC AI]
-    Faction --> Rep[Reputation tracking]
-```
-
-### Alliance Resolution
-
-```
-GetAllianceLevel(other)
-  1. Same party?         → Ally
-  2. Same guild?         → Ally
-  3. Either aggressive?  → Enemy
-  4. Other is NPC?
-     └── Check if NPC's InitialFaction is in this character's Hostile dict → Enemy
-  5. Other is Player?
-     └── For each of this character's Hostile factions:
-         └── If the other player is Allied with that faction → Enemy
-  6. Default             → Neutral
-```
-
-### Faction Adjustment Flow (Combat Kill)
-
-```
-CharacterDamageController.Kill()
-  └── AdjustFaction(defender, 0.01, 0.01)
-        ├── Defender is NPC
-        │   ├── For each DefaultAllied of defender's InitialFaction:
-        │   │   └── attacker.Add(-Maximum * 0.01)   // lose rep with allies
-        │   └── For each DefaultHostile of defender's InitialFaction:
-        │       └── attacker.Add(+Maximum * 0.01)   // gain rep with enemies
-        └── Defender is Player
-            ├── For each of defender's Allied factions:
-            │   └── attacker.Add(-faction.Value * 0.01)
-            └── For each of defender's Hostile factions:
-                └── attacker.Add(+faction.Value * 0.01)
-```
-
-### Faction Value Update Flow
-
-```
-SetFaction(templateID, value) / Add(template, amount)
-  ├── NPC check → early return if NPC
-  ├── Clamp value to [Minimum, Maximum]
-  ├── Remove from old alliance group dictionary
-  ├── Insert into new alliance group dictionary
-  └── Fire OnUpdateFaction(character, faction)
-        ├── Server: FactionSystem persists to DB, broadcasts to client
-        └── Client: UIFactions panel updates display
-```
-
-## Project Structure
-
-### Directory Structure
-
-```
-Faction/
-├── Faction.cs                     # Runtime faction instance (value, template ref)
-├── FactionAllianceLevel.cs        # Enum: Ally, Neutral, Enemy
-├── FactionController.cs           # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
-├── IFactionController.cs          # Faction controller interface + static events
-└── Template/
-    ├── FactionTemplate.cs             # ScriptableObject blueprint (bounds, default relationships)
-    ├── FactionMatrix.cs               # Flat array representing NxN faction relationship grid
-    ├── FactionMatrixTemplate.cs       # ScriptableObject wrapping FactionMatrix + editor rebuild tools
-    └── Editor/
-        └── FactionMatrixEditor.cs         # Custom inspector for visual matrix editing
-```
-
-### Module layout (Phase 2)
-
-Factions is a module: everything it is lives in `Assets/FishMMO/Modules/Factions`, and deleting the folder removes it while the
-game still builds and runs (the `character_factions` table and its rows stay).
+# Factions module
+
+**Short description:** Per-character faction standings, the alliance level between two characters, standings shifted by
+kills, the aggression toggle and its lock, and the faction relation in the harm rule, with the factions window and the
+faction matrix editor.
+
+| | |
+|---|---|
+| **Module id** | `factions` (`FactionsModule`) |
+| **Assemblies** | `FishMMO.Factions`, `.Server`, `.Client`, `.Tests`, `.RenderScratch`; editor `FishMMO.Shared.Faction.Editor` |
+| **Depends on** | The core |
+| **Depended on by** | None |
+| **Remove together with** | Nothing |
+| **Moved** | Phase 2 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-16 |
+
+## Folders
 
 ```
 Assets/FishMMO/Modules/Factions/
 ├── Runtime/    FishMMO.Factions          FactionController (a CharacterPart on every character), Faction, IFactionStandings,
-│                                         FactionTemplate (+ StartingRaces), FactionMatrix(+Template), FactionHarmRelation,
-│                                         broadcasts, AddFactionAction / HasFactionCondition / FactionEventData / FactionAmountValue
-├── Server/     FishMMO.Factions.Server   FactionSystem (+ asset: the aggression request), FactionPersistence (save participant),
-│                                         FactionCreationContributor (starting standings at character creation)
+│                                         FactionTemplate (+ StartingRaces), FactionMatrix (+ Template), FactionHarmRelation,
+│                                         FactionBroadcasts, AddFactionAction, HasFactionCondition, FactionEventData,
+│                                         FactionAmountValue, FactionsModule
+├── Server/     FishMMO.Factions.Server   FactionSystem (+ asset: the aggression request), FactionPersistence (save
+│                                         participant), FactionCreationContributor (starting standings)
 ├── Client/     FishMMO.Factions.Client   UITKFactions + UIFactions.prefab/uxml/uss
-├── Editor/     FishMMO.Shared.Faction.Editor   FactionMatrixEditor, FactionDashboardCategories
-├── Templates/                            the faction templates and the matrix
-└── Tests/      FishMMO.Factions.Tests
+├── Editor/     FishMMO.Shared.Faction.Editor   FactionMatrixEditor, FactionDashboardCategories; RenderScratch/
+├── Templates/                            The faction templates and FactionMatrix.asset
+├── Tests/      FishMMO.Factions.Tests
+└── README.md
 ```
 
-| Seam (core) | What the module does |
+## Core seams it uses
+
+| Seam | What the module does |
 |---|---|
-| `IFactionController` (slim: alliance level and colour, aggression, set a standing by id) | `FactionController` implements it; without the module a character has none. |
-| `CharacterPart` | `FactionController` is added at wake to every `BaseCharacter`; no prefab carries it. Its aggression state, once two SyncVars, rides the spawn payload and `FactionAggressionStateBroadcast` / `FactionAggressionLockBroadcast`. |
-| `HarmRule` relations | `FactionHarmRelation` (order 400): standing and the aggression toggles. |
+| `IFactionController` (core contract) | `FactionController` implements it: alliance level and colour, aggression, setting a standing by id. Without the module a character has none. |
+| `[assembly: CharacterPart]` | `FactionController` is added at wake to every `BaseCharacter`; no prefab carries it. Its standings and aggression state ride the spawn payload (`factions.standings`). |
+| `[assembly: HarmRelation]` | `FactionHarmRelation` (order 400): standing and the aggression toggles decide who may harm whom. |
 | `[assembly: CharacterPersistence]` | `FactionPersistence` over `character_factions`. |
-| `[assembly: CharacterCreationContributor]` | the starting standings of the race's faction (`FactionTemplate.StartingRaces`, which replaced `RaceTemplate.InitialFaction`). |
-| `Server.AdoptModuleSystems` | `FactionSystem.asset` carries `SceneServer_Systems`. |
-| `ModulePanelHost` | `UIFactions.prefab` carries `ClientWorldGUI_Panels`; the Factions key still opens it by name. |
-| `IDashboardCategoryProvider` | `FactionDashboardCategories` (the Dashboard's Factions and Faction Matrix pages). |
+| `[assembly: CharacterCreationContributor]` | `FactionCreationContributor`: the starting standings of the race's faction. |
+| `SceneServer_Systems` label | `FactionSystem.asset` (the aggression toggle request). |
+| `ClientWorldGUI_Panels` label | `UIFactions.prefab`; the Factions key still opens it by name. |
+| `IDashboardCategoryProvider` | `FactionDashboardCategories`: the Dashboard's Factions and Faction Matrix pages. |
+| `[assembly: GameModule]` | `FactionsModule` ("factions"). |
 
-Moved to core so the world needs no Factions: an NPC's race (`NPC.RaceTemplate`, in its own payload) and its
-`IsAggressive` flag.
+## What stays in the core
 
-### Inheritance Hierarchies
+`IFactionController` and `FactionAllianceLevel`; an NPC's race (`NPC.RaceTemplate`, in its own payload) and its
+`IsAggressive` flag; the harm rule itself (`HarmRule`, `IHarmRelation`); `ArenaTeamRegistry`, which decides sides inside
+an arena; and `CharacterDamageController`, which calls `AdjustFaction` on a kill.
 
-#### Runtime Instances
+## Removing it
 
-```
-Faction                            # Standalone class (no inheritance)
-```
+Delete `Assets/FishMMO/Modules/Factions` (to check it, follow [the gate](../../README.md#removing-a-module-the-gate)).
+Characters then have no standings, there is no aggression toggle, and the harm rule decides without the faction
+relation. The `character_factions` table and its rows stay in place, unused.
 
-#### Templates (ScriptableObjects)
+## Reference
 
-```
-CachedScriptableObject<FactionTemplate>
-└── FactionTemplate                    # Icon, Description, Minimum/Maximum, Default Allied/Neutral/Hostile sets
+### Standings
 
-CachedScriptableObject<FactionMatrixTemplate>
-└── FactionMatrixTemplate              # Wraps FactionMatrix, provides RebuildMatrix/RebuildFactions
-```
+Each `Faction` holds one `int Value`, clamped to `[FactionTemplate.Minimum, FactionTemplate.Maximum]` (`-10000`,
+`10000`). `FactionController` keeps four dictionaries: `Factions` (all), `Allied` (`> 0`), `Neutral` (`== 0`) and
+`Hostile` (`< 0`); a change moves the faction between groups.
 
-#### Controllers (NetworkBehaviour)
+- `SetFaction(templateID, value, skipEvent)` sets a value; `Add(template, amount)` adds to it. Both return early for an
+  NPC, mark the row changed (`Faction.MarkChanged()` sets `PersistenceDirty` and bumps `Version`), and raise
+  `IFactionStandings.OnUpdateFaction` unless `skipEvent` is set. `skipEvent: true` is the restore path and leaves the
+  row clean.
+- `MarkPersisted(version)` refuses to clear a row that changed while its write was in flight.
 
-```
-CharacterBehaviour
-└── FactionController : IFactionController
-```
+### A faction's races
 
-#### Supporting Types
+A faction lists the races that start in it (`FactionTemplate.StartingRaces`); `FactionTemplate.InitialFor(race)` answers
+the other way round. A new character starts allied at `Maximum` with its faction's `DefaultAllied`, neutral with
+`DefaultNeutral`, hostile at `Minimum` with `DefaultHostile` (`FactionCreationContributor`).
 
-```
-FactionAllianceLevel               # Enum: Ally (0), Neutral (1), Enemy (2)
-FactionMatrix                      # [Serializable] class: flat FactionAllianceLevel[] array
-```
+**NPCs derive their roster.** An NPC never changes faction, so both peers build its table from its race's faction
+(`InitializeTemplateFactions`, from `InitializeOnce` on the server and `ReadPayload` on a client) instead of sending it.
+`FactionsAreTemplateDerived` reports which case a controller is in. A pet is the exception: `CopyFrom` installs its
+owner's standings, which clears the flag, and its roster travels like a player's.
+
+### Alliance level
+
+`GetAllianceLevel(other)` resolves, in order:
+
+1. **Arena:** inside an arena the match's teams decide (`ArenaTeamRegistry`).
+2. **Same side:** a pet answers as its owner (`HarmRule.Principal`); an owner and its pets are allies.
+3. **Party, guild:** the same party or the same guild (through the core `IPartyController` / `IGuildController`) is Ally.
+4. **Wildlife:** wildlife stands outside the factions: Neutral, or Enemy when either side's aggression is on.
+5. **Aggression:** either side's aggression on is Enemy.
+6. **NPC:** the NPC's race faction is in this character's `Hostile` set → Enemy.
+7. **Player:** the other player is allied with one of this character's hostile factions → Enemy.
+8. Otherwise Neutral.
+
+`GetStandingAllianceLevel` is the same without the aggression steps; `GetDisplayedAllianceLevel` is what nameplates
+show. `GetAllianceLevelColor` gives green (Ally), sky blue (Neutral) and red (Enemy).
+
+### Kills
+
+`CharacterDamageController` calls `AdjustFaction(defender, 0.01, 0.01)` on a kill:
+
+- **NPC killed:** for each of its race faction's `DefaultAllied` the killer loses `Maximum × 1%`; for each
+  `DefaultHostile` the killer gains `Maximum × 1%`.
+- **Player killed:** the killer loses 1% of the victim's value with each of the victim's allied factions and gains 1%
+  of it with each hostile one.
+
+### Aggression
+
+`TrySetAggression` turns a player's toggle on or off (server only). Turning it off is refused for
+`AggressionLockSeconds` (300 s) after the character, with aggression on, hit or killed something or was hit; without the
+lock a player could strike, turn aggression off and be out of reach of the retaliation. `AutoAggressionAttacks` (3)
+different attack casts refused at the same character within `AutoAggressionWindowSeconds` (10 s), which only aggression
+would have let land, turn it on. The state reaches peers in the spawn payload and in `FactionAggressionStateBroadcast` /
+`FactionAggressionLockBroadcast`.
+
+### On the wire
+
+The payload is framed by a byte count, so `ReadPayload` can resynchronise after rejecting one (every behaviour on an
+object shares one unframed buffer). It writes the race template ID (unpacked) and a derived-roster flag; an owned roster
+is written per receiver: the **owner** gets exact `Int32` standings, **everyone else** one sign byte per entry.
+
+Changes go to the owner as `FactionUpdateBroadcast` / `FactionUpdateMultipleBroadcast` (exact values) and to observers
+as `CharacterObserverFactionUpdateBroadcast` (a sign, -1, 0 or +1, sent only when a standing crosses zero). The only
+observer-side reader of a peer's standings is the alliance check, which needs only the sign, and the exact value would
+hand a packet-inspecting client a peer's progression. The flush subscribes to `TimeManager.OnTick` only while something
+is dirty.
+
+### The faction matrix
+
+`FactionMatrixTemplate` holds a `FactionMatrix` (a flat `Count × Count` array of `FactionAllianceLevel`). In its
+inspector (`FactionMatrixEditor`): **Rebuild Matrix** loads every `FactionTemplate`, edits are mirrored, the diagonal is
+always Ally, and **Rebuild Factions** writes the matrix back into each template's `DefaultAllied`, `DefaultNeutral` and
+`DefaultHostile`.
 
 ## License
 

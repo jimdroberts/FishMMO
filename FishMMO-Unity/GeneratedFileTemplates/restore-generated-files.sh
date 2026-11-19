@@ -8,7 +8,7 @@
 # defaults of a tracked class (HostConfig.cs, CertificatePinSet.cs, ClientGateSecret.cs)
 # — but CI substitutes the real values INTO these files, so they must exist first.
 # The Unity Editor does the same restore on load
-# (Assets/Editor/GeneratedFiles/GeneratedFileRestorer.cs); this script exists for
+# (Assets/FishMMO/Editor/GeneratedFiles/GeneratedFileRestorer.cs); this script exists for
 # the case where Unity has not run yet, or is running headless in a build pipeline.
 #
 # It then checks the files that already existed against their templates and exits 1
@@ -24,9 +24,9 @@ template_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_root="$(dirname "$template_dir")"
 
 files=(
-	"Assets/Scripts/Shared/Implementation/HostConfig.generated.cs"
-	"Assets/Scripts/Client/Security/CertificatePins.generated.cs"
-	"Assets/Scripts/Client/Security/ClientApiSecret.generated.cs"
+	"Assets/FishMMO/Shared/Implementation/HostConfig.generated.cs"
+	"Assets/FishMMO/Client/Security/CertificatePins.generated.cs"
+	"Assets/FishMMO/Client/Security/ClientApiSecret.generated.cs"
 )
 
 # Value names a generated file or template assigns inside its Configure method

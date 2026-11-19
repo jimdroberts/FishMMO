@@ -7,7 +7,7 @@
  *
  * When Unity-side database health monitoring is needed:
  *   1. Move this file to the Unity project:
- *      Assets/Scripts/Server/Implementation/DatabaseHealthService.cs
+ *      Assets/FishMMO/Server/Implementation/DatabaseHealthService.cs
  *   2. Remove the enclosing comment block
  *   3. Ensure FishMMO-Database assembly is referenced by the Unity server asmdef
  *

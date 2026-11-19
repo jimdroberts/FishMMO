@@ -1,18 +1,52 @@
 # Leaderboards module
 
-**Short description:** Server-side PvP and PvE leaderboards for the scene server: one page of a board and the asking player's own standing, read from the database and held in the scene server's memory so that every player viewing a page shares one read.
+**Short description:** Server-side PvP and PvE leaderboards for the scene server: one page of a board and the asking
+player's own standing, read from the database and held in the scene server's memory so that every player viewing a page
+shares one read.
 
-## Table of Contents
+| | |
+|---|---|
+| **Module id** | `leaderboards` (`LeaderboardsModule`) |
+| **Assemblies** | `FishMMO.Leaderboards`, `.Server`, `.Client`, `.Tests` |
+| **Depends on** | The core |
+| **Depended on by** | None |
+| **Remove together with** | Nothing |
+| **Moved** | Phase 2 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-15: the first module, which set the folder and assembly pattern |
 
-- [Overview](#overview)
-- [Features](#features)
-- [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
-- [Accuracy and Staleness](#accuracy-and-staleness)
-- [Operational Checks](#operational-checks)
-- [Flow Diagram](#flow-diagram)
-- [Project Structure](#project-structure)
-- [License](#license)
+## Folders
+
+```
+Assets/FishMMO/Modules/Leaderboards/
+├── Runtime/   FishMMO.Leaderboards          LeaderboardTemplate, LeaderboardPaging, the broadcasts, LeaderboardsModule
+├── Server/    FishMMO.Leaderboards.Server   LeaderboardSystem (+ its asset), runtime data and their contracts
+├── Client/    FishMMO.Leaderboards.Client   UITKLeaderboards + UILeaderboards.prefab/uxml/uss, LeaderboardRequester,
+│                                            LeaderboardsClient (menu entry, arena standings source)
+├── Templates/                               The board assets (Shared_Static_Permanent)
+├── Tests/     FishMMO.Leaderboards.Tests    LeaderboardRulesTests, LeaderboardWiringTests
+└── README.md
+```
+
+## Core seams it uses
+
+| Seam | What the module does |
+|---|---|
+| `SceneServer_Systems` label | `LeaderboardSystem.asset` is adopted by the scene server at start; `SceneServer.unity`'s own list does not name it. |
+| `ClientWorldGUI_Panels` label | `UILeaderboards.prefab` is placed into ClientWorldGUI as that scene loads. |
+| `GameMenuEntries` | `LeaderboardsClient` registers the "Leaderboards" entry. |
+| `ArenaStandings.Source` | `LeaderboardArenaStandings` supplies the arena board's standings; with no source the arena board hides its Leaderboard tab. |
+| `[assembly: GameModule]` | `LeaderboardsModule` ("leaderboards"). |
+
+## What stays in the core
+
+`SingleFlightCache` (`Server/Core/Collections`), the shared-read cache, which is general purpose. The SQL is in the
+database project (`FishMMO-Database/FishMMO-DB/Npgsql/Services/Scene/Leaderboard/`), with the tables it reads, which
+belong to other features.
+
+## Removing it
+
+Delete `Assets/FishMMO/Modules/Leaderboards` (to check it, follow
+[the gate](../../README.md#removing-a-module-the-gate)). The game menu then has no Leaderboards entry and the arena
+board hides its Leaderboard tab. No table belongs to the module.
 
 ## Overview
 
@@ -63,7 +97,7 @@ A new board is a new asset pointing at a number the game already keeps. Nothing 
 
 - `ILeaderboardService` (`FishMMO-DB`) — `FetchPageAsync` and `FetchStandingAsync`. Read-only.
 
-The achievement and attribute boards read through the `(template_id, value)` indexes added by the `AddLeaderboardIndexes` migration; without them each read is a scan of the whole table.
+The achievement and attribute boards read through the `(template_id, value)` indexes declared in `CharacterAchievementEntityConfiguration` and `CharacterAttributeEntityConfiguration`; without them each read is a scan of the whole table.
 
 ## Usage Examples
 
@@ -94,7 +128,7 @@ Create a `LeaderboardTemplate` (FishMMO → Leaderboard → Leaderboard), set it
 
 | Check | How | Expected |
 |---|---|---|
-| The system is loaded | `SceneServer.unity` → Server → `serverBehaviors` | `LeaderboardSystem` is listed (`LeaderboardWiringTests.TheSceneServer_LoadsTheLeaderboardSystem`) |
+| The system is loaded | Addressables: `LeaderboardSystem.asset` in `Server_Static_Permanent` | It carries the `SceneServer_Systems` label (`LeaderboardWiringTests.TheSceneServer_LoadsTheLeaderboardSystem`) |
 | Boards are offered | Open Leaderboards from the game menu | PvP: Arena Rating, PvP Rank, PvP Wins. PvE: Monsters Slain, Explorers |
 | Reads are shared | Several players open the same page within `cacheSeconds` | One database read; every reply reports the same age |
 | A failed read is not cached | Stop the database, request, restart, request again | First reply `Unavailable`, second a board |
@@ -118,40 +152,6 @@ LeaderboardPageRequestBroadcast ──► OnServerLeaderboardPageRequestReceived
                                                                                           │
 LeaderboardPageBroadcast ◄───────────────────────────────────────────────────────────────┘
 ```
-
-## Project Structure
-
-The first Phase 2 module: everything the feature is lives in this folder, and deleting the folder removes the feature
-while the game still builds and runs (the database tables it reads belong to other features and stay).
-
-```
-Assets/FishMMO/Modules/Leaderboards/
-├── Runtime/   FishMMO.Leaderboards          LeaderboardTemplate, LeaderboardPaging, the broadcasts, LeaderboardsModule
-├── Server/    FishMMO.Leaderboards.Server   LeaderboardSystem (+ its asset), runtime data and their contracts
-├── Client/    FishMMO.Leaderboards.Client   UITKLeaderboards + UILeaderboards.prefab/uxml/uss, LeaderboardRequester,
-│                                            LeaderboardsClient (menu entry, arena standings source)
-├── Templates/                               The board assets (Shared_Static_Permanent)
-├── Tests/     FishMMO.Leaderboards.Tests    LeaderboardRulesTests, LeaderboardWiringTests
-└── README.md
-```
-
-How it plugs in, with nothing outside the folder naming it:
-
-| Seam | Where | What the module does |
-|---|---|---|
-| Server system | `Server.AdoptModuleSystems` | `LeaderboardSystem.asset` carries the `SceneServer_Systems` label; the scene server adopts it at start. It is not in `SceneServer.unity`'s list. |
-| Window | `ModulePanelHost` (Client) | `UILeaderboards.prefab` carries the `ClientWorldGUI_Panels` label; it is placed into ClientWorldGUI as that scene loads. |
-| Game menu | `GameMenuEntries` (Client) | `LeaderboardsClient` registers the "Leaderboards" entry. |
-| Arena board standings | `ArenaStandings.Source` (Client) | `LeaderboardArenaStandings` supplies them; with no source the arena board hides its Leaderboard tab. |
-| Module list | `[assembly: GameModule]` (Core) | `LeaderboardsModule` ("leaderboards") lists it among the installed modules. |
-
-Classes keep their namespaces (`FishMMO.Shared`, `FishMMO.Server.*`, `FishMMO.Client`): the assembly is the module's
-boundary, and scenes, prefabs and assets keep resolving their scripts unchanged.
-
-Related, outside the module:
-
-- `Server/Core/Collections/SingleFlightCache.cs`: the shared-read cache (general purpose).
-- `FishMMO-Database/FishMMO-DB/Npgsql/Services/Scene/Leaderboard/`: the SQL (the database project keeps its tables and services).
 
 ## License
 

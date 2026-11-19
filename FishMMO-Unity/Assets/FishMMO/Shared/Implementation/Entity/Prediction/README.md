@@ -35,7 +35,7 @@ Subsystems (movement, buffs, cooldowns, equipment, attributes, abilities) implem
 | Linux    | ✅ Supported | Server and client builds |
 | WebGL    | ✅ Supported | Via Unity WebGL export |
 
-Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
+Built with **Unity 6.6 (6000.6.8f1)** using **IL2CPP** scripting backend.
 
 ## Features / Capabilities / Security Features
 
@@ -73,7 +73,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 
 ## Prerequisites
 
-- **Unity 6.3 LTS** (or compatible version)
+- **Unity 6.6 (6000.6.8f1)** (or compatible version)
 - **FishNetworking** with Prediction V2 support (`[Replicate]`/`[Reconcile]` attributes)
 - **FishMMO Shared Core** — `IPredictableController` interface, `CharacterBehaviour` base class
 - **KinematicCharacterController** — for `KinematicCharacterMotorState` in reconcile data
@@ -83,7 +83,7 @@ Built with **Unity 6.3 LTS** using **IL2CPP** scripting backend.
 The prediction system is an integral part of the **FishMMO Unity project**. There is no separate installation step.
 
 1. Clone or update the FishMMO repository.
-2. Open the project in Unity 6.3 LTS.
+2. Open the project in Unity 6.6 (6000.6.8f1).
 3. The prediction system is located at `Assets/FishMMO/Shared/Implementation/Entity/Prediction/`.
 4. Ensure all FishMMO dependencies (FishNetworking, Shared Core, KinematicCharacterController) are present.
 
@@ -393,7 +393,7 @@ AbilityController (Order=100)  → Activates abilities, checks cooldowns + resou
 ### Rules the 2026-11-14 audit added
 
 Each closes a case where owner and server could count differently, or where a client's word was taken on trust.
-The full list of what was wrong is in `PREDICTION_AUDIT_REPORT.md` at the project root.
+The rules below are the record of it; `PredictionAuditFixTests` states each one as a test.
 
 **When the server may repeat an owner's input (held idle input).**
 

@@ -278,6 +278,13 @@ Each server scene contains:
 → NetworkWrapper.ApplyTransportConfiguration(AddressOverride, PortOverride > 0 ? PortOverride : null)
 → NetworkWrapper.AttachLoginAuthenticator(this)
 → NetworkWrapper.RegisterServerConnectionStateEventHandler(ServerManager_OnServerConnectionState)
+→ AdoptModuleSystems()
+    • Appends every ServerBehaviour asset labelled "<scene name>_Systems" (SceneServer_Systems
+      for the scene server) to serverBehaviors, loaded synchronously from Addressables.
+    • A module's system is not in the scene's own list, so removing the module leaves no missing
+      reference there. It runs before anything scans the list, so module systems get their data
+      containers and initialization like any other behaviour. A failure is logged and the server
+      runs without them.
 ```
 
 **4.4 RUNTIME DATA CONTAINER INITIALIZATION**
@@ -361,11 +368,12 @@ public partial class TradeSystem : ServerBehaviour { }
 Server.DataContainerRegistry.TryGet<IPartySystemRuntimeData>(out var data)
 ```
 
-> **A disabled behaviour still initializes successfully.** `HousingSystem.InitializeOnce` returns
-> `Initialized` *early* — subscribing to nothing and claiming no state — when `IsHousingEnabled` is
-> false (ownership mode `Neither`, the default). Its containers are still created, because
-> `[RequiresDataContainer]` is read from the type before anything runs. A server that has not asked
-> for housing therefore reports a clean initialization, not a skipped one.
+> **A disabled behaviour still initializes successfully.** `HousingSystem` (Housing module) returns
+> `Initialized` *early*, subscribing to nothing and claiming no state, when `IsHousingEnabled` is
+> false (ownership mode `Neither`, the field's default; the shipped `HousingSystem.asset` sets
+> `Player`). Its containers are still created, because `[RequiresDataContainer]` is read from the
+> type before anything runs. A server that has not asked for housing therefore reports a clean
+> initialization, not a skipped one.
 
 **4.5 SERVER BEHAVIOUR INITIALIZATION**
 ```
@@ -434,13 +442,14 @@ public override ServerComponentInitializationStatus InitializeOnce()
 }
 ```
 
-> **A partial class registers its own broadcasts.** `InteractableSystem` splits its
-> `InitializeOnce` work across partials — `InteractableSystem.Arena.cs`, `.ArenaMatch.cs`,
-> `.GroupFinder.cs`, `.Waypoint.cs` — as does `ChatSystem.ArenaChat.cs`. Each contributes its own
-> `RegisterBroadcast` calls and, where the operation needs one, its own per-operation ingress
-> guard: `InteractableSystem.Waypoint.cs` declares `WaypointTravelOperation = 20` with a 2000 ms
-> debounce alongside the `WaypointTravelRequestBroadcast` registration. Adding a partial is enough
-> to add a broadcast — nothing central lists them.
+> **A partial class registers its own broadcasts.** `ChatSystem` splits its `InitializeOnce` work
+> across partials (`ChatSystem.ArenaChat.cs`, `.GroupChat.cs`, …), and module systems do the same
+> (`MatchmakingSystem.Arena.cs`, `.ArenaMatch.cs`, `.GroupFinder.cs`, `.DungeonFinder.cs`). Each
+> contributes its own `RegisterBroadcast` calls and, where the operation needs one, its own
+> per-operation ingress guard: the Travel module's `WaypointTravelSystem` declares
+> `WaypointTravelOperation = 20` with a 2000 ms debounce alongside the
+> `WaypointTravelRequestBroadcast` registration. Adding a partial is enough to add a broadcast;
+> nothing central lists them.
 
 **4.6 Physics and Network Start** *(inside the initialization coroutine's completion path)*
 ```
@@ -583,6 +592,7 @@ Unity Engine Start
     │                   │           │                   ├─ NetworkWrapper.ApplyTransportConfiguration()
     │                   │           │                   ├─ NetworkWrapper.AttachLoginAuthenticator()
     │                   │           │                   ├─ NetworkWrapper.RegisterServerConnectionStateEventHandler()
+    │                   │           │                   ├─ AdoptModuleSystems()  (<scene>_Systems label)
     │                   │           │                   │
     │                   │           │                   ├─▶ DATA CONTAINER INITIALIZATION
     │                   │           │                   │   ├─ DataContainerRegistry = new()
@@ -728,8 +738,9 @@ MainBootstrap (persistent, DontDestroyOnLoad)
             └─ SceneServer.unity
                 ├─ NetworkManager
                 ├─ Server (MonoBehaviour)
-                └─ ServerBehaviours (CharacterSystem, PartySystem, HousingSystem,
-                                     TradeSystem, InteractableSystem, etc.)
+                └─ ServerBehaviours (CharacterSystem, InteractableSystem, ChatSystem, …,
+                                     and the adopted module systems: PartySystem, HousingSystem,
+                                     TradeSystem, …)
 ```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -57,7 +57,7 @@ A per-connection ingress guard provides debounce, global rate limiting, and in-f
 | Windows | Yes | |
 | Linux | Yes | |
 | WebGL | N/A | Server-only module |
-| Unity 6.3 LTS | Yes | Required engine version |
+| Unity 6.6 (6000.6.8f1) | Yes | Required engine version |
 | IL2CPP | Yes | Supported scripting backend |
 
 ## Features
@@ -87,7 +87,7 @@ A per-connection ingress guard provides debounce, global rate limiting, and in-f
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — networking framework
 - **FishMMO Server Core** — provides `ServerBehaviour`, `ICharacterInventorySystem`, `ICharacterInventorySystemRuntimeData`, `ICharacterInventorySystemMainThreadQueueData`, `ItemExchangeLeg`, `IngressGuard`, `AsyncWorkerData`, `ICharacterSystem`, `ICharacterMappingData`, and `CharacterSessionInfo`
 - **FishMMO Shared** — provides `IPlayerCharacter`, `IInventoryController`, `IEquipmentController`, `IBankController`, `IAbilityController`, `IItemContainer`, `Item`, `ItemStackTransfer`, `ServerItemHooks`, `RemovedItemRecord`, `ItemSlot`, `InventoryType`, `CharacterStateValidation`, `ISceneObject`, `IInteractable`, `Banker`, and the broadcast types (`InventoryRemoveItemBroadcast`, `InventorySwapItemSlotsBroadcast`, `InventorySplitItemBroadcast`, `BankRemoveItemBroadcast`, `BankSwapItemSlotsBroadcast`, `BankSplitItemBroadcast`, `EquipmentUnequipItemBroadcast`, `ItemOperationFailedBroadcast`)

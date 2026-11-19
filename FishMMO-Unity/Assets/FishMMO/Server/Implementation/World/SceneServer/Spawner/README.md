@@ -61,7 +61,7 @@ This is also why the per-spawner override settings matter for memory and not onl
 | Linux    | Yes       | Dedicated server only; not compiled into clients |
 | WebGL    | N/A       | Server-side only system |
 
-- **Unity Version:** Unity 6.3 LTS
+- **Unity Version:** Unity 6.6 (6000.6.8f1)
 - **Scripting Backend:** IL2CPP
 
 ## Features
@@ -88,7 +88,7 @@ This is also why the per-spawner override settings matter for memory and not onl
 
 ## Prerequisites
 
-- **Unity 6.3 LTS**
+- **Unity 6.6 (6000.6.8f1)**
 - **FishNetworking** — `NetworkObject`, `ServerManager`, `SceneManager` load/unload events, object pooling
 - **FishMMO Shared Core** — `ISpawnable`, `ISpawnOwner`, `ICharacterDamageController`
 - **FishMMO Server AI** — `AIBrainHost` for NPC brains
@@ -114,13 +114,10 @@ Scenes authored before the move carry networked spawners. `FishMMO Dashboard →
 
 | Scene | Spawner | Produces |
 |---|---|---|
-| StartScene A | `NPCSpawner` | Up to 4 of: banker, general merchant, ability crafter, ground loot |
-| StartScene A | `OrcSpawner` | Up to 9 of: orc, orc warrior, orc mage |
-| StartScene B | `MerchantSpawnArea` | One of: general merchant, banker, ability crafter |
-| Tutorial Spawners | `Banker Spawner`, `Ability Crafter Spawner`, `General Merchant Spawner` | Up to 5 of their one townsperson each |
-| Tutorial Spawners | `World Item Spawner` | Up to 10 ground loot items |
 | Dungeon | `Orc 2`, `Orc 3` | One orc each, weighted: `an orc` 0.5, `an orc warrior` 0.3, `an orc mage` 0.2; prefab respawn cadence |
 | Dungeon | `Chest` | `Dungeon Chest`: fixed position on the floor, respawns 5–10 minutes after it is emptied |
+
+The generated world scenes (`Assets/Scenes/WorldScene/<World>/`) get spawners from the world generator at the cut, wildlife among them (`WildlifeSpawnerCut`, World Design module).
 
 `SpawnTableBakeTests.EveryShippedSpawner_SpawnsSomething` fails on any spawner whose entries are empty or name no prefab, which the runtime skips without a word. The Dungeon's three spawners and the tutorial banker shipped that way until 2026-09-16.
 
