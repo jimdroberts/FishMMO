@@ -38,14 +38,14 @@ camera from the scene's baked data and the shared clock. Nothing is simulated on
 
 - The site data it draws from: the scenes' emitters, cave life spots, sea hall vents and cave water, all baked by the
   world generator and kept in the scenes whether or not this module is installed.
-- The cave skylights (`CaveSkylights`): the openings' light reaches every lit surface and the sky, so it stays with the
-  terrain; its shaft shader is referenced from the terrain render profile.
+- The cave skylights (`CaveSkylights`): the openings' light reaches every lit surface and the sky, so it is core lighting;
+  its shaft shader is referenced from the core world-passes renderer feature.
 - Whether a fire burns (`SiteFireState`): the weather decides it, and the site lights read it too.
 - The wetland measure (`TerrainProcess.Wetland`): moss reads it as well as the wisps.
 - The "Falling Leaves" option: without the module it does nothing.
 
-The module reads the weather, the sky, the terrain and the water (they are still in the core; when they become modules
-this one depends on them).
+The module reads the weather, the sky and the water (they are still in the core; when they become modules this one depends
+on them). It reads the grass cover through the core `GroundCoverQuery`, so it does not need the Terrain module.
 
 ## License
 

@@ -1,0 +1,34 @@
+{
+    "name": "FishMMO.Terrain.Client",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Terrain",
+        "FishNet.Runtime",
+        "Unity.Mathematics",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.Burst",
+        "Unity.Collections",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

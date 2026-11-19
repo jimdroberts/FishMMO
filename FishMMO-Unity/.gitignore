@@ -59,6 +59,9 @@ crashlytics-build.properties
 /[Aa]ssets/[Dd]ependencies*
 /[Aa]ssets/[Tt]emplates/[Ww]orld/[Aa]tlas*
 /[Aa]ssets/[Tt]emplates/[Ww]orld/[Ss]ystems*
+# The World Simulation module's generated world templates (moved from Assets/Templates/World, Phase 4, 2026-11-18).
+/[Aa]ssets/FishMMO/Modules/WorldSimulation/Templates/World/[Aa]tlas*
+/[Aa]ssets/FishMMO/Modules/WorldSimulation/Templates/World/[Ss]ystems*
 
 # --- Plugin Specific (FishNet, JetBrains) ---
 /[Aa]ssets/Plugins/Editor/JetBrains*

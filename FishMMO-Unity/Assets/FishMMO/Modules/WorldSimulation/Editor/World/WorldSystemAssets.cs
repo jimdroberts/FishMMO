@@ -1,0 +1,411 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEditor.AddressableAssets;
+using UnityEditor.AddressableAssets.Settings;
+using UnityEngine;
+using FishMMO.Shared.Atlas;
+using FishMMO.Shared.Celestial;
+
+using static FishMMO.Shared.WorldDesign.WorldEditorAssets;
+
+namespace FishMMO.Shared.WorldDesign
+{
+	/// <summary>
+	/// Asset plumbing for the Solar System and World Atlas pages: where world assets live, how a
+	/// script-made asset becomes loadable at runtime, the example system, and one atlas entry per
+	/// world scene.
+	/// </summary>
+	/// <summary>
+	/// The solar system and world atlas assets' helpers (split from WorldEditorAssets, Phase 4 of the core and modules plan,
+	/// 2026-11-18): the example system, its folders and names, the atlas and its scene entries.
+	/// </summary>
+	public static class WorldSystemAssets
+	{
+		// ── The example solar system ──────────────────────────────────
+
+		/// <summary>
+		/// Creates a small, neutral solar system: one sun, the home world with a 6-hour day and a
+		/// 23.4° tilt, one tidally locked moon, the calendar, the atlas and its two layers.
+		/// Existing assets are reused, never replaced.
+		/// </summary>
+		public static SolarSystemProfile CreateExampleSystem()
+		{
+			SolarSystemProfile existing = SolarSystemProfile.Resolve();
+			return existing != null ? existing : CreateExampleSystem(UniqueSystemName("Solar System"));
+		}
+
+		// ── Systems in folders of their own ───────────────────────────
+
+		/// <summary>Where systems made by the tools live, one folder to a system.</summary>
+		public const string SystemsFolder = Root + "/Systems";
+
+		public static string SystemFolder(string systemName) => SystemsFolder + "/" + Sanitize(systemName);
+
+		public static string SystemBodiesFolder(string systemName) => SystemFolder(systemName) + "/Bodies";
+
+		/// <summary>
+		/// A body's asset name inside a system: the system's name, then the body's. Assets are
+		/// identified at runtime by a hash of their type and their NAME, not their path, so two
+		/// systems that each had a "Home.asset" — in different folders, which the project window
+		/// allows — would be one entry in the cache, with whichever loaded last winning. The plain
+		/// name goes in the body's DisplayName, which is what anybody sees.
+		/// </summary>
+		public static string BodyAssetName(string systemName, string bodyName) => $"{systemName} - {bodyName}";
+
+		/// <summary>A system name no existing system or system folder already has.</summary>
+		public static string UniqueSystemName(string wanted)
+		{
+			wanted = Sanitize(wanted);
+			string name = wanted;
+			for (int n = 2; SystemNameProblem(name, null) != null; n++)
+			{
+				name = $"{wanted} {n}";
+			}
+			return name;
+		}
+
+		/// <summary>Why a system cannot be called this, or null when it can. <paramref name="except"/> is the system being renamed.</summary>
+		public static string SystemNameProblem(string name, SolarSystemProfile except)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				return "A system needs a name.";
+			}
+			if (name != Sanitize(name) || name.Trim() != name)
+			{
+				return "That name has characters a file cannot have, or spaces at its ends.";
+			}
+			foreach (SolarSystemProfile other in FindAll<SolarSystemProfile>())
+			{
+				if (other != except && string.Equals(other.name, name, StringComparison.OrdinalIgnoreCase))
+				{
+					return $"There is already a system called \"{other.name}\".";
+				}
+			}
+			// A folder left behind by a system that was deleted by hand would be silently adopted.
+			string folder = SystemFolder(name);
+			bool ownFolder = except != null && AssetDatabase.GetAssetPath(except).StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase);
+			if (!ownFolder && AssetDatabase.IsValidFolder(folder))
+			{
+				return $"There is already a folder at {folder}.";
+			}
+			return null;
+		}
+
+		/// <summary>
+		/// Creates the small, neutral example system under its own folder, whatever else exists.
+		/// </summary>
+		public static SolarSystemProfile CreateExampleSystem(string systemName)
+		{
+			string bodies = SystemBodiesFolder(systemName);
+			SolarSystemProfile system;
+
+			CalendarProfile calendar = FindFirst<CalendarProfile>() ?? Create<CalendarProfile>(Root, "World Calendar");
+			StarBody sun = Create<StarBody>(bodies, BodyAssetName(systemName, "Sun"), s =>
+			{
+				s.DisplayName = "Sun";
+				s.SkyRadiusKm = 696000f;
+				s.Tint = new Color(1f, 0.96f, 0.86f, 1f);
+				s.Orbit = new OrbitSettings { Distance = 1f, PeriodDays = 27.3f };
+			});
+			WorldBody home = Create<WorldBody>(bodies, BodyAssetName(systemName, "Home"), b =>
+			{
+				b.DisplayName = "Home";
+				b.Kind = WorldBodyKind.Planet;
+				b.Parent = sun;
+				b.Orbit = new OrbitSettings { Distance = 1f, Eccentricity = 0.0167f, PeriodMode = OrbitPeriodMode.Kepler, PeriodDays = 365f };
+				b.RotationHours = 6f;
+				b.AxialTiltDegrees = 23.4f;
+				b.SkyRadiusKm = 6371f;
+				b.Tint = new Color(0.35f, 0.55f, 0.85f, 1f);
+				b.CurrentRadiusKm = 30f;
+			});
+			WorldBody moon = Create<WorldBody>(bodies, BodyAssetName(systemName, "Moon 1"), b =>
+			{
+				b.DisplayName = "Moon 1";
+				b.Kind = WorldBodyKind.Moon;
+				b.Parent = home;
+				b.TidallyLocked = true;
+				b.AxialTiltDegrees = 1.5f;
+				b.Orbit = new OrbitSettings { Distance = 384f, InclinationDegrees = 5.1f, PeriodMode = OrbitPeriodMode.Authored, PeriodDays = 7.5f };
+				b.SkyRadiusKm = 1737f;
+				b.Atmosphere = AtmosphereKind.None;
+				b.MagneticField = 0f;
+				b.Water = 0f;
+				b.Tint = new Color(0.78f, 0.77f, 0.74f, 1f);
+				b.MinimumRadiusKm = 10f;
+				b.CurrentRadiusKm = 10f;
+			});
+
+			system = Create<SolarSystemProfile>(SystemFolder(systemName), systemName, p =>
+			{
+				p.Bodies.Add(sun);
+				p.Bodies.Add(home);
+				p.Bodies.Add(moon);
+				p.HomeWorld = home;
+				p.Calendar = calendar;
+			});
+			calendar.CalendarBody = home;
+			EditorUtility.SetDirty(calendar);
+
+			EnsureAtlas(system);
+			AssetDatabase.SaveAssets();
+			return system;
+		}
+
+		/// <summary>The project's atlas, created with Overworld and Underworld layers if missing.</summary>
+		public static WorldAtlas EnsureAtlas(SolarSystemProfile system)
+		{
+			WorldAtlas atlas = FindFirst<WorldAtlas>();
+			if (atlas == null)
+			{
+				WorldAtlasLayer overworld = Create<WorldAtlasLayer>(LayersFolder, "Overworld", l =>
+				{
+					l.DisplayName = "Overworld";
+					l.SortOrder = 0;
+					l.Tint = new Color(0.55f, 0.78f, 0.55f, 1f);
+				});
+				WorldAtlasLayer underworld = Create<WorldAtlasLayer>(LayersFolder, "Underworld", l =>
+				{
+					l.DisplayName = "Underworld";
+					l.SortOrder = 1;
+					l.Underground = true;
+					l.DefaultWeather = FishMMO.Shared.Weather.WeatherSceneMode.None;
+					l.Tint = new Color(0.78f, 0.55f, 0.4f, 1f);
+				});
+				atlas = Create<WorldAtlas>(AtlasFolder, "World Atlas", a =>
+				{
+					a.SolarSystem = system;
+					a.DefaultLayers.Add(overworld);
+					a.DefaultLayers.Add(underworld);
+					a.DungeonLayer = underworld;
+				});
+			}
+			else if (atlas.SolarSystem == null && system != null)
+			{
+				Undo.RecordObject(atlas, "Assign solar system");
+				atlas.SolarSystem = system;
+				EditorUtility.SetDirty(atlas);
+			}
+			return atlas;
+		}
+
+		/// <summary>
+		/// Creates an atlas entry for every world scene that has none, unplaced, in the surface
+		/// layer (dungeons in the dungeon layer), and refreshes every entry's size from the scene
+		/// details cache. Returns how many entries were created.
+		/// </summary>
+		public static int SyncAtlasScenes(WorldAtlas atlas)
+		{
+			var existing = new Dictionary<string, WorldAtlasScene>(StringComparer.Ordinal);
+			foreach (WorldAtlasScene entry in FindAll<WorldAtlasScene>())
+			{
+				if (!string.IsNullOrEmpty(entry.SceneName) && !existing.ContainsKey(entry.SceneName))
+				{
+					existing.Add(entry.SceneName, entry);
+				}
+			}
+
+			WorldSceneDetailsCache cache = SceneDetails();
+			HashSet<string> dungeons = DungeonSceneNames();
+			WorldBody home = atlas != null && atlas.SolarSystem != null ? atlas.SolarSystem.HomeWorld : null;
+			int created = 0;
+			/* Which file claimed each name, within this run.
+			 *
+			 * World scenes live in per-world subdirectories, so two worlds can each hold a "Coast".
+			 * The "existing" map above is built once before the loop, so without this the second
+			 * one would not see the entry the first just created and would make a SECOND atlas
+			 * entry with the same SceneName — after which WorldAtlasScene.Find returns whichever
+			 * registered last, and a scene silently takes another scene's latitude. */
+			var claimedBy = new Dictionary<string, string>(StringComparer.Ordinal);
+
+			foreach (string path in WorldScenePaths())
+			{
+				string sceneName = Path.GetFileNameWithoutExtension(path);
+				if (claimedBy.TryGetValue(sceneName, out string firstPath))
+				{
+					Debug.LogError(
+						$"[WorldDesign] Two world scenes are both called '{sceneName}': '{firstPath}' and '{path}'. " +
+						"Scene names must be unique across every world folder — the atlas identifies a scene by name, " +
+						$"not by path. No atlas entry was made for '{path}'; rename one of them.");
+					continue;
+				}
+				claimedBy[sceneName] = path;
+
+				Vector2? size = SceneSizeKm(cache, sceneName);
+				if (existing.TryGetValue(sceneName, out WorldAtlasScene entry))
+				{
+					if (size.HasValue && entry.SizeKm != size.Value)
+					{
+						Undo.RecordObject(entry, "Refresh scene size");
+						entry.SizeKm = size.Value;
+						EditorUtility.SetDirty(entry);
+					}
+					continue;
+				}
+				bool dungeon = dungeons.Contains(sceneName);
+				Create<WorldAtlasScene>(ScenesFolder, sceneName, e =>
+				{
+					e.SceneName = sceneName;
+					e.Body = home;
+					e.Layer = atlas == null ? null : dungeon ? atlas.DungeonLayerOf(home) : atlas.SurfaceLayerOf(home);
+					e.SizeKm = size ?? new Vector2(1f, 1f);
+					e.Placed = false;
+				});
+				created++;
+			}
+			if (created > 0)
+			{
+				WorldAtlasScene.EditorLookup.Invalidate();
+				AssetDatabase.SaveAssets();
+			}
+			return created;
+		}
+
+		/// <summary>Scene names that have an atlas entry but no scene file.</summary>
+		public static List<string> OrphanedAtlasScenes()
+		{
+			var orphans = new List<string>();
+			var scenes = new HashSet<string>(StringComparer.Ordinal);
+			foreach (string path in WorldScenePaths())
+			{
+				scenes.Add(Path.GetFileNameWithoutExtension(path));
+			}
+			foreach (WorldAtlasScene entry in FindAll<WorldAtlasScene>())
+			{
+				if (entry != null && !string.IsNullOrEmpty(entry.SceneName) && !scenes.Contains(entry.SceneName))
+				{
+					orphans.Add(entry.SceneName);
+				}
+			}
+			return orphans;
+		}
+
+		/// <summary>
+		/// Copies each scene's authored climate, biome map and client cap into its atlas entry
+		/// where the entry has none. Scenes are only read; nothing in them changes. Returns the
+		/// number of entries changed.
+		/// </summary>
+		public static int CopySceneSettingsIntoAtlas()
+		{
+			var entries = new Dictionary<string, WorldAtlasScene>(StringComparer.Ordinal);
+			foreach (WorldAtlasScene entry in FindAll<WorldAtlasScene>())
+			{
+				if (!string.IsNullOrEmpty(entry.SceneName))
+				{
+					entries[entry.SceneName] = entry;
+				}
+			}
+			int changed = 0;
+			foreach (string path in WorldScenePaths())
+			{
+				string sceneName = Path.GetFileNameWithoutExtension(path);
+				if (!entries.TryGetValue(sceneName, out WorldAtlasScene entry))
+				{
+					continue;
+				}
+				SceneSettingsSnapshot snapshot = ReadSceneSettings(path);
+				if (!snapshot.Found)
+				{
+					continue;
+				}
+				bool dirty = false;
+				Undo.RecordObject(entry, "Copy scene settings into atlas");
+				if (entry.Climate == null && snapshot.Climate != null) { entry.Climate = snapshot.Climate; dirty = true; }
+				if (entry.BiomeMap == null && snapshot.BiomeMap != null) { entry.BiomeMap = snapshot.BiomeMap; dirty = true; }
+				if (entry.MaxClients == 0 && snapshot.MaxClients > 0) { entry.MaxClients = snapshot.MaxClients; dirty = true; }
+				if (dirty)
+				{
+					EditorUtility.SetDirty(entry);
+					changed++;
+				}
+			}
+			AssetDatabase.SaveAssets();
+			return changed;
+		}
+
+		private struct SceneSettingsSnapshot
+		{
+			public bool Found;
+			public FishMMO.Shared.Biomes.ClimateSettings Climate;
+			public FishMMO.Shared.Biomes.SceneBiomeMap BiomeMap;
+			public int MaxClients;
+		}
+
+		/// <summary>
+		/// Reads the serialized WorldSceneSettings values from a scene file without opening it:
+		/// the component's YAML block names its fields and asset references by GUID.
+		/// </summary>
+		private static SceneSettingsSnapshot ReadSceneSettings(string scenePath)
+		{
+			var snapshot = new SceneSettingsSnapshot();
+			MonoScript script = FindScript(typeof(WorldSceneSettings));
+			if (script == null || !File.Exists(scenePath))
+			{
+				return snapshot;
+			}
+			string scriptGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(script));
+			string[] lines = File.ReadAllLines(scenePath);
+			for (int i = 0; i < lines.Length; i++)
+			{
+				if (!lines[i].Contains("m_Script:") || !lines[i].Contains(scriptGuid))
+				{
+					continue;
+				}
+				snapshot.Found = true;
+				for (int j = i + 1; j < lines.Length && !lines[j].StartsWith("---", StringComparison.Ordinal); j++)
+				{
+					string line = lines[j].Trim();
+					if (line.StartsWith("maxClients:", StringComparison.Ordinal) || line.StartsWith("MaxClients:", StringComparison.Ordinal))
+					{
+						int.TryParse(line.Substring(line.IndexOf(':') + 1).Trim(), out snapshot.MaxClients);
+					}
+					else if (line.StartsWith("climate:", StringComparison.Ordinal) || line.StartsWith("Climate:", StringComparison.Ordinal))
+					{
+						snapshot.Climate = LoadReference<FishMMO.Shared.Biomes.ClimateSettings>(line);
+					}
+					else if (line.StartsWith("biomeMap:", StringComparison.Ordinal) || line.StartsWith("BiomeMap:", StringComparison.Ordinal))
+					{
+						snapshot.BiomeMap = LoadReference<FishMMO.Shared.Biomes.SceneBiomeMap>(line);
+					}
+				}
+				break;
+			}
+			return snapshot;
+		}
+
+		private static T LoadReference<T>(string line) where T : UnityEngine.Object
+		{
+			int at = line.IndexOf("guid:", StringComparison.Ordinal);
+			if (at < 0)
+			{
+				return null;
+			}
+			string guid = line.Substring(at + 5).Trim();
+			int comma = guid.IndexOf(',');
+			if (comma >= 0)
+			{
+				guid = guid.Substring(0, comma).Trim();
+			}
+			string path = AssetDatabase.GUIDToAssetPath(guid);
+			return string.IsNullOrEmpty(path) ? null : AssetDatabase.LoadAssetAtPath<T>(path);
+		}
+
+		private static MonoScript FindScript(Type type)
+		{
+			foreach (string guid in AssetDatabase.FindAssets("t:MonoScript " + type.Name))
+			{
+				MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(guid));
+				if (script != null && script.GetClass() == type)
+				{
+					return script;
+				}
+			}
+			return null;
+		}
+	}
+}
+#endif

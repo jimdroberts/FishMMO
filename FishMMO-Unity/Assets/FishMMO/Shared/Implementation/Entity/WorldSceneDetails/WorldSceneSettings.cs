@@ -163,6 +163,9 @@ namespace FishMMO.Shared
 
 		private static readonly Dictionary<SceneHandle, WorldSceneSettings> byScene = new Dictionary<SceneHandle, WorldSceneSettings>();
 
+		/// <summary>Whether any loaded scene is a world scene (has its settings component).</summary>
+		public static bool AnyLoaded => byScene.Count > 0;
+
 		/// <summary>The settings component of a loaded scene, if it has one. Scenes load additively on a scene server, so this is keyed by scene.</summary>
 		public static bool TryGetForScene(Scene scene, out WorldSceneSettings settings)
 		{

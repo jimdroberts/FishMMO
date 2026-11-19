@@ -29,7 +29,7 @@
 #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 // The sea's wave sum (globals only), for what floats at the surface (2026-10-25).
-#include "Assets/Plugins/FishMMO Water/Shaders/FishWaterSwell.hlsl"
+#include "Assets/FishMMO/Modules/Water/Shaders/FishWaterSwell.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
     half _Mode;          // 0 fish (side to side), 1 whale (up and down), 2 ray (wings), 3 turtle (flippers), 4 jelly (pulse), 5 crab (legs), 6 eel (the whole body), 7 mola (its tall fins scull), 8 nautilus (jets)

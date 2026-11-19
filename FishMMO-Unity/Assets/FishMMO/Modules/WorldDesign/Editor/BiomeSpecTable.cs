@@ -139,7 +139,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static class BiomeSpecTable
 	{
 		/// <summary>Where the biome assets live; an entry names the file without its extension.</summary>
-		public const string Folder = "Assets/Templates/Entity/Biomes";
+		public const string Folder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		/// <summary>One biome's tabled values.</summary>
 		public readonly struct Entry
@@ -407,7 +407,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Apply biome envelopes and world requirements", Section = "Content", Order = 3,
 			Tooltip = "Writes the tabled elevation tier, height band, climate envelope, warmest-season range, selection weight, atmosphere, liquid-water and world requirements onto the named biome assets, logging every field it changes, and creates the new biomes the table defines (Ice Shelf, Ice Sheet) if their asset does not exist yet. Re-running it changes nothing once applied; biomes not in the table are left alone.",
-			Confirm = "Write the biome spec table onto the biome assets in Assets/Templates/Entity/Biomes, creating any new biome it defines that has no asset yet? Every changed field is logged before and after.")]
+			Confirm = "Write the biome spec table onto the biome assets in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes, creating any new biome it defines that has no asset yet? Every changed field is logged before and after.")]
 		public static void ApplyFromDashboard()
 		{
 			var log = new StringBuilder();

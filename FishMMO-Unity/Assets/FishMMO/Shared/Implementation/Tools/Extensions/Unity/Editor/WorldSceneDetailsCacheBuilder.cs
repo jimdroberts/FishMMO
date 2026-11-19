@@ -97,14 +97,14 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				WorldSystemsConfigurator.BeginCollecting();
+				WorldSystemsHooks.BeginCollecting?.Invoke();
 				try
 				{
 					rebuilt = cache.Rebuild();
 				}
 				finally
 				{
-					WorldSystemsConfigurator.EndCollecting();
+					WorldSystemsHooks.EndCollecting?.Invoke();
 				}
 			}
 
@@ -122,7 +122,7 @@ namespace FishMMO.Shared
 			 * before anything else reads the cache, because a scene that gains a settings component
 			 * changes what the cache should say about it — hence the second rebuild below. */
 			if (worldSystems != WorldSystemsMode.Off
-				&& WorldSystemsConfigurator.Apply(WorldSystemsConfigurator.Resolve(), worldSystems))
+				&& WorldSystemsHooks.ResolveAndApply != null && WorldSystemsHooks.ResolveAndApply(worldSystems))
 			{
 				Debug.Log("[World systems] Scenes changed; rebuilding the cache so it matches them.");
 				cache.Rebuild();

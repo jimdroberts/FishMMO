@@ -99,7 +99,7 @@ namespace FishMMO.Shared.WorldDesign
 		public string Describe()
 		{
 			string name = Committed != null ? Committed.name : $"layer {LayerIndex}";
-			string winner = SidecarWinner != null && SidecarWinner.Biome != null ? $" (sidecar of {SidecarWinner.Biome.name} {SidecarWinner.Slot})" : "";
+			string winner = SidecarWinner != null && (SidecarWinner.Biome as BiomeTemplate) != null ? $" (sidecar of {(SidecarWinner.Biome as BiomeTemplate).name} {SidecarWinner.Slot})" : "";
 			return $"{name}: layer {ParamsSource}, albedo {AlbedoSource}, normal {NormalSource}, mask {MaskSource}{winner}";
 		}
 	}
@@ -144,11 +144,11 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				foreach (TerrainArrayLayerUse use in source.Uses)
 				{
-					if (use == null || use.Biome == null)
+					if (use == null || (use.Biome as BiomeTemplate) == null)
 					{
 						continue;
 					}
-					BiomeLocalArt.SlotOverride candidate = lookup.Sidecar(use.Biome, use.Slot);
+					BiomeLocalArt.SlotOverride candidate = lookup.Sidecar((use.Biome as BiomeTemplate), use.Slot);
 					if (candidate == null || candidate.IsEmpty)
 					{
 						continue;
@@ -160,7 +160,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else if (!candidate.SameArtAs(winner))
 					{
-						conflicts?.Add($"Layer {layerIndex} '{(committed != null ? committed.name : "?")}': the LOCAL override of {use.Biome.name} ({use.Slot}) differs from that of {result.SidecarWinner.Biome.name} ({result.SidecarWinner.Slot}); {result.SidecarWinner.Biome.name} covers more of the scene and wins.");
+						conflicts?.Add($"Layer {layerIndex} '{(committed != null ? committed.name : "?")}': the LOCAL override of {(use.Biome as BiomeTemplate).name} ({use.Slot}) differs from that of {result.SidecarWinner.Biome.name} ({result.SidecarWinner.Slot}); {result.SidecarWinner.Biome.name} covers more of the scene and wins.");
 					}
 				}
 			}

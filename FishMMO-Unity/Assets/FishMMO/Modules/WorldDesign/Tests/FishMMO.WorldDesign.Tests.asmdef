@@ -34,7 +34,14 @@
         "Unity.Mathematics",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.ResourceManager",
-        "FishMMO.Naming"
+        "FishMMO.Naming",
+        "FishMMO.Terrain",
+        "FishMMO.Terrain.Client",
+        "FishMMO.Terrain.Editor",
+        "FishMMO.WorldTestBed",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

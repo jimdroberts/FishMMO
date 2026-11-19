@@ -103,11 +103,11 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(1 + 33, DetailScatterMath.ItemHeaderUints, "an item header: its first entry and 65 sixteen-bit starts");
 			LogAssert.AreEqual(GrassTerrain.MaxChannels / 4, GrassTerrain.MaxDensityMaps, "four channels a density map");
 			LogAssert.AreEqual(82, GrassTerrainAtlas.TerrainUints, "channels 16..63 appended after every older field");
-			string compute = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.compute");
+			string compute = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Shaders/FishGrassBlades.compute");
 			LogAssert.IsTrue(compute.Contains($"#define GRASS_TYPES {GrassMath.MaxTypes} "), "the compute's type cap is the record's");
 			LogAssert.IsTrue(compute.Contains($"#define GRASS_TERRAIN_UINTS {GrassTerrainAtlas.TerrainUints}u"), "the compute's table stride is the atlas's");
 			LogAssert.IsTrue(compute.Contains("#pragma multi_compile_local __ GRASS_WIDE GRASS_WIDEST"), "the 32- and 64-channel variants exist, one at a time");
-			string scatter = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute");
+			string scatter = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Shaders/FishDetailScatter.compute");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_TERRAIN_HEADER {DetailScatterAtlas.HeaderUints}u"), "the scatter row header matches");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_ITEM_HEADER_UINTS {DetailScatterMath.ItemHeaderUints}u"), "the item header matches");
 			LogAssert.IsTrue(scatter.Contains($"#define SCATTER_CELL_STREAM {DetailScatterMath.CellStream}u"), "the cell stream matches");

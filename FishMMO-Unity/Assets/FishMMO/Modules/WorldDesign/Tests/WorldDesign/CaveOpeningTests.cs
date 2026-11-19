@@ -465,9 +465,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(bare, Is.LessThan(stage.IndexOf("ScenePathBake.Write(scene", StringComparison.Ordinal)), "before the ground is baked for the client");
 			// The client's two plant builders (every detail kind is the blades' or the scatter's since the CPU chunk renderer went,
 			// 2026-10-27) read the plants' mask, the clouds and the ambient life the terrain's own holes.
-			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/Grass/GrassTerrain.cs"), Does.Contain("cut.KeepPlantsClear();"));
-			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/Scatter/DetailScatterTerrain.cs"), Does.Contain("PlantsClear(cut).ToTexels("));
-			Assert.That(File.Exists("Assets/FishMMO/Client/World/Terrain/TerrainDetailField.cs"), Is.False, "no CPU chunk renderer places plants of its own");
+			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassTerrain.cs"), Does.Contain("cut.KeepPlantsClear();"));
+			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/Scatter/DetailScatterTerrain.cs"), Does.Contain("PlantsClear(cut).ToTexels("));
+			Assert.That(File.Exists("Assets/FishMMO/Modules/Terrain/Client/TerrainDetailField.cs"), Is.False, "no CPU chunk renderer places plants of its own");
 		}
 	}
 }

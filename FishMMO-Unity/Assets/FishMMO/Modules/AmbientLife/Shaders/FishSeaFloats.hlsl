@@ -23,7 +23,7 @@
 
 #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
-#include "Assets/Plugins/FishMMO Water/Shaders/FishWaterSwell.hlsl"
+#include "Assets/FishMMO/Modules/Water/Shaders/FishWaterSwell.hlsl"
 #include "UnityIndirect.cginc"
 
 struct FloatInstance

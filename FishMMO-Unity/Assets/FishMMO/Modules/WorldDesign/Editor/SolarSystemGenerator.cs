@@ -15,7 +15,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para>
 	/// A project can hold several systems: the one the game is set in, and others to try things in.
-	/// Each lives in a folder of its own under <see cref="WorldEditorAssets.SystemsFolder"/>, with its
+	/// Each lives in a folder of its own under <see cref="WorldSystemAssets.SystemsFolder"/>, with its
 	/// bodies beside it, so a system is one thing to move, copy or throw away. Which of them the game
 	/// uses is the world atlas's to say (<see cref="SolarSystemProfile.Active"/>), and changing that
 	/// is its own deliberate step here, never a side effect of making a new one.
@@ -37,17 +37,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Asks, then makes another example system beside whatever exists. Null when declined.</summary>
 		public static SolarSystemProfile NewExample()
 		{
-			string name = WorldEditorAssets.UniqueSystemName("Solar System");
+			string name = WorldSystemAssets.UniqueSystemName("Solar System");
 			bool first = WorldEditorAssets.FindFirst<SolarSystemProfile>() == null;
 			if (!first && !EditorUtility.DisplayDialog("New solar system",
 				$"Create another solar system, \"{name}\"?\n\n"
-				+ $"It gets a folder of its own at {WorldEditorAssets.SystemFolder(name)}, with the example Sun, Home and Moon 1 in it. "
+				+ $"It gets a folder of its own at {WorldSystemAssets.SystemFolder(name)}, with the example Sun, Home and Moon 1 in it. "
 				+ "The systems you already have are not touched, and the game keeps using the one that is active until you choose otherwise.",
 				"Create", "Cancel"))
 			{
 				return null;
 			}
-			SolarSystemProfile system = WorldEditorAssets.CreateExampleSystem(name);
+			SolarSystemProfile system = WorldSystemAssets.CreateExampleSystem(name);
 			FinishCreating(system, first);
 			return system;
 		}
@@ -158,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			string path = AssetDatabase.GetAssetPath(system);
-			string folder = WorldEditorAssets.SystemFolder(system.name);
+			string folder = WorldSystemAssets.SystemFolder(system.name);
 			bool ownFolder = !string.IsNullOrEmpty(path) && path.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase);
 			if (!string.IsNullOrEmpty(path))
 			{
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			WorldEditorAssets.EnsureAtlas(system);
+			WorldSystemAssets.EnsureAtlas(system);
 			if (makeActive)
 			{
 				MakeActive(system);
@@ -204,7 +204,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			WorldAtlas atlas = WorldEditorAssets.EnsureAtlas(system);
+			WorldAtlas atlas = WorldSystemAssets.EnsureAtlas(system);
 			if (atlas != null && atlas.SolarSystem != system)
 			{
 				Undo.RecordObject(atlas, "Make solar system active");
@@ -241,21 +241,21 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return null;
 			}
-			string problem = WorldEditorAssets.SystemNameProblem(newName, system);
+			string problem = WorldSystemAssets.SystemNameProblem(newName, system);
 			if (problem != null)
 			{
 				return problem;
 			}
 			string oldName = system.name;
-			string oldFolder = WorldEditorAssets.SystemFolder(oldName);
-			string newFolder = WorldEditorAssets.SystemFolder(newName);
+			string oldFolder = WorldSystemAssets.SystemFolder(oldName);
+			string newFolder = WorldSystemAssets.SystemFolder(newName);
 			string path = AssetDatabase.GetAssetPath(system);
 			bool ownFolder = path.StartsWith(oldFolder + "/", StringComparison.OrdinalIgnoreCase);
 
 			// The folder first, so everything in it — a designer's own files too — comes along.
 			if (ownFolder)
 			{
-				WorldEditorAssets.EnsureFolder(WorldEditorAssets.SystemsFolder);
+				WorldEditorAssets.EnsureFolder(WorldSystemAssets.SystemsFolder);
 				string moved = AssetDatabase.MoveAsset(oldFolder, newFolder);
 				if (!string.IsNullOrEmpty(moved))
 				{
@@ -264,11 +264,11 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			else
 			{
-				WorldEditorAssets.EnsureFolder(WorldEditorAssets.SystemBodiesFolder(newName));
+				WorldEditorAssets.EnsureFolder(WorldSystemAssets.SystemBodiesFolder(newName));
 			}
 
 			// The bodies: the system's name at the front of each, in the system's own Bodies folder.
-			string bodiesFolder = WorldEditorAssets.SystemBodiesFolder(newName);
+			string bodiesFolder = WorldSystemAssets.SystemBodiesFolder(newName);
 			WorldEditorAssets.EnsureFolder(bodiesFolder);
 			foreach (CelestialBody body in system.Bodies)
 			{
@@ -279,7 +279,7 @@ namespace FishMMO.Shared.WorldDesign
 				string bodyPath = AssetDatabase.GetAssetPath(body);
 				string prefix = oldName + " - ";
 				string plain = body.name.StartsWith(prefix, StringComparison.Ordinal) ? body.name.Substring(prefix.Length) : body.name;
-				string target = AssetDatabase.GenerateUniqueAssetPath($"{bodiesFolder}/{WorldEditorAssets.Sanitize(WorldEditorAssets.BodyAssetName(newName, plain))}.asset");
+				string target = AssetDatabase.GenerateUniqueAssetPath($"{bodiesFolder}/{WorldEditorAssets.Sanitize(WorldSystemAssets.BodyAssetName(newName, plain))}.asset");
 				if (string.IsNullOrWhiteSpace(body.DisplayName))
 				{
 					// The plain name was the asset's; keep it as what people see.
@@ -441,9 +441,9 @@ namespace FishMMO.Shared.WorldDesign
 			// ── The suns ──
 			// One, most often. A second goes round the first; a third goes round the pair, further out.
 			string primaryName = Name(dice, taken);
-			string systemName = WorldEditorAssets.UniqueSystemName(primaryName + " System");
-			string folder = WorldEditorAssets.SystemBodiesFolder(systemName);
-			string Asset(string body) => WorldEditorAssets.BodyAssetName(systemName, body);
+			string systemName = WorldSystemAssets.UniqueSystemName(primaryName + " System");
+			string folder = WorldSystemAssets.SystemBodiesFolder(systemName);
+			string Asset(string body) => WorldSystemAssets.BodyAssetName(systemName, body);
 			StarBody primary = RollStar(dice, folder, Asset(primaryName), primaryName, 40f);
 			bodies.Add(primary);
 			int suns = dice.Chance(0.68f) ? 1 : dice.Chance(0.82f) ? 2 : 3;
@@ -678,7 +678,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// ── The system ──
-			SolarSystemProfile system = WorldEditorAssets.Create<SolarSystemProfile>(WorldEditorAssets.SystemFolder(systemName), systemName, p =>
+			SolarSystemProfile system = WorldEditorAssets.Create<SolarSystemProfile>(WorldSystemAssets.SystemFolder(systemName), systemName, p =>
 			{
 				p.Bodies.AddRange(bodies);
 				p.HomeWorld = home;

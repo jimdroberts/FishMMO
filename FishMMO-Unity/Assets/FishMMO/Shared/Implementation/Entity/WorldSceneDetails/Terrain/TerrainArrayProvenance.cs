@@ -9,7 +9,8 @@ namespace FishMMO.Shared
 	[Serializable]
 	public sealed class TerrainArrayLayerUse
 	{
-		public BiomeTemplate Biome;
+		[Tooltip("The biome template (World Simulation module) whose slot uses the layer.")]
+		public ScriptableObject Biome;
 		[Tooltip("The biome's slot: main, detail/<i>, cliff/<i>, lakebed or riverbed.")]
 		public string Slot;
 	}

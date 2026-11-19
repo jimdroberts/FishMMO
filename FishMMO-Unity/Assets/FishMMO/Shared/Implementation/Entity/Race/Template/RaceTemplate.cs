@@ -233,51 +233,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Draws one of this race's home biomes, weighted, with the given RNG; null when the race has
-		/// no registered affinities. Deterministic for a seeded RNG, so both peers agree.
-		/// </summary>
-		public BiomeTemplate PickHomeBiome(DeterministicRNG rng)
-		{
-			if (BiomeAffinities == null || BiomeAffinities.Count == 0)
-			{
-				return null;
-			}
-			float total = 0f;
-			for (int i = 0; i < BiomeAffinities.Count; i++)
-			{
-				BiomeAffinity affinity = BiomeAffinities[i];
-				if (affinity != null && affinity.Weight > 0f && affinity.Biome != null)
-				{
-					total += affinity.Weight;
-				}
-			}
-			if (total <= 0f)
-			{
-				return null;
-			}
-			float roll = (float)(rng.NextDouble() * total);
-			for (int i = 0; i < BiomeAffinities.Count; i++)
-			{
-				BiomeAffinity affinity = BiomeAffinities[i];
-				if (affinity == null || affinity.Weight <= 0f)
-				{
-					continue;
-				}
-				BiomeTemplate biome = affinity.Biome;
-				if (biome == null)
-				{
-					continue;
-				}
-				roll -= affinity.Weight;
-				if (roll <= 0f)
-				{
-					return biome;
-				}
-			}
-			return null;
-		}
-
-		/// <summary>
 		/// Gets the model reference for the given index, or the placeholder if out of range or models are missing.
 		/// </summary>
 		/// <param name="index">The model index.</param>

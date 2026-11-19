@@ -30,8 +30,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Append('|').Append(SystemInfo.graphicsDeviceType)
 				.Append('|').Append(typeof(WorldBody).Assembly.ManifestModule.ModuleVersionId);
 			foreach (string root in new[] {
-				"Assets/FishMMO/Shared/Implementation/Celestial",
-				"Assets/FishMMO/Shared/Implementation/Tools/Biomes",
+				"Assets/FishMMO/Modules/WorldSimulation/Runtime/Celestial",
+				"Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes",
 				"Assets/FishMMO/Shared/Implementation/Tools/Extensions/Unity/Editor/World",
 				"Assets/FishMMO/Modules/WorldDesign/Editor" })
 				foreach (string path in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))

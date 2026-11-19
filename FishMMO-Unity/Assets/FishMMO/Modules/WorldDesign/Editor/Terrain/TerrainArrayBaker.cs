@@ -207,13 +207,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					foreach (TerrainArrayLayerUse use in source.Uses)
 					{
-						TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+						TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer((use.Biome as BiomeTemplate), use.Slot) : null;
 						if (slot == null || slot.clock.IsNone)
 						{
 							continue;
 						}
 						packed = slot.clock.Pack();
-						int main = use.Slot == BiomeLocalArt.SlotMain ? -1 : MainLayerOf(layers, count, use.Biome);
+						int main = use.Slot == BiomeLocalArt.SlotMain ? -1 : MainLayerOf(layers, count, (use.Biome as BiomeTemplate));
 						rest = new Vector4(Mathf.Clamp01(slot.clock.Floor), main == i ? -1f : main, 0f, 0f);
 						break;
 					}
@@ -254,7 +254,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				foreach (TerrainArrayLayerUse use in layers[j].Uses)
 				{
-					if (use != null && use.Biome == biome && use.Slot == BiomeLocalArt.SlotMain)
+					if (use != null && (use.Biome as BiomeTemplate) == biome && use.Slot == BiomeLocalArt.SlotMain)
 					{
 						return j;
 					}
@@ -279,7 +279,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (TerrainArrayLayerUse use in source.Uses)
 			{
-				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer((use.Biome as BiomeTemplate), use.Slot) : null;
 				if (slot != null && slot.HasGroundMakeup)
 				{
 					Vector3 m = slot.GroundMakeup;
@@ -302,7 +302,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (TerrainArrayLayerUse use in source.Uses)
 			{
-				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer(use.Biome, use.Slot) : null;
+				TerrainTextureLayer slot = use != null ? BiomeLocalArt.CommittedLayer((use.Biome as BiomeTemplate), use.Slot) : null;
 				if (slot != null && !slot.glow.IsNone)
 				{
 					return slot.glow.Pack();

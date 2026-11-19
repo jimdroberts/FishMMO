@@ -56,7 +56,7 @@ namespace FishMMO.UnitTests
 				"ScenePropBaker", "TerrainTileLayerSync", "ProceduralArtCatalogue", "ProceduralArtVariants", "PointOfInterestGenerator", "SceneGenerator" };
 			var named = new Regex(@"\b(" + string.Join("|", moduleTypes) + @")\b");
 			var hits = Directory.GetFiles(ProjectFiles.Folder(CoreEditor), "*.cs", SearchOption.AllDirectories)
-				.Concat(new[] { "Assets/FishMMO/Client/World/Weather/Editor/WeatherRenderAssets.cs", "Assets/FishMMO/Client/World/Weather/Editor/TerrainDetailBaker.cs",
+				.Concat(new[] { "Assets/FishMMO/Modules/WorldSimulation/Editor/Weather/WeatherRenderAssets.cs", "Assets/FishMMO/Modules/Terrain/Editor/TerrainDetailBaker.cs",
 					"Assets/FishMMO/Client/GUI/Editor/ShaderPrewarm.cs" }.Select(ProjectFiles.Path))
 				.SelectMany(f => named.Matches(SourceScanPins.CodeOnly(File.ReadAllText(f))).Cast<Match>().Select(m => $"{Path.GetFileName(f)}: {m.Value}"))
 				.ToList();

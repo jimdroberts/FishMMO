@@ -14,7 +14,10 @@
         "FishMMO.Client.Weather.Editor",
         "FishMMO.Client.GUI.Editor",
         "FishMMO.WorldDesign.Editor",
-        "FishMMO.Naming"
+        "FishMMO.Naming",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

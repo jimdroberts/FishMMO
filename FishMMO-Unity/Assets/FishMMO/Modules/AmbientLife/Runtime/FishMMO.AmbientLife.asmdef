@@ -2,7 +2,8 @@
     "name": "FishMMO.AmbientLife",
     "rootNamespace": "FishMMO.Shared",
     "references": [
-        "FishMMO.Core"
+        "FishMMO.Core",
+        "FishMMO.WorldSimulation"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -20,14 +20,14 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeSeaCoastAndFieldClaimTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
-		private const string WaterFolder = "Assets/Plugins/FishMMO Water";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
+		private const string WaterFolder = "Assets/FishMMO/Modules/Water";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string FieldsSource = World + "/PointsOfInterest/Features/PointOfInterestFields.cs";
 		private const string StageSource = World + "/PointsOfInterest/PointOfInterestStage.cs";
 		private const string ContextSource = World + "/PointsOfInterest/PointOfInterestSiteContext.cs";
 		private const string FieldSource = World + "/Terrain/SceneBiomeField.cs";
-		private const string MapSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/SceneBiomeMap.cs";
+		private const string MapSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/SceneBiomeMap.cs";
 
 		private const int Bog = 7, Sea = 9, Meadow = 11;
 		private static readonly BiomeSeaLook Peat = new BiomeSeaLook(new Color(0.18f, 0.12f, 0.05f, 1f), 6f, 1.6f);

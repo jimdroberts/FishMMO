@@ -102,7 +102,9 @@ namespace FishMMO.UnitTests
 		public void LitPassesCarryNoUrpLightArraysOnWebGpu()
 		{
 			var all=Compiled();
-			Assert.That(all.Select(c=>c.label.Split(' ')[0]).Distinct().Count(),Is.GreaterThan(20),"too few table shaders found");
+			// The world modules carry most of the lit shaders; the core alone has a handful.
+			int expected=InstalledModules.Has("Terrain")&&InstalledModules.Has("WorldSimulation")?20:4;
+			Assert.That(all.Select(c=>c.label.Split(' ')[0]).Distinct().Count(),Is.GreaterThan(expected),"too few table shaders found");
 			foreach(var (label,result) in all)
 				foreach(var buffer in result.ConstantBuffers)
 				{
@@ -136,6 +138,8 @@ namespace FishMMO.UnitTests
 		public void HotLitPassesReadTheTable(string label)
 		{
 			var match=Compiled().Where(c=>c.label==label).ToArray();
+			// The grass, HLOD and heightmap draws are the Terrain module's (Phase 4, 2026-11-18): absent without it.
+			if(match.Length==0&&!InstalledModules.Has("Terrain"))Assert.Ignore("The Terrain module is not installed.");
 			Assert.That(match.Length,Is.EqualTo(1),"no program "+label);
 			Assert.That(match[0].result.ResourceBindings.Select(r=>r.Name),Does.Contain("_FishLightTable"),label);
 		}

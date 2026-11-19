@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests
 		private const string ShaderPath = "Assets/Prefabs/Client/Weather/Shaders/FishTerrainIndexBake.shader";
 		private static uint[] ReadWords(Texture index, int size)
 		{
-			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Tests/TestHarness/World/Editor/TerrainIndexLoadProbe.compute")));
+			var compute = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Tests/UnitTests/Probes/TerrainIndexLoadProbe.compute")));
 			try
 			{
 				using var words = new GraphicsBuffer(GraphicsBuffer.Target.Structured, size * size, 8);

@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeStillWaterBoardwalkPaddyTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string GeneratorSource = World + "/SceneGenerator.cs";
 		private const string RepaintSource = World + "/Terrain/BiomeRepaintTool.cs";
@@ -78,7 +78,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				get
 				{
-					string source = ProjectFiles.ReadAllText("Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
+					string source = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs");
 					StringAssert.Contains("private List<BiomeFloatingPlant> floatingPlants = new List<BiomeFloatingPlant>();", source);
 					return source.Contains("private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;") ? BiomeBoardwalks.None : (BiomeBoardwalks)255;
 				}

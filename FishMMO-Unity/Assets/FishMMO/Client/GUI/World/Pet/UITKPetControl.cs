@@ -154,6 +154,9 @@ namespace FishMMO.Client
 			public VisualElement Row;
 			public VisualElement Fill;
 			public Label Text;
+			/// <summary>The whole-unit health and maximum last drawn (see OnTick); MinValue until first drawn.</summary>
+			public int DrawnCurrent = int.MinValue;
+			public int DrawnMax = int.MinValue;
 		}
 
 		/// <summary>The pets shown, in slot order.</summary>
@@ -431,6 +434,57 @@ namespace FishMMO.Client
 				bound.Text = text;
 				petList.Add(row);
 			}
+		}
+
+		/// <summary>
+		/// Each frame while shown: every row against the pet itself, the way the target frame reads its pinned target.
+		/// </summary>
+		/// <remarks>
+		/// The rows follow health events, and the events are right; but a row bound to an object that is no longer the pet
+		/// hears nothing, and the panel sat at full health while the target frame, reading the live pet, showed 65%
+		/// (2026-11-18). So a row whose pet is no longer the listed, live object is rebound, and a row whose drawn numbers
+		/// differ from its health is redrawn: two integer comparisons per pet per frame until something moves.
+		/// </remarks>
+		protected override void OnTick()
+		{
+			if (!Visible || boundPets.Count == 0 || Character == null || !Character.TryGet(out IPetController petController))
+			{
+				return;
+			}
+			for (int i = 0; i < boundPets.Count; ++i)
+			{
+				BoundPet bound = boundPets[i];
+				if (bound.Pet == null || !IsListed(petController.Pets, bound.Pet))
+				{
+					RebindPets();
+					return;
+				}
+				CharacterResourceAttribute health = bound.Health;
+				if (health == null)
+				{
+					continue;
+				}
+				int current = Mathf.RoundToInt(health.CurrentValue);
+				int max = health.FinalValue;
+				if (current != bound.DrawnCurrent || max != bound.DrawnMax)
+				{
+					ApplyHealth(bound, health);
+					ApplyRowHealth(bound);
+				}
+			}
+		}
+
+		/// <summary>Whether <paramref name="pet"/> is in the list, by reference; a loop, as this runs every frame.</summary>
+		private static bool IsListed(IReadOnlyList<Pet> pets, Pet pet)
+		{
+			for (int i = 0; i < pets.Count; ++i)
+			{
+				if (ReferenceEquals(pets[i], pet))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/// <summary>Writes one pet's health into its row.</summary>
@@ -848,6 +902,8 @@ namespace FishMMO.Client
 				? health.CurrentValue / health.FinalValueAsFloat
 				: 0.0f;
 			bound.HealthText = Mathf.RoundToInt(health.CurrentValue) + "/" + health.FinalValue;
+			bound.DrawnCurrent = Mathf.RoundToInt(health.CurrentValue);
+			bound.DrawnMax = health.FinalValue;
 		}
 
 		/// <summary>

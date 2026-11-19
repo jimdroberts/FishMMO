@@ -19,8 +19,8 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeOpenSeaTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
-		private const string WaterShaders = "Assets/Plugins/FishMMO Water/Shaders";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
+		private const string WaterShaders = "Assets/FishMMO/Modules/Water/Shaders";
 		private const string ClientShaders = "Assets/Prefabs/Client/Weather/Shaders";
 		private const uint Seed = 0x5EA5EEDu;
 
@@ -59,7 +59,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(Regex.IsMatch(text, @"^  seaFloats:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} floats something at sea");
 			}
 			Assert.That(templates, Is.EqualTo(83));
-			string source = ProjectFiles.ReadAllText("Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
+			string source = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs");
 			StringAssert.Contains("private List<BiomeSeaFloat> seaFloats = new List<BiomeSeaFloat>();", source);
 			Assert.That(BiomeSeaFloats.Any(BiomeSeaFloats.None()), Is.False);
 			Assert.That(BiomeSeaFloats.Any(new List<BiomeSeaFloat> { new BiomeSeaFloat(BiomeSeaFloatKind.Sargassum, 0f) }), Is.False, "a zero weight floats nothing");

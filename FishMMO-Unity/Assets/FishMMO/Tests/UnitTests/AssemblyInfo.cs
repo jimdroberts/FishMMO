@@ -5,3 +5,5 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.AmbientLife.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.WorldDesign.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Naming.Tests")]
+[assembly: InternalsVisibleTo("FishMMO.Terrain.Tests")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]

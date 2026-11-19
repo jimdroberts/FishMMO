@@ -256,7 +256,7 @@ namespace FishMMO.Client
 				{
 					local = Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale) * local;
 				}
-				Bounds part = TerrainTreeMath.TransformBounds(local, mesh.bounds);
+				Bounds part = TransformBounds(local, mesh.bounds);
 				if (any)
 				{
 					bounds.Encapsulate(part);
@@ -269,5 +269,17 @@ namespace FishMMO.Client
 			}
 			return any;
 		}
-	}
+	
+		/// <summary>The box round <paramref name="local"/> carried by <paramref name="m"/> (its extents taken through the absolute matrix).</summary>
+		private static Bounds TransformBounds(Matrix4x4 m, Bounds local)
+		{
+			Vector3 centre = m.MultiplyPoint3x4(local.center);
+			Vector3 e = local.extents;
+			Vector3 extents = new Vector3(
+				Mathf.Abs(m.m00) * e.x + Mathf.Abs(m.m01) * e.y + Mathf.Abs(m.m02) * e.z,
+				Mathf.Abs(m.m10) * e.x + Mathf.Abs(m.m11) * e.y + Mathf.Abs(m.m12) * e.z,
+				Mathf.Abs(m.m20) * e.x + Mathf.Abs(m.m21) * e.y + Mathf.Abs(m.m22) * e.z);
+			return new Bounds(centre, extents * 2f);
+		}
+}
 }

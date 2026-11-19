@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class GroundBandsTests
 	{
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 
 		private static string Read(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
@@ -201,7 +201,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string input = Read(Path.Combine(Shaders, "FishWeatherTerrainArrayInput.hlsl"));
 			StringAssert.Contains("#include \"FishGroundClock.hlsl\"", input);
 			Assert.That(Regex.Matches(input, @"FishGroundClockShift\(weights, ids\);").Count, Is.EqualTo(2), "both FishTopLayers (tile and backdrop)");
-			string sky = Read("Assets/FishMMO/Client/World/Weather/Sky/GlowSky.cs");
+			string sky = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/GlowSky.cs");
 			StringAssert.Contains("Shader.PropertyToID(\"_FishGroundClock\")", sky);
 			StringAssert.Contains("Shader.SetGlobalVector(GroundClockId, GroundClockOf(state));", sky);
 			StringAssert.Contains("if (state == null)\n\t\t\t{\n\t\t\t\treturn Vector4.zero;", sky);

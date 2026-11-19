@@ -33,8 +33,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private ICharacterSystem<NetworkConnection, Scene> scheduleCharacterSystem;
 		private TimeManager scheduleTimeManager;
 		/// <summary>Players on this server and the last tick each was engaged, for the idle send interval.</summary>
+		/// <remarks>
+		/// Keyed by the connection OBJECT, not its value: FishNet resets a connection's ClientId to -1 when it disconnects, and
+		/// NetworkConnection's hash and equality follow the ClientId, so a disconnected entry could no longer be found by its
+		/// own key — not read, not removed — and every tick threw KeyNotFoundException for 'Id [-1]' from then on (live,
+		/// 2026-11-18, after a client closed its session). Identity keeps the entry reachable until it is removed.
+		/// </remarks>
 		private readonly Dictionary<NetworkConnection, (IPlayerCharacter Character, uint EngagedTick)> scheduledPlayers =
-			new Dictionary<NetworkConnection, (IPlayerCharacter, uint)>();
+			new Dictionary<NetworkConnection, (IPlayerCharacter, uint)>(ConnectionIdentityComparer.Instance);
 		private readonly List<NetworkConnection> scheduledPlayerScratch = new List<NetworkConnection>();
 		/// <summary>Player-ticks scheduled, and those spent on the idle interval (for the simulate report).</summary>
 		private long scheduledPlayerTicks, idleIntervalPlayerTicks;
@@ -125,7 +131,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			for (int i = 0; i < scheduledPlayerScratch.Count; ++i)
 			{
 				NetworkConnection connection = scheduledPlayerScratch[i];
-				(IPlayerCharacter character, uint engagedTick) = scheduledPlayers[connection];
+				if (!scheduledPlayers.TryGetValue(connection, out (IPlayerCharacter Character, uint EngagedTick) entry))
+				{
+					continue;
+				}
+				(IPlayerCharacter character, uint engagedTick) = entry;
 				if (connection == null || !connection.IsActive || character == null)
 				{
 					scheduledPlayers.Remove(connection);
@@ -165,5 +175,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				scheduledPlayers[connection] = (character, scheduleTimeManager.LocalTick);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Compares connections by reference. A NetworkConnection's own equality follows its ClientId, which FishNet resets to -1
+	/// on disconnect, so a dictionary keyed by value loses a connection that disconnects while it is a key.
+	/// </summary>
+	internal sealed class ConnectionIdentityComparer : IEqualityComparer<NetworkConnection>
+	{
+		public static readonly ConnectionIdentityComparer Instance = new ConnectionIdentityComparer();
+
+		public bool Equals(NetworkConnection x, NetworkConnection y) => ReferenceEquals(x, y);
+
+		public int GetHashCode(NetworkConnection connection) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(connection);
 	}
 }

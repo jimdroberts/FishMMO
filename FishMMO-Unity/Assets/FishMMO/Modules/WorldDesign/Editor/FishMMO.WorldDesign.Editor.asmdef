@@ -19,7 +19,9 @@
         "Unity.ScriptableBuildPipeline",
         "Unity.RenderPipelines.Universal.Runtime",
         "FishMMO.Shared.Tools.Editor",
-        "FishMMO.Naming"
+        "FishMMO.Naming",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

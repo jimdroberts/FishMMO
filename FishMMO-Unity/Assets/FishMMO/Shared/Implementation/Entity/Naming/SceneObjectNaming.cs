@@ -98,7 +98,7 @@ namespace FishMMO.Shared
 
 		[Header("Places and items")]
 		[Tooltip("Biome for Dungeon and Point of Interest names and flavour for City names. Leave unset to read the scene's biome map at the object's position.")]
-		[TemplateReference(typeof(BiomeTemplate))]
+		[TemplateReference("BiomeTemplate")]
 		public int BiomeID;
 		public CityType CityType = CityType.Any;
 		public POIType POIType = POIType.Any;

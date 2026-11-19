@@ -184,8 +184,8 @@ namespace FishMMO.Client
 				main.Add(timings[0].cpuMainThreadFrameTime);
 				render.Add(timings[0].cpuRenderThreadFrameTime);
 			}
-			grassBuilt |= GrassBladeSystem.Building;
-			scatterBuilt |= DetailScatterSystem.Building;
+			grassBuilt |= GroundCoverQuery.GrassBuilding;
+			scatterBuilt |= GroundCoverQuery.ScatterBuilding;
 
 			if (now >= nextRetry && now - firstFrame <= 60.0)
 			{
@@ -246,8 +246,8 @@ namespace FishMMO.Client
 			Array.Clear(sums, 0, sums.Length);
 			hitches = 0;
 			worstFrame = 0f;
-			grassBuilt = GrassBladeSystem.Building;
-			scatterBuilt = DetailScatterSystem.Building;
+			grassBuilt = GroundCoverQuery.GrassBuilding;
+			scatterBuilt = GroundCoverQuery.ScatterBuilding;
 			return sb.ToString();
 		}
 

@@ -381,10 +381,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				_ = Log.Warning("SceneServerSystem", $"Failed to clean up stale scenes for server {id}: [{cleanupResult.ErrorCode}] {cleanupResult.ErrorMessage}");
 			}
 
-			// World clock (core), then the weather that runs on it. See SceneServerSystem.WorldClock / .Weather.
+			// World clock (core), then the modules' services that run on it (the weather). See SceneServerSystem.WorldClock and
+			// SceneServerServices.
 			InitializeNetworkSchedule(characterSystem);
 			InitializeWorldClock(characterSystem);
-			InitializeWeather(characterSystem, characterMappingData);
+			InitializeModuleServices(characterSystem, characterMappingData);
 
 			// Periodic callbacks
 			if (Server is IPeriodicUpdateSystem periodicSystem)
@@ -457,7 +458,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			DeinitializeWeather();
+			DeinitializeModuleServices();
 			DeinitializeWorldClock();
 			DeinitializeNetworkSchedule();
 
@@ -523,7 +524,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		{
 			DrainMainThreadQueue(drainAll: false);
 			UpdateWorldClock(deltaTime);
-			UpdateWeather(deltaTime);
+			UpdateModuleServices(deltaTime);
 		}
 
 		/// <summary>

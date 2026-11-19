@@ -86,7 +86,7 @@ namespace FishMMO.Shared.WorldDesign
 			profileField.style.minWidth = 220f;
 			profileField.RegisterValueChangedCallback(evt => SetProfile(evt.newValue as SolarSystemProfile));
 			toolbar.Add(profileField);
-			toolbar.Add(new ToolbarButton(CreateExample) { text = "New", tooltip = "Makes another solar system — the example Sun, Home and Moon 1 — in a folder of its own under " + WorldEditorAssets.SystemsFolder + ". The systems you have are not touched, and the game keeps using the active one. Asks first." });
+			toolbar.Add(new ToolbarButton(CreateExample) { text = "New", tooltip = "Makes another solar system — the example Sun, Home and Moon 1 — in a folder of its own under " + WorldSystemAssets.SystemsFolder + ". The systems you have are not touched, and the game keeps using the active one. Asks first." });
 			toolbar.Add(new ToolbarButton(CreateRandom) { text = "Random", tooltip = "Replaces the system selected here with a randomly generated one: one to three suns, rocky worlds close in and giants further out, moons, rings, comets, a belt and meteor showers, every world with its own tilt and lean. The old system goes to the trash. Asks first. With no system selected it simply makes one." });
 			activeButton = new ToolbarButton(MakeActive) { text = "Make active", tooltip = "Makes the selected system the one the game is set in: the world atlas names it, and the calendar counts its home world's days. A project can hold several systems; exactly one is active." };
 			toolbar.Add(activeButton);

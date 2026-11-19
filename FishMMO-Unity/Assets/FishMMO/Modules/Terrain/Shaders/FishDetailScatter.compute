@@ -1,0 +1,797 @@
+// GPU detail scatter: regenerates the visible mesh details (pebbles, small rocks, shells, litter...) around one
+// camera every frame (DetailScatterRenderer, FishMMO.Client/World/Terrain/Scatter), the mesh counterpart of the blade
+// grass. Nothing is resident but the per-terrain block counts and heights; every instance is a deterministic function
+// of its world block, its type's salt and its channel's seed (DetailScatterMath.cs is the CPU mirror; change both
+// together). The output is what the procedural-instancing twins (FishIndirectInstancing.hlsl) already draw: FishInstance
+// matrices and FishVisible entries in per-(type, view) regions, so the same materials draw it as the CPU chunk renderer's did (removed 2026-10-27).
+//
+// Per camera, in order:
+//   FishScatterClear      zero every slot's counter
+//   FishScatterGenerate   ONCE per resolution group of DetailScatterAtlas (normally one): one 64-thread group per CPU work
+//                         item (8 x 8 blocks of one terrain), one thread per 2 m block; per painted channel (type) of
+//                         the block (its sparse entries, 2026-10-27) the block's exact count (whole + its coin), and per
+//                         instance: its place in the block (in one of its painted cells at an edge), the ground height
+//                         and normal, its size from the noise, its turn, ground alignment and slope sink (the chunk
+//                         renderer's rules), distance thinning and the edge fade, frustum / sun-swept cull, append
+//   FishScatterFinalize   each indirect command's instanceCount = min(count, capacity)
+//
+// Slots: (type * 3 + level) * 2 + view (0 camera, 1 shadow casters; DetailScatterRenderer.SlotOf). Most types draw level 0
+// only. A type of one level whose prefab carries variant meshes (Variant1, Variant2 children) draws each instance's variant,
+// picked by its hash (DetailScatterMath.Variant), from the slot that level would take: one slice per variant. A bush (DetailScatterSettings.BushPrefix) draws up to three levels, stepping at metres per metre of its own height
+// and cross-fading over a band (DetailScatterMath.SelectLevel), to a reach set by its height alone, never thinned: it is
+// cover, and must stand the same for every player whatever their settings. A slot never overflows: an append past its capacity is dropped
+// (the CPU sizes it from the exact upper bound of the blocks it listed, so only the per-slot cap can drop anything).
+//
+// Portable (WebGPU, Vulkan, D3D11/12, Metal, GLCore): no wave intrinsics; atomics only on a RWByteAddressBuffer;
+// textures read with Load (no samplers); 7 storage buffers in the generate kernel (WebGPU's per-stage limit is 8: the
+// sparse density rides the table, not a buffer of its own); 2 textures of the scatter's own (and the path overlay's).
+
+#pragma kernel FishScatterCull
+#pragma kernel FishScatterClear
+#pragma kernel FishScatterGenerate
+#pragma kernel FishScatterFinalize
+#pragma kernel FishScatterArgsFence
+#pragma kernel FishScatterPack
+#pragma use_dxc vulkan
+
+#define SCATTER_ITEM_SIDE 8
+#define SCATTER_MAX_PER_BLOCK 128
+// A bush is 3-4 m across, so more than this in a 2 m block adds overlapping leaves and no visible cover (DetailScatterMath.MaxBushesPerBlock).
+#define SCATTER_MAX_BUSHES_PER_BLOCK 2
+#define SCATTER_TERRAIN_HEADER 20u      // DetailScatterAtlas.HeaderUints: a row's header, then its channels
+#define SCATTER_CHANNEL_UINTS 10u       // DetailScatterAtlas.ChannelUints
+#define SCATTER_ITEM_HEADER_UINTS 34u   // DetailScatterMath.ItemHeaderUints: first entry, then 65 sixteen-bit block starts
+#define SCATTER_CELL_STREAM 10u         // DetailScatterMath.CellStream: the painted cell an instance stands in
+#define SCATTER_THIN_BAND 0.08
+#define SCATTER_SLOPE_SINK_SHARE 0.6
+#define SCATTER_MAX_SLOPE_SINK 0.4
+// The hash stream an instance's variant mesh is drawn from (DetailScatterMath.VariantStream), and the most a type cycles
+// (DetailScatterSettings.MaxVariants: a variant takes the slot a bush's level would).
+#define SCATTER_VARIANT_STREAM 5u
+#define SCATTER_MAX_VARIANTS 3u
+// The scatter modes (SCATTER-MODES; a channel's two words at cb + 8 and cb + 9, BiomeScatterModeWord in
+// FishMMO.Shared.Biomes, BiomeScatterMode.cs: the CPU mirror, change both together). Both 0 = every mode off: the
+// instance is exactly what it was before the modes existed. The hash streams of a lean's share and a power-law size.
+#define SCATTER_MODE_LEAN_STREAM 8u
+#define SCATTER_MODE_SIZE_STREAM 9u
+#define SCATTER_MODE_FACING_MASK 3u
+#define SCATTER_MODE_FACING_DOWNSLOPE 2u
+#define SCATTER_MODE_SPREAD_SHIFT 2u
+#define SCATTER_MODE_LEAN_SHIFT 10u
+#define SCATTER_MODE_LEAN_DEGREES_SHIFT 13u
+#define SCATTER_MODE_POWER_SHIFT 20u
+#define SCATTER_MODE_LEAN_DOWNSLOPE 2u
+#define SCATTER_MODE_LEAN_GROUND 3u
+
+struct FishInstance { float4 row0; float4 row1; float4 row2; };   // 48 bytes (FishIndirectInstancing.hlsl)
+struct FishVisible { uint index; float lodFade; };                 // 8 bytes
+struct ScatterItem { int blockX; int blockZ; uint packed; uint terrain; };   // packed: main 1, shadow 2, nx 4 bits from 2, nz 4 bits from 6
+struct ScatterModel { float4 sphere; float4 extra; float4 lod; };  // sphere: local centre xyz, radius; extra: x foot radius, y salt (bits), z casts shadows (0/1); lod: x levels, y bush (0/1), z mesh top (m), w variant meshes (0 or 1: one)
+
+StructuredBuffer<ScatterItem> _ScatterItems;
+/* DetailScatterAtlas: [terrain] its row's offset; the rows (SCATTER_TERRAIN_HEADER uints, then SCATTER_CHANNEL_UINTS per
+ * channel); then per terrain its item headers and its sparse entries (DetailScatterMath.PackEntry: bits 0..15 the stored
+ * count as a half float, 16..27 the channel, 28..31 the block's painted cells). */
+StructuredBuffer<uint> _ScatterTable;
+StructuredBuffer<ScatterModel> _ScatterModels;  // per type
+StructuredBuffer<uint2> _ScatterSlots;          // per slot: x base in the output buffers, y capacity
+RWByteAddressBuffer _ScatterCounts;             // one uint per slot
+RWStructuredBuffer<FishInstance> _ScatterInstancesOut;
+RWStructuredBuffer<FishVisible> _ScatterVisibleOut;
+
+#include "Assets/Prefabs/Client/Weather/Shaders/FishGroundPaths.hlsl"
+
+Texture2DArray<float> _ScatterHeights;          // the scatter's own copy of the heights, 0..1 of the terrain's height
+Texture2DArray<float> _ScatterHoles;            // the painted holes on the heights' grid, slice = the height slice: texel (x, z) = cell (x, z), 0 a hole, 1 solid
+
+float4 _ScatterCamera;                          // xyz position
+float4 _ScatterPlanes[6];                       // inside when dot(n, p) + w >= 0
+float4 _ScatterLight;                           // xyz the sun's direction of travel, w shadow distance (0 none)
+float4 _ScatterThin;                            // x thin start (m), y share kept at the draw distance, z edge fade band (share of the distance), w the farthest a bush reaches (m)
+float4 _ScatterBushLod;                         // x level 0 -> 1, y level 1 -> 2 (metres per metre of height), z cross-fade band (share of a level's reach)
+float4 _ScatterBushReach;                       // x draw metres per metre of height, y min, z max
+uint _ScatterItemOffset;
+uint _ScatterItemCount;
+uint _ScatterSlotCount;
+uint _ScatterArgCount;
+
+// The thread's terrain, from the table (ScatterLoadTerrain).
+static float4 _TerrainOrigin;    // xyz, w metres per height unit
+static float4 _TerrainSize;      // x size x, y size z, z heightmap resolution, w blocks per side
+static float2 _TerrainBlock;     // block size x, z (m)
+static uint _TerrainHeightSlice;
+static uint _TerrainHeaderBase;  // its first item header in the table
+static uint _TerrainItemsSide;   // work items a side
+static uint _TerrainFactor;      // detail cells a block side (the painted-cell masks)
+static int2 _TerrainWorldBlock;  // world index of block 0
+static float _TerrainDistance;
+static uint _TerrainRow;
+
+void ScatterLoadTerrain(uint terrain)
+{
+    uint at = _ScatterTable[terrain];
+    _TerrainRow = at;
+    _TerrainOrigin = asfloat(uint4(_ScatterTable[at], _ScatterTable[at + 1u], _ScatterTable[at + 2u], _ScatterTable[at + 3u]));
+    _TerrainSize = asfloat(uint4(_ScatterTable[at + 4u], _ScatterTable[at + 5u], _ScatterTable[at + 6u], _ScatterTable[at + 7u]));
+    _TerrainBlock = asfloat(uint2(_ScatterTable[at + 8u], _ScatterTable[at + 9u]));
+    _TerrainHeightSlice = _ScatterTable[at + 10u];
+    _TerrainHeaderBase = _ScatterTable[at + 11u];
+    _TerrainItemsSide = _ScatterTable[at + 16u];
+    _TerrainFactor = _ScatterTable[at + 17u];
+    _TerrainWorldBlock = asint(uint2(_ScatterTable[at + 13u], _ScatterTable[at + 14u]));
+    _TerrainDistance = asfloat(_ScatterTable[at + 15u]);
+}
+
+// ── Hashes (TerrainDetailMath.Mix / Hash / Unit) ──────────────────────
+
+uint ScatterMix(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+uint ScatterHash(int cellX, int cellZ, uint prototype, uint seed, uint instance)
+{
+    uint h = ScatterMix(asuint(cellX) * 0x9E3779B1u ^ ScatterMix(asuint(cellZ) + 0x632BE5ABu));
+    h = ScatterMix(h ^ prototype * 0x85EBCA77u);
+    h = ScatterMix(h ^ seed * 0xC2B2AE3Du);
+    return ScatterMix(h ^ instance * 0x27D4EB2Fu);
+}
+
+float ScatterUnit(uint hash, uint stream)
+{
+    return (float)(ScatterMix(hash ^ (stream + 1u) * 0x165667B1u) >> 8) * (1.0 / 16777216.0);
+}
+
+// TerrainDetailMath.Noise: smooth value noise over the world, so neighbouring plants share a size.
+float ScatterNoise(float x, float z, uint seed)
+{
+    int x0 = (int)floor(x);
+    int z0 = (int)floor(z);
+    float fx = x - (float)x0;
+    float fz = z - (float)z0;
+    fx = fx * fx * (3.0 - 2.0 * fx);
+    fz = fz * fz * (3.0 - 2.0 * fz);
+    uint minusOne = 0xFFFFFFFFu;
+    float a = ScatterUnit(ScatterHash(x0, z0, minusOne, seed, 0u), 3u);
+    float b = ScatterUnit(ScatterHash(x0 + 1, z0, minusOne, seed, 0u), 3u);
+    float c = ScatterUnit(ScatterHash(x0, z0 + 1, minusOne, seed, 0u), 3u);
+    float d = ScatterUnit(ScatterHash(x0 + 1, z0 + 1, minusOne, seed, 0u), 3u);
+    return lerp(lerp(a, b, fx), lerp(c, d, fx), fz);
+}
+
+// FishTerrainInstancing.compute FishThinFade's position hash (DetailScatterMath.PositionHash01).
+float ScatterPositionHash(float3 p)
+{
+    return (float)(ScatterMix(asuint(p.x) ^ ScatterMix(asuint(p.z))) & 0xFFFFFFu) / 16777216.0;
+}
+
+// ── Scatter modes (BiomeScatterModeWord.Yaw / LeanUp / SizeShare, BiomeScatterModes.PowerLawShare) ──
+
+// A 16-bit heading as Unity's turn, radians (BiomeScatterModeWord.Radians).
+float ScatterModeRadians(uint half16)
+{
+    return (float)(half16 & 0xFFFFu) / 65536.0 * 6.2831853;
+}
+
+// The instance's turn: its own draw with no facing; else the fixed heading or the fall line (flat ground keeps its own
+// turn) plus the offset, strayed by the spread from the same draw.
+float ScatterModeYaw(uint word, uint angles, float turnUnit, float3 normal)
+{
+    uint facing = word & SCATTER_MODE_FACING_MASK;
+    float own = turnUnit * 6.2831853;
+    if (facing == 0u)
+    {
+        return own;
+    }
+    float heading = ScatterModeRadians(angles);
+    if (facing == SCATTER_MODE_FACING_DOWNSLOPE)
+    {
+        if (normal.x * normal.x + normal.z * normal.z < 1e-8)
+        {
+            return own;
+        }
+        heading += atan2(normal.x, normal.z);
+    }
+    float spread = (float)((word >> SCATTER_MODE_SPREAD_SHIFT) & 0xFFu) / 255.0 * 3.14159265;
+    return heading + spread * (2.0 * turnUnit - 1.0);
+}
+
+// The up an instance is tilted to: straight up with no lean; the ground's normal for Ground; else tilted by the degrees
+// x (0.6 + 0.4 x leanUnit) toward the fixed heading or down the fall line (flat ground: upright).
+float3 ScatterModeLeanUp(uint word, uint angles, float3 normal, float leanUnit)
+{
+    uint lean = (word >> SCATTER_MODE_LEAN_SHIFT) & 7u;
+    if (lean == 0u)
+    {
+        return float3(0.0, 1.0, 0.0);
+    }
+    if (lean == SCATTER_MODE_LEAN_GROUND)
+    {
+        return normal;
+    }
+    float2 toward;
+    if (lean == SCATTER_MODE_LEAN_DOWNSLOPE)
+    {
+        toward = normal.xz;
+        float m = length(toward);
+        if (m < 1e-4)
+        {
+            return float3(0.0, 1.0, 0.0);
+        }
+        toward /= m;
+    }
+    else
+    {
+        float a = ScatterModeRadians(angles >> 16);
+        toward = float2(sin(a), cos(a));
+    }
+    float degrees = (float)((word >> SCATTER_MODE_LEAN_DEGREES_SHIFT) & 0x7Fu) / 127.0 * 90.0 * (0.6 + 0.4 * leanUnit);
+    float t = degrees * 0.017453292;
+    float s = sin(t);
+    return float3(toward.x * s, cos(t), toward.y * s);
+}
+
+// A truncated Pareto size, N(> s) ~ s^-alpha over [lo, hi], as a share along the range; t itself when it cannot apply.
+float ScatterPowerLawShare(float t, float alpha, float lo, float hi)
+{
+    if (!(alpha > 0.0) || !(hi > lo) || !(lo > 0.0))
+    {
+        return t;
+    }
+    t = saturate(t);
+    // Both bases are positive here (lo > 0, the second at least ratio); abs only quiets the compiler.
+    float ratio = pow(abs(lo / hi), alpha);
+    float s = lo * pow(abs(1.0 - t * (1.0 - ratio)), -1.0 / alpha);
+    return saturate((s - lo) / (hi - lo));
+}
+
+// The share along the scale range an instance's size takes: t with no power law.
+float ScatterModeSize(uint word, float t, float lo, float hi)
+{
+    uint power = (word >> SCATTER_MODE_POWER_SHIFT) & 0x3Fu;
+    return power == 0u ? t : ScatterPowerLawShare(t, (float)power / 16.0, lo, hi);
+}
+
+// FromToRotation(up, to) written out (Rodrigues, as the ground alignment below): R * up = to.
+float3x3 ScatterFromUp(float3 to)
+{
+    float3 v = float3(to.z, 0.0, -to.x);   // cross(up, to)
+    float cosine = to.y;
+    float k2 = 1.0 / max(1.0 + cosine, 1e-4);
+    return float3x3(1.0 - k2 * v.z * v.z,  -v.z,      k2 * v.x * v.z,
+                    v.z,                   cosine,    -v.x,
+                    k2 * v.x * v.z,        v.x,       1.0 - k2 * v.x * v.x);
+}
+
+// ── The terrain ───────────────────────────────────────────────────────
+
+float ScatterHeightTexel(int2 i)
+{
+    int last = (int)_TerrainSize.z - 1;
+    return _ScatterHeights.Load(int4(clamp(i, 0, last), _TerrainHeightSlice, 0));
+}
+
+// Whether a point lies over a cell the terrain's holes clip (a cave mouth, a canyon bed): its own cell, as ClipHoles reads it.
+bool ScatterInHole(float2 local)
+{
+    float res = _TerrainSize.z;
+    int2 cell = clamp((int2)floor(clamp(local / _TerrainSize.xy, 0.0, 1.0) * (res - 1.0)), 0, (int)res - 2);
+    return _ScatterHoles.Load(int4(cell, _TerrainHeightSlice, 0)) < 0.5;
+}
+
+// Bilinear between four Loads (no sampler, so the same on every API): world y.
+float ScatterHeightAt(float2 local)
+{
+    float res = _TerrainSize.z;
+    float2 g = clamp(local / _TerrainSize.xy, 0.0, 1.0) * (res - 1.0);
+    int2 i = (int2)floor(g);
+    float2 f = g - (float2)i;
+    float h00 = ScatterHeightTexel(i);
+    float h10 = ScatterHeightTexel(i + int2(1, 0));
+    float h01 = ScatterHeightTexel(i + int2(0, 1));
+    float h11 = ScatterHeightTexel(i + int2(1, 1));
+    return _TerrainOrigin.y + lerp(lerp(h00, h10, f.x), lerp(h01, h11, f.x), f.y) * _TerrainOrigin.w;
+}
+
+// The ground's normal from the heights a texel either side (TerrainData.GetInterpolatedNormal's role).
+float3 ScatterNormalAt(float2 local)
+{
+    float2 step = _TerrainSize.xy / max(1.0, _TerrainSize.z - 1.0);
+    float hx0 = ScatterHeightAt(local - float2(step.x, 0.0));
+    float hx1 = ScatterHeightAt(local + float2(step.x, 0.0));
+    float hz0 = ScatterHeightAt(local - float2(0.0, step.y));
+    float hz1 = ScatterHeightAt(local + float2(0.0, step.y));
+    return normalize(float3((hx0 - hx1) / (2.0 * step.x), 1.0, (hz0 - hz1) / (2.0 * step.y)));
+}
+
+// ── The sparse density (DetailScatterMath / DetailScatterDensity) ────
+
+// Sixteen-bit word w of an item header's block starts (two a uint after its first entry).
+uint ScatterHeaderStart(uint header, uint w)
+{
+    return (_ScatterTable[header + 1u + (w >> 1)] >> ((w & 1u) * 16u)) & 0xFFFFu;
+}
+
+// DetailScatterMath.PickCell: which painted cell (row z first, 0..3) of the mask an instance stands in, each set bit alike
+// likely. Selects only (no array written in the unrolled loop).
+uint ScatterPickCell(uint mask, float u)
+{
+    uint n = countbits(mask & 0xFu);
+    uint k = min((uint)(u * (float)n), max(n, 1u) - 1u);
+    uint cell = 0u;
+    [unroll] for (uint i = 0u; i < 4u; i++)
+    {
+        bool set = ((mask >> i) & 1u) != 0u;
+        cell = (set && k == 0u) ? i : cell;
+        k = set ? k - 1u : k;
+    }
+    return cell;
+}
+
+// ── Culling ───────────────────────────────────────────────────────────
+
+bool ScatterSphereVisible(float3 c, float r)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        inside = inside && dot(_ScatterPlanes[k].xyz, c) + _ScatterPlanes[k].w >= -r;
+    }
+    return inside;
+}
+
+bool ScatterSweptSphereVisible(float3 c, float r, float3 d, float l)
+{
+    bool inside = true;
+    [unroll] for (int k = 0; k < 6; k++)
+    {
+        float d0 = dot(_ScatterPlanes[k].xyz, c) + _ScatterPlanes[k].w;
+        float d1 = d0 + dot(_ScatterPlanes[k].xyz, d) * l;
+        inside = inside && max(d0, d1) >= -r;
+    }
+    return inside;
+}
+
+uint ScatterSlot(uint type, uint level, uint view)
+{
+    return (type * 3u + level) * 2u + view;
+}
+
+// DetailScatterMath.SelectLevel: the level an instance draws (fade -f in a band, 0 outside), and the one it fades into
+// (partner, fade +f; -1 none). levels 1 always draws level 0 with no partner.
+uint ScatterSelectLevel(float d, float height, uint levels, out float fade, out int partner, out float partnerFade)
+{
+    fade = 0.0;
+    partner = -1;
+    partnerFade = 0.0;
+    uint level = 0u;
+    if (levels > 1u)
+    {
+        float end0 = _ScatterBushLod.x * height;
+        float end1 = _ScatterBushLod.y * height;
+        level = d < end0 ? 0u : (levels > 2u && d < end1 ? 1u : levels - 1u);
+        if (level < levels - 1u)
+        {
+            float end = level == 0u ? end0 : end1;
+            float width = _ScatterBushLod.z * end;
+            float f = width > 0.0 ? (d - (end - width)) / width : 0.0;
+            if (f > 0.0)
+            {
+                fade = -f;
+                partner = (int)level + 1;
+                partnerFade = f;
+            }
+        }
+    }
+    return level;
+}
+
+// ── The BatchRendererGroup path (DetailScatterRenderer.Brg.cs; the layout is TerrainBrgMath's) ──
+// The batch buffer: every generated instance's DOTS matrices (unity_ObjectToWorld, unity_WorldToObject, column-major float3x4) at
+// its instance index, written as it is emitted. The eighth storage buffer of the generate kernel (WebGPU's limit a stage); a
+// one-word buffer and _ScatterDotsOn 0 while the scatter draws with RenderMeshIndirect.
+RWByteAddressBuffer _ScatterDotsOut;
+uint _ScatterDotsOn;
+uint _ScatterDotsObjectToWorld;
+uint _ScatterDotsWorldToObject;
+
+void ScatterStoreDots(uint address, float4 row0, float4 row1, float4 row2)
+{
+    // Column j is (row0[j], row1[j], row2[j]); four columns of three, the translation (w) last (FishTerrainInstancing.compute FishStoreDots).
+    _ScatterDotsOut.Store4(address +  0, asuint(float4(row0.x, row1.x, row2.x, row0.y)));
+    _ScatterDotsOut.Store4(address + 16, asuint(float4(row1.y, row2.y, row0.z, row1.z)));
+    _ScatterDotsOut.Store4(address + 32, asuint(float4(row2.z, row0.w, row1.w, row2.w)));
+}
+
+void ScatterEmitDots(uint index, FishInstance i)
+{
+    uint at = index * 48u;
+    ScatterStoreDots(_ScatterDotsObjectToWorld + at, i.row0, i.row1, i.row2);
+    // The inverse of T·R·S with orthogonal columns c: row k of inverse(R·S) is c_k / |c_k|², and its translation -that·t.
+    float3 c0 = float3(i.row0.x, i.row1.x, i.row2.x);
+    float3 c1 = float3(i.row0.y, i.row1.y, i.row2.y);
+    float3 c2 = float3(i.row0.z, i.row1.z, i.row2.z);
+    float3 i0 = c0 / dot(c0, c0);
+    float3 i1 = c1 / dot(c1, c1);
+    float3 i2 = c2 / dot(c2, c2);
+    float3 t = float3(i.row0.w, i.row1.w, i.row2.w);
+    ScatterStoreDots(_ScatterDotsWorldToObject + at, float4(i0, -dot(i0, t)), float4(i1, -dot(i1, t)), float4(i2, -dot(i2, t)));
+}
+
+// A visible entry as DOTS instancing reads it: the instance index in the low 24 bits, the LOD fade as a signed byte in the high 8
+// (FishTerrainInstancing.compute FishPackFade, TerrainBrgMath.PackVisible: the middle of the fade's 4x4 pattern step).
+uint ScatterPackVisible(FishVisible v)
+{
+    int q = 0;
+    if (v.lodFade != 0.0)
+    {
+        float steps = ceil(16.0 * min(abs(v.lodFade), 1.0));
+        q = (int)round((steps - 0.5) * (127.0 / 16.0));
+        q = v.lodFade < 0.0 ? -q : q;
+    }
+    return (v.index & 0xFFFFFFu) | (((uint)q & 0xFFu) << 24);
+}
+
+void ScatterEmit(uint slot, FishInstance instance, float fade)
+{
+    uint at;
+    _ScatterCounts.InterlockedAdd(slot * 4u, 1u, at);
+    uint2 s = _ScatterSlots[slot];
+    if (at < s.y)
+    {
+        _ScatterInstancesOut[s.x + at] = instance;
+        FishVisible v;
+        v.index = s.x + at;
+        v.lodFade = fade;
+        _ScatterVisibleOut[s.x + at] = v;
+        if (_ScatterDotsOn != 0u)
+        {
+            ScatterEmitDots(s.x + at, instance);
+        }
+    }
+}
+
+// ── Kernels ───────────────────────────────────────────────────────────
+
+[numthreads(64, 1, 1)]
+void FishScatterClear(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _ScatterSlotCount)
+    {
+        _ScatterCounts.Store(id.x * 4u, 0u);
+    }
+}
+
+[numthreads(64, 1, 1)]
+void FishScatterGenerate(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint itemIndex = group.x + group.y * 65535u;
+    if (itemIndex >= _ScatterItemCount)
+    {
+        return;
+    }
+    ScatterItem item = _ScatterItems[_ScatterItemOffset + itemIndex];
+    ScatterLoadTerrain(item.terrain);
+    bool main = (item.packed & 1u) != 0u;
+    bool shadow = (item.packed & 2u) != 0u;
+    uint nx = (item.packed >> 2) & 15u;
+    uint nz = (item.packed >> 6) & 15u;
+    uint lx = thread.x & 7u;
+    uint lz = thread.x >> 3;
+    if (lx >= nx || lz >= nz)
+    {
+        return;
+    }
+    int bx = item.blockX + (int)lx;
+    int bz = item.blockZ + (int)lz;
+    int blocks = (int)_TerrainSize.w;
+    if (bx >= blocks || bz >= blocks)
+    {
+        return;
+    }
+    // The block's extent on the terrain (the last row and column may be partial).
+    float2 blockMin = float2((float)bx, (float)bz) * _TerrainBlock;
+    float2 blockMax = min(blockMin + _TerrainBlock, _TerrainSize.xy);
+    float2 extent = max(blockMax - blockMin, 0.0);
+    float distanceLimit = _TerrainDistance;
+    float3 eye = _ScatterCamera.xyz;
+    // Nothing in a block whose nearest ground point is past the distance (in the ground plane: never more than the 3D one).
+    float2 nearest = clamp(eye.xz - _TerrainOrigin.xz, blockMin, blockMax);
+    // A terrain's own distance is the detail distance; its bushes may reach further (their own reach, w).
+    if (distance(nearest, eye.xz - _TerrainOrigin.xz) > max(distanceLimit, _ScatterThin.w))
+    {
+        return;
+    }
+    int2 worldBlock = _TerrainWorldBlock + int2(bx, bz);
+    // The block's painted channels: its run of the item's entries (DetailScatterDensity: by block, channel ascending).
+    uint header = _TerrainHeaderBase + ((uint)(item.blockZ >> 3) * _TerrainItemsSide + (uint)(item.blockX >> 3)) * SCATTER_ITEM_HEADER_UINTS;
+    uint entryBase = _ScatterTable[header];
+    uint blockIndex = lz * 8u + lx;
+    uint first = ScatterHeaderStart(header, blockIndex);
+    uint last = ScatterHeaderStart(header, blockIndex + 1u);
+    float shadowDistance = _ScatterLight.w;
+    // Only 1 m cells keep a mask of four (DetailScatterMath.MaskCells); 2 m cells have one, finer cells none.
+    bool cellMasks = _TerrainFactor == 2u;
+
+    [loop] for (uint j = first; j < last; j++)
+    {
+        uint entry = _ScatterTable[entryBase + j];
+        float expected = f16tof32(entry & 0xFFFFu);
+        uint c = (entry >> 16) & 0xFFFu;
+        uint cells = entry >> 28;
+        if (!(expected > 0.0))
+        {
+            continue;
+        }
+        uint cb = _TerrainRow + SCATTER_TERRAIN_HEADER + c * SCATTER_CHANNEL_UINTS;
+        int type = asint(_ScatterTable[cb]);
+        if (type < 0)
+        {
+            continue;
+        }
+        float2 widthRange = asfloat(uint2(_ScatterTable[cb + 1u], _ScatterTable[cb + 2u]));
+        float2 heightRange = asfloat(uint2(_ScatterTable[cb + 3u], _ScatterTable[cb + 4u]));
+        float noiseSpread = asfloat(_ScatterTable[cb + 5u]);
+        uint seed = _ScatterTable[cb + 6u];
+        float align = asfloat(_ScatterTable[cb + 7u]);
+        uint modeWord = _ScatterTable[cb + 8u];
+        uint modeAngles = _ScatterTable[cb + 9u];
+        uint modeLean = (modeWord >> SCATTER_MODE_LEAN_SHIFT) & 7u;
+        // A Ground lean conforms to the ground whatever the prototype's alignment (and takes no slope sink).
+        if (modeLean == SCATTER_MODE_LEAN_GROUND)
+        {
+            align = 1.0;
+        }
+        ScatterModel model = _ScatterModels[type];
+        uint salt = asuint(model.extra.y);
+        bool casts = model.extra.z > 0.5;
+        bool bush = model.lod.y > 0.5;
+        uint levels = clamp((uint)(model.lod.x + 0.5), 1u, 3u);
+        // The variant meshes its instances cycle: only a type of one level (never a bush) has more than one.
+        uint variants = (bush || levels > 1u) ? 1u : clamp((uint)(model.lod.w + 0.5), 1u, SCATTER_MAX_VARIANTS);
+
+        // DetailScatterMath.Count: the whole part, plus one when the block's coin lands under the fraction.
+        float stored = min(expected, (float)(bush ? SCATTER_MAX_BUSHES_PER_BLOCK : SCATTER_MAX_PER_BLOCK));
+        uint whole = (uint)floor(stored);
+        uint count = whole + (ScatterUnit(ScatterHash(worldBlock.x, worldBlock.y, salt, seed, 0u), 7u) < stored - (float)whole ? 1u : 0u);
+        count = min(count, (uint)SCATTER_MAX_PER_BLOCK);
+
+        [loop] for (uint k = 0u; k < count; k++)
+        {
+            uint h = ScatterHash(worldBlock.x, worldBlock.y, salt, seed, k + 1u);
+            // Anywhere in a wholly painted block (as before the masks); at a painted edge, anywhere in one of its painted
+            // cells (DetailScatterMath.InBlockCells), so nothing stands on the unpainted ground beside it.
+            float2 inBlock = float2(ScatterUnit(h, 0u), ScatterUnit(h, 1u));
+            float2 local = blockMin + inBlock * extent;
+            if (cellMasks && cells != 0xFu)
+            {
+                uint cell = ScatterPickCell(cells, ScatterUnit(h, SCATTER_CELL_STREAM));
+                local = blockMin + (float2((float)(cell & 1u), (float)(cell >> 1)) + inBlock) * (_TerrainBlock * 0.5);
+            }
+            float2 worldXZ = _TerrainOrigin.xz + local;
+            float3 position = float3(worldXZ.x, ScatterHeightAt(local), worldXZ.y);
+            float d = distance(position, eye);
+            // Size by the noise (neighbours share it): a bush's reach and level steps go by its height as placed.
+            float noise = ScatterNoise(worldXZ.x * noiseSpread, worldXZ.y * noiseSpread, seed);
+            float width = lerp(widthRange.x, widthRange.y, noise);
+            float height = lerp(heightRange.x, heightRange.y, noise);
+            if (((modeWord >> SCATTER_MODE_POWER_SHIFT) & 0x3Fu) != 0u)
+            {
+                // A power-law size (its own draw in place of the noise; both scales take the same draw).
+                float sizeUnit = ScatterUnit(h, SCATTER_MODE_SIZE_STREAM);
+                width = lerp(widthRange.x, widthRange.y, ScatterModeSize(modeWord, sizeUnit, widthRange.x, widthRange.y));
+                height = lerp(heightRange.x, heightRange.y, ScatterModeSize(modeWord, sizeUnit, heightRange.x, heightRange.y));
+            }
+            float tall = model.lod.z * height;
+            float limit = bush ? clamp(tall * _ScatterBushReach.x, _ScatterBushReach.y, _ScatterBushReach.z) : distanceLimit;
+            if (d > limit)
+            {
+                continue;
+            }
+            // Nothing stands over a hole painted in the terrain: the detail layers under a cave mouth keep what was
+            // painted before it was cut, and a 2 m block reaches past the hole's edge anyway.
+            if (ScatterInHole(local))
+            {
+                continue;
+            }
+            // Nothing stands where a path or a yard wears the ground bare (FishGroundPaths.hlsl), as the terrain draws it.
+            float trodden = FishPathTrodden(worldXZ);
+            if (trodden > 0.0 && ScatterUnit(h, 6u) < trodden)
+            {
+                continue;
+            }
+            // Distance thinning (DetailScatterMath.Keep / ThinFade; never a bush) and the dissolve at the distance's edge.
+            float keep = 1.0;
+            if (!bush && _ScatterThin.y < 1.0 && d > _ScatterThin.x)
+            {
+                keep = lerp(1.0, _ScatterThin.y, saturate((d - _ScatterThin.x) / max(1e-3, limit - _ScatterThin.x)));
+            }
+            float thin = keep >= 1.0 ? 0.0 : saturate(1.0 - (keep - ScatterPositionHash(position)) / SCATTER_THIN_BAND);
+            float band = max(1e-3, _ScatterThin.z * limit);
+            float edge = saturate((d - (limit - band)) / band);
+            float fadeOut = max(thin, edge);
+            if (fadeOut >= 1.0)
+            {
+                continue;
+            }
+
+            float3 normal = ScatterNormalAt(local);
+            // The turn by the hash (or the facing's heading, strayed by the same draw).
+            float turnUnit = ScatterUnit(h, 2u);
+            float yaw = turnUnit * 6.2831853;
+            if ((modeWord & SCATTER_MODE_FACING_MASK) != 0u)
+            {
+                yaw = ScatterModeYaw(modeWord, modeAngles, turnUnit, normal);
+            }
+            float cy = cos(yaw), sy = sin(yaw);
+            // Unity's turn about +Y (Quaternion.AngleAxis(yaw, up)): x' = x cos + z sin, z' = -x sin + z cos.
+            float3x3 turn = float3x3(cy, 0.0, sy,
+                                     0.0, 1.0, 0.0,
+                                     -sy, 0.0, cy);
+            float3x3 rotation = turn;
+            if (align > 0.0)
+            {
+                // FromToRotation(up, the up leaned toward the ground's normal by the prototype's alignment).
+                float3 to = normalize(lerp(float3(0.0, 1.0, 0.0), normal, align));
+                float3 v = float3(to.z, 0.0, -to.x);   // cross(up, to)
+                float cosine = to.y;
+                float k2 = 1.0 / (1.0 + cosine);
+                // The Rodrigues form written out: R = I + [v]x + [v]x^2 / (1 + c), v = (vx, 0, vz); R * up = to.
+                float3x3 lean = float3x3(1.0 - k2 * v.z * v.z,  -v.z,      k2 * v.x * v.z,
+                                         v.z,                   cosine,    -v.x,
+                                         k2 * v.x * v.z,        v.x,       1.0 - k2 * v.x * v.x);
+                rotation = mul(lean, turn);
+            }
+            if (modeLean != 0u && modeLean != SCATTER_MODE_LEAN_GROUND)
+            {
+                // The mode's lean (toward a heading or down the fall line), on top of the turn and the alignment.
+                rotation = mul(ScatterFromUp(ScatterModeLeanUp(modeWord, modeAngles, normal, ScatterUnit(h, SCATTER_MODE_LEAN_STREAM))), rotation);
+            }
+            // Into the slope by most of the drop across its foot, as much of the slope as it does not lean with
+            // (TerrainDetailField.Place): nothing floats on a bank.
+            float slope = acos(clamp(normal.y, -1.0, 1.0)) * (1.0 - align);
+            if (slope > 1e-3 && model.extra.x > 0.0)
+            {
+                position.y -= min(SCATTER_SLOPE_SINK_SHARE * model.extra.x * width * tan(min(slope, 1.2)), SCATTER_MAX_SLOPE_SINK);
+            }
+
+            FishInstance instance;
+            float3 scale = float3(width, height, width);
+            instance.row0 = float4(rotation[0] * scale, position.x);
+            instance.row1 = float4(rotation[1] * scale, position.y);
+            instance.row2 = float4(rotation[2] * scale, position.z);
+
+            float3 centre = position + mul(rotation, model.sphere.xyz * scale);
+            float radius = model.sphere.w * max(width, height);
+            // The level and its cross-fade partner; the dissolve at the reach's edge on a level fading alone.
+            float fade, partnerFade;
+            int partner;
+            uint level = ScatterSelectLevel(d, tall, levels, fade, partner, partnerFade);
+            if (variants > 1u)
+            {
+                // Its variant's slice (levels is 1 here, so level is 0 and there is no partner), from its own stream.
+                level = min((uint)(ScatterUnit(h, SCATTER_VARIANT_STREAM) * (float)variants), variants - 1u);
+            }
+            if (partner < 0)
+            {
+                fade = -max(-fade, fadeOut);
+            }
+            if (main && ScatterSphereVisible(centre, radius))
+            {
+                ScatterEmit(ScatterSlot((uint)type, level, 0u), instance, fade);
+                if (partner >= 0)
+                {
+                    ScatterEmit(ScatterSlot((uint)type, (uint)partner, 0u), instance, partnerFade);
+                }
+            }
+            if (shadow && casts && shadowDistance > 0.0 && d <= shadowDistance + radius)
+            {
+                float3 l = _ScatterLight.xyz;
+                float down = max(-l.y, 0.1);
+                float sweep = min(shadowDistance, 2.0 * radius / down);
+                if (ScatterSweptSphereVisible(centre, radius, l, sweep))
+                {
+                    ScatterEmit(ScatterSlot((uint)type, level, 1u), instance, fade);
+                    if (partner >= 0)
+                    {
+                        ScatterEmit(ScatterSlot((uint)type, (uint)partner, 1u), instance, partnerFade);
+                    }
+                }
+            }
+        }
+    }
+}
+
+StructuredBuffer<uint> _ScatterArgSlots;        // the slot each indirect command draws
+RWByteAddressBuffer _ScatterArgs;               // IndirectDrawIndexedArgs, 5 uints per command
+
+[numthreads(64, 1, 1)]
+void FishScatterFinalize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < _ScatterArgCount)
+    {
+        uint slot = _ScatterArgSlots[id.x];
+        uint count = _ScatterCounts.Load(slot * 4u);
+        _ScatterArgs.Store((id.x * 5u + 1u) * 4u, min(count, _ScatterSlots[slot].y));
+    }
+}
+
+/* OpenGL: makes Unity issue GL_COMMAND_BARRIER_BIT before the indirect draws (FishGrassBlades.compute FishGrassArgsFence,
+ * FishTerrainInstancing.compute FishArgsFence): Unity's GLES device marks the command barrier pending only when the args
+ * buffer is BOUND after its write, never for the write itself. */
+ByteAddressBuffer _ScatterArgsFence;
+
+[numthreads(1, 1, 1)]
+void FishScatterArgsFence(uint3 id : SV_DispatchThreadID)
+{
+    // Never true (instance counts are capped): only the bindings matter.
+    if (_ScatterArgsFence.Load(4) == 0xFFFFFFFFu)
+    {
+        _ScatterCounts.Store(0, 0u);
+    }
+}
+
+// The generated visible lists packed for the batch group (ScatterPackVisible), every slot's run at its base: after each
+// generation, one group a slot.
+RWByteAddressBuffer _ScatterPackedOut;
+
+[numthreads(64, 1, 1)]
+void FishScatterPack(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint slot = group.x;
+    if (slot >= _ScatterSlotCount) return;
+    uint2 region = _ScatterSlots[slot];
+    uint count = min(_ScatterCounts.Load(slot * 4u), region.y);
+    for (uint i = thread.x; i < count; i += 64u)
+    {
+        _ScatterPackedOut.Store((region.x + i) * 4u, ScatterPackVisible(_ScatterVisibleOut[region.x + i]));
+    }
+}
+
+// Visibility is refreshed independently of generation: cached candidates may become visible again next frame.
+// Seven storage buffers, and the eighth the culled list packed for the batch group (a one-word buffer while it is off);
+// shadow lists and their counts are copied without camera occlusion.
+#include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
+RWStructuredBuffer<FishVisible> _ScatterCulledVisible;
+RWByteAddressBuffer _ScatterCulledCounts;
+RWByteAddressBuffer _ScatterCulledPacked;
+[numthreads(64, 1, 1)]
+void FishScatterCull(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID)
+{
+    uint slot = group.x;
+    if (slot >= _ScatterSlotCount) return;
+    uint2 region = _ScatterSlots[slot];
+    uint count = min(_ScatterCounts.Load(slot * 4u), region.y);
+    if ((slot & 1u) != 0u)
+    {
+        if (thread.x == 0u) _ScatterCulledCounts.Store(slot * 4u, count);
+        return;
+    }
+    ScatterModel model = _ScatterModels[slot / 6u];
+    for (uint i = thread.x; i < count; i += 64u)
+    {
+        FishVisible visible = _ScatterVisibleOut[region.x + i];
+        FishInstance instance = _ScatterInstancesOut[visible.index];
+        float4 local = float4(model.sphere.xyz, 1.0);
+        float3 centre = float3(dot(instance.row0, local), dot(instance.row1, local), dot(instance.row2, local));
+        float scale = max(length(float3(instance.row0.x, instance.row1.x, instance.row2.x)),
+            max(length(float3(instance.row0.y, instance.row1.y, instance.row2.y)), length(float3(instance.row0.z, instance.row1.z, instance.row2.z))));
+        // Conservative wind/flora allowance, also used for prop shadow culling. No LOD or density change.
+        float radius = model.sphere.w * scale * 1.6 + 1.0;
+        if (ScatterSphereVisible(centre, radius) && !FishOccluded(centre, radius))
+        {
+            uint at;
+            _ScatterCulledCounts.InterlockedAdd(slot * 4u, 1u, at);
+            _ScatterCulledVisible[region.x + at] = visible;
+            if (_ScatterDotsOn != 0u)
+            {
+                _ScatterCulledPacked.Store((region.x + at) * 4u, ScatterPackVisible(visible));
+            }
+        }
+    }
+}

@@ -27,6 +27,12 @@ namespace FishMMO.Shared.Weather
 		/// <summary>The installed weather's answer for (scene, position, tick), or null for none.</summary>
 		public static Func<Scene, Vector3, uint, WeatherReading> Sampler;
 
+		/// <summary>Whether a scene has weather at all (a timeline); installed by the weather with <see cref="Sampler"/>.</summary>
+		public static Func<Scene, bool> SceneHasWeather;
+
+		/// <summary>Whether <paramref name="scene"/> has weather; false when no weather is installed.</summary>
+		public static bool HasWeather(Scene scene) => SceneHasWeather != null && SceneHasWeather(scene);
+
 		/// <summary>The weather at <paramref name="position"/> now.</summary>
 		public static WeatherReading Sample(Scene scene, Vector3 position) => Sample(scene, position, CurrentTick);
 

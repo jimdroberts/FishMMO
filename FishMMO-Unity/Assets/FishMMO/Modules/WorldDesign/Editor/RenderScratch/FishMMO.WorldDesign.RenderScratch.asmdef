@@ -11,7 +11,10 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
         "FishMMO.Render.Scratch",
-        "FishMMO.WorldDesign.Editor"
+        "FishMMO.WorldDesign.Editor",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

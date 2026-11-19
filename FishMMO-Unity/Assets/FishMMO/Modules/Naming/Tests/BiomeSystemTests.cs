@@ -378,7 +378,7 @@ namespace FishMMO.UnitTests
 				bool anyResolves = false;
 				foreach (BiomeAffinity affinity in race.BiomeAffinities)
 				{
-					anyResolves |= affinity.Biome != null;
+					anyResolves |= affinity.Biome() != null;
 				}
 				Assert.IsTrue(anyResolves, $"{race.name}: no affinity points at a registered biome.");
 			}

@@ -31,7 +31,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.StraightRoads.IsSet, Is.False, entry.Biome);
 			}
 			// And no biome asset carries either field set (an asset written before the fields existed reads the defaults).
-			string folder = Path.Combine("Assets", "Templates", "Entity", "Biomes");
+			string folder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 			int assets = 0;
 			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(folder), "*.asset"))
 			{

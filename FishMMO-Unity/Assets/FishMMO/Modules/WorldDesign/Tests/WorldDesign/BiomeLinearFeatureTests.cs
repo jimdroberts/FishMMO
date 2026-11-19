@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </remarks>
 	public class BiomeLinearFeatureTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string StageSource = World + "/PointsOfInterest/PointOfInterestStage.cs";
 		private const string FieldsSource = World + "/PointsOfInterest/Features/PointOfInterestFields.cs";
@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string ReaderSource = World + "/Terrain/BiomeTemplateArt.cs";
 		private const string StructuresGeneratorSource = World + "/ProceduralArt/BiomeArtGenerator.Structures.cs";
 		private const string PiecesSource = World + "/ProceduralArt/StructurePieces.cs";
-		private const string TemplateSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
+		private const string TemplateSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs";
 
 		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 

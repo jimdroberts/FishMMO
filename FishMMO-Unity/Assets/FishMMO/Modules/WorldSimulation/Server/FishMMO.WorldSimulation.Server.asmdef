@@ -1,0 +1,31 @@
+{
+    "name": "FishMMO.WorldSimulation.Server",
+    "rootNamespace": "FishMMO.Server",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "KinematicCharacterController",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "WebTransport",
+        "FishMMO.Server",
+        "FishMMO.WorldSimulation"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

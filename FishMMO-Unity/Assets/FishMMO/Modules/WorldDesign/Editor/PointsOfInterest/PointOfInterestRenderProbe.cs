@@ -264,7 +264,7 @@ namespace FishMMO.Shared.WorldDesign
 			WorldAtlasScene.EditorLookup.Invalidate();
 		}
 
-		private static string SettingsPath() => $"Assets/Templates/World/Atlas/Scenes/{ProbeName} POI Settings.asset";
+		private static string SettingsPath() => $"Assets/FishMMO/Modules/WorldSimulation/Templates/World/Atlas/Scenes/{ProbeName} POI Settings.asset";
 
 		/// <summary>A capital and the requested density, saved so the generator can revive it by path.</summary>
 		private static PointOfInterestSettings ProbeSettings(WorldAtlasScene entry)

@@ -1893,7 +1893,7 @@ namespace FishMMO.Client
 					stamp = stamp * 31 + SurfaceWater.Version;
 					stamp = stamp * 31 + (seaPresent ? seaMean.GetHashCode() : 1);
 					stamp = stamp * 31 + (cloudWorld ? 2 : 1);
-					stamp = stamp * 31 + GrassBladeSystem.CoverStamp;
+					stamp = stamp * 31 + GroundCoverQuery.CoverStamp;
 					Stamp = stamp;
 				}
 				return !first;
@@ -1978,7 +1978,7 @@ namespace FishMMO.Client
 			}
 
 			/// <summary>The blade grass standing there (GrassBladeSystem's cover map), for open-ground foraging.</summary>
-			public float CoverAt(float x, float z) => GrassBladeSystem.CoverAt(x, z);
+			public float CoverAt(float x, float z) => GroundCoverQuery.CoverAt(x, z);
 
 			/// <summary>Whether the scene's biome looks are built and switched on (<see cref="FloraPaletteMap"/>).</summary>
 			public bool LooksAvailable => FloraPaletteMap.Enabled && FloraPaletteMap.LookAt(Vector3.zero, out _);

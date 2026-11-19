@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 			{
 				LogAssert.IsTrue(overlay is AirMotesField, "made as the air motes");
 			}
-			string presentation = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Weather/Presentation/WeatherPresentation.cs");
+			string presentation = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Presentation/WeatherPresentation.cs");
 			LogAssert.IsFalse(Regex.IsMatch(SourceScanPins.CodeOnly(presentation), @"\b(AirMotesField|AmbientLifeRenderProfile)\b"), "the weather names no ambient life");
 		}
 
@@ -36,8 +36,11 @@ namespace FishMMO.UnitTests
 			AmbientLifeClient.Install();
 			LogAssert.IsTrue(new[] { "ambientLife", "ambientLifeMax", "ambientHighlight" }.All(n => RenderSwitches.Names.Contains(n)), "its three switches");
 			LogAssert.IsTrue(RenderReports.All.Any(r => r.Key == "ambient life"), "its perf report line");
-			string harness = ProjectFiles.ReadAllText("Assets/FishMMO/Tests/TestHarness/World/HarnessSettings.cs");
-			LogAssert.IsFalse(harness.Contains("AmbientLifeRenderProfile"), "the test bed names no ambient life");
+			if (InstalledModules.Has("WorldTestBed"))
+			{
+				string harness = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldTestBed/World/HarnessSettings.cs");
+				LogAssert.IsFalse(harness.Contains("AmbientLifeRenderProfile"), "the test bed names no ambient life");
+			}
 		}
 
 		[Test]
@@ -50,14 +53,6 @@ namespace FishMMO.UnitTests
 			var profile = AssetDatabase.LoadAssetAtPath<AmbientLifeRenderProfile>(ProjectFiles.Path(AmbientLifeRenderAssets.ProfilePath));
 			LogAssert.IsTrue(profile != null && profile.AmbientLifeShader != null && profile.SeaLifeShader != null && profile.AirMotesShader != null,
 				"its shaders are referenced, so a client build includes them");
-		}
-
-		[Test]
-		public void TheCaveSkylights_StayWithTheTerrain()
-		{
-			// The openings' light (_FishSkylights) is lighting every surface reads; only the ambient profile moved.
-			var terrain = AssetDatabase.LoadAssetAtPath<TerrainRenderProfile>(ProjectFiles.Path(WeatherRenderAssets.TerrainProfilePath));
-			LogAssert.IsTrue(terrain != null && terrain.CaveSkylightShaftsShader != null, "the shafts' shader is on the terrain profile");
 		}
 	}
 }

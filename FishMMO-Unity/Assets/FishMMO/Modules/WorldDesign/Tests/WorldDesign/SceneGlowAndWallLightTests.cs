@@ -215,9 +215,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(pass, Does.Contain("else if (_FishStructure < -0.5h)").And.Contain("surfaceData.emission *= FishGlowFlicker(input.fishRockOrigin);"));
 			Assert.That(BiomeArtGenerator.FlickeringCrystalFlag, Is.LessThan(-0.5f));
 			// Who publishes and who reads.
-			string sky = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Weather/Sky/SkySystem.cs");
+			string sky = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/SkySystem.cs");
 			Assert.That(sky, Does.Contain("Shader.SetGlobalFloat(GlowLightsId, SceneGlow.Visibility(sunDirections[0].y));"));
-			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("case SceneEmitterKind.Glow:").And.Contain("SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed))")
 				.And.Contain("SceneGlow.Colour(SceneGlow.HueOf(e.Seed))"));
 		}
@@ -330,7 +330,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			int assets = 0, entries = 0;
-			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes"), "*.asset"))
 			{
 				string[] lines = ProjectFiles.ReadAllLines(path);
 				int at = Array.FindIndex(lines, l => l == "  wayLights:");

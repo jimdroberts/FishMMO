@@ -12,7 +12,11 @@
         "Unity.RenderPipelines.Core.Runtime",
         "FishMMO.TestHarness.World.Editor",
         "FishMMO.WorldDesign.Editor",
-        "FishMMO.Naming"
+        "FishMMO.Naming",
+        "FishMMO.WorldTestBed",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

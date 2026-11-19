@@ -25,14 +25,26 @@ namespace FishMMO.Client
 		[UnityEngine.Serialization.FormerlySerializedAs("PassesCompute")]
 		public ComputeShader PassesCompute;
 
+		[Tooltip("FishMMO/World/Cave Skylight Shafts: the daylight's shafts and the dust motes in them under the openings in caves' " +
+			"roofs near the camera (CaveSkylights). Core lighting (Phase 4, 2026-11-18: moved off the terrain profile). Referenced " +
+			"here so a build carries it; empty, CaveSkylights finds it by name, which only works in the editor.")]
+		public Shader SkylightShaftsShader;
+
 		/// <summary>The compute the passes take their kernels from, as the live feature assigned it.</summary>
 		public static ComputeShader Compute { get; private set; }
+
+		/// <summary>The cave skylights' shaft shader, as the live feature assigned it.</summary>
+		public static Shader SkylightShafts { get; private set; }
 
 		public override void Create()
 		{
 			if (PassesCompute != null)
 			{
 				Compute = PassesCompute;
+			}
+			if (SkylightShaftsShader != null)
+			{
+				SkylightShafts = SkylightShaftsShader;
 			}
 		}
 

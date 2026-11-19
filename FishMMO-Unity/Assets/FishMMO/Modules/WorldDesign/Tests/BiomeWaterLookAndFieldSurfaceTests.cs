@@ -22,15 +22,15 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeWaterLookAndFieldSurfaceTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
-		private const string WaterFolder = "Assets/Plugins/FishMMO Water";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
+		private const string WaterFolder = "Assets/FishMMO/Modules/Water";
 		private const string InlandMaterial = WaterFolder + "/Materials/InlandWater.mat";
 		private const string InlandShader = WaterFolder + "/Shaders/FishInlandWater.shader";
 		private const string InlandHlsl = WaterFolder + "/Shaders/FishInlandWater.hlsl";
 		private const string InlandRenderer = WaterFolder + "/Scripts/InlandWaterRenderer.cs";
 		private const string InlandLooks = WaterFolder + "/Scripts/InlandWaterRenderer.Looks.cs";
 		private const string InlandFlow = WaterFolder + "/Scripts/InlandWaterRenderer.Flow.cs";
-		private const string TemplateSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
+		private const string TemplateSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs";
 		private const string AuthoringSource = "Assets/FishMMO/Modules/WorldDesign/Editor/ProceduralArt/BiomeArtAuthoring.cs";
 		private const string FieldsSource = "Assets/FishMMO/Modules/WorldDesign/Editor/PointsOfInterest/Features/PointOfInterestFields.cs";
 

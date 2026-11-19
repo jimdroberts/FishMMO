@@ -335,7 +335,7 @@ namespace FishMMO.UnitTests
 			StringAssert.Contains("|| LooksChanged ||", code);
 			StringAssert.Contains("BindLooks();", SourceScanPins.Body(code, "private void BindBlocks()"));
 			StringAssert.Contains("DisposeLooks();", SourceScanPins.Body(code, "public void Dispose()"));
-			StringAssert.Contains("case \"nolooks\":", SourceScanPins.ReadCode("Assets/FishMMO/Tests/TestHarness/World/Editor/ScenePerfProbe.cs"));
+			StringAssert.Contains("case \"nolooks\":", SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldTestBed/World/Editor/ScenePerfProbe.cs"));
 		}
 
 		[Test]

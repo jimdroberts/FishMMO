@@ -297,7 +297,7 @@ namespace FishMMO.UnitTests
 			BakerPath,
 			"Assets/FishMMO/Modules/WorldDesign/Editor/SceneGenerator.cs",
 			"Assets/FishMMO/Modules/WorldDesign/Editor/SceneGeneration.cs",
-			"Assets/FishMMO/Shared/Implementation/Tools/Biomes/SurfaceLiquid.cs",
+			"Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/SurfaceLiquid.cs",
 		};
 
 		private static string ReadSource(string relativePath)

@@ -214,7 +214,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeTemplate.Authored.CaveHangings, Is.EqualTo("caveHangings"));
 			Assert.That(BiomeTemplate.Authored.CaveStains, Is.EqualTo("caveStains"));
 			// The look: a body's own biome over its shores, on the client.
-			Assert.That(Code("Assets/Plugins/FishMMO Water/Scripts/InlandWaterRenderer.Looks.cs"), Does.Contain("if (shore.Own != 0 && BiomeRegistry.TryGetByID(shore.Own, out BiomeTemplate own) && own != null)"));
+			Assert.That(Code("Assets/FishMMO/Modules/Water/Scripts/InlandWaterRenderer.Looks.cs"), Does.Contain("if (shore.Own != 0 && BiomeRegistry.TryGetByID(shore.Own, out BiomeTemplate own) && own != null)"));
 			// The ring: one branch off by default, its properties in the material buffer and both shaders' blocks.
 			Assert.That(Code(Shaders + "FishCaveRock.hlsl"), Does.Contain("if (_FishCaveFlood.w > 0.5 && wall > 0.02h)"));
 			Assert.That(Code(Shaders + "FishWeatherLitInput.hlsl"), Does.Contain("float4 _FishCaveFlood;").And.Contain("half4 _FishCaveFloodStain;"));
@@ -236,7 +236,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(new BiomeCaveFlood(BiomeCaveForm.Grotto, 1.5f, 1f, 0f, 1f).ToString(), Is.EqualTo("Grotto=1.5|1|0|1"));
 			Assert.That(new BiomeCaveFlood(BiomeCaveForm.Cave, 1.2f, 0.6f, 0.5f, 1.25f).ToString(), Is.EqualTo("Cave=1.2|0.6|0.5|1.25"));
 			// Every asset floods nothing yet (so no cave beads and no leech swims until a round authors them).
-			foreach (string asset in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset").Where(a => !a.EndsWith("Default Climate.asset")))
+			foreach (string asset in Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes"), "*.asset").Where(a => !a.EndsWith("Default Climate.asset")))
 			{
 				Assert.That(ProjectFiles.ReadAllText(asset), Does.Contain("caveFloods: []"), asset);
 			}
@@ -352,7 +352,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("row = min(FishGlowCaveRow(originWS, row), 63u);", hlsl);
 			Assert.That(hlsl.IndexOf("row = min(FishGlowCaveRow(originWS, row), 63u);", StringComparison.Ordinal),
 				Is.GreaterThan(hlsl.IndexOf("uint row = min(FishGlowAnchoredRow(originWS.xz, FishGlowRowAt(originWS.xz)), 63u);", StringComparison.Ordinal)), "the cave's row over the anchor's and the grid's");
-			string table = Code("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs");
+			string table = Code("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs");
 			StringAssert.Contains("\"_FishGlowCaves\"", table);
 			StringAssert.Contains("SceneGlowCaves.FromSpots(set.Spots, found);", table);
 			StringAssert.Contains("placeInfo = new Vector4(lineCount, ventCount, anchorCount, caveCount);", table);

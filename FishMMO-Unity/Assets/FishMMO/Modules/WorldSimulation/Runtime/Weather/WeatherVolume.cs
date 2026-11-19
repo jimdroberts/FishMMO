@@ -1,0 +1,203 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace FishMMO.Shared.Weather
+{
+	/// <summary>What a <see cref="WeatherVolume"/> does to the weather inside it.</summary>
+	public enum WeatherVolumeKind : byte
+	{
+		/// <summary>Weather still shows outside, but nothing inside is exposed to it.</summary>
+		Shelter = 0,
+		/// <summary>
+		/// Inside, the air is changed by <see cref="WeatherVolume.Air"/> — a crater hotter, a hollow
+		/// colder and damper — and the weather there is worked out from that air.
+		/// </summary>
+		Air = 1,
+		/// <summary>Inside, some kinds never happen (a city ward that keeps the rain out).</summary>
+		Suppress = 2,
+	}
+
+	/// <summary>
+	/// A region of a scene that changes the weather inside it. Tested by position, not by trigger
+	/// callbacks, so NPCs, the camera and predicted characters all get the same answer every time
+	/// a tick is replayed.
+	/// </summary>
+	/// <remarks>
+	/// Can sit on a <see cref="Region"/>'s GameObject and reuse its collider; the Region keeps its
+	/// own enter/exit actions for cosmetic effects.
+	/// </remarks>
+	[DisallowMultipleComponent]
+	public class WeatherVolume : MonoBehaviour
+	{
+		public WeatherVolumeKind Kind = WeatherVolumeKind.Shelter;
+		[Tooltip("The shape. Defaults to this GameObject's collider.")]
+		public Collider Shape;
+		[Tooltip("Shelter: how much it protects. 0.5 for a tree canopy, 1 for a building.")]
+		[Range(0f, 1f)] public float ShelterStrength = 1f;
+		[Tooltip("Air: what is added to the air inside. The weather there follows from it.")]
+		public AirOffsets Air;
+		[Tooltip("Suppress: the kinds that never happen inside.")]
+		public WeatherKindMask Suppressed = WeatherKindMask.Precipitation;
+		[Tooltip("Higher wins when air volumes overlap.")]
+		public int Priority;
+
+		private SceneHandle registeredScene;
+
+		private void OnEnable()
+		{
+			if (Shape == null)
+			{
+				Shape = GetComponent<Collider>();
+			}
+			registeredScene = gameObject.scene.handle;
+			WeatherVolumeRegistry.Add(registeredScene, this);
+		}
+
+		private void OnDisable()
+		{
+			WeatherVolumeRegistry.Remove(registeredScene, this);
+		}
+
+		public bool Contains(Vector3 worldPoint) => Shape != null && RegionGeometry.ContainsPoint(Shape, worldPoint);
+	}
+
+	/// <summary>Every enabled <see cref="WeatherVolume"/>, by scene.</summary>
+	public static class WeatherVolumeRegistry
+	{
+		private static readonly Dictionary<SceneHandle, List<WeatherVolume>> byScene = new Dictionary<SceneHandle, List<WeatherVolume>>();
+		private static readonly List<WeatherVolume> empty = new List<WeatherVolume>();
+
+		public static void Add(SceneHandle sceneHandle, WeatherVolume volume)
+		{
+			if (!byScene.TryGetValue(sceneHandle, out List<WeatherVolume> list))
+			{
+				byScene[sceneHandle] = list = new List<WeatherVolume>();
+			}
+			if (!list.Contains(volume))
+			{
+				list.Add(volume);
+			}
+		}
+
+		public static void Remove(SceneHandle sceneHandle, WeatherVolume volume)
+		{
+			if (byScene.TryGetValue(sceneHandle, out List<WeatherVolume> list))
+			{
+				list.Remove(volume);
+				if (list.Count == 0)
+				{
+					byScene.Remove(sceneHandle);
+				}
+			}
+		}
+
+		public static IReadOnlyList<WeatherVolume> InScene(Scene scene) => byScene.TryGetValue(scene.handle, out List<WeatherVolume> list) ? list : empty;
+
+		/// <summary>
+		/// Applies every volume containing a point to its weather: suppressions remove kinds, and the
+		/// strongest shelter sets the exposure. What air volumes add is not applied here — it is added
+		/// to the air before the weather is worked out, by <see cref="OffsetsAt"/>.
+		/// </summary>
+		public static void Apply(Scene scene, Vector3 position, ref WeatherFrame frame, ref float shelter)
+		{
+			IReadOnlyList<WeatherVolume> volumes = InScene(scene);
+			WeatherKindMask suppressed = WeatherKindMask.None;
+			for (int i = 0; i < volumes.Count; i++)
+			{
+				WeatherVolume v = volumes[i];
+				if (v == null || !v.Contains(position))
+				{
+					continue;
+				}
+				switch (v.Kind)
+				{
+					case WeatherVolumeKind.Shelter:
+						shelter = Mathf.Max(shelter, v.ShelterStrength);
+						break;
+					case WeatherVolumeKind.Suppress:
+						suppressed |= v.Suppressed;
+						break;
+				}
+			}
+			if (suppressed != WeatherKindMask.None)
+			{
+				frame.Suppress(suppressed);
+			}
+		}
+
+		/// <summary>
+		/// What the air volumes containing a point add to its air: the highest-priority one's.
+		/// </summary>
+		public static AirOffsets OffsetsAt(Scene scene, Vector3 position)
+		{
+			IReadOnlyList<WeatherVolume> volumes = InScene(scene);
+			WeatherVolume top = null;
+			for (int i = 0; i < volumes.Count; i++)
+			{
+				WeatherVolume v = volumes[i];
+				if (v != null && v.Kind == WeatherVolumeKind.Air && (top == null || v.Priority > top.Priority) && v.Contains(position))
+				{
+					top = v;
+				}
+			}
+			return top != null ? top.Air : default;
+		}
+
+		/// <summary>
+		/// The nearest volume that would actually keep the weather off somebody, or null.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Measured to the shape's centre rather than to its nearest surface, because the centre is
+		/// where the NPC is trying to GET to — the nearest point of a long barn is its outside wall,
+		/// which is no shelter at all, and picking a barn by how close its wall is would have an NPC
+		/// walk past an open doorway to stand against the far side of it.
+		/// </para>
+		/// <para>
+		/// Only <see cref="WeatherVolumeKind.Shelter"/> volumes count, and only those protecting at
+		/// least <paramref name="minimumStrength"/>: a thin canopy is not a roof, and sending an NPC
+		/// across a field to stand under one is worse than letting it get rained on.
+		/// </para>
+		/// </remarks>
+		/// <param name="from">Where the search starts, usually the NPC's home.</param>
+		/// <param name="maxDistance">How far from there to look.</param>
+		/// <param name="minimumStrength">How well a volume has to shelter before it counts.</param>
+		/// <summary><see cref="NearestShelter"/> as the core's <see cref="ShelterQuery"/> asks: the shelter's bounds.</summary>
+		public static bool TryNearestShelter(Scene scene, Vector3 from, float maxDistance, float minimumStrength, out Bounds bounds)
+		{
+			WeatherVolume shelter = NearestShelter(scene, from, maxDistance, minimumStrength);
+			bounds = shelter != null && shelter.Shape != null ? shelter.Shape.bounds : default;
+			return shelter != null && shelter.Shape != null;
+		}
+
+		public static WeatherVolume NearestShelter(Scene scene, Vector3 from, float maxDistance, float minimumStrength)
+		{
+			IReadOnlyList<WeatherVolume> volumes = InScene(scene);
+			WeatherVolume best = null;
+			float bestSqr = maxDistance * maxDistance;
+
+			for (int i = 0; i < volumes.Count; i++)
+			{
+				WeatherVolume v = volumes[i];
+				if (v == null || v.Kind != WeatherVolumeKind.Shelter || v.Shape == null)
+				{
+					continue;
+				}
+				if (v.ShelterStrength < minimumStrength)
+				{
+					continue;
+				}
+				float sqr = (v.Shape.bounds.center - from).sqrMagnitude;
+				if (sqr <= bestSqr)
+				{
+					bestSqr = sqr;
+					best = v;
+				}
+			}
+			return best;
+		}
+
+		public static void Clear() => byScene.Clear();
+	}
+}

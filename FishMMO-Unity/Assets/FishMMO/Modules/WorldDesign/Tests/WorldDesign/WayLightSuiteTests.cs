@@ -248,7 +248,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ClientReadsThePyre_AndTheLighthouseBeamsDoNot()
 		{
-			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("case SceneEmitterKind.Pyre:").And.Contain("ScenePyre.Light(time, night, e.Seed)"));
 			if (InstalledModules.Has("AmbientLife"))
 			{
@@ -350,7 +350,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Defaults_NoSpecEntryOrTemplateNamesASuiteLight()
 		{
 			int entries = 0;
-			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets"), "*.asset", SearchOption.AllDirectories).Where(p => p.Replace('\\', '/').Contains("/Biomes/") || p.Replace('\\', '/').Contains("Templates/World"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets"), "*.asset", SearchOption.AllDirectories).Where(p => p.Replace('\\', '/').Contains("/Biomes/") || p.Replace('\\', '/').Contains("FishMMO/Modules/WorldSimulation/Templates/World"))
 				.Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				string[] lines = ProjectFiles.ReadAllLines(path);

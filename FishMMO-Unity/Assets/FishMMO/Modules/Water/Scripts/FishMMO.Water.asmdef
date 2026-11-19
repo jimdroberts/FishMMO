@@ -1,0 +1,24 @@
+{
+    "name": "FishMMO.Water",
+    "rootNamespace": "FishMMO.Water",
+    "references": [
+        "FishMMO.Shared",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.Burst",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "FishMMO.WorldSimulation"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

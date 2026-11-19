@@ -54,7 +54,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * would silently empty every gated spawner in any scene that had not been given weather
 			 * yet — which is most of them while this is being built — so the default is to let the
 			 * spawn through and let the setting say otherwise. */
-			if (!WeatherTimelines.TryGetTimeline(spawner.Scene, out _))
+			if (!WeatherQuery.HasWeather(spawner.Scene))
 			{
 				return AllowWhenSceneHasNoWeather;
 			}

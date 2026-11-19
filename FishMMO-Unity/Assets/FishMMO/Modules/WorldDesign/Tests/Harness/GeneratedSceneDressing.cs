@@ -40,7 +40,7 @@ namespace FishMMO.TestHarness.World.Editor
 	{
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
 		private const string ThemePath = "Assets/FishMMO/Client/GUI/FishMMO-Theme.uss";
-		private const string PanelLayoutPath = "Assets/FishMMO/Tests/TestHarness/World/WorldSimPanel.uss";
+		private const string PanelLayoutPath = "Assets/FishMMO/Modules/WorldTestBed/Scene/WorldSimPanel.uss";
 
 		static GeneratedSceneDressing()
 		{

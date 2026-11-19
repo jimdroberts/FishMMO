@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class BiomeTemplateEntryMarksTests
 	{
 		private const string WorldFolder = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		private static string Id(BiomeSiteVariant v) => BiomeArtAuthoring.SiteVariantId(v);
 		private static string Print(BiomeSiteVariant v) => v.ToString();

@@ -6,3 +6,9 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.UnitTests")]
 // Delete alongside Assets/FishMMO/Tests/TestHarness.
 [assembly: InternalsVisibleTo("FishMMO.TestHarness.Server")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Client")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Server")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]
+[assembly: InternalsVisibleTo("FishMMO.Client.Weather.Editor")]
+[assembly: InternalsVisibleTo("FishMMO.Shared.Biomes.Editor")]

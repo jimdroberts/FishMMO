@@ -35,9 +35,9 @@ namespace FishMMO.UnitTests
 			Shaders + "FishWeatherTerrainPasses.hlsl", Shaders + "FishWeatherTerrainArrayPasses.hlsl",
 		};
 		private const string DeadwoodGenerator = "Assets/FishMMO/Modules/WorldDesign/Editor/ProceduralArt/BiomeArtGenerator.Deadwood.cs";
-		private const string RockyCoastAsset = "Assets/Templates/Entity/Biomes/Rocky Coast.asset";
+		private const string RockyCoastAsset = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes/Rocky Coast.asset";
 
-		// A biome's envelope, in BiomeTemplate's terms (-1..1), as the assets under Templates/Entity/Biomes hold them.
+		// A biome's envelope, in BiomeTemplate's terms (-1..1), as the assets under FishMMO/Modules/WorldSimulation/Templates/Biomes hold them.
 		private static float Damp(float minH, float maxH, float minT, float maxT, bool liquid, bool loose = false, bool emits = false, float wetland = 0f, bool seaShore = false)
 		{
 			return MossClimate.Dampness(minH, maxH, minT, maxT, liquid, loose, emits, wetland, seaShore);

@@ -22,6 +22,7 @@ namespace FishMMO.UnitTests
 		{
 			string script = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(Folder + "/FishWorldPassesFeature.cs"));
 			string compute = AssetDatabase.AssetPathToGUID(ProjectFiles.Path("Assets/FishMMO/Shaders/FishWorldPasses.compute"));
+			string shafts = AssetDatabase.AssetPathToGUID(ProjectFiles.Path("Assets/FishMMO/Shaders/FishSkylightShafts.shader"));
 			foreach (string tier in new[] { "HighFidelity", "Balanced", "Performant" })
 			{
 				string renderer = ProjectFiles.ReadAllText($"Assets/Settings/URP-{tier}-Renderer.asset").Replace("\r\n", "\n");
@@ -30,6 +31,8 @@ namespace FishMMO.UnitTests
 				LogAssert.IsTrue(renderer.Contains("  - {fileID: " + doc.Groups[1].Value + "}\n"), $"and lists it among its features ({tier})");
 				LogAssert.IsTrue(doc.Value.Contains("  m_Active: 1\n"), $"active ({tier})");
 				LogAssert.IsTrue(doc.Value.Contains("PassesCompute: {fileID: 7200000, guid: " + compute), $"with its core compute, so a build carries it ({tier})");
+				// The caves' skylight shafts are core lighting (Phase 4, 2026-11-18): their shader rides on the core feature.
+				LogAssert.IsTrue(doc.Value.Contains("SkylightShaftsShader: {fileID: 4800000, guid: " + shafts), $"and the skylight shafts' shader ({tier})");
 			}
 		}
 
@@ -37,22 +40,11 @@ namespace FishMMO.UnitTests
 		public void TheWorldPassesKernels_AreCore_NotTheTerrains()
 		{
 			string passes = ProjectFiles.ReadAllText("Assets/FishMMO/Shaders/FishWorldPasses.compute");
-			string terrain = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute");
+			string terrain = InstalledModules.Has("Terrain") ? ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Shaders/FishTerrainInstancing.compute") : string.Empty;
 			foreach (string kernel in new[] { "FishHiZCopy", "FishHiZReduce", "FishLightTableGather" })
 			{
 				LogAssert.IsTrue(passes.Contains("#pragma kernel " + kernel), $"{kernel} is in the core compute");
 				LogAssert.IsFalse(terrain.Contains("#pragma kernel " + kernel), $"and not in the terrain's culling compute ({kernel})");
-			}
-		}
-
-		[Test]
-		public void TheClouds_QueueNoneOfTheSharedPasses()
-		{
-			string clouds = SourceScanPins.ReadCode("Assets/FishMMO/Client/World/Weather/Sky/FishCloudsFeature.cs");
-			foreach (string pass in new[] { "FishDepthPyramid.Pass", "ShadowCascadeCulling.Pass", "AdditionalLightTable.Pass", "CachedMainLightShadows.CachePass", "CachedMainLightShadows.MergePass" })
-			{
-				LogAssert.IsFalse(clouds.Contains(pass), $"the clouds no longer queue {pass}");
-				LogAssert.IsTrue(SourceScanPins.ReadCode(Folder + "/FishWorldPassesFeature.cs").Contains("renderer.EnqueuePass(" + pass + ")"), $"the world passes do ({pass})");
 			}
 		}
 

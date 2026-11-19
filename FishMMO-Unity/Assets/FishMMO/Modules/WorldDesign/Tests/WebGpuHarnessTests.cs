@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	public class WebGpuHarnessTests
 	{
 		private static Type BuildType => Type.GetType("FishMMO.TestHarness.World.Editor.WebGpuSmokeBuild, FishMMO.WorldDesign.Harness.Editor", true);
-		private static Type ProbeType => Type.GetType("FishMMO.TestHarness.World.WebGpuSmokeProbe, FishMMO.TestHarness.World", true);
+		private static Type ProbeType => Type.GetType("FishMMO.TestHarness.World.WebGpuSmokeProbe, FishMMO.WorldTestBed", true);
 
 		private static object Invoke(Type type, string method, object target, params object[] args)
 		{

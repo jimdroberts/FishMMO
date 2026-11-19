@@ -47,7 +47,8 @@ namespace FishMMO.Client
 		/// <summary>Writes what observed characters are casting onto their nameplates.</summary>
 		private ClientCastNameplateDisplay castNameplateDisplay;
 		private ClientWorldClock worldClock;
-		private ClientWeather weather;
+		// The modules' client services (ClientServices): the weather's mirror of the scene server's weather.
+		private System.Collections.Generic.List<IClientService> services;
 		/// <summary>
 		/// Manages client-side fog-of-war visibility.
 		/// </summary>
@@ -438,8 +439,7 @@ namespace FishMMO.Client
 			// The world clock (core) and the scene's weather on it, mirrored from the scene server.
 			this.worldClock = new ClientWorldClock();
 			this.worldClock.Initialize(NetworkManager);
-			this.weather = new ClientWeather();
-			this.weather.Initialize(NetworkManager);
+			this.services = ClientServices.CreateAll(NetworkManager);
 
 			this.fogManager = new ClientFogManager(this);
 			this.fogManager.Initialize();
@@ -470,7 +470,13 @@ namespace FishMMO.Client
 			nameplateDisplay?.Tick();
 			castNameplateDisplay?.Tick();
 			boundaryWarning?.Tick();
-			weather?.Tick(Time.deltaTime);
+			if (services != null)
+			{
+				for (int i = 0; i < services.Count; i++)
+				{
+					services[i].Tick(Time.deltaTime);
+				}
+			}
 
 			TickDeathDialogFallback();
 			TickSceneLoadProgress();
@@ -510,7 +516,14 @@ namespace FishMMO.Client
 			this.nameplateDisplay?.Shutdown();
 			this.boundaryWarning?.Shutdown();
 			this.castNameplateDisplay?.Shutdown();
-			this.weather?.Shutdown();
+			if (this.services != null)
+			{
+				foreach (IClientService service in this.services)
+				{
+					service.Shutdown();
+				}
+				this.services = null;
+			}
 			this.worldClock?.Shutdown();
 			this.fogManager?.Shutdown();
 			DeinitializeAuthenticator();
@@ -678,7 +691,7 @@ namespace FishMMO.Client
 			this.castNameplateDisplay?.Clear();
 			// A different scene server keeps its own clock anchor and weather.
 			this.worldClock?.Reset();
-			this.weather?.Clear();
+			ClearServices();
 
 			/* Abandon any world-scene preload this session started. The flag is what stops a
 			 * second preload from being kicked off, and it is only ever cleared by the batch's
@@ -2677,9 +2690,22 @@ namespace FishMMO.Client
 			this.fogManager?.Stop();
 			this.castNameplateDisplay?.Clear();
 			// The next scene sends its own weather when the character arrives there.
-			this.weather?.Clear();
+			ClearServices();
 			if (c?.GameObject != null) Destroy(c.GameObject);
 		}
+		/// <summary>Clears every module service (<see cref="IClientService.Clear"/>).</summary>
+		private void ClearServices()
+		{
+			if (services == null)
+			{
+				return;
+			}
+			for (int i = 0; i < services.Count; i++)
+			{
+				services[i].Clear();
+			}
+		}
+
 		/// <summary>
 		/// Called when a guild ID is read. Sets the guild name label on the character.
 		/// </summary>

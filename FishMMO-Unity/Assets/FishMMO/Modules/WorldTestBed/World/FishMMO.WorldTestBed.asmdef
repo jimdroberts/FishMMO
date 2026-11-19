@@ -1,0 +1,35 @@
+{
+    "name": "FishMMO.WorldTestBed",
+    "rootNamespace": "FishMMO.TestHarness.World",
+    "references": [
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "Unity.InputSystem",
+        "KinematicCharacterController",
+        "FishNet.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "FishMMO.Water",
+        "FishMMO.TestHarness.World",
+        "FishMMO.Terrain",
+        "FishMMO.Terrain.Client",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

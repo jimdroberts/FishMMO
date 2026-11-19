@@ -71,9 +71,9 @@ namespace FishMMO.RenderScratch
 		/// <summary>The example system, saved; then placement and sky extras, in memory only.</summary>
 		private static void Prepare()
 		{
-			SolarSystemProfile system = WorldEditorAssets.CreateExampleSystem();
-			WorldAtlas atlas = WorldEditorAssets.EnsureAtlas(system);
-			WorldEditorAssets.SyncAtlasScenes(atlas);
+			SolarSystemProfile system = WorldSystemAssets.CreateExampleSystem();
+			WorldAtlas atlas = WorldSystemAssets.EnsureAtlas(system);
+			WorldSystemAssets.SyncAtlasScenes(atlas);
 			AssetDatabase.SaveAssets();
 
 			// ── In memory from here on: nothing below is saved. ──

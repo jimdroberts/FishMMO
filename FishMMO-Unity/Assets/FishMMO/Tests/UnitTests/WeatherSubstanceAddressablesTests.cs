@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class WeatherSubstanceAddressablesTests
 	{
-		private const string SubstancesFolder = "Assets/Templates/Weather/Substances";
+		private const string SubstancesFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Substances";
 		private const string GroupsFolder = "Assets/AddressableAssetsData/AssetGroups";
 		/// <summary>The WeatherSubstance script's GUID, so other asset types in the folder are ignored.</summary>
 		private const string WeatherSubstanceScriptGuid = "fc31fd6c26d6fbb81b415e9bc031c46f";

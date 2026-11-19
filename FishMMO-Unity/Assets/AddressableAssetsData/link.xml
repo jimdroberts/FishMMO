@@ -622,8 +622,8 @@
     <type fullname="UnityEngine.Texture2DArray" preserve="all" />
     <type fullname="UnityEngine.Texture3D" preserve="all" />
     <type fullname="UnityEngine.Transform" preserve="all" />
-    <type fullname="UnityEngine.Vector4" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.LayerMask" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.Vector4" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Color" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Vector2" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Quaternion" preserve="nothing" serialized="true" />

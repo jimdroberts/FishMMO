@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class BiomeCodeTableClearanceTests
 	{
 		private const string WorldFolder = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		private static IEnumerable<BiomeArtSpec.Entry> Entries => BiomeArtSpec.Entries;
 
@@ -291,7 +291,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Ground_TheFilesGiveTheOldTable_AndTheTemplatesAlreadyHoldIt()
 		{
 			var old = OldGround.ToDictionary(g => g.Biome);
-			Dictionary<string, string> substances = GuidNames(Path.Combine("Assets/Templates/Weather/Substances"));
+			Dictionary<string, string> substances = GuidNames(Path.Combine("Assets/FishMMO/Modules/WorldSimulation/Templates/Substances"));
 			foreach (BiomeArtSpec.Entry entry in Entries)
 			{
 				old.TryGetValue(entry.Biome, out var row);

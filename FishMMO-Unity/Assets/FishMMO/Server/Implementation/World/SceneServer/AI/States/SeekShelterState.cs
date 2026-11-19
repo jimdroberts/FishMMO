@@ -14,7 +14,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// is not. The state does the walking; the archetype decides whether it ever happens (Q15).
 	/// </para>
 	/// <para>
-	/// A shelter is a <see cref="WeatherVolume"/> of kind <see cref="WeatherVolumeKind.Shelter"/> —
+	/// A shelter is a WeatherVolume of kind Shelter (the World Simulation module; read through <see cref="ShelterQuery"/>) —
 	/// the same volumes that keep the rain off a player standing in them. So an NPC that has reached
 	/// one is genuinely sheltered by the same measure the player's exposure uses, and is not merely
 	/// standing somewhere a designer once labelled dry.
@@ -89,18 +89,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return false;
 			}
 
-			WeatherVolume shelter = WeatherVolumeRegistry.NearestShelter(
+			if (!ShelterQuery.TryNearest(
 				controller.Character.GameObject.scene,
 				controller.Home,
 				settings.SearchRadius,
-				settings.MinimumShelterStrength);
-
-			if (shelter == null || shelter.Shape == null)
+				settings.MinimumShelterStrength,
+				out Bounds bounds))
 			{
 				return false;
 			}
 
-			Bounds bounds = shelter.Shape.bounds;
 			Vector3 target = Vector3.Lerp(bounds.ClosestPoint(controller.Character.Transform.position), bounds.center, DepthIntoShelter);
 
 			if (Spread > 0f)

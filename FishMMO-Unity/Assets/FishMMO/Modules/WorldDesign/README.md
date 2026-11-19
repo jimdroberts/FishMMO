@@ -53,7 +53,7 @@ machine by this module's generator. A project without the module must commit tha
 ## Templates
 
 The point-of-interest templates and the NPC table are this module's content: `Templates/PointsOfInterest` (moved from
-`Assets/Templates/World/PointsOfInterest`, 2026-11-18, GUIDs kept).
+`Assets/FishMMO/Modules/WorldSimulation/Templates/World/PointsOfInterest`, 2026-11-18, GUIDs kept).
 
 ## Serialized data
 

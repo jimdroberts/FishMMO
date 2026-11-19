@@ -151,8 +151,8 @@ namespace FishMMO.Shared
 					continue;
 				}
 				string name = LayerNames != null && i < LayerNames.Length ? LayerNames[i] : null;
-				Biomes.BiomeLooks.GroundShare share = Biomes.BiomeLooks.GroundShareOf(name);
-				flora[i] = new Vector4(share.Foliage, share.Accent, share.Mineral, 0f);
+				Vector3 makeup = Biomes.GroundMakeup.OfLayerName(name);
+				flora[i] = new Vector4(makeup.x, makeup.y, makeup.z, 0f);
 				if (name == null || !name.StartsWith("Ground_", System.StringComparison.Ordinal))
 				{
 					byName++;

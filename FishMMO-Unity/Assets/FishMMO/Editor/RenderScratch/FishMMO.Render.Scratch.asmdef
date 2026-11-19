@@ -7,7 +7,6 @@
         "FishMMO.Shared.Tools.Editor",
         "FishNet.Runtime",
         "Unity.InputSystem",
-        "FishMMO.Water",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime"
     ],

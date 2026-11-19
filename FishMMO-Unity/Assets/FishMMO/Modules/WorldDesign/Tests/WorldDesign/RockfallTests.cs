@@ -468,7 +468,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			// And no unauthored template rule is graded.
-			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Entity/Biomes"), "*.asset", SearchOption.AllDirectories)
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes"), "*.asset", SearchOption.AllDirectories)
 				.Where(p => !BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(p))))
 			{
 				Assert.That(Read(path), Does.Not.Contain("talusGrading: 1"), path);

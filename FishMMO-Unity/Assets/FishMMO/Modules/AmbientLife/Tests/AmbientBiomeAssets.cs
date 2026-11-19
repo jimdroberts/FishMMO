@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests
 	/// <summary>Every biome template under the biome folder (core data the World Design module authors), by name.</summary>
 	public static class AmbientBiomeAssets
 	{
-		public const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		public const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		public static List<BiomeTemplate> All()
 		{

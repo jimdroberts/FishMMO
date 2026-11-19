@@ -170,7 +170,7 @@ namespace FishMMO.Client
 			camera.enabled = false;
 			camera.targetTexture = texture;
 			// No grass or other ground cover on the map (the detail renderer and the blade grass skip it).
-			TerrainInstancingShared.SetDrawsDetails(camera, false);
+			CameraGroundCover.SetDraws(camera, false);
 
 			ApplyCameraSettings(new MapViewTransform(Vector3.zero, 25.0f, 0.0f));
 		}

@@ -716,7 +716,7 @@ namespace FishMMO.UnitTests
 
 			string binder = ProjectFiles.ReadAllText("Assets/FishMMO/Shared/Implementation/Entity/WorldSceneDetails/Terrain/TerrainArrayBinder.cs");
 			Assert.That(binder, Does.Not.Contain("SetVectorArray"), "OpenGL: no large constant arrays varied per tile");
-			string contact = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/GroundMaterialMap.cs");
+			string contact = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/GroundMaterialMap.cs");
 			Assert.That(contact, Does.Not.Contain("SetGlobalVectorArray(Layer"));
 		}
 

@@ -19,15 +19,15 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeFieldCarveAndSeaLookTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
-		private const string WaterFolder = "Assets/Plugins/FishMMO Water";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
+		private const string WaterFolder = "Assets/FishMMO/Modules/Water";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string FieldsSource = World + "/PointsOfInterest/Features/PointOfInterestFields.cs";
 		private const string CarveSource = World + "/PointsOfInterest/Features/PointOfInterestFieldCarve.cs";
 		private const string StageSource = World + "/PointsOfInterest/PointOfInterestStage.cs";
 		private const string GeneratorSource = World + "/PointsOfInterest/PointOfInterestGenerator.cs";
 		private const string RepaintSource = World + "/Terrain/BiomeRepaintTool.cs";
-		private const string TemplateSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
+		private const string TemplateSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs";
 		private const string AuthoringSource = World + "/ProceduralArt/BiomeArtAuthoring.cs";
 
 		// ── Ridge and furrow, carved ─────────────────────────────────

@@ -35,7 +35,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SceneName = "LoginBackdrop";
 		/// <summary>The world the backdrop is cut from: it stands beside this scene, on its body and layer.</summary>
 		public const string NeighbourScene = "Moron 2";
-		public const string WoodlandBiomePath = "Assets/Templates/Entity/Biomes/Woodland.asset";
+		public const string WoodlandBiomePath = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes/Woodland.asset";
 		public const string LoginGuiScenePath = "Assets/Scenes/Client/ClientLoginGUI.unity";
 		public const string PostbootScenePath = "Assets/Scenes/Client/ClientPostboot.unity";
 		public const string RigName = "Login Backdrop";

@@ -18,9 +18,9 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeFloatKindsAndBoardwalkStylesTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string TemplateSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
+		private const string TemplateSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs";
 
 		/// <summary>The inland floating kinds the drafts' APPROVED sections and the infrastructure map name, by the name they are appended under.</summary>
 		private static readonly string[] DraftFloats =

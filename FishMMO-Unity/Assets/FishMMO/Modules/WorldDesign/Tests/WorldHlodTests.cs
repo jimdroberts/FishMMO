@@ -78,7 +78,7 @@ namespace FishMMO.UnitTests
 		[TestCase(ShaderCompilerPlatform.WebGPU, BuildTarget.WebGL)]
 		public void HlodForwardAndDepthVariantsCompile(ShaderCompilerPlatform platform, BuildTarget target)
 		{
-			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlod.shader"));
+			var shader = AssetDatabase.LoadAssetAtPath<Shader>(ProjectFiles.Path("Assets/FishMMO/Modules/Terrain/Shaders/FishWorldHlod.shader"));
 			Assert.That(shader, Is.Not.Null);
 			var sub = ShaderUtil.GetShaderData(shader).GetSubshader(0);
 			for (int p = 0; p < 3; p++) foreach (var stage in new[] { ShaderType.Vertex, ShaderType.Fragment })
@@ -98,7 +98,7 @@ namespace FishMMO.UnitTests
 			try
 			{
 				using var scope = new FishMMO.Shared.CustomBuildTool.Core.WebGLRenderPipelineScope(true);
-				var result = UnityEditor.Build.Pipeline.CompatibilityBuildPipeline.BuildAssetBundles(output,new[] { new AssetBundleBuild { assetBundleName = "hlod-compute",assetNames = new[] {"Assets/Prefabs/Client/Weather/Shaders/FishWorldHlodCull.compute","Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute","Assets/FishMMO/Tests/TestHarness/World/Editor/TerrainIndexFilterProbe.compute","Assets/FishMMO/Tests/TestHarness/World/Editor/GrassLookCacheProbe.compute"} } },BuildAssetBundleOptions.ForceRebuildAssetBundle,BuildTarget.WebGL);
+				var result = UnityEditor.Build.Pipeline.CompatibilityBuildPipeline.BuildAssetBundles(output,new[] { new AssetBundleBuild { assetBundleName = "hlod-compute",assetNames = new[] {"Assets/FishMMO/Modules/Terrain/Shaders/FishWorldHlodCull.compute","Assets/FishMMO/Modules/Terrain/Shaders/FishTerrainInstancing.compute","Assets/FishMMO/Tests/UnitTests/Probes/TerrainIndexFilterProbe.compute","Assets/FishMMO/Modules/Terrain/Tests/Probes/GrassLookCacheProbe.compute"} } },BuildAssetBundleOptions.ForceRebuildAssetBundle,BuildTarget.WebGL);
 				Assert.That(result,Is.Not.Null); Assert.That(new FileInfo(Path.Combine(output,"hlod-compute")).Length,Is.GreaterThan(0));
 			}
 			finally { Directory.Delete(output,true); }
@@ -158,7 +158,7 @@ namespace FishMMO.UnitTests
 		public void GpuMainReplacementRetainsTheExactShadowOutput()
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishTerrainInstancing.compute")));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Modules/Terrain/Shaders/FishTerrainInstancing.compute")));
 			try
 			{
 				using var instances = new GraphicsBuffer(GraphicsBuffer.Target.Structured,1,FishInstance.Stride); instances.SetData(new[] { FishInstance.From(Matrix4x4.Translate(new Vector3(0,0,30))) });
@@ -191,7 +191,7 @@ namespace FishMMO.UnitTests
 		public void GpuCullingKeepsCommandGeometryAndOnlyWritesInstanceCount()
 		{
 			if (!SystemInfo.supportsComputeShaders) Assert.Ignore("GPU required");
-			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/Prefabs/Client/Weather/Shaders/FishWorldHlodCull.compute")));
+			var shader = Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Modules/Terrain/Shaders/FishWorldHlodCull.compute")));
 			try
 			{
 				using var parts = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 3, 32);

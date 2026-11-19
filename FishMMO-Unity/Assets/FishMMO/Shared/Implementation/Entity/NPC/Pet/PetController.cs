@@ -336,6 +336,8 @@ namespace FishMMO.Shared
 				ClientManager.RegisterBroadcast<PetMovementOrderBroadcast>(OnClientPetMovementOrderBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
 				ClientManager.RegisterBroadcast<PetActionBroadcast>(OnClientPetActionBroadcastReceived);
+				SceneObject.Registered -= SceneObject_PetRespawned;
+				SceneObject.Registered += SceneObject_PetRespawned;
 			}
 		}
 
@@ -356,6 +358,39 @@ namespace FishMMO.Shared
 				ClientManager.UnregisterBroadcast<PetAttackPriorityBroadcast>(OnClientPetAttackPriorityBroadcastReceived);
 				ClientManager.UnregisterBroadcast<PetActionBroadcast>(OnClientPetActionBroadcastReceived);
 			}
+			SceneObject.Registered -= SceneObject_PetRespawned;
+		}
+
+		/// <summary>
+		/// A listed pet's object arriving again on this client: it takes the old object's place in the list, carrying the
+		/// slot and orders, and the pet panel rebinds to it (OnPetSummoned).
+		/// </summary>
+		/// <remarks>
+		/// The server can drop a pet from its owner's view (a crowd evicting it from the observer budget, before own pets
+		/// were pinned there; or a step out of range) and send it again later. The client then despawns the old object to
+		/// the pool and spawns the pet as a new one, but no PetAdd comes with it, so the list and the panel kept the old
+		/// object: its health frozen while the live pet fought on (2026-11-18). Registration is the moment the new one has
+		/// its ID and payload.
+		/// </remarks>
+		private void SceneObject_PetRespawned(ISceneObject sceneObject)
+		{
+			if (sceneObject == null || sceneObject.GameObject == null || pets.Count == 0 ||
+				!sceneObject.GameObject.TryGetComponent(out Pet arrived))
+			{
+				return;
+			}
+			Pet listed = FindPet(sceneObject.ID);
+			if (listed == null || ReferenceEquals(listed, arrived))
+			{
+				return;
+			}
+			arrived.Slot = listed.Slot;
+			arrived.Stance = listed.Stance;
+			arrived.MovementOrder = listed.MovementOrder;
+			arrived.AttackPriority = listed.AttackPriority;
+			RemovePet(listed);
+			AddPet(arrived);
+			IPetController.OnPetSummoned?.Invoke(arrived);
 		}
 
 		/// <summary>Pets the server announced whose objects have not reached this client yet; see <see cref="OnClientPetAddBroadcastReceived"/>.</summary>

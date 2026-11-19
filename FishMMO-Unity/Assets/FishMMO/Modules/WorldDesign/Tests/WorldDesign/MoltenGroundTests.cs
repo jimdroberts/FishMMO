@@ -22,7 +22,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class MoltenGroundTests
 	{
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 
 		private static string Read(string path) => ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
@@ -231,12 +231,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The glow sits inside the terrain-only block (the backdrop reads no index map).
 			int include = passes.IndexOf("#include \"FishGroundGlow.hlsl\"", StringComparison.Ordinal);
 			Assert.That(passes.LastIndexOf("#if !defined(FISH_TERRAIN_BACKDROP)", include, StringComparison.Ordinal), Is.GreaterThan(0));
-			string flora = Read("Assets/FishMMO/Client/World/Terrain/FloraPaletteMap.cs");
+			string flora = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/FloraPaletteMap.cs");
 			StringAssert.Contains("GroundGlowTable.Build(rowBiomes, system, body);", flora);
 			StringAssert.Contains("GroundGlowTable.Publish(on);", flora);
 			StringAssert.Contains("GroundGlowTable.Release();", flora);
-			StringAssert.Contains("GroundGlowMask.ShareAt", Read("Assets/Plugins/FishMMO Water/Scripts/LavaMask.cs"));
-			StringAssert.Contains("GroundGlowMask.Version", Read("Assets/Plugins/FishMMO Water/Scripts/WaterSurface.cs"));
+			StringAssert.Contains("GroundGlowMask.ShareAt", Read("Assets/FishMMO/Modules/Water/Scripts/LavaMask.cs"));
+			StringAssert.Contains("GroundGlowMask.Version", Read("Assets/FishMMO/Modules/Water/Scripts/WaterSurface.cs"));
 			StringAssert.Contains("plan.Glow.Add(GlowOf(layers[i]));", Read(World + "/Terrain/TerrainArrayBaker.cs"));
 		}
 
@@ -486,7 +486,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string shader = Read(Path.Combine(Shaders, "FishVolcanicPlume.shader"));
 			StringAssert.Contains("else if (population == 7)", shader);
 			StringAssert.Contains("float u = frac(t / max(0.1, _PlumeBallistic.w) + frac(r.w * 7.31 + r.y));", shader);
-			StringAssert.Contains("DrawCurtains(camera, material, profile, viewer2, reach);", Read("Assets/FishMMO/Client/World/Weather/Sky/VolcanicPlumePresenter.cs"));
+			StringAssert.Contains("DrawCurtains(camera, material, profile, viewer2, reach);", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/VolcanicPlumePresenter.cs"));
 		}
 
 		// ── Defaults: nothing changes ─────────────────────────────────
@@ -527,7 +527,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(templates, Is.EqualTo(83));
 			// Off: the table publishes nothing and the terrain takes its old path; no glowing ground reaches the lava's mask.
-			string table = Read("Assets/FishMMO/Client/World/Terrain/GroundGlowTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GroundGlowTable.cs");
 			StringAssert.Contains("info = on ? new Vector4(1f, worldKelvin, 0f, 0f) : Vector4.zero;", table);
 			StringAssert.Contains("Shader.SetGlobalVector(InfoId, published ? info : Vector4.zero);", table);
 			Assert.That(FishMMO.Client.GroundGlowTable.Glows(null), Is.False);

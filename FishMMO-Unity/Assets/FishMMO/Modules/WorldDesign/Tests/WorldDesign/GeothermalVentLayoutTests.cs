@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class GeothermalVentLayoutTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		/// <summary>The rounds' vent columns (decisions 53, 66, 90, 93, 95): biome → layout/timing signature.</summary>
 		private static readonly Dictionary<string, string> NamedVents = new Dictionary<string, string>
@@ -466,7 +466,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("With(Vented(Grain(\"Cryo Tephra\"", content);
 			StringAssert.Contains("substance.Vented = spec.Vented;", content);
 			// Only Volcanic Ash and Cryo Tephra carried it before: the refresh changes no existing substance's flag.
-			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/Weather/Substances"), "*.asset"))
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/Substances"), "*.asset"))
 			{
 				bool vented = ProjectFiles.ReadAllText(path).Contains("\n  Vented: 1");
 				string name = Path.GetFileNameWithoutExtension(path);
@@ -482,7 +482,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("springHeat.AddRange(IceStripes.Heat(lines));", carve);
 			string generator = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldDesign/Editor/SceneGenerator.cs");
 			StringAssert.Contains("map.SetVentLines(hotGround.Lines);", generator);
-			string vents = ProjectFiles.ReadAllText("Assets/FishMMO/Shared/Implementation/Weather/GeothermalVents.cs");
+			string vents = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/GeothermalVents.cs");
 			StringAssert.Contains("FindAlong(lines, scene, SeedOf(map)", vents);
 			StringAssert.Contains("FindAlong(lines, near, SeedOf(map)", vents);
 		}

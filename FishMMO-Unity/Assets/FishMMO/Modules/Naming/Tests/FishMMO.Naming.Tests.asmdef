@@ -26,7 +26,10 @@
         "Unity.ScriptableBuildPipeline",
         "FishMMO.TestHarness.World.Editor",
         "FishMMO.UnitTests",
-        "FishMMO.Naming"
+        "FishMMO.Naming",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client",
+        "FishMMO.WorldSimulation.Editor"
     ],
     "includePlatforms": [
         "Editor"

@@ -48,7 +48,7 @@ Shader "FishMMO/Weather/Air Motes"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishWeather.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
-            #include "Assets/Prefabs/Client/Weather/Shaders/FishFogLayer.hlsl"
+            #include "Assets/FishMMO/Modules/WorldSimulation/Shaders/FishFogLayer.hlsl"
 
             // The fine ground round the camera (MistGroundMap), shared with the mist and the lit surfaces.
             #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"

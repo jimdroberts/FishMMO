@@ -441,7 +441,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheClient_LightsTheLava_ThrowsItsEmbersAndFumes_AndBendsTheAirOverIt()
 		{
-			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("case SceneEmitterKind.Magma:").And.Contain("SceneMagma.Light(time, e.Position, e.Seed)"));
 			Assert.That(pool, Does.Contain("kind != SceneEmitterKind.Fumes"), "fumes give no light");
 			Assert.That(pool, Does.Contain("SceneMagma.PickLights(candidates, eye, MaxLights, near);"), "lava lights win their place in the pool");
@@ -453,9 +453,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(shader, Does.Contain("bool lava = kind == 5;").And.Contain("return FumesVert(input, fire, strength);"));
 				Assert.That(shader, Does.Not.Contain("_Time"), "on the shared clock alone");
 			}
-			string shimmer = ProjectFiles.ReadAllText("Assets/Prefabs/Client/Weather/Shaders/FishHeatShimmer.shader");
+			string shimmer = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Shaders/FishHeatShimmer.shader");
 			Assert.That(shimmer, Does.Contain("HeatSpotVariance(eye, d, distanceToP)"));
-			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Weather/Sky/FishHeatShimmerFeature.cs"), Does.Contain("CaveLavaHeat.Spots(camera.transform.position, heatSpots)"));
+			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishHeatShimmerFeature.cs"), Does.Contain("CaveLavaHeat.Spots(camera.transform.position, heatSpots)"));
 			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/CaveLavaHeat.cs"), Does.Contain("SceneMagma.HeatBall(near[i])"));
 		}
 	}

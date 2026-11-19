@@ -814,24 +814,24 @@ namespace FishMMO.Shared.WorldDesign
 		public const float TerrainPixelError = 2f;
 
 		/// <summary>The ocean material every generated scene shares.</summary>
-		public const string WaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/OceanWater.mat";
+		public const string WaterMaterialPath = "Assets/FishMMO/Modules/Water/Materials/OceanWater.mat";
 
 		/// <summary>The compute shader that simulates the sea's waves.</summary>
-		public const string WaterSpectrumPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.compute";
+		public const string WaterSpectrumPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterFFT.compute";
 
 		/// <summary>The same FFT as render passes, for machines with no compute shaders.</summary>
-		public const string WaterSpectrumPassesPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFFT.shader";
+		public const string WaterSpectrumPassesPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterFFT.shader";
 
 		/// <summary>The pass that keeps the foam the swash leaves on the sand.</summary>
-		public const string WaterFoamMemoryPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamMemory.shader";
+		public const string WaterFoamMemoryPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterFoamMemory.shader";
 		/// <summary>The simulated foam's step (WaterFoamField), referenced by the sea and the inland water so a build includes it.</summary>
-		public const string WaterFoamFieldPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterFoamField.shader";
+		public const string WaterFoamFieldPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterFoamField.shader";
 		/// <summary>The breakers' sheet, curling at the break line where the sea fades out.</summary>
-		public const string WaterBreakerPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterBreaker.shader";
+		public const string WaterBreakerPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterBreaker.shader";
 		/// <summary>The breakers' spray and mist.</summary>
-		public const string WaterSprayPath = "Assets/Plugins/FishMMO Water/Shaders/FishWaterSpray.shader";
+		public const string WaterSprayPath = "Assets/FishMMO/Modules/Water/Shaders/FishWaterSpray.shader";
 		/// <summary>Molten rock, for a volcanic body's lava lakes or a world above the melting point of rock.</summary>
-		public const string LavaMaterialPath = "Assets/Plugins/FishMMO Water/Materials/Lava.mat";
+		public const string LavaMaterialPath = "Assets/FishMMO/Modules/Water/Materials/Lava.mat";
 
 		/// <summary>
 		/// Puts the sea in the scene, at the height the planet says its sea level is.
@@ -1595,13 +1595,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>The lakes' and rivers' shared material.</summary>
-		public const string InlandWaterMaterialPath = "Assets/Plugins/FishMMO Water/Materials/InlandWater.mat";
+		public const string InlandWaterMaterialPath = "Assets/FishMMO/Modules/Water/Materials/InlandWater.mat";
 		public const string InlandWaterShaderName = "FishMMO/Water/Inland Water";
 		/// <summary>The lava lakes' and rivers' material (a lava tube's: CaveLavaWater), FishMMO/Water/Inland Lava.</summary>
-		public const string InlandLavaMaterialPath = "Assets/Plugins/FishMMO Water/Materials/InlandLava.mat";
-		public const string WaterfallMaterialPath = "Assets/Plugins/FishMMO Water/Materials/Waterfall.mat";
+		public const string InlandLavaMaterialPath = "Assets/FishMMO/Modules/Water/Materials/InlandLava.mat";
+		public const string WaterfallMaterialPath = "Assets/FishMMO/Modules/Water/Materials/Waterfall.mat";
 		public const string WaterfallShaderName = "FishMMO/Water/Waterfall";
-		public const string WaterfallSprayMaterialPath = "Assets/Plugins/FishMMO Water/Materials/WaterfallSpray.mat";
+		public const string WaterfallSprayMaterialPath = "Assets/FishMMO/Modules/Water/Materials/WaterfallSpray.mat";
 		public const string WaterfallSprayShaderName = "FishMMO/Water/Waterfall Spray";
 
 		/// <summary>The scene object holding the lakes and rivers: what the game asks about the water, and what draws it.</summary>
@@ -1714,11 +1714,11 @@ namespace FishMMO.Shared.WorldDesign
 			material = new Material(shader) { name = name };
 			if (material.HasProperty("_NormalMap"))
 			{
-				material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterNormal.png"));
+				material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterNormal.png"));
 			}
 			if (material.HasProperty("_FoamTexture"))
 			{
-				material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterFoam.png"));
+				material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterFoam.png"));
 			}
 			AssetDatabase.CreateAsset(material, path);
 			return material;
@@ -1739,8 +1739,8 @@ namespace FishMMO.Shared.WorldDesign
 				return null;
 			}
 			material = new Material(shader) { name = "InlandWater" };
-			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterNormal.png"));
-			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterFoam.png"));
+			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterNormal.png"));
+			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterFoam.png"));
 			AssetDatabase.CreateAsset(material, InlandWaterMaterialPath);
 			return material;
 		}

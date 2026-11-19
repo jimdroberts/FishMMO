@@ -1412,8 +1412,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		public const int HabitatTries = 8;
 
 		/// <summary>The scene's biome map, looked up once; null when it has none (no habitat check then).</summary>
-		private FishMMO.Shared.Biomes.SceneBiomeMap biomeMap;
-		private bool biomeMapResolved;
 
 		/// <summary>The species an entry spawns, or null when it is not wildlife (read from its prefab, cached).</summary>
 		private readonly Dictionary<SpawnableSettings, WildlifeTemplate> speciesBySettings = new Dictionary<SpawnableSettings, WildlifeTemplate>();
@@ -1524,18 +1522,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <summary>True when the ground at <paramref name="position"/> is one of the species' habitats (always, without a biome map).</summary>
 		private bool LivesAt(WildlifeTemplate species, Vector3 position)
 		{
-			if (!biomeMapResolved)
+			if (!FishMMO.Shared.Biomes.BiomeHabitatQuery.TryGet(Scene, position, out bool hasMap, out FishMMO.Shared.Biomes.BiomeHabitat habitat))
 			{
-				biomeMapResolved = true;
-				biomeMap = WorldSceneSettings.TryGetForScene(Scene, out WorldSceneSettings settings) ? settings.BiomeMap() : null;
+				return !hasMap;
 			}
-			if (biomeMap == null || !biomeMap.Contains(position))
-			{
-				return biomeMap == null;
-			}
-			FishMMO.Shared.Biomes.BiomeHabitat habitat = FishMMO.Shared.Biomes.BiomeRegistry.TryGetByID(biomeMap.IDAt(position), out FishMMO.Shared.Biomes.BiomeTemplate biome) && biome != null
-				? biome.LiveHabitat
-				: FishMMO.Shared.Biomes.BiomeHabitat.None;
 			return WildlifePlanner.Lives(species, habitat);
 		}
 

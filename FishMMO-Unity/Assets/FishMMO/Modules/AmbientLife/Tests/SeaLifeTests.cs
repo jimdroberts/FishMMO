@@ -366,16 +366,11 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
-		public void TheProfileAsset_CarriesTheSeaLifeShader_AndNoSeaPlantIsGrass()
+		public void TheProfileAsset_CarriesTheSeaLifeShader()
 		{
 			// Code defaults do not reach a saved profile: the shader must be in the asset itself.
-			var terrain = AssetDatabase.LoadAssetAtPath<TerrainRenderProfile>(ProjectFiles.Path(WeatherRenderAssets.TerrainProfilePath));
 			var profile = AssetDatabase.LoadAssetAtPath<AmbientLifeRenderProfile>(ProjectFiles.Path(AmbientLifeRenderAssets.ProfilePath));
-			Assume.That(terrain, Is.Not.Null);
 			Assume.That(profile, Is.Not.Null);
-			// Seagrass and seaweed drawn as blades read as a lawn and dead grass on the sea floor: both were removed.
-			Assert.That(terrain.Grass.IsBladePrototype("Detail_Seagrass"), Is.False);
-			Assert.That(terrain.Grass.IsBladePrototype("Detail_Seaweed"), Is.False);
 			Assert.That(profile.SeaLifeShader, Is.Not.Null, "FishMMO/Sea Life must be referenced so a client build includes it");
 			Assert.That(profile.SeaLifeShader.name, Is.EqualTo("FishMMO/Sea Life"));
 			Assert.That(profile.SeaLife, Is.Not.Null);

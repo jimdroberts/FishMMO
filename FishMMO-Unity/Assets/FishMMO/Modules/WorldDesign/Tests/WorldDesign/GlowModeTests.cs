@@ -27,7 +27,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	{
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const float Wrap = (float)SceneGlow.WrapSeconds;
 
 		private static string Read(string path) => ProjectFiles.ReadAllText(path);
@@ -464,20 +464,20 @@ namespace FishMMO.UnitTests.WorldDesign
 			string cave = Read(Path.Combine(World, "ProceduralArt/BiomeArtGenerator.CaveGlow.cs"));
 			StringAssert.Contains("m.SetFloat(\"_FishStructure\", SteadyCrystalFlag);", cave);
 			// The table is published only when a biome names a mode (GlowModeTable; FloraPaletteMap builds and publishes it).
-			string table = Read("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs");
 			StringAssert.Contains("info = any && count > 0 ? new Vector4(1f, count, width, height) : Vector4.zero;", table);
 			Assert.That(table, Does.Not.Contain("Texture2D"), "no texture: the indirect pass is near the texture units WebGPU and GL allow");
 			Assert.That(GlowModeTableRows, Is.EqualTo(64));
-			string flora = Read("Assets/FishMMO/Client/World/Terrain/FloraPaletteMap.cs");
+			string flora = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/FloraPaletteMap.cs");
 			StringAssert.Contains("GlowModeTable.Build(rowBiomes, indices, w, h, rect,", flora);
 			StringAssert.Contains("GlowModeTable.Publish(published);", flora);
 			StringAssert.Contains("GlowModeTable.Release();", flora);
 			// The site lights take their old intensity and only move where the table names a mode.
-			string pool = Read("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			string pool = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			StringAssert.Contains("intensity = SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed));", pool);
 			StringAssert.Contains("if (GlowModeTable.TryAt(e.Position, SceneGlowModes.SourceOf(SceneGlow.HueOf(e.Seed)), out", pool);
 			StringAssert.Contains("if (GlowModeTable.TryAt(e.Position, SceneGlowSource.Crystal, out", pool);
-			StringAssert.Contains("GlowSky.Publish(state, in context, sunDirections[0].y);", Read("Assets/FishMMO/Client/World/Weather/Sky/SkySystem.cs"));
+			StringAssert.Contains("GlowSky.Publish(state, in context, sunDirections[0].y);", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/SkySystem.cs"));
 		}
 
 		// ── The shader's copy ─────────────────────────────────────────
@@ -511,12 +511,12 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				StringAssert.Contains(h, hlsl);
 			}
-			StringAssert.Contains("0x9E3779B1u", Read("Assets/FishMMO/Shared/Implementation/Weather/TurbidityEpisodes.cs"));
-			StringAssert.Contains("0x8DA6B343u", Read("Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeGlowMode.cs"));
+			StringAssert.Contains("0x9E3779B1u", Read("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/TurbidityEpisodes.cs"));
+			StringAssert.Contains("0x8DA6B343u", Read("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeGlowMode.cs"));
 			StringAssert.Contains("mode == 6 || mode == 11 || mode == 14 || mode == 19", hlsl, "the modes that carry their own daylight");
 			Assert.That(new[] { (int)SceneGlowMode.Sun, (int)SceneGlowMode.AfterSunset, (int)SceneGlowMode.Terminator, (int)SceneGlowMode.Night }, Is.EqualTo(new[] { 6, 11, 14, 19 }));
 			// Its globals are what GlowSky and GlowModeTable publish.
-			string sky = Read("Assets/FishMMO/Client/World/Weather/Sky/GlowSky.cs") + Read("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs");
+			string sky = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/GlowSky.cs") + Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs");
 			foreach (string g in new[] { "_FishGlowRows", "_FishGlowEpisodes", "_FishGlowRamps", "_FishGlowInfo", "_FishGlowSkyA", "_FishGlowSkyB", "_FishGlowSkyC", "_FishGlowSkyD", "_FishPlumeTide", "_FishTidalStress", "_FishVentBurst" })
 			{
 				StringAssert.Contains(g, hlsl);
@@ -530,8 +530,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			get
 			{
-				StringAssert.Contains("public const int Rows = FloraPaletteMap.MaxBiomes + 1;", Read("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs"));
-				StringAssert.Contains("public const int MaxBiomes = 63;", Read("Assets/FishMMO/Client/World/Terrain/FloraPaletteMap.cs"));
+				StringAssert.Contains("public const int Rows = FloraPaletteMap.MaxBiomes + 1;", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs"));
+				StringAssert.Contains("public const int MaxBiomes = 63;", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/FloraPaletteMap.cs"));
 				StringAssert.Contains("float4 _FishGlowRows[64];", Read(Path.Combine(Shaders, "FishGlowModes.hlsl")));
 				return 64;
 			}
@@ -543,7 +543,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string hlsl = Read(Path.Combine(Shaders, "FishGlowModes.hlsl"));
 			StringAssert.Contains("float every = floor(packed / 64.0);", hlsl);
 			StringAssert.Contains("float warm = rest >= 32.0 ? 1.0 : 0.0;", hlsl);
-			string table = Read("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs");
 			StringAssert.Contains("public const float WarmBit = 32f, EveryUnit = 64f;", table);
 			StringAssert.Contains("(float)entry.Mode + (entry.Warm ? WarmBit : 0f) + EveryUnit * SceneGlowModes.EveryOf(entry.Mode, entry.Every)", table);
 			foreach (SceneGlowMode mode in Modes())
@@ -572,7 +572,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Plumbing_TemplateSpecAuthoringAndCloudWorlds()
 		{
-			string template = Read("Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs");
+			string template = Read("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs");
 			StringAssert.Contains("private List<BiomeGlowMode> glowModes = new List<BiomeGlowMode>();", template);
 			StringAssert.Contains("private BiomeFountainEpisodes fountainEpisodes;", template);
 			StringAssert.Contains("public const string GlowModes = nameof(glowModes);", template);
@@ -852,7 +852,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains($"float4 _FishGlowLineData[{SceneGlowPlaces.MaxLines}];", hlsl);
 			StringAssert.Contains($"float4 _FishGlowVents[{SceneGlowPlaces.MaxVents}];", hlsl);
 			StringAssert.Contains($"float4 _FishGlowAnchors[{SceneGlowPlaces.MaxAnchors}];", hlsl);
-			string table = Read("Assets/FishMMO/Client/World/Terrain/GlowModeTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/GlowModeTable.cs");
 			StringAssert.Contains("public const int Schedules = 16;", table);
 			StringAssert.Contains("float4 _FishGlowEpisodes[16];", hlsl);
 			StringAssert.Contains("float4 _FishGlowRamps[4];", hlsl);
@@ -875,14 +875,14 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(SceneGlowModes.TrailZ, Is.EqualTo(0.8f));
 			// Plumbing: the cut stores every landform line, the table reads them (and the vents), the lights read the same places.
 			StringAssert.Contains("map.SetGlowLines(SceneGlowPlaces.FromLandforms(SceneLandforms.Sites(scene)));", Read(Path.Combine(World, "SceneGenerator.cs")));
-			string map = Read("Assets/FishMMO/Shared/Implementation/Tools/Biomes/SceneBiomeMap.cs");
+			string map = Read("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/SceneBiomeMap.cs");
 			StringAssert.Contains("[HideInInspector] public List<VentLine> GlowLines = new List<VentLine>();", map);
 			StringAssert.Contains("SetGlowLines(null);", map);
 			StringAssert.Contains("map.GlowLines != null && map.GlowLines.Count > 0 ? map.GlowLines : IceStripes.Of(map)", table);
 			StringAssert.Contains("SceneGlowPlaces.VentsOf(VolcanicVents.Of(settings))", table);
-			StringAssert.Contains("GlowModeTable.Place(settings);", Read("Assets/FishMMO/Client/World/Terrain/FloraPaletteMap.cs"));
-			StringAssert.Contains("GlowModeTable.Refresh();", Read("Assets/FishMMO/Client/World/Weather/Sky/GlowSky.cs"));
-			string pool = Read("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			StringAssert.Contains("GlowModeTable.Place(settings);", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/FloraPaletteMap.cs"));
+			StringAssert.Contains("GlowModeTable.Refresh();", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/GlowSky.cs"));
+			string pool = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			Assert.That(Regex.Matches(pool, Regex.Escape("GlowModeTable.PlaceAt(e.Position)")).Count, Is.EqualTo(2), "the crystal's and the glow's light");
 			// Cloud worlds: a crystal post carries its crystal (where the art exists) and its light takes that crystal's hue.
 			string cut = Read(Path.Combine(World, "CloudWorld/CloudWorldCut.cs"));

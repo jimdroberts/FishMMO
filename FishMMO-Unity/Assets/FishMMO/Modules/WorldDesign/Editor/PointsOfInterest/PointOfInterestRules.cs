@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Defaults are code</b>, so a fresh project, a test and a batch cut all plan the same scene without an asset.
 	/// Density at Normal comes to roughly 2.5–3.5 placed sites per km² of temperate land before the ground rules thin
-	/// it: 20–60 on an 8–20 km² scene. Biome names are the asset names in Assets/Templates/Entity/Biomes.
+	/// it: 20–60 on an 8–20 km² scene. Biome names are the asset names in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes.
 	/// </para>
 	/// <para>
 	/// <b>Order.</b> Placed kinds are sited tier by tier (<see cref="TierOf"/>) and, inside a tier, in

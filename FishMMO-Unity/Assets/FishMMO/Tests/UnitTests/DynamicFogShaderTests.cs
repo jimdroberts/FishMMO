@@ -29,8 +29,9 @@ namespace FishMMO.UnitTests
         [Test]
         public void AllOwnedWeatherAndWaterFogPragmasUseTheDynamicConfiguration()
         {
-            foreach (string folder in new[] { "Assets/Prefabs/Client/Weather/Shaders", "Assets/Plugins/FishMMO Water/Shaders" })
-            foreach (string path in Directory.GetFiles(ProjectFiles.Folder(folder), "*.shader"))
+            // The core's ground shaders and every installed module's (the weather's and the water's moved into modules, Phase 4).
+            foreach (string folder in new[] { "Assets/Prefabs/Client/Weather/Shaders", "Assets/FishMMO/Modules/WorldSimulation/Shaders", "Assets/FishMMO/Modules/Water/Shaders" })
+            foreach (string path in Directory.Exists(System.IO.Path.Combine(Directory.GetCurrentDirectory(), folder)) ? Directory.GetFiles(folder, "*.shader") : System.Array.Empty<string>())
             {
                 string source = ProjectFiles.ReadAllText(path);
                 Assert.That(source.Contains("#pragma multi_compile_fog"), Is.False, path);

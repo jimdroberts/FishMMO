@@ -111,7 +111,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ThePlumbing_StoresReadsAndDraws()
 		{
-			string map = Read("Assets/FishMMO/Shared/Implementation/Tools/Biomes/SceneBiomeMap.cs");
+			string map = Read("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/SceneBiomeMap.cs");
 			Assert.That(map, Does.Contain("public List<RockChute> Chutes").And.Contain("public List<TalusCone> TalusCones"));
 			Assert.That(map, Does.Contain("SetRockChutes(null, null, null);"), "a new grid clears them");
 			if (InstalledModules.Has("WorldDesign"))

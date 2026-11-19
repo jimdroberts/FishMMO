@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeTemplateLooksTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		// ── Look class ────────────────────────────────────────────────
 

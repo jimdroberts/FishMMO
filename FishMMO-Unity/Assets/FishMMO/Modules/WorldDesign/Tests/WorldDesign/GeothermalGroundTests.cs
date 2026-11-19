@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class GeothermalGroundTests
 	{
 		private const string WorldFolder = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheGroundOverload_IsTheTemplatesSearch()
 		{
-			string vents = Code("Assets/FishMMO/Shared/Implementation/Weather/GeothermalVents.cs");
+			string vents = Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/GeothermalVents.cs");
 			// The template overload (Near, the client) reads the ground through GeothermalGround.Of, as SceneSites (the cut) does.
 			StringAssert.Contains("Find(origin, area, seed, p => GeothermalGround.Of(biomeAt(p)), into, cellMetres, MaxSites);", vents);
 			// Both through GroundOf since 2026-10-25 (I2q-b): the template's ground, marked lined when the map stores its vent lines.
@@ -452,9 +452,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			string generator = Code(WorldFolder + "/SceneGenerator.cs");
 			Assert.That(generator.IndexOf("map.SetGreatSpout(hotGround.GreatSpout >= 0, spout.Position, spout.Seed, spout.Size);", StringComparison.Ordinal),
 				Is.GreaterThan(generator.IndexOf("map.SetHeat(heat);", StringComparison.Ordinal)));
-			string map = Code("Assets/FishMMO/Shared/Implementation/Tools/Biomes/SceneBiomeMap.cs");
+			string map = Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/SceneBiomeMap.cs");
 			StringAssert.Contains("GreatSpoutBaked = HasGreatSpout = false;", map);
-			string vents = Code("Assets/FishMMO/Shared/Implementation/Weather/GeothermalVents.cs");
+			string vents = Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/GeothermalVents.cs");
 			StringAssert.Contains("if (map.GreatSpoutBaked)", vents);
 		}
 
@@ -632,7 +632,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(BiomeGeothermalShares.Today.IsToday, Is.True);
 			Assert.That(new BiomeGeothermalShares(0.25f, 0.4f, 0.2f, 0.15f).IsToday, Is.False);
-			StringAssert.Contains("private BiomeGeothermalShares geothermal = BiomeGeothermalShares.Today;", Code("Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs"));
+			StringAssert.Contains("private BiomeGeothermalShares geothermal = BiomeGeothermalShares.Today;", Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs"));
 			// Signatures marked before the flag existed hold.
 			Assert.That(BiomeWaterLooks.Today.Signature().Contains("hot"), Is.False);
 			BiomeWaterLook hot = BiomeWaterLooks.Today;
@@ -671,9 +671,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					StringAssert.Contains("Fingerprint: Steam@5000", text, "the basin emits Steam at 0.5, authored");
 					StringAssert.Contains("Fingerprint: " + Basin.Signature(), text);
 					// The substance the weather content generator made (EnsureShipped), a vapour, is what it emits.
-					string steam = ProjectFiles.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset");
+					string steam = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Templates/Substances/Steam.asset");
 					StringAssert.Contains("\n  Vapour: 1", steam);
-					string guid = Regex.Match(ProjectFiles.ReadAllText("Assets/Templates/Weather/Substances/Steam.asset.meta"), @"guid: (\w+)").Groups[1].Value;
+					string guid = Regex.Match(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Templates/Substances/Steam.asset.meta"), @"guid: (\w+)").Groups[1].Value;
 					StringAssert.Contains($"\n  Emits: {{fileID: 11400000, guid: {guid}, type: 2}}\n  EmissionRate: 0.5\n", text);
 				}
 			}
@@ -726,10 +726,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(stage.IndexOf("GeothermalGroundCarve.WriteWater(", StringComparison.Ordinal),
 				Is.GreaterThan(stage.IndexOf("PointOfInterestPaddies.ClearWater(TerrainFolder, Request.SceneName);", StringComparison.Ordinal)));
 
-			string presenter = Code("Assets/FishMMO/Client/World/Weather/Sky/GeothermalSteamPresenter.cs");
+			string presenter = Code("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/GeothermalSteamPresenter.cs");
 			StringAssert.Contains("lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack", presenter);
 			StringAssert.Contains("GeothermalVents.Plop(site, motionSeconds, lane)", presenter);
-			StringAssert.Contains("WithHot(reading, HotShore(", Code("Assets/FishMMO/Shared/Implementation/Weather/WaterTemperature.cs"));
+			StringAssert.Contains("WithHot(reading, HotShore(", Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/WaterTemperature.cs"));
 			string painter = Code(WorldFolder + "/Terrain/BiomeSplatPainter.cs");
 			StringAssert.Contains("strength *= source.HeatWeight(heat);", painter);
 		}

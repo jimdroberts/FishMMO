@@ -13,24 +13,6 @@ namespace FishMMO.UnitTests
 {
     public class WebGpuRenderingCompatibilityTests
     {
-        [TestCase(GraphicsDeviceType.WebGPU,true,BatchBufferTarget.RawBuffer,true)]
-        [TestCase(GraphicsDeviceType.WebGPU,false,BatchBufferTarget.RawBuffer,false)]
-        [TestCase(GraphicsDeviceType.Vulkan,true,BatchBufferTarget.RawBuffer,true)]
-        [TestCase(GraphicsDeviceType.Direct3D11,true,BatchBufferTarget.RawBuffer,true)]
-        [TestCase(GraphicsDeviceType.Direct3D12,true,BatchBufferTarget.RawBuffer,true)]
-        [TestCase(GraphicsDeviceType.Vulkan,false,BatchBufferTarget.RawBuffer,false)]
-        [TestCase(GraphicsDeviceType.Vulkan,true,BatchBufferTarget.ConstantBuffer,false)]
-        public void BrgUsesCompatibleBackendAndBufferLayout(GraphicsDeviceType api,bool compute,BatchBufferTarget target,bool expected)
-            => Assert.That(TerrainGpuRenderer.SupportsBrg(api,compute,target),Is.EqualTo(expected));
-
-        [TestCase(GraphicsDeviceType.Vulkan,false,true)]
-        [TestCase(GraphicsDeviceType.WebGPU,true,true)]
-        [TestCase(GraphicsDeviceType.WebGPU,false,false)]
-        [TestCase(GraphicsDeviceType.Direct3D11,true,false)]
-        [TestCase(GraphicsDeviceType.Direct3D12,true,false)]
-        [TestCase(GraphicsDeviceType.OpenGLES3,true,false)]
-        public void FirstInstanceRequiresMatchingBackendAndEnabledDeviceFeature(GraphicsDeviceType api,bool feature,bool expected)
-            => Assert.That(TerrainGpuRenderer.SupportsInstanceIdBase(api,feature),Is.EqualTo(expected));
 
         [Test]
         public void LoadedBilinearHeightsPreserveFloatPrecisionSlicesAndClampEdges()
@@ -38,7 +20,7 @@ namespace FishMMO.UnitTests
             if(!SystemInfo.supportsComputeShaders)Assert.Ignore("GPU required");
             const int size=9,count=4096;
             var texture=new Texture2DArray(size,size,2,TextureFormat.RFloat,false,true){filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp};
-            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Tests/TestHarness/World/Editor/GroundHeightLoadsProbe.compute")));
+            var shader=Object.Instantiate(AssetDatabase.LoadAssetAtPath<ComputeShader>(ProjectFiles.Path("Assets/FishMMO/Tests/UnitTests/Probes/GroundHeightLoadsProbe.compute")));
             try
             {
                 var random=new System.Random(3771);var values=new float[2][];
@@ -172,6 +154,8 @@ namespace FishMMO.UnitTests
         [TestCase("FishBackdropGround","ForwardLit",null)]
         public void HotForwardPipelinesFitWebGpuDynamicUniformLimit(string shader,string pass,string instancing)
         {
+            // FishWeatherTerrainArrayGpu is the Terrain module's (Phase 4, 2026-11-18).
+            if(shader=="FishWeatherTerrainArrayGpu"&&!InstalledModules.Has("Terrain"))Assert.Ignore("The Terrain module is not installed.");
             var keywords=HeavyKeywords.Concat(new[]{"_ADDITIONAL_LIGHTS"}).ToList();
             if(instancing!=null)keywords.Add(instancing);
             bool found=false;
@@ -229,17 +213,7 @@ namespace FishMMO.UnitTests
                         Assert.That(allowedBefore,Does.Contain(before),file+": "+before+" comes before FishShadowVariants.hlsl, so URP's lighting cbuffers would be declared first");
                 }
             }
-            Assert.That(passes,Is.GreaterThan(20));
-        }
-
-        // WebGPU's direct header loads read exactly the words the native metadata names (TerrainGpuRenderer.Brg.cs SyncDots).
-        [Test]
-        public void WebGpuBatchHeaderAddressesMatchTheBatchLayout()
-        {
-            string include=ProjectFiles.ReadAllText("Assets/FishMMO/Shaders/FishIndirectInstancing.hlsl");
-            Assert.That(include,Does.Contain("#define FISH_BRG_CONTACT_ON_ADDRESS "+TerrainBrgMath.ContactOnAddress+"u"));
-            Assert.That(include,Does.Contain("#define FISH_BRG_FLORA_ON_ADDRESS "+TerrainBrgMath.FloraOnAddress+"u"));
-            Assert.That(TerrainBrgMath.ContactOnAddress&TerrainBrgMath.PerInstanceBit,Is.Zero,"a per-batch word, not per instance");
+            Assert.That(passes,Is.GreaterThan(InstalledModules.Has("Terrain")&&InstalledModules.Has("WorldSimulation")?20:6));
         }
 
         [TestCase(ShaderCompilerPlatform.Vulkan,BuildTarget.StandaloneLinux64,false)]

@@ -216,7 +216,7 @@ namespace FishMMO.Shared
 					{
 						reason = $"{type.Name} exists only in client code, and the server loads '{group.Name}'";
 					}
-					else if (type != null && typeof(FishMMO.Shared.Biomes.BiomeTemplate).IsAssignableFrom(type) &&
+					else if (IsBiomeTemplate(type) &&
 						!string.Equals(group.Name, SmartGroups.SharedBiomes, StringComparison.OrdinalIgnoreCase))
 					{
 						reason = $"{type.Name} references its whole art set; preloaded in '{group.Name}' it loads every biome's art at boot";

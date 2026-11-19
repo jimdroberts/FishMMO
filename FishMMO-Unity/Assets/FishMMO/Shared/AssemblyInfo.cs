@@ -18,3 +18,9 @@ using System.Runtime.CompilerServices;
 // The Naming module's tests moved out of FishMMO.UnitTests (Phase 4, 2026-11-18).
 [assembly: InternalsVisibleTo("FishMMO.Naming.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Naming")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Client")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Server")]
+[assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]
+[assembly: InternalsVisibleTo("FishMMO.Client.Weather.Editor")]
+[assembly: InternalsVisibleTo("FishMMO.Shared.Biomes.Editor")]

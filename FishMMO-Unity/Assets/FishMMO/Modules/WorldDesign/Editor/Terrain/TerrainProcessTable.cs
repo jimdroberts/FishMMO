@@ -148,8 +148,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Apply terrain process profiles", Section = "Content", Order = 4,
-			Tooltip = "Creates the shared terrain process profiles (how each kind of ground erodes, drains and breaks into benches) in Assets/Templates/Entity/Biomes/Terrain Processes, writes the tabled values onto them, and assigns each tabled biome its profile, logging every change. Re-running it changes nothing once applied; biomes not in the table are left alone.",
-			Confirm = "Write the terrain process table: create or update the profiles in Assets/Templates/Entity/Biomes/Terrain Processes and assign them to the tabled biomes? Every change is logged before and after.")]
+			Tooltip = "Creates the shared terrain process profiles (how each kind of ground erodes, drains and breaks into benches) in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes/Terrain Processes, writes the tabled values onto them, and assigns each tabled biome its profile, logging every change. Re-running it changes nothing once applied; biomes not in the table are left alone.",
+			Confirm = "Write the terrain process table: create or update the profiles in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes/Terrain Processes and assign them to the tabled biomes? Every change is logged before and after.")]
 		public static void ApplyFromDashboard()
 		{
 			var log = new StringBuilder();

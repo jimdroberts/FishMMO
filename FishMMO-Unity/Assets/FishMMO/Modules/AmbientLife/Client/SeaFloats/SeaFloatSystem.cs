@@ -444,7 +444,7 @@ namespace FishMMO.Client
 				}
 #endif
 			}
-			if (!TerrainGpuMath.ChooseGpu(SystemInfo.supportsComputeShaders, SystemInfo.maxComputeBufferInputsVertex, compute != null))
+			if (!SystemInfo.supportsComputeShaders || SystemInfo.maxComputeBufferInputsVertex < 2 || compute == null)
 			{
 				why = compute == null ? $"the compute ({ComputeAssetPath}) is not loaded: Weather Render Profile → Sea floats" : "no compute shaders or too few vertex-stage buffers on this device";
 				return false;

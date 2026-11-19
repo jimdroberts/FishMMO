@@ -62,7 +62,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string[] names = Enum.GetNames(typeof(SceneEmitterKind));
 			Assert.That(Array.IndexOf(names, "Drip"), Is.EqualTo(12), "appended after Fumes (11)");
 			Assert.That((int)SceneEmitterKind.Fumes, Is.EqualTo(11));
-			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Terrain/SiteLightPool.cs");
+			string pool = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/SiteLightPool.cs");
 			Assert.That(pool, Does.Contain("kind != SceneEmitterKind.Drip"), "the client's site lights skip drips");
 			string walk = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldDesign/Editor/PointsOfInterest/Shapers/CaveWalkRender.cs");
 			Assert.That(walk, Does.Contain("x.Kind != SceneEmitterKind.Drip"), "the cave walk render's lights skip drips");

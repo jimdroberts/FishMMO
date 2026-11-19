@@ -917,7 +917,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// An entry whose scene file is gone: it still draws, still blocks a cut, and is still
 			// counted as somewhere a character can be. Red, like any other invalid rectangle.
-			var orphans = new HashSet<string>(WorldEditorAssets.OrphanedAtlasScenes(), StringComparer.Ordinal);
+			var orphans = new HashSet<string>(WorldSystemAssets.OrphanedAtlasScenes(), StringComparer.Ordinal);
 
 			double radius = AtlasModel.RadiusOf(body);
 			foreach (GlobeScene scene in globe.Scenes)
@@ -1722,9 +1722,9 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			if (model.Atlas == null)
 			{
-				model.Atlas = WorldEditorAssets.EnsureAtlas(model.System);
+				model.Atlas = WorldSystemAssets.EnsureAtlas(model.System);
 			}
-			int created = WorldEditorAssets.SyncAtlasScenes(model.Atlas);
+			int created = WorldSystemAssets.SyncAtlasScenes(model.Atlas);
 			if (created > 0 || rebuild)
 			{
 				model.Reload();
@@ -1988,7 +1988,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			int changed = WorldEditorAssets.CopySceneSettingsIntoAtlas();
+			int changed = WorldSystemAssets.CopySceneSettingsIntoAtlas();
 			Debug.Log($"[World Atlas] Copied scene settings into {changed} atlas entr{(changed == 1 ? "y" : "ies")}.");
 			model.Reload();
 			Rebuild();

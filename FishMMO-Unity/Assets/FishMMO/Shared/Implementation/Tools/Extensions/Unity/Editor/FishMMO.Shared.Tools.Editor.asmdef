@@ -12,7 +12,6 @@
         "Unity.Addressables.Editor",
         "Unity.ResourceManager",
         "FishMMO.Shared.Map.Editor",
-        "FishMMO.Water",
         "Unity.AI.Navigation",
         "Unity.ScriptableBuildPipeline.Editor",
         "Unity.ScriptableBuildPipeline",

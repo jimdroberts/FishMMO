@@ -366,8 +366,8 @@ namespace FishMMO.UnitTests
 			{
 				foreach (TerrainArrayLayerUse use in source.Uses)
 				{
-					Assert.That(SceneTerrainPalette.SlotLayer(use.Biome, use.Slot).terrainLayer, Is.SameAs(source.Layer));
-					Assert.That(BiomeLocalArt.CommittedLayer(use.Biome, use.Slot), Is.SameAs(SceneTerrainPalette.SlotLayer(use.Biome, use.Slot)));
+					Assert.That(SceneTerrainPalette.SlotLayer((use.Biome as BiomeTemplate), use.Slot).terrainLayer, Is.SameAs(source.Layer));
+					Assert.That(BiomeLocalArt.CommittedLayer((use.Biome as BiomeTemplate), use.Slot), Is.SameAs(SceneTerrainPalette.SlotLayer((use.Biome as BiomeTemplate), use.Slot)));
 				}
 			}
 		}

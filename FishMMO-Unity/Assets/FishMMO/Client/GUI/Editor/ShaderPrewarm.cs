@@ -13,6 +13,7 @@ using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FishMMO.UnitTests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]
 
 namespace FishMMO.Client
 {

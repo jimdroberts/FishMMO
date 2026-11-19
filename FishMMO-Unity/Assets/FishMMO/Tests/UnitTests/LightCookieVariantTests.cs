@@ -63,14 +63,16 @@ float4 Frag(V i):SV_Target {
     return float4(_CookieTestAdditional > .5 ? SampleAdditionalLightCookie(0,float3(0,0,0)) : SampleMainLightCookie(float3(0,0,0)),1);
 }
 ";
+				bool water = InstalledModules.Has("Water");
 				string Pass(string code) => "Pass {ZTest Always ZWrite Off Cull Off HLSLPROGRAM\n#pragma use_dxc vulkan\n#pragma target 4.5\n#pragma vertex Vert\n#pragma fragment Frag\n" + code + "\nENDHLSL\n}";
 				string source = "Shader \"Hidden/FishMMO/CookieFixture\" {SubShader {" +
 					Pass(common + "float4 Frag(V i):SV_Target{return 1;}") +
 					Pass("#define _LIGHT_COOKIES 1\n" + common + sample) +
 					Pass("#include_with_pragmas \"" + Header + "\"\n" + common + sample) +
-					Pass("#include_with_pragmas \"" + Header + "\"\n" + common +
-						"#include \"Assets/Plugins/FishMMO Water/Shaders/FishWaterSun.hlsl\"\n" +
-						"float4 Frag(V i):SV_Target{return float4(FishWaterCloudLight(float3(0,0,0),.85),1);}") + "}}";
+					// The water's cloud light is the Water module's (Phase 4, 2026-11-18): checked when it is installed.
+					(water ? Pass("#include_with_pragmas \"" + Header + "\"\n" + common +
+						"#include \"Assets/FishMMO/Modules/Water/Shaders/FishWaterSun.hlsl\"\n" +
+						"float4 Frag(V i):SV_Target{return float4(FishWaterCloudLight(float3(0,0,0),.85),1);}") : string.Empty) + "}}";
 				string path = folder + "/Fixture.shader";
 				File.WriteAllText(path, source);
 				AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
@@ -114,8 +116,12 @@ float4 Frag(V i):SV_Target {
 					string context = $"additional={additional}, enabled={enabled}, format={format}";
 					for (int c = 0; c < 4; c++) Assert.That(actual[c], Is.EqualTo(expected[c]).Within(.00001f), context);
 					Assert.That(actual.r, Is.EqualTo(enabled && format == 0 ? .2f : 1f).Within(.00001f), context);
-					var water = Capture(material, target, 3);
-					Assert.That(water.r, Is.EqualTo(enabled && format == 0 ? .2f : .85f).Within(.0001f), "water cloud cookie: " + context);
+					if (!water)
+					{
+						continue;
+					}
+					var waterLight = Capture(material, target, 3);
+					Assert.That(waterLight.r, Is.EqualTo(enabled && format == 0 ? .2f : .85f).Within(.0001f), "water cloud cookie: " + context);
 				}
 			}
 			finally

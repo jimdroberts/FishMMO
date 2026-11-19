@@ -51,9 +51,11 @@ namespace FishMMO.Shared
 			"Assets/Plugins/FishNet/Demos",
 			"Assets/Plugins/FishNet/Example",
 			"Assets/Plugins/FishNet/Upgrading",
-			"Assets/Templates/World/Atlas",
-			"Assets/Templates/World/Systems",
+			"Assets/FishMMO/Modules/WorldSimulation/Templates/World/Atlas",
+			"Assets/FishMMO/Modules/WorldSimulation/Templates/World/Systems",
 			"Assets/Resources/Prefabs/Shared/WorldSceneDetails",
+			// The biome art World Design generates (gitignored, regenerated per machine; Phase 4, 2026-11-18).
+			"Assets/Prefabs/Shared/Biomes/Generated",
 		};
 
 		/// <summary>The extensions of text-serialized Unity assets that can hold references.</summary>

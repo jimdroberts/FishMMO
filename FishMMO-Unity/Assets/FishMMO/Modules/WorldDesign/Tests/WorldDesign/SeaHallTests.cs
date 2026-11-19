@@ -207,7 +207,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			BiomeSpecTable.Entry vent = BiomeSpecTable.Entries.First(e => e.Name == "Subsurface Ocean Vent");
 			Assert.That(vent.SelectionWeight, Is.EqualTo(0f), "the table never selects it");
-			Assert.That(ProjectFiles.ReadAllText("Assets/Templates/Entity/Biomes/Subsurface Ocean Vent.asset"), Does.Contain("\n  SelectionWeight: 0\n"));
+			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes/Subsurface Ocean Vent.asset"), Does.Contain("\n  SelectionWeight: 0\n"));
 			Assert.That(BiomeArtSpec.For("Subsurface Ocean Vent").Habitat, Is.EqualTo(BiomeHabitat.Sea | BiomeHabitat.Cave));
 			PointOfInterestKindRule hallRule = rules.RuleFor(POIType.SeaHall);
 			Assert.That(hallRule.Face, Is.False, "a melt shaft needs no face");

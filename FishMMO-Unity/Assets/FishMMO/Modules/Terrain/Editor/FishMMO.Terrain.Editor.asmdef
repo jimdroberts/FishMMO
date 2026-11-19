@@ -1,0 +1,29 @@
+{
+    "name": "FishMMO.Terrain.Editor",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Client.Weather.Editor",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Terrain.Client",
+        "FishMMO.Terrain",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

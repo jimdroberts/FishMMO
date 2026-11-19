@@ -221,7 +221,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Wiring_FamiliesDrawFromTheirPoolsOnEveryPath()
 		{
-			string code = SourceScanPins.ReadCode("Assets/FishMMO/Client/World/Terrain/Scatter/DetailScatterRenderer.cs");
+			string code = SourceScanPins.ReadCode("Assets/FishMMO/Modules/Terrain/Client/Scatter/DetailScatterRenderer.cs");
 			// Alpha-tested vegetation only, as the build lists it.
 			StringAssert.Contains("!clone.IsKeywordEnabled(\"_ALPHATEST_ON\")", code);
 			// Batched or not, a family command's mesh is its pool (only the pool's vertices name its row).
@@ -233,7 +233,7 @@ namespace FishMMO.UnitTests
 			// Identical materials share one clone in both renderers.
 			StringAssert.Contains("string key = mergedState ? TerrainGpuRenderer.ContentKey(material, contentKey) : null;", code);
 			StringAssert.Contains("string key = MergeIdenticalMaterials ? ContentKey(material, contentKey) : null;",
-				SourceScanPins.ReadCode("Assets/FishMMO/Client/World/Terrain/TerrainGpuRenderer.cs"));
+				SourceScanPins.ReadCode("Assets/FishMMO/Modules/Terrain/Client/TerrainGpuRenderer.cs"));
 		}
 	}
 }

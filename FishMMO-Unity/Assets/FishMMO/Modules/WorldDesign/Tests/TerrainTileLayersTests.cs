@@ -366,15 +366,15 @@ namespace FishMMO.UnitTests
 			Assert.That(shader, Does.Contain("uint4 n = uint4(SceneLayer((uint)ids.x), SceneLayer((uint)ids.y), SceneLayer((uint)ids.z), SceneLayer((uint)ids.w));"),
 				"renamed after the four are chosen, as the CPU renames the chosen ids");
 
-			string contact = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundMaterialMap.cs");
+			string contact = ProjectFiles.ReadAllText(Scripts + "Modules/Terrain/Client/GroundMaterialMap.cs");
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.Bake(data, bake, target, slice, TerrainTileLayers.Of(t))"));
-			string colour = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/GroundColourMap.cs");
+			string colour = ProjectFiles.ReadAllText(Scripts + "Modules/Terrain/Client/GroundColourMap.cs");
 			Assert.That(colour, Does.Contain("int slice = TerrainTileLayerMap.SceneLayerOf(sceneLayers, l);"));
 			Assert.That(colour, Does.Contain("LayerColour(set, ls, i, TerrainTileLayerMap.SceneLayerOf(sceneLayers, i), out bool fromArray)"));
 			Assert.That(colour, Does.Contain("count = set.LayerCount;"), "a stored map names the set's layers, past a compacted tile's count");
-			string grass = ProjectFiles.ReadAllText(Scripts + "Client/World/Terrain/Grass/GrassTerrain.cs");
+			string grass = ProjectFiles.ReadAllText(Scripts + "Modules/Terrain/Client/Grass/GrassTerrain.cs");
 			Assert.That(grass, Does.Contain("GrassMath.RenameSurfaceLayers(GrassMath.PackSurfaceLayers(weights, alayers), sceneLayers)"));
-			string footsteps = ProjectFiles.ReadAllText(Scripts + "Client/Audio/World/GroundSurface.cs");
+			string footsteps = ProjectFiles.ReadAllText(Scripts + "Modules/WorldSimulation/Client/Audio/World/GroundSurface.cs");
 			Assert.That(footsteps, Does.Contain("TerrainLayer[] painted = data.terrainLayers;"), "footsteps read a tile's own layers by name: per tile already");
 
 			string generator = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldDesign/Editor/SceneGenerator.cs");
@@ -391,7 +391,7 @@ namespace FishMMO.UnitTests
 			Assert.That(shading, Does.Contain("TerrainTileLayerSync.ScenePalette(scene, tiles)"));
 			string stripper = ProjectFiles.ReadAllText(Scripts + "Shared/Implementation/Tools/Extensions/Unity/Editor/ClientTerrainLayerStripper.cs");
 			Assert.That(stripper, Does.Contain("WorldDesign.TerrainTileLayerStore.Record(terrain, sceneLayers);"), "a kept tile's map reaches the player");
-			string store = ProjectFiles.ReadAllText(Scripts + "Client/World/Weather/Editor/TerrainDetailBaker.cs");
+			string store = ProjectFiles.ReadAllText(Scripts + "Modules/Terrain/Editor/TerrainDetailBaker.cs");
 			Assert.That(store, Does.Contain("TerrainTileLayerMap.Bake(data.GetAlphamaps(0, 0, res, res), TerrainTileLayers.Of(terrain))"));
 		}
 	}

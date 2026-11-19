@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class BiomeClimateGroundTests
 	{
 		private const string WorldFolder = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		// ── The band ──────────────────────────────────────────────────
 

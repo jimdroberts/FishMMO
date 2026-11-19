@@ -269,8 +269,8 @@ namespace FishMMO.Shared.WorldDesign
 			bodies.Hydrology = hydrology;
 			var renderer = host.AddComponent<FishMMO.Water.InlandWaterRenderer>();
 			var material = new Material(Shader.Find(SceneGenerator.InlandWaterShaderName));
-			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterNormal.png"));
-			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterFoam.png"));
+			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterNormal.png"));
+			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterFoam.png"));
 			renderer.Material = material;
 			var fallMaterial = new Material(Shader.Find(SceneGenerator.WaterfallShaderName));
 			fallMaterial.SetTexture("_NormalMap", material.GetTexture("_NormalMap"));
@@ -573,8 +573,8 @@ namespace FishMMO.Shared.WorldDesign
 			terrain.heightmapPixelError = 2f;
 
 			var material = new Material(Shader.Find(SceneGenerator.InlandWaterShaderName));
-			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterNormal.png"));
-			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Plugins/FishMMO Water/Textures/WaterFoam.png"));
+			material.SetTexture("_NormalMap", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterNormal.png"));
+			material.SetTexture("_FoamTexture", AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/FishMMO/Modules/Water/Textures/WaterFoam.png"));
 			// The scene's own water, as the game draws it.
 			if (water != null && water.Any)
 			{

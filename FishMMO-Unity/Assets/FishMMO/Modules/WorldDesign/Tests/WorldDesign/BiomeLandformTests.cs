@@ -17,9 +17,9 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeLandformTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string TemplateSource = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/BiomeTemplate.cs";
+		private const string TemplateSource = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/BiomeTemplate.cs";
 
 		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 

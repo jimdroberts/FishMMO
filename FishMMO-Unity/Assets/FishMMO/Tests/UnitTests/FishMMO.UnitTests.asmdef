@@ -13,17 +13,14 @@
         "Unity.InputSystem",
         "KinematicCharacterController",
         "Unity.RenderPipelines.Universal.Runtime",
-        "FishMMO.Water",
         "Unity.Addressables",
         "FishMMO.Shared.Tools.Editor",
         "FishMMO.Shared.Map.Editor",
-        "FishMMO.Client.Weather.Editor",
         "FishMMO.Client.GUI.Editor",
         "Unity.Addressables.Editor",
         "Unity.AI.Navigation",
         "Unity.ScriptableBuildPipeline.Editor",
-        "Unity.ScriptableBuildPipeline",
-        "FishMMO.TestHarness.World.Editor"
+        "Unity.ScriptableBuildPipeline"
     ],
     "includePlatforms": [
         "Editor"

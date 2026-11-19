@@ -1,0 +1,29 @@
+{
+    "name": "FishMMO.Water.RenderScratch",
+    "rootNamespace": "FishMMO.RenderScratch",
+    "references": [
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishNet.Runtime",
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime",
+        "FishMMO.Water",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

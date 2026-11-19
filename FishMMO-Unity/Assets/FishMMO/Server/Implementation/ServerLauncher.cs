@@ -34,13 +34,21 @@ namespace FishMMO.Server.Implementation
 			AddressableLoadProcessor.OnAddressableUnloaded += AddressableLoadProcessor_OnAddressableUnloaded;
 
 			// Load static permanent addressables (e.g., templates) before loading scenes to ensure they're available in the cache.
-			AddressableLoadProcessor.EnqueueLoad(new List<string>()
+			// And the labels installed modules ask for (ServerPreloadLabels): the World Simulation module's biome templates,
+			// which the client loads per scene and the server keeps all of (art stripped).
+			var preload = new List<string>()
 			{
 				"Server_Static_Permanent",
 				Constants.SharedStaticLabel,
-				// Every biome template: the client loads them per scene, the server keeps all of them (art stripped).
-				Constants.SharedBiomesLabel,
-			});
+			};
+			foreach (string label in ServerPreloadLabels.All)
+			{
+				if (!preload.Contains(label))
+				{
+					preload.Add(label);
+				}
+			}
+			AddressableLoadProcessor.EnqueueLoad(preload);
 
 			List<AddressableSceneLoadData> initialScenes = new List<AddressableSceneLoadData>();
 

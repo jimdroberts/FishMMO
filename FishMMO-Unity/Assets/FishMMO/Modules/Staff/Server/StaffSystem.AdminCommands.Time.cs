@@ -66,7 +66,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				case "":
 				case "show":
-					ReportClock(character);
+					ReportClockOrTime(character);
 					return;
 				case "help":
 					ReplyLines(character, TimeActionHelp);
@@ -91,6 +91,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Reply(character, $"Unknown time action '{action}'. /admin time help lists them.");
 					return;
 			}
+		}
+
+		/// <summary>
+		/// The clock report: the installed world module's (<c>/gm clock</c>: the date and local time too) when there is one
+		/// (Phase 4 of the core and modules plan, 2026-11-18), else the core clock's world time.
+		/// </summary>
+		private void ReportClockOrTime(IPlayerCharacter character)
+		{
+			foreach (OperatorCommandProvider provider in OperatorCommandProviders.All)
+			{
+				foreach (OperatorCommand command in provider.GameMasterCommands(this))
+				{
+					if (command != null && command.Name == "clock" && command.Run != null)
+					{
+						command.Run(character, string.Empty);
+						return;
+					}
+				}
+			}
+			Reply(character, $"World time: {FishMMO.Shared.Celestial.WorldTimeText.Write(WorldSecondsNow(), WorldEpoch())}.");
 		}
 
 		private static long WorldEpoch() => FishMMO.Shared.Celestial.WorldEpoch.UnixSeconds;

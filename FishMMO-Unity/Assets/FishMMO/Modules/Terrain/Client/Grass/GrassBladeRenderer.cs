@@ -1,0 +1,1846 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Unity.Collections;
+using UnityEngine;
+using UnityEngine.Profiling;
+using UnityEngine.Rendering;
+using FishMMO.Shared.Biomes;
+using Object = UnityEngine.Object;
+using FishMMO.Shared;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// The GPU side of the procedural blade grass: per camera, the CPU picks the world-aligned tiles within
+	/// the grass distance that the camera (or the sun's shadow of it) can see, gives each tile a lattice
+	/// level from its nearest distance (<see cref="GrassMath.LevelForShare"/>) and lists it as 8 × 8-candidate
+	/// work items; FishGrassBlades.compute turns those into blades in five slot buffers (camera LOD0..2,
+	/// shadow LOD0..1), and five <see cref="Graphics.RenderMeshIndirect"/> calls draw them. Everything the
+	/// GPU does for a camera is recorded into one command buffer executed on that camera's context, as
+	/// <see cref="TerrainGpuRenderer"/> does. No readback in the frame (stats are read asynchronously).
+	/// </summary>
+	public sealed class GrassBladeRenderer : IDisposable
+	{
+		public const string ComputeAssetPath = "Assets/FishMMO/Modules/Terrain/Shaders/FishGrassBlades.compute";
+		public const string ShaderName = "FishMMO/Grass Blades";
+		/// <summary>
+		/// Blade types in one scene (GrassMath.MaxTypes: four bits of the record's packed word, two of its colour word and one of
+		/// its sixth word).
+		/// Was 16; the vegetation expansion's sedges, rushes, dune, feather, savanna and plume grasses and five flower sets
+		/// make 20, and a scene past the cap drew its later types as meshes.
+		/// </summary>
+		public const int MaxTypes = GrassMath.MaxTypes;
+
+		/// <summary>
+		/// Rows of the per-type table (<see cref="typeTable"/>, FishGrassBlades.compute / .hlsl GRASS_ROW_*): a texel per
+		/// type per row. 0 shape, 1 shape2, 2 more (read by the compute), 3 root, 4 tip, 5 healthy, 6 dry, 7 params, 8 head,
+		/// 9..12 the head colours (the blades'). The root row's alpha is the type's ground tint (BiomeGrassType.GroundTint).
+		/// </summary>
+		public const int TypeRows = 9 + GrassType.MaxHeadColours;
+		private const int RowShape = 0, RowShape2 = 1, RowMore = 2, RowRoot = 3, RowTip = 4, RowHealthy = 5, RowDry = 6, RowParams = 7, RowHead = 8, RowHeadColour = 9;
+		public const int MaxRings = 6;
+		public const int Slots = 5;
+
+		/// <summary>The slot's level of detail (camera 0..2, shadow 0..1).</summary>
+		private static readonly int[] SlotLod = { 0, 1, 2, 0, 1 };
+		/// <summary>The slot's share of the blade cap.</summary>
+		/// <remarks>
+		/// Sized to where the blades are: with the default rings a camera sees ~0.16 M blades nearer than LOD0's 12 m, ~0.6 M
+		/// to LOD1's 45 m and ~2.3 M beyond (to 500 m), and casts shadows only to 20 m. Every slot keeps headroom over that.
+		/// </remarks>
+		private static readonly float[] SlotShare = { 0.06f, 0.2f, 0.6f, 0.06f, 0.06f };
+		private static readonly int ScreenId = Shader.PropertyToID("_GrassScreen");
+		private static readonly int TemporalId = Shader.PropertyToID("_GrassTemporal");
+		/// <summary>The longest step of the shared motion clock between two frames still taken as motion (s); a longer one is a jump.</summary>
+		private const float MaxMotionStep = 0.25f;
+		private static readonly int ViewerId = Shader.PropertyToID("_GrassViewer");
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct Item
+		{
+			public const int Stride = 16;
+			public int CellX, CellZ;
+			public uint Packed, Terrain;
+		}
+
+		/// <summary>
+		/// A tile with grass, as the GPU gather reads it (FishGrassBlades.compute GrassTile), baked once in 16 bytes: its
+		/// place on the tile grid (two signed 16-bit), terrain (low 16) and group (high 16), its padded height range in
+		/// quarter metres (two signed 16-bit, rounded outward), and the pad round it. Bounds were 48 bytes a tile, and Flo
+		/// Monolith has 720 000 tiles at 2.5 cm cells: 35 MB of tile table.
+		/// </summary>
+		[StructLayout(LayoutKind.Sequential)]
+		private struct Tile
+		{
+			public const int Stride = 16;
+			public const float HeightStep = 0.25f;
+			public uint TileXZ, TerrainGroup, Heights;
+			public float Pad;
+
+			public static uint PackPair(int low, int high) => (uint)(low & 0xFFFF) | ((uint)(high & 0xFFFF) << 16);
+		}
+
+		/// <summary>
+		/// The GPU-driven gather: every tile with grass baked once into a table (<see cref="EnsureTiles"/>), and each frame
+		/// a compute pass culls it (reach, view, the shadows' sweep), picks each tile's level and writes the work list the
+		/// generation reads, dispatched indirectly from the counts it wrote. Nothing is gathered or uploaded on the CPU per
+		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). 2026-10-07: "the real fix".
+		/// </summary>
+		public static bool GpuGather = true;
+
+		/// <summary>Skip empty density maps in wide grass generation using conservative, bilinear-safe channel masks.</summary>
+		public static bool UseActiveChannels = true;
+		/// <summary>Reuses the exact biome/variant selected by generation, rather than finding it again for every vertex.</summary>
+		public static bool CacheFloraLooks = true;
+		public static bool CoarseOcclusion = true, PrepareTerrainColour = true;
+		private static readonly int LinearTableBaseId = Shader.PropertyToID("_GrassLinearTableBase"), PreparedColourId = Shader.PropertyToID("_GrassUsePreparedColour"), ColourTableOutId = Shader.PropertyToID("_GrassColourTableOut");
+		private int colourVersion = -1;
+		private readonly int prepareColourKernel;
+		private static readonly int CacheFloraLooksId = Shader.PropertyToID("_GrassCacheFloraLooks");
+		private static readonly int ActiveTableBaseId = Shader.PropertyToID("_GrassActiveTableBase");
+		private static readonly int ActiveTerrainId = Shader.PropertyToID("_GrassActiveTerrain");
+		private static readonly int ActiveOutId = Shader.PropertyToID("_GrassActiveOut");
+		private static readonly int UseActiveChannelsId = Shader.PropertyToID("_GrassUseActiveChannels");
+		private static readonly int RejectStatsId = Shader.PropertyToID("_GrassRejectStats");
+		private static readonly int EarlyExitsId = Shader.PropertyToID("_GrassEarlyExits");
+		private int activeVersion = -1;
+
+		private struct GroupRange
+		{
+			public GrassTerrainAtlas.Group Group;
+			public int Offset, Count;
+		}
+
+		private static readonly int ItemsId = Shader.PropertyToID("_GrassItems");
+		private static readonly int CountsId = Shader.PropertyToID("_GrassCounts");
+		private static readonly int ArgsId = Shader.PropertyToID("_GrassArgs");
+		private static readonly int[] OutIds =
+		{
+			Shader.PropertyToID("_GrassOut0"), Shader.PropertyToID("_GrassOut1"), Shader.PropertyToID("_GrassOut2"),
+			Shader.PropertyToID("_GrassOut3"), Shader.PropertyToID("_GrassOut4"),
+		};
+		private static readonly int HeightmapId = Shader.PropertyToID("_GrassHeightmap");
+		private static readonly int DensityId = Shader.PropertyToID("_GrassDensity");
+		private static readonly int WaterId = Shader.PropertyToID("_GrassWater");
+		private static readonly int SeaId = Shader.PropertyToID("_GrassSea");
+
+		private static readonly int FishSeaId = Shader.PropertyToID("_FishSea");
+		private static readonly int CameraId = Shader.PropertyToID("_GrassCamera");
+		private static readonly int PlanesId = Shader.PropertyToID("_GrassPlanes");
+		private static readonly int LightId = Shader.PropertyToID("_GrassLight");
+		private static readonly int LatticeId = Shader.PropertyToID("_GrassLattice");
+		private static readonly int ShapeParamsId = Shader.PropertyToID("_GrassShapeParams");
+		private static readonly int RingDistanceId = Shader.PropertyToID("_GrassRingDistance");
+		private static readonly int RingDensityId = Shader.PropertyToID("_GrassRingDensity");
+		private static readonly int RingCountId = Shader.PropertyToID("_GrassRingCount");
+		private static readonly int TypeTableId = Shader.PropertyToID("_GrassTypeTable");
+		// What buries a blade (FishGrassBlades.compute GrassBuried): the weather's maps, handed over by name.
+		private static readonly int GrassCoverId = Shader.PropertyToID("_GrassCover");
+		private static readonly int GrassDeepSnowId = Shader.PropertyToID("_GrassDeepSnow");
+		private static readonly int GrassOcclusionId = Shader.PropertyToID("_GrassOcclusion");
+		private static readonly int GrassSnowId = Shader.PropertyToID("_GrassSnow");
+		private static readonly int GrassCoverRectId = Shader.PropertyToID("_GrassCoverRect");
+		private static readonly int GrassOcclusionRectId = Shader.PropertyToID("_GrassOcclusionRect");
+		private static readonly int GrassOcclusionRangeId = Shader.PropertyToID("_GrassOcclusionRange");
+		private static readonly int GrassSnowLineId = Shader.PropertyToID("_GrassSnowLine");
+		private static readonly int GrassSnowDeepId = Shader.PropertyToID("_GrassSnowDeep");
+		private static readonly int GrassSnowFieldId = Shader.PropertyToID("_GrassSnowField");
+		private static readonly int GrassSnowFieldRectId = Shader.PropertyToID("_GrassSnowFieldRect");
+		private static readonly int FishSnowLineId = Shader.PropertyToID("_FishSnowLine");
+		private static readonly int FishSnowDeepId = Shader.PropertyToID("_FishSnowDeep");
+		private static readonly int FishSnowFieldTexId = Shader.PropertyToID("_FishSnowFieldTex");
+		private static readonly int FishSnowFieldRectId = Shader.PropertyToID("_FishSnowFieldRect");
+		private static readonly int FishCoverTexId = Shader.PropertyToID("_FishCoverTex");
+		private static readonly int FishCoverRectId = Shader.PropertyToID("_FishCoverRect");
+		private static readonly int FishCoverParamsId = Shader.PropertyToID("_FishCoverParams");
+		private static readonly int FishSnowDepthTexId = Shader.PropertyToID("_FishSnowDepthTex");
+		private static readonly int FishSnowDepthParamsId = Shader.PropertyToID("_FishSnowDepthParams");
+		private static readonly int FishOcclusionTexId = Shader.PropertyToID("_FishOcclusionTex");
+		private static readonly int FishOcclusionRectId = Shader.PropertyToID("_FishOcclusionRect");
+		private static readonly int FishOcclusionRangeId = Shader.PropertyToID("_FishOcclusionRange");
+		private static readonly int FishWeatherTierId = Shader.PropertyToID("_FishWeatherTier");
+		private static readonly int FishWeatherCoverId = Shader.PropertyToID("_FishWeatherCover");
+		private static readonly int FishGroundBlendId = Shader.PropertyToID("_FishGroundBlend");
+		// The biome's looks (FloraPaletteMap, FishFlora.hlsl): the globals, handed to the compute under their own names.
+		private static readonly int FloraBiomesId = Shader.PropertyToID("_FishFloraBiomes");
+		private static readonly int FloraPaletteId = Shader.PropertyToID("_FishFloraPalette");
+		private static readonly int FloraRectId = Shader.PropertyToID("_FishFloraRect");
+		private static readonly int FloraInfoId = Shader.PropertyToID("_FishFloraInfo");
+		private static readonly int FloraStrengthId = Shader.PropertyToID("_FishFloraStrength");
+		private static readonly int FloraGroundId = Shader.PropertyToID("_FishFloraGround");
+		private static readonly int FloraWorldId = Shader.PropertyToID("_FishFloraWorld");
+		private static readonly int Capacity0Id = Shader.PropertyToID("_GrassCapacity0");
+		private static readonly int Capacity1Id = Shader.PropertyToID("_GrassCapacity1");
+		private static readonly int TilesId = Shader.PropertyToID("_GrassTiles");
+		private static readonly int TileCountId = Shader.PropertyToID("_GrassTileCount");
+		private static readonly int ItemsOutId = Shader.PropertyToID("_GrassItemsOut");
+		private static readonly int GatherCountsId = Shader.PropertyToID("_GrassGatherCounts");
+		private static readonly int GatherArgsId = Shader.PropertyToID("_GrassGatherArgs");
+		private static readonly int GatherLayoutId = Shader.PropertyToID("_GrassGatherLayout");
+		private static readonly int GatherGroupCountId = Shader.PropertyToID("_GrassGatherGroupCount");
+		private static readonly int GatherGroupId = Shader.PropertyToID("_GrassGatherGroup");
+		private static readonly int GatherCapacityId = Shader.PropertyToID("_GrassGatherCapacity");
+		private static readonly int GatherFromGpuId = Shader.PropertyToID("_GrassGatherFromGpu");
+		private static readonly int ItemOffsetId = Shader.PropertyToID("_GrassItemOffset");
+		private static readonly int ItemCountId = Shader.PropertyToID("_GrassItemCount");
+		private static readonly int SurfaceLayersId = Shader.PropertyToID("_GrassSurfaceLayers");
+		private static readonly int SharedId = Shader.PropertyToID("_GrassShared");
+		private static readonly int ColourId = Shader.PropertyToID("_GrassColour");
+		private static readonly int ProbeTerrainId = Shader.PropertyToID("_GrassProbeTerrain");
+		private static readonly int ProbePointsId = Shader.PropertyToID("_GrassProbePoints");
+		private static readonly int ProbeHeightsId = Shader.PropertyToID("_GrassProbeHeights");
+		private static readonly int ProbeCountId = Shader.PropertyToID("_GrassProbeCount");
+
+		private static readonly int BladesId = Shader.PropertyToID("_GrassBlades");
+		private static readonly int Params0Id = Shader.PropertyToID("_GrassParams0");
+		private static readonly int Params1Id = Shader.PropertyToID("_GrassParams1");
+		private static readonly int Params2Id = Shader.PropertyToID("_GrassParams2");
+		private static readonly int Params3Id = Shader.PropertyToID("_GrassParams3");
+		private static readonly int Params4Id = Shader.PropertyToID("_GrassParams4");
+		private static readonly int Params5Id = Shader.PropertyToID("_GrassParams5");
+		private static readonly int Params6Id = Shader.PropertyToID("_GrassParams6");
+		private static readonly int Params7Id = Shader.PropertyToID("_GrassParams7");
+
+		private readonly ComputeShader compute;
+		private readonly int clearKernel, generateKernel, finalizeKernel, probeKernel, argsFenceKernel, activeKernel;
+		private readonly int gatherClearKernel = -1, gatherKernel = -1, gatherArgsKernel = -1;
+		private GraphicsBuffer tileBuffer, gatherItems, gatherCounts, gatherArgs, gatherLayout;
+		private readonly List<Tile> tileList = new List<Tile>();
+		private int tileCount;
+		private int[] groupBase = new int[0], groupCapacity = new int[0];
+		private int tilesAtlas = -1, tilesFoliage = -1;
+		private float tilesCell = -1f, tilesClump = -1f, tilesDistance = -1f, tilesRings = float.NaN;
+
+		/// <summary>The GPU gather's items written last (summed over groups, clamped to their capacities), read back in the editor.</summary>
+		public static int GpuItems;
+
+		private bool GpuGatherReady => gatherKernel >= 0 && gatherClearKernel >= 0 && gatherArgsKernel >= 0 && SystemInfo.supportsIndirectArgumentsBuffer;
+		private static readonly int ArgsFenceId = Shader.PropertyToID("_GrassArgsFence");
+
+		/// <summary>
+		/// OpenGL only: Unity's GLES device issues GL_COMMAND_BARRIER_BIT before an indirect draw only when the args buffer
+		/// was BOUND after its last write, never for the write itself (FishGrassBlades.compute FishGrassArgsFence). Without
+		/// the fence dispatch the draws read the args while Finalize still wrote them, every other frame: the flicker.
+		/// </summary>
+		private static bool NeedsArgsFence => SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore || SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3;
+		private readonly Material material;
+		/* One material per slot, each holding its slot's blade buffer; copied from `material` (the parameters) every
+		 * Publish. The per-draw MaterialPropertyBlock alone was not enough: a pass drew without it (Vulkan: "Shader
+		 * requires a compute buffer _GrassBlades, but none provided. Skipping draw calls"), and on OpenGL that draw
+		 * silently read whatever buffer was last bound. TerrainGpuRenderer sets its buffers on its material for the
+		 * same reason. */
+		private readonly Material[] slotMaterials = new Material[Slots];
+		private readonly Mesh[] lodMeshes = new Mesh[3];
+		private readonly GraphicsBuffer[] outBuffers = new GraphicsBuffer[Slots];
+		private readonly MaterialPropertyBlock[] blocks = new MaterialPropertyBlock[Slots];
+		private readonly int[] capacities = new int[Slots];
+		/// <summary>
+		/// The per-type table, a texel per type (x) per row (y, <see cref="TypeRows"/>), RGBAFloat: read with Load by the
+		/// compute and the blades' vertex shader alike. It was nine constant arrays (MaxTypes float4 each, the head colours
+		/// four times that), two set on the compute every camera and seven on the material; at 32 types that is 352
+		/// float4s of constants, and per-dispatch constant arrays are what blanked whole terrains of grass on OpenGL
+		/// (GrassTerrainAtlas). The values are the same floats, so every blade draws exactly as it did. Uploaded only when
+		/// a value changes (the profile is live in the inspector, so <see cref="Publish"/> compares every frame).
+		/// </summary>
+		private readonly Texture2D typeTable;
+		private readonly Vector4[] typeTexels = new Vector4[MaxTypes * TypeRows];
+		private readonly Vector4[] uploadedTexels = new Vector4[MaxTypes * TypeRows];
+		private bool typeTableUploaded;
+		private GraphicsBuffer itemBuffer, countBuffer, argsBuffer;
+		private NativeArray<Item> items;
+		private int itemCount;
+		private readonly List<GroupRange> ranges = new List<GroupRange>();
+		/// <summary>All terrains' textures as array slices and their parameters in one table: one dispatch for all of them.</summary>
+		private readonly GrassTerrainAtlas atlas = new GrassTerrainAtlas();
+		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO procedural grass" };
+		/// <summary>The generation's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("FishMMO grass (compute)", true);
+		private static readonly CustomSampler GatherGpuSample = CustomSampler.Create("FishMMO grass gather", true);
+		private static readonly CustomSampler GenerateGpuSample = CustomSampler.Create("FishMMO grass generate", true);
+		private readonly Vector4[] planeVectors = new Vector4[6];
+		private readonly Vector4[] ringDistance = new Vector4[MaxRings];
+		private readonly Vector4[] ringDensity = new Vector4[MaxRings];
+		private readonly float[] ringDistanceF = new float[MaxRings];
+		/// <summary>The rings as one number, so a work list gathered under other rings is not reused.</summary>
+		private float ringSignature;
+
+		/// <summary>
+		/// How far a camera may move, metres, and turn, degrees, before the work list is gathered again. Gathered
+		/// against a view widened by as much (the frustum's sides pushed out by what that move and turn sweep at the
+		/// grass's far edge), it still holds every tile the camera can see until then, and the compute culls each blade
+		/// against the camera's own frustum every frame. The gather was 4 ms of every camera's render in the editor
+		/// (ScenePerfProbe, 2026-10-07: 3 500 tiles, 67 000 items) for a list that changes only as the camera moves.
+		/// </summary>
+		public const float RegatherMetres = 1.5f, RegatherDegrees = 3f;
+
+		/// <summary>Tiles a side in the blocks the gather culls before their tiles (8 × 8: about 50 m at the near density).</summary>
+		public const int GatherBlockTiles = 8;
+
+		private Camera gatheredFor;
+		private Vector3 gatheredEye, gatheredForward, gatheredLight;
+		private float gatheredFov, gatheredAspect, gatheredDistance, gatheredShadow, gatheredCell, gatheredRings;
+		private int gatheredAtlas = -1, gatheredTiles;
+		private long gatheredCandidates;
+		private readonly Plane[] widened = new Plane[6];
+
+		/// <summary>Whether the last work list still holds for this camera's view (see <see cref="RegatherMetres"/>).</summary>
+		/// <summary>Debug and profiling: gather on every render, as a camera turning all the time would.</summary>
+		public static bool AlwaysRegather;
+
+		private bool StillGathered(Camera camera, in TerrainTreeField.View view, float cell, float grassDistance, float shadowDistance)
+		{
+			if (AlwaysRegather || gatheredFor != camera || gatheredAtlas != atlas.Version || gatheredCell != cell || gatheredDistance != grassDistance
+				|| gatheredShadow != shadowDistance || gatheredRings != ringSignature || gatheredFov != camera.fieldOfView || gatheredAspect != camera.aspect)
+			{
+				return false;
+			}
+			if ((view.Position - gatheredEye).sqrMagnitude > RegatherMetres * RegatherMetres)
+			{
+				return false;
+			}
+			float turn = Mathf.Cos(RegatherDegrees * Mathf.Deg2Rad);
+			if (Vector3.Dot(camera.transform.forward, gatheredForward) < turn)
+			{
+				return false;
+			}
+			return shadowDistance <= 0f || Vector3.Dot(view.LightDirection, gatheredLight) >= turn;
+		}
+
+		private void RememberGather(Camera camera, in TerrainTreeField.View view, float cell, float grassDistance, float shadowDistance, int tiles, long candidates)
+		{
+			gatheredFor = camera;
+			gatheredAtlas = atlas.Version;
+			gatheredEye = view.Position;
+			gatheredForward = camera.transform.forward;
+			gatheredLight = view.LightDirection;
+			gatheredFov = camera.fieldOfView;
+			gatheredAspect = camera.aspect;
+			gatheredDistance = grassDistance;
+			gatheredShadow = shadowDistance;
+			gatheredCell = cell;
+			gatheredRings = ringSignature;
+			gatheredTiles = tiles;
+			gatheredCandidates = candidates;
+		}
+
+		/// <summary>The view's planes with every one pushed outward by <paramref name="margin"/> metres.</summary>
+		private Plane[] Widen(Plane[] planes, float margin)
+		{
+			for (int i = 0; i < 6; i++)
+			{
+				widened[i] = new Plane(planes[i].normal, planes[i].distance + margin);
+			}
+			return widened;
+		}
+		private readonly float[] ringDensityF = new float[MaxRings];
+		private int ringCount;
+		/// <summary>
+		/// A per-type table texel (<see cref="TypeRows"/>). For the compute: shape x height (m), y density factor, z clump
+		/// pull, w wade (m); shape2 x the sprinkle chance per candidate (0: a tussock species), y the head, z its size (m),
+		/// w how far snow buries it; more x the share of stems with a head. For the blades: head x the head, y its size
+		/// (m), z how many head colours, w 1 = blunt strap tip.
+		/// </summary>
+		private void SetType(int type, int row, Vector4 value) => typeTexels[row * MaxTypes + type] = value;
+		/// <summary>Each array set's layer albedo as the grass's own buffer (<see cref="GrassAlbedoTexels"/>), built in <see cref="Publish"/>.</summary>
+		private readonly Dictionary<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels> albedoTexels = new Dictionary<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels>();
+		private readonly HashSet<FishMMO.Shared.TerrainArraySet> albedoWanted = new HashSet<FishMMO.Shared.TerrainArraySet>();
+		private float colourFootprint = 0.25f;
+		private readonly List<(GraphicsBuffer Buffer, int Frame)> retired = new List<(GraphicsBuffer, int)>();
+
+		/// <summary>Work items, candidate threads and tiles of the last camera.</summary>
+		public int LastItems { get; private set; }
+
+		/// <summary>
+		/// Where <see cref="Execute"/>'s time goes, milliseconds summed over calls since the last reset, and the calls:
+		/// the atlas check, the tile gather, the compute recording, the draws. Read by ScenePerfProbe; cheap enough to
+		/// leave on (four timestamps a camera).
+		/// </summary>
+		public static double TimeAtlas, TimeGather, TimeRecord, TimeDraws;
+		/// <summary>Calls to <see cref="Execute"/> counted with the times, and the items and tiles of the last.</summary>
+		public static int TimedCalls, TimedItems, TimedTiles;
+
+		/// <summary>Zeroes the <see cref="TimeAtlas"/> family.</summary>
+		public static void ResetTimes()
+		{
+			TimeAtlas = TimeGather = TimeRecord = TimeDraws = 0;
+			TimedCalls = 0;
+		}
+		public long LastCandidates { get; private set; }
+		public int LastTiles { get; private set; }
+		/// <summary>
+		/// The last game camera's name, position, grass distance and lattice cell (Describe). Formatted only when asked: the
+		/// string (and the camera's name, which Unity allocates afresh) was built every frame for a line read on demand.
+		/// </summary>
+		public string LastCamera => lastCamera == null ? "none yet"
+			: $"'{(lastCamera.Camera != null ? lastCamera.Camera.name : "(destroyed)")}' at ({lastCamera.Eye.x:F0}, {lastCamera.Eye.y:F0}, {lastCamera.Eye.z:F0}), grass distance {lastCamera.Distance:F0} m, cell {lastCamera.Cell * 100f:F1} cm";
+
+		/// <summary>What <see cref="LastCamera"/> is formatted from.</summary>
+		private sealed class CameraNote
+		{
+			public Camera Camera;
+			public Vector3 Eye;
+			public float Distance, Cell;
+		}
+
+		private CameraNote lastCamera;
+
+		/// <summary>Debug: every blade drawn bright magenta, so procedural blades can be told from mesh grass at a glance.</summary>
+		public static bool Highlight;
+
+		/// <summary>Diagnosis: the blades are generated as ever but not drawn (the harness's "hide" A/B of what each feature costs a frame).</summary>
+		public static bool HideDraws;
+
+		/// <summary>
+		/// Diagnosis: the generate kernel counts how many candidate cells each of its exits takes (FishGrassBlades.compute
+		/// GRASS_STAT), read back with the blade counts into <see cref="LastStages"/> (the editor, or <see cref="StatsEnabled"/>).
+		/// Off, the kernel pays one branch not taken an exit.
+		/// </summary>
+		public static bool RejectStats;
+
+		/// <summary>
+		/// The generate kernel turns away, right after a candidate's root, one its blade could never survive: buried in snow
+		/// even at the tallest it can be (FishGrassBlades.compute). The same blades, less work: at the forest test camera a
+		/// third of all candidates were found buried only after every other test (2026-11-05). Off only for the A/B that proves
+		/// the blades the same (harness grassEarly, probe noearly).
+		/// </summary>
+		public static bool EarlyExits = true;
+
+		/// <summary>The kernel's stage counters' first word in the counts buffer (GRASS_STATS_BASE).</summary>
+		private const int StatsBase = 16;
+
+		/// <summary>What each stage counter counts, in the kernel's order (GRASS_STAT k).</summary>
+		public static readonly string[] StageNames =
+		{
+			"past the work list", "past the item's edge", "ring priority or distance", "no spawn (coverage, clump)", "no type",
+			"neighbour terrain's", "under the sea", "bank freeboard", "leaning over water", "past the grass distance",
+			"thinned by distance", "trodden", "burnt", "buried", "BUILT", "DRAWN by the camera", "(unused)",
+		};
+
+		/// <summary>The last read stage counts (RejectStats on), −1 before any.</summary>
+		public readonly long[] LastStages = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+
+		/// <summary>
+		/// Debug: stop regenerating and keep drawing the last blades generated (whichever camera made them).
+		/// A flicker that goes on while frozen is in the drawing or lighting; one that stops is in the generation or culling.
+		/// </summary>
+		public static bool Freeze;
+
+		/// <summary>
+		/// Debug A/B: the generate kernel's GRASS_NO_TERRAIN_COLOUR variant, which declares and binds none of the terrain-colour
+		/// textures (8 control maps, the albedo array): exactly the bindings it had before the tint. The blades take the ground
+		/// colour map's fallback.
+		/// </summary>
+		public static bool SkipTerrainColour;
+
+		/// <summary>Debug A/B: the full kernel and bindings, but a constant valid colour and no colour data read (_GrassArrayInfo.y = 1).</summary>
+		public static bool ConstantTerrainColour;
+
+		/// <summary>Debug A/B: dispatch the terrains last to first (the terrain underfoot, built first, is normally the first dispatch).</summary>
+		public static bool ReverseDispatchOrder;
+		private readonly LocalKeyword noTerrainColour;
+		/// <summary>The generate kernel's 32-channel variant (FishGrassBlades.compute GRASS_WIDE): on only while a terrain needs it.</summary>
+		private readonly LocalKeyword wideChannels;
+		/// <summary>Its 64-channel variant (GRASS_WIDEST, 2026-10-27): on only while a terrain has more than 32 channels.</summary>
+		private readonly LocalKeyword widestChannels;
+		private readonly LocalKeyword activeChannelsKeyword;
+		private bool generated;
+		private static readonly int HighlightId = Shader.PropertyToID("_GrassHighlight");
+
+		/// <summary>Blades appended per slot, read back asynchronously (camera LOD0..2, shadow LOD0..1); −1 before the first read.</summary>
+		public readonly int[] LastBlades = { -1, -1, -1, -1, -1 };
+
+		/// <summary>Reads the slot counters back every <see cref="StatsInterval"/> frames (the probe and the dashboard turn it on).</summary>
+		public static bool StatsEnabled;
+		public const int StatsInterval = 30;
+		private int lastStatsFrame = -1000;
+		private readonly bool[] overflowWarned = new bool[Slots];
+		private static readonly string[] SlotNames = { "camera LOD0", "camera LOD1", "camera LOD2", "shadow LOD0", "shadow LOD1" };
+
+		public int Capacity(int slot) => capacities[slot];
+
+		/// <summary>Bytes of GPU memory this renderer holds (buffers; the density maps are the terrains').</summary>
+		public long GpuBytes
+		{
+			get
+			{
+				long n = Size(itemBuffer) + Size(countBuffer) + Size(argsBuffer) + Size(tileBuffer) + Size(gatherItems) + Size(gatherCounts) + Size(gatherArgs) + Size(gatherLayout);
+				foreach (GraphicsBuffer b in outBuffers)
+				{
+					n += Size(b);
+				}
+				return n;
+			}
+		}
+
+		private static long Size(GraphicsBuffer b) => b != null ? (long)b.count * b.stride : 0;
+
+		private GrassBladeRenderer(ComputeShader compute, Shader shader)
+		{
+			this.compute = compute;
+			typeTable = new Texture2D(MaxTypes, TypeRows, TextureFormat.RGBAFloat, false, true)
+			{
+				name = "Grass type table",
+				filterMode = FilterMode.Point,
+				wrapMode = TextureWrapMode.Clamp,
+				hideFlags = HideFlags.DontSave,
+			};
+			clearKernel = compute.FindKernel("FishGrassClear");
+			generateKernel = compute.FindKernel("FishGrassGenerate");
+			finalizeKernel = compute.FindKernel("FishGrassFinalize");
+			probeKernel = compute.FindKernel("FishGrassProbeHeights");
+			argsFenceKernel = compute.FindKernel("FishGrassArgsFence");
+			activeKernel = compute.FindKernel("FishGrassBuildActiveChannels");
+			prepareColourKernel = compute.FindKernel("FishGrassPrepareColour");
+			if (compute.HasKernel("FishGrassGather") && compute.HasKernel("FishGrassGatherClear") && compute.HasKernel("FishGrassGatherArgs"))
+			{
+				gatherClearKernel = compute.FindKernel("FishGrassGatherClear");
+				gatherKernel = compute.FindKernel("FishGrassGather");
+				gatherArgsKernel = compute.FindKernel("FishGrassGatherArgs");
+			}
+			// Bound to the generate kernel on either path (it reads the count from it when the gather is on the GPU).
+			gatherCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, 16, 4);
+			noTerrainColour = new LocalKeyword(compute, "GRASS_NO_TERRAIN_COLOUR");
+			wideChannels = new LocalKeyword(compute, "GRASS_WIDE");
+			widestChannels = new LocalKeyword(compute, "GRASS_WIDEST");
+			activeChannelsKeyword = new LocalKeyword(compute, "GRASS_ACTIVE_CHANNELS");
+			material = new Material(shader) { name = "Grass Blades (runtime)", hideFlags = HideFlags.DontSave };
+			for (int s = 0; s < Slots; s++)
+			{
+				slotMaterials[s] = new Material(material) { name = $"Grass Blades (runtime, slot {s})", hideFlags = HideFlags.DontSave };
+			}
+			lodMeshes[0] = BuildStrip(7, "Grass blade LOD0");
+			lodMeshes[1] = BuildStrip(3, "Grass blade LOD1");
+			lodMeshes[2] = BuildStrip(1, "Grass blade LOD2");
+			for (int s = 0; s < Slots; s++)
+			{
+				blocks[s] = new MaterialPropertyBlock();
+			}
+			countBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, StatsBase + StageNames.Length, 4);
+			argsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments | GraphicsBuffer.Target.Raw, Slots, GraphicsBuffer.IndirectDrawIndexedArgs.size);
+			var args = new GraphicsBuffer.IndirectDrawIndexedArgs[Slots];
+			for (int s = 0; s < Slots; s++)
+			{
+				Mesh mesh = lodMeshes[SlotLod[s]];
+				args[s] = new GraphicsBuffer.IndirectDrawIndexedArgs
+				{
+					indexCountPerInstance = mesh.GetIndexCount(0),
+					instanceCount = 0,
+					startIndex = 0,
+					baseVertexIndex = 0,
+					startInstance = 0,
+				};
+			}
+			argsBuffer.SetData(args);
+
+		}
+
+		/// <summary>The renderer, or null where it cannot run (no compute, no vertex-stage buffers, assets missing or unsupported).</summary>
+		public static GrassBladeRenderer TryCreate(out string reason)
+		{
+			reason = null;
+			TerrainRenderProfile profile = TerrainRenderProfile.Active;
+			ComputeShader cs = profile != null ? profile.GrassBladesCompute : null;
+			Shader shader = profile != null ? profile.GrassBladesShader : null;
+#if UNITY_EDITOR
+			if (cs == null)
+			{
+				cs = UnityEditor.AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputeAssetPath);
+			}
+#endif
+			if (shader == null)
+			{
+				shader = ShaderLookup.Find(ShaderName);
+			}
+			if (!SystemInfo.supportsComputeShaders || SystemInfo.maxComputeBufferInputsVertex < 1)
+			{
+				reason = "no compute shaders or no vertex-stage buffers on this device (the mesh grass draws)";
+				return null;
+			}
+			if (cs == null || shader == null)
+			{
+				reason = $"the {(cs == null ? "compute (" + ComputeAssetPath + ")" : "shader (" + ShaderName + ")")} is not loaded: Weather Render Profile → Procedural grass";
+				return null;
+			}
+			if (!shader.isSupported)
+			{
+				reason = $"{ShaderName} is not supported on this device";
+				return null;
+			}
+			ComputeShader own = Object.Instantiate(cs);
+			own.hideFlags = HideFlags.DontSave;
+			own.name = cs.name + " (instance)";
+			return new GrassBladeRenderer(own, shader);
+		}
+
+		/// <summary>A blade strip: two vertices a row (x −1 and +1, y how far along), the last row a single tip point.</summary>
+		public static Mesh BuildStrip(int segments, string name)
+		{
+			var vertices = new List<Vector3>();
+			var indices = new List<int>();
+			for (int r = 0; r < segments; r++)
+			{
+				float t = GrassMath.RowT(r, segments);
+				vertices.Add(new Vector3(-1f, t, 0f));
+				vertices.Add(new Vector3(1f, t, 0f));
+			}
+			vertices.Add(new Vector3(0f, 1f, 0f));
+			// Wound so the front face (Unity: the side cross(b − a, c − a) points to) is the side the shader's
+			// face normal cross(across, along) points to: SV_IsFrontFace then says which side is seen.
+			for (int r = 0; r < segments - 1; r++)
+			{
+				int a = r * 2;
+				indices.Add(a); indices.Add(a + 1); indices.Add(a + 2);
+				indices.Add(a + 1); indices.Add(a + 3); indices.Add(a + 2);
+			}
+			int last = (segments - 1) * 2;
+			indices.Add(last); indices.Add(last + 1); indices.Add(vertices.Count - 1);
+			var mesh = new Mesh { name = name, hideFlags = HideFlags.DontSave };
+			mesh.SetVertices(vertices);
+			mesh.SetIndices(indices, MeshTopology.Triangles, 0);
+			mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1e4f);
+			return mesh;
+		}
+
+		// ── Settings and types ───────────────────────────────────────
+
+		/// <summary>A type with no look at all (never, in practice): the plain defaults at the old ground tint.</summary>
+		private static readonly BiomeGrassType FallbackLook = new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
+
+		/// <summary>
+		/// How hard the world's air moves the blades, as a share of the wind's sway (BiomeAir.Sway, decision 41, 2026-10-18): 0 on
+		/// an airless world (no blade moves), 0.3 under a thin sky, 1 under Earth-like air (exactly as before). Set by the blade
+		/// system from the scene's world before each <see cref="Publish"/>; it scales the published wind strength, flutter and idle
+		/// breeze, so no material property is added.
+		/// </summary>
+		public float AirSway = 1f;
+
+		/// <summary>Takes the profile's settings (every frame: live in the inspector) and the types into the material and the compute's arrays.</summary>
+		public void Publish(GrassBladeSettings s, IReadOnlyList<GrassType> types, float grassDistance)
+		{
+			using var publishScope = PublishMarker.Auto();
+			ringCount = 0;
+			if (s.Rings != null)
+			{
+				for (int r = 0; r < s.Rings.Length && ringCount < MaxRings; r++)
+				{
+					ringDistanceF[ringCount] = Mathf.Max(0.1f, s.Rings[r].x);
+					ringDensityF[ringCount] = Mathf.Max(1e-3f, s.Rings[r].y);
+					ringCount++;
+				}
+			}
+			ringSignature = ringCount;
+			for (int r = 0; r < ringCount; r++)
+			{
+				ringSignature = ringSignature * 31f + ringDistanceF[r] * 7f + ringDensityF[r];
+			}
+			for (int r = 0; r < MaxRings; r++)
+			{
+				ringDistance[r] = new Vector4(r < ringCount ? ringDistanceF[r] : 0f, 0f, 0f, 0f);
+				// Ring 0's y carries the sprinkled species' fullness, z the coverage that grows the full field (FishGrassBlades.compute:
+				// spawn = summed coverage / z), w how much of a thin field gathers into tufts.
+				ringDensity[r] = r == 0
+					? new Vector4(r < ringCount ? ringDensityF[r] : 0f, Mathf.Clamp(s.Fullness, 0.05f, 1f), Mathf.Clamp(s.FullCoverage, 0.05f, 1f), Mathf.Clamp01(s.Tufting))
+					: new Vector4(r < ringCount ? ringDensityF[r] : 0f, 0f, 0f, 0f);
+			}
+			for (int t = 0; t < MaxTypes; t++)
+			{
+				GrassType type = t < types.Count ? types[t] : null;
+				if (type == null)
+				{
+					SetType(t, RowShape, new Vector4(0.3f, 1f, 0f, 0f));
+					SetType(t, RowShape2, Vector4.zero);
+					SetType(t, RowMore, Vector4.zero);
+					SetType(t, RowHead, Vector4.zero);
+					SetType(t, RowRoot, Vector4.one);
+					SetType(t, RowTip, Vector4.one);
+					SetType(t, RowHealthy, Vector4.one);
+					SetType(t, RowDry, Vector4.one);
+					SetType(t, RowParams, new Vector4(1f, 0f, 0.4f, 1f));
+					for (int k = 0; k < GrassType.MaxHeadColours; k++)
+					{
+						SetType(t, RowHeadColour + k, Vector4.one);
+					}
+					continue;
+				}
+				// The type's look: its biome template's entry, read live (an edit to it in play shows at once; the height rescaled
+				// by the scale it was built with), or the old look where the biome has none.
+				BiomeGrassType look = type.Look ?? FallbackLook;
+				SetType(t, RowShape, new Vector4(type.Height * look.HeightScale / Mathf.Max(0.05f, type.BuiltHeightScale), Mathf.Clamp(look.Density, 0.01f, 1f), Mathf.Clamp(look.ClumpPull, 0f, 0.95f), Mathf.Max(0f, look.Wade)));
+				// The root row's alpha is how much of the terrain texture's colour the type takes (per type and biome since
+				// 2026-10-15; one global 0.85 before, _GrassParams6.x).
+				SetType(t, RowRoot, new Vector4(type.Root.r, type.Root.g, type.Root.b, Mathf.Clamp01(look.GroundTint)));
+				SetType(t, RowTip, new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * look.Width));
+				SetType(t, RowHealthy, new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread));
+				SetType(t, RowDry, new Vector4(type.Dry.r, type.Dry.g, type.Dry.b, type.PatchMetres));
+				SetType(t, RowParams, new Vector4(look.Stiffness, type.SnowBury, look.Bend, 1f));
+				// Sprinkled species: stems per square metre at full paint, as a chance per candidate of the near lattice, then of
+				// the coarser level they stand on (GrassMath.SprinkleLevel).
+				float sprinkle = look.Sprinkle > 0f ? Mathf.Clamp01(look.Sprinkle / s.NearDensity) : 0f;
+				int sprinkleLevel = GrassMath.SprinkleLevel(sprinkle, s.SprinkleLevel);
+				GrassBladeHead head = look.Head;
+				float headSize = Mathf.Max(0.002f, look.HeadSize);
+				SetType(t, RowShape2, new Vector4(GrassMath.SprinkleChance(sprinkle, sprinkleLevel), (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
+				// The share of stems with a head, the sprinkled type's lattice level, 1 for a rigid (mineral) type that never sways, and 1 for
+				// an after-burn type that grows only on freshly burnt ground (fire lilies; 2026-10-25, I2t).
+				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, look.AfterBurn ? 1f : 0f));
+				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
+				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
+				Color[] palette = colours == 0 ? look.HeadColours : null;
+				int paletteColours = palette != null ? Mathf.Min(palette.Length, GrassType.MaxHeadColours) : 0;
+				Color fallback = (look.HeadColours != null && look.HeadColours.Length > 0 ? look.HeadColours[0] : BiomeGrassType.DefaultHeadColour).linear;
+				for (int k = 0; k < GrassType.MaxHeadColours; k++)
+				{
+					Color c = k < colours ? type.HeadColours[k] : k < paletteColours ? palette[k].linear : fallback;
+					SetType(t, RowHeadColour + k, new Vector4(c.r, c.g, c.b, 1f));
+				}
+				SetType(t, RowHead, new Vector4((float)head, headSize, Mathf.Max(1, Mathf.Max(colours, paletteColours)), look.BluntTip ? 1f : 0f));
+			}
+			bool changed = !typeTableUploaded;
+			for (int i = 0; i < typeTexels.Length && !changed; i++)
+			{
+				changed = typeTexels[i] != uploadedTexels[i];
+			}
+			if (changed)
+			{
+				typeTable.SetPixelData(typeTexels, 0);
+				typeTable.Apply(false, false);
+				Array.Copy(typeTexels, uploadedTexels, typeTexels.Length);
+				typeTableUploaded = true;
+			}
+			publishedParams[0] = new Vector4(s.WidenExponent, Mathf.Max(1f, s.MaxWiden), grassDistance, s.DistanceFadeBand);
+			publishedParams[1] = new Vector4(s.NormalRounding * Mathf.Deg2Rad, s.RootOcclusion, s.Translucency, s.Smoothness);
+			// The world's air scales the sway (AirSway: none airless, 1 under Earth-like air, where x·1 is x exactly).
+			float air = Mathf.Clamp01(AirSway);
+			publishedParams[2] = new Vector4(s.WindStrength * air, s.GustWaveMetres, s.Flutter * air, s.IdleBreeze * air);
+			publishedParams[3] = new Vector4(s.RootGroundBlend, s.RootGroundHeight, s.GroundHueTint, s.Specular);
+			publishedParams[4] = new Vector4(s.MaxWindBendDegrees * Mathf.Deg2Rad, s.GustSharpness, s.GustSpeed, s.GustSheen);
+			publishedParams[5] = new Vector4(s.FarBlendStart, s.FarBlendEnd, s.FarGroundPull, s.FarNormalFlatten);
+			// x unused: how much of the terrain's colour a blade takes is its type's (the root row's alpha, BiomeGrassType.GroundTint).
+			publishedParams[6] = new Vector4(0f, s.TerrainTextureBrightness, s.TerrainTextureRoot, Mathf.Clamp01(s.EdgeOnThicken));
+			publishedParams[7] = new Vector4(s.WindCalmStart, Mathf.Max(s.WindCalmStart + 1f, s.WindCalmEnd), s.FarWind,
+				Mathf.Sin(Mathf.Clamp(s.TopDownLayDegrees, 0f, 80f) * Mathf.Deg2Rad));
+			colourFootprint = Mathf.Max(0.01f, s.TerrainTextureFootprint);
+			// The shadow slots at their share of the cap only while blade shadows are on: off (the default), the compute never
+			// appends to them and no draw reads them, and their two full-size buffers were ~12 MB held for nothing.
+			bool buffersChanged = EnsureCapacity(s.BladeCap, s.ShadowDistance > 0f);
+			// One set's albedo copy a frame (a blit and a readback per layer), outside any camera's rendering.
+			FishMMO.Shared.TerrainArraySet wanted = null;
+			foreach (FishMMO.Shared.TerrainArraySet set in albedoWanted)
+			{
+				wanted = set;
+				break;
+			}
+			if (wanted != null || albedoWanted.Count > 0)
+			{
+				albedoWanted.Remove(wanted);
+				if (wanted != null && wanted.IsUsable)
+				{
+					albedoTexels[wanted] = GrassAlbedoTexels.Build(wanted.Albedo, wanted.LayerCount, wanted.LayerST, wanted.LayerTint, wanted.LayerFlora());
+				}
+			}
+			// The materials only when something they hold changed: the settings are live in the inspector, so every value is
+			// worked out each frame, but the copies into the five slot materials were native work repeated for nothing.
+			bool intact = !materialsPublished || MaterialsIntact();
+			if (materialsPublished && intact && !changed && !buffersChanged && publishedRingCount == ringCount && SameValues(publishedParams, appliedParams)
+				&& SameValues(ringDistance, appliedRingDistance) && SameValues(ringDensity, appliedRingDensity))
+			{
+				return;
+			}
+			if (!intact && lostMaterialsLogged < 3)
+			{
+				lostMaterialsLogged++;
+				Debug.Log("[Grass] The blade materials had lost what was set on them (a shader reload rebuilds a material from its shader, and this one declares nothing); published again.");
+			}
+			materialsPublished = true;
+			publishedRingCount = ringCount;
+			Array.Copy(publishedParams, appliedParams, publishedParams.Length);
+			Array.Copy(ringDistance, appliedRingDistance, ringDistance.Length);
+			Array.Copy(ringDensity, appliedRingDensity, ringDensity.Length);
+			material.SetTexture(TypeTableId, typeTable);
+			material.SetVectorArray(RingDistanceId, ringDistance);
+			material.SetVectorArray(RingDensityId, ringDensity);
+			material.SetFloat(RingCountId, ringCount);
+			for (int i = 0; i < ParamIds.Length; i++)
+			{
+				material.SetVector(ParamIds[i], publishedParams[i]);
+			}
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				if (slotMaterials[slot] == null)
+				{
+					slotMaterials[slot] = new Material(material) { name = $"Grass Blades (runtime, slot {slot})", hideFlags = HideFlags.DontSave };
+				}
+				slotMaterials[slot].CopyPropertiesFromMaterial(material);
+				slotMaterials[slot].SetBuffer(BladesId, outBuffers[slot]);
+				// Set on each slot's own material too, as its buffer is (see slotMaterials): a draw must never read an unbound table.
+				slotMaterials[slot].SetTexture(TypeTableId, typeTable);
+			}
+		}
+
+		private static readonly Unity.Profiling.ProfilerMarker PublishMarker = new Unity.Profiling.ProfilerMarker("GrassBladeRenderer.Publish");
+		private static readonly int[] ParamIds = { Params0Id, Params1Id, Params2Id, Params3Id, Params4Id, Params5Id, Params6Id, Params7Id };
+		/// <summary>The material's parameter vectors as worked out this frame, and as last set on the materials.</summary>
+		private readonly Vector4[] publishedParams = new Vector4[8], appliedParams = new Vector4[8];
+		private readonly Vector4[] appliedRingDistance = new Vector4[MaxRings], appliedRingDensity = new Vector4[MaxRings];
+		private int publishedRingCount = -1;
+		private bool materialsPublished;
+		private int lostMaterialsLogged;
+		private readonly List<Vector4> ringScratch = new List<Vector4>(MaxRings);
+		private const string BladesName = "_GrassBlades";
+
+		/// <summary>
+		/// Whether the slot materials still hold what <see cref="Publish"/> last set. The shader declares no properties, so
+		/// everything on them is runtime state, and a shader reload (the grass shader or anything it includes recompiled)
+		/// rebuilds them from the shader without it: no blade buffer, no ring tables. With publishing only on change, nothing
+		/// put it back and the grass stayed invisible until a setting was touched. Checked every frame: a handful of reads.
+		/// </summary>
+		private bool MaterialsIntact()
+		{
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				Material m = slotMaterials[slot];
+				if (m == null || outBuffers[slot] == null || !m.GetBuffer(BladesName).Equals(outBuffers[slot].bufferHandle))
+				{
+					return false;
+				}
+			}
+			slotMaterials[0].GetVectorArray(RingDistanceId, ringScratch);
+			return ringScratch.Count == MaxRings && slotMaterials[0].GetVector(Params0Id).Equals(appliedParams[0]);
+		}
+
+		/// <summary>Exact equality, component by component (Vector4's == forgives differences under 1e-5).</summary>
+		private static bool SameValues(Vector4[] a, Vector4[] b)
+		{
+			for (int i = 0; i < a.Length; i++)
+			{
+				if (!a[i].Equals(b[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		/// <summary>Sizes the slot buffers (the shadow slots at the floor while <paramref name="shadows"/> is off); true when any was replaced.</summary>
+		private bool EnsureCapacity(int cap, bool shadows)
+		{
+			bool replaced = false;
+			for (int s = 0; s < Slots; s++)
+			{
+				int capacity = s >= 3 && !shadows ? 1024 : Mathf.Max(1024, Mathf.CeilToInt(cap * SlotShare[s]));
+				if (outBuffers[s] != null && capacities[s] == capacity)
+				{
+					continue;
+				}
+				replaced = true;
+				// The old buffer may still be read by a frame in flight: released a few frames later.
+				if (outBuffers[s] != null)
+				{
+					retired.Add((outBuffers[s], Time.frameCount));
+				}
+				outBuffers[s] = new GraphicsBuffer(GraphicsBuffer.Target.Structured, capacity, GrassMath.BladeStride);
+				capacities[s] = capacity;
+				blocks[s].SetBuffer(BladesId, outBuffers[s]);
+			}
+			return replaced;
+		}
+
+		// ── Per camera ───────────────────────────────────────────────
+
+		/// <summary>Picks the tiles, records the generation into the camera's context and issues the draws. Returns the draws.</summary>
+		public int Execute(Camera camera, ScriptableRenderContext context, in TerrainTreeField.View view, IReadOnlyList<GrassTerrain> terrains, GrassBladeSettings s, float grassDistance)
+		{
+			double t0 = TerrainInstancingProbe.Now;
+			TimedCalls++;
+			ReleaseRetired(false);
+			Shader.SetGlobalFloat(HighlightId, Highlight ? 1f : 0f);
+			// This camera's RENDERED pixel at a distance, for the blades' on-screen width cap and the sub-pixel coverage
+			// (FishGrassBlades.hlsl). A global, set before every draw of this camera, so its shadow casters widen exactly as its
+			// blades do. Under a render scale (a quality level drawn below native with STP) a rendered pixel is 1/scale screen pixels: the
+			// sub-pixel test counted screen pixels until 2026-10-27, so a "pixel-wide" blade was two thirds of what it drew to.
+			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+			float renderScale = RenderScaleOf(camera, pipeline);
+			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight * renderScale);
+			float perMetre = camera.orthographic ? 0f : 2f * Mathf.Tan(0.5f * camera.fieldOfView * Mathf.Deg2Rad) / pixelsHigh;
+			float flat = camera.orthographic ? 2f * camera.orthographicSize / pixelsHigh : 0f;
+			// w: how a blade thinner than a rendered pixel is drawn (2026-10-21 MSAA; 2026-10-27 temporal): a pixel wide with its true
+			// width as coverage, MSAA's alpha to coverage (1) or a dither that turns every frame for STP/TAA to average (2), so it
+			// fades smoothly instead of flipping whole pixels as it sways; 0 as it is (no resolve could smooth it).
+			bool msaa = camera.allowMSAA && pipeline != null && pipeline.msaaSampleCount > 1;
+			bool temporal = !msaa && ResolvesTemporally(camera, pipeline);
+			float subPixel = !s.SubPixelCoverage ? 0f : msaa ? 1f : temporal ? 2f : 0f;
+			// MaxBladePixels counts screen pixels (it was tuned at full resolution: about two a blade): in rendered pixels, × scale.
+			float bladePixels = Mathf.Max(0.1f, s.MaxBladePixels) * renderScale;
+			Shader.SetGlobalVector(ScreenId, new Vector4(perMetre, flat, bladePixels / Mathf.Max(1e-4f, s.BladeWidth), subPixel));
+			TrackMotionClock();
+			Shader.SetGlobalVector(TemporalId, new Vector4(motionFrame & 63, temporal ? motionBack : 0f, temporal ? 1f : 0f, 0f));
+			motionLevels = temporal ? Mathf.Clamp(s.MotionVectorLevels, 0, 3) : 0;
+			// And where it stands, for the lay-over seen from above and the edge-on thickening: the shadow pass's own
+			// camera is the light's, and its casters must take the shape this camera's blades have.
+			Vector3 viewer = camera.transform.position;
+			Shader.SetGlobalVector(ViewerId, new Vector4(viewer.x, viewer.y, viewer.z, 0f));
+			float cell = s.CellMetres;
+			float tile = GrassMath.TileCells * cell;
+			float shadowDistance = view.Shadows ? Mathf.Min(s.ShadowDistance, view.ShadowDistance) : 0f;
+			if (Freeze && generated)
+			{
+				return IssueDraws(camera, terrains, view.Position, grassDistance, shadowDistance);
+			}
+			bool synced = atlas.Sync(terrains, albedoForDelegate ??= AlbedoFor);
+			double t1 = TerrainInstancingProbe.Now;
+			TimeAtlas += t1 - t0;
+			if (!synced)
+			{
+				return 0;
+			}
+			bool gpuGather = false;
+			if (GpuGather && GpuGatherReady)
+			{
+				if (!EnsureTiles(s, cell, grassDistance))
+				{
+					return 0;
+				}
+				gpuGather = true;
+			}
+			Vector3 eye = view.Position;
+			// Kept from the last gather while the camera has not moved or turned past what it was widened for.
+			bool reuse = !gpuGather && StillGathered(camera, in view, cell, grassDistance, shadowDistance);
+			int tiles = gpuGather ? tileCount : gatheredTiles;
+			long candidates = gpuGather ? 0 : gatheredCandidates;
+			if (gpuGather)
+			{
+				itemCount = GpuItems;
+			}
+			else if (!reuse)
+			{
+				itemCount = 0;
+				ranges.Clear();
+				tiles = 0;
+				candidates = 0;
+				Plane[] gatherPlanes = Widen(view.Planes, RegatherMetres + grassDistance * RegatherDegrees * Mathf.Deg2Rad);
+				// One work list for all terrains, grouped by the atlas's resolution groups (normally one): each item names
+				// its terrain's row in the table, so one dispatch per group generates them all.
+				foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+				{
+					int groupStart = itemCount;
+					foreach (GrassTerrain gt in group.Terrains)
+					{
+						uint terrainIndex = (uint)atlas.IndexOf(gt);
+						if (gt.Terrain == null || !gt.Terrain.drawTreesAndFoliage)
+						{
+							continue;
+						}
+						float rx0 = gt.Origin.x, rz0 = gt.Origin.z, rx1 = rx0 + gt.Size.x, rz1 = rz0 + gt.Size.z;
+						float x0 = Mathf.Max(rx0, eye.x - grassDistance), x1 = Mathf.Min(rx1, eye.x + grassDistance);
+						float z0 = Mathf.Max(rz0, eye.z - grassDistance), z1 = Mathf.Min(rz1, eye.z + grassDistance);
+						if (x0 >= x1 || z0 >= z1)
+						{
+							continue;
+						}
+						int tx0 = Mathf.FloorToInt(x0 / tile), tx1 = Mathf.FloorToInt(x1 / tile);
+						int tz0 = Mathf.FloorToInt(z0 / tile), tz1 = Mathf.FloorToInt(z1 / tile);
+						// Blocks of tiles first, as one: a block with no grass, out of reach, or seen by neither the view nor its
+						// shadows is passed over whole, so a regather walks the tiles of only the blocks that matter.
+						float blockReach = GrassMath.BladeReach(gt.MaxGrassHeight);
+						float blockPad = s.ClumpMetres + blockReach;
+						for (int blockZ = tz0; blockZ <= tz1; blockZ += GatherBlockTiles)
+						{
+							for (int blockX = tx0; blockX <= tx1; blockX += GatherBlockTiles)
+							{
+								int lastX = Mathf.Min(blockX + GatherBlockTiles - 1, tx1), lastZ = Mathf.Min(blockZ + GatherBlockTiles - 1, tz1);
+								float qx0 = Mathf.Max(blockX * tile, rx0), qx1 = Mathf.Min((lastX + 1) * tile, rx1);
+								float qz0 = Mathf.Max(blockZ * tile, rz0), qz1 = Mathf.Min((lastZ + 1) * tile, rz1);
+								if (qx0 >= qx1 || qz0 >= qz1 || !gt.HasGrass(qx0, qz0, qx1, qz1))
+								{
+									continue;
+								}
+								Vector2 blockHeights = gt.HeightRange(qx0, qz0, qx1, qz1);
+								var blockBounds = new Bounds();
+								blockBounds.SetMinMax(new Vector3(qx0 - blockPad, blockHeights.x - 0.2f, qz0 - blockPad), new Vector3(qx1 + blockPad, blockHeights.y + blockReach, qz1 + blockPad));
+								float blockNear = TerrainTreeMath.MinDistance(blockBounds, eye);
+								if (blockNear > grassDistance)
+								{
+									continue;
+								}
+								if (!TerrainTreeMath.IntersectsFrustum(gatherPlanes, blockBounds)
+									&& !(shadowDistance > 0f && blockNear <= shadowDistance
+										&& TerrainTreeMath.IntersectsFrustum(gatherPlanes, TerrainTreeMath.ShadowSweep(blockBounds, view.LightDirection, shadowDistance))))
+								{
+									continue;
+								}
+								for (int tz = blockZ; tz <= lastZ; tz++)
+								{
+									for (int tx = blockX; tx <= lastX; tx++)
+									{
+										float bx0 = Mathf.Max(tx * tile, rx0), bx1 = Mathf.Min((tx + 1) * tile, rx1);
+										float bz0 = Mathf.Max(tz * tile, rz0), bz1 = Mathf.Min((tz + 1) * tile, rz1);
+										if (bx0 >= bx1 || bz0 >= bz1 || !gt.HasGrass(bx0, bz0, bx1, bz1))
+										{
+											continue;
+										}
+										Vector2 heights = gt.HeightRange(bx0, bz0, bx1, bz1);
+										var bounds = new Bounds();
+										// Room for the clump pull (blades leave their cell toward the clump's centre) and the wind: a blade
+										// laid over reaches its full length sideways (up to 1.6 x the type height with the clump and own
+										// variation, as the top), grown by the biome's look (GrassMath.BladeReach). With 0.5 m the edge tiles
+										// were culled while their bent blades showed.
+										float reach = GrassMath.BladeReach(gt.MaxGrassHeight);
+										float pad = s.ClumpMetres + reach;
+										bounds.SetMinMax(new Vector3(bx0 - pad, heights.x - 0.2f, bz0 - pad), new Vector3(bx1 + pad, heights.y + reach, bz1 + pad));
+										float near = TerrainTreeMath.MinDistance(bounds, eye);
+										if (near > grassDistance)
+										{
+											continue;
+										}
+										bool main = TerrainTreeMath.IntersectsFrustum(gatherPlanes, bounds);
+										bool shadow = shadowDistance > 0f && near <= shadowDistance
+											&& TerrainTreeMath.IntersectsFrustum(gatherPlanes, TerrainTreeMath.ShadowSweep(bounds, view.LightDirection, shadowDistance));
+										if (!main && !shadow)
+										{
+											continue;
+										}
+										float share = GrassMath.Share(near, ringDistanceF, ringDensityF, ringCount);
+										int level = GrassMath.LevelForShare(share);
+										int side = GrassMath.TileCells >> level;
+										int perSide = GrassMath.ItemsPerSide(level);
+										int step = 1 << level;
+										EnsureItems(itemCount + perSide * perSide);
+										for (int iz = 0; iz < perSide; iz++)
+										{
+											for (int ix = 0; ix < perSide; ix++)
+											{
+												int nx = Mathf.Min(GrassMath.ItemSide, side - ix * GrassMath.ItemSide);
+												int nz = Mathf.Min(GrassMath.ItemSide, side - iz * GrassMath.ItemSide);
+												items[itemCount++] = new Item
+												{
+													CellX = tx * GrassMath.TileCells + ix * GrassMath.ItemSide * step,
+													CellZ = tz * GrassMath.TileCells + iz * GrassMath.ItemSide * step,
+													Packed = (uint)level | (main ? 8u : 0u) | (shadow ? 16u : 0u) | (uint)nx << 5 | (uint)nz << 9,
+												Terrain = terrainIndex,
+												};
+												candidates += nx * nz;
+											}
+										}
+										tiles++;
+									}
+								}
+							}
+						}
+					}
+					if (itemCount > groupStart)
+					{
+						ranges.Add(new GroupRange { Group = group, Offset = groupStart, Count = itemCount - groupStart });
+					}
+				}
+				RememberGather(camera, in view, cell, grassDistance, shadowDistance, tiles, candidates);
+			}
+			// Only the game camera's figures: a scene view or capture camera rendering last used to overwrite them
+			// ("0 tiles" for a camera nowhere near the grass).
+			if (camera.cameraType == CameraType.Game)
+			{
+				LastItems = itemCount;
+				LastCandidates = candidates;
+				LastTiles = tiles;
+				lastCamera ??= new CameraNote();
+				lastCamera.Camera = camera;
+				lastCamera.Eye = eye;
+				lastCamera.Distance = grassDistance;
+				lastCamera.Cell = cell;
+			}
+			TimeGather += TerrainInstancingProbe.Now - t1;
+			TimedItems = itemCount;
+			TimedTiles = tiles;
+			if (!gpuGather && itemCount == 0)
+			{
+				return 0;
+			}
+			if (!gpuGather && (itemBuffer == null || itemBuffer.count < itemCount))
+			{
+				if (itemBuffer != null)
+				{
+					retired.Add((itemBuffer, Time.frameCount));
+				}
+				itemBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(itemCount, items.Length), Item.Stride);
+				reuse = false;
+			}
+
+			for (int i = 0; i < 6; i++)
+			{
+				Plane p = view.Planes[i];
+				planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
+			}
+			double recordStart = TerrainInstancingProbe.Now;
+			cmd.Clear();
+			// Named on the GPU, so the profiler (and ScenePerfProbe's GPU table) can price the grass's compute.
+			cmd.BeginSample(GpuSample);
+			cmd.SetComputeIntParam(compute, ActiveTableBaseId, atlas.ActiveTableBase);
+			cmd.SetComputeIntParam(compute, UseActiveChannelsId, UseActiveChannels ? 1 : 0);
+			cmd.SetComputeIntParam(compute, RejectStatsId, RejectStats ? 1 : 0);
+			cmd.SetComputeIntParam(compute, EarlyExitsId, EarlyExits ? 1 : 0);
+			cmd.SetComputeIntParam(compute, CacheFloraLooksId, CacheFloraLooks ? 1 : 0);
+			cmd.SetComputeIntParam(compute, LinearTableBaseId, atlas.LinearTableBase);
+			cmd.SetComputeIntParam(compute, PreparedColourId, PrepareTerrainColour ? 1 : 0);
+			if (colourVersion != atlas.Version)
+			{
+				cmd.SetComputeBufferParam(compute, prepareColourKernel, ColourTableOutId, atlas.Shared);
+				cmd.DispatchComputeChecked(compute, prepareColourKernel, 1, 1, 1);
+				colourVersion = atlas.Version;
+			}
+			if (atlas.Tier >= 2 && activeVersion != atlas.Version)
+			{
+				cmd.SetComputeBufferParam(compute, activeKernel, ActiveOutId, atlas.Shared);
+				foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+				{
+					cmd.SetComputeTextureParam(compute, activeKernel, DensityId, group.Density);
+					foreach (GrassTerrain gt in group.Terrains)
+					{
+						cmd.SetComputeIntParam(compute, ActiveTerrainId, atlas.IndexOf(gt));
+						int side = (gt.DensityResolution + GrassTerrainAtlas.ActiveRegionSide - 1) / GrassTerrainAtlas.ActiveRegionSide;
+						cmd.DispatchComputeChecked(compute, activeKernel, side, side, 1);
+					}
+				}
+				activeVersion = atlas.Version;
+			}
+			// A reused work list is already in the buffer (only a new gather can grow it, which reallocates).
+			if (!gpuGather && !reuse)
+			{
+				cmd.SetBufferData(itemBuffer, items, 0, 0, itemCount);
+			}
+			cmd.SetComputeVectorParam(compute, CameraId, new Vector4(eye.x, eye.y, eye.z, grassDistance));
+			// The sea (SeaLifeSystem's _FishSea, which a compute shader never sees as a global): no land grass below its lowest tide.
+			// Then the banks of rivers and lakes: how far above their water a blade may root, and over how much more it thins in.
+			Vector4 sea = Shader.GetGlobalVector(FishSeaId);
+			cmd.SetComputeVectorParam(compute, SeaId, new Vector4(sea.y, sea.z, s.BankClearance, Mathf.Max(0.01f, s.BankThinning)));
+			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
+			cmd.SetComputeVectorParam(compute, LightId, shadowDistance > 0f ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, shadowDistance) : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, LatticeId, new Vector4(cell, Mathf.Max(0.1f, s.ClumpMetres), s.ClumpFacing, s.ClumpHeightVariation));
+			cmd.SetComputeVectorParam(compute, ShapeParamsId, new Vector4(s.MaxLean, s.Lod0Distance, Mathf.Max(s.Lod0Distance, s.Lod1Distance), GrassMath.MaxPackedHeight));
+			cmd.SetComputeVectorArrayParam(compute, RingDistanceId, ringDistance);
+			cmd.SetComputeVectorArrayParam(compute, RingDensityId, ringDensity);
+			cmd.SetComputeIntParam(compute, RingCountId, ringCount);
+			cmd.SetComputeVectorParam(compute, Capacity0Id, new Vector4(capacities[0], capacities[1], capacities[2], capacities[3]));
+			cmd.SetComputeVectorParam(compute, Capacity1Id, new Vector4(capacities[4], 0f, 0f, 0f));
+
+			if (gpuGather)
+			{
+				cmd.BeginSample(GatherGpuSample);
+				FishDepthPyramid.Bind(cmd, compute, gatherKernel, camera, eye, CoarseOcclusion);
+				RecordGather();
+				cmd.EndSample(GatherGpuSample);
+			}
+
+			cmd.BeginSample(GenerateGpuSample);
+			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
+			cmd.DispatchComputeChecked(compute, clearKernel, 1, 1, 1);
+
+			compute.SetKeyword(noTerrainColour, SkipTerrainColour);
+			// One of the two at most (one multi_compile set): the narrow kernel unless a terrain asks for more channels.
+			compute.SetKeyword(wideChannels, atlas.Tier == 1);
+			compute.SetKeyword(widestChannels, atlas.Tier >= 2);
+			compute.SetKeyword(activeChannelsKeyword, UseActiveChannels && atlas.Tier >= 2);
+			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, gpuGather ? gatherItems : itemBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeIntParam(compute, GatherFromGpuId, gpuGather ? 1 : 0);
+			// Blades hidden behind what this camera drew last frame are left out of its view (never its shadows): FishOccluded.
+			FishDepthPyramid.Bind(cmd, compute, generateKernel, camera, eye, true);
+			cmd.SetComputeBufferParam(compute, generateKernel, CountsId, countBuffer);
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				cmd.SetComputeBufferParam(compute, generateKernel, OutIds[slot], outBuffers[slot]);
+			}
+			cmd.SetComputeBufferParam(compute, generateKernel, SharedId, atlas.Shared);
+			cmd.SetComputeTextureParam(compute, generateKernel, TypeTableId, typeTable);
+			// The scene's baked paths: blades on a worn way are thinned and trampled short (FishGroundPaths.hlsl).
+			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
+			BindSnow();
+			BindFlora();
+			cmd.SetComputeVectorParam(compute, ColourId, new Vector4(colourFootprint, cell, ConstantTerrainColour ? 1f : 0f, 0f));
+			if (gpuGather)
+			{
+				// One indirect dispatch per resolution group, from the counts the gather wrote.
+				for (int g = 0; g < atlas.Groups.Count; g++)
+				{
+					GrassTerrainAtlas.Group group = atlas.Groups[g];
+					cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
+					cmd.SetComputeTextureParam(compute, generateKernel, DensityId, group.Density);
+					cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
+					if (!SkipTerrainColour)
+					{
+						cmd.SetComputeTextureParam(compute, generateKernel, SurfaceLayersId, group.Surface);
+					}
+					cmd.SetComputeIntParam(compute, ItemOffsetId, groupBase[g]);
+					cmd.SetComputeIntParam(compute, ItemCountId, 0);
+					cmd.SetComputeIntParam(compute, GatherGroupId, g);
+					cmd.SetComputeIntParam(compute, GatherCapacityId, groupCapacity[g]);
+					cmd.DispatchCompute(compute, generateKernel, gatherArgs, (uint)(g * 12));
+				}
+			}
+			for (int r = 0; !gpuGather && r < ranges.Count; r++)
+			{
+				GroupRange range = ranges[ReverseDispatchOrder ? ranges.Count - 1 - r : r];
+				GrassTerrainAtlas.Group group = range.Group;
+				cmd.SetComputeTextureParam(compute, generateKernel, HeightmapId, group.Heights);
+				cmd.SetComputeTextureParam(compute, generateKernel, DensityId, group.Density);
+				cmd.SetComputeTextureParam(compute, generateKernel, WaterId, group.Water);
+				if (!SkipTerrainColour)
+				{
+					cmd.SetComputeTextureParam(compute, generateKernel, SurfaceLayersId, group.Surface);
+				}
+				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
+				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
+				int gx = Mathf.Min(range.Count, 65535), gy = (range.Count + 65534) / 65535;
+				cmd.DispatchComputeChecked(compute, generateKernel, gx, gy, 1);
+			}
+			cmd.EndSample(GenerateGpuSample);
+			if (camera.cameraType == CameraType.Game)
+			{
+				foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+				{
+					foreach (GrassTerrain gt in group.Terrains)
+					{
+						if (!gt.HeightChecked)
+						{
+							gt.HeightChecked = true;
+							RecordHeightProbe(gt, group);
+						}
+					}
+				}
+			}
+
+			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, countBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, 1, 1, 1);
+			if (NeedsArgsFence)
+			{
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
+				cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
+			}
+			// Always read in the editor: an overflowing slot is otherwise invisible but for its symptom.
+			if ((StatsEnabled || Application.isEditor) && camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
+			{
+				lastStatsFrame = Time.frameCount;
+				if (gpuGather)
+				{
+					// The capacities this read is checked against, as they are now (a regather can resize them before it lands).
+					if (statsCapacities.Length != groupCapacity.Length)
+					{
+						statsCapacities = new int[groupCapacity.Length];
+					}
+					System.Array.Copy(groupCapacity, statsCapacities, groupCapacity.Length);
+					cmd.RequestAsyncReadback(gatherCounts, onGatherCounts ??= OnGatherCounts);
+				}
+				cmd.RequestAsyncReadback(countBuffer, onBladeCounts ??= OnBladeCounts);
+			}
+			cmd.EndSample(GpuSample);
+			context.ExecuteCommandBuffer(cmd);
+			cmd.Clear();
+			generated = true;
+			TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;
+			TimeRecord += TerrainInstancingProbe.Now - recordStart;
+			double drawsAt = TerrainInstancingProbe.Now;
+			int issued = IssueDraws(camera, terrains, eye, grassDistance, shadowDistance);
+			TimeDraws += TerrainInstancingProbe.Now - drawsAt;
+			return issued;
+		}
+
+		/// <summary>AlbedoFor as a delegate, made once: a method group allocates a new delegate on every conversion.</summary>
+		private System.Func<FishMMO.Shared.TerrainArraySet, GrassAlbedoTexels> albedoForDelegate;
+
+		private bool gatherOverflowWarned;
+
+		// The stats reads' callbacks, made once: as lambdas they were a closure and two delegates of garbage every read.
+		private System.Action<AsyncGPUReadbackRequest> onGatherCounts, onBladeCounts;
+		private int[] statsCapacities = new int[0];
+
+		private void OnGatherCounts(AsyncGPUReadbackRequest request)
+		{
+			if (request.hasError)
+			{
+				return;
+			}
+			NativeArray<uint> written = request.GetData<uint>();
+			int[] capacitiesNow = statsCapacities;
+			int sum = 0;
+			for (int g = 0; g < capacitiesNow.Length && g < written.Length; g++)
+			{
+				sum += (int)Mathf.Min(written[g], capacitiesNow[g]);
+				if (written[g] > capacitiesNow[g] && !gatherOverflowWarned)
+				{
+					gatherOverflowWarned = true;
+					Debug.LogWarning($"[Grass] The GPU gather's work list overflowed group {g}: {written[g]} items for a capacity of {capacitiesNow[g]}. Tiles past it go ungenerated.");
+				}
+			}
+			GpuItems = sum;
+		}
+
+		/// <summary>
+		/// Diagnosis (ScenePerfProbe's grass early-exit check): every slot's blade count and an order-independent fingerprint
+		/// of its records (the sum and the xor of each 24-byte record's hash), read back now (a stall). The kernel appends in a
+		/// different order every frame, so only a set's own fingerprint can compare two frames' blades.
+		/// </summary>
+		public string Fingerprint()
+		{
+			if (countBuffer == null)
+			{
+				return "no grass";
+			}
+			var counts = new uint[countBuffer.count];
+			countBuffer.GetData(counts);
+			var s = new System.Text.StringBuilder();
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				int n = (int)Mathf.Min(counts[slot], outBuffers[slot] != null ? outBuffers[slot].count : 0);
+				ulong sum = 0, xor = 0;
+				if (n > 0)
+				{
+					var words = new uint[n * (GrassMath.BladeStride / 4)];
+					outBuffers[slot].GetData(words, 0, 0, words.Length);
+					for (int i = 0; i < n; i++)
+					{
+						ulong h = 1469598103934665603UL;
+						for (int w = 0; w < GrassMath.BladeStride / 4; w++)
+						{
+							h = (h ^ words[i * (GrassMath.BladeStride / 4) + w]) * 1099511628211UL;
+						}
+						sum += h;
+						xor ^= h;
+					}
+				}
+				s.Append($"{SlotNames[slot]} {counts[slot]} {sum:x16}{xor:x16}; ");
+			}
+			return s.ToString();
+		}
+
+		private void OnBladeCounts(AsyncGPUReadbackRequest request)
+		{
+			if (request.hasError)
+			{
+				return;
+			}
+			NativeArray<uint> counts = request.GetData<uint>();
+			if (RejectStats)
+			{
+				for (int k = 0; k < StageNames.Length && StatsBase + k < counts.Length; k++)
+				{
+					LastStages[k] = counts[StatsBase + k];
+				}
+			}
+			for (int i = 0; i < Slots && i < counts.Length; i++)
+			{
+				LastBlades[i] = (int)counts[i];
+				if (counts[i] > capacities[i] && !overflowWarned[i])
+				{
+					overflowWarned[i] = true;
+					Debug.LogWarning($"[Grass] Slot {SlotNames[i]} overflowed: {counts[i]} blades appended, capacity {capacities[i]}. "
+						+ "The blades past the capacity are dropped by whole work groups in a different order every frame, so squares of grass flicker. "
+						+ "Raise Grass > BladeCap on the Weather Render Profile, or thin the rings.");
+				}
+			}
+		}
+
+		/// <summary>
+		/// The tile table for the GPU gather: every tile of every drawn terrain with grass on it, its bounds padded as the
+		/// CPU gather pads them (clump pull and the wind's lean), its first cell, terrain and resolution group, with each
+		/// group's run of the work list sized to the most items a camera anywhere can want (<see cref="DiscItems"/>).
+		/// Built again only when the atlas, the lattice, the grass distance or the rings change. False: no grass at all.
+		/// </summary>
+		private bool EnsureTiles(GrassBladeSettings s, float cell, float grassDistance)
+		{
+			int foliage = 17;
+			foreach (GrassTerrainAtlas.Group group in atlas.Groups)
+			{
+				foreach (GrassTerrain gt in group.Terrains)
+				{
+					foliage = foliage * 31 + (gt.Terrain != null && gt.Terrain.drawTreesAndFoliage ? 1 : 0);
+				}
+			}
+			if (tilesAtlas == atlas.Version && tilesCell == cell && tilesClump == s.ClumpMetres && tilesDistance == grassDistance
+				&& tilesRings == ringSignature && tilesFoliage == foliage && tileBuffer != null)
+			{
+				return tileCount > 0;
+			}
+			tilesAtlas = atlas.Version;
+			tilesCell = cell;
+			tilesClump = s.ClumpMetres;
+			tilesDistance = grassDistance;
+			tilesRings = ringSignature;
+			tilesFoliage = foliage;
+
+			float tile = GrassMath.TileCells * cell;
+			int groups = atlas.Groups.Count;
+			groupBase = new int[groups];
+			groupCapacity = new int[groups];
+			int disc = DiscItems(tile, grassDistance);
+			int fullTile = GrassMath.ItemsPerSide(0) * GrassMath.ItemsPerSide(0);
+			tileList.Clear();
+			int total = 0;
+			for (int g = 0; g < groups; g++)
+			{
+				int start = tileList.Count;
+				foreach (GrassTerrain gt in atlas.Groups[g].Terrains)
+				{
+					if (gt.Terrain == null || !gt.Terrain.drawTreesAndFoliage)
+					{
+						continue;
+					}
+					uint terrainIndex = (uint)atlas.IndexOf(gt);
+					float rx0 = gt.Origin.x, rz0 = gt.Origin.z, rx1 = rx0 + gt.Size.x, rz1 = rz0 + gt.Size.z;
+					float reach = GrassMath.BladeReach(gt.MaxGrassHeight);
+					float pad = s.ClumpMetres + reach;
+					int tx0 = Mathf.FloorToInt(rx0 / tile), tx1 = Mathf.FloorToInt(rx1 / tile);
+					int tz0 = Mathf.FloorToInt(rz0 / tile), tz1 = Mathf.FloorToInt(rz1 / tile);
+					for (int tz = tz0; tz <= tz1; tz++)
+					{
+						for (int tx = tx0; tx <= tx1; tx++)
+						{
+							float bx0 = Mathf.Max(tx * tile, rx0), bx1 = Mathf.Min((tx + 1) * tile, rx1);
+							float bz0 = Mathf.Max(tz * tile, rz0), bz1 = Mathf.Min((tz + 1) * tile, rz1);
+							if (bx0 >= bx1 || bz0 >= bz1 || !gt.HasGrass(bx0, bz0, bx1, bz1))
+							{
+								continue;
+							}
+							Vector2 heights = gt.HeightRange(bx0, bz0, bx1, bz1);
+							int low = Mathf.Clamp(Mathf.FloorToInt((heights.x - 0.2f) / Tile.HeightStep), short.MinValue, short.MaxValue);
+							int high = Mathf.Clamp(Mathf.CeilToInt((heights.y + reach) / Tile.HeightStep), short.MinValue, short.MaxValue);
+							tileList.Add(new Tile
+							{
+								TileXZ = Tile.PackPair(tx, tz),
+								TerrainGroup = (terrainIndex & 0xFFFFu) | ((uint)g << 16),
+								Heights = Tile.PackPair(low, high),
+								Pad = pad,
+							});
+						}
+					}
+				}
+				groupBase[g] = total;
+				groupCapacity[g] = (int)Mathf.Min((long)disc, (long)(tileList.Count - start) * fullTile);
+				total += groupCapacity[g];
+			}
+			tileCount = tileList.Count;
+			if (tileCount == 0)
+			{
+				return false;
+			}
+			Retire(ref tileBuffer);
+			tileBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, tileCount, Tile.Stride);
+			tileBuffer.SetData(tileList);
+			Retire(ref gatherItems);
+			gatherItems = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(1, total), Item.Stride);
+			Retire(ref gatherLayout);
+			gatherLayout = new GraphicsBuffer(GraphicsBuffer.Target.Raw, Mathf.Max(2, groups * 2), 4);
+			var layout = new uint[Mathf.Max(2, groups * 2)];
+			for (int g = 0; g < groups; g++)
+			{
+				layout[g * 2] = (uint)groupBase[g];
+				layout[g * 2 + 1] = (uint)groupCapacity[g];
+			}
+			gatherLayout.SetData(layout);
+			Retire(ref gatherArgs);
+			gatherArgs = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments | GraphicsBuffer.Target.Raw, Mathf.Max(3, groups * 3), 4);
+			if (gatherCounts.count < groups)
+			{
+				Retire(ref gatherCounts);
+				gatherCounts = new GraphicsBuffer(GraphicsBuffer.Target.Raw, Mathf.Max(16, groups), 4);
+			}
+			gatherOverflowWarned = false;
+			return true;
+		}
+
+		private void Retire(ref GraphicsBuffer buffer)
+		{
+			if (buffer != null)
+			{
+				retired.Add((buffer, Time.frameCount));
+				buffer = null;
+			}
+		}
+
+		/// <summary>
+		/// The most work items a camera anywhere can want: every tile within the grass distance of it (by its ground
+		/// distance less half a tile, for wherever in its own tile the camera stands) at the level its distance gives, as
+		/// if every one had grass and were seen. A tenth more for good measure.
+		/// </summary>
+		private int DiscItems(float tile, float grassDistance)
+		{
+			int r = Mathf.CeilToInt(grassDistance / tile) + 2;
+			long sum = 0;
+			for (int j = -r; j <= r; j++)
+			{
+				for (int i = -r; i <= r; i++)
+				{
+					float dx = Mathf.Max(0f, Mathf.Max(i * tile, -(i + 1) * tile));
+					float dz = Mathf.Max(0f, Mathf.Max(j * tile, -(j + 1) * tile));
+					float near = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - 0.5f * tile);
+					if (near > grassDistance)
+					{
+						continue;
+					}
+					int perSide = GrassMath.ItemsPerSide(GrassMath.LevelForShare(GrassMath.Share(near, ringDistanceF, ringDensityF, ringCount)));
+					sum += perSide * perSide;
+				}
+			}
+			return (int)Mathf.Min(int.MaxValue / 2, sum * 11 / 10 + 64);
+		}
+
+		/// <summary>Diagnostic (ScenePerfProbe <c>nobury</c>): off, blades the snow hides are generated and drawn as before.</summary>
+		public static bool CullBuried = true;
+
+		/// <summary>
+		/// The weather's maps the generate kernel buries blades by (FishGrassBlades.compute GrassBuried), read from the
+		/// globals the weather publishes and handed over by name: the cover's snow, the deep snow past it, the sky occlusion
+		/// that keeps snow off what is sheltered. Placeholders and a zero validity where one is not published yet, so
+		/// nothing is cut. The ground's lift at full cover only where this tier lifts it and there is snow in the scene,
+		/// exactly when the terrain shader lifts it (FishSnowLift).
+		/// </summary>
+		private void BindSnow()
+		{
+			Texture cover = Shader.GetGlobalTexture(FishCoverTexId);
+			Texture deep = Shader.GetGlobalTexture(FishSnowDepthTexId);
+			Texture occlusion = Shader.GetGlobalTexture(FishOcclusionTexId);
+			Vector4 coverParams = Shader.GetGlobalVector(FishCoverParamsId);
+			Vector4 deepParams = Shader.GetGlobalVector(FishSnowDepthParamsId);
+			bool coverValid = CullBuried && cover != null && coverParams.x > 0.5f;
+			bool deepValid = coverValid && deep != null;
+			Vector4 snowLine = CullBuried ? Shader.GetGlobalVector(FishSnowLineId) : Vector4.zero;
+			Vector4 snowDeep = Shader.GetGlobalVector(FishSnowDeepId);
+			Texture snowField = Shader.GetGlobalTexture(FishSnowFieldTexId);
+			bool fielded = snowDeep.z > 0.5f && snowField != null;
+			// Snow anywhere in view (FishSnowAnywhere): the scene's figure, or ground reaching the seasonal line.
+			bool lifts = Shader.GetGlobalVector(FishWeatherTierId).x > 0f && (Shader.GetGlobalVector(FishWeatherCoverId).x > 0f || snowLine.z > 0.5f);
+			float blanket = lifts ? Mathf.Max(0f, Shader.GetGlobalVector(FishGroundBlendId).w) : 0f;
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassCoverId, coverValid ? cover : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassDeepSnowId, deepValid ? deep : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassOcclusionId, occlusion != null ? occlusion : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, GrassSnowId, new Vector4(coverValid ? 1f : 0f, blanket, deepValid ? deepParams.x : 0f, 0f));
+			cmd.SetComputeVectorParam(compute, GrassCoverRectId, Shader.GetGlobalVector(FishCoverRectId));
+			cmd.SetComputeVectorParam(compute, GrassOcclusionRectId, Shader.GetGlobalVector(FishOcclusionRectId));
+			cmd.SetComputeVectorParam(compute, GrassOcclusionRangeId, occlusion != null ? Shader.GetGlobalVector(FishOcclusionRangeId) : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, GrassSnowLineId, snowLine);
+			cmd.SetComputeVectorParam(compute, GrassSnowDeepId, new Vector4(snowDeep.x, snowDeep.y, fielded ? 1f : 0f, snowDeep.w));
+			cmd.SetComputeTextureParam(compute, generateKernel, GrassSnowFieldId, fielded ? snowField : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, GrassSnowFieldRectId, fielded ? Shader.GetGlobalVector(FishSnowFieldRectId) : Vector4.zero);
+		}
+
+		/// <summary>
+		/// The biome's looks the generate kernel sizes and leans the blades by, and recolours the ground under their roots by
+		/// (FishGrassBlades.compute, FishFlora.hlsl), read from the globals FloraPaletteMap publishes and handed over by name, as the snow's are. Placeholders and
+		/// <c>_FishFloraInfo.x</c> = 0 where nothing is published (edit mode, the A/B off, no world scene): every blade is
+		/// then generated as it was, and the vertex shader, which reads the same globals, colours it as it was.
+		/// </summary>
+		private void BindFlora()
+		{
+			Texture biomes = Shader.GetGlobalTexture(FloraBiomesId);
+			Texture palette = Shader.GetGlobalTexture(FloraPaletteId);
+			Vector4 info = Shader.GetGlobalVector(FloraInfoId);
+			bool valid = biomes != null && palette != null && info.x > 0.5f;
+			cmd.SetComputeTextureParam(compute, generateKernel, FloraBiomesId, valid ? biomes : Texture2D.blackTexture);
+			cmd.SetComputeTextureParam(compute, generateKernel, FloraPaletteId, valid ? palette : Texture2D.blackTexture);
+			cmd.SetComputeVectorParam(compute, FloraRectId, valid ? Shader.GetGlobalVector(FloraRectId) : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, FloraInfoId, valid ? info : Vector4.zero);
+			cmd.SetComputeVectorParam(compute, FloraStrengthId, Shader.GetGlobalVector(FloraStrengthId));
+			// The world's bare-ground colour (a = how far mineral layers take it): the root's ground colour wears it as the
+			// terrain does (FishFloraGround in GrassTerrainColourAt).
+			cmd.SetComputeVectorParam(compute, FloraGroundId, valid ? Shader.GetGlobalVector(FloraGroundId) : Vector4.zero);
+			// The world's growth (FishFloraGrowth: thin air low, thick air tall), which the blade heights take.
+			cmd.SetComputeVectorParam(compute, FloraWorldId, valid ? Shader.GetGlobalVector(FloraWorldId) : new Vector4(1f, 1f, 0f, 0f));
+			// The burn mosaic (2026-10-25, I2t; FishBurn.hlsl): stubble, the flush and the fire lilies on the flora grid's rows.
+			BurnMosaicTable.BindCompute(cmd, compute);
+		}
+
+		/// <summary>The gather on the GPU: counts cleared, the tile table culled into the work list, the dispatches written.</summary>
+		private void RecordGather()
+		{
+			int groups = atlas.Groups.Count;
+			int groupThreads = (groups + 7) / 8;
+			cmd.SetComputeIntParam(compute, GatherGroupCountId, groups);
+			cmd.SetComputeIntParam(compute, TileCountId, tileCount);
+			cmd.SetComputeBufferParam(compute, gatherClearKernel, GatherCountsId, gatherCounts);
+			cmd.DispatchComputeChecked(compute, gatherClearKernel, groupThreads, 1, 1);
+			cmd.SetComputeBufferParam(compute, gatherKernel, TilesId, tileBuffer);
+			cmd.SetComputeBufferParam(compute, gatherKernel, ItemsOutId, gatherItems);
+			cmd.SetComputeBufferParam(compute, gatherKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeBufferParam(compute, gatherKernel, GatherLayoutId, gatherLayout);
+			cmd.DispatchComputeChecked(compute, gatherKernel, (tileCount + 63) / 64, 1, 1);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherCountsId, gatherCounts);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherLayoutId, gatherLayout);
+			cmd.SetComputeBufferParam(compute, gatherArgsKernel, GatherArgsId, gatherArgs);
+			cmd.DispatchComputeChecked(compute, gatherArgsKernel, groupThreads, 1, 1);
+		}
+
+		/// <summary>The frame <see cref="TrackMotionClock"/> last read the shared motion clock in, and what it read.</summary>
+		private int motionFrame = -1;
+		private float motionNow;
+		/// <summary>Seconds of the shared motion clock since the frame before (0 after a pause, a jump or a skipped frame).</summary>
+		private float motionBack;
+		/// <summary>The camera slots' levels of detail that draw their own motion vectors this camera (GrassBladeSettings.MotionVectorLevels; 0 without a temporal resolve).</summary>
+		private int motionLevels;
+
+		/// <summary>
+		/// Reads the shared motion clock (WeatherShaderGlobals' _FishWeatherMisc.w, the clock every blade's wind runs on) once a
+		/// frame, keeping how far it moved since the frame before: the motion vectors rebuild each blade that far back.
+		/// </summary>
+		private void TrackMotionClock()
+		{
+			int frame = Time.frameCount;
+			if (frame == motionFrame)
+			{
+				return;
+			}
+			float now = Shader.GetGlobalVector(WeatherShaderGlobals.Misc).w;
+			float step = now - motionNow;
+			if (step < 0f)
+			{
+				// The shader clock wraps (WorldMotion.ShaderWrapSeconds): a step across the wrap is still a step.
+				step += (float)FishMMO.Shared.Celestial.WorldMotion.ShaderWrapSeconds;
+			}
+			motionBack = frame == motionFrame + 1 && step <= MaxMotionStep ? step : 0f;
+			motionNow = now;
+			motionFrame = frame;
+		}
+
+		/// <summary>URP's render scale for this camera (UniversalRenderPipeline.InitializeStackedCameraData): the asset's, for a game camera only, ignored within 0.05 of 1.</summary>
+		private static float RenderScaleOf(Camera camera, UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset pipeline)
+		{
+			if (pipeline == null || camera.cameraType != CameraType.Game)
+			{
+				return 1f;
+			}
+			float scale = pipeline.renderScale;
+			return Mathf.Abs(1f - scale) < 0.05f ? 1f : Mathf.Clamp(scale, 0.1f, 2f);
+		}
+
+		/// <summary>
+		/// True when URP resolves this camera over frames (STP, or TAA): the conditions of UniversalCameraData.IsTemporalAAEnabled,
+		/// with STP forcing TAA on for a game camera as UniversalRenderPipeline does. The dither then turns every frame and the
+		/// near blades write their own motion.
+		/// </summary>
+		private static bool ResolvesTemporally(Camera camera, UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset pipeline)
+		{
+			if (pipeline == null || camera.cameraType != CameraType.Game || camera.allowDynamicResolution
+				|| !camera.TryGetComponent(out UnityEngine.Rendering.Universal.UniversalAdditionalCameraData data)
+				|| !data.renderPostProcessing || data.renderType != UnityEngine.Rendering.Universal.CameraRenderType.Base
+				|| (data.cameraStack != null && data.cameraStack.Count > 0))
+			{
+				return false;
+			}
+			return pipeline.upscalingFilter == UnityEngine.Rendering.Universal.UpscalingFilterSelection.STP
+				|| data.antialiasing == UnityEngine.Rendering.Universal.AntialiasingMode.TemporalAntiAliasing;
+		}
+
+		/// <summary>The five indirect draws of whatever the slots last received.</summary>
+		private int IssueDraws(Camera camera, IReadOnlyList<GrassTerrain> terrains, Vector3 eye, float grassDistance, float shadowDistance)
+		{
+			double drawStart = TerrainInstancingProbe.Now;
+			var worldBounds = new Bounds(eye, Vector3.one * (2f * grassDistance + 20f));
+			int draws = 0;
+			for (int slot = 0; slot < Slots; slot++)
+			{
+				bool shadowSlot = slot >= 3;
+				if (shadowSlot && shadowDistance <= 0f)
+				{
+					continue;
+				}
+				if (HideDraws)
+				{
+					continue;
+				}
+				var rp = new RenderParams(slotMaterials[slot])
+				{
+					camera = camera,
+					worldBounds = worldBounds,
+					matProps = blocks[slot],
+					layer = LayerOf(terrains),
+					shadowCastingMode = shadowSlot ? ShadowCastingMode.ShadowsOnly : ShadowCastingMode.Off,
+					receiveShadows = true,
+					lightProbeUsage = LightProbeUsage.Off,
+					reflectionProbeUsage = ReflectionProbeUsage.Off,
+					// Per-object motion makes URP draw the shader's MotionVectors pass (the blades' own sway) for this slot every frame.
+					motionVectorMode = !shadowSlot && SlotLod[slot] < motionLevels ? MotionVectorGenerationMode.Object : MotionVectorGenerationMode.Camera,
+				};
+				Graphics.RenderMeshIndirect(rp, lodMeshes[SlotLod[slot]], argsBuffer, 1, slot);
+				draws++;
+			}
+			TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
+			return draws;
+		}
+
+		/// <summary>
+		/// A terrain array set's albedo copy for the atlas, or null until it is built: asking for one queues it for the
+		/// next <see cref="Publish"/> (a blit and a readback per layer, outside any camera's rendering).
+		/// </summary>
+		private GrassAlbedoTexels AlbedoFor(FishMMO.Shared.TerrainArraySet set)
+		{
+			if (SkipTerrainColour || set == null || !set.IsUsable)
+			{
+				return null;
+			}
+			if (albedoTexels.TryGetValue(set, out GrassAlbedoTexels texels) && texels != null && texels.Source == set.Albedo)
+			{
+				return texels;
+			}
+			// The scene's bake holds the copy as it was read back when the scene was cut: no blit and readback for it.
+			texels = GrassAlbedoTexels.FromBaked(FishMMO.Shared.SceneTerrainBake.AlbedoOf(set.Albedo), set.Albedo, set.LayerCount, set.LayerST, set.LayerTint, set.LayerFlora());
+			if (texels != null)
+			{
+				albedoTexels[set] = texels;
+				return texels;
+			}
+			albedoWanted.Add(set);
+			return null;
+		}
+
+		/// <summary>The layer the blades draw on: the first terrain's (the detail renderer's choice too).</summary>
+		private static int LayerOf(IReadOnlyList<GrassTerrain> terrains)
+		{
+			for (int i = 0; i < terrains.Count; i++)
+			{
+				if (terrains[i].Terrain != null)
+				{
+					return terrains[i].Terrain.gameObject.layer;
+				}
+			}
+			return 0;
+		}
+
+		/// <summary>
+		/// Reads the heightmap back at a few points through the same kernel code the blades use, and logs how
+		/// far it is from <see cref="TerrainData.GetInterpolatedHeight"/>: proves the texture's normalisation
+		/// (<see cref="GrassTerrain.Heightmap"/>, the grass's own copy of the heights) on this platform, once per terrain.
+		/// </summary>
+		private void RecordHeightProbe(GrassTerrain gt, GrassTerrainAtlas.Group group)
+		{
+			const int n = 8;
+			var points = new Vector2[n];
+			for (int i = 0; i < n; i++)
+			{
+				points[i] = new Vector2(gt.Size.x * (0.1f + 0.8f * ((i * 0.618034f) % 1f)), gt.Size.z * (0.1f + 0.8f * ((i * 0.381966f + 0.5f) % 1f)));
+			}
+			var pointBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, n, 8);
+			var heightBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, n, 4);
+			retired.Add((pointBuffer, Time.frameCount + 60));
+			retired.Add((heightBuffer, Time.frameCount + 60));
+			cmd.SetBufferData(pointBuffer, points);
+			cmd.SetComputeBufferParam(compute, probeKernel, ProbePointsId, pointBuffer);
+			cmd.SetComputeBufferParam(compute, probeKernel, ProbeHeightsId, heightBuffer);
+			cmd.SetComputeTextureParam(compute, probeKernel, HeightmapId, group.Heights);
+			cmd.SetComputeBufferParam(compute, probeKernel, SharedId, atlas.Shared);
+			cmd.SetComputeIntParam(compute, ProbeTerrainId, atlas.IndexOf(gt));
+			cmd.SetComputeIntParam(compute, ProbeCountId, n);
+			cmd.DispatchComputeChecked(compute, probeKernel, 1, 1, 1);
+			string name = gt.Terrain != null ? gt.Terrain.name : "terrain";
+			TerrainData data = gt.Data;
+			Vector3 origin = gt.Origin, size = gt.Size;
+			cmd.RequestAsyncReadback(heightBuffer, request =>
+			{
+				if (request.hasError || data == null)
+				{
+					return;
+				}
+				NativeArray<float> gpu = request.GetData<float>();
+				float worst = 0f;
+				for (int i = 0; i < n; i++)
+				{
+					float cpu = origin.y + data.GetInterpolatedHeight(points[i].x / size.x, points[i].y / size.z);
+					worst = Mathf.Max(worst, Mathf.Abs(cpu - gpu[i]));
+				}
+				string line = $"[Grass] Heightmap check on '{name}': GPU roots vs GetInterpolatedHeight, worst {worst:F3} m over {n} points.";
+				if (worst > 0.25f)
+				{
+					Debug.LogWarning(line + " The blades float or sink: GrassTerrain.Heightmap (the grass's own height texture, 0..1 of the terrain's height) does not read back as written on this platform.");
+				}
+				else if (!heightCheckReported)
+				{
+					// Once a session: every play and every scene load rebuilds the terrains and probes each
+					// one again, and a line per terrain per load buried the console. A failure always warns.
+					heightCheckReported = true;
+					Debug.Log(line + " (Further checks that pass are not logged this session.)");
+				}
+			});
+		}
+
+		/// <summary>Whether a passing height check has been logged this session (RecordHeightProbe).</summary>
+		private static bool heightCheckReported;
+
+		private void EnsureItems(int needed)
+		{
+			if (items.IsCreated && items.Length >= needed)
+			{
+				return;
+			}
+			var grown = new NativeArray<Item>(Mathf.Max(needed, items.IsCreated ? items.Length * 2 : 4096), Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+			if (items.IsCreated)
+			{
+				NativeArray<Item>.Copy(items, grown, itemCount);
+				items.Dispose();
+			}
+			items = grown;
+		}
+
+		private void ReleaseRetired(bool all)
+		{
+			for (int i = retired.Count - 1; i >= 0; i--)
+			{
+				if (all || Time.frameCount - retired[i].Frame >= 4)
+				{
+					retired[i].Buffer.Release();
+					retired.RemoveAt(i);
+				}
+			}
+		}
+
+		public void Dispose()
+		{
+			cmd.Release();
+			ReleaseRetired(true);
+			itemBuffer?.Release();
+			tileBuffer?.Release();
+			gatherItems?.Release();
+			gatherCounts?.Release();
+			gatherArgs?.Release();
+			gatherLayout?.Release();
+			tileBuffer = gatherItems = gatherCounts = gatherArgs = gatherLayout = null;
+			countBuffer?.Release();
+			argsBuffer?.Release();
+			itemBuffer = countBuffer = argsBuffer = null;
+			for (int s = 0; s < Slots; s++)
+			{
+				outBuffers[s]?.Release();
+				outBuffers[s] = null;
+			}
+			if (items.IsCreated)
+			{
+				items.Dispose();
+			}
+			if (compute != null)
+			{
+				Object.Destroy(compute);
+			}
+			foreach (Material m in slotMaterials)
+			{
+				if (m != null)
+				{
+					Object.Destroy(m);
+				}
+			}
+			if (material != null)
+			{
+				Object.Destroy(material);
+			}
+			foreach (Mesh m in lodMeshes)
+			{
+				if (m != null)
+				{
+					Object.Destroy(m);
+				}
+			}
+			atlas.Dispose();
+			albedoTexels.Clear();
+			if (typeTable != null)
+			{
+				Object.Destroy(typeTable);
+			}
+		}
+	}
+}

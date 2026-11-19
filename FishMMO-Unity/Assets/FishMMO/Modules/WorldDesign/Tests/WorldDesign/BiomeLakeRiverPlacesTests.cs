@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeLakeRiverPlacesTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string ScatterSource = World + "/Terrain/TerrainScatter.cs";
 		private const string GeneratorSource = World + "/SceneGenerator.cs";
@@ -30,8 +30,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string PlacementSource = World + "/PointsOfInterest/PointOfInterestPlanner.Placement.cs";
 		private const string VegetationSource = "Assets/Prefabs/Client/Weather/Shaders/FishVegetationPasses.hlsl";
 		private const string ChannelSource = "Assets/Prefabs/Client/Weather/Shaders/FishChannelFlow.hlsl";
-		private const string RendererSource = "Assets/Plugins/FishMMO Water/Scripts/InlandWaterRenderer.cs";
-		private const string RendererChannelSource = "Assets/Plugins/FishMMO Water/Scripts/InlandWaterRenderer.Channel.cs";
+		private const string RendererSource = "Assets/FishMMO/Modules/Water/Scripts/InlandWaterRenderer.cs";
+		private const string RendererChannelSource = "Assets/FishMMO/Modules/Water/Scripts/InlandWaterRenderer.Channel.cs";
 
 		// ── The water over the bed ────────────────────────────────────
 

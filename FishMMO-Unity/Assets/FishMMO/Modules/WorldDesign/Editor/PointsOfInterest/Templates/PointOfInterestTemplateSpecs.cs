@@ -319,7 +319,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Styles ───────────────────────────────────────────────────
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
 
-		// ── Biomes (asset names in Assets/Templates/Entity/Biomes, exactly: a name no biome has matches nothing) ───
+		// ── Biomes (asset names in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes, exactly: a name no biome has matches nothing) ───
 		// The variants' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring wrote each biome the weight these lists
 		// give it for every variant (where it differs from the variant's weight elsewhere) onto its template, and the cut picks
 		// by the template's. Since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) every biome's spec file carries those

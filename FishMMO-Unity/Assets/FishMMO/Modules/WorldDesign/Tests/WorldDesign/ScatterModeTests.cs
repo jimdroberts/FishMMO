@@ -20,9 +20,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		private const string Terrain = "Assets/FishMMO/Modules/WorldDesign/Editor/Terrain";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string Art = World + "/ProceduralArt";
-		private const string Client = "Assets/FishMMO/Client/World/Terrain";
-		private const string Compute = "Assets/Prefabs/Client/Weather/Shaders/FishDetailScatter.compute";
-		private const string ModeFile = "Assets/FishMMO/Shared/Implementation/Tools/Biomes/Terrain/BiomeScatterMode.cs";
+		private const string Client = "Assets/FishMMO/Modules/Terrain/Client";
+		private const string Compute = "Assets/FishMMO/Modules/Terrain/Shaders/FishDetailScatter.compute";
+		private const string ModeFile = "Assets/FishMMO/Modules/WorldSimulation/Runtime/Biomes/Terrain/BiomeScatterMode.cs";
 
 		private static string Read(string relative) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), relative)).Replace("\r\n", "\n");
 
@@ -117,7 +117,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void BiomeAssets_CarryOnlyOffModes()
 		{
-			string folder = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Templates/Entity/Biomes");
+			string folder = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes");
 			Assume.That(ProjectFiles.FolderExists(folder), Is.True);
 			var block = new Regex(@"scatterMode:\n((?:\s{8,}\w+:.*\n)+)");
 			int seen = 0;

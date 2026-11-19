@@ -188,7 +188,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("CaveCoverBake cover = CoverBakeFor(assetPath, site.Id, meshes, rebuilt, live);", shaper);
 			string species = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/WorldDesign/Editor/PointsOfInterest/Shapers/CaveCoverSpecies.cs");
 			StringAssert.Contains("site.SetBake(bake);", species);
-			string system = ProjectFiles.ReadAllText("Assets/FishMMO/Client/World/Caves/Cover/CaveCoverSystem.cs");
+			string system = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/Caves/CaveCoverSystem.cs");
 			int bake = system.IndexOf("cave.Bake.For(mesh)", StringComparison.Ordinal);
 			int guard = system.IndexOf("if (!mesh.isReadable && !Application.isEditor)", StringComparison.Ordinal);
 			int retarget = system.IndexOf("mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;", StringComparison.Ordinal);

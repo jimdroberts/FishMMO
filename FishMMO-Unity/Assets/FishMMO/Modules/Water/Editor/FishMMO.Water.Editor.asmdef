@@ -1,0 +1,19 @@
+{
+    "name": "FishMMO.Water.Editor",
+    "rootNamespace": "FishMMO.Water.Editor",
+    "references": [
+        "FishMMO.Water",
+        "FishMMO.WorldSimulation"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

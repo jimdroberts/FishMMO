@@ -370,7 +370,7 @@ namespace FishMMO.UnitTests
 		public void AtlasWatcher_NoticesPointOfInterestAndMapAssets()
 		{
 			LogAssert.IsTrue(AtlasAssetWatcher.Touches(new[] { "Assets/Scenes/WorldScenes/Home/Coast Terrain/Coast Points of Interest.asset" }));
-			LogAssert.IsTrue(AtlasAssetWatcher.Touches(new[] { "Assets/Templates/World/Atlas/Scenes/Coast POI Settings.asset" }));
+			LogAssert.IsTrue(AtlasAssetWatcher.Touches(new[] { "Assets/FishMMO/Modules/WorldSimulation/Templates/World/Atlas/Scenes/Coast POI Settings.asset" }));
 			LogAssert.IsTrue(AtlasAssetWatcher.Touches(new[] { WorldMapDefinition.BakedImagePath("Coast") }));
 			LogAssert.IsFalse(AtlasAssetWatcher.Touches(new[] { "Assets/Prefabs/Tree.prefab" }));
 		}

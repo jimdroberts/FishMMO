@@ -2717,8 +2717,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			// Only commit to the state when there is somewhere to go. Entering it with no shelter in
 			// reach would have the NPC walk nowhere and immediately bounce back out, once per check,
 			// for as long as the storm lasted.
-			if (WeatherVolumeRegistry.NearestShelter(Character.GameObject.scene, Home,
-				settings.SearchRadius, settings.MinimumShelterStrength) == null)
+			if (!ShelterQuery.TryNearest(Character.GameObject.scene, Home,
+				settings.SearchRadius, settings.MinimumShelterStrength, out _))
 			{
 				return;
 			}

@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class BurnMosaicTests
 	{
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 
 		/// <summary>A short year (a 365th of it ten minutes), so the floats stay fine and a test spans many years.</summary>
@@ -75,7 +75,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(BiomeBurnRegimes.Drawn((BiomeBurnRegime)9, true), Is.EqualTo(BiomeBurnRegime.None), "an unknown value draws nothing");
 			// The client table builds its rows through Drawn with the scene's IsBreathable.
-			string table = Read("Assets/FishMMO/Client/World/Terrain/BurnMosaicTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/BurnMosaicTable.cs");
 			Assert.That(table, Does.Contain("bool breathable = scene == null || BiomeAir.IsBreathable(scene.WorldConditions());"));
 			Assert.That(table, Does.Contain("BiomeBurnRegimes.Drawn(biome != null ? biome.BurnRegime : BiomeBurnRegime.None, breathable)"));
 		}
@@ -389,16 +389,16 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ThePlumbing_IsWired()
 		{
-			string flora = Read("Assets/FishMMO/Client/World/Terrain/FloraPaletteMap.cs");
+			string flora = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/FloraPaletteMap.cs");
 			Assert.That(flora, Does.Contain("BurnMosaicTable.Build(rowBiomes, settings);"));
 			Assert.That(flora, Does.Contain("BurnMosaicTable.Publish(on);"));
 			Assert.That(flora, Does.Contain("BurnMosaicTable.Release();"));
-			Assert.That(Read("Assets/FishMMO/Client/World/Weather/Sky/GlowSky.cs"), Does.Contain("BurnMosaicTable.Frame(in sky,"));
-			string renderer = Read("Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
+			Assert.That(Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/GlowSky.cs"), Does.Contain("BurnMosaicTable.Frame(in sky,"));
+			string renderer = Read("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassBladeRenderer.cs");
 			Assert.That(renderer, Does.Contain("BurnMosaicTable.BindCompute(cmd, compute);"));
 			Assert.That(renderer, Does.Contain("look.AfterBurn ? 1f : 0f"));
 			string compute = Read(Path.Combine(Shaders, "FishGrassBlades.compute"));
-			Assert.That(compute, Does.Contain("#include \"FishBurn.hlsl\""));
+			Assert.That(compute, Does.Contain("#include \"Assets/Prefabs/Client/Weather/Shaders/FishBurn.hlsl\""));
 			Assert.That(compute, Does.Contain("height *= burnRegrow;"));
 			Assert.That(compute, Does.Contain("bool afterBurn = GrassTypeRow(type, GRASS_ROW_MORE).w > 0.5;"));
 			Assert.That(Read(Path.Combine(Shaders, "FishGrassBlades.hlsl")), Does.Contain("uint burnBits = (blade.colour >> 24) & 7u;"));
@@ -455,7 +455,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(templates, Is.EqualTo(83));
 			// With no burning row the table is off and every shader takes its old path (_FishBurnInfo.x = 0).
-			string table = Read("Assets/FishMMO/Client/World/Terrain/BurnMosaicTable.cs");
+			string table = Read("Assets/FishMMO/Modules/WorldSimulation/Client/Looks/BurnMosaicTable.cs");
 			Assert.That(table, Does.Contain("info = On ? new Vector4(1f, 0f, 0f, 0f) : Vector4.zero;"));
 			Assert.That(table, Does.Contain("Shader.SetGlobalVector(InfoId, published ? info : Vector4.zero);"));
 			Assert.That(Read(Path.Combine(Shaders, "FishBurn.hlsl")), Does.Contain("if (_FishBurnInfo.x < 0.5 || _FishFloraInfo.x < 0.5)"));

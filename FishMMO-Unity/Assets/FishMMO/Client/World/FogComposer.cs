@@ -40,6 +40,13 @@ namespace FishMMO.Client
 	/// </summary>
 	public static class FogComposer
 	{
+		/// <summary>The editor's fog switch (Dashboard → Weather Tools → Fog): kept in EditorPrefs and set again after every domain
+		/// reload. Always false in a build. Core so the fog's off switch reaches the region's fog without the weather.</summary>
+		public static bool EditorFogOff;
+
+		/// <summary>Whether any fog is drawn: off, the region's fog and the weather's all stop at once.</summary>
+		public static bool DrawFog => !EditorFogOff;
+
 		private static FogState baseFog;
 		private static bool hasBase;
 		private static bool regionColor;
@@ -169,8 +176,8 @@ namespace FishMMO.Client
 				weather = new Color(weatherColor.r * dim, weatherColor.g * dim, weatherColor.b * dim, weatherColor.a);
 			}
 			FogState composed = Compose(region, weatherAmount, weather, weatherDensity, weatherEnd);
-			// The fog switch (SkySystem.DrawFog) takes the region's fog out too.
-			composed.Enabled &= SkySystem.DrawFog;
+			// The fog switch (DrawFog) takes the region's fog out too.
+			composed.Enabled &= DrawFog;
 			Active = composed.Enabled;
 			/* No fog is written as exponential fog at no density, never as fog switched off: switched off, URP draws every
 			 * lit shader without FOG_EXP, so each clear spell and each weather's start flipped every material to another

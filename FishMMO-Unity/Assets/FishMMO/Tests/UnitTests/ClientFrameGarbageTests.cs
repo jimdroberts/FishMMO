@@ -112,12 +112,29 @@ namespace FishMMO.UnitTests
 
 		// ── Source pins ─────────────────────────────────────────────
 
-		/// <summary>Where the client's per-frame render code lives.</summary>
-		private static readonly string[] RenderRoots =
+		/// <summary>Where the client's per-frame render code lives: the core client, the water, and every installed module's client.</summary>
+		private static IEnumerable<string> RenderRoots
 		{
-			"Assets/FishMMO/Client",
-			"Assets/Plugins/FishMMO Water/Scripts",
-		};
+			get
+			{
+				yield return "Assets/FishMMO/Client";
+				if (Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/Water/Scripts")))
+				{
+					yield return "Assets/FishMMO/Modules/Water/Scripts";
+				}
+				string modules = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules");
+				if (Directory.Exists(modules))
+				{
+					foreach (string module in Directory.GetDirectories(modules))
+					{
+						if (Directory.Exists(Path.Combine(module, "Client")))
+						{
+							yield return "Assets/FishMMO/Modules/" + Path.GetFileName(module) + "/Client";
+						}
+					}
+				}
+			}
+		}
 
 		private static readonly Regex HookSignature = new Regex(
 			@"(override\s+void\s+RecordRenderGraph|void\s+OnBeginCamera\w*|void\s+OnBeginContext\w*)\s*\(", RegexOptions.Compiled);
@@ -151,7 +168,7 @@ namespace FishMMO.UnitTests
 					}
 				}
 			}
-			LogAssert.IsTrue(hooks >= 30, $"the scan must find the render hooks (found {hooks}): has the signature changed?");
+			LogAssert.IsTrue(hooks >= (InstalledModules.Has("WorldSimulation") ? 20 : 4), $"the scan must find the render hooks (found {hooks}): has the signature changed?");
 			LogAssert.IsTrue(offenders.Count == 0, "render hooks must not format strings every frame:\n" + string.Join("\n", offenders));
 		}
 
@@ -176,102 +193,17 @@ namespace FishMMO.UnitTests
 				"Linq's FirstOrDefault over Dictionary.Values boxes its enumerator: 40 bytes a call");
 		}
 
-		/// <summary>Per-frame ground and terrain reads: <c>Terrain.activeTerrains</c> builds a new array on every read.</summary>
-		private static readonly string[] PerFrameTerrainReaders =
-		{
-			"Assets/FishMMO/Client/World/Weather/Presentation/FogLayerView.cs",
-			"Assets/FishMMO/Client/World/Weather/Sky/SkyEffects.cs",
-			"Assets/FishMMO/Client/World/Weather/Sky/VortexPresenter.cs",
-			"Assets/FishMMO/Client/World/Weather/Sky/CloudTerrainMap.cs",
-			"Assets/FishMMO/Modules/AmbientLife/Client/SiteLife/RockfallField.cs",
-			"Assets/FishMMO/Client/Audio/World/ThunderPresenter.cs",
-			"Assets/Plugins/FishMMO Water/Scripts/InlandWaterRenderer.Lava.cs",
-			"Assets/Plugins/FishMMO Water/Scripts/FallRock.cs",
-		};
-
-		[Test]
-		public void PerFrameTerrainReads_UseTheReusedList()
-		{
-			foreach (string file in PerFrameTerrainReaders)
-			{
-				if (InstalledModules.IsAbsent(file))
-				{
-					continue;
-				}
-				foreach (string line in CodeLines(Read(file)))
-				{
-					LogAssert.IsFalse(line.Contains("Terrain.activeTerrains"), $"{file} reads Terrain.activeTerrains (a new array a read): {line.Trim()}");
-				}
-			}
-			string plume = Read("Assets/FishMMO/Client/World/Weather/Sky/VolcanicPlumePresenter.cs");
-			string groundAt = BodyAfter(plume, IndexOrFail(plume, "private static float GroundAt(Scene scene, Vector2 p)") + 1);
-			LogAssert.IsFalse(groundAt.Contains("Terrain.activeTerrains"), "VolcanicPlumePresenter.GroundAt runs every frame");
-		}
-
-		[Test]
-		public void VolcanicPlume_SortsWithoutCapturingLambdas()
-		{
-			string source = Read("Assets/FishMMO/Client/World/Weather/Sky/VolcanicPlumePresenter.cs");
-			LogAssert.IsFalse(source.Contains("plumes.Sort((a, b)"), "a lambda capturing the viewer is a closure and a delegate every camera, every frame");
-			LogAssert.IsFalse(source.Contains("curtains.Sort((a, b)"), "a lambda capturing the viewer is a closure and a delegate every camera, every frame");
-		}
 
 		// ── Follow-up pass (2026-10-27, allocation callstacks) ──────
 
 		[Test]
-		public void PerFrameSync_ReusesNoStopwatch()
-		{
-			foreach (string file in new[] { "Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeSystem.cs", "Assets/FishMMO/Client/World/Terrain/Scatter/DetailScatterSystem.cs" })
-			{
-				foreach (string line in CodeLines(Read(file)))
-				{
-					LogAssert.IsFalse(line.Contains("Stopwatch.StartNew"), $"{file}: Stopwatch.StartNew is an object a frame; read Stopwatch.GetTimestamp: {line.Trim()}");
-				}
-			}
-		}
-
-		[Test]
-		public void PlanetSurfaceLibrary_ReadsTheNameOncePerBody()
-		{
-			string source = Read("Assets/FishMMO/Client/World/Weather/Sky/PlanetSurfaceLibrary.cs");
-			string get = BodyAfter(source, IndexOrFail(source, "public static Texture2D Get(CelestialBody body)") + 1);
-			LogAssert.IsTrue(get.Contains("names.TryGetValue(body"), "Get must look the name up by instance first (Object.name builds a string per read)");
-			LogAssert.IsTrue(CodeLines(get).Count(l => l.Contains("body.name")) == 1, "Get may read body.name only on the cache miss");
-		}
-
-		[Test]
-		public void ShadeWorkers_StartInTheirOwnMethod()
-		{
-			// A lambda's closure is made on entry to the scope that owns the captured locals: left in the per-frame method, it was
-			// 120 / 88 / 56 bytes of garbage a frame for a worker started a few times a minute.
-			foreach (string file in new[] { "Assets/FishMMO/Client/World/Weather/Sky/MistGroundMap.cs", "Assets/FishMMO/Client/World/Weather/Sky/CloudFlowField.cs" })
-			{
-				string source = Read(file);
-				string shade = BodyAfter(source, IndexOrFail(source, "private void Shade(Vector3 toLight") + 1);
-				LogAssert.IsFalse(shade.Contains("Task.Run"), $"{file}: Shade runs every frame and must not hold the worker's lambda");
-				LogAssert.IsTrue(source.Contains("private void StartShade("), $"{file}: the worker starts in StartShade");
-			}
-			string breakers = Read("Assets/Plugins/FishMMO Water/Scripts/WaterBreakers.cs");
-			string hook = BodyAfter(breakers, IndexOrFail(breakers, "private void OnBeginCameraRendering(") + 1);
-			LogAssert.IsFalse(hook.Contains("Task.Run"), "WaterBreakers' camera hook must not hold the trace worker's lambda");
-		}
-
-		[Test]
-		public void CloudPass_FormatChoicesAreMadeOnce()
-		{
-			string source = Read("Assets/FishMMO/Client/World/Weather/Sky/FishCloudsFeature.cs");
-			foreach (string name in new[] { "public static GraphicsFormat MotionFormat()", "public static GraphicsFormat WeightFormat(bool randomWrite)" })
-			{
-				string body = BodyAfter(source, IndexOrFail(source, name) + 1);
-				LogAssert.IsFalse(body.Contains("SystemInfo.") || body.Contains("GraphicsFormat[]"), $"{name} runs every frame: it must answer from its cache");
-			}
-		}
-
-		[Test]
 		public void GrassAndAmbient_MakeNoDelegatesOrSortersPerFrame()
 		{
-			string grass = Read("Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
-			LogAssert.IsFalse(grass.Contains("atlas.Sync(terrains, AlbedoFor)"), "a method group is a new delegate on every conversion: cache it");
+			if (InstalledModules.Has("Terrain"))
+			{
+				string grass = Read("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassBladeRenderer.cs");
+				LogAssert.IsFalse(grass.Contains("atlas.Sync(terrains, AlbedoFor)"), "a method group is a new delegate on every conversion: cache it");
+			}
 			if (InstalledModules.Has("AmbientLife"))
 			{
 				string ambient = Read("Assets/FishMMO/Modules/AmbientLife/Client/AmbientLife/AmbientLifeSystem.cs");

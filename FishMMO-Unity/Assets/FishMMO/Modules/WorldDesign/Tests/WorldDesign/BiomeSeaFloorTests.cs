@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	/// </summary>
 	public class BiomeSeaFloorTests
 	{
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string World = "Assets/FishMMO/Modules/WorldDesign/Editor";
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders";
 
@@ -88,7 +88,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.IsFalse(BiomeSeaFloors.IsAuthoredTide(3.1f, 7f), "a hand-tuned sea is kept");
 			// The constants mirror the water plugin's defaults (FishMMO.Water is not referenced by FishMMO.Shared).
 			Assert.AreEqual(FishMMO.Water.WaterEnvironment.DefaultMaximumTideMetres, BiomeSeaFloors.DefaultTideMetres);
-			StringAssert.Contains("public float CoastalAmplification = 2.5f;", Read("Assets/Plugins/FishMMO Water/Scripts/WaterEnvironment.cs"));
+			StringAssert.Contains("public float CoastalAmplification = 2.5f;", Read("Assets/FishMMO/Modules/Water/Scripts/WaterEnvironment.cs"));
 		}
 
 		[Test]
@@ -114,9 +114,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				StringAssert.Contains("FishSeaDaylight(input.positionWS)", Read("Assets/FishMMO/Modules/AmbientLife/Shaders/FishSeaLife.hlsl"));
 			}
-			StringAssert.Contains("_FishOcclusionWater.w > 0.0 ? half3(1.0, 1.0, 1.0) : behindLight", Read("Assets/Plugins/FishMMO Water/Shaders/FishWaterVolume.shader"),
+			StringAssert.Contains("_FishOcclusionWater.w > 0.0 ? half3(1.0, 1.0, 1.0) : behindLight", Read("Assets/FishMMO/Modules/Water/Shaders/FishWaterVolume.shader"),
 				"the underwater pass does not dim twice (nor the glow) on a scene whose floor dims its own daylight");
-			StringAssert.Contains("SurfaceWater.DaylightExtinction", Read("Assets/FishMMO/Client/World/Weather/Presentation/SkyOcclusionMap.cs"));
+			StringAssert.Contains("SurfaceWater.DaylightExtinction", Read("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Presentation/SkyOcclusionMap.cs"));
 		}
 
 		[Test]

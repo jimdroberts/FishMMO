@@ -6,7 +6,8 @@
         "FishMMO.Shared",
         "FishMMO.Naming",
         "FishMMO.Shared.Tools.Editor",
-        "FishMMO.Server"
+        "FishMMO.Server",
+        "FishMMO.WorldSimulation"
     ],
     "includePlatforms": [
         "Editor"

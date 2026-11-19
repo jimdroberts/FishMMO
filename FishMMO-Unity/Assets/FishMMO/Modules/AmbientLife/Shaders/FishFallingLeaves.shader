@@ -45,7 +45,7 @@ Shader "FishMMO/Weather/Falling Leaves"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishWeather.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
-            #include "Assets/Prefabs/Client/Weather/Shaders/FishFogLayer.hlsl"
+            #include "Assets/FishMMO/Modules/WorldSimulation/Shaders/FishFogLayer.hlsl"
 
             TEXTURE2D(_LeafCanopy);
             SAMPLER(sampler_LeafCanopy);

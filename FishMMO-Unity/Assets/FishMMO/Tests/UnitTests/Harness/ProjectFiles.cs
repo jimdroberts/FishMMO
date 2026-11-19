@@ -75,7 +75,8 @@ namespace FishMMO.UnitTests
 				foreach (string file in Directory.GetFiles(modules, "*.cs", SearchOption.AllDirectories))
 				{
 					string path = file.Replace('\\', '/');
-					if (!path.Contains("/Tests/"))
+					// The World Test Bed module is test tooling, as Tests/ is (its scene components moved there, Phase 4, 2026-11-18).
+					if (!path.Contains("/Tests/") && !path.Contains("/Modules/WorldTestBed/"))
 					{
 						files.Add(file);
 					}

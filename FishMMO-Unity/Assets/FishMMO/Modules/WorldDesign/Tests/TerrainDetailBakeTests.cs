@@ -35,8 +35,8 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheTakeOns_TryTheSceneBake_BeforeBuilding()
 		{
-			string grass = Source("Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeSystem.cs");
-			string scatter = Source("Assets/FishMMO/Client/World/Terrain/Scatter/DetailScatterSystem.cs");
+			string grass = Source("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassBladeSystem.cs");
+			string scatter = Source("Assets/FishMMO/Modules/Terrain/Client/Scatter/DetailScatterSystem.cs");
 			foreach ((string name, string code) in new[] { ("GrassBladeSystem", grass), ("DetailScatterSystem", scatter) })
 			{
 				LogAssert.IsTrue(code.Contains("SceneTerrainBake.TileOf(data, out _)"), $"{name} looks for the terrain in the scene's bake");
@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 		{
 			string generator = Source("Assets/FishMMO/Modules/WorldDesign/Editor/SceneGenerator.cs");
 			LogAssert.IsTrue(generator.Contains("SceneTerrainEvents.RaiseFinished(scene, tiles, notes);"), "the end of a cut or repaint raises the event");
-			string baker = Source("Assets/FishMMO/Client/World/Weather/Editor/TerrainDetailBaker.cs");
+			string baker = Source("Assets/FishMMO/Modules/Terrain/Editor/TerrainDetailBaker.cs");
 			LogAssert.IsTrue(baker.Contains("SceneTerrainEvents.Finished += OnTerrainFinished;"), "the client's baker listens for it");
 			LogAssert.IsTrue(baker.Contains("go.AddComponent<ClientOnlyObject>();"), "its holder is client-only, so server builds drop the bake");
 			LogAssert.IsTrue(baker.Contains("TerrainCallbacks.heightmapChanged += OnHeightsChanged;"), "hand edits to the heights mark the bake stale");

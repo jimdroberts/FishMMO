@@ -1,0 +1,26 @@
+{
+    "name": "FishMMO.WorldSimulation",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "KinematicCharacterController",
+        "Unity.InputSystem",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.Burst",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "FishMMO.Shared"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

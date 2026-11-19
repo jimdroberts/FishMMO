@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	public class BiomeWorldGateTests
 	{
 		private const string WorldFolder = "Assets/FishMMO/Modules/WorldDesign/Editor";
-		private const string BiomeFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
 		private static string Code(string path) => ProjectFiles.ReadAllText(path);
 
@@ -436,7 +436,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The air of a body in the home system, read from its asset (bodies are tracked templates; scenes are cut output).</summary>
 		private static AtmosphereKind BodyAir(string body)
 		{
-			string path = Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Systems"), "* - " + body + ".asset", SearchOption.AllDirectories).Single();
+			string path = Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/World/Systems"), "* - " + body + ".asset", SearchOption.AllDirectories).Single();
 			return (AtmosphereKind)int.Parse(Regex.Match(ProjectFiles.ReadAllText(path), @"\n  Atmosphere: (\d+)").Groups[1].Value);
 		}
 
@@ -511,7 +511,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void CutScenes_HoldNoLivedInSiteWithoutBreathableAir()
 		{
 			string[] kinds = Enum.GetNames(typeof(POIType));
-			foreach (string atlas in Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Atlas/Scenes"), "*.asset"))
+			foreach (string atlas in Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/World/Atlas/Scenes"), "*.asset"))
 			{
 				string text = ProjectFiles.ReadAllText(atlas);
 				Match scene = Regex.Match(text, @"\n  SceneName: ([^\n]+)");
@@ -520,7 +520,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				string meta = Directory.GetFiles(ProjectFiles.Folder("Assets/Templates/World/Systems"), "*.asset.meta", SearchOption.AllDirectories)
+				string meta = Directory.GetFiles(ProjectFiles.Folder("Assets/FishMMO/Modules/WorldSimulation/Templates/World/Systems"), "*.asset.meta", SearchOption.AllDirectories)
 					.First(m => ProjectFiles.ReadAllText(m).Contains("guid: " + body.Groups[1].Value));
 				var air = (AtmosphereKind)int.Parse(Regex.Match(ProjectFiles.ReadAllText(meta.Substring(0, meta.Length - 5)), @"\n  Atmosphere: (\d+)").Groups[1].Value);
 				string name = scene.Groups[1].Value.Trim();
@@ -637,21 +637,21 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(BiomeGrassDefaults.For(prefix + "Test").Rigid, Is.False, prefix);
 			}
 
-			string renderer = Code("Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeRenderer.cs");
+			string renderer = Code("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassBladeRenderer.cs");
 			Assert.That(renderer, Does.Contain("publishedParams[2] = new Vector4(s.WindStrength * air, s.GustWaveMetres, s.Flutter * air, s.IdleBreeze * air);"));
 			Assert.That(renderer, Does.Contain("SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, look.AfterBurn ? 1f : 0f));"));
 			Assert.That(renderer, Does.Contain("RowMore = 2"));
-			string system = Code("Assets/FishMMO/Client/World/Terrain/Grass/GrassBladeSystem.cs");
+			string system = Code("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassBladeSystem.cs");
 			Assert.That(system, Does.Contain("renderer.AirSway = AirSway();"));
 			Assert.That(system, Does.Contain("BiomeAir.Sway(world.WorldConditions().Atmosphere)"));
 
-			string shader = Code("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.hlsl");
+			string shader = Code("Assets/FishMMO/Modules/Terrain/Shaders/FishGrassBlades.hlsl");
 			Assert.That(shader, Does.Contain("#define GRASS_ROW_MORE 2"));
 			Assert.That(shader, Does.Contain("float typeSway = 1.0 - saturate(GrassTypeRow(type, GRASS_ROW_MORE).z);"));
 			Assert.That(shader, Does.Contain("* _GrassParams2.x / stiffness) * typeSway;"), "the bend (and with it the sheen)");
 			Assert.That(shader, Does.Contain("(0.3 + speed + gust) * calm * typeSway;"), "the flutter");
 			// Every pass of the blade shader compiles with DXC (the house rule): none of them includes the FXC-only instancing.
-			string pass = Code("Assets/Prefabs/Client/Weather/Shaders/FishGrassBlades.shader");
+			string pass = Code("Assets/FishMMO/Modules/Terrain/Shaders/FishGrassBlades.shader");
 			Assert.That(Regex.Matches(pass, "HLSLPROGRAM").Count, Is.EqualTo(Regex.Matches(pass, @"#pragma use_dxc vulkan").Count));
 			Assert.That(pass + shader, Does.Not.Contain("FishIndirectInstancing.hlsl"));
 		}

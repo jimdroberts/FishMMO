@@ -165,6 +165,22 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
+		/// Whether an asset type is a biome template (the World Simulation module's BiomeTemplate), named rather than referenced
+		/// so this dashboard does not need the module (Phase 4 of the core and modules plan, 2026-11-18).
+		/// </summary>
+		private static bool IsBiomeTemplate(Type type)
+		{
+			for (Type t = type; t != null; t = t.BaseType)
+			{
+				if (t.Name == "BiomeTemplate" && t.Namespace == "FishMMO.Shared.Biomes")
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>
 		/// Determines which smart group an asset should be placed in based on its path
 		/// and which existing groups reference it.
 		/// </summary>
@@ -256,7 +272,7 @@ namespace FishMMO.Shared
 			ScriptSide side = SideOf(mainType);
 			// Biome templates reference their whole art set, so they are cached but not preloaded: the client loads a
 			// scene's own biomes with the scene (SceneBiomeLoader), the server loads the label at boot.
-			if (mainType != null && typeof(FishMMO.Shared.Biomes.BiomeTemplate).IsAssignableFrom(mainType))
+			if (IsBiomeTemplate(mainType))
 			{
 				return new AssetCategory
 				{

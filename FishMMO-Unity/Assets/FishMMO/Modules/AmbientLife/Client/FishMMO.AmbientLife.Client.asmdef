@@ -11,7 +11,9 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.Burst",
-        "Unity.Collections"
+        "Unity.Collections",
+        "FishMMO.WorldSimulation",
+        "FishMMO.WorldSimulation.Client"
     ],
     "includePlatforms": [],
     "excludePlatforms": [

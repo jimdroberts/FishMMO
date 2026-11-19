@@ -20,7 +20,7 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class BiomeAddressablesTests
 	{
-		private const string BiomesFolder = "Assets/Templates/Entity/Biomes";
+		private const string BiomesFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 		private const string GroupsFolder = "Assets/AddressableAssetsData/AssetGroups";
 		/// <summary>The BiomeTemplate script's GUID, so other asset types in the folder are ignored.</summary>
 		private const string BiomeTemplateScriptGuid = "b10de7e3a4c14e1f8a9d5c2b6f7e8a01";

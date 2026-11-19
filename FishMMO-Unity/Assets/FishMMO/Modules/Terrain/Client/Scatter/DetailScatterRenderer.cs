@@ -1,0 +1,1563 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Unity.Collections;
+using UnityEngine;
+using UnityEngine.Profiling;
+using UnityEngine.Rendering;
+using Object = UnityEngine.Object;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// The GPU side of the detail scatter: per camera, the CPU picks the work items (8 × 8 blocks of 2 m) within each
+	/// terrain's draw distance that the camera, or the sun's shadow of it, can see, and sizes every type's slots from the
+	/// items' exact upper bounds; FishDetailScatter.compute turns the items into instances in per-(type, view) regions;
+	/// and one <see cref="Graphics.RenderMeshIndirect"/> per type and view draws them through the material's
+	/// procedural-instancing twin (FishIndirectInstancing.hlsl), the same twin the removed CPU chunk renderer drew with. Everything
+	/// the GPU does for a camera is recorded into one command buffer executed on that camera's context, as
+	/// <see cref="GrassBladeRenderer"/> and <see cref="TerrainGpuRenderer"/> do. No readback in the frame.
+	/// </summary>
+	public sealed partial class DetailScatterRenderer : IDisposable
+	{
+		public const string ComputeAssetPath = "Assets/FishMMO/Modules/Terrain/Shaders/FishDetailScatter.compute";
+
+		/// <summary>Views per type: the camera (0) and the shadow casters (1).</summary>
+		public const int Views = 2;
+
+		/// <summary>Levels of detail per type (most types draw only level 0; a bush draws three).</summary>
+		public const int Levels = DetailScatterSettings.MaxLevels;
+
+		/// <summary>Slots per type: one per level and view.</summary>
+		public const int SlotsPerType = Levels * Views;
+
+		/// <summary>The slot of a type's level in a view (FishDetailScatter.compute ScatterSlot).</summary>
+		public static int SlotOf(int type, int level, int view) => (type * Levels + level) * Views + view;
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct Item
+		{
+			public const int Stride = 16;
+			public int BlockX, BlockZ;
+			public uint Packed, Terrain;
+		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct ModelData
+		{
+			public const int Stride = 48;
+			/// <summary>The mesh's bounding sphere in its own space: centre, radius.</summary>
+			public Vector4 Sphere;
+			/// <summary>The compute's <c>extra</c>: x foot radius (m), y the salt (its raw bits, read with asuint), z casts shadows (0/1).</summary>
+			public float FootRadius;
+			public uint Salt;
+			public float CastsShadows;
+			public float Padding;
+			/// <summary>The compute's <c>lod</c>: x levels (1..3), y bush (0/1), z the mesh's top at scale 1 (m), w the variant meshes its instances cycle (1..3).</summary>
+			public Vector4 Lod;
+		}
+
+		private struct Command
+		{
+			public int Slot;
+			/// <summary>What the call draws from: the part's own mesh, or its pool's (<see cref="BatchDraws"/>).</summary>
+			public Mesh Mesh;
+			/// <summary>The part itself (its bounds are the caster sphere's).</summary>
+			public Mesh Source;
+			/// <summary>Its kind's row of its vegetation family's table (<see cref="VegFamilies"/>), drawn from the family's pool; −1 none.</summary>
+			public int Row;
+			public RenderParams Params;
+			/// <summary>
+			/// The draw's <c>_FishFloraOn</c> (TerrainGpuRenderer.FloraOnId): 1 its look's colours and size, 2 its colours only
+			/// (a bush: cover is the size it was placed at, for everyone).
+			/// </summary>
+			public float Flora;
+		}
+
+		private struct GroupRange
+		{
+			public DetailScatterAtlas.Group Group;
+			public int Offset, Count;
+		}
+
+		private static readonly int ItemsId = Shader.PropertyToID("_ScatterItems");
+		private static readonly int TableId = Shader.PropertyToID("_ScatterTable");
+		private static readonly int ModelsId = Shader.PropertyToID("_ScatterModels");
+		private static readonly int SlotsId = Shader.PropertyToID("_ScatterSlots");
+		private static readonly int CountsId = Shader.PropertyToID("_ScatterCounts");
+		private static readonly int InstancesOutId = Shader.PropertyToID("_ScatterInstancesOut");
+		private static readonly int VisibleOutId = Shader.PropertyToID("_ScatterVisibleOut");
+		private static readonly int HeightsId = Shader.PropertyToID("_ScatterHeights");
+		private static readonly int HolesId = Shader.PropertyToID("_ScatterHoles");
+		private static readonly int CameraId = Shader.PropertyToID("_ScatterCamera");
+		private static readonly int PlanesId = Shader.PropertyToID("_ScatterPlanes");
+		private static readonly int LightId = Shader.PropertyToID("_ScatterLight");
+		private static readonly int ThinId = Shader.PropertyToID("_ScatterThin");
+		private static readonly int BushLodId = Shader.PropertyToID("_ScatterBushLod");
+		private static readonly int BushReachId = Shader.PropertyToID("_ScatterBushReach");
+		private static readonly int ItemOffsetId = Shader.PropertyToID("_ScatterItemOffset");
+		private static readonly int ItemCountId = Shader.PropertyToID("_ScatterItemCount");
+		private static readonly int SlotCountId = Shader.PropertyToID("_ScatterSlotCount");
+		private static readonly int ArgCountId = Shader.PropertyToID("_ScatterArgCount");
+		private static readonly int ArgSlotsId = Shader.PropertyToID("_ScatterArgSlots");
+		private static readonly int ArgsId = Shader.PropertyToID("_ScatterArgs");
+		private static readonly int ArgsFenceId = Shader.PropertyToID("_ScatterArgsFence");
+		// The procedural-instancing twins' contract (FishIndirectInstancing.hlsl).
+		private static readonly int InstancesId = Shader.PropertyToID("_FishInstances");
+		private static readonly int VisibleId = Shader.PropertyToID("_FishVisibleInstances");
+		private static readonly int CommandBasesId = Shader.PropertyToID(TerrainGpuRenderer.CommandBasesName);
+
+		/// <summary>OpenGL only: the args fence (see FishDetailScatter.compute FishScatterArgsFence).</summary>
+		private static bool NeedsArgsFence => SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore || SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3;
+
+		private readonly ComputeShader compute;
+		private readonly int clearKernel, generateKernel, finalizeKernel, argsFenceKernel, cullKernel;
+		private readonly DetailScatterAtlas atlas = new DetailScatterAtlas();
+		private readonly CommandBuffer cmd = new CommandBuffer { name = "FishMMO detail scatter" };
+		/// <summary>The scatter's GPU time, as a marker the profiler's GPU module and ScenePerfProbe see (a string sample has no GPU timing).</summary>
+		private static readonly CustomSampler GpuSample = CustomSampler.Create("FishMMO detail scatter (compute)", true);
+		private readonly Vector4[] planeVectors = new Vector4[6];
+		private readonly List<GroupRange> ranges = new List<GroupRange>();
+		private readonly List<Command> commands = new List<Command>();
+		/// <summary>Each source material's clone, a bush's apart (<see cref="ColoursOnlyId"/>).</summary>
+		private readonly Dictionary<(Material, bool), Material> clones = new Dictionary<(Material, bool), Material>();
+		private static readonly int ColoursOnlyId = Shader.PropertyToID("_FishFloraColoursOnly");
+		/// <summary>Each clone by its source's content (<see cref="MergeIdenticalMaterials"/>).</summary>
+		private readonly Dictionary<string, Material> clonesByContent = new Dictionary<string, Material>(StringComparer.Ordinal);
+		private readonly System.Text.StringBuilder contentKey = new System.Text.StringBuilder(1024);
+		/// <summary><see cref="MergeIdenticalMaterials"/> as the clones were made.</summary>
+		private bool mergedState;
+		private readonly List<(GraphicsBuffer Buffer, int Frame)> retired = new List<(GraphicsBuffer, int)>();
+		private MaterialPropertyBlock[] blocks = Array.Empty<MaterialPropertyBlock>();
+		private GraphicsBuffer culledVisibleBuffer, culledCountBuffer;
+		private GraphicsBuffer itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer;
+		private NativeArray<Item> items;
+		private int itemCount;
+		/// <summary>Per slot (<see cref="SlotOf"/>): the instances it holds, and its first entry in the output buffers.</summary>
+		private int[] capacities = Array.Empty<int>(), bases = Array.Empty<int>();
+		/// <summary>Per slot, the exact upper bound of this camera's work (the items it listed).</summary>
+		private long[] need = Array.Empty<long>();
+		private int slotCount;
+		private int layoutTypes = -1;
+		private bool layoutDirty = true;
+		private bool capWarned;
+
+		/// <summary>
+		/// How far a camera may move, metres, and turn, degrees, before its instances are generated again. Between, the last
+		/// generation is drawn as it stands: nothing in it moves with time (the wind is the vertex stage's), so a camera
+		/// standing still or creeping regenerated the same instances every frame — about 0.8 ms of GPU and 0.4 ms of the main
+		/// thread at Flo Monolith's meadow (ScenePerfProbe, 2026-10-08). Generated against a frustum widened by what that
+		/// move and turn sweep at the farthest reach, so nothing the camera can turn to is missing. The move is kept short,
+		/// shorter than the grass's and the props' (RegatherMetres 1.5), because unlike theirs this reuse skips the per-instance
+		/// work too: the distance fades, the thinning and a bush's level are as from where the camera stood, and a shorter
+		/// step keeps each refresh's change in them below anything seen.
+		/// </summary>
+		public const float RegatherMetres = 0.5f, RegatherDegrees = 3f;
+
+		/// <summary>Debug and profiling: generate on every render, as before the reuse.</summary>
+		public static bool AlwaysRegenerate;
+
+		/// <summary>Refresh cached instances' camera visibility each frame; shadow lists remain unchanged.</summary>
+		public static bool CullInstances = true;
+
+		/// <summary>
+		/// Draw the commands of one material, view and set of render parameters with one call (2026-11-04; the harness setting
+		/// `scatterBatching` for A/B): their parts merged into a pooled mesh, a submesh a part, as the props' renderer does
+		/// (TerrainGpuRenderer.BatchDraws). Each call is replayed in every pass that draws it (the camera's, its depth, every
+		/// shadow cascade), and every replay set its material up again: in the browser that set-up was most of the scatter's
+		/// 1.5 ms of main thread at Moron 2's settlement. Needs the instance index to carry each command's run start
+		/// (<see cref="TerrainGpuRenderer.InstanceIdCarriesBase"/>); elsewhere every command is its own call, as before.
+		/// </summary>
+		public static bool BatchDraws = true;
+
+		/// <summary>
+		/// Whether scattered types whose materials draw identically share one clone (2026-11-04, the harness setting
+		/// `mergeMaterials`): TerrainGpuRenderer.ContentKey, the same shader, keywords, queue, passes and every property value. The
+		/// art generator writes a material per kind; the 121 Detail_Bush_* materials hold two value sets and the 678 Detail_* 195,
+		/// so types that drew as separate calls (<see cref="BatchDraws"/> groups by material) join one. Exact: the image is unchanged.
+		/// </summary>
+		public static bool MergeIdenticalMaterials = true;
+
+		/// <summary>A run of consecutive commands one call can draw: one material, mesh, view and set of render parameters.</summary>
+		private struct Batch
+		{
+			public int First, Count;
+			public Mesh Mesh;
+			public RenderParams Params;
+			public MaterialPropertyBlock Block;
+			public bool CameraView;
+		}
+
+		/// <summary>Every part drawn with one material and one vertex layout, merged into one mesh, a submesh a part.</summary>
+		private sealed class MeshPool
+		{
+			public Mesh Mesh;
+			/// <summary>Each part and the family row its vertices carry (uv4.x; −1 none: a pool of one material's own parts).</summary>
+			public readonly List<Mesh> Parts = new List<Mesh>();
+			public readonly List<int> Rows = new List<int>();
+			public readonly Dictionary<(Mesh, int), int> Index = new Dictionary<(Mesh, int), int>();
+			public int Built;
+		}
+
+		/// <summary>
+		/// Draw the scattered kinds of one vegetation structure through one family material (2026-11-04, the harness setting
+		/// `vegTable`; TerrainVegTableMath): each kind's scalars a row of the family's table, named by its pooled part's uv4, so
+		/// the kinds that differed only in their tints, wind, burial and sink share a material and so a call. 614 of the 678
+		/// Detail_* materials are one structure. Exact up to the table's half precision.
+		/// </summary>
+		public static bool VegFamilies = true;
+
+		private sealed class VegFamily
+		{
+			public Material Material;
+			public readonly List<TerrainVegTableMath.Row> Rows = new List<TerrainVegTableMath.Row>();
+			public Texture2D Table;
+			public Color[] Pixels;
+			public bool Dirty = true;
+		}
+
+		private readonly Dictionary<string, VegFamily> vegFamilies = new Dictionary<string, VegFamily>(StringComparer.Ordinal);
+		/// <summary>A clone's family and row, or no family (decided once per clone).</summary>
+		private readonly Dictionary<Material, (VegFamily Family, int Row)> vegOf = new Dictionary<Material, (VegFamily, int)>();
+		private static readonly int VegTableId = Shader.PropertyToID(TerrainVegTableMath.TableName);
+		/// <summary><see cref="VegFamilies"/> as the layout was built.</summary>
+		private bool vegState;
+
+		/// <summary>Families and their kinds now (probes).</summary>
+		public int VegFamilyCount => vegFamilies.Count;
+
+		private readonly List<Batch> batches = new List<Batch>();
+		private readonly Dictionary<(Material, string), MeshPool> pools = new Dictionary<(Material, string), MeshPool>();
+		private readonly Dictionary<Mesh, string> layouts = new Dictionary<Mesh, string>();
+		/// <summary>Whether the layout was built batched (<see cref="BatchDraws"/> as it was then).</summary>
+		private bool batchedState;
+		private static readonly int CulledVisibleId = Shader.PropertyToID("_ScatterCulledVisible");
+		private static readonly int CulledCountsId = Shader.PropertyToID("_ScatterCulledCounts");
+		private static readonly CustomSampler CullGpuSample = CustomSampler.Create("FishMMO scatter visibility", true);
+
+		private Camera generatedFor;
+		private Vector3 generatedEye, generatedForward, generatedLight;
+		private float generatedFov, generatedAspect, generatedShadow, generatedReach;
+		private int generatedAtlas = -1, generatedTypes = -1, generatedSettings, generatedDraws;
+		private readonly Plane[] widened = new Plane[6];
+
+		/// <summary>The last game camera's work items and its total upper bound (instances).</summary>
+		public int LastItems { get; private set; }
+		public long LastBound { get; private set; }
+
+		/// <summary>Instances appended per slot, read back asynchronously in the editor (−1 before the first read).</summary>
+		public int[] LastCounts { get; private set; } = Array.Empty<int>();
+
+		public const int StatsInterval = 30;
+		private int lastStatsFrame = -1000;
+		private bool[] overflowWarned = Array.Empty<bool>();
+
+		/// <summary>Bytes of GPU buffers held, the atlas's table with them (its height and hole arrays are textures).</summary>
+		public long GpuBytes
+		{
+			get
+			{
+				long n = 0;
+				foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer, culledVisibleBuffer, culledCountBuffer })
+				{
+					n += b != null ? (long)b.count * b.stride : 0;
+				}
+				// And the table: the terrains' rows and their sparse density.
+				return n + atlas.TableBytes;
+			}
+		}
+
+		/// <summary>Bytes of the atlas's table alone (the terrains' rows and their sparse density).</summary>
+		public long TableBytes => atlas.TableBytes;
+
+		public int Capacity(int slot) => slot >= 0 && slot < capacities.Length ? capacities[slot] : 0;
+
+		private DetailScatterRenderer(ComputeShader compute)
+		{
+			this.compute = compute;
+			clearKernel = compute.FindKernel("FishScatterClear");
+			generateKernel = compute.FindKernel("FishScatterGenerate");
+			finalizeKernel = compute.FindKernel("FishScatterFinalize");
+			argsFenceKernel = compute.FindKernel("FishScatterArgsFence");
+			cullKernel = compute.FindKernel("FishScatterCull");
+			packKernel = compute.FindKernel("FishScatterPack");
+		}
+
+		/// <summary>The renderer, or null where it cannot run (no compute, too few vertex-stage buffers, the compute missing).</summary>
+		public static DetailScatterRenderer TryCreate(out string reason)
+		{
+			reason = null;
+			TerrainRenderProfile profile = TerrainRenderProfile.Active;
+			ComputeShader cs = profile != null ? profile.DetailScatterCompute : null;
+#if UNITY_EDITOR
+			if (cs == null)
+			{
+				cs = UnityEditor.AssetDatabase.LoadAssetAtPath<ComputeShader>(ComputeAssetPath);
+			}
+#endif
+			if (!TerrainGpuMath.ChooseGpu(SystemInfo.supportsComputeShaders, SystemInfo.maxComputeBufferInputsVertex, cs != null))
+			{
+				reason = cs == null ? $"the compute ({ComputeAssetPath}) is not loaded: Weather Render Profile → GPU detail scatter" : "no compute shaders or too few vertex-stage buffers on this device";
+				return null;
+			}
+			// Its pebbles draw through the rock shader, which declares the crevice inputs: bound before the first draw.
+			RockContactField.EnsureBindings();
+			ComputeShader own = Object.Instantiate(cs);
+			own.hideFlags = HideFlags.DontSave;
+			own.name = cs.name + " (instance)";
+			return new DetailScatterRenderer(own);
+		}
+
+		// ── Per camera ───────────────────────────────────────────────
+
+		/// <summary>Lists the camera's work, records the generation into its context and issues the draws. Returns the draws.</summary>
+		public int Execute(Camera camera, ScriptableRenderContext context, in TerrainTreeField.View view, IReadOnlyList<DetailScatterTerrain> terrains,
+			IReadOnlyList<DetailScatterType> types, DetailScatterSettings s, Func<DetailScatterTerrain, float> distanceOf)
+		{
+			ReleaseRetired(false);
+			if (types.Count == 0 || !atlas.Sync(terrains, distanceOf))
+			{
+				generatedFor = null;
+				return 0;
+			}
+			int settings = SettingsSignature(s);
+			if (StillGenerated(camera, in view, types.Count, settings))
+			{
+				// Reuse placement, refreshing camera visibility before submitting the draws.
+				if (generatedDraws <= 0) return 0;
+				RefreshVisibility(camera, context, in view);
+				return Draw(camera, generatedEye, generatedReach);
+			}
+			generatedFor = null;
+			EnsureSlots(types.Count);
+			Array.Clear(need, 0, need.Length);
+			itemCount = 0;
+			ranges.Clear();
+			Vector3 eye = view.Position;
+			float reach = 0f;
+			float bushReach = Mathf.Max(s.BushDrawMin, s.BushDrawMax);
+			foreach (DetailScatterAtlas.Group group in atlas.Groups)
+			{
+				foreach (DetailScatterTerrain st in group.Terrains)
+				{
+					float distance = st.Terrain != null && st.Terrain.drawTreesAndFoliage ? distanceOf(st) : 0f;
+					if (distance > 0f)
+					{
+						reach = Mathf.Max(reach, HasBush(st, types) ? Mathf.Max(distance, bushReach) : distance);
+					}
+				}
+			}
+			// Listed and generated against the frustum widened by what the reuse's move and turn sweep at the farthest
+			// reach (RegatherMetres): the blocks just off screen are there when the camera turns to them.
+			float margin = RegatherMetres + reach * RegatherDegrees * Mathf.Deg2Rad;
+			for (int i = 0; i < 6; i++)
+			{
+				widened[i] = new Plane(view.Planes[i].normal, view.Planes[i].distance + margin);
+			}
+			TerrainTreeField.View listView = view;
+			listView.Planes = widened;
+			foreach (DetailScatterAtlas.Group group in atlas.Groups)
+			{
+				int groupStart = itemCount;
+				foreach (DetailScatterTerrain st in group.Terrains)
+				{
+					if (st.Terrain == null || !st.Terrain.drawTreesAndFoliage)
+					{
+						continue;
+					}
+					float distance = distanceOf(st);
+					if (distance <= 0f)
+					{
+						continue;
+					}
+					ListItems(st, (uint)atlas.IndexOf(st), distance, in listView, types, s);
+				}
+				if (itemCount > groupStart)
+				{
+					ranges.Add(new GroupRange { Group = group, Offset = groupStart, Count = itemCount - groupStart });
+				}
+			}
+			if (camera.cameraType == CameraType.Game)
+			{
+				long bound = 0;
+				foreach (long n in need)
+				{
+					bound += n;
+				}
+				LastItems = itemCount;
+				LastBound = bound;
+			}
+			ShareVariantNeeds(types);
+			if (itemCount == 0)
+			{
+				Remember(camera, in view, types.Count, settings, reach, 0);
+				return 0;
+			}
+
+			// Every slot at least this camera's exact upper bound (grow-only, doubling), never past the cap.
+			int cap = Mathf.Max(1024, s.MaxInstancesPerSlot);
+			for (int slot = 0; slot < slotCount; slot++)
+			{
+				if (need[slot] <= capacities[slot] || capacities[slot] >= cap)
+				{
+					continue;
+				}
+				if (need[slot] > cap && !capWarned)
+				{
+					capWarned = true;
+					Debug.LogWarning($"[Detail scatter] '{types[slot / SlotsPerType].Name}' level {slot % SlotsPerType / Views} {(slot % Views == 0 ? "camera" : "shadow")} slot needs up to {need[slot]} instances, over the cap of {cap} (GPU detail scatter > Max Instances Per Slot): the instances past it are dropped.");
+				}
+				capacities[slot] = (int)Math.Min(cap, Math.Max(need[slot], Math.Max(2L * capacities[slot], 1024L)));
+				layoutDirty = true;
+			}
+			if (layoutDirty || layoutTypes != types.Count || brgState != BrgFor(instanceBuffer != null ? instanceBuffer.count : 0)
+				|| batchedState != (!brgState && BatchDraws && TerrainGpuRenderer.InstanceIdCarriesBase) || mergedState != MergeIdenticalMaterials || vegState != VegFamilies)
+			{
+				Relayout(types);
+			}
+			if (itemBuffer == null || itemBuffer.count < itemCount)
+			{
+				Retire(itemBuffer);
+				itemBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, Mathf.Max(itemCount, items.Length), Item.Stride);
+			}
+			for (int i = 0; i < 6; i++)
+			{
+				Plane p = widened[i];
+				planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
+			}
+
+			double recordStart = TerrainInstancingProbe.Now;
+			cmd.Clear();
+			// Named on the GPU, so the profiler (and ScenePerfProbe's GPU table) can price the scatter's compute.
+			cmd.BeginSample(GpuSample);
+			cmd.SetBufferData(itemBuffer, items, 0, 0, itemCount);
+			cmd.SetComputeVectorParam(compute, CameraId, eye);
+			cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
+			cmd.SetComputeVectorParam(compute, LightId, view.Shadows ? new Vector4(view.LightDirection.x, view.LightDirection.y, view.LightDirection.z, view.ShadowDistance) : Vector4.zero);
+			// w: the farthest any bush reaches, for the compute's per-block early out (a terrain's own distance is the detail distance).
+			cmd.SetComputeVectorParam(compute, ThinId, new Vector4(Mathf.Max(0f, s.ThinStartMetres), Mathf.Clamp(s.ThinKeepAtDistance, 0.02f, 1f), Mathf.Clamp(s.EdgeFadeBand, 0.02f, 0.5f), bushReach));
+			cmd.SetComputeVectorParam(compute, BushLodId, new Vector4(Mathf.Max(0f, s.BushLodMetresPerMetre.x), Mathf.Max(0f, s.BushLodMetresPerMetre.y), Mathf.Clamp(s.BushLodFadeBand, 0.02f, 0.5f), 0f));
+			cmd.SetComputeVectorParam(compute, BushReachId, new Vector4(Mathf.Max(1f, s.BushDrawMetresPerMetre), Mathf.Max(10f, s.BushDrawMin), bushReach, 0f));
+			cmd.SetComputeIntParam(compute, SlotCountId, slotCount);
+			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
+
+			cmd.SetComputeBufferParam(compute, clearKernel, CountsId, countBuffer);
+			cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+
+			cmd.SetComputeBufferParam(compute, generateKernel, ItemsId, itemBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, TableId, atlas.Table);
+			cmd.SetComputeBufferParam(compute, generateKernel, ModelsId, modelBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, SlotsId, slotBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, CountsId, countBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, InstancesOutId, instanceBuffer);
+			cmd.SetComputeBufferParam(compute, generateKernel, VisibleOutId, visibleBuffer);
+			BindDots(cmd);
+			// The scene's baked paths: nothing stands on a worn way (FishGroundPaths.hlsl).
+			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
+			foreach (GroupRange range in ranges)
+			{
+				cmd.SetComputeTextureParam(compute, generateKernel, HeightsId, range.Group.Heights);
+				cmd.SetComputeTextureParam(compute, generateKernel, HolesId, range.Group.Holes);
+				cmd.SetComputeIntParam(compute, ItemOffsetId, range.Offset);
+				cmd.SetComputeIntParam(compute, ItemCountId, range.Count);
+				cmd.DispatchComputeChecked(compute, generateKernel, Mathf.Min(range.Count, 65535), (range.Count + 65534) / 65535, 1);
+			}
+			DispatchPack(cmd);
+			// Always read in the editor: an overflowing slot is otherwise invisible but for its symptom.
+			if (Application.isEditor && camera.cameraType == CameraType.Game && Time.frameCount - lastStatsFrame >= StatsInterval)
+			{
+				lastStatsFrame = Time.frameCount;
+				RequestStats(types);
+			}
+			cmd.EndSample(GpuSample);
+			context.ExecuteCommandBuffer(cmd);
+			cmd.Clear();
+			TerrainInstancingProbe.RecordMs += TerrainInstancingProbe.Now - recordStart;
+
+			RefreshVisibility(camera, context, in view);
+			int draws = Draw(camera, eye, reach);
+			Remember(camera, in view, types.Count, settings, reach, draws);
+			return draws;
+		}
+
+		/// <summary>Compact only camera lists against current frustum and fresh depth, including reused generations.
+		/// The source lists remain intact so camera movement or a disabled depth pyramid restores every candidate.</summary>
+		private void RefreshVisibility(Camera camera, ScriptableRenderContext context, in TerrainTreeField.View view)
+		{
+			cmd.Clear();
+			cmd.BeginSample(CullGpuSample);
+			if (CullInstances)
+			{
+				Recreate(ref culledVisibleBuffer, GraphicsBuffer.Target.Structured, visibleBuffer.count, FishVisible.Stride);
+				Recreate(ref culledCountBuffer, GraphicsBuffer.Target.Raw, Mathf.Max(1, slotCount), 4);
+				for (int i = 0; i < 6; i++)
+				{
+					Plane p = view.Planes[i];
+					planeVectors[i] = new Vector4(p.normal.x, p.normal.y, p.normal.z, p.distance);
+				}
+				cmd.SetComputeVectorArrayParam(compute, PlanesId, planeVectors);
+				cmd.SetComputeIntParam(compute, SlotCountId, slotCount);
+				cmd.SetComputeBufferParam(compute, clearKernel, CountsId, culledCountBuffer);
+				cmd.DispatchComputeChecked(compute, clearKernel, (slotCount + 63) / 64, 1, 1);
+				FishDepthPyramid.Bind(cmd, compute, cullKernel, camera, view.Position, true);
+				cmd.SetComputeBufferParam(compute, cullKernel, ModelsId, modelBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, SlotsId, slotBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CountsId, countBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, InstancesOutId, instanceBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, VisibleOutId, visibleBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CulledVisibleId, culledVisibleBuffer);
+				cmd.SetComputeBufferParam(compute, cullKernel, CulledCountsId, culledCountBuffer);
+				BindCulledPacked(cmd);
+				cmd.DispatchComputeChecked(compute, cullKernel, slotCount, 1, 1);
+			}
+			// Also restore the original counts after switching the diagnostic off.
+			cmd.SetComputeIntParam(compute, ArgCountId, commands.Count);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgSlotsId, argSlotBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, CountsId, CullInstances ? culledCountBuffer : countBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, SlotsId, slotBuffer);
+			cmd.SetComputeBufferParam(compute, finalizeKernel, ArgsId, argsBuffer);
+			cmd.DispatchComputeChecked(compute, finalizeKernel, (commands.Count + 63) / 64, 1, 1);
+			if (NeedsArgsFence)
+			{
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, ArgsFenceId, argsBuffer);
+				cmd.SetComputeBufferParam(compute, argsFenceKernel, CountsId, countBuffer);
+				cmd.DispatchComputeChecked(compute, argsFenceKernel, 1, 1, 1);
+			}
+			cmd.EndSample(CullGpuSample);
+			context.ExecuteCommandBuffer(cmd);
+			cmd.Clear();
+		}
+
+		/// <summary>Issues the indirect draws of every slot this camera's generation filled. Returns the draws.</summary>
+		/// <summary>Of the last camera's draws, those of shadow casters (each drawn into every cascade).</summary>
+		public int LastShadowDraws { get; private set; }
+
+		private int Draw(Camera camera, Vector3 eye, float reach)
+		{
+			double drawStart = TerrainInstancingProbe.Now;
+			var worldBounds = new Bounds(eye, Vector3.one * (2f * reach + 20f));
+			int draws = 0, shadowDraws = 0;
+			if (brgState)
+			{
+				draws = ArmBrg(camera, out shadowDraws);
+				LastShadowDraws = shadowDraws;
+				TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
+				return draws;
+			}
+			if (batchedState)
+			{
+				draws = DrawBatches(camera, worldBounds, out shadowDraws);
+				LastShadowDraws = shadowDraws;
+				TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
+				return draws;
+			}
+			for (int c = 0; c < commands.Count; c++)
+			{
+				Command command = commands[c];
+				if (need[command.Slot] <= 0)
+				{
+					continue;
+				}
+				RenderParams rp = command.Params;
+				rp.camera = camera;
+				rp.worldBounds = worldBounds;
+				rp.matProps = blocks[c];
+				blocks[c].SetBuffer(VisibleId, CullInstances && (command.Slot & 1) == 0 ? culledVisibleBuffer : visibleBuffer);
+				// Procedural vegetation already clips every punctual shadow in FishVegetationPasses. Avoid those native
+				// submissions for configured local lights while keeping the original lit draw and directional shadows.
+				if (rp.shadowCastingMode == ShadowCastingMode.ShadowsOnly && rp.material.shader.name == TerrainGpuRenderer.VegetationIndirectName)
+					rp.layer = DirectionalShadowDraws.LayerFor(camera, RenderSettings.sun, rp.layer);
+				Graphics.RenderMeshIndirect(rp, command.Mesh, argsBuffer, 1, c);
+				draws++;
+				shadowDraws += rp.shadowCastingMode == UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly ? 1 : 0;
+			}
+			LastShadowDraws = shadowDraws;
+			TerrainInstancingProbe.DrawMs += TerrainInstancingProbe.Now - drawStart;
+			return draws;
+		}
+
+		/// <summary>Whether the last generation still serves this camera (see <see cref="RegatherMetres"/>).</summary>
+		private bool StillGenerated(Camera camera, in TerrainTreeField.View view, int typeCount, int settings)
+		{
+			if (AlwaysRegenerate || generatedFor != camera || generatedAtlas != atlas.Version || generatedTypes != typeCount || generatedSettings != settings
+				|| layoutDirty || generatedShadow != (view.Shadows ? view.ShadowDistance : 0f) || generatedFov != camera.fieldOfView || generatedAspect != camera.aspect)
+			{
+				return false;
+			}
+			if ((view.Position - generatedEye).sqrMagnitude > RegatherMetres * RegatherMetres)
+			{
+				return false;
+			}
+			float turn = Mathf.Cos(RegatherDegrees * Mathf.Deg2Rad);
+			return Vector3.Dot(camera.transform.forward, generatedForward) >= turn
+				&& (!view.Shadows || Vector3.Dot(view.LightDirection, generatedLight) >= turn);
+		}
+
+		private void Remember(Camera camera, in TerrainTreeField.View view, int typeCount, int settings, float reach, int draws)
+		{
+			generatedFor = camera;
+			generatedAtlas = atlas.Version;
+			generatedTypes = typeCount;
+			generatedSettings = settings;
+			generatedEye = view.Position;
+			generatedForward = camera.transform.forward;
+			generatedLight = view.LightDirection;
+			generatedShadow = view.Shadows ? view.ShadowDistance : 0f;
+			generatedFov = camera.fieldOfView;
+			generatedAspect = camera.aspect;
+			generatedReach = reach;
+			generatedDraws = draws;
+		}
+
+		/// <summary>Every setting the generation reads, folded together, so an edit in the profile regenerates at once.</summary>
+		private static int SettingsSignature(DetailScatterSettings s)
+		{
+			unchecked
+			{
+				int h = s.ThinStartMetres.GetHashCode();
+				h = h * 31 + s.ThinKeepAtDistance.GetHashCode();
+				h = h * 31 + s.EdgeFadeBand.GetHashCode();
+				h = h * 31 + s.BushDrawMetresPerMetre.GetHashCode();
+				h = h * 31 + s.BushDrawMin.GetHashCode();
+				h = h * 31 + s.BushDrawMax.GetHashCode();
+				h = h * 31 + s.BushLodMetresPerMetre.GetHashCode();
+				h = h * 31 + s.BushLodFadeBand.GetHashCode();
+				h = h * 31 + s.MaxInstancesPerSlot;
+				return h;
+			}
+		}
+
+		/// <summary>True when any of a terrain's channels is a bush.</summary>
+		private static bool HasBush(DetailScatterTerrain st, IReadOnlyList<DetailScatterType> types)
+		{
+			for (int c = 0; c < st.Channels; c++)
+			{
+				int type = st.ChannelSettings[c].Type;
+				if (type >= 0 && type < types.Count && types[type].Bush)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The farthest point of a box from a point.</summary>
+		private static float MaxDistance(Bounds b, Vector3 p)
+		{
+			Vector3 d = Vector3.Max(b.max - p, p - b.min);
+			return d.magnitude;
+		}
+
+		/// <summary>One channel of the terrain being listed, looked up once per terrain rather than once per item.</summary>
+		private struct ListedChannel
+		{
+			public int Type;
+			public bool Usable, Bush, Casts;
+			public int Levels;
+			/// <summary>A bush's tallest and shortest instance (its mesh's top at the channel's height range), and its reach.</summary>
+			public float Tallest, Shortest, Reach;
+		}
+
+		private ListedChannel[] listed = new ListedChannel[16];
+		private static readonly Unity.Profiling.ProfilerMarker ListMarker = new Unity.Profiling.ProfilerMarker("DetailScatterRenderer.ListItems");
+
+		/// <summary>
+		/// Lists one terrain's work items within <paramref name="distance"/> (the detail distance; a bush's own reach for
+		/// its channels) that the view (or the sun's shadow of it) can see, adding their bounds to the slots' needs: to
+		/// level 0 for most types, to every level a bush's instances there can draw (<see cref="DetailScatterMath.LevelsReached"/>).
+		/// Every test is the one it always was, on the same values; what does not change from item to item (each channel's
+		/// type and a bush's heights and reach, the light's direction) is worked out once per terrain.
+		/// </summary>
+		private void ListItems(DetailScatterTerrain st, uint terrainIndex, float distance, in TerrainTreeField.View view, IReadOnlyList<DetailScatterType> types, DetailScatterSettings s)
+		{
+			using var listScope = ListMarker.Auto();
+			Vector3 eye = view.Position;
+			bool bushes = HasBush(st, types);
+			float listedReach = bushes ? Mathf.Max(distance, Mathf.Max(s.BushDrawMin, s.BushDrawMax)) : distance;
+			float itemX = DetailScatterMath.ItemSide * st.BlockX, itemZ = DetailScatterMath.ItemSide * st.BlockZ;
+			int side = st.ItemsSide;
+			int ix0 = Mathf.Max(0, Mathf.FloorToInt((eye.x - listedReach - st.Origin.x) / itemX)), ix1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.x + listedReach - st.Origin.x) / itemX));
+			int iz0 = Mathf.Max(0, Mathf.FloorToInt((eye.z - listedReach - st.Origin.z) / itemZ)), iz1 = Mathf.Min(side - 1, Mathf.FloorToInt((eye.z + listedReach - st.Origin.z) / itemZ));
+			float pad = st.MaxInstanceReach + 0.5f;
+			int channels = st.Channels;
+			if (listed.Length < channels)
+			{
+				listed = new ListedChannel[Mathf.NextPowerOfTwo(channels)];
+			}
+			for (int c = 0; c < channels; c++)
+			{
+				ref ListedChannel lc = ref listed[c];
+				int type = st.ChannelSettings[c].Type;
+				lc.Type = type;
+				lc.Usable = type >= 0 && type < types.Count;
+				if (!lc.Usable)
+				{
+					continue;
+				}
+				DetailScatterType t = types[type];
+				lc.Bush = t.Bush;
+				lc.Casts = t.CastsShadows;
+				lc.Levels = t.Levels.Length;
+				if (t.Bush)
+				{
+					ref DetailScatterTerrain.Channel ch = ref st.ChannelSettings[c];
+					lc.Tallest = t.MeshTop * Mathf.Max(ch.MinHeight, ch.MaxHeight);
+					lc.Shortest = t.MeshTop * Mathf.Min(ch.MinHeight, ch.MaxHeight);
+					lc.Reach = s.BushDrawDistance(lc.Tallest);
+				}
+			}
+			// The shadows' sweep (TerrainTreeMath.ShadowSweep), its direction worked out once.
+			bool shadows = view.Shadows && st.CastsShadows;
+			Vector3 sweepDirection = view.LightDirection.sqrMagnitude > 1e-8f ? view.LightDirection.normalized : Vector3.down;
+			float sweepDown = Mathf.Max(-sweepDirection.y, 0.1f);
+			for (int iz = iz0; iz <= iz1; iz++)
+			{
+				for (int ix = ix0; ix <= ix1; ix++)
+				{
+					// The item's painted channels and their bounds (sparse: DetailScatterDensity.ItemBounds).
+					int item = iz * side + ix;
+					int boundsFrom = st.ItemBoundStart[item], boundsTo = st.ItemBoundStart[item + 1];
+					if (boundsFrom >= boundsTo)
+					{
+						continue;
+					}
+					float x0 = st.Origin.x + ix * itemX, x1 = Mathf.Min(x0 + itemX, st.Origin.x + st.Size.x);
+					float z0 = st.Origin.z + iz * itemZ, z1 = Mathf.Min(z0 + itemZ, st.Origin.z + st.Size.z);
+					Vector2 heights = st.ItemHeightRange(ix, iz);
+					var bounds = new Bounds();
+					bounds.SetMinMax(new Vector3(x0 - pad, heights.x - 0.5f, z0 - pad), new Vector3(x1 + pad, heights.y + st.MaxInstanceHeight + 0.5f, z1 + pad));
+					float near = TerrainTreeMath.MinDistance(bounds, eye);
+					if (near > listedReach)
+					{
+						continue;
+					}
+					bool main = TerrainTreeMath.IntersectsFrustum(view.Planes, bounds);
+					bool shadow = shadows && near <= view.ShadowDistance
+						&& TerrainTreeMath.IntersectsFrustum(view.Planes, Sweep(bounds, sweepDirection, sweepDown, view.ShadowDistance));
+					if (!main && !shadow)
+					{
+						continue;
+					}
+					// The far side only for a bush's levels: worked out once an item has one.
+					float far = -1f;
+					bool any = false;
+					for (int k = boundsFrom; k < boundsTo; k++)
+					{
+						int c = st.ItemBoundChannel[k];
+						int bound = st.ItemBoundValue[k];
+						if (c >= channels)
+						{
+							continue;
+						}
+						ref ListedChannel lc = ref listed[c];
+						if (bound <= 0 || !lc.Usable)
+						{
+							continue;
+						}
+						int levels = 1;
+						if (lc.Bush)
+						{
+							if (near > lc.Reach)
+							{
+								continue;
+							}
+							if (far < 0f)
+							{
+								far = MaxDistance(bounds, eye);
+							}
+							levels = DetailScatterMath.LevelsReached(near, far, lc.Shortest, lc.Tallest, lc.Levels, s.BushLodMetresPerMetre, s.BushLodFadeBand);
+						}
+						else if (near > distance)
+						{
+							continue;
+						}
+						any = true;
+						for (int level = 0; level < Levels; level++)
+						{
+							if ((levels & (1 << level)) == 0)
+							{
+								continue;
+							}
+							if (main)
+							{
+								need[SlotOf(lc.Type, level, 0)] += bound;
+							}
+							if (shadow && lc.Casts)
+							{
+								need[SlotOf(lc.Type, level, 1)] += bound;
+							}
+						}
+					}
+					if (!any)
+					{
+						continue;
+					}
+					int nx = Mathf.Min(DetailScatterMath.ItemSide, st.Blocks - ix * DetailScatterMath.ItemSide);
+					int nz = Mathf.Min(DetailScatterMath.ItemSide, st.Blocks - iz * DetailScatterMath.ItemSide);
+					EnsureItems(itemCount + 1);
+					items[itemCount++] = new Item
+					{
+						BlockX = ix * DetailScatterMath.ItemSide,
+						BlockZ = iz * DetailScatterMath.ItemSide,
+						Packed = (main ? 1u : 0u) | (shadow ? 2u : 0u) | (uint)nx << 2 | (uint)nz << 6,
+						Terrain = terrainIndex,
+					};
+				}
+			}
+		}
+
+		/// <summary>
+		/// TerrainTreeMath.ShadowSweep with its direction (<paramref name="d"/>, normalised) and its fall per metre
+		/// (<paramref name="down"/>) worked out by the caller: the same operations on the same values.
+		/// </summary>
+		private static Bounds Sweep(Bounds bounds, Vector3 d, float down, float maxLength)
+		{
+			float length = Mathf.Min(maxLength, bounds.size.y / down);
+			Bounds swept = bounds;
+			swept.Encapsulate(bounds.min + d * length);
+			swept.Encapsulate(bounds.max + d * length);
+			return swept;
+		}
+
+		/// <summary>The variant meshes a type's instances cycle (2026-10-26): 1 for a bush or any type with levels.</summary>
+		public static int VariantsOf(DetailScatterType type)
+		{
+			int n = type.Variants != null ? type.Variants.Length : 1;
+			return type.Bush || type.Levels.Length > 1 ? 1 : Mathf.Clamp(n, 1, DetailScatterSettings.MaxVariants);
+		}
+
+		/// <summary>
+		/// A type whose instances cycle variant meshes draws each variant from its own slot, the one its level would take
+		/// (FishDetailScatter.compute), so the bound listed into level 0 is shared out (DetailScatterMath.VariantBound): each
+		/// variant's slot is sized for its even share and the hash's spread, not for the whole.
+		/// </summary>
+		private void ShareVariantNeeds(IReadOnlyList<DetailScatterType> types)
+		{
+			for (int t = 0; t < types.Count; t++)
+			{
+				int variants = VariantsOf(types[t]);
+				if (variants <= 1)
+				{
+					continue;
+				}
+				for (int view = 0; view < Views; view++)
+				{
+					long whole = need[SlotOf(t, 0, view)];
+					for (int v = 0; v < variants && v < Levels; v++)
+					{
+						need[SlotOf(t, v, view)] = DetailScatterMath.VariantBound(whole, variants);
+					}
+				}
+			}
+		}
+
+		// ── Layout ────────────────────────────────────────────────────
+
+		/// <summary>Grows the per-slot arrays to the types' count (a new type starts with no capacity).</summary>
+		private void EnsureSlots(int typeCount)
+		{
+			int wanted = typeCount * SlotsPerType;
+			if (slotCount == wanted)
+			{
+				return;
+			}
+			Array.Resize(ref capacities, wanted);
+			Array.Resize(ref bases, wanted);
+			Array.Resize(ref need, wanted);
+			Array.Resize(ref overflowWarned, wanted);
+			slotCount = wanted;
+			layoutDirty = true;
+		}
+
+		/// <summary>
+		/// Each batch's runs of commands whose slot has work this camera, a call a run (the others draw nothing, and a call over
+		/// one would still be a GPU draw: TerrainGpuRenderer.BatchGap). Returns the calls.
+		/// </summary>
+		private int DrawBatches(Camera camera, Bounds worldBounds, out int shadowDraws)
+		{
+			int draws = 0;
+			shadowDraws = 0;
+			foreach (Batch batch in batches)
+			{
+				RenderParams rp = batch.Params;
+				rp.camera = camera;
+				rp.worldBounds = worldBounds;
+				rp.matProps = batch.Block;
+				batch.Block.SetBuffer(VisibleId, CullInstances && batch.CameraView ? culledVisibleBuffer : visibleBuffer);
+				if (rp.shadowCastingMode == ShadowCastingMode.ShadowsOnly && rp.material.shader.name == TerrainGpuRenderer.VegetationIndirectName)
+					rp.layer = DirectionalShadowDraws.LayerFor(camera, RenderSettings.sun, rp.layer);
+				int end = batch.First + batch.Count;
+				for (int c = batch.First; c < end;)
+				{
+					if (need[commands[c].Slot] <= 0)
+					{
+						c++;
+						continue;
+					}
+					int first = c;
+					while (c < end && need[commands[c].Slot] > 0)
+					{
+						c++;
+					}
+					Graphics.RenderMeshIndirect(rp, batch.Mesh, argsBuffer, c - first, first);
+					draws++;
+					shadowDraws += batch.CameraView ? 0 : 1;
+				}
+			}
+			return draws;
+		}
+
+		/// <summary>Whether a part can be merged into a pool (CombineMeshes reads it: readable, triangles, no blend shapes).</summary>
+		private static bool Poolable(Mesh mesh)
+			=> mesh != null && mesh.isReadable && mesh.subMeshCount >= 1 && mesh.GetTopology(0) == MeshTopology.Triangles && mesh.blendShapeCount == 0;
+
+		/// <summary>The pool a part joins (by material and vertex layout) with its family row, or null for a part no pool can merge.</summary>
+		private MeshPool PoolOf(Material material, Mesh mesh, int row)
+		{
+			if (material == null || !Poolable(mesh))
+			{
+				return null;
+			}
+			if (!layouts.TryGetValue(mesh, out string layout))
+			{
+				var sb = new System.Text.StringBuilder();
+				foreach (VertexAttributeDescriptor d in mesh.GetVertexAttributes())
+				{
+					sb.Append((int)d.attribute).Append(':').Append((int)d.format).Append('x').Append(d.dimension).Append('@').Append(d.stream).Append(';');
+				}
+				layout = sb.ToString();
+				layouts.Add(mesh, layout);
+			}
+			if (!pools.TryGetValue((material, layout), out MeshPool pool))
+			{
+				pool = new MeshPool();
+				pools.Add((material, layout), pool);
+			}
+			if (!pool.Index.ContainsKey((mesh, row)))
+			{
+				pool.Index.Add((mesh, row), pool.Parts.Count);
+				pool.Parts.Add(mesh);
+				pool.Rows.Add(row);
+			}
+			return pool;
+		}
+
+		/// <summary>Parts merged into one mesh, part i its submesh i (32-bit indices, vertices untouched; a pure function, tests).</summary>
+		public static Mesh PoolMesh(IReadOnlyList<Mesh> parts) => PoolMesh(parts, null);
+
+		/// <summary>
+		/// <see cref="PoolMesh(IReadOnlyList{Mesh})"/>, and with <paramref name="rows"/> every vertex of part i carries rows[i] in
+		/// uv4.x (TerrainVegTableMath.RowChannel): its kind's row of the family's table.
+		/// </summary>
+		public static Mesh PoolMesh(IReadOnlyList<Mesh> parts, IReadOnlyList<int> rows)
+		{
+			var combine = new CombineInstance[parts.Count];
+			for (int i = 0; i < combine.Length; i++)
+			{
+				combine[i] = new CombineInstance { mesh = parts[i], subMeshIndex = 0, transform = Matrix4x4.identity };
+			}
+			var mesh = new Mesh { name = "Detail scatter pool", hideFlags = HideFlags.DontSave, indexFormat = IndexFormat.UInt32 };
+			mesh.CombineMeshes(combine, false, false, false);
+			if (rows != null)
+			{
+				// CombineMeshes appends each part's vertices in order: part i owns the next vertexCount of them.
+				var uv = new Vector2[mesh.vertexCount];
+				int at = 0;
+				for (int i = 0; i < parts.Count; i++)
+				{
+					int n = parts[i].vertexCount;
+					for (int v = 0; v < n && at + v < uv.Length; v++)
+					{
+						uv[at + v] = new Vector2(rows[i], 0f);
+					}
+					at += n;
+				}
+				mesh.SetUVs(TerrainVegTableMath.RowChannel, uv);
+			}
+			return mesh;
+		}
+
+		/// <summary>Merges a pool's parts into a new mesh (<see cref="PoolMesh"/>) and releases the old one.</summary>
+		private static void BuildPool(MeshPool pool)
+		{
+			bool rows = false;
+			foreach (int row in pool.Rows)
+			{
+				rows |= row >= 0;
+			}
+			Mesh mesh = PoolMesh(pool.Parts, rows ? pool.Rows : null);
+			if (pool.Mesh != null)
+			{
+				Object.Destroy(pool.Mesh);
+			}
+			pool.Mesh = mesh;
+			pool.Built = pool.Parts.Count;
+		}
+
+		/// <summary>
+		/// Orders the commands into batches (<see cref="BatchDraws"/>): those of one material, view, flora mode and set of render
+		/// parameters whose parts share a pool become one run drawn from the pool's mesh, in slot order; a part no pool takes
+		/// is a batch on its own mesh. Every command's draw then reads its pool submesh's indices.
+		/// </summary>
+		private void GroupCommands()
+		{
+			var keyed = new Dictionary<(Material, MeshPool, Mesh, ShadowCastingMode, float, int, bool, ReflectionProbeUsage, uint, MotionVectorGenerationMode), int>();
+			var members = new List<List<(Command Command, MeshPool Pool)>>();
+			foreach (Command command in commands)
+			{
+				RenderParams p = command.Params;
+				MeshPool pool = PoolOf(p.material, command.Source, command.Row);
+				var key = (p.material, pool, pool == null ? command.Source : null, p.shadowCastingMode, command.Flora, p.layer, p.receiveShadows, p.reflectionProbeUsage, p.renderingLayerMask, p.motionVectorMode);
+				if (!keyed.TryGetValue(key, out int b))
+				{
+					b = members.Count;
+					keyed.Add(key, b);
+					members.Add(new List<(Command, MeshPool)>());
+				}
+				members[b].Add((command, pool));
+			}
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Built != pool.Parts.Count)
+				{
+					BuildPool(pool);
+				}
+			}
+			commands.Clear();
+			for (int b = 0; b < members.Count; b++)
+			{
+				var batch = new Batch { First = commands.Count, Count = members[b].Count };
+				var bounds = new Bounds();
+				bool first = true;
+				foreach ((Command member, MeshPool pool) in members[b])
+				{
+					Command c = member;
+					c.Mesh = pool != null ? pool.Mesh : c.Source;
+					commands.Add(c);
+					if (first)
+					{
+						bounds = c.Source.bounds;
+						first = false;
+					}
+					else
+					{
+						bounds.Encapsulate(c.Source.bounds);
+					}
+				}
+				Command head = commands[batch.First];
+				batch.Mesh = head.Mesh;
+				batch.Params = head.Params;
+				batch.CameraView = head.Params.shadowCastingMode != ShadowCastingMode.ShadowsOnly;
+				batch.Block = b < batchBlocks.Count ? batchBlocks[b] : AddBatchBlock();
+				batch.Block.SetFloat(TerrainGpuRenderer.FloraOnId, head.Flora);
+				// The batch's parts' caster sphere: every part's bounds, so a cascade it skips no part could reach.
+				batch.Block.SetVector(TerrainGpuRenderer.CasterSphereId, TerrainGpuRenderer.CasterSphere(bounds));
+				batches.Add(batch);
+			}
+		}
+
+		/// <summary>
+		/// Unbatched (<see cref="BatchDraws"/> off, or the instance index not carrying the run start): every family command still
+		/// draws from its pool, alone, since only the pool's vertices name its row.
+		/// </summary>
+		private void PoolFamilyCommands()
+		{
+			for (int c = 0; c < commands.Count; c++)
+			{
+				if (commands[c].Row >= 0)
+				{
+					PoolOf(commands[c].Params.material, commands[c].Source, commands[c].Row);
+				}
+			}
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Built != pool.Parts.Count)
+				{
+					BuildPool(pool);
+				}
+			}
+			for (int c = 0; c < commands.Count; c++)
+			{
+				Command command = commands[c];
+				if (command.Row >= 0)
+				{
+					command.Mesh = PoolOf(command.Params.material, command.Source, command.Row).Mesh;
+					commands[c] = command;
+				}
+			}
+		}
+
+		/// <summary>
+		/// A clone's vegetation family and row: FishMMO/Vegetation Indirect with the table variant, its family every clone equal
+		/// in all but the table's properties (TerrainGpuRenderer.VegFamilyKey). False (draws as itself) otherwise or when off.
+		/// </summary>
+		private bool VegFamilyOf(Material clone, out VegFamily family, out int row)
+		{
+			family = null;
+			row = -1;
+			if (!vegState || clone == null)
+			{
+				return false;
+			}
+			if (!vegOf.TryGetValue(clone, out (VegFamily Family, int Row) found))
+			{
+				found = MakeVegFamily(clone);
+				vegOf.Add(clone, found);
+			}
+			family = found.Family;
+			row = found.Row;
+			return family != null;
+		}
+
+		private (VegFamily, int) MakeVegFamily(Material clone)
+		{
+			Shader shader = clone.shader;
+			// Alpha-tested only: the sets the build lists with the table (ProceduralArtVariants.JoinsVegFamily).
+			if (shader == null || shader.name != TerrainGpuRenderer.VegetationIndirectName || !shader.keywordSpace.FindKeyword(TerrainVegTableMath.Keyword).isValid
+				|| !clone.IsKeywordEnabled("_ALPHATEST_ON"))
+			{
+				return (null, -1);
+			}
+			foreach (string property in TerrainVegTableMath.TableProperties)
+			{
+				if (!clone.HasProperty(property))
+				{
+					return (null, -1);
+				}
+			}
+			string key = TerrainGpuRenderer.VegFamilyKey(clone, contentKey);
+			if (key == null)
+			{
+				return (null, -1);
+			}
+			if (!vegFamilies.TryGetValue(key, out VegFamily family))
+			{
+				// The first member's clone, every shared value and binding as it is, drawn through the table.
+				var material = new Material(clone) { name = clone.name + " (family)", hideFlags = HideFlags.DontSave };
+				material.EnableKeyword(TerrainVegTableMath.Keyword);
+				family = new VegFamily { Material = material };
+				vegFamilies.Add(key, family);
+			}
+			family.Rows.Add(TerrainVegTableMath.RowOf(clone, QualitySettings.activeColorSpace == ColorSpace.Linear));
+			family.Dirty = true;
+			return (family, family.Rows.Count - 1);
+		}
+
+		/// <summary>Writes the tables of families that took new kinds (RGBAHalf, point, grown to the next power of two).</summary>
+		private void BuildVegTables()
+		{
+			foreach (VegFamily family in vegFamilies.Values)
+			{
+				if (!family.Dirty)
+				{
+					continue;
+				}
+				family.Dirty = false;
+				int rows = TerrainVegTableMath.TableRows(family.Rows.Count);
+				if (family.Table == null || family.Table.height < rows)
+				{
+					if (family.Table != null)
+					{
+						Object.Destroy(family.Table);
+					}
+					family.Table = new Texture2D(TerrainVegTableMath.Columns, rows, TextureFormat.RGBAHalf, false, true)
+					{
+						name = family.Material.name + " table",
+						hideFlags = HideFlags.DontSave,
+						filterMode = FilterMode.Point,
+						wrapMode = TextureWrapMode.Clamp,
+					};
+					family.Pixels = new Color[TerrainVegTableMath.Columns * rows];
+				}
+				for (int r = 0; r < family.Rows.Count; r++)
+				{
+					TerrainVegTableMath.WriteRow(family.Rows[r], family.Pixels, r);
+				}
+				family.Table.SetPixels(family.Pixels);
+				family.Table.Apply(false, false);
+				family.Material.SetTexture(VegTableId, family.Table);
+			}
+		}
+
+		private readonly List<MaterialPropertyBlock> batchBlocks = new List<MaterialPropertyBlock>();
+
+		private MaterialPropertyBlock AddBatchBlock()
+		{
+			var block = new MaterialPropertyBlock();
+			batchBlocks.Add(block);
+			return block;
+		}
+
+		/// <summary>A command's indirect args: its part's indices in the mesh it is drawn from, its slot's run start where the instance index carries it.</summary>
+		private GraphicsBuffer.IndirectDrawIndexedArgs ArgsOf(Command command)
+		{
+			int submesh = 0;
+			if (command.Mesh != command.Source)
+			{
+				foreach (MeshPool pool in pools.Values)
+				{
+					if (pool.Mesh == command.Mesh)
+					{
+						submesh = pool.Index[(command.Source, command.Row)];
+						break;
+					}
+				}
+			}
+			return new GraphicsBuffer.IndirectDrawIndexedArgs
+			{
+				indexCountPerInstance = command.Mesh.GetIndexCount(submesh),
+				startIndex = command.Mesh.GetIndexStart(submesh),
+				baseVertexIndex = (uint)command.Mesh.GetBaseVertex(submesh),
+				instanceCount = 0,
+				// The run's start where the instance index carries it (FishIndirectInstancing.hlsl's Vulkan branch); 0 for the batch
+				// group, whose DOTS setup adds the command's visibleOffset itself.
+				startInstance = !brgState && TerrainGpuRenderer.InstanceIdCarriesBase ? (uint)bases[command.Slot] : 0u,
+			};
+		}
+
+		/// <summary>Lays the slots out in the output buffers and rebuilds the commands, the models and the bindings.</summary>
+		private void Relayout(IReadOnlyList<DetailScatterType> types)
+		{
+			layoutDirty = false;
+			layoutTypes = types.Count;
+			int total = 0;
+			for (int slot = 0; slot < slotCount; slot++)
+			{
+				bases[slot] = total;
+				total += capacities[slot];
+			}
+			var slots = new Vector2Int[Mathf.Max(1, slotCount)];
+			for (int slot = 0; slot < slotCount; slot++)
+			{
+				slots[slot] = new Vector2Int(bases[slot], capacities[slot]);
+			}
+			Recreate(ref slotBuffer, GraphicsBuffer.Target.Structured, slots.Length, 8);
+			slotBuffer.SetData(slots);
+			Recreate(ref countBuffer, GraphicsBuffer.Target.Raw, Mathf.Max(1, slotCount), 4);
+			if (instanceBuffer == null || instanceBuffer.count < total)
+			{
+				// Headroom, so the next few growths do not reallocate at once.
+				int count = Mathf.Max(1024, total + total / 4);
+				Retire(instanceBuffer);
+				Retire(visibleBuffer);
+				instanceBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, FishInstance.Stride) { name = "Detail scatter instances" };
+				visibleBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, FishVisible.Stride) { name = "Detail scatter visible" };
+			}
+
+			if (mergedState != MergeIdenticalMaterials || vegState != VegFamilies)
+			{
+				// A switch flipped: every clone, family and pool made for them again.
+				ReleaseClones();
+				mergedState = MergeIdenticalMaterials;
+				vegState = VegFamilies;
+			}
+			var models = new ModelData[Mathf.Max(1, types.Count)];
+			commands.Clear();
+			batches.Clear();
+			for (int t = 0; t < types.Count; t++)
+			{
+				DetailScatterType type = types[t];
+				Bounds b = type.MeshBounds;
+				models[t] = new ModelData
+				{
+					// Culled by the largest its look can draw it (a bush keeps its size: colours only).
+					Sphere = new Vector4(b.center.x, b.center.y, b.center.z, type.Bush ? b.extents.magnitude : TerrainGpuRenderer.FloraSphereRadius(b)),
+					FootRadius = type.FootRadius,
+					Salt = type.Salt,
+					CastsShadows = type.CastsShadows ? 1f : 0f,
+					Lod = new Vector4(type.Levels.Length, type.Bush ? 1f : 0f, type.MeshTop, VariantsOf(type)),
+				};
+				Material clone = CloneOf(type.Material, type.Bush);
+				if (clone == null)
+				{
+					continue;
+				}
+				bool family = VegFamilyOf(clone, out VegFamily vegFamily, out int vegRow);
+				// A type's slices: its levels, or the variant meshes its instances cycle (a type of one level: ShareVariantNeeds).
+				Mesh[] slices = VariantsOf(type) > 1 ? type.Variants : type.Levels;
+				for (int level = 0; level < slices.Length && level < Levels; level++)
+				{
+					Mesh mesh = slices[level];
+					for (int v = 0; v < Views; v++)
+					{
+						if (v == 1 && !type.CastsShadows)
+						{
+							continue;
+						}
+						int slot = SlotOf(t, level, v);
+						RenderParams rp = type.Template;
+						// A family's kind draws through the family's material from its pool, whose uv4 names the row; a part no
+						// pool can take draws as itself.
+						bool pooled = family && Poolable(mesh);
+						rp.material = pooled ? vegFamily.Material : clone;
+						rp.shadowCastingMode = v == 0 ? ShadowCastingMode.Off : ShadowCastingMode.ShadowsOnly;
+						commands.Add(new Command { Slot = slot, Mesh = mesh, Source = mesh, Row = pooled ? vegRow : -1, Params = rp, Flora = type.Bush ? 2f : 1f });
+					}
+				}
+			}
+			BuildVegTables();
+			// The batch group draws every command itself (no multi-command calls); a family's still from its pool.
+			brgState = BrgFor(instanceBuffer.count);
+			batchedState = !brgState && BatchDraws && TerrainGpuRenderer.InstanceIdCarriesBase;
+			if (batchedState)
+			{
+				GroupCommands();
+			}
+			else
+			{
+				PoolFamilyCommands();
+			}
+			var args = new List<GraphicsBuffer.IndirectDrawIndexedArgs>(commands.Count);
+			var argSlots = new List<uint>(commands.Count);
+			var commandBases = new List<uint>(commands.Count);
+			foreach (Command command in commands)
+			{
+				args.Add(ArgsOf(command));
+				argSlots.Add((uint)command.Slot);
+				commandBases.Add((uint)bases[command.Slot]);
+			}
+			Recreate(ref modelBuffer, GraphicsBuffer.Target.Structured, models.Length, ModelData.Stride);
+			modelBuffer.SetData(models);
+			Recreate(ref argsBuffer, GraphicsBuffer.Target.IndirectArguments | GraphicsBuffer.Target.Raw, Mathf.Max(1, args.Count), GraphicsBuffer.IndirectDrawIndexedArgs.size);
+			if (args.Count > 0)
+			{
+				argsBuffer.SetData(args);
+			}
+			Recreate(ref argSlotBuffer, GraphicsBuffer.Target.Structured, Mathf.Max(1, argSlots.Count), 4);
+			Recreate(ref commandBaseBuffer, GraphicsBuffer.Target.Structured, Mathf.Max(1, commandBases.Count), 4);
+			if (argSlots.Count > 0)
+			{
+				argSlotBuffer.SetData(argSlots);
+				commandBaseBuffer.SetData(commandBases);
+			}
+			if (blocks.Length < commands.Count)
+			{
+				int old = blocks.Length;
+				Array.Resize(ref blocks, commands.Count);
+				for (int c = old; c < commands.Count; c++)
+				{
+					blocks[c] = new MaterialPropertyBlock();
+				}
+			}
+			Bind();
+			BrgLayout();
+		}
+
+		/// <summary>
+		/// The material's procedural-instancing twin, cloned once per source material and bushness (its buffers are this
+		/// renderer's). A bush's clone takes its look's colours only (_FishFloraColoursOnly): what its draws' _FishFloraOn 2 says
+		/// on the RenderMeshIndirect path, and the only way to say it on the batch group's, whose flora constant is per batch.
+		/// </summary>
+		private Material CloneOf(Material material, bool bush)
+		{
+			if (material == null)
+			{
+				return null;
+			}
+			if (clones.TryGetValue((material, bush), out Material clone))
+			{
+				return clone;
+			}
+			Shader shader = TerrainGpuRenderer.IndirectShaderFor(material);
+			if (shader == null)
+			{
+				return null;
+			}
+			string key = mergedState ? TerrainGpuRenderer.ContentKey(material, contentKey) : null;
+			if (key != null)
+			{
+				key += bush ? "|bush" : "|plant";
+			}
+			if (key != null && clonesByContent.TryGetValue(key, out clone) && clone != null)
+			{
+				clones.Add((material, bush), clone);
+				return clone;
+			}
+			clone = new Material(material) { shader = shader, name = material.name + " (scatter)", hideFlags = HideFlags.DontSave };
+			// Every scattered thing (a pebble, a shell, litter, a bush) takes the look of the patch it lies in (FishFlora.hlsl).
+			// On the clone and on every block (Bind, per command: a bush takes its colours only), as the trees set
+			// _FishContactOn: the source material, a Rock_* the boulders and cliff rocks wear too, is never touched.
+			clone.SetFloat(TerrainGpuRenderer.FloraOnId, 1f);
+			clone.SetFloat(ColoursOnlyId, bush ? 1f : 0f);
+			// An alpha-tested bush is never primed (its lit pass writes depth): drawn between the trees' primes and their lit
+			// draws, not sorted in among the latter, which write none (TerrainGpuRenderer.UnprimedAlphaTestQueueOffset).
+			if (shader.name == TerrainGpuRenderer.VegetationIndirectName && clone.IsKeywordEnabled("_ALPHATEST_ON"))
+			{
+				clone.renderQueue = material.renderQueue + TerrainGpuRenderer.UnprimedAlphaTestQueueOffset;
+			}
+			clones.Add((material, bush), clone);
+			if (key != null)
+			{
+				clonesByContent[key] = clone;
+			}
+			return clone;
+		}
+
+		/// <summary>Destroys every clone (a merged one once) and the pools merged for them.</summary>
+		private void ReleaseClones()
+		{
+			foreach (Material clone in new HashSet<Material>(clones.Values))
+			{
+				if (clone != null)
+				{
+					Object.Destroy(clone);
+				}
+			}
+			clones.Clear();
+			clonesByContent.Clear();
+			foreach (VegFamily family in vegFamilies.Values)
+			{
+				if (family.Material != null)
+				{
+					Object.Destroy(family.Material);
+				}
+				if (family.Table != null)
+				{
+					Object.Destroy(family.Table);
+				}
+			}
+			vegFamilies.Clear();
+			vegOf.Clear();
+			foreach (MeshPool pool in pools.Values)
+			{
+				if (pool.Mesh != null)
+				{
+					Object.Destroy(pool.Mesh);
+				}
+			}
+			pools.Clear();
+		}
+
+		/// <summary>Binds the output and command-base buffers on every clone material and every command's block.</summary>
+		private void Bind()
+		{
+			foreach (Material clone in clones.Values)
+			{
+				if (clone != null)
+				{
+					clone.SetBuffer(InstancesId, instanceBuffer);
+					clone.SetBuffer(VisibleId, visibleBuffer);
+					clone.SetBuffer(CommandBasesId, commandBaseBuffer);
+				}
+			}
+			foreach (VegFamily family in vegFamilies.Values)
+			{
+				family.Material.SetBuffer(InstancesId, instanceBuffer);
+				family.Material.SetBuffer(VisibleId, visibleBuffer);
+				family.Material.SetBuffer(CommandBasesId, commandBaseBuffer);
+			}
+			for (int c = 0; c < commands.Count; c++)
+			{
+				blocks[c].SetBuffer(InstancesId, instanceBuffer);
+				blocks[c].SetBuffer(VisibleId, visibleBuffer);
+				blocks[c].SetBuffer(CommandBasesId, commandBaseBuffer);
+				blocks[c].SetFloat(TerrainGpuRenderer.FloraOnId, commands[c].Flora);
+				// The drawn level's caster sphere, as the trees' slots carry it: a bush's or a pebble's shadow caster then
+				// skips the cascades it cannot reach (FishCasterCulling.hlsl), by the same rule as the trees'.
+				blocks[c].SetVector(TerrainGpuRenderer.CasterSphereId, commands[c].Source != null ? TerrainGpuRenderer.CasterSphere(commands[c].Source.bounds) : Vector4.zero);
+			}
+			foreach (Batch batch in batches)
+			{
+				batch.Block.SetBuffer(InstancesId, instanceBuffer);
+				batch.Block.SetBuffer(VisibleId, visibleBuffer);
+				batch.Block.SetBuffer(CommandBasesId, commandBaseBuffer);
+			}
+		}
+
+		private void RequestStats(IReadOnlyList<DetailScatterType> types)
+		{
+			int slotsNow = slotCount;
+			int[] capacitiesNow = (int[])capacities.Clone();
+			cmd.RequestAsyncReadback(countBuffer, request =>
+			{
+				if (request.hasError)
+				{
+					return;
+				}
+				NativeArray<uint> counts = request.GetData<uint>();
+				int n = Mathf.Min(slotsNow, counts.Length);
+				var last = new int[n];
+				for (int i = 0; i < n; i++)
+				{
+					last[i] = (int)counts[i];
+					if (counts[i] > capacitiesNow[i] && i < overflowWarned.Length && !overflowWarned[i] && i / SlotsPerType < types.Count)
+					{
+						overflowWarned[i] = true;
+						Debug.LogWarning($"[Detail scatter] '{types[i / SlotsPerType].Name}' level {i % SlotsPerType / Views} {(i % Views == 0 ? "camera" : "shadow")} slot overflowed: {counts[i]} appended, capacity {capacitiesNow[i]}; the rest were dropped (GPU detail scatter > Max Instances Per Slot).");
+					}
+				}
+				LastCounts = last;
+			});
+		}
+
+		private void EnsureItems(int needed)
+		{
+			if (items.IsCreated && items.Length >= needed)
+			{
+				return;
+			}
+			var grown = new NativeArray<Item>(Mathf.Max(needed, items.IsCreated ? items.Length * 2 : 1024), Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+			if (items.IsCreated)
+			{
+				NativeArray<Item>.Copy(items, grown, itemCount);
+				items.Dispose();
+			}
+			items = grown;
+		}
+
+		private void Recreate(ref GraphicsBuffer buffer, GraphicsBuffer.Target target, int count, int stride)
+		{
+			if (buffer != null && buffer.count == count && buffer.stride == stride)
+			{
+				return;
+			}
+			Retire(buffer);
+			buffer = new GraphicsBuffer(target, count, stride);
+		}
+
+		/// <summary>A buffer a frame in flight may still read: released a few frames later.</summary>
+		private void Retire(GraphicsBuffer buffer)
+		{
+			if (buffer != null)
+			{
+				retired.Add((buffer, Time.frameCount));
+			}
+		}
+
+		private void ReleaseRetired(bool all)
+		{
+			for (int i = retired.Count - 1; i >= 0; i--)
+			{
+				if (all || Time.frameCount - retired[i].Frame >= 4)
+				{
+					retired[i].Buffer.Release();
+					retired.RemoveAt(i);
+				}
+			}
+		}
+
+		public void Dispose()
+		{
+			DisposeBrg(true);
+			cmd.Release();
+			ReleaseRetired(true);
+			foreach (GraphicsBuffer b in new[] { itemBuffer, modelBuffer, slotBuffer, countBuffer, instanceBuffer, visibleBuffer, argsBuffer, argSlotBuffer, commandBaseBuffer, culledVisibleBuffer, culledCountBuffer })
+			{
+				b?.Release();
+			}
+			itemBuffer = modelBuffer = slotBuffer = countBuffer = instanceBuffer = visibleBuffer = argsBuffer = argSlotBuffer = commandBaseBuffer = culledVisibleBuffer = culledCountBuffer = null;
+			if (items.IsCreated)
+			{
+				items.Dispose();
+			}
+			if (compute != null)
+			{
+				Object.Destroy(compute);
+			}
+			ReleaseClones();
+			commands.Clear();
+			batches.Clear();
+			atlas.Dispose();
+		}
+	}
+}

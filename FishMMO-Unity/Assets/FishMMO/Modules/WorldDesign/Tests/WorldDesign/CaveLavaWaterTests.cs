@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	[TestFixture]
 	public class CaveLavaWaterTests
 	{
-		private const string WaterFolder = "Assets/Plugins/FishMMO Water/";
+		private const string WaterFolder = "Assets/FishMMO/Modules/Water/";
 
 		[TearDown]
 		public void TearDown() => WaterQuery.Clear();
