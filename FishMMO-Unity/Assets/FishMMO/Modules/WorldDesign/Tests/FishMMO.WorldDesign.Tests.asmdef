@@ -46,7 +46,9 @@
         "FishMMO.Map.Client",
         "FishMMO.WorldInteractables",
         "FishMMO.NPCs",
-        "FishMMO.NPCs.Server"
+        "FishMMO.NPCs.Server",
+        "FishMMO.Matchmaking",
+        "FishMMO.Housing"
     ],
     "includePlatforms": [
         "Editor"

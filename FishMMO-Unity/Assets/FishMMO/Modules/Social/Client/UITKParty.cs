@@ -220,6 +220,8 @@ namespace FishMMO.Client
 			public float TotalSeconds;
 			/// <summary>Seconds remaining when the server sent this entry.</summary>
 			public float RemainingSeconds;
+			/// <summary>When (unscaled time) the entry behind <see cref="RemainingSeconds"/> was received.</summary>
+			public float ReceivedAt;
 			/// <summary>Stack count this icon's label was built from.</summary>
 			public int Stacks;
 			/// <summary>
@@ -1906,6 +1908,7 @@ namespace FishMMO.Client
 			icon.Template = template;
 			icon.TotalSeconds = entry.TotalSeconds;
 			icon.RemainingSeconds = entry.RemainingSeconds;
+			icon.ReceivedAt = Time.unscaledTime - elapsed;
 			icon.Stacks = entry.Stacks;
 
 			/* Invalidated before the fill is written. A pooled icon carries the percentage its
@@ -1943,15 +1946,52 @@ namespace FishMMO.Client
 		/// <param name="icon">The hovered icon.</param>
 		private void OnIconPointerEnter(BuffIcon icon)
 		{
-			if (icon.Template == null)
+			TooltipContent content = BuildIconTooltip(icon);
+			if (content == null || !UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				return;
 			}
+			tooltip.Open(content, icon.Root);
 
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			/* Time Left counts down while the pointer rests on the icon (2026-11-21), from the received entry as the fill
+			 * does; four times a second, only while this icon still owns the tooltip. */
+			iconHoverRefresh?.Pause();
+			iconHoverRefresh = icon.Root.schedule.Execute(() =>
 			{
-				tooltip.Open(icon.Template, icon.Root);
+				if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip open))
+				{
+					TooltipContent live = BuildIconTooltip(icon);
+					if (live != null)
+					{
+						open.RefreshLive(icon.Root, live);
+					}
+				}
+			}).Every(IconHoverRefreshMilliseconds);
+		}
+
+		/// <summary>How often an open party buff tooltip is rewritten while hovered, milliseconds.</summary>
+		private const long IconHoverRefreshMilliseconds = 250;
+
+		/// <summary>The hovered party buff icon's tooltip refresh, paused when the pointer leaves.</summary>
+		private IVisualElementScheduledItem iconHoverRefresh;
+
+		/// <summary>A party buff icon's tooltip: the template, and the time left as this client counts it down.</summary>
+		private static TooltipContent BuildIconTooltip(BuffIcon icon)
+		{
+			if (icon?.Template == null)
+			{
+				return null;
 			}
+			TooltipContent content = icon.Template.BuildContent();
+			if (!icon.Template.IsPermanent && icon.TotalSeconds > 0.0f)
+			{
+				float remaining = icon.RemainingSeconds - (Time.unscaledTime - icon.ReceivedAt);
+				if (remaining > 0.0f)
+				{
+					content.AddStat("Time Left", $"{remaining:0.#}s", TooltipPriority.LiveState);
+				}
+			}
+			return content;
 		}
 
 		/// <summary>
@@ -1960,6 +2000,8 @@ namespace FishMMO.Client
 		/// <param name="icon">The icon the pointer left.</param>
 		private void OnIconPointerLeave(BuffIcon icon)
 		{
+			iconHoverRefresh?.Pause();
+			iconHoverRefresh = null;
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				tooltip.HideFor(icon.Root);

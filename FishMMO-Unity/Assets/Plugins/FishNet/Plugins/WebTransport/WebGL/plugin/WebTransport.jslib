@@ -61,6 +61,16 @@ var LibraryFishWebTransport = {
          *  (browser: WIRE SEND FAIL, server: prefill=0) while the desktop
          *  native path sent fine. Once ready() resolves we treat the session
          *  as live until it is explicitly closed or failed. */
+        /** A read that failed because its session closed: a server hop (login -> world -> scene) closes the old session on
+         *  purpose, and its pending reads reject with "The session is closed." before readyState or _closed catch up.
+         *  That is the session's normal end, not an error (2026-11-21: three red/yellow lines on every hop). */
+        _isClosedRead: function(session, e) {
+            if (!FishWebTransport._isLive(session)) return true;
+            var msg = (e && e.message) ? String(e.message) : '';
+            return /session is closed|session closed|connection lost/i.test(msg) ||
+                   (e && e.name === 'WebTransportError' && e.source === 'session');
+        },
+
         _isLive: function(session) {
             if (!session || !session.wt || session._closed) return false;
             var rs = session.wt.readyState;
@@ -483,7 +493,11 @@ var LibraryFishWebTransport = {
                     if (st.broken) { try { streamReader.releaseLock(); } catch (_) {} return; }
                     readStream();
                 }).catch(function(e) {
-                    console.warn('[FishWT] ' + label + ' read error: ' + e.message);
+                    if (FishWebTransport._isClosedRead(session, e)) {
+                        console.debug('[FishWT] ' + label + ' reader ended with its session');
+                    } else {
+                        console.warn('[FishWT] ' + label + ' read error: ' + e.message);
+                    }
                     try { streamReader.releaseLock(); } catch (_) {}
                 });
             }
@@ -598,8 +612,13 @@ var LibraryFishWebTransport = {
                             pump();
                         });
                     }).catch(function(e) {
-                        console.error('[FishWT] dgram read error: ' + e.message);
                         try { reader.releaseLock(); } catch (_) {}
+                        if (FishWebTransport._isClosedRead(session, e)) {
+                            /* The session is gone: nothing to read again, so no retry either. */
+                            console.debug('[FishWT] datagram reader ended with its session');
+                            return;
+                        }
+                        console.error('[FishWT] dgram read error: ' + e.message);
                         setTimeout(function() { startPump(); }, 1000);
                     });
                 }

@@ -36,6 +36,13 @@ namespace FishMMO.Shared
 		public int HitCount;
 
 		/// <summary>
+		/// The ability object passes through scenery (ground, props, walls) and strikes only characters. For a volume that
+		/// travels with its caster (a charge), whose stop and impact must answer to a body ahead, not to the ground it skims.
+		/// </summary>
+		[Tooltip("Pass through scenery: only characters are struck (a charge's volume skims the ground it rushes over).")]
+		public bool StrikesCharactersOnly;
+
+		/// <summary>
 		/// The type of the ability (e.g., offensive, defensive, utility).
 		/// </summary>
 		public AbilityType Type;

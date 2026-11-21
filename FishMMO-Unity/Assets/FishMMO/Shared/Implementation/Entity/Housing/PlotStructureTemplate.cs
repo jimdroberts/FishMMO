@@ -62,13 +62,13 @@ namespace FishMMO.Shared
 		/// because an empty box is contained by everything.
 		/// </remarks>
 		public Vector2 SafeFootprint => new Vector2(
-			Mathf.Max(PlotFoundation.MinimumExtent, Footprint.x),
-			Mathf.Max(PlotFoundation.MinimumExtent, Footprint.y));
+			Mathf.Max(PlotRules.MinimumExtent, Footprint.x),
+			Mathf.Max(PlotRules.MinimumExtent, Footprint.y));
 
 		/// <summary>
 		/// The structure's height, floored at the same minimum.
 		/// </summary>
-		public float SafeHeight => Mathf.Max(PlotFoundation.MinimumExtent, Height);
+		public float SafeHeight => Mathf.Max(PlotRules.MinimumExtent, Height);
 
 		/// <summary>
 		/// The volume this structure would occupy if placed at a point, facing a given way.

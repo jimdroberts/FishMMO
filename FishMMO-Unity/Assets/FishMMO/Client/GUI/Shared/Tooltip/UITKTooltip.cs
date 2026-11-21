@@ -269,6 +269,19 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// Rewrites the open tooltip with <paramref name="content"/>, only if it is still showing for <paramref name="owner"/>:
+		/// for live values (a buff's time left) that change while the pointer rests on one element. Never opens a tooltip.
+		/// </summary>
+		public void RefreshLive(VisualElement owner, TooltipContent content)
+		{
+			if (content == null || !Describes(owner))
+			{
+				return;
+			}
+			Open(content, this.owner);
+		}
+
+		/// <summary>
 		/// Re-describes <paramref name="owner"/> after the thing it stands for has changed.
 		/// </summary>
 		/// <remarks>

@@ -109,6 +109,8 @@ namespace FishMMO.AbilityContent
 				a.LifeTime = 0.6f;       // outlasts the longest rush; ends with the rush
 				a.Cooldown = 6f;
 				a.HitCount = 1;
+				// The volume skims the ground it rushes over: rising ground ahead must not count as running into something.
+				a.StrikesCharactersOnly = true;
 				a.ActivationConditions.Add(Cost(stamina, 12));
 				a.OnSpawnEvents.Add(chargeRush);
 				a.OnTickEvents.Add(chargeFollow);

@@ -15,7 +15,8 @@
         "Unity.Addressables",
         "Unity.Addressables.Editor",
         "KinematicCharacterController",
-        "FishMMO.Buffs"
+        "FishMMO.Buffs",
+        "FishMMO.NPCs"
     ],
     "includePlatforms": [
         "Editor"

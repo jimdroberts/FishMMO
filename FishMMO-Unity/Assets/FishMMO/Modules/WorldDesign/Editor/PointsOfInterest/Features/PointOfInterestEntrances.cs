@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using FishMMO.Shared.Core;
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
@@ -52,7 +53,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Builds a dungeon entrance in the door the site's props laid, where no feature built one.</summary>
 		public static void EnsureDungeonAtDoor(PointOfInterestSiteContext context)
 		{
-			if (context.Root.GetComponentInChildren<DungeonEntrance>(true) != null
+			if (context.Root.GetComponentInChildren<IDungeonEntrance>(true) != null
 				|| !DungeonEntranceFeature.TryLaidDoor(context.Laid, out PointOfInterestSiteContext.PlacedProp door, out _))
 			{
 				return;

@@ -599,14 +599,47 @@ namespace FishMMO.Client
 		/// <param name="owner">The hovered element, used to auto-close the tooltip.</param>
 		private void OnGroupPointerEnter(int templateID, VisualElement owner)
 		{
-			if (!entries.TryGetValue(templateID, out BuffEntry entry) || entry.Template == null)
+			TooltipContent content = BuildTooltip(templateID);
+			if (content == null || !UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				return;
 			}
+			tooltip.Open(content, owner);
 
-			if (!UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			/* Time Left counts down while the pointer rests on the icon (2026-11-21: it froze at the value it opened with).
+			 * Refreshed four times a second, and only while this icon still owns the tooltip. */
+			hoverRefresh?.Pause();
+			hoverRefresh = owner.schedule.Execute(() =>
 			{
-				return;
+				if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip open))
+				{
+					TooltipContent live = BuildTooltip(templateID);
+					if (live != null)
+					{
+						open.RefreshLive(owner, live);
+					}
+					else
+					{
+						// The buff ran out under the pointer: nothing left to describe.
+						open.HideFor(owner);
+						hoverRefresh?.Pause();
+					}
+				}
+			}).Every(HoverRefreshMilliseconds);
+		}
+
+		/// <summary>How often an open buff tooltip is rewritten while hovered, milliseconds.</summary>
+		private const long HoverRefreshMilliseconds = 250;
+
+		/// <summary>The hovered icon's tooltip refresh, paused when the pointer leaves.</summary>
+		private IVisualElementScheduledItem hoverRefresh;
+
+		/// <summary>The tooltip for one of this strip's buffs, with its live state; null when the buff is gone.</summary>
+		private TooltipContent BuildTooltip(int templateID)
+		{
+			if (!entries.TryGetValue(templateID, out BuffEntry entry) || entry.Template == null)
+			{
+				return null;
 			}
 
 			TooltipContent content = entry.Template.BuildContent();
@@ -622,8 +655,7 @@ namespace FishMMO.Client
 			{
 				content.AddHint(DISMISS_HINT);
 			}
-
-			tooltip.Open(content, owner);
+			return content;
 		}
 
 		/// <summary>
@@ -645,6 +677,8 @@ namespace FishMMO.Client
 		/// <param name="owner">The element the pointer left.</param>
 		private void OnGroupPointerLeave(VisualElement owner)
 		{
+			hoverRefresh?.Pause();
+			hoverRefresh = null;
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				tooltip.HideFor(owner);

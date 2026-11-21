@@ -17,7 +17,12 @@ MonoBehaviour:
   MaxStackSize: 1
   Price: 0
   IconPools: 
-  icon: {fileID: 21300000, guid: 66305a19e3614694f868c75a982e6b68, type: 3}
+  icon:
+    m_AssetGUID: fb39f83f063ab5c249fbc769828acbc9
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
   Attributes: []
   Slot: 1
   MaxItemAttributes: 0

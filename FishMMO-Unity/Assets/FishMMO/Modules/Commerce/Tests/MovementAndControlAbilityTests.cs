@@ -38,6 +38,17 @@ namespace FishMMO.UnitTests
 		// ── The staged charge ────────────────────────────────────────────────────────────────
 
 		[Test]
+		public void ShortCharge_PassesThroughScenery()
+		{
+			/* 2026-11-21, "stops going up a slope, sometimes desyncs": the charge volume (1 x 1.6 x 0.6 m, 0.9 m up, 0.7 m
+			 * ahead) reaches 0.1 m above the feet and 1 m forward, so any rise over ~6 degrees put the ground inside it. That
+			 * scenery hit ran the stop event (no conditions: any hit) and spent the volume's one hit. Only characters stop it
+			 * now; walls stop the rush through the motor's blocked rule. */
+			AbilityTemplate charge = Load(ShortCharge);
+			Assert.That(charge.StrikesCharactersOnly, Is.True, "the charge volume must not strike the ground it rushes over");
+		}
+
+		[Test]
 		public void ChargeStage_TapHalfAndFull()
 		{
 			const uint total = 30; // a 1 s charge at 30 Hz

@@ -47,6 +47,17 @@ namespace FishMMO.Shared
 		public bool NeutralExcludesWildlifeAndPets;
 
 		/// <summary>
+		/// A pet passes only for its own side: its owner, or the owner's other pets (Jim, 2026-11-21: "players that summon pets
+		/// should be required to handle their own pet maintenance"). Applies at every standing, so a party or guild member's pet,
+		/// an ally, is not healed by anyone but its owner either.
+		/// </summary>
+		[Tooltip("A pet passes only when it is the initiator's own (or the initiator's owner's): nobody else maintains a pet.")]
+		public bool ExcludeOthersPets;
+
+		/// <summary>The pet rule as a pure function: whether a target that is someone else's pet is let through.</summary>
+		public bool PassesPetRule(bool defenderIsOthersPet) => !ExcludeOthersPets || !defenderIsOthersPet;
+
+		/// <summary>
 		/// The rule for a target other than the initiator, as a pure function of how the two stand and whether the target is a
 		/// player character.
 		/// </summary>
@@ -117,8 +128,15 @@ namespace FishMMO.Shared
 			{
 				return ApplyToSelf;
 			}
+			// Someone else's pet, at any standing (a pet's side is its owner's).
+			ICharacter defenderSide = HarmRule.Principal(defender);
+			bool othersPet = !ReferenceEquals(defenderSide, defender) && !ReferenceEquals(defenderSide, HarmRule.Principal(initiator));
+			if (!PassesPetRule(othersPet))
+			{
+				return false;
+			}
 			// Otherwise, check the alliance level between initiator and defender
-			else if (defender.TryGet(out IFactionController defenderFactionController))
+			if (defender.TryGet(out IFactionController defenderFactionController))
 			{
 				FactionAllianceLevel allianceLevel = attackerFactionController.GetAllianceLevel(defenderFactionController);
 				FactionAllianceLevel standing = attackerFactionController.GetStandingAllianceLevel(defenderFactionController);

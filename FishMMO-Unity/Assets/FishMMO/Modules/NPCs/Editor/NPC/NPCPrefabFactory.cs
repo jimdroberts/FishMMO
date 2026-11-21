@@ -223,31 +223,31 @@ namespace FishMMO.Shared
 			{
 				return NPCInteraction.Merchant;
 			}
-			if (prefab.GetComponent<Banker>() != null)
+			if (prefab.GetComponent<IBanker>() != null)
 			{
 				return NPCInteraction.Banker;
 			}
-			if (prefab.GetComponent<AbilityCrafter>() != null)
+			if (prefab.GetComponent<IAbilityCrafter>() != null)
 			{
 				return NPCInteraction.AbilityCrafter;
 			}
 			return NPCInteraction.None;
 		}
 
-		/// <summary>The Commerce module's merchant component, found by name (null without the module).</summary>
-		private static Type MerchantComponentType
+		/// <summary>
+		/// The component behind a role's core interface, found in whichever module provides it (null without the module): the
+		/// merchant is Commerce's, the banker Items', the ability crafter AbilityCrafting's (2026-11-21, second-wave moves).
+		/// </summary>
+		private static Type ComponentFor<TInterface>()
 		{
-			get
+			foreach (Type type in TypeCache.GetTypesDerivedFrom<TInterface>())
 			{
-				foreach (Type type in TypeCache.GetTypesDerivedFrom<IMerchant>())
+				if (!type.IsAbstract && typeof(Component).IsAssignableFrom(type))
 				{
-					if (!type.IsAbstract && typeof(Component).IsAssignableFrom(type))
-					{
-						return type;
-					}
+					return type;
 				}
-				return null;
 			}
+			return null;
 		}
 
 		/// <summary>
@@ -259,9 +259,9 @@ namespace FishMMO.Shared
 		{
 			switch (interaction)
 			{
-				case NPCInteraction.Merchant: return MerchantComponentType;
-				case NPCInteraction.Banker: return typeof(Banker);
-				case NPCInteraction.AbilityCrafter: return typeof(AbilityCrafter);
+				case NPCInteraction.Merchant: return ComponentFor<IMerchant>();
+				case NPCInteraction.Banker: return ComponentFor<IBanker>();
+				case NPCInteraction.AbilityCrafter: return ComponentFor<IAbilityCrafter>();
 				default: return null;
 			}
 		}

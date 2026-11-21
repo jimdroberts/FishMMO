@@ -134,6 +134,9 @@ namespace FishMMO.Shared
 		/// Number of hits this object can perform before being destroyed.
 		/// </summary>
 		public int HitCount;
+
+		/// <summary>Whether scenery is passed through rather than struck (<see cref="AbilityTemplate.StrikesCharactersOnly"/>).</summary>
+		public bool StrikesCharactersOnly;
 		/// <summary>
 		/// The charge stage the cast that made this object was released at (<see cref="Ability.ChargeStage"/>), from 1; 0
 		/// when the ability is not a staged charge, or on an observer's copy, which never learns it (it applies nothing).
@@ -2028,6 +2031,14 @@ namespace FishMMO.Shared
 
 		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal, Vector3 localPoint, bool isAuthoritativeEcho = false)
 		{
+			/* Scenery is passed through, not struck, by an object that only strikes characters (a charge's volume: the
+			 * ground rising ahead on a slope overlapped it, spent its one hit and ran the rush's stop event; 2026-11-21).
+			 * Walls still stop the rush, through the motor's own blocked rule. Checked first, so it costs no hit slot. */
+			if (hitCharacter == null && StrikesCharactersOnly)
+			{
+				return true;
+			}
+
 			/* Once per target for this object's whole life, keyed on the character where there is one
 			 * so two hitboxes on one body cost one hit. The sweep runs every tick, and a pierce that
 			 * ends up inside a character overlaps it on all of them; without this it would drain its
@@ -3223,6 +3234,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = ability;
 			abilityObject.Caster = caster;
 			abilityObject.HitCount = ability.Template.HitCount;
+			abilityObject.StrikesCharactersOnly = ability.Template.StrikesCharactersOnly;
 			abilityObject.ChargeStage = ability.ChargeStage;
 			abilityObject.RemainingLifeTime = ability.LifeTime;
 			abilityObject.RNG = new DeterministicRNG(seed);
@@ -3394,6 +3406,7 @@ namespace FishMMO.Shared
 			abilityObject.Ability = source.Ability;
 			abilityObject.Caster = source.Caster;
 			abilityObject.HitCount = source.HitCount;
+			abilityObject.StrikesCharactersOnly = source.StrikesCharactersOnly;
 			abilityObject.ChargeStage = source.ChargeStage;
 			abilityObject.RemainingLifeTime = source.RemainingLifeTime;
 			abilityObject.RNG = new DeterministicRNG(CreateChildSeed(seed, abilityObjectID));

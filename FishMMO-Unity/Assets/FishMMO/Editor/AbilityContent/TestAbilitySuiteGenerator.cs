@@ -948,7 +948,7 @@ namespace FishMMO.AbilityContent
 
 		/// <summary>
 		/// Who a heal mends: you, your allies, and any player or NPC that is not hostile to you — never wildlife or someone
-		/// else's pet (Jim, 2026-11-21: neutral NPCs too, "it will be helpful later on"). Buffs stay with <see cref="Friends"/>:
+		/// else's pet, even an ally's (Jim, 2026-11-21: owners maintain their own pets) (Jim, 2026-11-21: neutral NPCs too, "it will be helpful later on"). Buffs stay with <see cref="Friends"/>:
 		/// allies only.
 		/// </summary>
 		private static T Healable<T>(T selector) where T : TargetSelector
@@ -960,6 +960,7 @@ namespace FishMMO.AbilityContent
 				ApplyToNeutral = true,
 				NeutralPlayersOnly = false,
 				NeutralExcludesWildlifeAndPets = true,
+				ExcludeOthersPets = true,
 				ApplyToAllies = true,
 			});
 			selector.Conditions.Add(new IsCharacterAliveCondition());

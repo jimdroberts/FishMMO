@@ -16,7 +16,8 @@
         "FishMMO.Map",
         "FishMMO.Map.Client",
         "Unity.InputSystem",
-        "FishMMO.Client.Input.Generated"
+        "FishMMO.Client.Input.Generated",
+        "FishMMO.Matchmaking"
     ],
     "includePlatforms": [
         "Editor"

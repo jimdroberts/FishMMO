@@ -32,6 +32,7 @@ MonoBehaviour:
   RequiresTarget: 0
   AdditionalEventSlots: 0
   HitCount: 1
+  StrikesCharactersOnly: 1
   Type: 3
   ChargeStages: 3
   IntentOverride: 0

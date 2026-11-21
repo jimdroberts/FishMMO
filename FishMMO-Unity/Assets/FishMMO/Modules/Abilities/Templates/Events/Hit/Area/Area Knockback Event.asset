@@ -20,12 +20,7 @@ MonoBehaviour:
   - rid: 4295713125095964707
   OnConditionsNotMetActions: []
   Verbose: 0
-  icon:
-    m_AssetGUID: 79ae2f10e2e642bded0d9b44dc06570f
-    m_SubObjectName: 
-    m_SubObjectType: 
-    m_SubObjectGUID: 
-    m_EditorAssetChanged: 0
+  icon: {fileID: 21300000, guid: 79ae2f10e2e642bded0d9b44dc06570f, type: 3}
   ActivationTime: 0
   LifeTime: 0
   Speed: 0

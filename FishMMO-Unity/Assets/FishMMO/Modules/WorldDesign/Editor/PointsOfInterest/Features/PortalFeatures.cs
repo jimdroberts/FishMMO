@@ -28,6 +28,7 @@ namespace FishMMO.Shared.WorldDesign
 	[MovedFrom(false, sourceAssembly: "FishMMO.Shared.Tools.Editor")]
 	public class PortalFeature : PointOfInterestFeature, IPointOfInterestUnlockFeature
 	{
+
 		[Tooltip("Chance the portal leads to another scene (a SceneTeleporter) rather than within this one (a Teleporter).")]
 		[Range(0.0f, 1.0f)]
 		public float CrossSceneChance = 0.5f;
@@ -170,6 +171,22 @@ namespace FishMMO.Shared.WorldDesign
 	[MovedFrom(false, sourceAssembly: "FishMMO.Shared.Tools.Editor")]
 	public class DungeonEntranceFeature : PointOfInterestFeature
 	{
+		/// <summary>The dungeon entrance component (the Matchmaking module's), or null without the module.</summary>
+		private static Type DungeonEntranceComponentType
+		{
+			get
+			{
+				foreach (Type type in TypeCache.GetTypesDerivedFrom<IDungeonEntrance>())
+				{
+					if (!type.IsAbstract && typeof(Interactable).IsAssignableFrom(type))
+					{
+						return type;
+					}
+				}
+				return null;
+			}
+		}
+
 		[Tooltip("Where the entrance stands in the site's frame when no door stands at the site, metres.")]
 		public Vector2 Offset = Vector2.zero;
 
@@ -281,8 +298,16 @@ namespace FishMMO.Shared.WorldDesign
 			NetworkObject networkObject = PointOfInterestFeatureKit.AddNetworkObject(entrance);
 			BoxCollider box = entrance.AddComponent<BoxCollider>();
 			box.size = size;
-			DungeonEntrance dungeon = entrance.AddComponent<DungeonEntrance>();
-			dungeon.DungeonName = string.Empty;
+			/* The entrance component is the Matchmaking module's, found through its core interface (2026-11-21, second-wave
+			 * moves): without the module the doorway is built and leads nowhere, as a door with no dungeon would. */
+			Type entranceType = DungeonEntranceComponentType;
+			if (entranceType == null)
+			{
+				PointOfInterestFeatureKit.Note(context, "no module provides dungeon entrances (Matchmaking), so its doorway has no entrance.");
+				UnityEngine.Object.DestroyImmediate(entrance);
+				return;
+			}
+			Interactable dungeon = (Interactable)entrance.AddComponent(entranceType);
 			// Reached from the forecourt before a big door as from before a small one.
 			dungeon.InteractionRange = Mathf.Max(6f, 0.5f * size.x + 4f);
 			PointOfInterestFeatureKit.SetInteractTriggers(dungeon, PointOfInterestFeatureKit.Load<Trigger>(context, PointOfInterestFeatureKit.DungeonEntranceTriggerPath));

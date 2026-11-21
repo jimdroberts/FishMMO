@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// The scene cut's housing step: plans the lots (<see cref="HousingPlotPlanner"/>), levels them and
-	/// keeps trees and rocks off them, then lays a <see cref="PlotFoundation"/> per lot and writes the
+	/// keeps trees and rocks off them, then lays a plot (the Housing module's <c>PlotFoundation</c>, laid through <see cref="PlotLayers"/>) per lot and writes the
 	/// scene's <see cref="ScenePlotManifest"/>.
 	/// </summary>
 	/// <remarks>
@@ -35,9 +35,6 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		/// <summary>The scene root every plot is laid under; replaced whole each time.</summary>
 		public const string RootName = "Housing Plots";
-
-		/// <summary>The trigger every deed post runs on interaction.</summary>
-		public const string TriggerPath = "Assets/FishMMO/Modules/Housing/Templates/Interactions/Plot Interact.asset";
 
 		/// <summary>Where the plot look's materials are kept.</summary>
 		public const string MaterialFolder = "Assets/Prefabs/Shared/Entity/Interactables/Housing/Materials";
@@ -96,6 +93,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The stage for a cut: reads the previous manifest now, before a re-cut deletes it.</summary>
 		public static HousingPlotStage ForCut(SceneGenerationRequest request, string terrainFolder)
 		{
+			// No module lays plots (Housing not installed): no lots, no spurs, no posts.
+			if (PlotLayers.Active == null)
+			{
+				return null;
+			}
 			var stage = new HousingPlotStage(terrainFolder, request.SceneName, SeedFor(request), false);
 			stage.ReadPrevious();
 			return stage;
@@ -104,6 +106,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The stage for a repaint: the stored lots only.</summary>
 		public static HousingPlotStage ForRepaint(SceneGenerationRequest request, string terrainFolder)
 		{
+			// No module lays plots (Housing not installed): no lots, no spurs, no posts.
+			if (PlotLayers.Active == null)
+			{
+				return null;
+			}
 			var stage = new HousingPlotStage(terrainFolder, request.SceneName, SeedFor(request), true);
 			stage.ReadPrevious();
 			return stage;
@@ -397,11 +404,11 @@ namespace FishMMO.Shared.WorldDesign
 				return 0;
 			}
 
-			Trigger trigger = EnsureTrigger();
-			Material wood = EnsureMaterial("Plot Wood", new Color(0.36f, 0.25f, 0.15f));
-			Material rope = EnsureMaterial("Plot Rope", new Color(0.66f, 0.56f, 0.38f));
-			Material stone = EnsureMaterial("Plot Stone", new Color(0.52f, 0.5f, 0.47f));
-			Material board = EnsureMaterial("Plot Board", new Color(0.72f, 0.6f, 0.42f));
+			IPlotLayer layer = PlotLayers.Active;
+			if (layer == null)
+			{
+				return 0;
+			}
 
 			var root = new GameObject(RootName);
 			SceneManager.MoveGameObjectToScene(root, scene);
@@ -430,52 +437,20 @@ namespace FishMMO.Shared.WorldDesign
 				box.center = new Vector3(0.2f, 1.2f, 0f);
 				box.size = new Vector3(0.9f, 2.4f, 0.4f);
 
-				PlotFoundation foundation = plot.AddComponent<PlotFoundation>();
 				// The volume starts below the post (and below the lot's floor), so ground that dips under the post still counts.
 				Vector3 offset = lot.Centre - post;
 				offset.y = Mathf.Min(0f, lot.Centre.y - post.y) - VolumeFloorDrop;
-				foundation.EditorConfigure(lot.Key, lot.Price, lot.Size, VolumeHeight + VolumeFloorDrop, offset);
-				foundation.InteractionRange = 4f;
-				if (trigger != null)
-				{
-					PointOfInterestFeatureKit.SetInteractTriggers(foundation, trigger);
-				}
-				PlotFoundationVisual visual = plot.AddComponent<PlotFoundationVisual>();
-				visual.Wood = wood;
-				visual.Rope = rope;
-				visual.Stone = stone;
-				visual.Board = board;
+				Component[] dressed = layer.Lay(plot, lot.Key, lot.Price, lot.Size, VolumeHeight + VolumeFloorDrop, offset, EnsureMaterial);
 
 				PointOfInterestFeatureKit.AssignSceneId(networkObject, StableHash.FNV32("plot:" + lot.Key));
-				EditorUtility.SetDirty(foundation);
-				EditorUtility.SetDirty(visual);
+				foreach (Component component in dressed)
+				{
+					EditorUtility.SetDirty(component);
+				}
 				laid++;
 			}
 			EditorSceneManager.MarkSceneDirty(scene);
 			return laid;
-		}
-
-		/// <summary>The deed posts' interaction trigger, made if it is missing.</summary>
-		private static Trigger EnsureTrigger()
-		{
-			Trigger trigger = AssetDatabase.LoadAssetAtPath<Trigger>(TriggerPath);
-			if (trigger == null)
-			{
-				trigger = ScriptableObject.CreateInstance<Trigger>();
-				AssetDatabase.CreateAsset(trigger, TriggerPath);
-			}
-			bool hasAction = false;
-			foreach (BaseAction action in trigger.OnConditionsMetActions)
-			{
-				hasAction |= action is OpenPlotPanelAction;
-			}
-			if (!hasAction)
-			{
-				trigger.OnConditionsMetActions.Add(new OpenPlotPanelAction());
-				EditorUtility.SetDirty(trigger);
-			}
-			WorldEditorAssets.RegisterAddressable(trigger);
-			return trigger;
 		}
 
 		private static Material EnsureMaterial(string name, Color colour)

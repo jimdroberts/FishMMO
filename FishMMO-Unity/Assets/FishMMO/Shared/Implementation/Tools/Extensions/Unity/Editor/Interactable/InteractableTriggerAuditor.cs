@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// There is no default behaviour left in the interactable classes — <see cref="Banker"/>,
+	/// There is no default behaviour left in the interactable classes — <c>Banker</c>,
 	/// <see cref="Merchant"/>, <see cref="Bindstone"/> and the rest are data holders, and the ECA
 	/// trigger list is the entire implementation. That is the right shape, but it moves a whole
 	/// class of failure out of the compiler's reach: an interactable with an empty list compiles,

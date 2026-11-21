@@ -56,6 +56,7 @@
   <Project Path="FishMMO.AmbientLife.Tests.csproj" />
   <Project Path="FishMMO.NPCs.Editor.csproj" />
   <Project Path="FishMMO.Shared.WorldSceneDetails.Editor.csproj" />
+  <Project Path="FishMMO.Matchmaking.csproj" />
   <Project Path="FishMMO.AbilityCrafting.Server.csproj" />
   <Project Path="FishMMO.TestHarness.Editor.csproj" />
   <Project Path="FishMMO.Wildlife.csproj" />
@@ -127,7 +128,6 @@
   <Project Path="FishMMO.Hotkeys.Client.csproj" />
   <Project Path="FishMMO.Pets.Client.csproj" />
   <Project Path="FishMMO.Achievements.csproj" />
-  <Project Path="FishMMO.Matchmaking.csproj" />
   <Project Path="FishMMO.Commerce.Client.csproj" />
   <Project Path="KinematicCharacterController.Editor.csproj" />
   <Project Path="FishMMO.Chat.RenderScratch.csproj" />
@@ -145,6 +145,7 @@
   <Project Path="FishMMO.Hotkeys.RenderScratch.csproj" />
   <Project Path="FishMMO.TestHarness.Weather.Editor.csproj" />
   <Project Path="FishMMO.WorldTestBed.csproj" />
+  <Project Path="FishMMO.Shared.Housing.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />
   <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
   <Project Path="FishMMO.NPCs.csproj" />
@@ -156,7 +157,6 @@
   <Project Path="FishMMO.Client.Input.Generated.csproj" />
   <Project Path="FishMMO.Achievements.RenderScratch.csproj" />
   <Project Path="FishMMO.AbilityCrafting.Tests.csproj" />
-  <Project Path="FishMMO.Shared.Housing.Editor.csproj" />
   <Project Path="FishMMO.Travel.Tests.csproj" />
   <Project Path="FishMMO.Pets.Editor.csproj" />
   <Project Path="FishMMO.Commerce.Editor.csproj" />

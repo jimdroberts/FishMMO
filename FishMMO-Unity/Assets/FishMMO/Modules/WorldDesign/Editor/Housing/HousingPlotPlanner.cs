@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 	/// The cut levels what it accepts; the tool for an already-cut scene cannot, and asks for flatter
 	/// ground instead.</para>
 	///
-	/// <para>Lots are axis-aligned squares because the plot volume is (<see cref="PlotFoundation.Bounds"/>).
+	/// <para>Lots are axis-aligned squares because the plot volume is (<c>PlotFoundation.Bounds</c>, Housing module).
 	/// A district is a lane with a row of lots on each side, each lot's deed post on the lane.</para>
 	/// </remarks>
 	public static class HousingPlotPlanner

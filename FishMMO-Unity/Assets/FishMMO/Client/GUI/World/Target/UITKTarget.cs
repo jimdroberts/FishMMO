@@ -1205,18 +1205,77 @@ namespace FishMMO.Client
 		/// <param name="icon">The hovered icon.</param>
 		private void OnIconPointerEnter(BuffIcon icon)
 		{
-			if (icon.Template == null)
+			TooltipContent content = BuildIconTooltip(icon);
+			if (content == null || !UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				return;
 			}
+			tooltip.Open(content, icon.Root);
 
-			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
+			/* Time Left counts down while the pointer rests on the icon (2026-11-21), from the same locally counted-down
+			 * observed entries the fills use; four times a second, only while this icon still owns the tooltip. */
+			iconHoverRefresh?.Pause();
+			iconHoverRefresh = icon.Root.schedule.Execute(() =>
 			{
-				if (icon.Template is ITooltip content)
+				if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip open))
 				{
-					tooltip.Open(content, icon.Root);
+					TooltipContent live = BuildIconTooltip(icon);
+					if (live != null)
+					{
+						open.RefreshLive(icon.Root, live);
+					}
+				}
+			}).Every(IconHoverRefreshMilliseconds);
+		}
+
+		/// <summary>How often an open target buff tooltip is rewritten while hovered, milliseconds.</summary>
+		private const long IconHoverRefreshMilliseconds = 250;
+
+		/// <summary>The hovered target buff icon's tooltip refresh, paused when the pointer leaves.</summary>
+		private IVisualElementScheduledItem iconHoverRefresh;
+
+		/// <summary>A target buff icon's tooltip: the template, and the time left as this client counts it down.</summary>
+		private TooltipContent BuildIconTooltip(BuffIcon icon)
+		{
+			if (!(icon?.Template is ITooltip source))
+			{
+				return null;
+			}
+			TooltipContent content = source.BuildContent();
+			TargetCard card = CardOf(icon);
+			if (card != null && !icon.Template.IsPermanent)
+			{
+				float elapsed = Time.unscaledTime - card.ObservedBuffCaptureTime;
+				for (int i = 0; i < card.ObservedBuffModel.Count; ++i)
+				{
+					ObservedBuffEntry entry = card.ObservedBuffModel[i];
+					if (entry.TemplateID != icon.Template.ID || entry.TotalSeconds <= 0.0f)
+					{
+						continue;
+					}
+					float remaining = entry.RemainingSeconds - elapsed;
+					if (remaining > 0.0f)
+					{
+						content.AddStat("Time Left", $"{remaining:0.#}s", TooltipPriority.LiveState);
+					}
+					break;
 				}
 			}
+			return content;
+		}
+
+		/// <summary>The card an icon sits in (icons are pooled and carry no card), or null.</summary>
+		private TargetCard CardOf(BuffIcon icon)
+		{
+			if (hoverCard?.Root != null && hoverCard.Root.Contains(icon.Root))
+			{
+				return hoverCard;
+			}
+			if (pinnedCard?.Root != null && pinnedCard.Root.Contains(icon.Root))
+			{
+				return pinnedCard;
+			}
+			return null;
 		}
 
 		/// <summary>
@@ -1225,6 +1284,8 @@ namespace FishMMO.Client
 		/// <param name="icon">The icon the pointer left.</param>
 		private void OnIconPointerLeave(BuffIcon icon)
 		{
+			iconHoverRefresh?.Pause();
+			iconHoverRefresh = null;
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
 				tooltip.HideFor(icon.Root);

@@ -175,7 +175,7 @@ namespace FishMMO.UnitTests
 			TargetAllianceCondition alliance = hit.TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
 			Assert.That(alliance.ApplyToAllies, Is.True);
 			Assert.That(alliance.ApplyToEnemy, Is.False, "an enemy it strikes is spared");
-			Assert.That(alliance.ApplyToNeutral && !alliance.NeutralPlayersOnly && alliance.NeutralExcludesWildlifeAndPets, Is.True,
+			Assert.That(alliance.ApplyToNeutral && !alliance.NeutralPlayersOnly && alliance.NeutralExcludesWildlifeAndPets && alliance.ExcludeOthersPets, Is.True,
 				"a stranger and a neutral NPC are healed, wildlife and other people's pets are not");
 			Assert.That(heal.OnDestroyEvents.SelectMany(e => e.OnConditionsMetActions).OfType<PlayFXAction>().Any(a => a.FXPrefab != null), Is.True, "a burst where it ends");
 		}
@@ -229,7 +229,7 @@ namespace FishMMO.UnitTests
 		{
 			// The area heal: you, allies, neutral players and neutral NPCs (not wildlife or others' pets). The area buffs: you and allies only.
 			TargetAllianceCondition heal = Load(AbilityPaths[2]).OnHitEvents.Single().TargetSelector.Conditions.OfType<TargetAllianceCondition>().Single();
-			Assert.That(heal.ApplyToSelf && heal.ApplyToAllies && heal.ApplyToNeutral && !heal.NeutralPlayersOnly && heal.NeutralExcludesWildlifeAndPets && !heal.ApplyToEnemy, Is.True, "area heal");
+			Assert.That(heal.ApplyToSelf && heal.ApplyToAllies && heal.ApplyToNeutral && !heal.NeutralPlayersOnly && heal.NeutralExcludesWildlifeAndPets && heal.ExcludeOthersPets && !heal.ApplyToEnemy, Is.True, "area heal");
 			foreach (string path in new[] { AbilityPaths[4], AbilityPaths[5] })
 			{
 				AbilityTemplate area = Load(path);
@@ -266,6 +266,16 @@ namespace FishMMO.UnitTests
 
 			TargetAllianceCondition plain = new TargetAllianceCondition { ApplyToEnemy = false, ApplyToNeutral = true };
 			Assert.That(plain.Passes(FactionAllianceLevel.Neutral, defenderIsPlayer: false), Is.True, "off by default: existing content unchanged");
+		}
+
+		[Test]
+		public void ExcludeOthersPets_OnlyTheOwnerMaintainsAPet()
+		{
+			// Jim, 2026-11-21: players who summon pets handle their own pet maintenance — at every standing, allies' pets too.
+			TargetAllianceCondition heal = new TargetAllianceCondition { ExcludeOthersPets = true };
+			Assert.That(heal.PassesPetRule(defenderIsOthersPet: true), Is.False, "someone else's pet, even a party member's");
+			Assert.That(heal.PassesPetRule(defenderIsOthersPet: false), Is.True, "your own pet, or anyone who is not a pet");
+			Assert.That(new TargetAllianceCondition().PassesPetRule(defenderIsOthersPet: true), Is.True, "off by default: buffs and dispels unchanged");
 		}
 
 		[Test]

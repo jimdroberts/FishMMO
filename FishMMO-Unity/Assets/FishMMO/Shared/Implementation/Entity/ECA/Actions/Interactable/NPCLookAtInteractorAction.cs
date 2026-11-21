@@ -6,7 +6,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// ECA action that makes an NPC face the interacting player and transition to idle state.
 	/// Add this to any NPC's <see cref="Interactable.OnInteractTriggers"/> alongside the primary
-	/// interaction action (e.g., <see cref="SendMerchantBroadcastAction"/>) to achieve the
+	/// interaction action (e.g., <c>SendMerchantBroadcastAction</c> (Commerce module)) to achieve the
 	/// classic "NPC turns to greet the player" behaviour.
 	/// </summary>
 	[Serializable]
