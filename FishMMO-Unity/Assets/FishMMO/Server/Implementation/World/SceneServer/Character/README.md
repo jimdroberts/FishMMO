@@ -70,7 +70,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Transfer watchdog: a connection whose character has been handed off is force-disconnected after `TransferDisconnectGrace` (15s) if the client never reports its scene unload, so a crashed or modified client cannot idle on a server that no longer holds its character
 - Residency watchdog: a connection that authenticated but still has no character after `CharacterResidencyTimeout` (60s) is disconnected with `ServerError`, bounding every load path that can fail without delivering its own disconnect
 - Scene-handshake watchdog: a character parked in `WaitingSceneLoadCharacters` that never acknowledges its scene within the scene-load watchdog (120 s without a progress heartbeat, `SceneLoadStallTimeoutSeconds`; 900 s at most, `SceneLoadMaxSeconds`) is disconnected with `SceneHandshakeTimedOut`, so its session claim is released instead of being held for the life of the socket
-- Death/respawn: player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
+- Death/respawn (the Combat module's combat system since 2026-11-20; this system lends the world's part through `ICharacterDeathHost`): player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
 - A dead owner's pet is never captured as out (`IsPetOut`): death dismisses the pet, but the pet system's kill handler runs after this one, which finalises a combat-logout body killed while its owner was away — and used to save it with its pet still out
@@ -79,7 +79,7 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Every sub-entity row is written under the session claim it was captured with (`SubEntitySnapshot.Claims`, the services' `PersistOwnedAsync`), so it lands only while that claim is still held — see [Session claims are binding on writes](#session-claims-are-binding-on-writes). A character with no claim is not captured at all
 - Dirty marks cleared only by a write that actually landed (`MarkAttributesPersisted` and friends), and only when `BulkWriteReporting.MayClearDirtyMarks` says so: a successful write with `Filtered == 0`. A row the service declined to attempt never reached the database — including one the ownership gate refused (`BulkWriteResult.Unowned`, counted as filtered) — so retiring its value would lose it
 - Item persistence handed off, not duplicated: the logout item flush is captured by `ICharacterInventorySystem.CaptureDespawnFlush` while the character is still resident and **awaited inside save-and-release, before the release**
-- The hotkey bar is folded in the same way: every departure capture (`AppendDepartureSubEntities` — logout, transfer, a linger's end or reattach, the shutdown flush) takes the character's whole live bar (`IHotkeySystemRuntimeData.TakeDepartingBar`) into its `SubEntitySnapshot`, written before the release under the claim. The hotkey system no longer writes on `OnDisconnect` or from its own teardown
+- A participant's departure rows are folded in the same way: every departure capture (`AppendDepartureSubEntities` — logout, transfer, a linger's end or reattach, the shutdown flush) also asks each persistence participant for them (`CharacterPersistenceParticipant.CaptureDeparture`), into its `SubEntitySnapshot`, written before the release under the claim. The Hotkeys module's participant takes the character's whole live bar there; its system does not write on `OnDisconnect` or from its own teardown. A participant with `SavesPerCharacter` is queued on each character's lane (`CharacterRows.ByCharacter`), behind what its own system queued there
 - No release overtakes a write already queued for the character: releases and pending-flush retries run on the character's ordered lane, and the shutdown flush waits (briefly) for that lane before each release — see [Every other system's writes are gated too](#every-other-systems-writes-are-gated-too)
 - Characters pool out of the world scene (`PersistentPool`) on every despawn — logout, transfer, a lingering body, an eviction — so an instance scene that unloads after its last occupant leaves no longer destroys pooled characters the pool still counts
 - Verified client target reports (`TargetSelectionBroadcast`), which feed the observer-streaming target pin
@@ -114,7 +114,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 4. Verify that `SceneServerAuthenticator` exists in the scene for authentication event subscription.
 5. Verify that `ICharacterService` and all sub-entity services are registered in `Database.ServiceRegistry`.
 6. Adjust inspector parameters (`saveRate`, `sessionLeaseRefreshRate`, `outOfBoundsCheckRate`, `maxMainThreadActionsPerFrame`) as needed.
-7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, `RespawnAtBindPointBroadcast`, `ResurrectAcceptBroadcast`), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnKilled`), and periodic callbacks for save, session lease refresh, pending-flush retry, transfer watchdog, out-of-bounds checks, and respawn/resurrect guard sweep.
+7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, the instance, target and buff-dismiss requests), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnResurrected` for the cloud world), and periodic callbacks for save, session lease refresh, pending-flush retry, transfer watchdog, out-of-bounds checks, and the request guard sweep. The death, respawn and resurrect handlers are the Combat module's combat system's (2026-11-20).
 8. On deinitialize, it unregisters all event handlers, snapshots and persists all character data, drains the pending-flush retry queue, and releases all claimed sessions.
 
 ## Configuration
@@ -183,8 +183,6 @@ This is an integrated module within FishMMO. It is included as part of the serve
 |---|---|---|
 | `ClientValidatedSceneBroadcast` | `OnClientValidatedSceneBroadcastReceived` | Client confirms scene loaded; server spawns character and sends initial payloads |
 | `ClientScenesUnloadedBroadcast` | `OnClientScenesUnloadedBroadcastReceived` | Client confirms scene unloaded; server disconnects if no character is loaded |
-| `RespawnAtBindPointBroadcast` | `OnClientRespawnAtBindPointBroadcastReceived` | Dead player asks to respawn at their bind point |
-| `ResurrectAcceptBroadcast` | `OnClientResurrectAcceptBroadcastReceived` | Dead player accepts a recorded resurrect offer |
 | `RequestLeaveInstanceBroadcast` | `OnClientRequestLeaveInstanceBroadcastReceived` | Leave the current instance |
 | `RequestInstanceDetailsBroadcast` | `OnClientRequestInstanceDetailsBroadcastReceived` | Instance panel readout |
 | `InstanceKickBroadcast` | `OnClientInstanceKickBroadcastReceived` | Party leader removes a member from the run |
@@ -203,9 +201,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `SceneServerAuthenticator` | `OnClientAuthenticationResult` | `Authenticator_OnClientAuthenticationResult` | Entry point for character loading after authentication |
 | `SceneManager` | `OnClientLoadedStartScenes` | `SceneManager_OnClientLoadedStartScenes` | Validates character scene and sends `ClientValidatedSceneBroadcast` |
 | `IPlayerCharacter` | `OnTeleport` | `IPlayerCharacter_OnTeleport` | Handles teleportation between scenes |
-| `ICharacterDamageController` | `OnKilled` | `CharacterDamageController_OnKilled` | Handles player death, NPC despawn, pet death |
-| `RespawnAtBindPointBroadcast` | Client broadcast | `OnClientRespawnAtBindPointBroadcastReceived` | Handles dead player respawn at bind point |
-| `ResurrectAcceptBroadcast` | Client broadcast | `OnClientResurrectAcceptBroadcastReceived` | Handles dead player accepting a resurrect |
+| `ICharacterDeathHost` (implemented) | Called by the Combat module | `CharacterSystem.DeathHost.cs` | An instance's lives, the resurrection ban, the combat-logout linger, the pets' owners' notice, the move to the bind point |
 | Connection state | Remote connection stopped | `OnRemoteConnectionStopped` | Cleans up auth rate-limit tracking and character mappings |
 
 ### Exposed Lifecycle Events
@@ -314,13 +310,12 @@ refusing to let their combat timer lapse.
 |---|---|
 | Known base abilities | `KnownAbilityAddMultipleBroadcast` |
 | Known ability events | `KnownAbilityEventAddMultipleBroadcast` |
-| Achievements | `AchievementUpdateMultipleBroadcast` |
 | Inventory items | `InventorySetMultipleItemsBroadcast` |
 | Bank items | `BankSetMultipleItemsBroadcast` |
-| Hotkeys | `HotkeySetMultipleBroadcast` |
 
 **Module payloads.** Friends, party and guild rosters are sent by the Social module's systems, each to a spawned
-player, not by `CharacterSystem` (see `Assets/FishMMO/Modules/Social`).
+player, not by `CharacterSystem` (see `Assets/FishMMO/Modules/Social`); achievements by the Achievements module's
+`AchievementSystem` on spawn; the hotkey bar by the Hotkeys module's `HotkeySystem`, after its login prune.
 
 ### Session Ownership and Release
 
@@ -418,28 +413,18 @@ the world server. Two safeguards keep that from becoming a hang:
 
 ### Death/Respawn Flow
 
-`CharacterDamageController_OnKilled(killer, defender)`:
-
-1. Removes all buffs from the defender.
-2. **Player character:**
-   - Sets `IsDead` flag, sends `DeathBroadcast` to client to show death dialog.
-   - Player chooses: "Respawn at Bind Point" (teleports to bind + revives) or waits for "Resurrect" from another player (revives at corpse location).
-   - Reconnect-while-dead: `IsDead` flag is persisted; `DeathBroadcast` re-sent after scene load so dialog reappears.
-3. **NPC:** calls `npc.Despawn()` which enters corpse state for `CorpseDecayDuration` seconds before returning to the object pool.
-4. **Pet:** calls `pet.Despawn()` which returns to pool immediately (no corpse timer).
-
-Client-side death handlers:
-- `RespawnAtBindPointBroadcast` → `OnClientRespawnAtBindPointBroadcastReceived`: revives character, teleports to bind.
-- `ResurrectAcceptBroadcast` → `OnClientResurrectAcceptBroadcastReceived`: revives character at current position (no teleport).
+A death is the Combat module's (2026-11-20): its combat system handles the kill, the respawn at the bind point and
+resurrect offers, and the client's death dialog; see the [Combat module's README](../../../../../Modules/Combat/README.md).
+This system lends it what a death touches that is the world's, through `ICharacterDeathHost`
+(`CharacterSystem.DeathHost.cs`): an instance's lives and resurrection ban (`ApplyInstanceDeathRules`,
+`IsResurrectionAllowed`), ending a combat-logout linger, the pets' owners' notice (`OnPetKilled`), the move to the bind
+point (in this scene, or by the ordered scene-server transfer below), and the system line.
 
 When the bind point is in a **different scene**, respawning is a scene-server transfer and
 follows the same ordering as the teleporter path: fire `OnDisconnect` while the character
 still knows the scene it is in, then apply the bind scene/position, then
 `RemoveCharacterConnectionMapping(skipOnDisconnect: true)` to save and release, then
-disconnect. Deferring the save and release to the connection-stopped handler instead meant
-`SceneName` had already been overwritten with `BindScene` by the time `OnDisconnect` ran, so
-party, guild and per-scene bookkeeping were told the player left the scene they were
-respawning *into* rather than the one they died in.
+disconnect.
 
 ### Targeted Broadcasts
 
@@ -669,20 +654,17 @@ IPlayerCharacter_OnTeleport(character)
 
 ### Death/Respawn
 
+The Combat module's combat system (see its README); this system's part is `ICharacterDeathHost.RespawnAtBindPoint`:
+
 ```
-CharacterDamageController_OnKilled(killer, defender)
+RespawnAtBindPoint(conn, player)            # the player was revived by the combat system first
 │
-├─ RemoveAll buffs
-├─ [Player + different bind scene]
-│    ├─ Heal(999999)
-│    ├─ Update SceneName/position to bind point
+├─ [Bind point in another scene]
+│    ├─ OnDisconnect (the scene the player is leaving)
+│    ├─ SceneName/position = bind point; clear instance bookkeeping
 │    ├─ DisableFlags(IsInInstance, IsLoaded)
-│    └─ Disconnect → reconnect via world server
-├─ [Player + same bind scene]
-│    ├─ Heal(999999)
-│    └─ SetPositionAndRotationAndVelocity(bindPosition)
-├─ [NPC] → Despawn()
-└─ [Pet] → OnPetKilled(petOwner.conn, petOwner)
+│    └─ RemoveCharacterConnectionMapping(skipOnDisconnect: true) → disconnect → reconnect via world routing
+└─ [Same scene] → ResolveSameSceneRespawn (a cloud world's open-air bind point → nearest place that holds)
 ```
 
 ### Periodic Save
@@ -702,9 +684,9 @@ OnPeriodicSave(deltaTime)
 │      └─ finally: EndSave (release guard)
 └─ EnqueueSubEntitySaves (one lane per non-empty list)
        ├─ SaveAttributesAsync   ├─ SaveAbilitiesAsync    ├─ SavePetsAsync
-       ├─ SaveKnownAbilitiesAsync                       ├─ SaveHotkeysAsync
-       ├─ each CharacterPersistenceParticipant.SaveAsync (achievements, and the modules':
-       │    factions, archetypes, waypoints, …)
+       ├─ SaveKnownAbilitiesAsync
+       ├─ each CharacterPersistenceParticipant.SaveAsync (the modules':
+       │    achievements, hotkeys, factions, archetypes, waypoints, …)
        └─ each: written && Filtered == 0 → MarkXPersisted on the main thread
 ```
 
@@ -864,7 +846,7 @@ could be a later session's claim. The single-row owned variants are
 |---|---|
 | `AbilitySystem` | the crafted/purchased grant, its revoke, a forget |
 | `QuestSystem` | every quest update, turn-in and abandon |
-| `HotkeySystem` | the pump's bar (the departing bar rides the save-and-release — above) |
+| `HotkeySystem` (Hotkeys module) | the pump's bar (the departing bar rides the save-and-release — above) |
 | `InteractableSystem` | merchant, loot, mail and craft currency rows (`TryPersistCharacterAttributes`); a purchased known ability |
 | `AchievementSystem` | a known-ability reward |
 | `SceneServerSystem` (operator economy) | `/admin setgold`, `givegold`, `takegold`, `setattr` |
@@ -954,40 +936,14 @@ login after deploying still restores whatever stale rows it had.
 
 ## Death, respawn and resurrect
 
-`CharacterDamageController_OnKilled` flags `IsDead` **first**, before any side-effecting call.
-`CharacterDamageController.Kill` guards re-entry on that flag but never sets it — this handler
-does, and it is invoked at the very end of `Kill`. Anything side-effecting that ran before the
-flag was set executed inside a window where a second `Kill` would sail past the guard and
-recurse; buff removal, which invokes each buff's removal effects, is exactly such a call.
-
-The handler never revives, teleports, or moves the character. Bind-point movement happens only
-in `OnClientRespawnAtBindPointBroadcastReceived`, in response to an explicit client request.
-
-### Resurrect offers
-
-`ApplyReviveAction` **offers** a resurrect to a player rather than applying one — the revive
-happens only if they accept. It previously called `Revive` and *then* sent the offer, which
-made the prompt meaningless and left the target with health restored but `IsDead` still set,
-because only the accept handler cleared it. A player who ignored the prompt stayed in that
-contradictory state indefinitely.
-
-Offers are recorded server-side (`pendingResurrectOffers`: who offered, how much, 30 s expiry)
-and raised through `ICharacterDamageController.OnResurrectOffered`, so the shared ECA action
-does not need to reference server types.
-
-`OnClientResurrectAcceptBroadcastReceived` requires a matching, unexpired recorded offer.
-Previously it only checked that the named resurrector existed and shared the scene — **not that
-they had offered anything** — so a dead player could revive themselves at full health at will
-by naming any nearby character. The accept now applies the offer's configured amount, credited
-to the actual resurrector so their ECA resurrect triggers fire, instead of a blanket full heal.
-Choosing bind-point respawn declines any outstanding offer; unanswered offers expire on the
-existing respawn/resurrect sweep.
+The kill handler, the respawn and the resurrect offers are the Combat module's since 2026-11-20 (its README carries their
+rules: the death flag first, no revive or move from the kill handler, recorded and expiring offers).
 
 ### Reconnecting while dead
 
 Death survives a disconnect intact: combat-logout linger declines a dead character, the save
 preserves `IsDead` (only `IsInCombat` is masked), and health persists at zero. On reload the
-flag and health are restored, scene entry re-sends `DeathBroadcast`, and `Immortal` is cleared.
+flag and health are restored, the Combat module's combat system re-sends `DeathBroadcast` as the character spawns, and `Immortal` is cleared.
 The character cannot regenerate, be healed, be damaged further, move, or cast.
 `CharacterAnimationController` re-applies the death pose when the animator appears, because
 death is an Animator *trigger* — a one-shot with nothing to restore — so a character that

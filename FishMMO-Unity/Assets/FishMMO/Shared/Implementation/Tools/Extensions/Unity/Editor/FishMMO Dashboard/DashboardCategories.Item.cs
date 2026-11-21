@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.Core;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -24,7 +23,7 @@ namespace FishMMO.Shared
 				DisplayName = "Items",
 				Group = "Items",
 				AssetType = typeof(BaseItemTemplate),
-				DefaultAssetDirectory = "Assets/Templates/Entity/Items",
+				DefaultAssetDirectory = "Assets/FishMMO/Modules/Items/Templates",
 				ConcreteTypes = new List<(string, Type)>
 				{
 					("Weapon", typeof(WeaponTemplate)),
@@ -47,7 +46,7 @@ namespace FishMMO.Shared
 			});
 
 			list.Add<ItemAttributeTemplate>("Item Attributes", "Items",
-				"Assets/Templates/Entity/Items",
+				"Assets/FishMMO/Modules/Items/Templates",
 				"FishMMO/Item/Item Attribute/Attribute");
 
 			list.Add(new TemplateCategory
@@ -55,7 +54,7 @@ namespace FishMMO.Shared
 				DisplayName = "Loot Tables",
 				Group = "Items",
 				AssetType = typeof(LootTableTemplate),
-				DefaultAssetDirectory = "Assets/Templates/Entity/Items/LootTables",
+				DefaultAssetDirectory = "Assets/FishMMO/Modules/Items/Templates/LootTables",
 				CreateAssetMenuName = "FishMMO/Character/Loot/Loot Table",
 				/* Grouped by what the table is worth rather than by name. A designer opening this
 				 * category is nearly always balancing — comparing what a tier of creature drops

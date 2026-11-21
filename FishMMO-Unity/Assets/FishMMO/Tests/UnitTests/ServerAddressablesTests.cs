@@ -43,7 +43,7 @@ namespace FishMMO.UnitTests
 				{
 					stripping.SetValue(null, true);
 					MethodInfo gather = preprocessor.GetMethod("GatherShaderFeatures", BindingFlags.Static | BindingFlags.NonPublic);
-					var failure = Assert.Throws<TargetInvocationException>(() => gather.Invoke(null, new object[] { false }));
+					var failure = Assert.Throws<TargetInvocationException>(() => gather.Invoke(null, GatherArguments(gather)));
 					Assert.That(failure.InnerException, Is.TypeOf<NullReferenceException>());
 					Assert.Throws<InvalidOperationException>(() =>
 					{
@@ -53,7 +53,7 @@ namespace FishMMO.UnitTests
 							Assert.That(QualitySettings.GetQualityLevel(), Is.EqualTo(selected));
 							for (int index = 0; index < before.Length; index++)
 								Assert.That(QualitySettings.GetRenderPipelineAssetAt(index), Is.Null);
-							Assert.DoesNotThrow(() => gather.Invoke(null, new object[] { false }));
+							Assert.DoesNotThrow(() => gather.Invoke(null, GatherArguments(gather)));
 							throw new InvalidOperationException("simulated failed content build");
 						}
 					});
@@ -80,6 +80,9 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>URP's GatherShaderFeatures took a flag until 17.6, and takes nothing since.</summary>
+		private static object[] GatherArguments(MethodInfo gather) => gather.GetParameters().Length == 0 ? null : new object[] { false };
+
 		[TestCase(null)]
 		[TestCase("URP callback threw")]
 		public void MissingOrFailedAddressablesResultStopsTheBuild(string error)
@@ -100,16 +103,19 @@ namespace FishMMO.UnitTests
 			var settings = AddressableAssetSettings.Create("", "FailureFixture", false, false);
 			var group = settings.CreateGroup("Scene_Shared", true, false, false, null, typeof(BundledAssetGroupSchema));
 			var schema = group.GetSchema<BundledAssetGroupSchema>();
+			/* A reachable original state: Addressables (UUM-140558) makes "CRC off, cached-bundle CRC on" impossible, since turning
+			 * on cached-bundle CRC turns CRC on, so the fixture that used to start there started from a state it then asserted
+			 * against. The failing build below flips every flag. */
 			schema.IncludeInBuild = true;
 			schema.UseAssetBundleCrc = false;
-			schema.UseAssetBundleCrcForCachedBundles = true;
+			schema.UseAssetBundleCrcForCachedBundles = false;
 			schema.UseUnityWebRequestForLocalBundles = false;
 			try
 			{
 				Assert.Throws<BuildFailedException>(() => new FailingManager(settings).BuildAddressablesWithExclusions(new[] { "Client" }));
 				Assert.That(schema.IncludeInBuild, Is.True);
 				Assert.That(schema.UseAssetBundleCrc, Is.False);
-				Assert.That(schema.UseAssetBundleCrcForCachedBundles, Is.True);
+				Assert.That(schema.UseAssetBundleCrcForCachedBundles, Is.False);
 				Assert.That(schema.UseUnityWebRequestForLocalBundles, Is.False);
 			}
 			finally
@@ -130,7 +136,7 @@ namespace FishMMO.UnitTests
 				var schema = settings.DefaultGroup.GetSchema<BundledAssetGroupSchema>();
 				schema.IncludeInBuild = false;
 				schema.UseAssetBundleCrc = true;
-				schema.UseAssetBundleCrcForCachedBundles = false;
+				schema.UseAssetBundleCrcForCachedBundles = true;
 				schema.UseUnityWebRequestForLocalBundles = true;
 				RequireSuccessfulContentBuild(new AddressablesPlayerBuildResult { Error = "simulated Addressables failure" });
 			}

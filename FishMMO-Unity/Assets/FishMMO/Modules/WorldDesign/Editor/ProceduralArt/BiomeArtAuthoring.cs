@@ -920,11 +920,16 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return;
 			}
-			// Rules already there by name: brought up to date when untouched, kept when tuned.
+			/* Rules already there by name: brought up to date when untouched, kept when tuned. A slot may list one name twice (the
+			 * desert's bones everywhere and again, denser, near its sites): the spec's n-th rule of a name is the slot's n-th of it.
+			 * Matched by name alone, the second refreshed the first to its own settings, and every run flipped the pair back. */
 			var missing = new List<BiomeArtSpec.Scatter>();
+			var seen = new Dictionary<string, int>();
 			foreach (BiomeArtSpec.Scatter s in spec.Scatter)
 			{
-				PrefabSpawnRule existing = RuleNamed(slot.prefabSpawnRules, s.Name);
+				seen.TryGetValue(s.Name, out int occurrence);
+				seen[s.Name] = occurrence + 1;
+				PrefabSpawnRule existing = RuleNamed(slot.prefabSpawnRules, s.Name, occurrence);
 				if (existing != null)
 				{
 					Refresh(who, slotName, existing, s, source, report, apply);
@@ -972,7 +977,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		private static PrefabSpawnRule RuleNamed(List<PrefabSpawnRule> rules, string name)
+		/// <summary>The slot's <paramref name="occurrence"/>-th rule (from 0) named <paramref name="name"/>; null for none.</summary>
+		private static PrefabSpawnRule RuleNamed(List<PrefabSpawnRule> rules, string name, int occurrence = 0)
 		{
 			if (rules == null)
 			{
@@ -980,7 +986,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (PrefabSpawnRule rule in rules)
 			{
-				if (rule != null && rule.ruleName == name)
+				if (rule != null && rule.ruleName == name && occurrence-- == 0)
 				{
 					return rule;
 				}

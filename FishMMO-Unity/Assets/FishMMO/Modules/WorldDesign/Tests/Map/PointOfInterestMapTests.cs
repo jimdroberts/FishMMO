@@ -22,8 +22,8 @@ namespace FishMMO.UnitTests
 	[TestFixture]
 	public class PointOfInterestMapTests
 	{
-		private const string SharedSheetPath = "Assets/FishMMO/Client/GUI/World/Map/UIMapShared.uss";
-		private const string PointOfInterestSheetPath = "Assets/FishMMO/Client/GUI/World/Map/UIMapPOI.uss";
+		private const string SharedSheetPath = "Assets/FishMMO/Modules/Map/Client/UIMapShared.uss";
+		private const string PointOfInterestSheetPath = "Assets/FishMMO/Modules/Map/Client/UIMapPOI.uss";
 		private const string ThemePath = "Assets/FishMMO/Client/GUI/FishMMO-Theme.uss";
 
 		private readonly List<UnityEngine.Object> temporary = new List<UnityEngine.Object>();
@@ -252,7 +252,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void BothMapPanels_LoadThePointOfInterestSheet()
 		{
-			foreach (string uxml in new[] { "Assets/FishMMO/Client/GUI/World/Map/UIMap.uxml", "Assets/FishMMO/Client/GUI/World/Minimap/UIMinimap.uxml" })
+			foreach (string uxml in new[] { "Assets/FishMMO/Modules/Map/Client/UIMap.uxml", "Assets/FishMMO/Modules/Map/Client/UIMinimap.uxml" })
 			{
 				LogAssert.IsTrue(ProjectFiles.ReadAllText(uxml).Contains("UIMapPOI.uss\""), $"{uxml} must load UIMapPOI.uss, or every point of interest draws in the fallback grey");
 			}

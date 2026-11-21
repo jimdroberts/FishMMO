@@ -104,7 +104,7 @@ MonoBehaviour:
     version: 2
     RefIds:
     - rid: 1
-      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: SpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: 7260598054390996014, guid: 48d5a903fd5eb581ba5235f674695571, type: 3}
         MinimumRespawnTime: 300
@@ -112,7 +112,7 @@ MonoBehaviour:
         SpawnChance: 1
         YOffset: -0
     - rid: 2
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0, type: 3}
         MinimumRespawnTime: 0
@@ -131,7 +131,7 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 3
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32, type: 3}
         MinimumRespawnTime: 0
@@ -150,7 +150,7 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 4
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4, type: 3}
         MinimumRespawnTime: 0
@@ -169,7 +169,7 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 5
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: f69ceb06ce90da94fbf1cbff95f3b7f0, type: 3}
         MinimumRespawnTime: 0
@@ -188,7 +188,7 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 6
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: ecf1db3ea5ffe04438c0c425adb9bb32, type: 3}
         MinimumRespawnTime: 0
@@ -207,7 +207,7 @@ MonoBehaviour:
         MinimumScale: 1
         MaximumScale: 1
     - rid: 7
-      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.Server}
+      type: {class: NPCSpawnableSettings, ns: FishMMO.Server.Implementation.World.SceneServer.Spawner, asm: FishMMO.NPCs.Server}
       data:
         NetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4, type: 3}
         MinimumRespawnTime: 0

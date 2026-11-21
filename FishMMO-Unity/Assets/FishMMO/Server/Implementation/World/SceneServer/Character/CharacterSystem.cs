@@ -27,7 +27,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	[RequiresDataContainer(typeof(CharacterSystemRuntimeData))]
 	[RequiresDataContainer(typeof(CharacterSystemMainThreadQueueData))]
 	[RequiresDataContainer(typeof(AsyncWorkerData))]
-	public partial class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>
+	public partial class CharacterSystem : ServerBehaviour, ICharacterSystem<NetworkConnection, Scene>, ICharacterDeathHost
 	{
 		/// <summary>
 		/// Maximum number of queued main-thread actions processed per frame.
@@ -185,8 +185,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ClientSceneLoadProgressBroadcast>(OnClientSceneLoadProgressBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<RequestInstanceDetailsBroadcast>(OnClientRequestInstanceDetailsBroadcastReceived, true);
 			Server.NetworkWrapper.RegisterBroadcast<InstanceKickBroadcast>(OnClientInstanceKickBroadcastReceived, true);
@@ -224,8 +222,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Character events
 			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
-			ICharacterDamageController.OnKilled += CharacterDamageController_OnKilled;
-			ICharacterDamageController.OnResurrectOffered += CharacterDamageController_OnResurrectOffered;
 			ICharacterDamageController.OnResurrected += CharacterDamageController_OnResurrectedFromTheDeck;
 
 			ConfigureSceneLoadTimeouts();
@@ -283,8 +279,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<ClientValidatedSceneBroadcast>(OnClientValidatedSceneBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ClientSceneLoadProgressBroadcast>(OnClientSceneLoadProgressBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<ClientScenesUnloadedBroadcast>(OnClientScenesUnloadedBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<RespawnAtBindPointBroadcast>(OnClientRespawnAtBindPointBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<ResurrectAcceptBroadcast>(OnClientResurrectAcceptBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<RequestLeaveInstanceBroadcast>(OnClientRequestLeaveInstanceBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<RequestInstanceDetailsBroadcast>(OnClientRequestInstanceDetailsBroadcastReceived);
 			Server.NetworkWrapper.UnregisterBroadcast<InstanceKickBroadcast>(OnClientInstanceKickBroadcastReceived);
@@ -300,8 +294,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Character events
 			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
-			ICharacterDamageController.OnKilled -= CharacterDamageController_OnKilled;
-			ICharacterDamageController.OnResurrectOffered -= CharacterDamageController_OnResurrectOffered;
 			ICharacterDamageController.OnResurrected -= CharacterDamageController_OnResurrectedFromTheDeck;
 
 			// Static registry: a command left behind outlives this ScriptableObject and would

@@ -39,15 +39,38 @@ namespace FishMMO.Shared
 
 		public bool Initialized { get; private set; }
 
-		protected NetworkObject NetworkObject => Host != null ? Host.NetworkObject : null;
+		protected NetworkObject NetworkObject => NetworkObjectOverride != null ? NetworkObjectOverride : (Host != null ? Host.NetworkObject : null);
+
+		/// <summary>
+		/// Tests only: the network object a part with no spawned character answers with (an owner-shaped payload written by
+		/// a part built outside a live session).
+		/// </summary>
+		internal NetworkObject NetworkObjectOverride { get; set; }
 		protected bool IsOwner => Host != null && Host.IsOwner;
 		protected bool IsServerInitialized => Host != null && Host.IsServerInitialized;
 		protected bool IsServerStarted => Host != null && Host.IsServerStarted;
 		protected bool IsClientInitialized => Host != null && Host.IsClientInitialized;
+		protected bool IsClientStarted => Host != null && Host.IsClientStarted;
+		protected FishNet.Managing.NetworkManager NetworkManager => Host != null ? Host.NetworkManager : null;
 		protected bool IsSpawned => Host != null && Host.IsSpawned;
 		protected ClientManager ClientManager => Host != null ? Host.ClientManager : null;
 		protected ServerManager ServerManager => Host != null ? Host.ServerManager : null;
 		protected TimeManager TimeManager => Host != null ? Host.TimeManager : null;
+
+		/// <summary>Unity Awake: runs as the character adds the part (in its own Awake), before InitializeOnce.</summary>
+		protected void Awake()
+		{
+			OnAwake();
+		}
+
+		/// <summary>Early setup, before InitializeOnce: the character is not set yet.</summary>
+		public virtual void OnAwake() { }
+
+		/// <summary>The connection that owns the character, as the network behaviour's <c>Owner</c>.</summary>
+		protected NetworkConnection Owner => Host != null ? Host.Owner : null;
+
+		/// <summary>The character's prediction manager, as the network behaviour's <c>PredictionManager</c>.</summary>
+		protected FishNet.Managing.Predicting.PredictionManager PredictionManager => Host != null ? Host.PredictionManager : null;
 
 		public void InitializeOnce(ICharacter character)
 		{
@@ -82,6 +105,21 @@ namespace FishMMO.Shared
 
 		/// <summary>Client: the character is stopping.</summary>
 		public virtual void OnStopCharacter() { }
+
+		/// <summary>Both peers: the character's network object started (a NetworkBehaviour's OnStartNetwork).</summary>
+		public virtual void OnStartNetwork() { }
+
+		/// <summary>Both peers: the character's network object is stopping (a NetworkBehaviour's OnStopNetwork).</summary>
+		public virtual void OnStopNetwork() { }
+
+		/// <summary>Client: the character started on this client (forwarded by the character, after its own start).</summary>
+		public virtual void OnStartClient() { }
+
+		/// <summary>Client: the character is stopping on this client (forwarded before the character's own stop).</summary>
+		public virtual void OnStopClient() { }
+
+		/// <summary>Client: the character's owner changed on this client (forwarded by the character).</summary>
+		public virtual void OnOwnershipClient(NetworkConnection prevOwner) { }
 
 		/// <summary>Server: the character started on the server.</summary>
 		public virtual void OnStartServer() { }

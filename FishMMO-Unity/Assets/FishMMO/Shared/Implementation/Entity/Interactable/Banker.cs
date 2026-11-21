@@ -16,10 +16,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement to increment when a player uses this banker.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <inheritdoc />
-		AchievementTemplate IBanker.AchievementTemplate => AchievementTemplate;
+		CachedScriptableObject IBanker.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// The display title for the banker, shown in the UI.

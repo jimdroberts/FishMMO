@@ -21,7 +21,14 @@
         "FishMMO.Shared.Tools.Editor",
         "FishMMO.Naming",
         "FishMMO.WorldSimulation",
-        "FishMMO.WorldSimulation.Editor"
+        "FishMMO.WorldSimulation.Editor",
+        "FishMMO.WorldInteractables",
+        "FishMMO.Achievements",
+        "FishMMO.Wildlife",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Wildlife.Server",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Editor"
     ],
     "includePlatforms": [
         "Editor"

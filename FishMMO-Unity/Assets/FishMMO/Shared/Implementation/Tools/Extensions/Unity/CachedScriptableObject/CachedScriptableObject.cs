@@ -6,13 +6,54 @@ using FishMMO.Logging;
 namespace FishMMO.Shared
 {
 	/// <summary>
+	/// The non-generic base of every <see cref="CachedScriptableObject{T}"/>: what core content declares a reference as when
+	/// the template it names belongs to a module (2026-11-20, the core and modules split). A race's starting abilities, an
+	/// NPC's ability list, a spawner's extra abilities are all module templates the core cannot name; the field is typed on
+	/// this, and <see cref="TemplateOfAttribute"/> keeps the inspector to the right kind. The asset stores the referenced
+	/// object's GUID, so widening a field's type to this keeps every reference it held.
+	/// </summary>
+	public abstract class CachedScriptableObject : ScriptableObject
+	{
+		/// <summary>The template's cache ID (<see cref="ICachedObject.ID"/>); 0 for an object that is not a cached template.</summary>
+		public int CachedID => this is ICachedObject cached ? cached.ID : 0;
+
+		/// <summary>Every cached template by its ID, whatever its type (IDs are hashes of the type's name and the asset's).</summary>
+		private static readonly Dictionary<int, CachedScriptableObject> byID = new Dictionary<int, CachedScriptableObject>();
+
+		/// <summary>
+		/// The cached template with <paramref name="id"/>, of whatever type: for core code holding a module template's ID it
+		/// cannot name the type of (a world item's achievement, 2026-11-20).
+		/// </summary>
+		public static bool TryGetByID(int id, out CachedScriptableObject template)
+		{
+			return byID.TryGetValue(id, out template) && template != null;
+		}
+
+		protected static void RegisterByID(int id, CachedScriptableObject template)
+		{
+			if (id != 0 && template != null)
+			{
+				byID[id] = template;
+			}
+		}
+
+		protected static void UnregisterByID(int id, CachedScriptableObject template)
+		{
+			if (byID.TryGetValue(id, out CachedScriptableObject current) && ReferenceEquals(current, template))
+			{
+				byID.Remove(id);
+			}
+		}
+	}
+
+	/// <summary>
 	/// Abstract base class for ScriptableObjects that need to be cached and retrieved quickly by ID.
 	/// Objects are cached not only by their concrete type but also by their base types up to <see cref="CachedScriptableObject{T}"/>.
 	/// This allows for flexible retrieval by specific derived types or broader base types.
 	/// </summary>
 	/// <typeparam name="T">The concrete type of the ScriptableObject inheriting from this class.
 	/// Must also implement <see cref="ICachedObject"/>.</typeparam>
-	public abstract class CachedScriptableObject<T> : ScriptableObject where T : CachedScriptableObject<T>, ICachedObject
+	public abstract class CachedScriptableObject<T> : CachedScriptableObject where T : CachedScriptableObject<T>, ICachedObject
 	{
 		/// <summary>
 		/// The unique ID generated for this cached object instance.
@@ -59,6 +100,7 @@ namespace FishMMO.Shared
 			// Generate a deterministic hash code for the ID.
 			// This ensures that the same type name and objectName always produce the same ID across sessions.
 			ID = (currentType.Name + objectName).GetDeterministicHashCode();
+			RegisterByID(ID, this);
 
 			// Iterate up the inheritance chain, caching the object under each relevant base type.
 			// The loop continues as long as 'currentType' is not null, and it's not the generic
@@ -97,6 +139,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void RemoveFromCache()
 		{
+			UnregisterByID(ID, this);
+
 			// Get the concrete type of the current instance.
 			Type currentType = this.GetType();
 

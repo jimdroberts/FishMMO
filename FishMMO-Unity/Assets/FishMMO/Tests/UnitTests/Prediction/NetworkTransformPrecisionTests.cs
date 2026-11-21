@@ -233,7 +233,7 @@ namespace FishMMO.UnitTests
 					"(WalkSpeed / tick rate) quantises the per-tick delta to a handful of values; the interpolator " +
 					"renders that as stalls and hops. Keep the grid at or under a quarter of a walking tick.");
 			}
-			Assert.AreEqual(17, checkedCount, "Expected seventeen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15); the set changed.");
+			Assert.AreEqual(18, checkedCount, "Expected eighteen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15; the fire elemental, 2026-11-16, the greater summon's own prefab); the set changed.");
 		}
 
 		// ── guards ───────────────────────────────────────────────────────────
@@ -399,7 +399,7 @@ namespace FishMMO.UnitTests
 					"so positions go stale by more than quantisation already costs.");
 			}
 
-			Assert.AreEqual(17, checkedCount, "Expected seventeen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15); the set changed.");
+			Assert.AreEqual(18, checkedCount, "Expected eighteen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15; the fire elemental, 2026-11-16, the greater summon's own prefab); the set changed.");
 		}
 
 		/// <summary>
@@ -424,7 +424,7 @@ namespace FishMMO.UnitTests
 					$"{Path.GetFileName(path)} has a NetworkTransform that does not pack positions in 24 bits (TwentyFour = 1).");
 			}
 
-			Assert.AreEqual(17, checkedCount, "Expected seventeen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15); the set changed.");
+			Assert.AreEqual(18, checkedCount, "Expected eighteen NetworkTransform prefabs (the eleventh: Simulated Player, 2026-11-13; the six wildlife, 2026-11-15; the fire elemental, 2026-11-16, the greater summon's own prefab); the set changed.");
 		}
 	}
 }

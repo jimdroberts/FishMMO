@@ -1,0 +1,3270 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using FishNet.Connection;
+using FishNet.Managing.Predicting;
+using FishNet.Object;
+using FishNet.Object.Prediction;
+using FishNet.Serializing;
+using KinematicCharacterController;
+using NUnit.Framework;
+using UnityEngine;
+using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
+using FishMMO.Server.Implementation.World.SceneServer.Spawner;
+
+namespace FishMMO.UnitTests
+{
+	/// <summary>
+	/// Regression guards for the defects found by the 2026-08-28 prediction-pipeline audit. Each
+	/// test names the defect it pins and failed against the code as it was before the fix.
+	/// </summary>
+	[TestFixture]
+	public class PredictionAuditRegressionTests
+	{
+		private const BindingFlags Any = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+		[OneTimeSetUp]
+		public void RegisterProductionSerializers()
+		{
+			Type[] serializerTypes =
+			{
+				typeof(CharacterReconcileDataDeltaSerializer),
+				typeof(CharacterReplicateDataDeltaSerializer),
+				typeof(CharacterTransientGroundingReportDeltaSerializer),
+				typeof(KinematicCharacterMotorStateDeltaSerializer),
+				typeof(CharacterAttributeResourceStateSerializer),
+			};
+			foreach (Type serializerType in serializerTypes)
+			{
+				MethodInfo register = serializerType.GetMethod("RegisterSerializers", Any);
+				LogAssert.IsNotNull(register, $"{serializerType.Name} must expose a RegisterSerializers hook.");
+				register.Invoke(null, null);
+			}
+		}
+
+		[TearDown]
+		public void TearDownLedger()
+		{
+			DisposeLedgerFixture();
+		}
+
+		private static CharacterReconcileData BaseReconcile()
+		{
+			CharacterReconcileData data = default;
+			data.MotorState.Rotation = Quaternion.identity;
+			data.MotorState.Position = new Vector3(10f, 2f, 10f);
+			data.MotorState.BaseVelocity = new Vector3(1f, 0f, 0f);
+			data.MotorState.TimeSinceJumpRequested = float.MaxValue;
+			data.ResourceState.Health = 100;
+			return data;
+		}
+
+		// ── 1. FishNet WriteDeltaVector3 leaked its Skip(1) placeholder into Writer.Length ──
+
+		/// <summary>
+		/// A walking tick whose only change is the motor position: every Vector3 delta after
+		/// <c>Position</c> is unchanged, and the last of them used to leave a stale byte between
+		/// <c>Position</c> and <c>Length</c>. The RPC is copied up to <c>Length</c>, so the client
+		/// read one byte of garbage after the reconcile and mis-parsed the next packet id.
+		/// </summary>
+		[Test]
+		public void UnchangedVector3Delta_LeavesNoTrailingByteInTheWriter()
+		{
+			CharacterReconcileData prev = BaseReconcile();
+			CharacterReconcileData next = prev;
+			next.MotorState.Position += new Vector3(0.1f, 0f, 0f);
+
+			Writer writer = new Writer();
+			LogAssert.IsTrue(writer.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize),
+				"A changed position must produce a delta.");
+			LogAssert.AreEqual(writer.Position, writer.Length,
+				"The Skip(1) placeholder of an unchanged Vector3 delta shipped as a trailing byte.");
+
+			Reader reader = new Reader(writer.GetArraySegment(), null);
+			CharacterReconcileData decoded = reader.ReadDelta(prev);
+			LogAssert.AreEqual(0, reader.Remaining, "The reconcile payload must be consumed exactly.");
+			LogAssert.IsTrue((decoded.MotorState.Position - next.MotorState.Position).magnitude < 0.01f,
+				"The decoded position must match.");
+		}
+
+		/// <summary>The primitive itself, isolated from the project serializers.</summary>
+		[Test]
+		public void FishNet_WriteDeltaVector3_RewindsLengthWhenNothingChanged()
+		{
+			Writer writer = new Writer();
+			writer.WriteUInt8Unpacked(7);
+			int lengthBefore = writer.Length;
+			Vector3 v = new Vector3(1f, 2f, 3f);
+			LogAssert.IsFalse(writer.WriteDeltaVector3(v, v), "No change, no bytes.");
+			LogAssert.AreEqual(lengthBefore, writer.Length, "WriteDeltaVector3 must rewind Length with Position.");
+			LogAssert.IsFalse(writer.WriteDeltaVector2(Vector2.one, Vector2.one));
+			LogAssert.AreEqual(lengthBefore, writer.Length, "WriteDeltaVector2 must rewind Length with Position.");
+		}
+
+		// ── 2. The chain sequence counted reconciles CREATED, not SENT ──
+		/*
+		 * The 4.6.12 fork chained every delta onto the previous reconcile and numbered them, and the
+		 * defect pinned here was numbering at creation instead of at send. FishNet's delta prediction
+		 * (FISHNET_DELTA_PREDICTION) removed the chain: each delta is written against the last FULL
+		 * reconcile and FishNet's header names which one. The tests below pin the replacement — that
+		 * a skipped send cannot break anything, that FishMMO kept no counter of its own, and that the
+		 * FishNet wiring and the build define it depends on are in place.
+		 */
+
+		/// <summary>
+		/// Ticks whose send is skipped (no resends left: after any input gap longer than
+		/// RedundancyCount, and at every spawn) cost nothing. A delta is written against the full
+		/// reconcile, not against the last reconcile sent, so there is nothing for a gap to break.
+		/// </summary>
+		[Test]
+		public void SkippedSends_DoNotDisturbTheDeltas()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(30);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = BaseReconcile();
+			uint tick = 0;
+
+			// Spawn: five reconciles are created before the owner's first input arrives, none sent.
+			for (int i = 0; i < 5; i++)
+			{
+				tick++;
+				authoritative.MotorState.Position += Vector3.forward;
+			}
+
+			void SendAndCheck(string context)
+			{
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out CharacterReconcileData received),
+					$"{context}: the reconcile must be usable");
+				LogAssert.IsTrue((received.MotorState.Position - authoritative.MotorState.Position).magnitude < 0.05f,
+					$"{context}: decoded {received.MotorState.Position}, server holds {authoritative.MotorState.Position}");
+			}
+
+			tick++;
+			authoritative.MotorState.Position += Vector3.forward;
+			SendAndCheck("first reconcile ever sent");
+
+			for (int i = 0; i < 3; i++)
+			{
+				tick++;
+				authoritative.MotorState.Position += Vector3.forward;
+				SendAndCheck($"steady state {i}");
+			}
+
+			// A six-tick input gap during which nothing is sent.
+			for (int i = 0; i < 6; i++)
+			{
+				tick++;
+				authoritative.MotorState.Position += Vector3.forward;
+			}
+			tick++;
+			authoritative.MotorState.Position += Vector3.forward;
+			SendAndCheck("after a send gap");
+		}
+
+		/// <summary>FishMMO keeps no chain counter: the producer does not number reconciles and the payload has no field for it.</summary>
+		[Test]
+		public void NoProjectSideChainCounter_Remains()
+		{
+			LogAssert.IsNull(typeof(CharacterPredictionController).GetField("reconcileSequence", Any),
+				"CharacterPredictionController must not keep its own reconcile sequence counter.");
+			LogAssert.IsNull(typeof(CharacterReconcileData).GetField("Sequence", Any),
+				"CharacterReconcileData.Sequence was the fork's chain counter; FishNet's delta header replaced it and a " +
+				"field nothing stamps would ride every full reconcile as a constant.");
+			LogAssert.IsNull(typeof(CharacterReconcileDataDeltaSerializer).GetMethod("StampSequence", Any),
+				"The send-time stamper hook (ReconcileSequenceStamper) does not exist on FishNet's delta prediction.");
+		}
+
+		/// <summary>
+		/// Server_SendReconcileRpc and Reconcile_Reader_Remote take FishNet's delta path, and
+		/// GetDeltaSerializeOption is the real one.
+		/// </summary>
+		/// <remarks>
+		/// Upstream ships GetDeltaSerializeOption hard-coded to FullSerialize and the delta call sites
+		/// under a define. Neither shows up in a compile or in any serializer test: reconcile just
+		/// quietly goes back to the full serializer every tick, about six times the bytes. The
+		/// mirrors in ReconcileDeltaChainTests copy this code, so this also tells them when to change.
+		/// </remarks>
+		[Test]
+		public void DeltaReconcile_IsWiredThroughFishNet()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"Plugins/FishNet/Runtime/Object/NetworkBehaviour/NetworkBehaviour.Prediction.cs")).Replace("\r\n", "\n");
+
+			int write = source.IndexOf("Reconcile_WriteDelta(methodWriter, ref lastReconcileData, reconcileData);", StringComparison.Ordinal);
+			LogAssert.IsTrue(write >= 0, "Server_SendReconcileRpc no longer writes reconciles through Reconcile_WriteDelta.");
+			LogAssert.IsTrue(source.LastIndexOf("#if FISHNET_DELTA_PREDICTION", write, StringComparison.Ordinal) > source.LastIndexOf("#endif", write, StringComparison.Ordinal),
+				"The delta reconcile write must sit inside #if FISHNET_DELTA_PREDICTION.");
+			LogAssert.IsTrue(source.Contains("if (!Reconcile_ReadDelta(reader, out T newData))"),
+				"Reconcile_Reader_Remote no longer reads through Reconcile_ReadDelta, the guard that discards a delta against a lost full reconcile.");
+
+			int option = source.IndexOf("private DeltaSerializerOption GetDeltaSerializeOption()", StringComparison.Ordinal);
+			LogAssert.IsTrue(option >= 0, "GetDeltaSerializeOption is gone.");
+			// To the method's final return; the body is mostly comments, so no fixed window is safe.
+			int end = source.IndexOf("return DeltaSerializerOption.RootSerialize;", option, StringComparison.Ordinal);
+			LogAssert.IsTrue(end > option, "GetDeltaSerializeOption no longer ends by returning RootSerialize.");
+			string body = source.Substring(option, end - option);
+			int brace = body.IndexOf('{');
+			string firstStatement = body.Substring(brace + 1).TrimStart().Split('\n')[0].Trim();
+			LogAssert.IsFalse(firstStatement.StartsWith("return DeltaSerializerOption.FullSerialize", StringComparison.Ordinal),
+				"GetDeltaSerializeOption returns FullSerialize before any of its logic (upstream's stub): every reconcile goes out in full.");
+			LogAssert.IsTrue(body.Contains("ObserverAddedTick"),
+				"GetDeltaSerializeOption must send a full reconcile to a newly added observer.");
+		}
+
+		/// <summary>
+		/// FISHNET_DELTA_PREDICTION is set for every build target. It changes the wire format, so a
+		/// server and a client built with different settings misread every reconcile and replicate,
+		/// and nothing detects it at runtime.
+		/// </summary>
+		[Test]
+		public void DeltaPredictionDefine_IsSetForEveryBuildTarget()
+		{
+#if !FISHNET_DELTA_PREDICTION
+			LogAssert.Fail("This assembly was compiled without FISHNET_DELTA_PREDICTION; FishMMO runs delta prediction on every build.");
+#endif
+			string settings = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/ProjectSettings.asset")).Replace("\r\n", "\n");
+			int start = settings.IndexOf("  scriptingDefineSymbols:\n", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "ProjectSettings has no scriptingDefineSymbols block.");
+
+			int targets = 0;
+			foreach (string line in settings.Substring(start + "  scriptingDefineSymbols:\n".Length).Split('\n'))
+			{
+				if (!line.StartsWith("    ", StringComparison.Ordinal))
+				{
+					break;
+				}
+				targets++;
+				string[] defines = line.Substring(line.IndexOf(':') + 1).Trim().Split(';');
+				LogAssert.IsTrue(Array.IndexOf(defines, "FISHNET_DELTA_PREDICTION") >= 0,
+					$"Build target '{line.Trim()}' lacks FISHNET_DELTA_PREDICTION: its builds would not read the other builds' reconciles.");
+			}
+			LogAssert.IsTrue(targets > 0, "No build targets listed under scriptingDefineSymbols.");
+		}
+
+		// ── 3. TargetOrdering used the per-process instance id as a cross-peer sort key ──
+
+		[Test]
+		public void SameNamedSceneObjects_OrderByAuthoredPosition_NotByCreationOrder()
+		{
+			int[] firstRun = RankTwoBraziers(createNearFirst: false);
+			int[] secondRun = RankTwoBraziers(createNearFirst: true);
+			LogAssert.AreEqual(1, firstRun[0], "The brazier at x=1 must sort first regardless of which was created first.");
+			LogAssert.AreEqual(1, secondRun[0], "The brazier at x=1 must sort first regardless of which was created first.");
+		}
+
+		/// <summary>Returns the x positions of two same-named objects in sorted order.</summary>
+		private static int[] RankTwoBraziers(bool createNearFirst)
+		{
+			GameObject a = null, b = null;
+			try
+			{
+				if (createNearFirst)
+				{
+					a = new GameObject("Brazier"); a.transform.position = new Vector3(1f, 0f, 0f);
+					b = new GameObject("Brazier"); b.transform.position = new Vector3(2f, 0f, 0f);
+				}
+				else
+				{
+					b = new GameObject("Brazier"); b.transform.position = new Vector3(2f, 0f, 0f);
+					a = new GameObject("Brazier"); a.transform.position = new Vector3(1f, 0f, 0f);
+				}
+				List<GameObject> candidates = new List<GameObject> { b, a };
+				List<TargetRank> ranks = new List<TargetRank>
+				{
+					TargetOrdering.Rank(0, b, 0f),
+					TargetOrdering.Rank(1, a, 0f),
+				};
+				TargetOrdering.SortStable(ranks);
+				return new[]
+				{
+					Mathf.RoundToInt(candidates[ranks[0].Index].transform.position.x),
+					Mathf.RoundToInt(candidates[ranks[1].Index].transform.position.x),
+				};
+			}
+			finally
+			{
+				if (a != null) UnityEngine.Object.DestroyImmediate(a);
+				if (b != null) UnityEngine.Object.DestroyImmediate(b);
+			}
+		}
+
+		// ── 4. Area/Cone/Random capped by identity, not distance; Chain truncated in the broadphase ──
+
+		[Test]
+		public void AreaSelector_MaxHits_KeepsTheNearestCandidates()
+		{
+			GameObject context = MakeSphere("AreaContext", Vector3.zero);
+			GameObject near = MakeSphere("AreaNear", new Vector3(2f, 0f, 0f));
+			GameObject mid = MakeSphere("AreaMid", new Vector3(4f, 0f, 0f));
+			GameObject far = MakeSphere("AreaFar", new Vector3(6f, 0f, 0f));
+			try
+			{
+				Physics.SyncTransforms();
+				AreaTargetSelector selector = new AreaTargetSelector { Radius = 10f, TargetLayer = ~0, MaxHits = 2 };
+				EventData eventData = new EventData(null);
+				eventData.SetTarget(context);
+
+				List<GameObject> picked = new List<GameObject>(selector.SelectTargets(eventData));
+				// The context's own collider is a candidate too (documented behaviour); the cap of 2
+				// must therefore keep the context (d=0) and the nearest other collider.
+				LogAssert.AreEqual(2, picked.Count, "MaxHits caps the result.");
+				LogAssert.IsTrue(picked.Contains(near), "The nearest candidate survives the cap.");
+				LogAssert.IsFalse(picked.Contains(far), "The furthest candidate is the first one dropped.");
+				LogAssert.IsFalse(picked.Contains(mid), "Only the two nearest survive.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(near);
+				UnityEngine.Object.DestroyImmediate(mid);
+				UnityEngine.Object.DestroyImmediate(far);
+			}
+		}
+
+		[Test]
+		public void ChainSelector_QueriesWiderThanItsBufferHint_AndTargetsEverythingByDefault()
+		{
+			ChainTargetSelector selector = new ChainTargetSelector { QueryBufferHint = 4 };
+			LogAssert.AreEqual(~0, selector.TargetLayer.value,
+				"A fresh chain selector must target every layer like the other physics selectors, not Nothing.");
+
+			/* NewHitBuffer, not EnsureHitBuffer: the buffer is allocated per gather now rather than
+			 * held in a field. Selectors are serialized inline on shared assets, so one instance
+			 * serves every caster — and a nested trigger fired by a candidate's conditions could
+			 * re-enter the same instance and re-run the query into the array the outer gather was
+			 * still walking. What this test asserts is unchanged: the STARTING size is wider than
+			 * the authored hint, so the broadphase cannot truncate before the ranking runs.
+			 *
+			 * The field was called MaxHits and is now QueryBufferHint — this selector caps with
+			 * ChainLength and never with this value, and the old name was the last thing still
+			 * claiming otherwise. */
+			MethodInfo newBuffer = typeof(ChainTargetSelector).GetMethod("NewHitBuffer", Any);
+			LogAssert.IsNotNull(newBuffer);
+			Collider[] hits = (Collider[])newBuffer.Invoke(selector, null);
+			MethodInfo size = typeof(TargetSelector).GetMethod("QueryBufferSize", Any);
+			int expected = (int)size.Invoke(null, new object[] { 4 });
+			LogAssert.AreEqual(expected, hits.Length,
+				"The chain's query buffer must be the wide one, so the broadphase cannot truncate before ranking.");
+			LogAssert.IsTrue(hits.Length > 4, "Wider than the authored hint.");
+		}
+
+		private static GameObject MakeSphere(string name, Vector3 position)
+		{
+			GameObject go = new GameObject(name);
+			go.transform.position = position;
+			SphereCollider c = go.AddComponent<SphereCollider>();
+			c.radius = 0.5f;
+			return go;
+		}
+
+		// ── 5. The moving platform never moved on clients ──
+
+		/// <summary>
+		/// The client tick calls <see cref="KCCPlatform.Step"/> directly because FishNet never
+		/// invokes an ownerless, non-forwarded replicate body on a client. The step itself must be
+		/// the deterministic movement the server runs: advance, snap on arrival, wrap the goal.
+		/// </summary>
+		[Test]
+		public void Platform_ClientStep_MovesTowardGoals_SnapsAndWraps()
+		{
+			GameObject go = new GameObject("Platform");
+			try
+			{
+				go.transform.position = new Vector3(0f, 5f, 0f);
+				KCCPlatform platform = go.AddComponent<KCCPlatform>();
+				typeof(KCCPlatform).GetField("moveRate", Any).SetValue(platform, 4f);
+				typeof(KCCPlatform).GetMethod("Awake", Any).Invoke(platform, null);
+
+				float delta = 1f / 30f;
+				platform.Step(delta);
+				LogAssert.IsTrue(Mathf.Abs(go.transform.position.z - 4f * delta) < 1e-4f, "One tick moves moveRate × delta toward the first goal (+5 z).");
+				LogAssert.IsTrue((platform.LastCompletedTickVelocity - new Vector3(0f, 0f, 4f)).magnitude < 1e-3f, "Velocity is exposed for riders.");
+
+				FieldInfo goalField = typeof(KCCPlatform).GetField("goalIndex", Any);
+				int steps = 0;
+				while ((byte)goalField.GetValue(platform) == 0 && steps < 100) { platform.Step(delta); steps++; }
+				LogAssert.AreEqual(1, (int)(byte)goalField.GetValue(platform), "Arrival advances the goal.");
+				LogAssert.IsTrue(Mathf.Abs(go.transform.position.z - 5f) < 1e-4f, "Arrival snaps exactly onto the goal.");
+				LogAssert.IsTrue(steps > 30 && steps < 45, $"5 units at 4 u/s over 30 Hz takes ~38 ticks, took {steps}.");
+
+				steps = 0;
+				while ((byte)goalField.GetValue(platform) == 1 && steps < 200) { platform.Step(delta); steps++; }
+				LogAssert.AreEqual(0, (int)(byte)goalField.GetValue(platform), "The last goal wraps to the first.");
+				LogAssert.IsTrue(Mathf.Abs(go.transform.position.z + 5f) < 1e-4f, "Snapped onto the second goal (-5 z).");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		[Test]
+		public void Platform_ClientTick_RunsTheReplicate_BecauseItForwardsState()
+		{
+			/* Inverted by issue #228. This test used to pin the OPPOSITE: with forwarding off,
+			 * FishNet's Replicate_NonAuthoritative returns before invoking the body on a client,
+			 * so the client had to step the platform by hand — which also meant no reconcile ever
+			 * rolled it back. The platform now forwards state (an ownerless object relays no
+			 * input, so the scale argument against forwarding does not apply), and the client's
+			 * platform is moved by the replicate FishNet invokes and corrected by its reconcile. */
+			string path = Path.Combine(Application.dataPath, "FishMMO/Shared/Implementation/Entity/Prediction/KCC/KCCPlatform.cs");
+			string source = ProjectFiles.ReadAllText(path);
+			int onTick = source.IndexOf("protected override void TimeManager_OnTick()", StringComparison.Ordinal);
+			int next = source.IndexOf("public override void CreateReconcile()", onTick, StringComparison.Ordinal);
+			LogAssert.IsTrue(onTick >= 0 && next > onTick, "TimeManager_OnTick must exist ahead of CreateReconcile.");
+			string body = source.Substring(onTick, next - onTick);
+			LogAssert.IsTrue(body.Contains("PerformReplicate(default);"),
+				"Every peer's OnTick must go through the replicate; that is what FishNet rolls back and replays.");
+			LogAssert.IsFalse(body.Contains("Step((float)TimeManager.TickDelta);"),
+				"A client platform stepped outside the replicate is never reconciled — the open-loop model of issue #228.");
+		}
+
+		// ── 6. NPC.ReadPayload overwrote the modifiers the attribute payload just delivered ──
+
+		[Test]
+		public void NpcAttributeGeneration_OnTheClient_DoesNotReplaceTheServersModifier()
+		{
+			GameObject go = new GameObject("NPCProbe");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				// NPC's RequireComponent chain adds NetworkObject twice on a bare GameObject; FishNet
+				// logs an error about it that is irrelevant to the attribute path under test.
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+				NPC npc = go.AddComponent<NPC>();
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
+				CharacterAttributeController attributes = go.GetComponent<CharacterAttributeController>();
+				attributes.InitializeOnce(npc);
+				npc.RegisterCharacterBehaviour(attributes);
+
+				CharacterAttributeTemplate template = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				template.name = "Audit_NPC_Strength"; template.InitialValue = 10; template.AddToCache(template.name); assets.Add(template);
+				CharacterAttribute attribute = new CharacterAttribute(attributes, template.ID, 10, 0);
+				attributes.AddAttribute(attribute);
+				// What the server's attribute payload delivered: bonus + instance difficulty + buffs.
+				attribute.SetModifier(50);
+
+				NPCAttributeDatabase bonuses = ScriptableObject.CreateInstance<NPCAttributeDatabase>();
+				assets.Add(bonuses);
+				bonuses.Attributes.Add(new NPCAttribute(false, false, 25, 25, template));
+				npc.AttributeBonuses = bonuses;
+				typeof(NPC).GetField("npcRNG", Any).SetValue(npc, new DeterministicRNG(1));
+
+				typeof(NPC).GetMethod("AddNPCAttributes", Any).Invoke(npc, new object[] { false });
+
+				LogAssert.AreEqual(50, attribute.ExternalModifier,
+					"A client must not replace the payload-delivered modifier with the locally generated NPC bonus.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		// ── 7. Replaying a cast did not restore its cooldown after a pre-cast reconcile wiped it ──
+
+		private sealed class ProbeTemplate : AbilityTemplate { }
+
+		[Test]
+		public void ReplayedCast_ReappliesTheCooldown()
+		{
+			GameObject go = new GameObject("CastReplayProbe");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				MockCharacter character = new MockCharacter();
+				CooldownController cooldowns = go.AddComponent<CooldownController>();
+				cooldowns.InitializeOnce(character);
+				typeof(CooldownController).GetField("cachedTickDelta", Any).SetValue(cooldowns, 1f / 30f);
+
+				AbilityController controller = go.AddComponent<AbilityController>();
+				controller.OnAwake();
+				typeof(AbilityController).GetField("abilitySeedGenerator", Any).SetValue(controller, new DeterministicRNG(1));
+				controller.InitializeOnce(character);
+				typeof(AbilityController).GetField("cachedCooldownController", Any).SetValue(controller, cooldowns);
+
+				ProbeTemplate template = ScriptableObject.CreateInstance<ProbeTemplate>();
+				template.name = "Audit_Replay_Ability"; template.Cooldown = 5f; template.AddToCache(template.name); assets.Add(template);
+				Ability ability = new Ability(9002L, template);
+
+				// The reconcile for a tick before the cast restored "no cooldowns".
+				cooldowns.RestoreFromReconcile(null);
+
+				MethodInfo finish = typeof(AbilityController).GetMethod("FinishAbility", Any);
+				LogAssert.IsNotNull(finish);
+				AbilityActivationReplicateData activation = default;
+				activation.SetTick(100);
+				finish.Invoke(controller, new object[] { ability, activation, ReplicateState.Replayed | ReplicateState.Ticked | ReplicateState.Created });
+
+				object table = typeof(CooldownController).GetField("cooldowns", Any).GetValue(cooldowns);
+				bool hasCooldown = (bool)table.GetType().GetMethod("ContainsKey").Invoke(table, new object[] { ability.ID });
+				LogAssert.IsTrue(hasCooldown,
+					"Replaying the cast tick after a pre-cast reconcile must put the predicted cooldown back.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		// ── 8. Equipment payload threw on an item template that failed to resolve ──
+
+		// ── 9. The owner is no longer sent a total AND the components that produced it ──
+
+		/// <summary>
+		/// The owner's payload carries base values only, so the restores that follow cannot double it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// This test used to assert the opposite half of the same problem: that a repair pass
+		/// re-installed the server's total after the buff and equipment blocks had added their
+		/// contributions on top of it. The repair worked, but the double it repaired was created by
+		/// the payload itself — the total already contained every buff and item, and the owner
+		/// applies those components for real.
+		/// </para>
+		/// <para>
+		/// The upstream fix is that the owner is no longer sent the total. There is nothing to
+		/// double and nothing to undo, and the standing constraint the repair imposed — that
+		/// anything added to the buff or equipment restores must WRITE and never READ a derived
+		/// attribute, or capture the doubled number — goes with it.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void OwnerPayload_CarriesNoExternalModifier_SoTheRestoresCannotDoubleIt()
+		{
+			GameObject writerGo = new GameObject("AttrWriter");
+			GameObject readerGo = new GameObject("AttrReader");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				CharacterAttributeTemplate template = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				template.name = "Audit_Doubling_Health"; template.InitialValue = 100;
+				template.AddToCache(template.name); assets.Add(template);
+
+				CharacterAttributeController source = writerGo.AddComponent<CharacterAttributeController>();
+				source.InitializeOnce(new MockCharacter());
+				CharacterAttribute sourceAttribute = new CharacterAttribute(source, template.ID, 100, 0);
+				source.AddAttribute(sourceAttribute);
+				// The server's total: base 100 plus 25 of equipment or buff.
+				sourceAttribute.SetModifier(25);
+
+				Writer payload = new Writer();
+				source.WritePayload(payload, ownerShape: true);
+
+				CharacterAttributeController target = readerGo.AddComponent<CharacterAttributeController>();
+				target.InitializeOnce(new MockCharacter());
+				CharacterAttribute targetAttribute = new CharacterAttribute(target, template.ID, 100, 0);
+				target.AddAttribute(targetAttribute);
+
+				target.ReadPayload(null, new Reader(payload.GetArraySegment(), null));
+				LogAssert.AreEqual(0, targetAttribute.ExternalModifier,
+					"The owner reconstructs its own modifier from the components. Receiving the " +
+					"server's total here as well is what made every buffed attribute read doubled.");
+				LogAssert.AreEqual(100, targetAttribute.Value, "The base value still travels.");
+
+				// What BuffController.ReadPayload and EquipmentController.ReadPayload do next.
+				targetAttribute.SetSource(ModifierSource.Item(1), 25);
+
+				LogAssert.AreEqual(25, targetAttribute.ExternalModifier,
+					"...so once the restores have run the owner holds exactly the server's number, " +
+					"with no repair pass in between.");
+				LogAssert.AreEqual(125, targetAttribute.FinalValue, "...and the final value agrees.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(writerGo);
+				UnityEngine.Object.DestroyImmediate(readerGo);
+			}
+		}
+
+		/// <summary>
+		/// An observer's payload still carries the total, because it reconstructs nothing.
+		/// </summary>
+		/// <remarks>
+		/// The other half of the shape, and the reason the fix could not simply be "send base values
+		/// only". <c>BuffController.ReadPayload</c> tracks a buff without applying it, and an
+		/// observer's items carry no id so <c>ItemGenerator.TryResolveLedgerSource</c> declines — so
+		/// an observer applies no components at all. Sending it base values alone showed every peer
+		/// unbuffed and unequipped, which is the bug the modifier was added to the payload to fix.
+		/// </remarks>
+		[Test]
+		public void ObserverPayload_StillCarriesTheAuthoritativeTotal()
+		{
+			GameObject writerGo = new GameObject("AttrWriter");
+			GameObject readerGo = new GameObject("AttrReader");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				CharacterAttributeTemplate template = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				template.name = "Audit_Observer_Health"; template.InitialValue = 100;
+				template.AddToCache(template.name); assets.Add(template);
+
+				CharacterAttributeController source = writerGo.AddComponent<CharacterAttributeController>();
+				source.InitializeOnce(new MockCharacter());
+				CharacterAttribute sourceAttribute = new CharacterAttribute(source, template.ID, 100, 0);
+				source.AddAttribute(sourceAttribute);
+				sourceAttribute.SetModifier(25);
+
+				Writer payload = new Writer();
+				source.WritePayload(payload, ownerShape: false);
+
+				CharacterAttributeController target = readerGo.AddComponent<CharacterAttributeController>();
+				target.InitializeOnce(new MockCharacter());
+				CharacterAttribute targetAttribute = new CharacterAttribute(target, template.ID, 100, 0);
+				target.AddAttribute(targetAttribute);
+
+				target.ReadPayload(null, new Reader(payload.GetArraySegment(), null));
+
+				LogAssert.AreEqual(25, targetAttribute.ExternalModifier,
+					"An observer applies no buffs and no item bonuses, so the server's total is the " +
+					"only thing that can be right for it — and it is right from the first read.");
+				LogAssert.AreEqual(125, targetAttribute.FinalValue,
+					"...so a peer in +max-health gear shows its BUFFED maximum, not its base one.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(writerGo);
+				UnityEngine.Object.DestroyImmediate(readerGo);
+			}
+		}
+
+		// ── 12. The ungrounded ground normal is the motor's up vector, not zero ──
+
+		/// <summary>
+		/// The grounding serializer omits the three normals while airborne and the reader
+		/// reconstructs them as zero — correct only if the writer's baseline is zero too. The motor
+		/// seeds an ungrounded report's <c>GroundNormal</c> with the character's up vector, so the
+		/// two peers held different baselines for the whole airborne stretch, and the landing delta
+		/// was decoded against the wrong one.
+		/// </summary>
+		[Test]
+		public void UngroundedNormals_AreCanonicalisedByTheProducer_SoTheChainSurvivesAJump()
+		{
+			// What an airborne motor actually hands the snapshot, before canonicalisation.
+			CharacterTransientGroundingReport airborneFromMotor = default;
+			airborneFromMotor.FoundAnyGround = false;
+			airborneFromMotor.GroundNormal = Vector3.up;
+
+			CharacterTransientGroundingReport airborneCanonical = airborneFromMotor;
+			airborneCanonical.GroundNormal = Vector3.zero;
+
+			// Both peers start grounded and agree.
+			CharacterTransientGroundingReport grounded = default;
+			grounded.FoundAnyGround = true;
+			grounded.IsStableOnGround = true;
+			grounded.GroundNormal = Vector3.up;
+			grounded.InnerGroundNormal = Vector3.up;
+			grounded.OuterGroundNormal = Vector3.up;
+
+			// Airborne tick: the writer sends no normals, the reader zeroes them.
+			CharacterTransientGroundingReport clientAirborne = RoundTripGrounding(grounded, airborneCanonical);
+			LogAssert.AreEqual(Vector3.zero, clientAirborne.GroundNormal,
+				"The reader reconstructs an ungrounded normal as zero.");
+
+			// Landing on a slope, delta'd against each side's own airborne baseline.
+			CharacterTransientGroundingReport landed = default;
+			landed.FoundAnyGround = true;
+			landed.IsStableOnGround = true;
+			Vector3 slope = new Vector3(0.3f, 0.95f, 0f).normalized;
+			landed.GroundNormal = slope;
+			landed.InnerGroundNormal = slope;
+			landed.OuterGroundNormal = slope;
+
+			CharacterTransientGroundingReport clientLanded = RoundTripGrounding(airborneCanonical, landed, clientAirborne);
+			float error = Vector3.Angle(clientLanded.GroundNormal, slope);
+			LogAssert.IsTrue(error < 1f,
+				$"The landing normal must decode to the server's, within the packed resolution; was {error:F2} degrees out.");
+
+			/* Negative control: the same landing delta written against the RAW motor baseline the
+			 * producer used to hand over, and read against the zero the reader holds. */
+			CharacterTransientGroundingReport clientLandedUncanonical =
+				RoundTripGrounding(airborneFromMotor, landed, clientAirborne);
+			float uncanonicalError = Vector3.Angle(clientLandedUncanonical.GroundNormal, slope);
+			LogAssert.IsTrue(uncanonicalError > 10f,
+				$"Without canonicalisation the two baselines disagree and the landing normal decodes wrong; got only {uncanonicalError:F2} degrees of error, so this control no longer proves anything.");
+		}
+
+		/// <summary>Writes a grounding delta against <paramref name="writerBaseline"/> and reads it against <paramref name="readerBaseline"/>.</summary>
+		private static CharacterTransientGroundingReport RoundTripGrounding(
+			CharacterTransientGroundingReport writerBaseline,
+			CharacterTransientGroundingReport next,
+			CharacterTransientGroundingReport? readerBaseline = null)
+		{
+			Writer writer = new Writer();
+			bool wrote = CharacterTransientGroundingReportDeltaSerializer.WriteDelta(
+				writer, writerBaseline, next, DeltaSerializerOption.Unset);
+			Reader reader = new Reader(writer.GetArraySegment(), null);
+			CharacterTransientGroundingReport result = wrote
+				? CharacterTransientGroundingReportDeltaSerializer.ReadDelta(reader, readerBaseline ?? writerBaseline)
+				: (readerBaseline ?? writerBaseline);
+			LogAssert.AreEqual(0, reader.Remaining, "The grounding block must be consumed exactly.");
+			return result;
+		}
+
+		/// <summary>
+		/// The producer is what makes the reader's zero correct; if this stops zeroing, the chain
+		/// above breaks silently on every jump.
+		/// </summary>
+		[Test]
+		public void KccControllerGetState_ZeroesUngroundedNormals()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/KCC/KCCController.cs"));
+			int start = source.IndexOf("public KinematicCharacterMotorState GetState()", StringComparison.Ordinal);
+			int end = source.IndexOf("return baseState;", start, StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0 && end > start, "KCCController.GetState must be locatable.");
+			string body = source.Substring(start, end - start);
+			LogAssert.IsTrue(body.Contains("!baseState.GroundingStatus.FoundAnyGround"),
+				"GetState must canonicalise the ungrounded grounding normals; the motor seeds GroundNormal with the character's up vector.");
+			LogAssert.IsTrue(body.Contains("GroundNormal = Vector3.zero"),
+				"...by zeroing them, which is the value the reader reconstructs.");
+		}
+
+		// ── Round 3: the remaining confirmed defects ──
+
+		/// <summary>
+		/// Lag compensation used to rewind a constant two ticks because its "latency" term was
+		/// stamped with the current server tick immediately before the replicate body ran. The
+		/// offset now travels in the input, so it must survive the wire exactly.
+		/// </summary>
+		[Test]
+		public void ViewOffsetTicks_SurvivesTheReplicateWire()
+		{
+			CharacterReplicateData prev = default;
+			prev.AimDirection = AimDirectionCompression.QuantizedFallbackDirection;
+			prev.ViewOffsetTicks = 2;
+
+			CharacterReplicateData next = prev;
+			next.ViewOffsetTicks = 9;
+
+			// Full serializer.
+			Writer full = new Writer();
+			full.WriteCharacterReplicateData(next);
+			Reader fullReader = new Reader(full.GetArraySegment(), null);
+			LogAssert.AreEqual(9, (int)fullReader.ReadCharacterReplicateData().ViewOffsetTicks,
+				"The absolute form must carry the view offset.");
+			LogAssert.AreEqual(0, fullReader.Remaining, "Consumed exactly.");
+
+			// Delta serializer.
+			Writer delta = new Writer();
+			LogAssert.IsTrue(delta.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize),
+				"A changed view offset must produce a delta.");
+			Reader deltaReader = new Reader(delta.GetArraySegment(), null);
+			LogAssert.AreEqual(9, (int)deltaReader.ReadDelta(prev).ViewOffsetTicks,
+				"The delta form must carry the view offset.");
+			LogAssert.AreEqual(0, deltaReader.Remaining, "Consumed exactly.");
+
+			// Unchanged costs nothing.
+			Writer unchanged = new Writer();
+			unchanged.WriteDelta(next, next, DeltaSerializerOption.RootSerialize);
+			Reader unchangedReader = new Reader(unchanged.GetArraySegment(), null);
+			LogAssert.AreEqual(9, (int)unchangedReader.ReadDelta(next).ViewOffsetTicks,
+				"An unchanged view offset carries forward from the baseline.");
+		}
+
+		/// <summary>The client's claim is capped before it reaches the position history.</summary>
+		[Test]
+		public void ViewOffsetClaim_IsCapped()
+		{
+			LogAssert.IsTrue(LagCompensationTick.MaximumCompensationTicks > LagCompensationTick.SpectatorInterpolationTicks,
+				"The cap must leave room for a real view offset.");
+			LogAssert.IsTrue(LagCompensationTick.MaximumCompensationTicks <= 60,
+				"The cap must still bound how far into the past a client can claim to have seen.");
+
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
+			// The EXECUTING code, not the remarks — which name the old API deliberately, to explain
+			// why it is not used.
+			LogAssert.IsFalse(source.Contains("uint lagTicks = owner.ReplicateTick.LocalTickDifference"),
+				"The rewind must not compute its offset from ReplicateTick.LocalTickDifference, which reads 0 on every tick that carries real input.");
+			LogAssert.IsTrue(source.Contains("MaximumCompensationTicks"),
+				"The client-supplied offset must be capped.");
+		}
+
+		/// <summary>
+		/// The motor state declares IReconcileData, so as a ROOT reconcile its full form must be
+		/// decodable by a peer with no baseline.
+		/// </summary>
+		/// <remarks>
+		/// The fork guaranteed this with a mode byte inside the delta serializer. FishNet's delta
+		/// prediction now writes a full reconcile with the REGULAR serializer behind its header, so the
+		/// property is FishNet's and the mode byte is gone; this checks the property, not the means.
+		/// </remarks>
+		[Test]
+		public void MotorStateFullReconcile_IsDecodableWithoutABaseline()
+		{
+			KinematicCharacterMotorState baseline = default;
+			baseline.Rotation = Quaternion.identity;
+			baseline.Position = new Vector3(120f, 8f, -40f);
+			baseline.BaseVelocity = new Vector3(2f, 0f, 1f);
+
+			KinematicCharacterMotorState next = baseline;
+			next.Position = new Vector3(121f, 8f, -39f);
+
+			LogAssert.IsTrue(DeltaReconcileWire.HasDeltaSerializers<KinematicCharacterMotorState>(),
+				"The motor state must have both delta serializers for this to exercise the delta path.");
+			Writer writer = new Writer();
+			DeltaReconcileWire.Write(writer, baseline, next, 1, fullSerialize: true);
+
+			// A peer holding NOTHING must still decode it.
+			Reader reader = new Reader(writer.GetArraySegment(), null);
+			KinematicCharacterMotorState decoded = DeltaReconcileWire.Read<KinematicCharacterMotorState>(reader, default, out bool isFull, out _);
+			LogAssert.IsTrue(isFull, "Written as a full reconcile.");
+			LogAssert.AreEqual(0, reader.Remaining, "Consumed exactly.");
+			LogAssert.IsTrue((decoded.Position - next.Position).magnitude < 0.05f,
+				"A full reconcile must be decodable from an empty baseline, not relative to one.");
+		}
+
+		/// <summary>
+		/// A stacking buff applied for the first time used to run both the new-buff branch and the
+		/// stack branch, applying its modifier twice.
+		/// </summary>
+		[Test]
+		public void FreshStackingBuff_AppliesItsModifierOnce()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
+			LogAssert.IsTrue(source.Contains("if (!isNew && template.MaxStacks > 0"),
+				"Only an existing buff may take a stack; a new one already applied its modifier.");
+		}
+
+		/// <summary>
+		/// The attribute reconcile must run AFTER the buff and equipment reconciles, or their
+		/// incremental modifier writes compound instead of being overwritten.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>CharacterPredictionController.Reconcile</c> walks the controllers sorted by
+		/// <c>Order</c>. <c>BuffController</c> and <c>EquipmentController</c> restore INCREMENTALLY —
+		/// <c>Buff.Apply</c> and <c>ItemGenerator.ApplyAttributes</c> both call <c>AddModifier</c> —
+		/// while <c>CharacterAttributeController.ApplyAttributeSnapshot</c> installs the server's
+		/// TOTAL absolutely with <c>SetModifierDirect</c>. Running the absolute write last is what
+		/// makes the incremental ones harmless.
+		/// </para>
+		/// <para>
+		/// Asserted because nothing else does. The values were 85 / 93 / 95 with the reason recorded
+		/// only in prose, so lowering the attribute controller to fix some unrelated ordering
+		/// problem would have silently reintroduced compounding on the owner's sheet — a drift with
+		/// no exception, no log line and no failing test to catch it.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void AttributeReconcile_RunsAfterBuffAndEquipment()
+		{
+			int attributes = OrderOf<CharacterAttributeController>();
+			int buffs = OrderOf<BuffController>();
+			// The equipment half (the Items module's controller) is pinned by its own EquipmentPredictionAuditTests.
+
+			LogAssert.IsTrue(attributes > buffs,
+				$"CharacterAttributeController.Order ({attributes}) must exceed BuffController.Order ({buffs}): " +
+				"the buff reconcile re-applies modifiers with AddModifier and the attribute reconcile " +
+				"overwrites the total with SetModifierDirect, so the overwrite has to come second.");
+		}
+
+		/// <summary>
+		/// Reads a controller's pipeline order without a live NetworkManager. <c>Order</c> is an
+		/// instance property on <c>IPredictableController</c>, and these are all
+		/// <c>MonoBehaviour</c>s, so the instance is built on a throwaway GameObject.
+		/// </summary>
+		private static int OrderOf<T>() where T : MonoBehaviour, IPredictableController
+		{
+			GameObject go = new GameObject("OrderProbe_" + typeof(T).Name);
+			try
+			{
+				return go.AddComponent<T>().Order;
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// A pooled object must not inherit the previous occupant's permanent buffs — they carry
+		/// attribute modifiers.
+		/// </summary>
+		[Test]
+		public void LifecycleRemoveAll_ClearsPermanentBuffsToo()
+		{
+			MethodInfo removeAll = typeof(BuffController).GetMethod("RemoveAll", Any);
+			LogAssert.IsTrue(removeAll != null, "BuffController.RemoveAll must exist.");
+			/* Asserted by NAME, not by arity. The property that matters is that clearing permanent
+			 * buffs is an explicit decision at each call site; how many other options RemoveAll
+			 * grew since is irrelevant, and pinning the count made an unrelated parameter look like
+			 * a regression. */
+			ParameterInfo[] parameters = removeAll.GetParameters();
+			bool hasIncludePermanent = false;
+			for (int i = 0; i < parameters.Length; ++i)
+			{
+				hasIncludePermanent |= parameters[i].Name == "includePermanent";
+			}
+			LogAssert.IsTrue(hasIncludePermanent,
+				"RemoveAll must take an explicit includePermanent flag rather than always exempting permanent buffs.");
+
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
+			int count = source.Split(new[] { "includePermanent: true" }, StringSplitOptions.None).Length - 1;
+			LogAssert.AreEqual(2, count,
+				"Both lifecycle callers (ResetState and ReadPayload) must clear permanent buffs.");
+		}
+
+		/// <summary>ECA triggers are server-authoritative; actions are not all self-gating.</summary>
+		[Test]
+		public void BuffEcaTriggers_OnlyDispatchOnTheAuthoritativePeer()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
+			foreach (string invoke in new[] { "Trigger.InvokeAll(onBuffApplyTriggers", "Trigger.InvokeAll(onBuffRemoveTriggers" })
+			{
+				int index = 0;
+				while ((index = source.IndexOf(invoke, index, StringComparison.Ordinal)) >= 0)
+				{
+					// The guard must appear close above each dispatch.
+					string preceding = source.Substring(Math.Max(0, index - 400), Math.Min(400, index));
+					LogAssert.IsTrue(preceding.Contains("IsAuthoritativePeer"),
+						$"Every '{invoke}' must sit under an IsAuthoritativePeer guard.");
+					index += invoke.Length;
+				}
+			}
+		}
+
+		/// <summary>A prefab authored immortal must survive pool reuse.</summary>
+		[Test]
+		public void ResetState_PreservesTheAuthoredImmortalFlag()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs"));
+			LogAssert.IsFalse(source.Contains("\n\t\t\timmortal = false;"),
+				"ResetState must not force the authored immortal flag to false.");
+			LogAssert.IsTrue(source.Contains("authoredImmortal"),
+				"The prefab-authored immortal value must be captured and restored.");
+		}
+
+		/// <summary>
+		/// A resource's authoritative maximum must survive the next local modifier change; only
+		/// stamping FinalValue left it one AddModifier away from being recomputed away.
+		/// </summary>
+		[Test]
+		public void ReconciledResourceMaximum_SurvivesALaterModifierChange()
+		{
+			GameObject go = new GameObject("ResourceReconcileProbe");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				CharacterAttributeController attributes = go.AddComponent<CharacterAttributeController>();
+				attributes.InitializeOnce(new MockCharacter());
+
+				CharacterAttributeTemplate template = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				template.name = "Audit_Resource_Health"; template.InitialValue = 100; template.IsResourceAttribute = true;
+				template.AddToCache(template.name); assets.Add(template);
+				CharacterResourceAttribute health = new CharacterResourceAttribute(attributes, template.ID, 100, 100, 0);
+				attributes.AddResourceAttribute(health);
+
+				// The server's authoritative maximum, as a reconcile installs it.
+				MethodInfo apply = typeof(CharacterAttributeController).GetMethod("ApplyIndividualResourceState", Any);
+				LogAssert.IsTrue(apply != null, "ApplyIndividualResourceState must exist.");
+				apply.Invoke(attributes, new object[] { template.ID, 150, 150f });
+				LogAssert.AreEqual(150, health.FinalValue, "The reconcile installs the server's maximum.");
+
+				/* Anything that changes a modifier afterwards recomputes FinalValue from `value` and
+				 * `externalModifier` — neither of which a resource reconcile carries. With only
+				 * SetFinal stamping the number, that recompute produced 100 + 10 = 110 and the
+				 * server's maximum was gone. (AddModifier(0) is a no-op by design, so the trigger
+				 * has to be a real change.) */
+				health.AddModifier(10);
+				LogAssert.AreEqual(160, health.FinalValue,
+					"A later modifier change must build on the reconciled maximum, not discard it.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// An activation that completed without producing an object must take back the object the
+		/// owner predicted for that tick — the seeds agree, so nothing else can.
+		/// </summary>
+		[Test]
+		public void ServerSpawnedNothing_RollsBackThePredictedObject()
+		{
+			const int agreedSeed = 4242;
+			LogAssert.IsFalse(AbilityController.ShouldDestroySpawnsAtReconcileTick(
+					denied: false, havePredicted: true, predictedSeed: agreedSeed,
+					havePrevious: true, previousSeed: 11, serverSeed: agreedSeed),
+				"Agreeing seeds alone confirm the object — this is the state the ghost survived in.");
+
+			LogAssert.IsTrue(AbilityController.ShouldDestroySpawnsAtReconcileTick(
+					denied: false, havePredicted: true, predictedSeed: agreedSeed,
+					havePrevious: true, previousSeed: 11, serverSeed: agreedSeed,
+					serverSpawnedNothing: true),
+				"With the server reporting no spawn at this tick, the predicted object must go.");
+
+			LogAssert.IsFalse(AbilityController.ShouldDestroySpawnsAtReconcileTick(
+					denied: false, havePredicted: false, predictedSeed: 0,
+					havePrevious: false, previousSeed: 0, serverSeed: agreedSeed,
+					serverSpawnedNothing: true),
+				"With no history for the tick there is nothing to roll back.");
+		}
+
+		/// <summary>The platform never replays, so a replaying rider must ask for its tick.</summary>
+		[Test]
+		public void PlatformVelocityHistory_AnswersForAPastTick()
+		{
+			GameObject go = new GameObject("PlatformHistory");
+			try
+			{
+				KCCPlatform platform = go.AddComponent<KCCPlatform>();
+				MethodInfo record = typeof(KCCPlatform).GetMethod("RecordTickVelocity", Any);
+				LogAssert.IsTrue(record != null, "KCCPlatform must record per-tick velocity.");
+
+				record.Invoke(platform, new object[] { 100u, new Vector3(0f, 0f, 4f) });
+				record.Invoke(platform, new object[] { 101u, new Vector3(0f, 0f, -4f) });
+
+				LogAssert.IsTrue(platform.TryGetVelocityForTick(100u, out Vector3 atHundred));
+				LogAssert.IsTrue((atHundred - new Vector3(0f, 0f, 4f)).magnitude < 1e-4f,
+					"A replayed tick must get that tick's velocity, not the present one.");
+				LogAssert.IsTrue(platform.TryGetVelocityForTick(101u, out Vector3 atHundredOne));
+				LogAssert.IsTrue((atHundredOne - new Vector3(0f, 0f, -4f)).magnitude < 1e-4f,
+					"...including across a direction reversal, which is where it mattered.");
+				LogAssert.IsFalse(platform.TryGetVelocityForTick(5000u, out _),
+					"A tick outside the ring reports miss rather than a stale slot's value.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>Destroying an item must remove the modifiers it applied.</summary>
+		[Test]
+		public void ItemDestroy_UnequipsBeforeDetachingItsHandlers()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Item/Item.cs"));
+			int destroy = source.IndexOf("public void Destroy()", StringComparison.Ordinal);
+			LogAssert.IsTrue(destroy >= 0, "Item.Destroy must exist.");
+			int equippableDestroy = source.IndexOf("Equippable.Destroy();", destroy, StringComparison.Ordinal);
+			int detach = source.IndexOf("Equippable.OnUnequip -= ItemEquippable_OnUnequip;", destroy, StringComparison.Ordinal);
+			LogAssert.IsTrue(equippableDestroy >= 0 && detach >= 0, "Both steps must be present.");
+			LogAssert.IsTrue(equippableDestroy < detach,
+				"Unequip must run BEFORE the handlers are detached, or OnUnequip fires into an empty list and the item's attribute modifiers are never removed.");
+		}
+
+		/// <summary>The shipped buff assets must not serialize fields the template no longer has.</summary>
+		[Test]
+		public void ShippedBuffAssets_MatchTheirTemplateFields()
+		{
+			string[] assets = Directory.GetFiles(
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "FishMMO/Modules/Buffs/Templates")), "*.asset");
+			LogAssert.IsTrue(assets.Length > 0, "There must be buff assets to check.");
+
+			foreach (string path in assets)
+			{
+				string text = ProjectFiles.ReadAllText(path);
+				string name = Path.GetFileName(path);
+				LogAssert.IsFalse(text.Contains("FXPrefab: "),
+					$"{name} serializes FXPrefab, which no longer exists — the field is FXPrefabReference, so the buff has no FX.");
+				LogAssert.IsFalse(text.Contains("UseCount:"),
+					$"{name} serializes UseCount, which no longer exists on BaseBuffTemplate.");
+				LogAssert.IsTrue(text.Contains("FXPrefabReference:"),
+					$"{name} must carry the FX through the addressable reference the template declares.");
+
+				// A tick rate with nothing to tick costs a full buff-array resend per interval.
+				if (!text.Contains("OnTickEvents:"))
+				{
+					LogAssert.IsTrue(text.Contains("TickRate: 0"),
+						$"{name} has no OnTickEvents, so its TickRate must be 0 — otherwise it dirties the reconcile snapshot on every interval for nothing.");
+				}
+			}
+		}
+
+		/// <summary>
+		/// The float delta primitive quantised the magnitude of a difference by flooring it, so the
+		/// error never cancelled — it accumulated toward the previous value until the next absolute
+		/// snapshot snapped the position forward.
+		/// </summary>
+		[Test]
+		public void FloatDelta_DoesNotDriftTowardThePreviousValue()
+		{
+			// A steady 5 m/s at tick rate 30: 0.1667 per tick, which floors to 0.166.
+			const float perTick = 5f / 30f;
+			float server = 0f;
+			float client = 0f;
+
+			for (int i = 0; i < 29; i++)
+			{
+				float next = server + perTick;
+
+				Writer writer = new Writer();
+				LogAssert.IsTrue(writer.WriteUDeltaSingle(server, next), "A real movement must be written.");
+				Reader reader = new Reader(writer.GetArraySegment(), null);
+				client = reader.ReadUDeltaSingle(client);
+
+				// The writer advances its baseline to the exact value, as Reconcile_Send does.
+				server = next;
+			}
+
+			float drift = Mathf.Abs(server - client);
+
+			/* What flooring would have produced over the same chain: the whole fractional part is
+			 * lost every tick, in the same direction, so it accumulates linearly. Rounding cannot
+			 * remove the error — a constant per-tick difference rounds the same way every tick, so
+			 * some bias survives — but it halves the magnitude and stops the direction from being
+			 * guaranteed. The once-per-second absolute snapshot remains the backstop for what is
+			 * left. Comparing against the model rather than a fixed number keeps this honest if the
+			 * quantisation constant ever changes. */
+			float floorErrorPerTick = perTick - (float)(System.Math.Floor(perTick * 1000d) / 1000d);
+			float floorDrift = 29 * floorErrorPerTick;
+
+			TestContext.WriteLine($"MEASURE 29-tick float delta drift: {drift * 100f:F2} cm (flooring would give {floorDrift * 100f:F2} cm)");
+			LogAssert.IsTrue(drift < floorDrift * 0.6f,
+				$"29 ticks of walking drifted {drift * 100f:F2} cm against flooring's {floorDrift * 100f:F2} cm; the quantised difference is still biased toward the previous value.");
+		}
+
+		/// <summary>
+		/// The quaternion delta writer discarded a change below its dead zone while the caller
+		/// advanced its baseline anyway, so a slow turn was never transmitted at all.
+		/// </summary>
+		[Test]
+		public void SlowRotation_IsNotDiscardedByTheQuaternionDeadZone()
+		{
+			// ~0.25 degrees per tick — under the old 0.0025 component threshold.
+			Quaternion server = Quaternion.identity;
+			Quaternion client = Quaternion.identity;
+
+			for (int i = 0; i < 20; i++)
+			{
+				Quaternion next = Quaternion.Euler(0f, (i + 1) * 0.25f, 0f);
+
+				Writer writer = new Writer();
+				if (writer.WriteDeltaQuaternion(server, next))
+				{
+					Reader reader = new Reader(writer.GetArraySegment(), null);
+					client = reader.ReadDeltaQuaternion(client);
+				}
+
+				// The caller advances regardless of whether anything was written.
+				server = next;
+			}
+
+			float error = Quaternion.Angle(server, client);
+			TestContext.WriteLine($"MEASURE 20-tick slow-turn error: {error:F2} degrees");
+			LogAssert.IsTrue(error < 1f,
+				$"A slow turn accumulated {error:F2} degrees of unsent rotation; the dead zone discards changes the caller has already committed to.");
+		}
+
+		/// <summary>
+		/// Two independent rolls can select the same attribute template, and the dictionary add
+		/// threw — from inside a spawn payload read and from the equipment reconcile.
+		/// </summary>
+		[Test]
+		public void DuplicateRandomItemAttribute_DoesNotThrow()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Item/ItemGenerator.cs"));
+			int start = source.IndexOf("private void AddRandomAttributes", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "AddRandomAttributes must be locatable.");
+			string body = source.Substring(start, 1600);
+
+			LogAssert.IsTrue(body.Contains("ContainsKey"),
+				"A repeated template roll must be skipped rather than thrown on — Dictionary.Add throws on a duplicate key, from inside a payload read.");
+			/* Matched on the assignment rather than on the draw expression. The roll moved behind a
+			 * RollValue helper when the inclusive-maximum fix landed, which left this assertion
+			 * pinning a spelling instead of the ordering it cares about. */
+			int roll = body.IndexOf("int rolledValue =", StringComparison.Ordinal);
+			int guard = body.IndexOf("ContainsKey", StringComparison.Ordinal);
+			LogAssert.IsTrue(roll >= 0, "The rolled value must still be assigned in this method.");
+			LogAssert.IsTrue(roll < guard,
+				"The value must still be drawn before the duplicate is skipped, or the RNG stream advances differently on peers that skip.");
+			LogAssert.IsTrue(body.Substring(roll, guard - roll).Contains("random"),
+				"And the draw must consume the shared stream, or skipping costs no RNG and the peers diverge anyway.");
+		}
+
+		// ── Permanent buffs and their FX across a respawn ──
+
+		/// <summary>A buff template that reports whether its FX was spawned and torn down.</summary>
+		private sealed class PermanentFXProbeTemplate : BaseBuffTemplate
+		{
+			public int ApplyFXCalls;
+			public int RemoveFXCalls;
+			public bool ThrowOnRemove;
+
+			public override void OnApply(Buff buff, ICharacter target) { }
+
+			public override void OnRemove(Buff buff, ICharacter target)
+			{
+				if (ThrowOnRemove)
+				{
+					throw new InvalidOperationException("Probe: OnRemove failed.");
+				}
+			}
+
+			public override GameObject OnApplyFX(Buff buff, ICharacter target)
+			{
+				++ApplyFXCalls;
+				return new GameObject($"{name}_FX");
+			}
+
+			public override void OnRemoveFX(GameObject fxInstance, ICharacter target)
+			{
+				++RemoveFXCalls;
+				if (fxInstance != null)
+				{
+					UnityEngine.Object.DestroyImmediate(fxInstance);
+				}
+			}
+		}
+
+		private static BuffController BuildBuffController(GameObject go, ICharacter character)
+		{
+			BuffController controller = go.AddComponent<BuffController>();
+			controller.InitializeOnce(character);
+			return controller;
+		}
+
+		/// <summary>
+		/// Clearing a permanent buff on respawn must take its FX with it. A pooled object becomes a
+		/// different character; an aura left running belongs to the previous occupant.
+		/// </summary>
+		[Test]
+		public void PermanentBuff_ClearedOnRespawn_TakesItsFXWithIt()
+		{
+			GameObject go = new GameObject("PermanentBuffFX");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				PermanentFXProbeTemplate template = ScriptableObject.CreateInstance<PermanentFXProbeTemplate>();
+				template.name = "Audit_Permanent_Buff";
+				template.IsPermanent = true;
+				template.Duration = 0f;
+				template.AddToCache(template.name);
+				assets.Add(template);
+
+				BuffController buffs = BuildBuffController(go, new MockCharacter());
+				buffs.Apply(new Buff(template.ID, 0u, 0u, 1f / 30f, 0, 0), suppressFX: false);
+
+				LogAssert.AreEqual(1, template.ApplyFXCalls, "The permanent buff's FX must have spawned.");
+
+				FieldInfo instances = typeof(BuffController).GetField("buffFXInstances", Any);
+				LogAssert.IsTrue(instances != null, "BuffController must track its FX instances.");
+				int liveBefore = ((System.Collections.ICollection)instances.GetValue(buffs)).Count;
+				LogAssert.AreEqual(1, liveBefore, "One FX instance is tracked while the buff is applied.");
+
+				// What a pooled respawn does.
+				buffs.RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
+
+				FieldInfo buffTable = typeof(BuffController).GetField("buffs", Any);
+				int remaining = ((System.Collections.ICollection)buffTable.GetValue(buffs)).Count;
+				LogAssert.AreEqual(0, remaining, "A lifecycle teardown clears permanent buffs.");
+				LogAssert.AreEqual(1, template.RemoveFXCalls,
+					"...and their FX with them — an aura must not outlive the character it belonged to.");
+				LogAssert.AreEqual(0, ((System.Collections.ICollection)instances.GetValue(buffs)).Count,
+					"No FX instance may remain tracked after the teardown.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// Even when a template's OnRemove throws — which keeps the buff tracked so its attribute
+		/// modifiers are not orphaned — the FX must still be torn down on a lifecycle teardown.
+		/// </summary>
+		[Test]
+		public void PermanentBuffFX_IsTornDown_EvenWhenRemovalThrows()
+		{
+			GameObject go = new GameObject("PermanentBuffFXThrow");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				PermanentFXProbeTemplate template = ScriptableObject.CreateInstance<PermanentFXProbeTemplate>();
+				template.name = "Audit_Permanent_Buff_Throws";
+				template.IsPermanent = true;
+				template.Duration = 0f;
+				template.AddToCache(template.name);
+				assets.Add(template);
+
+				BuffController buffs = BuildBuffController(go, new MockCharacter());
+				buffs.Apply(new Buff(template.ID, 0u, 0u, 1f / 30f, 0, 0), suppressFX: false);
+				LogAssert.AreEqual(1, template.ApplyFXCalls, "The FX must have spawned.");
+
+				template.ThrowOnRemove = true;
+
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+				try
+				{
+					buffs.RemoveAll(ignoreInvokeRemove: true, includePermanent: true);
+				}
+				finally
+				{
+					UnityEngine.TestTools.LogAssert.ignoreFailingMessages = false;
+				}
+
+				LogAssert.AreEqual(1, template.RemoveFXCalls,
+					"A failed effect removal keeps the buff tracked on purpose, but the FX has no modifier to orphan and must still go.");
+				FieldInfo instances = typeof(BuffController).GetField("buffFXInstances", Any);
+				LogAssert.AreEqual(0, ((System.Collections.ICollection)instances.GetValue(buffs)).Count,
+					"No FX instance may remain tracked.");
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// The model swap deactivates every old child of the mesh root and Destroys it (deferred to the end of the frame), then
+		/// raises OnModelReady in the same frame. A buff FX caught in the swap is not null yet, and it must still be re-created:
+		/// after a scene change the race model is cached, the swap lands right after the payload restored the buffs, and the
+		/// speed buff's ankle effect vanished for good.
+		/// </summary>
+		[Test]
+		public void BuffFX_CaughtInTheModelSwap_IsRecreatedOnModelReady()
+		{
+			GameObject go = new GameObject("BuffFXModelSwap");
+			List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
+			try
+			{
+				PermanentFXProbeTemplate template = ScriptableObject.CreateInstance<PermanentFXProbeTemplate>();
+				template.name = "Audit_ModelSwap_Buff";
+				template.IsPermanent = true;
+				template.Duration = 0f;
+				template.AddToCache(template.name);
+				assets.Add(template);
+
+				BuffController buffs = BuildBuffController(go, new MockCharacter());
+				buffs.Apply(new Buff(template.ID, 0u, 0u, 1f / 30f, 0, 0), suppressFX: false);
+				LogAssert.AreEqual(1, template.ApplyFXCalls, "The buff's FX must have spawned.");
+
+				FieldInfo instances = typeof(BuffController).GetField("buffFXInstances", Any);
+				var table = (Dictionary<int, GameObject>)instances.GetValue(buffs);
+				GameObject doomed = table[template.ID];
+				LogAssert.IsTrue(doomed != null, "The FX instance is tracked.");
+
+				// What InstantiateRaceModelFromIndex does to the old children before Destroy (which only lands at frame end).
+				doomed.SetActive(false);
+
+				buffs.OnModelReady();
+
+				LogAssert.AreEqual(2, template.ApplyFXCalls, "An FX deactivated by the swap must be spawned again on model ready.");
+				LogAssert.AreEqual(1, template.RemoveFXCalls, "...and the doomed instance removed rather than leaked.");
+				GameObject fresh = table[template.ID];
+				LogAssert.IsTrue(fresh != null && fresh.activeSelf, "The tracked instance is the new, active one.");
+				if (fresh != null) UnityEngine.Object.DestroyImmediate(fresh);
+			}
+			finally
+			{
+				foreach (UnityEngine.Object asset in assets) UnityEngine.Object.DestroyImmediate(asset);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		// ── Lag compensation: input-tick anchor and sub-tick resolution ──
+
+		/// <summary>
+		/// A rewind resolved on a tick boundary reproduces a pose the client never rendered: its view
+		/// of a peer is an interpolation between two received snapshots and sits BETWEEN ticks.
+		/// </summary>
+		[Test]
+		public void RewindTarget_ResolvesBetweenTicks()
+		{
+			GameObject go = new GameObject("SubTickHistory");
+			try
+			{
+				CharacterPositionHistory history = go.AddComponent<CharacterPositionHistory>();
+				MethodInfo allocate = typeof(CharacterPositionHistory).GetMethod("AllocateBuffer", Any);
+				MethodInfo record = typeof(CharacterPositionHistory).GetMethod("Record", Any);
+				LogAssert.IsTrue(allocate != null && record != null,
+					"CharacterPositionHistory must allocate and record through these.");
+				allocate.Invoke(history, new object[] { 32 });
+
+				// A peer moving 1 unit per tick along +z.
+				for (uint tick = 100; tick <= 110; tick++)
+				{
+					record.Invoke(history, new object[] { tick, new Vector3(0f, 0f, tick), Quaternion.identity });
+				}
+
+				// Exactly on a tick: unchanged behaviour.
+				LogAssert.IsTrue(history.TryResolve(new RewindTarget(105u, 0f), out CharacterPositionHistory.Snapshot onTick));
+				LogAssert.IsTrue(Mathf.Abs(onTick.Position.z - 105f) < 1e-3f, "A zero fraction resolves the tick itself.");
+
+				// A quarter of a tick BEFORE tick 105 is three quarters of the way from 104 to 105.
+				LogAssert.IsTrue(history.TryResolve(new RewindTarget(105u, 0.25f), out CharacterPositionHistory.Snapshot quarter));
+                LogAssert.IsTrue(Mathf.Abs(quarter.Position.z - 104.75f) < 1e-3f,
+					$"A 0.25-tick offset must land at 104.75, not on a boundary; got {quarter.Position.z:F3}.");
+
+				// Three quarters before 105 is a quarter of the way from 104.
+				LogAssert.IsTrue(history.TryResolve(new RewindTarget(105u, 0.75f), out CharacterPositionHistory.Snapshot threeQuarter));
+				LogAssert.IsTrue(Mathf.Abs(threeQuarter.Position.z - 104.25f) < 1e-3f,
+					$"A 0.75-tick offset must land at 104.25; got {threeQuarter.Position.z:F3}.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>The fraction arrives off the wire, so it is clamped rather than trusted.</summary>
+		[Test]
+		public void RewindTarget_ClampsAnUntrustedFraction()
+		{
+			LogAssert.AreEqual(0f, new RewindTarget(50u, -3f).SubTickFraction, "A negative fraction clamps to zero.");
+			LogAssert.IsTrue(new RewindTarget(50u, 5f).SubTickFraction < 1f, "A fraction of a whole tick or more clamps below one.");
+
+			new RewindTarget(50u, 0f).GetBounds(out uint older, out uint newer, out float alpha);
+			LogAssert.AreEqual(50u, older, "A zero fraction collapses both bounds...");
+			LogAssert.AreEqual(50u, newer, "...onto the tick itself.");
+			LogAssert.AreEqual(1f, alpha);
+
+			LogAssert.IsFalse(RewindTarget.None.IsValid, "The empty target names nothing.");
+		}
+
+		/// <summary>
+		/// The rewind anchors on the SERVER's tick, because that is the domain the history is keyed
+		/// in. Supersedes an earlier guard that required the replicate input's tick instead.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>This test previously asserted the opposite, and the assertion was wrong.</b> It
+		/// required <c>TryResolve</c> to anchor on
+		/// <c>CharacterPredictionController.CurrentReplicateTickSnapshot</c>, on the reasoning that
+		/// the server's present tick and the input's tick "differ by however much of that client's
+		/// input the server has buffered". They do differ — but not by that, and not by a small
+		/// amount. On the server a replicate carries the OWNING CLIENT'S <c>TimeManager.LocalTick</c>:
+		/// <c>Buffer.CopySegment</c> stamps every packet with the sender's <c>LocalTick</c>,
+		/// <c>NetworkBehaviour.Replicate_Reader</c> stamps the read datas from that value, and
+		/// <c>TimeManager.LocalTick</c> is documented as "a tick that is not synchronized", reset to
+		/// zero whenever that client connects. The server's own <c>LocalTick</c> returns
+		/// <c>TimeManager.Tick</c>, which has been running since the process started.
+		/// </para>
+		/// <para>
+		/// The gap is therefore an arbitrary per-connection constant, not a queue depth — which is
+		/// exactly what <c>BuffController.OnReplicate</c> already computes with
+		/// <c>GetSignedTickOffset(TimeManager.LocalTick, input.GetTick())</c> in order to shift
+		/// pre-replicate buffs between the two domains. That code would be a no-op if the ticks
+		/// agreed.
+		/// </para>
+		/// <para>
+		/// The consequence of anchoring in the client's domain was total and silent: every target
+		/// landed outside <c>CharacterPositionHistory</c>'s recorded window, so every <c>Rewind</c>
+		/// declined, <c>LagCompensationRegistry.Rewind</c> returned an inactive scope, and every hit
+		/// resolved against live positions — the precise behaviour the subsystem exists to prevent,
+		/// reached without a log line. The queue-depth correction it was bought for is not even
+		/// observable here: <c>NetworkObject.SetReplicateTick</c> stamps the owner's
+		/// <c>ReplicateTick</c> immediately before the replicate body, so the difference the old
+		/// rationale wanted reads as zero for the same reason <c>LocalTickDifference</c> does.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void RewindAnchor_IsTheServersOwnTick_NotTheOwningClientsInputTick()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/LagCompensation/LagCompensationTick.cs"));
+			int start = source.IndexOf("public static bool TryResolve(", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "TryResolve must be locatable.");
+			string body = source.Substring(start);
+
+			LogAssert.IsFalse(body.Contains("CurrentReplicateTickSnapshot"),
+				"TryResolve must not anchor on the replicate input's tick: that value is the owning " +
+				"client's unsynchronised counter and cannot index a history keyed by the server's, so " +
+				"using it disables compensation outright.");
+
+			int anchorAssign = body.IndexOf("anchorTick = ServerTickDomain(timeManager)", StringComparison.Ordinal);
+			int rewindBuild = body.IndexOf("new RewindTarget(anchorTick", StringComparison.Ordinal);
+			LogAssert.IsTrue(anchorAssign >= 0,
+				"The anchor must come from LagCompensationTick.ServerTickDomain, the one function that " +
+				"also keys CharacterPositionHistory, so the two cannot drift into different domains.");
+			LogAssert.IsTrue(rewindBuild > anchorAssign,
+				"The anchor must be established before the target is built.");
+
+			LogAssert.IsTrue(body.Contains("CurrentViewOffsetFraction"),
+				"The sub-tick remainder must still reach the rewind, or it quantises back to a tick " +
+				"boundary. Only the ANCHOR changed; the offset subtracted from it is still the client's " +
+				"measured view lag, whole part and fraction.");
+		}
+
+		/// <summary>The sub-tick remainder must survive the wire like the whole part does.</summary>
+		[Test]
+		public void ViewOffsetFraction_SurvivesTheReplicateWire()
+		{
+			CharacterReplicateData prev = default;
+			prev.AimDirection = AimDirectionCompression.QuantizedFallbackDirection;
+			prev.ViewOffsetTicks = 3;
+			prev.ViewOffsetFraction = 0;
+
+			CharacterReplicateData next = prev;
+			next.ViewOffsetFraction = 192;   // 0.75 of a tick
+
+			Writer full = new Writer();
+			full.WriteCharacterReplicateData(next);
+			Reader fullReader = new Reader(full.GetArraySegment(), null);
+			CharacterReplicateData decodedFull = fullReader.ReadCharacterReplicateData();
+			LogAssert.AreEqual(192, (int)decodedFull.ViewOffsetFraction, "The absolute form carries the fraction.");
+			LogAssert.AreEqual(0, fullReader.Remaining, "Consumed exactly.");
+
+			Writer delta = new Writer();
+			LogAssert.IsTrue(delta.WriteDelta(prev, next, DeltaSerializerOption.RootSerialize),
+				"A changed fraction alone must produce a delta — the whole part did not move.");
+			Reader deltaReader = new Reader(delta.GetArraySegment(), null);
+			CharacterReplicateData decodedDelta = deltaReader.ReadDelta(prev);
+			LogAssert.AreEqual(192, (int)decodedDelta.ViewOffsetFraction, "The delta form carries the fraction.");
+			LogAssert.AreEqual(3, (int)decodedDelta.ViewOffsetTicks, "...alongside the unchanged whole part.");
+			LogAssert.AreEqual(0, deltaReader.Remaining, "Consumed exactly.");
+		}
+
+		// ── Engagement-range exemption: tick-exact where it can be hit, throttled elsewhere ──
+
+		[Test]
+		public void EngagementRange_WidensWithReach_AndIsCappedAtTheAbilityCeiling()
+		{
+			float floor = ObserverStreamingPolicy.EngagementRange;
+			float ceiling = ObserverStreamingPolicy.EngagementRangeCeiling;
+			float margin = ObserverStreamingPolicy.EngagementRangeMargin;
+
+			LogAssert.AreEqual(floor, ObserverStreamingPolicy.ResolveEngagementRange(0f),
+				"A character with no reach still gets the floor — every ability authored today has a range of 0.");
+			LogAssert.AreEqual(floor, ObserverStreamingPolicy.ResolveEngagementRange(5f),
+				"A melee character keeps the LOD saving beyond the floor.");
+			LogAssert.AreEqual(60f + margin, ObserverStreamingPolicy.ResolveEngagementRange(60f),
+				"A long-range caster's radius covers its reach plus the closing margin.");
+			LogAssert.AreEqual(ceiling, ObserverStreamingPolicy.ResolveEngagementRange(500f),
+				"Nothing reaches past the ceiling, so nothing is exempt past it.");
+		}
+
+		/// <summary>
+		/// Inside the radius the transform must be sent every tick — a throttled one is interpolated
+		/// across the gap, and the pose the client renders then exists on no server tick at all.
+		/// </summary>
+		[Test]
+		public void WithinEngagementRange_NothingThrottles()
+		{
+			GameObject go = new GameObject("EngagedLod");
+			try
+			{
+				NetworkTransformDistanceLod lod = go.AddComponent<NetworkTransformDistanceLod>();
+				MethodInfo band = typeof(NetworkTransformDistanceLod).GetMethod("BandObserver", Any);
+				LogAssert.IsTrue(band != null, "BandObserver must exist.");
+
+				const float engagement = 40f;
+				float engagementSqr = engagement * engagement;
+
+				NetworkConnection engagedObserver = new NetworkConnection { ClientId = 7 };
+				NetworkConnection distantObserver = new NetworkConnection { ClientId = 8 };
+
+				// 30 m: inside the radius, and inside a band that would otherwise throttle.
+				band.Invoke(lod, new object[] { engagedObserver.ClientId, 30f * 30f, engagementSqr });
+				LogAssert.AreEqual(1, (int)lod.GetInterval(engagedObserver),
+					"A target the observer can reach must be sent every tick.");
+				LogAssert.IsTrue(lod.IsEngaged(engagedObserver), "...and be marked engaged for the cap to honour.");
+
+				// 70 m: beyond the radius, so the saving still applies.
+				band.Invoke(lod, new object[] { distantObserver.ClientId, 70f * 70f, engagementSqr });
+				LogAssert.IsTrue(lod.GetInterval(distantObserver) > 1,
+					"Beyond the engagement radius the distance bands must still throttle — that is where the bandwidth saving lives.");
+				LogAssert.IsFalse(lod.IsEngaged(distantObserver), "...and it must not be marked engaged.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// The relevance cap throttles independently of distance, so it has to honour the exemption
+		/// too — otherwise a character standing next to its attacker is throttled by the cap alone.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Rewritten 2026-09-09. This used to assert, at source level, that the engagement exemption
+		/// was checked BEFORE any cap interval was read — i.e. that it was a blanket override of every
+		/// cap interval. It was, and that was the defect: the engaged full-rate budget's own overflow
+		/// interval is a cap interval, so the exemption cancelled the budget that bounds it, and
+		/// <c>EngagedFullRateBudget_BoundsTheExemption</c> below was measuring constants that reached
+		/// no send.
+		/// </para>
+		/// <para>
+		/// What is pinned now is the genuine exemption — the RELEVANCE cap, which scores by combat,
+		/// party, guild and proximity and knows nothing about whether the observer can reach the
+		/// object — against the pure composition rule, plus the fact that the engaged overflow is not
+		/// covered by it. <c>ObserverInterestBoundaryTests</c> composes that with a real ranking pass.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void EngagementExemption_OverridesTheRelevanceCapToo()
+		{
+			// A relevance cap heavy enough to matter, and a distance band throttling as well.
+			const byte capInterval = 3;
+			const byte lodInterval = 2;
+
+			LogAssert.AreEqual(capInterval, ObserverStreamingEntry.ResolveEffectiveInterval(
+					capInterval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap, lodInterval, engaged: false),
+				"Sanity: with no exemption the larger of the two intervals applies.");
+
+			LogAssert.AreEqual(1, (int)ObserverStreamingEntry.ResolveEffectiveInterval(
+					capInterval, ObserverStreamingEntry.IntervalOrigin.RelevanceCap, lodInterval, engaged: true),
+				"An engaged observer must be exempt from the relevance cap, or a character standing next to " +
+				"its attacker is throttled to every 3rd tick and lag compensation rewinds to a pose that was " +
+				"never rendered.");
+
+			byte overflow = ObserverStreamingPolicy.EngagedOverflowInterval;
+			LogAssert.IsTrue(overflow > 1, "The engaged budget needs an overflow interval that throttles.");
+			LogAssert.AreEqual(overflow, ObserverStreamingEntry.ResolveEffectiveInterval(
+					overflow, ObserverStreamingEntry.IntervalOrigin.EngagedOverflow, 1, engaged: true),
+				"...but NOT from the engaged-overflow interval, which is the bound on the exemption itself. " +
+				"Exempting that made EngagedFullRateBudget inert.");
+		}
+
+		/// <summary>
+		/// What the exemption costs. A 40 m disc out of the 100 m player observer range is 16% of the
+		/// observed area, so the LOD keeps its saving over the other 84%.
+		/// </summary>
+		[Test]
+		public void Measure_EngagementExemption_KeepsMostOfTheSaving()
+		{
+			float engagement = ObserverStreamingPolicy.EngagementRange;
+			const float playerObserverRange = 100f;   // PlayerDistanceCondition._maximumDistance
+
+			float exemptArea = Mathf.PI * engagement * engagement;
+			float observedArea = Mathf.PI * playerObserverRange * playerObserverRange;
+			float exemptFraction = exemptArea / observedArea;
+
+			TestContext.WriteLine(
+				$"MEASURE engagement exemption: {engagement:F0} m of {playerObserverRange:F0} m observer range " +
+				$"= {exemptFraction * 100f:F0}% of observed area sent at full rate, {(1f - exemptFraction) * 100f:F0}% still throttled");
+
+			LogAssert.IsTrue(exemptFraction < 0.35f,
+				$"The exemption must leave most of the observed area throttled; it currently covers {exemptFraction * 100f:F0}%.");
+			LogAssert.IsTrue(engagement <= ObserverStreamingPolicy.EngagementRangeCeiling,
+				"The floor must not exceed the ability ceiling.");
+		}
+
+		// ── Visibility budget: the hard observer cap ──
+
+		[Test]
+		public void VisibilityBudget_AdmitsTheTopRanksAndExcludesTheRest()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			LogAssert.IsTrue(budget > 0, "A budget of 0 disables the cap; the test needs one.");
+
+			SeedRanks(clientId: 11, count: budget + 10);
+			try
+			{
+				LogAssert.IsTrue(Budget(11, RankObjectId(0), currentlyVisible: false),
+					"The most relevant character must be admitted.");
+				LogAssert.IsTrue(Budget(11, RankObjectId(budget - 1), currentlyVisible: false),
+					"The last character inside the budget must be admitted.");
+				LogAssert.IsFalse(Budget(11, RankObjectId(budget), currentlyVisible: false),
+					"The first character past the budget must be excluded — this is the cap.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// Rank hysteresis, not distance hysteresis: two near-identical scores at the boundary would
+		/// otherwise spawn and despawn each other every pass, and a despawn is far more expensive
+		/// than any rate change.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_HoldsAnAlreadyVisibleCharacterPastTheBoundary()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			LogAssert.IsTrue(widened > budget, "The hysteresis must actually widen the budget.");
+
+			SeedRanks(clientId: 12, count: widened + 5);
+			// The rank rule alone: the minimum time in view (pinned separately below) is switched off for this one.
+			uint minimumVisible = ObserverStreamingRegistry.MinimumVisibleTicks;
+			ObserverStreamingRegistry.MinimumVisibleTicks = 0;
+			try
+			{
+				LogAssert.IsTrue(Budget(12, RankObjectId(budget), currentlyVisible: true),
+					"A character already visible keeps its slot just past the budget.");
+				LogAssert.IsFalse(Budget(12, RankObjectId(budget), currentlyVisible: false),
+					"...but the same rank is not admitted from outside.");
+				LogAssert.IsFalse(Budget(12, RankObjectId(widened), currentlyVisible: true),
+					"Past the widened boundary even a visible character is dropped.");
+			}
+			finally
+			{
+				ObserverStreamingRegistry.MinimumVisibleTicks = minimumVisible;
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// A character the budget let in stays in view for its minimum time even when it falls past the boundary, so a crowd
+		/// wandering across the budget's edge does not spawn and despawn its members over and over; one never admitted is
+		/// not let in by it.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_KeepsAJustAdmittedCharacterForItsMinimumTime()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			SeedRanks(clientId: 14, count: widened + 5);
+			try
+			{
+				LogAssert.IsTrue(Budget(14, RankObjectId(widened), currentlyVisible: true),
+					"Just in view: held past the widened boundary for its minimum time.");
+				LogAssert.IsFalse(Budget(14, RankObjectId(widened), currentlyVisible: false),
+					"Not in view: the hold does not admit anyone.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>
+		/// The chicken-and-egg case. Ranking only what a viewer already observes would mean a
+		/// character that is not yet an observer is never ranked, never admitted, and can never
+		/// become one.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_DoesNotDeadlockOnUnrankedOrUnrankedViewers()
+		{
+			SeedRanks(clientId: 13, count: 3);
+			try
+			{
+				// A ranked viewer, an object outside its range this pass: the distance condition has
+				// already decided that; the budget must not vote a second time.
+				LogAssert.IsTrue(Budget(13, 999999, currentlyVisible: false),
+					"An unranked object under a ranked viewer must not be rejected by the budget.");
+
+				// A viewer with no pass at all must be deferred, not rejected.
+				bool admitted = ObserverStreamingRegistry.IsWithinVisibilityBudget(
+					9999, RankObjectId(0), currentlyVisible: false, out bool hasRanking);
+				LogAssert.IsFalse(hasRanking,
+					"A viewer with no pass must report that it has no ranking...");
+				LogAssert.IsFalse(admitted, "...so the condition defers rather than admitting blind.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>Party members and the current target are pinned and cannot be evicted.</summary>
+		[Test]
+		public void VisibilityBudget_PinsAreNeverEvicted()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			SeedRanks(clientId: 14, count: budget + 5);
+			const int pinnedId = 4242;
+			try
+			{
+				// Ranked far outside the budget, but pinned.
+				RegistryRanks(14)[pinnedId] = budget + 4;
+				LogAssert.IsFalse(Budget(14, pinnedId, currentlyVisible: false),
+					"Sanity: without the pin this rank is excluded.");
+
+				RegistryPins(14).Add(pinnedId);
+				LogAssert.IsTrue(Budget(14, pinnedId, currentlyVisible: false),
+					"A pinned character is admitted whatever its rank — a party you cannot see is a party you cannot play with.");
+			}
+			finally
+			{
+				ClearRegistryRanks();
+			}
+		}
+
+		/// <summary>The engaged full-rate budget bounds what the lag-compensation exemption can cost.</summary>
+		/// <remarks>
+		/// Arithmetic on the constants only. That the scheduler's overflow interval actually reaches the
+		/// send path is pinned by
+		/// <c>ObserverInterestBoundaryTests.RankForViewers_ThrottlesEngagedCharactersBeyondTheBudget_AtTheSendPath</c>,
+		/// which is the half this test cannot see — and the half that was broken while this one passed.
+		/// </remarks>
+		[Test]
+		public void EngagedFullRateBudget_BoundsTheExemption()
+		{
+			int k = ObserverStreamingPolicy.EngagedFullRateBudget;
+			LogAssert.IsTrue(k > 0, "Some engaged targets must keep full rate, or compensation is never exact.");
+			LogAssert.IsTrue(k <= ObserverStreamingPolicy.VisibilityBudget,
+				"More full-rate slots than visible characters would be unreachable.");
+			LogAssert.IsTrue(ObserverStreamingPolicy.EngagedOverflowInterval >= 2,
+				"Overflow must actually throttle, or the budget saves nothing.");
+			LogAssert.IsTrue(ObserverStreamingPolicy.EngagedOverflowInterval <= 3,
+				"Overflow beyond every 3rd tick gives back more compensation accuracy than the exemption was worth.");
+
+			// The cost the budget bounds, at the 17 B/update figure for most of an 8 km world.
+			const float bytesPerUpdate = 17f;
+			const float tickRate = 30f;
+			float unbounded = 30 * bytesPerUpdate * tickRate;
+			float bounded = k * bytesPerUpdate * tickRate
+				+ (30 - k) * bytesPerUpdate * (tickRate / ObserverStreamingPolicy.EngagedOverflowInterval);
+			TestContext.WriteLine(
+				$"MEASURE 30 engaged characters: {unbounded / 1024f:F1} KB/s unbounded, {bounded / 1024f:F1} KB/s with K={k}");
+			LogAssert.IsTrue(bounded < unbounded * 0.75f,
+				"The engaged budget must meaningfully bound the crowd case it exists for.");
+		}
+
+		private static readonly BindingFlags Priv = BindingFlags.Static | BindingFlags.NonPublic;
+
+		private static int RankObjectId(int rank) => 10000 + rank;
+
+		private static Dictionary<int, int> RegistryRanks(int clientId)
+		{
+			var map = (Dictionary<int, Dictionary<int, int>>)typeof(ObserverStreamingRegistry)
+				.GetField("ranksByClientId", Priv).GetValue(null);
+			if (!map.TryGetValue(clientId, out Dictionary<int, int> ranks))
+			{
+				ranks = new Dictionary<int, int>();
+				map[clientId] = ranks;
+			}
+			return ranks;
+		}
+
+		private static HashSet<int> RegistryPins(int clientId)
+		{
+			var map = (Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("pinnedByClientId", Priv).GetValue(null);
+			if (!map.TryGetValue(clientId, out HashSet<int> pins))
+			{
+				pins = new HashSet<int>();
+				map[clientId] = pins;
+			}
+			return pins;
+		}
+
+		private static void SeedRanks(int clientId, int count)
+		{
+			Dictionary<int, int> ranks = RegistryRanks(clientId);
+			ranks.Clear();
+			RegistryPins(clientId).Clear();
+			for (int i = 0; i < count; i++)
+			{
+				ranks[RankObjectId(i)] = i;
+			}
+			((HashSet<int>)typeof(ObserverStreamingRegistry).GetField("rankedClientIds", Priv)
+				.GetValue(null)).Add(clientId);
+		}
+
+		private static void ClearRegistryRanks()
+		{
+			((Dictionary<int, Dictionary<int, int>>)typeof(ObserverStreamingRegistry)
+				.GetField("ranksByClientId", Priv).GetValue(null)).Clear();
+			((HashSet<int>)typeof(ObserverStreamingRegistry).GetField("rankedClientIds", Priv)
+				.GetValue(null)).Clear();
+			((Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("pinnedByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, Dictionary<int, uint>>)typeof(ObserverStreamingRegistry)
+				.GetField("visibleSinceByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, Dictionary<int, uint>>)typeof(ObserverStreamingRegistry)
+				.GetField("hiddenSinceByClientId", Priv).GetValue(null)).Clear();
+			((Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry)
+				.GetField("engagedByClientId", Priv).GetValue(null)).Clear();
+		}
+
+		/// <summary>
+		/// The mirror of the minimum time in view: a character the budget took out stays out for its minimum time even if the
+		/// budget would have it back, so a crowd at the edge does not come and go every few seconds, each return a full spawn.
+		/// A pinned character, or one within the viewer's engagement range, comes back at once.
+		/// </summary>
+		[Test]
+		public void VisibilityBudget_KeepsAnEvictedCharacterOutForItsMinimumTime()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			SeedRanks(clientId: 15, count: widened + 5);
+			uint minimumVisible = ObserverStreamingRegistry.MinimumVisibleTicks;
+			ObserverStreamingRegistry.MinimumVisibleTicks = 0;
+			int objectId = RankObjectId(widened);
+			try
+			{
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Past the widened boundary: taken out of view.");
+				RegistryRanks(15)[objectId] = 0;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: false), "Back inside the budget at once, but held out for its minimum time.");
+
+				RegistryPins(15).Add(objectId);
+				LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "A pinned character (party, target, a fight) comes back at once.");
+				RegistryPins(15).Remove(objectId);
+
+				RegistryRanks(15)[objectId] = widened;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Evicted again.");
+				RegistryRanks(15)[objectId] = 0;
+				var engaged = (Dictionary<int, HashSet<int>>)typeof(ObserverStreamingRegistry).GetField("engagedByClientId", Priv).GetValue(null);
+				engaged[15] = new HashSet<int> { objectId };
+				LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "One within the engagement range comes back at once.");
+
+				engaged.Clear();
+				RegistryRanks(15)[objectId] = widened;
+				LogAssert.IsFalse(Budget(15, objectId, currentlyVisible: true), "Evicted once more.");
+				RegistryRanks(15)[objectId] = 0;
+				uint minimumHidden = ObserverStreamingRegistry.MinimumHiddenTicks;
+				ObserverStreamingRegistry.MinimumHiddenTicks = 0;
+				try
+				{
+					LogAssert.IsTrue(Budget(15, objectId, currentlyVisible: false), "With no minimum it comes back as soon as the budget allows.");
+				}
+				finally
+				{
+					ObserverStreamingRegistry.MinimumHiddenTicks = minimumHidden;
+				}
+			}
+			finally
+			{
+				ObserverStreamingRegistry.MinimumVisibleTicks = minimumVisible;
+				ClearRegistryRanks();
+			}
+		}
+
+		private static bool Budget(int clientId, int objectId, bool currentlyVisible)
+			=> ObserverStreamingRegistry.IsWithinVisibilityBudget(clientId, objectId, currentlyVisible, out _);
+
+		// ── Observer stack wiring ──
+
+		/// <summary>
+		/// The condition asset must actually resolve to the script. It was authored by hand, and a
+		/// GUID mismatch does not fail loudly — the ScriptableObject deserialises to null, the
+		/// entry in <c>_defaultConditions</c> becomes a null reference, and the visibility budget
+		/// silently stops existing.
+		/// </summary>
+		[Test]
+		public void ObserverBudgetCondition_AssetResolvesToItsScript()
+		{
+			string assetPath = Path.Combine(Application.dataPath, "Settings/ObserverConditions/ObserverBudgetCondition.asset");
+			LogAssert.IsTrue(ProjectFiles.Exists(assetPath), "The budget condition asset must exist.");
+
+			string scriptMeta = Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverBudgetCondition.cs.meta");
+			LogAssert.IsTrue(ProjectFiles.Exists(scriptMeta), "The condition script must exist.");
+
+			string scriptGuid = GuidFromMeta(scriptMeta);
+			string asset = ProjectFiles.ReadAllText(assetPath);
+			LogAssert.IsTrue(asset.Contains($"guid: {scriptGuid}"),
+				$"The asset's m_Script must point at the condition script ({scriptGuid}); a mismatch loads as null and disables the cap.");
+		}
+
+		/// <summary>The condition has to be installed, and installed LAST.</summary>
+		[Test]
+		public void ObserverBudgetCondition_IsInstalledLastOnTheSceneServer()
+		{
+			string scenePath = Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity");
+			LogAssert.IsTrue(ProjectFiles.Exists(scenePath), "The SceneServer scene must exist.");
+			string scene = ProjectFiles.ReadAllText(scenePath);
+
+			string budgetGuid = GuidFromMeta(Path.Combine(Application.dataPath,
+				"Settings/ObserverConditions/ObserverBudgetCondition.asset.meta"));
+
+			int defaults = scene.IndexOf("_defaultConditions:", StringComparison.Ordinal);
+			LogAssert.IsTrue(defaults >= 0, "The ObserverManager must declare default conditions.");
+			int blockEnd = scene.IndexOf("--- !u!", defaults, StringComparison.Ordinal);
+			string block = scene.Substring(defaults, blockEnd - defaults);
+
+			LogAssert.IsTrue(block.Contains(budgetGuid),
+				"The budget condition must be in the SceneServer's default conditions, or nothing is capped.");
+
+			int gridIndex = block.IndexOf("cc503f7541ebd424c94541e6a767efee", StringComparison.Ordinal);
+			int budgetIndex = block.IndexOf(budgetGuid, StringComparison.Ordinal);
+			LogAssert.IsTrue(gridIndex >= 0 && budgetIndex > gridIndex,
+				"The budget must be evaluated after the cheap conditions — it is the only one needing a global ranking.");
+		}
+
+		/// <summary>
+		/// The grid is ANDed with the distance conditions, so an accuracy below twice a condition's
+		/// reach silently clips it. This is what made 100 m player visibility actually 35–70 m.
+		/// </summary>
+		/// <remarks>
+		/// Measured per PREFAB rather than across every condition asset, because not every object takes
+		/// the grid: a prefab set to <c>IgnoreManager</c> carries only the conditions it declares, which
+		/// is how a Titan reaches 1000 m without demanding a 2500-unit accuracy that would make the grid
+		/// a no-op for everything else. The invariant is "if you take the grid, the grid must reach you".
+		/// </remarks>
+		[Test]
+		public void HashGridAccuracy_CannotClipTheDistanceConditions()
+		{
+			string scene = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath, "Scenes/Server/SceneServer.unity"));
+			Match accuracy = Regex.Match(scene, @"_accuracy: (\d+)");
+			LogAssert.IsTrue(accuracy.Success, "The SceneServer must configure a HashGrid accuracy.");
+			int accuracyValue = int.Parse(accuracy.Groups[1].Value);
+
+			const string gridGuid = "cc503f7541ebd424c94541e6a767efee";
+
+			// Does the ObserverManager hand the grid to every prefab that does not opt out?
+			int defaults = scene.IndexOf("_defaultConditions:", StringComparison.Ordinal);
+			LogAssert.IsTrue(defaults >= 0, "The ObserverManager must declare default conditions.");
+			string defaultBlock = scene.Substring(defaults, scene.IndexOf("--- !u!", defaults, StringComparison.Ordinal) - defaults);
+			bool gridIsADefault = defaultBlock.Contains(gridGuid);
+
+			/* Condition assets by guid, with the furthest distance each one ever answers true from.
+			 * The HIDE distance, not the base distance: checking the base alone left the whole
+			 * hysteresis band outside the grid's reach, so an observed object at 100–125 m was held by
+			 * the distance condition and dropped by the grid depending on which side of a cell boundary
+			 * it sat on — precisely the flicker the hysteresis exists to prevent. */
+			Dictionary<string, (string Name, float Reach)> byGuid = new Dictionary<string, (string, float)>();
+			foreach (string path in Directory.GetFiles(
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
+			{
+				string text = ProjectFiles.ReadAllText(path);
+				Match m = Regex.Match(text, @"_maximumDistance: ([0-9.]+)");
+				if (!m.Success)
+				{
+					continue;
+				}
+				float reach = float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				Match hide = Regex.Match(text, @"_hideDistancePercent: ([0-9.]+)");
+				if (hide.Success)
+				{
+					reach *= 1f + float.Parse(hide.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				}
+				string guid = Regex.Match(ProjectFiles.ReadAllText(path + ".meta"), @"guid: ([0-9a-f]{32})").Groups[1].Value;
+				byGuid[guid] = (Path.GetFileNameWithoutExtension(path), reach);
+			}
+			LogAssert.IsTrue(byGuid.Count > 0, "At least one distance condition must be authored.");
+
+			List<string> clipped = new List<string>();
+			foreach (string prefab in Directory.GetFiles(
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Prefabs")), "*.prefab", SearchOption.AllDirectories))
+			{
+				string text = ProjectFiles.ReadAllText(prefab);
+				int conditions = text.IndexOf("_observerConditions:", StringComparison.Ordinal);
+				if (conditions < 0)
+				{
+					continue;
+				}
+
+				Match overrideType = Regex.Match(text, @"_overrideType: (\d+)");
+				bool ignoresManager = overrideType.Success && overrideType.Groups[1].Value == "3";
+
+				string block = text.Substring(conditions);
+				int blockEnd = block.IndexOf("\n  m_", StringComparison.Ordinal);
+				if (blockEnd > 0)
+				{
+					block = block.Substring(0, blockEnd);
+				}
+
+				bool takesGrid = ignoresManager ? block.Contains(gridGuid) : gridIsADefault;
+				if (!takesGrid)
+				{
+					continue;
+				}
+
+				foreach (Match reference in Regex.Matches(block, @"guid: ([0-9a-f]{32})"))
+				{
+					if (byGuid.TryGetValue(reference.Groups[1].Value, out (string Name, float Reach) condition) &&
+						accuracyValue < condition.Reach * 2f)
+					{
+						clipped.Add($"{Path.GetFileNameWithoutExtension(prefab)} via {condition.Name} ({condition.Reach} m)");
+					}
+				}
+			}
+
+			/* Cells are ceil(accuracy/2) and "nearby" is the 3x3 block, so anything beyond accuracy on
+			 * an axis is always rejected. The grid must therefore reach at least as far as any condition
+			 * it is ANDed with, or it is the real visibility limit. */
+			LogAssert.AreEqual(0, clipped.Count,
+				$"HashGrid accuracy {accuracyValue} clips: {string.Join(", ", clipped)}. Cells are accuracy/2, " +
+				$"so visibility would really be {accuracyValue / 2}–{accuracyValue} m depending on cell alignment. " +
+				"Either raise the accuracy or wire the prefab to IgnoreManager without the grid.");
+		}
+
+		/// <summary>
+		/// Pop-in margin must cover the ground a player crosses between observer sweeps, and the
+		/// sweep slows down as population rises.
+		/// </summary>
+		[Test]
+		public void DistanceHysteresis_CoversTravelBetweenObserverSweeps()
+		{
+			foreach (string path in Directory.GetFiles(
+				ProjectFiles.Folder(Path.Combine(Application.dataPath, "Settings/ObserverConditions")), "*DistanceCondition.asset"))
+			{
+				string text = ProjectFiles.ReadAllText(path);
+				string name = Path.GetFileName(path);
+				Match hide = Regex.Match(text, @"_hideDistancePercent: ([0-9.]+)");
+				LogAssert.IsTrue(hide.Success, $"{name} must author a hide percent.");
+				float percent = float.Parse(hide.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+
+				Match max = Regex.Match(text, @"_maximumDistance: ([0-9.]+)");
+				float distance = float.Parse(max.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+				float margin = distance * percent;
+
+				/* The sweep is min(0.5 x (1 + clients x 0.005 + objects x 0.0005), ceiling). A scene
+				 * channel caps at 200 players; with ~3000 timed objects that is 1.75 s, and a 6 m/s
+				 * player covers 10.5 m. The margin has to exceed that or an object can cross the
+				 * whole hysteresis band between two sweeps and flicker.
+				 *
+				 * World items are exempt deliberately. They are static pickups whose worst failure
+				 * is a briefly blinking icon, and the alternative — a 15 m item that stays observed
+				 * out to 26 m — nearly doubles the number observed per player for no gameplay
+				 * benefit. Everything that spawns a CHARACTER pays the margin, because there a
+                 * flicker despawns audio, nameplates and a prediction object. */
+				const float sweepTravel = 10.5f;
+				if (name.StartsWith("WorldItem", StringComparison.Ordinal))
+				{
+					LogAssert.IsTrue(margin > 0f, $"{name} must still have some hysteresis.");
+					continue;
+				}
+
+				LogAssert.IsTrue(margin >= sweepTravel,
+					$"{name}: a {margin:F1} m hide margin is under the {sweepTravel:F1} m a player crosses between observer sweeps on a full 200-player channel — characters will flicker under exactly the load the caps exist for.");
+			}
+		}
+
+		/// <summary>
+		/// Only a peer that APPLIED a buff's modifiers is allowed to reverse them.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// An observer holds real <c>Buff</c> instances — <c>MaterializeObservedBuffs</c> builds them
+		/// so Inspect, the target frame and aggro read state rather than a display list — but never
+		/// runs <c>Buff.Apply</c>, because the attribute broadcast it already receives carries those
+		/// bonuses inside <c>ExternalModifier</c>. <c>Apply</c> and <c>Remove</c> both gate on
+		/// <c>SimulatesBuffEffects</c> for that reason; <c>RemoveAll</c> did not, so a teardown
+		/// subtracted modifiers this peer had never added and left the observed character's sheet
+		/// permanently low.
+		/// </para>
+		/// <para>
+		/// An unspawned controller has no <c>NetworkObject</c>, so it is neither the server nor an
+		/// owner — exactly the tracking-only role this guards.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void BuffRemoveAll_DoesNotReverseModifiersOnATrackingOnlyPeer()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Application.dataPath,
+				"FishMMO/Shared/Implementation/Entity/Prediction/Buff/BuffController.cs"));
+
+			Match removeAll = Regex.Match(source,
+				@"public void RemoveAll\([^)]*\)\s*\{(?<body>.*?)\n\t\t\}", RegexOptions.Singleline);
+			LogAssert.IsTrue(removeAll.Success, "RemoveAll must be findable to check its gating.");
+
+			string body = removeAll.Groups["body"].Value;
+			LogAssert.IsTrue(body.Contains("SimulatesBuffEffects"),
+				"BuffController.RemoveAll must consult SimulatesBuffEffects before running " +
+				"TryRemoveBuffEffects. Without it a tracking-only observer reverses modifiers it never " +
+				"applied — the mirror of the double-count Apply already avoids.");
+
+			LogAssert.IsFalse(Regex.IsMatch(body, @"if \(!TryRemoveBuffEffects\("),
+				"RemoveAll must not call TryRemoveBuffEffects unconditionally.");
+		}
+
+		/// <summary>
+		/// No ECA action gates authoritative state on a build-target define.
+		/// </summary>
+		/// <remarks>
+		/// <c>#if UNITY_SERVER</c> is undefined in the editor the scene server is developed in, so it
+		/// deletes the body there rather than restricting it — the action still exists, still
+		/// serialises and still fires, and simply never has an effect. <c>EcaAuthority</c> asks the
+		/// same question of the peer the character actually belongs to. The inverse form,
+		/// <c>#if !UNITY_SERVER</c>, is left alone: it guards client-side visuals and audio, where
+		/// running in the editor is what you want.
+		/// </remarks>
+		[Test]
+		public void EcaActions_DoNotGateAuthoritativeStateOnABuildDefine()
+		{
+			string root = Path.Combine(Application.dataPath, "FishMMO/Shared/Implementation/Entity/ECA/Actions");
+			List<string> offenders = new List<string>();
+
+			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
+			{
+				foreach (string line in ProjectFiles.ReadAllLines(path))
+				{
+					string trimmed = line.Trim();
+					if (trimmed.StartsWith("#if", StringComparison.Ordinal) &&
+						trimmed.Contains("UNITY_SERVER") &&
+						!trimmed.Contains("!UNITY_SERVER"))
+					{
+						offenders.Add(Path.GetFileName(path));
+						break;
+					}
+				}
+			}
+
+			LogAssert.AreEqual(0, offenders.Count,
+				$"These actions gate server-authoritative work on the UNITY_SERVER build define, so they " +
+				$"do nothing in the editor: {string.Join(", ", offenders)}. Use EcaAuthority.IsServer instead.");
+		}
+
+		private static string GuidFromMeta(string metaPath)
+		{
+			foreach (string line in ProjectFiles.ReadAllLines(metaPath))
+			{
+				if (line.StartsWith("guid:", StringComparison.Ordinal))
+				{
+					return line.Substring(5).Trim();
+				}
+			}
+			LogAssert.Fail($"No guid in {metaPath}");
+			return null;
+		}
+
+		// ══════════════════════════════════════════════════════════════════════════
+		// 2026-08-29 audit round: area-query determinism, buffer growth, scope safety
+		// ══════════════════════════════════════════════════════════════════════════
+
+		/// <summary>
+		/// A MaxHits cap on an area query keeps the NEAREST candidates, not the ones with the lowest
+		/// identity keys.
+		/// </summary>
+		/// <remarks>
+		/// <c>LagCompensatedQuery.OverlapSphere</c> used to sort its buffer by network identity
+		/// (ObjectId, then a stable name hash) and <c>AbilityApplyAreaAction</c> truncated that
+		/// ordered buffer — so a cap of 2 in a crowd kept the two lowest identity keys rather than the
+		/// two nearest the blast. The names below are ASSIGNED so that identity order is the exact
+		/// reverse of distance order, which is what makes reverting the fix fail this test rather than
+		/// coincidentally still pass.
+		/// </remarks>
+		[Test]
+		public void AreaQuery_CapKeepsTheNearest_NotTheLowestIdentityKeys()
+		{
+			// None of these carry a NetworkObject, so ObjectId ties at UnnetworkedObjectId for all
+			// three and the identity comparison falls through to the name key — which is the key this
+			// test arranges to disagree with distance.
+			string[] names = { "areaCapA", "areaCapB", "areaCapC" };
+			Array.Sort(names, (a, b) => TargetOrdering.StableNameKey(b).CompareTo(TargetOrdering.StableNameKey(a)));
+
+			GameObject nearest = MakeSphere(names[0], new Vector3(1f, 0f, 0f));
+			GameObject middle = MakeSphere(names[1], new Vector3(3f, 0f, 0f));
+			GameObject furthest = MakeSphere(names[2], new Vector3(5f, 0f, 0f));
+			GameObject context = new GameObject("areaCapContext");
+			try
+			{
+				Physics.SyncTransforms();
+
+				// Precondition: identity order really is the reverse of distance order, so the two
+				// orderings cannot agree by accident.
+				LogAssert.IsTrue(
+					TargetOrdering.StableNameKey(nearest.name) > TargetOrdering.StableNameKey(furthest.name),
+					"The nearest object must carry the HIGHEST name key, or identity order and distance " +
+					"order would agree and this test would pass against the defect.");
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 2, charactersOnly: false, results);
+
+				LogAssert.AreEqual(2, count, "MaxHits caps the result.");
+
+				List<GameObject> picked = new List<GameObject>();
+				for (int i = 0; i < results.Count; ++i)
+				{
+					picked.Add(results[i].Collider.gameObject);
+				}
+
+				LogAssert.IsTrue(picked.Contains(nearest), "The nearest candidate must survive the cap.");
+				LogAssert.IsTrue(picked.Contains(middle), "The second nearest must survive the cap.");
+				LogAssert.IsFalse(picked.Contains(furthest),
+					"The furthest candidate is the one a distance cap drops. Keeping it means the cap is " +
+					"ordering by identity again.");
+
+				LogAssert.IsTrue(results[0].Distance < results[1].Distance,
+					"Results are handed back nearest first.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(nearest);
+				UnityEngine.Object.DestroyImmediate(middle);
+				UnityEngine.Object.DestroyImmediate(furthest);
+			}
+		}
+
+		/// <summary>
+		/// A hit on a child collider resolves to the body it belongs to, not to the bone.
+		/// </summary>
+		/// <remarks>
+		/// <c>AbilityApplyAreaAction</c> used a bare <c>GetComponent&lt;ICharacter&gt;()</c> on the
+		/// collider, so a character whose hitbox hangs off a child was found by the overlap, charged
+		/// against the cap, and then silently skipped. The sweep next to it resolved through the
+		/// rigidbody and did not — the two hit-resolving paths disagreed about who was a candidate.
+		/// </remarks>
+		[Test]
+		public void ResolveHitRoot_WalksAChildColliderUpToItsBody()
+		{
+			GameObject body = new GameObject("hitRootBody");
+			try
+			{
+				body.AddComponent<Rigidbody>().isKinematic = true;
+				GameObject hitbox = new GameObject("hitRootChild");
+				hitbox.transform.SetParent(body.transform);
+				SphereCollider collider = hitbox.AddComponent<SphereCollider>();
+
+				GameObject resolved = TargetOrdering.ResolveHitRoot(collider, out ICharacter character);
+
+				LogAssert.AreSame(body, resolved,
+					"A child collider must resolve to the body its rigidbody sits on, which is what " +
+					"Collision.gameObject reported back when hits came from collision callbacks.");
+				LogAssert.IsNull(character, "There is no ICharacter on this body.");
+				LogAssert.AreSame(body, TargetOrdering.ResolveHitKey(collider, out _),
+					"With no character the dedupe key is the resolved body, never the child collider.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(body);
+			}
+		}
+
+		/// <summary>
+		/// Two hitboxes on one body cost one hit and one slot of the cap.
+		/// </summary>
+		/// <remarks>
+		/// The cap used to count COLLIDERS, so the same ability hit a different number of characters
+		/// depending on how its targets happened to be rigged: a cap of 2 spent both slots on the
+		/// two-hitbox body and never reached the second character at all.
+		/// </remarks>
+		[Test]
+		public void AreaQuery_TwoHitboxesOnOneBody_CostOneSlotOfTheCap()
+		{
+			GameObject twoBox = new GameObject("areaDedupeBody");
+			GameObject single = MakeSphere("areaDedupeOther", new Vector3(4f, 0f, 0f));
+			GameObject context = new GameObject("areaDedupeContext");
+			try
+			{
+				twoBox.transform.position = new Vector3(1f, 0f, 0f);
+				twoBox.AddComponent<Rigidbody>().isKinematic = true;
+				for (int i = 0; i < 2; ++i)
+				{
+					GameObject hitbox = new GameObject("areaDedupeHitbox" + i);
+					hitbox.transform.SetParent(twoBox.transform);
+					hitbox.transform.localPosition = new Vector3(i * 0.5f, 0f, 0f);
+					hitbox.AddComponent<SphereCollider>().radius = 0.5f;
+				}
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 2, charactersOnly: false, results);
+
+				LogAssert.AreEqual(2, count, "Two distinct bodies are in range.");
+
+				bool sawTwoBox = false;
+				bool sawSingle = false;
+				for (int i = 0; i < results.Count; ++i)
+				{
+					GameObject root = TargetOrdering.ResolveHitRoot(results[i].Collider, out _);
+					sawTwoBox |= ReferenceEquals(root, twoBox);
+					sawSingle |= ReferenceEquals(root, single);
+				}
+
+				LogAssert.IsTrue(sawTwoBox, "The two-hitbox body is hit.");
+				LogAssert.IsTrue(sawSingle,
+					"The second body must still be reached. A cap that counts colliders spends both " +
+					"slots on the first body and never gets here.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(twoBox);
+				UnityEngine.Object.DestroyImmediate(single);
+			}
+		}
+
+		/// <summary>
+		/// A character rigged with its collider on a child is still resolved, and scenery never
+		/// consumes a slot of a damage query's cap.
+		/// </summary>
+		[Test]
+		public void AreaQuery_CharactersOnly_FindsAChildRiggedCharacterAndSkipsScenery()
+		{
+			GameObject character = new GameObject("areaCharBody");
+			GameObject scenery = MakeSphere("areaCharScenery", new Vector3(0.5f, 0f, 0f));
+			GameObject context = new GameObject("areaCharContext");
+			try
+			{
+				character.transform.position = new Vector3(2f, 0f, 0f);
+				character.AddComponent<Rigidbody>().isKinematic = true;
+				character.AddComponent<MonoCharacter>();
+				GameObject hitbox = new GameObject("areaCharHitbox");
+				hitbox.transform.SetParent(character.transform);
+				hitbox.transform.localPosition = Vector3.zero;
+				hitbox.AddComponent<SphereCollider>().radius = 0.5f;
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> results = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.OverlapSphereNearest(
+					null, context, Vector3.zero, 10f, ~0, maxHits: 1, charactersOnly: true, results);
+
+				LogAssert.AreEqual(1, count,
+					"The character must be found through its child hitbox. A bare GetComponent on the " +
+					"collider finds nothing here and the query returns empty.");
+				LogAssert.IsNotNull(results[0].Character, "The resolved character travels with the hit.");
+				LogAssert.AreSame(character, results[0].Character.GameObject, "And it is the right one.");
+				LogAssert.IsTrue(scenery != null,
+					"The scenery collider is nearer than the character; charactersOnly must skip it " +
+					"BEFORE it charges the cap, or the query returns scenery and hits nobody.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(character);
+				UnityEngine.Object.DestroyImmediate(scenery);
+			}
+		}
+
+		/// <summary>
+		/// A query buffer that comes back full is grown, and growth stops at the shared ceiling.
+		/// </summary>
+		/// <remarks>
+		/// Without this the broadphase truncates the candidate set before any ranking runs, which is
+		/// the same failure <c>QueryBufferSize</c> exists to prevent — just moved from <c>MaxHits</c>
+		/// up to <c>MaxHits * 4</c>.
+		/// </remarks>
+		[Test]
+		public void TryGrowQueryBuffer_DoublesWhileFull_AndStopsAtTheCeiling()
+		{
+			Collider[] buffer = new Collider[32];
+
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref buffer, 31),
+				"A query that did not fill its buffer discarded nothing; there is nothing to grow for.");
+			LogAssert.AreEqual(32, buffer.Length, "And the buffer is left alone.");
+
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref buffer, 32),
+				"A full buffer is indistinguishable from a truncated one, so it must be re-queried wider.");
+			LogAssert.AreEqual(64, buffer.Length, "Doubling, not a fixed step.");
+
+			int guard = 0;
+			while (TargetOrdering.TryGrowQueryBuffer(ref buffer, buffer.Length) && ++guard < 32)
+			{
+			}
+			LogAssert.AreEqual(TargetOrdering.MaximumQueryBufferSize, buffer.Length,
+				"Growth stops at the shared ceiling rather than running away.");
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref buffer, buffer.Length),
+				"At the ceiling the answer is a warning, not another allocation.");
+		}
+
+		/// <summary>
+		/// A selector's hit buffer is grow-only, so growth bought on one query survives to the next.
+		/// </summary>
+		/// <remarks>
+		/// <c>EnsureHitBuffer</c> reallocated whenever the length DIFFERED from the authored size,
+		/// which silently undid every growth — a selector in a dense crowd re-truncated on every
+		/// single cast, and the growth loop above would have been dead weight.
+		/// </remarks>
+		[Test]
+		public void SelectorHitBuffer_StartsWiderThanTheCap_AndGrowsWithinTheGather()
+		{
+			AreaTargetSelector selector = new AreaTargetSelector { MaxHits = 4 };
+			MethodInfo newBuffer = typeof(AreaTargetSelector).GetMethod("NewHitBuffer", Any);
+			LogAssert.IsNotNull(newBuffer);
+
+			Collider[] hits = (Collider[])newBuffer.Invoke(selector, null);
+			LogAssert.IsTrue(hits.Length > 4,
+				"The starting size is wider than the cap, so the broadphase cannot truncate the " +
+				"candidates in its own order before the ranking runs.");
+
+			/* The growth this replaces used to persist in a FIELD across casts, and the property
+			 * asserted here was that re-entering the sizing helper could not shrink it back. The
+			 * buffer is per-gather now — a shared one was one authored nested trigger away from
+			 * being re-queried out from under the loop walking it — so there is nothing to shrink,
+			 * and the property that matters is the one that survived: a query that comes back full
+			 * grows and is re-run, within the gather, until it does not.
+			 *
+			 * That costs a fresh allocation per cast in a crowd where the starting size is not
+			 * enough. Selectors resolve once per cast rather than per tick, which is what makes the
+			 * trade the right way round. */
+			int before = hits.Length;
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref hits, before),
+				"A query that filled its buffer must grow it and ask to be re-run.");
+			LogAssert.IsTrue(hits.Length > before, "...and the buffer must actually be wider.");
+
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref hits, hits.Length - 1),
+				"A query that came back short of full is complete and must not re-run.");
+		}
+
+		/// <summary>
+		/// A throw while restoring rewound characters still closes the scope.
+		/// </summary>
+		/// <remarks>
+		/// <c>RestoreAll</c> set <c>scopeOpen = false</c> only on the success path. One throw left it
+		/// true forever, every later <c>Rewind</c> took the nested-scope branch and returned an
+		/// inactive scope, and from that point every hit in the process resolved against live
+		/// positions — silently, with no log and no recovery short of a restart.
+		/// </remarks>
+		[Test]
+		public void RewindScope_ClosesEvenWhenARestoreThrows()
+		{
+			Type registry = typeof(LagCompensationRegistry);
+			FieldInfo scopeOpen = registry.GetField("scopeOpen", Any);
+			FieldInfo rewound = registry.GetField("rewound", Any);
+			MethodInfo restoreAll = registry.GetMethod("RestoreAll", Any);
+			LogAssert.IsNotNull(scopeOpen);
+			LogAssert.IsNotNull(rewound);
+			LogAssert.IsNotNull(restoreAll);
+
+			GameObject go = new GameObject("rewindThrower");
+			bool priorIgnore = UnityEngine.TestTools.LogAssert.ignoreFailingMessages;
+			try
+			{
+				CharacterPositionHistory history = go.AddComponent<CharacterPositionHistory>();
+				// Marked as displaced so Restore() reaches the transform, then destroyed so that
+				// touching the transform raises MissingReferenceException — a restore that cannot
+				// complete, which is the only way this failure ever happens.
+				typeof(CharacterPositionHistory).GetField("isRewound", Any).SetValue(history, true);
+
+				List<CharacterPositionHistory> list = (List<CharacterPositionHistory>)rewound.GetValue(null);
+				list.Clear();
+				list.Add(history);
+				scopeOpen.SetValue(null, true);
+
+				UnityEngine.Object.DestroyImmediate(go);
+				go = null;
+
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
+				restoreAll.Invoke(null, null);
+
+				LogAssert.IsFalse((bool)scopeOpen.GetValue(null),
+					"The scope must be closed in a finally. Leaving it open disables lag compensation " +
+					"for the rest of the process.");
+				LogAssert.AreEqual(0, ((List<CharacterPositionHistory>)rewound.GetValue(null)).Count,
+					"And the displaced list is cleared, so the next scope does not inherit it.");
+			}
+			finally
+			{
+				UnityEngine.TestTools.LogAssert.ignoreFailingMessages = priorIgnore;
+				LagCompensationRegistry.Clear();
+				if (go != null)
+				{
+					UnityEngine.Object.DestroyImmediate(go);
+				}
+			}
+		}
+
+		/// <summary>
+		/// <c>MaxHits</c> of zero means NO cap on a line selector, as it does everywhere else.
+		/// </summary>
+		/// <remarks>
+		/// It read <c>Mathf.Max(1, MaxHits)</c>, so an author who set zero on a beam meaning "pierce
+		/// everything on the line" got a beam that stopped at the first target — the one place in the
+		/// target system where a non-positive cap meant something other than "uncapped".
+		/// </remarks>
+		[Test]
+		public void LineSelector_ZeroMaxHits_MeansUncapped()
+		{
+			GameObject context = new GameObject("lineCapContext");
+			GameObject a = MakeSphere("lineCapA", new Vector3(0f, 0f, 2f));
+			GameObject b = MakeSphere("lineCapB", new Vector3(0f, 0f, 4f));
+			GameObject c = MakeSphere("lineCapC", new Vector3(0f, 0f, 6f));
+			try
+			{
+				context.transform.position = Vector3.zero;
+				context.transform.forward = Vector3.forward;
+				Physics.SyncTransforms();
+
+				LineTargetSelector selector = new LineTargetSelector { Length = 20f, TargetLayer = ~0, MaxHits = 0 };
+				EventData eventData = new EventData(null);
+				eventData.SetTarget(context);
+
+				List<GameObject> picked = new List<GameObject>(selector.SelectTargets(eventData));
+
+				LogAssert.AreEqual(3, picked.Count,
+					"Zero means uncapped, matching TargetOrdering.CappedCount. A cap of one here is the " +
+					"defect: a beam authored to pierce everything stopped at the first target.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(a);
+				UnityEngine.Object.DestroyImmediate(b);
+				UnityEngine.Object.DestroyImmediate(c);
+			}
+		}
+
+		/// <summary>
+		/// The client-measured view offset is latched from real input only, so a tick the server ran
+		/// with default data does not zero it and switch lag compensation off.
+		/// </summary>
+		/// <remarks>
+		/// FishNet does not skip a tick when a connection's replicate queue is empty — it calls
+		/// <c>ReplicateDefaultData()</c>, which invokes the body with a default-initialised struct and
+		/// <c>ReplicateState.Ticked</c> WITHOUT <c>Created</c>. Assigning unconditionally wrote a zero
+		/// on every such tick, and <c>LagCompensationTick.TryResolve</c> declines on a zero offset, so
+		/// those hits silently resolved against live positions.
+		/// </remarks>
+		[Test]
+		public void ViewOffset_IsLatchedFromRealInput_AndSurvivesAnEmptyQueueTick()
+		{
+			GameObject go = new GameObject("viewOffsetLatch");
+			try
+			{
+				CharacterPredictionController controller = go.AddComponent<CharacterPredictionController>();
+				MethodInfo capture = typeof(CharacterPredictionController).GetMethod("CaptureViewOffset", Any);
+				LogAssert.IsNotNull(capture);
+
+				// A tick carrying real queued input: Ticked | Created.
+				CharacterReplicateData real = default;
+				real.ViewOffsetTicks = 7;
+				real.ViewOffsetFraction = 128;
+				capture.Invoke(controller, new object[] { real, ReplicateState.Ticked | ReplicateState.Created });
+
+				LogAssert.AreEqual((byte)7, controller.CurrentViewOffsetTicks, "Real input is latched.");
+				LogAssert.AreEqual((byte)128, controller.CurrentViewOffsetFraction, "Including the sub-tick remainder.");
+
+				// The tick FishNet manufactures when the queue is empty: default data, no Created bit.
+				capture.Invoke(controller, new object[] { default(CharacterReplicateData), ReplicateState.Ticked });
+
+				LogAssert.AreEqual((byte)7, controller.CurrentViewOffsetTicks,
+					"A defaulted replicate must NOT overwrite the latched offset. Zero here means every " +
+					"tick with a late packet resolves its hits uncompensated.");
+				LogAssert.AreEqual((byte)128, controller.CurrentViewOffsetFraction, "Same for the remainder.");
+
+				// A replay re-supplies the tick's real input and keeps Created, so it still latches.
+				CharacterReplicateData replayed = default;
+				replayed.ViewOffsetTicks = 3;
+				capture.Invoke(controller, new object[]
+				{
+					replayed,
+					ReplicateState.Replayed | ReplicateState.Ticked | ReplicateState.Created
+				});
+				LogAssert.AreEqual((byte)3, controller.CurrentViewOffsetTicks,
+					"A replay carries the tick's actual input and must still update the latch.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// With a send interval of 2 only the reconcile of the tick a packet leaves on is sent (the owner used only the newer
+		/// of the two anyway), but a reconcile carrying a one-shot report (Denied, NoSpawn) always goes, or the report is lost.
+		/// </summary>
+		[Test]
+		public void Reconciles_AreSentOnFlushTicks_AndAlwaysWithAOneShotReport()
+		{
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(0, 7, 1), "interval 1: every tick");
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(0, 8, 2), "interval 2: the flush tick");
+			LogAssert.IsFalse(CharacterPredictionController.ShouldSendReconcile(0, 7, 2), "interval 2: not the tick between");
+
+			int noSpawn = 0;
+			noSpawn.EnableBit(AbilityActivationFlags.NoSpawn);
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(noSpawn, 7, 2), "a NoSpawn report goes on any tick");
+			int denied = 0;
+			denied.EnableBit(AbilityActivationFlags.Denied);
+			LogAssert.IsTrue(CharacterPredictionController.ShouldSendReconcile(denied, 7, 2), "so does a denial");
+		}
+
+		/// <summary>
+		/// Each exact view claim is kept by the input tick it came with, so an ability object's step rewinds to the view the
+		/// caster had on THAT input (AbilityObject.StepInputTick), not to whichever input the server ran last. They differed
+		/// whenever the replicate queue ran dry or doubled up for a tick, and the fireball then hit on the client and missed on
+		/// the server now and then.
+		/// </summary>
+		[Test]
+		public void ViewClaims_AreKeptPerInputTick()
+		{
+			GameObject go = new GameObject("viewClaims");
+			try
+			{
+				CharacterPredictionController controller = go.AddComponent<CharacterPredictionController>();
+				MethodInfo capture = typeof(CharacterPredictionController).GetMethod("CaptureViewOffset", Any);
+				LogAssert.IsNotNull(capture);
+
+				for (uint tick = 100; tick < 110; ++tick)
+				{
+					CharacterReplicateData input = default;
+					input.ViewTickOffset = (ushort)(60000 + tick);
+					input.ViewTickFraction = (byte)(1 + tick % 200);
+					input.SetTick(tick);
+					capture.Invoke(controller, new object[] { input, ReplicateState.Ticked | ReplicateState.Created });
+				}
+				// An empty-queue tick (no Created) must not record anything.
+				CharacterReplicateData empty = default;
+				empty.SetTick(110);
+				capture.Invoke(controller, new object[] { empty, ReplicateState.Ticked });
+
+				LogAssert.IsTrue(controller.TryGetViewClaim(103, out ushort offset, out byte fraction), "an earlier input's claim is still held");
+				LogAssert.AreEqual((ushort)60103, offset, "with its own offset");
+				LogAssert.AreEqual((byte)104, fraction, "and its own fraction");
+				LogAssert.IsTrue(controller.TryGetViewClaim(109, out offset, out _) && offset == 60109, "the latest one too");
+				LogAssert.IsFalse(controller.TryGetViewClaim(110, out _, out _), "an input never received has no claim");
+				LogAssert.AreEqual(109u, controller.CurrentViewInputTick, "the latch still names the latest input run");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
+		/// A no-spawn report only travels in the reconcile for the tick it happened on.
+		/// </summary>
+		/// <remarks>
+		/// <c>serverSpawnedNothing</c> was a bare bool consumed by the next <c>OnCreateReconcile</c>,
+		/// which is exact only while the server runs exactly one replicate per tick. FishNet's
+		/// catch-up path runs a second replicate body in the same tick, and then a flag raised at T
+		/// would be stamped onto the reconcile for T+1 — destroying an owner-predicted object the
+		/// server really did spawn, which the replay cannot restore because it starts at T+1.
+		/// </remarks>
+		[Test]
+		public void NoSpawnFlag_TravelsOnlyInItsOwnTicksReconcile()
+		{
+			LogAssert.IsTrue(AbilityController.ShouldFlagNoSpawn(100u, 100u),
+				"The ordinary case: one replicate, one reconcile, same tick.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(100u, 101u),
+				"Two replicates consumed in one tick share a reconcile stamped for the LATER tick. " +
+				"Reporting the earlier tick's no-spawn against it destroys a real object.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(101u, 100u),
+				"A report from ahead of the reconcile is equally not this reconcile's business.");
+
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(FishNet.Managing.Timing.TimeManager.UNSET_TICK, 100u),
+				"Nothing recorded means nothing to report.");
+			LogAssert.IsFalse(AbilityController.ShouldFlagNoSpawn(100u, FishNet.Managing.Timing.TimeManager.UNSET_TICK),
+				"No reconcile tick means the flag cannot be attributed, so it is dropped rather than guessed.");
+		}
+
+		// ── Hitscan: the Bullet / Beam resolution path ────────────────────────────
+
+		/// <summary>
+		/// A hitscan ray reports the bodies it passes through in ray order, one entry per body.
+		/// </summary>
+		/// <remarks>
+		/// The ordering is the whole point: a pierce cap is meaningless over an unordered set, and
+		/// Unity's non-allocating <c>Raycast</c> promises no order at all.
+		/// </remarks>
+		[Test]
+		public void RaycastNearest_ReturnsBodiesInRayOrder_OnePerBody()
+		{
+			GameObject context = new GameObject("rayContext");
+			GameObject near = MakeSphere("rayNear", new Vector3(0f, 0f, 2f));
+			GameObject far = MakeSphere("rayFar", new Vector3(0f, 0f, 6f));
+			GameObject twoBox = new GameObject("rayTwoBox");
+			try
+			{
+				// A body with two colliders on the line must still cost one entry.
+				twoBox.transform.position = new Vector3(0f, 0f, 4f);
+				twoBox.AddComponent<Rigidbody>().isKinematic = true;
+				for (int i = 0; i < 2; ++i)
+				{
+					GameObject hb = new GameObject("rayTwoBoxHit" + i);
+					hb.transform.SetParent(twoBox.transform);
+					hb.transform.localPosition = new Vector3(0f, 0f, i * 0.3f);
+					hb.AddComponent<SphereCollider>().radius = 0.5f;
+				}
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+				int count = LagCompensatedQuery.RaycastNearest(
+					null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+
+				LogAssert.AreEqual(3, count,
+					"Three distinct bodies on the line. Four means the two-collider body was counted twice.");
+
+				for (int i = 1; i < hits.Count; ++i)
+				{
+					LogAssert.IsTrue(hits[i - 1].Distance <= hits[i].Distance,
+						"Hits must come back ordered along the ray, nearest first.");
+				}
+
+				LogAssert.AreSame(near, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"The nearest body is reported first.");
+				LogAssert.AreSame(twoBox, TargetOrdering.ResolveHitRoot(hits[1].Collider, out _),
+					"Then the two-collider body, once, at its nearest collider.");
+				LogAssert.AreSame(far, TargetOrdering.ResolveHitRoot(hits[2].Collider, out _),
+					"Then the furthest.");
+
+				LogAssert.IsTrue(hits[0].Point != Vector3.zero,
+					"The impact point is carried, so an effect can be placed where the shot landed.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(near);
+				UnityEngine.Object.DestroyImmediate(twoBox);
+				UnityEngine.Object.DestroyImmediate(far);
+			}
+		}
+
+		/// <summary>
+		/// The pierce cap counts bodies, and zero means it pierces everything.
+		/// </summary>
+		[Test]
+		public void RaycastNearest_PierceCap_CountsBodiesAndZeroMeansUncapped()
+		{
+			GameObject context = new GameObject("pierceContext");
+			GameObject a = MakeSphere("pierceA", new Vector3(0f, 0f, 2f));
+			GameObject b = MakeSphere("pierceB", new Vector3(0f, 0f, 4f));
+			GameObject c = MakeSphere("pierceC", new Vector3(0f, 0f, 6f));
+			try
+			{
+				Physics.SyncTransforms();
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 1, charactersOnly: false, hits);
+				LogAssert.AreEqual(1, hits.Count, "A pierce of one stops at the first body.");
+				LogAssert.AreSame(a, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"And that body is the nearest one, not whichever the broadphase listed first.");
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 2, charactersOnly: false, hits);
+				LogAssert.AreEqual(2, hits.Count, "A pierce of two stops at the second.");
+
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+				LogAssert.AreEqual(3, hits.Count,
+					"Zero means uncapped, matching TargetOrdering.CappedCount and every selector.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(a);
+				UnityEngine.Object.DestroyImmediate(b);
+				UnityEngine.Object.DestroyImmediate(c);
+			}
+		}
+
+		/// <summary>
+		/// A ray that finds a character through a child hitbox reports the character, and
+		/// <c>charactersOnly</c> keeps scenery from consuming the pierce budget.
+		/// </summary>
+		[Test]
+		public void RaycastNearest_CharactersOnly_SkipsSceneryWithoutSpendingTheCap()
+		{
+			GameObject scenery = MakeSphere("rayWall", new Vector3(0f, 0f, 2f));
+			GameObject character = new GameObject("rayCharacter");
+			GameObject context = new GameObject("rayCharContext");
+			try
+			{
+				character.transform.position = new Vector3(0f, 0f, 5f);
+				character.AddComponent<Rigidbody>().isKinematic = true;
+				character.AddComponent<MonoCharacter>();
+				GameObject hb = new GameObject("rayCharacterHitbox");
+				hb.transform.SetParent(character.transform);
+				hb.transform.localPosition = Vector3.zero;
+				hb.AddComponent<SphereCollider>().radius = 0.5f;
+				Physics.SyncTransforms();
+
+				List<LagCompensatedQuery.CompensatedHit> hits = new List<LagCompensatedQuery.CompensatedHit>();
+
+				// charactersOnly: the wall is nearer, and must neither be reported nor charged.
+				int count = LagCompensatedQuery.RaycastNearest(
+					null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 1, charactersOnly: true, hits);
+
+				LogAssert.AreEqual(1, count,
+					"The character must be reached. Charging the cap for the wall would return the wall " +
+					"and hit nobody.");
+				LogAssert.IsNotNull(hits[0].Character, "And it resolves through its child hitbox.");
+				LogAssert.AreSame(character, hits[0].Character.GameObject, "To the right body.");
+
+				// The opposite setting is what makes cover work: the wall comes back, first.
+				LagCompensatedQuery.RaycastNearest(null, context, Vector3.zero, Vector3.forward, 20f, ~0,
+					maxHits: 0, charactersOnly: false, hits);
+				LogAssert.IsTrue(hits.Count >= 1, "Scenery is reported when it is allowed to block.");
+				LogAssert.IsNull(hits[0].Character,
+					"And it arrives first, which is what lets the hitscan action stop the shot there.");
+				LogAssert.AreSame(scenery, TargetOrdering.ResolveHitRoot(hits[0].Collider, out _),
+					"The blocker is the wall.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(context);
+				UnityEngine.Object.DestroyImmediate(character);
+				UnityEngine.Object.DestroyImmediate(scenery);
+			}
+		}
+
+		// ── D3: the source-keyed modifier ledger ──────────────────────────────────
+
+		/// <summary>Template the ledger tests resolve their attribute through.</summary>
+		private static CharacterAttributeTemplate ledgerTemplate;
+
+		/// <summary>Host for the controller the attribute reports changes to.</summary>
+		private static GameObject ledgerHost;
+
+		/// <summary>
+		/// Builds an attribute wired to a real controller, so <c>UpdateValues</c> has somewhere to go.
+		/// </summary>
+		/// <remarks>
+		/// The template must be cached under its name or <c>CharacterAttributeTemplate.Get</c> cannot
+		/// resolve the id the constructor is handed, and the attribute comes up with a null Template.
+		/// </remarks>
+		private static CharacterAttribute MakeLedgerAttribute(int initialValue = 100, int initialModifier = 0)
+		{
+			DisposeLedgerFixture();
+
+			ledgerTemplate = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+			ledgerTemplate.name = "LedgerTestAttribute";
+			ledgerTemplate.InitialValue = initialValue;
+			ledgerTemplate.AddToCache(ledgerTemplate.name);
+
+			ledgerHost = new GameObject("LedgerTestHost");
+			CharacterAttributeController controller = ledgerHost.AddComponent<CharacterAttributeController>();
+
+			return new CharacterAttribute(controller, ledgerTemplate.ID, initialValue, initialModifier);
+		}
+
+		/// <summary>Releases the template and host a ledger test created.</summary>
+		private static void DisposeLedgerFixture()
+		{
+			if (ledgerTemplate != null)
+			{
+				ledgerTemplate.RemoveFromCache();
+				UnityEngine.Object.DestroyImmediate(ledgerTemplate);
+				ledgerTemplate = null;
+			}
+			if (ledgerHost != null)
+			{
+				UnityEngine.Object.DestroyImmediate(ledgerHost);
+				ledgerHost = null;
+			}
+		}
+
+		/// <summary>
+		/// Applying the same source twice is applying it once.
+		/// </summary>
+		/// <remarks>
+		/// This is the property that replaces a set of carefully ordered suppressions. A character can
+		/// reach an equip or a buff apply more than once for the same instance — a database load, a
+		/// spawn payload restore, a reconcile replay — and under the old accumulate-and-negate shape
+		/// every arrival doubled the bonus and something downstream had to undo it.
+		/// </remarks>
+		[Test]
+		public void Ledger_ReapplyingASource_DoesNotDouble()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource item = ModifierSource.Item(42);
+
+			attribute.SetSource(item, 10);
+			LogAssert.AreEqual(10, attribute.ExternalModifier, "First apply contributes its value.");
+
+			attribute.SetSource(item, 10);
+			attribute.SetSource(item, 10);
+			LogAssert.AreEqual(10, attribute.ExternalModifier,
+				"Re-applying the SAME source states its contribution again rather than adding to it. " +
+				"Doubling here is the database-load duplication the ledger exists to make impossible.");
+			LogAssert.AreEqual(1, attribute.ModifierSourceCount, "And it is still one contributor.");
+		}
+
+		/// <summary>
+		/// Every source kind can be released independently, and releasing one leaves the others.
+		/// </summary>
+		[Test]
+		public void Ledger_EachSourceIsReleasedIndependently()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource itemA = ModifierSource.Item(1);
+			ModifierSource itemB = ModifierSource.Item(2);
+			ModifierSource buff = ModifierSource.Buff(7);
+			ModifierSource dungeon = ModifierSource.DungeonScaling();
+
+			attribute.SetSource(itemA, 5);
+			attribute.SetSource(itemB, 7);
+			attribute.SetSource(buff, 11);
+			attribute.SetSource(dungeon, 13);
+			LogAssert.AreEqual(36, attribute.ExternalModifier, "Four contributors sum.");
+			LogAssert.AreEqual(4, attribute.ModifierSourceCount, "Four entries.");
+
+			/* Item 1 and buff 7 would collide on a bare id: both are small positive numbers from
+			 * different id spaces. The kind is what separates them. */
+			attribute.ClearSource(buff);
+			LogAssert.AreEqual(25, attribute.ExternalModifier, "Releasing the buff leaves the items.");
+			LogAssert.AreEqual(5, attribute.GetSourceValue(itemA), "Item 1 is untouched by buff 7's release.");
+
+			attribute.ClearSource(itemA);
+			attribute.ClearSource(itemB);
+			attribute.ClearSource(dungeon);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Everything released returns to zero.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount,
+				"A released source is removed, not left at zero — otherwise 'is this applied?' is unanswerable.");
+		}
+
+		/// <summary>
+		/// Releasing a source this peer never applied is a no-op, not a subtraction.
+		/// </summary>
+		/// <remarks>
+		/// The negation shape it replaces subtracted unconditionally, so a peer whose add had been
+		/// suppressed — an observer, or an owner whose ledger the reconcile had restated — drove its
+		/// own sheet below the server's number until the next authoritative push corrected it.
+		/// </remarks>
+		[Test]
+		public void Ledger_ReleasingAnUnappliedSource_DoesNotSubtract()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			attribute.SetModifier(50);
+			LogAssert.AreEqual(50, attribute.ExternalModifier, "The server's total is installed.");
+
+			attribute.ClearSource(ModifierSource.Item(999));
+
+			LogAssert.AreEqual(50, attribute.ExternalModifier,
+				"Releasing a source that was never applied here must change nothing. Subtracting would " +
+				"put this peer below the server's number.");
+		}
+
+		/// <summary>
+		/// An authoritative total is reproduced exactly, and does NOT destroy attributed sources.
+		/// </summary>
+		/// <remarks>
+		/// The reconcile installs a total on the owner every tick. Collapsing the ledger to that one
+		/// number would leave the owner unable to release an item or a buff between reconciles — the
+		/// release would find nothing and silently keep the bonus. The total lands as a residual
+		/// instead, so the observable sum is identical and the attribution survives.
+		/// </remarks>
+		[Test]
+		public void Ledger_AuthoritativeTotal_IsExactAndPreservesAttribution()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource item = ModifierSource.Item(3);
+
+			attribute.SetSource(item, 20);
+			attribute.SetModifier(50);
+
+			LogAssert.AreEqual(50, attribute.ExternalModifier,
+				"The server's total is reproduced exactly — this is what the old wholesale overwrite did.");
+			LogAssert.AreEqual(20, attribute.GetSourceValue(item),
+				"And the item's attribution survived it, which the overwrite could not manage.");
+			LogAssert.AreEqual(30, attribute.GetSourceValue(ModifierSource.Authoritative),
+				"The authoritative entry holds the residual: the server's total minus what is attributed.");
+
+			// Now the owner unequips between reconciles. The bonus must actually leave.
+			attribute.ClearSource(item);
+			LogAssert.AreEqual(30, attribute.ExternalModifier,
+				"Releasing the item removes its contribution. Under a collapsing ledger this would " +
+				"have found nothing to remove and kept the full 50 until the next reconcile.");
+		}
+
+		/// <summary>
+		/// A recycled character keeps none of the previous occupant's contributors.
+		/// </summary>
+		/// <remarks>
+		/// <c>RestoreTemplateBaseline</c> must clear the ledger, not install a zero total.
+		/// <c>SetModifierDirect(0)</c> would set the authoritative residual to minus the attributed
+		/// sum — a total of zero today, and the previous character's items and buffs still in the
+		/// ledger for the next one.
+		/// </remarks>
+		[Test]
+		public void Ledger_ClearAll_RemovesContributorsNotJustTheTotal()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			attribute.SetSource(ModifierSource.Item(1), 15);
+			attribute.SetSource(ModifierSource.Buff(2), 25);
+
+			attribute.SetModifierDirect(0);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "A zero total is a zero total either way.");
+			LogAssert.IsTrue(attribute.ModifierSourceCount > 0,
+				"But the contributors are still there — which is exactly why pool return must not use this.");
+
+			attribute.ClearAllModifierSources();
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Cleared.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount,
+				"And no contributor survives into the next occupant of a pooled character.");
+		}
+
+		/// <summary>
+		/// <c>SetFinalDerivingModifier</c> still lands on the requested final value.
+		/// </summary>
+		/// <remarks>
+		/// The resource reconcile back-solves a modifier from an authoritative maximum. Under the
+		/// ledger that solve targets the same total and lands in the authoritative residual, so
+		/// attributed sources survive a resource reconcile too.
+		/// </remarks>
+		[Test]
+		public void Ledger_SetFinalDerivingModifier_StillReproducesTheServersFinal()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute(initialValue: 100);
+			attribute.SetSource(ModifierSource.Item(8), 10);
+
+			attribute.SetFinalDerivingModifier(250);
+
+			LogAssert.AreEqual(250, attribute.FinalValue, "The server's final value is reproduced.");
+			LogAssert.AreEqual(10, attribute.GetSourceValue(ModifierSource.Item(8)),
+				"And the item is still attributed, so unequipping it will still take its bonus away.");
+		}
+
+		// ── Region-owned attribute modifiers ──────────────────────────────────────
+
+		/// <summary>
+		/// A region's contribution is idempotent across stay ticks and released as a whole.
+		/// </summary>
+		/// <remarks>
+		/// Both halves of what had <c>ApplyRegionAttributeAction</c> cut down to resources. Applied
+		/// through the old <c>AddModifier</c> an <c>OnRegionStay</c> trigger accumulated once per tick
+		/// forever, and nothing could reverse the total because nothing recorded who owned it.
+		/// </remarks>
+		[Test]
+		public void RegionModifier_IsIdempotentPerStayTick_AndReleasedWhole()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource region = ModifierSource.Region(4242);
+
+			// An OnRegionStay trigger firing every tick for a second at 30Hz.
+			for (int tick = 0; tick < 30; ++tick)
+			{
+				attribute.SetSource(region, 25);
+			}
+
+			LogAssert.AreEqual(25, attribute.ExternalModifier,
+				"Thirty stay ticks state the same contribution thirty times. Accumulating here is the " +
+				"defect that made the stay case unusable and got the action amputated.");
+
+			attribute.ClearSource(region);
+			LogAssert.AreEqual(0, attribute.ExternalModifier, "Leaving the region takes the whole bonus.");
+			LogAssert.AreEqual(0, attribute.ModifierSourceCount, "And the contributor is gone.");
+		}
+
+		/// <summary>
+		/// Releasing one region leaves every other contributor — including a second, overlapping region.
+		/// </summary>
+		[Test]
+		public void RegionModifier_ReleasingOneRegion_LeavesOverlappingOnes()
+		{
+			CharacterAttribute attribute = MakeLedgerAttribute();
+			ModifierSource outer = ModifierSource.Region(1);
+			ModifierSource inner = ModifierSource.Region(2);
+			ModifierSource item = ModifierSource.Item(9);
+
+			attribute.SetSource(outer, 10);
+			attribute.SetSource(inner, 5);
+			attribute.SetSource(item, 3);
+			LogAssert.AreEqual(18, attribute.ExternalModifier, "Two nested regions and an item.");
+
+			// Walking out of the inner region while still inside the outer one.
+			attribute.ClearSource(inner);
+			LogAssert.AreEqual(13, attribute.ExternalModifier,
+				"Only the inner region's contribution leaves. Regions nest, so releasing one must not " +
+				"take an ancestor's bonus with it.");
+			LogAssert.AreEqual(10, attribute.GetSourceValue(outer), "The outer region is untouched.");
+			LogAssert.AreEqual(3, attribute.GetSourceValue(item), "And so is the equipment.");
+		}
+
+		/// <summary>
+		/// A sheet-wide release drops the region's contribution from attributes AND resources.
+		/// </summary>
+		/// <remarks>
+		/// This is what <c>Region.ReleaseAttributeContributions</c> calls. It has to walk both halves:
+		/// a region action may modify a resource's maximum, and a contributor forgotten on one half is
+		/// exactly the orphaned modifier the ledger exists to prevent.
+		/// </remarks>
+		[Test]
+		public void ClearModifierSource_ReleasesAcrossTheWholeSheet()
+		{
+			GameObject host = new GameObject("RegionReleaseHost");
+			CharacterAttributeTemplate plain = null;
+			CharacterAttributeTemplate resourceTemplate = null;
+			try
+			{
+				CharacterAttributeController controller = host.AddComponent<CharacterAttributeController>();
+
+				plain = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				plain.name = "RegionReleasePlain";
+				plain.InitialValue = 50;
+				plain.AddToCache(plain.name);
+
+				resourceTemplate = ScriptableObject.CreateInstance<CharacterAttributeTemplate>();
+				resourceTemplate.name = "RegionReleaseResource";
+				resourceTemplate.InitialValue = 100;
+				resourceTemplate.IsResourceAttribute = true;
+				resourceTemplate.AddToCache(resourceTemplate.name);
+
+				/* Registered straight into the two dictionaries. AddAttribute routes everything into
+				 * Attributes regardless of kind, and the resource half is populated elsewhere during
+				 * real initialisation — which is more setup than this test needs. Both properties
+				 * expose the live dictionaries. */
+				controller.Attributes[plain.ID] = new CharacterAttribute(controller, plain.ID, 50, 0);
+				/* Current value 0: ClampCurrentValue returns early below 0.001 and so never reaches
+				 * characterAttributeController.Character.Flags, which a bare controller has no
+				 * character for. This test is about the MODIFIER, not the depletable value. */
+				controller.ResourceAttributes[resourceTemplate.ID] =
+					new CharacterResourceAttribute(controller, resourceTemplate.ID, 100, 0f, 0);
+
+				ModifierSource region = ModifierSource.Region(77);
+				controller.Attributes[plain.ID].SetSource(region, 8);
+				controller.ResourceAttributes[resourceTemplate.ID].SetSource(region, 40);
+
+				LogAssert.AreEqual(8, controller.Attributes[plain.ID].ExternalModifier, "Attribute took it.");
+				LogAssert.AreEqual(40, controller.ResourceAttributes[resourceTemplate.ID].ExternalModifier,
+					"And so did the resource's maximum.");
+
+				controller.ClearModifierSource(region);
+
+				LogAssert.AreEqual(0, controller.Attributes[plain.ID].ExternalModifier,
+					"Leaving the region releases it from the attribute.");
+				LogAssert.AreEqual(0, controller.ResourceAttributes[resourceTemplate.ID].ExternalModifier,
+					"And from the resource. Walking only one half orphans the other.");
+			}
+			finally
+			{
+				if (plain != null) { plain.RemoveFromCache(); UnityEngine.Object.DestroyImmediate(plain); }
+				if (resourceTemplate != null) { resourceTemplate.RemoveFromCache(); UnityEngine.Object.DestroyImmediate(resourceTemplate); }
+				UnityEngine.Object.DestroyImmediate(host);
+			}
+		}
+
+		/// <summary>
+		/// A minimal <see cref="ICharacter"/> that is a real component, so the parent walk in
+		/// <see cref="TargetOrdering.ResolveHitRoot"/> can find it.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="MockCharacter"/> below is a plain class and cannot sit on a GameObject, which is
+		/// exactly what the child-hitbox resolution needs to be tested against.
+		/// </remarks>
+		private sealed class MonoCharacter : MonoBehaviour, ICharacter
+		{
+			public long ID { get; set; } = 91;
+			public string Name => "MonoCharacter";
+			public Transform Transform => transform;
+			public GameObject GameObject => gameObject;
+			public Collider Collider { get; set; }
+			public NetworkConnection Owner => null;
+			public NetworkObject NetworkObject => null;
+			public PredictionManager PredictionManager => null;
+			public HashSet<NetworkConnection> Observers { get; } = new HashSet<NetworkConnection>();
+			public bool IsTeleporting => false;
+			public bool IsSpawned => true;
+			public int Flags { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
+			public Transform MeshRoot => null;
+#if !UNITY_SERVER
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
+#endif
+			public void EnableFlags(CharacterFlags flags) => Flags |= (int)flags;
+			public void DisableFlags(CharacterFlags flags) => Flags &= ~(int)flags;
+			public bool IsFlagged(CharacterFlags flags) => (Flags & (int)flags) != 0;
+			public void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
+			public void Invoke(List<Trigger> triggers, EventData eventData) { }
+		}
+
+		private sealed class MockCharacter : ICharacter
+		{
+			public long ID { get; set; } = 77;
+			public string Name => "MockCharacter";
+			public Transform Transform => null;
+			public GameObject GameObject => null;
+			public Collider Collider { get; set; }
+			public NetworkConnection Owner => null;
+			public NetworkObject NetworkObject => null;
+			public PredictionManager PredictionManager => null;
+			public HashSet<NetworkConnection> Observers { get; } = new HashSet<NetworkConnection>();
+			public bool IsTeleporting => false;
+			public bool IsSpawned => true;
+			public int Flags { get; set; }
+			/// <inheritdoc/>
+			public Nameplate CharacterNameplate { get; set; }
+			public Transform MeshRoot => null;
+#if !UNITY_SERVER
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex) { }
+			public void InstantiateRaceModelFromIndex(RaceTemplate raceTemplate, int modelIndex, CharacterGender gender) { }
+#endif
+			public void EnableFlags(CharacterFlags flags) => Flags |= (int)flags;
+			public void DisableFlags(CharacterFlags flags) => Flags &= ~(int)flags;
+			public bool IsFlagged(CharacterFlags flags) => (Flags & (int)flags) != 0;
+			public void RegisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
+			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
+			public void Invoke(List<Trigger> triggers, EventData eventData) { }
+		}
+	}
+}

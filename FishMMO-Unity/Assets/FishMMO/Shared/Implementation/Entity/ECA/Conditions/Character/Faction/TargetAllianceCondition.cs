@@ -39,14 +39,20 @@ namespace FishMMO.Shared
 		public bool NeutralPlayersOnly;
 
 		/// <summary>
+		/// With <see cref="ApplyToNeutral"/>: a neutral target passes unless it is wildlife or someone else's pet (2026-11-21,
+		/// heals reach neutral NPCs such as townsfolk and guards, still never a wolf mid-fight or a stranger's companion). Your
+		/// own pets, and your party's and guild's, read as allies and are not affected.
+		/// </summary>
+		[Tooltip("With Apply To Neutral: neutral wildlife and other people's pets do not pass (neutral players and NPCs do).")]
+		public bool NeutralExcludesWildlifeAndPets;
+
+		/// <summary>
 		/// The rule for a target other than the initiator, as a pure function of how the two stand and whether the target is a
 		/// player character.
 		/// </summary>
 		public bool Passes(FactionAllianceLevel allianceLevel, bool defenderIsPlayer)
 		{
-			return (allianceLevel == FactionAllianceLevel.Enemy && ApplyToEnemy) ||
-				   (allianceLevel == FactionAllianceLevel.Neutral && ApplyToNeutral && (!NeutralPlayersOnly || defenderIsPlayer)) ||
-				   (allianceLevel == FactionAllianceLevel.Ally && ApplyToAllies);
+			return Passes(allianceLevel, allianceLevel, defenderIsPlayer, false);
 		}
 
 		/// <summary>
@@ -61,8 +67,19 @@ namespace FishMMO.Shared
 		/// </remarks>
 		public bool Passes(FactionAllianceLevel allianceLevel, FactionAllianceLevel standing, bool defenderIsPlayer)
 		{
+			return Passes(allianceLevel, standing, defenderIsPlayer, false);
+		}
+
+		/// <summary>
+		/// The rule with the target's kind: <paramref name="defenderIsWildlifeOrPet"/> is wildlife, or a companion whose owner
+		/// is someone else (see <see cref="NeutralExcludesWildlifeAndPets"/>).
+		/// </summary>
+		public bool Passes(FactionAllianceLevel allianceLevel, FactionAllianceLevel standing, bool defenderIsPlayer, bool defenderIsWildlifeOrPet)
+		{
 			return (allianceLevel == FactionAllianceLevel.Enemy && ApplyToEnemy) ||
-				   (standing == FactionAllianceLevel.Neutral && ApplyToNeutral && (!NeutralPlayersOnly || defenderIsPlayer)) ||
+				   (standing == FactionAllianceLevel.Neutral && ApplyToNeutral &&
+					(!NeutralPlayersOnly || defenderIsPlayer) &&
+					(!NeutralExcludesWildlifeAndPets || !defenderIsWildlifeOrPet)) ||
 				   (standing == FactionAllianceLevel.Ally && ApplyToAllies);
 		}
 
@@ -106,7 +123,9 @@ namespace FishMMO.Shared
 				FactionAllianceLevel allianceLevel = attackerFactionController.GetAllianceLevel(defenderFactionController);
 				FactionAllianceLevel standing = attackerFactionController.GetStandingAllianceLevel(defenderFactionController);
 
-				return Passes(allianceLevel, standing, defender is IPlayerCharacter);
+				bool wildlifeOrPet = WildlifeRules.RoleOf(defender) != WildlifeRole.None ||
+					!ReferenceEquals(HarmRule.Principal(defender), defender);
+				return Passes(allianceLevel, standing, defender is IPlayerCharacter, wildlifeOrPet);
 			}
 
 			// Not able to resolve target or other conditions not met

@@ -489,6 +489,11 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				// An authored round uses the new fields on purpose (BiomeAuthoredRounds; pinned biome by biome in BiomeAuthoredRoundTests).
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  bedTextureLayers:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} has a bed layer");
 				Assert.That(Regex.IsMatch(text, @"^\s+waters: [1-9]", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} has a rule with its own waters");
 			}

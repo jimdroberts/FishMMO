@@ -86,13 +86,20 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheInlandWaterDeclaresExactlyItsConstants()
 		{
-			List<string> members = PerMaterial(Read("FishInlandWater.hlsl"));
+			string hlsl = Read("FishInlandWater.hlsl");
+			string shader = Read("FishInlandWater.shader");
+			List<string> members = PerMaterial(hlsl);
 			LogAssert.IsTrue(members.Count > 10, $"the scan found only {members.Count} constants; its pattern is stale");
-			HashSet<string> declared = Properties(Read("FishInlandWater.shader"));
+			HashSet<string> declared = Properties(shader);
+			/* Textures are properties outside the material block, as they are for the lava (the river flow field, 2026-11-19,
+			 * among them): each must be sampled instead. */
+			HashSet<string> textures = TextureProperties(shader);
 			string missing = string.Join(", ", members.Where(m => !declared.Contains(m)));
-			string extra = string.Join(", ", declared.Where(p => !members.Contains(p) && p != "_NormalMap" && p != "_FoamTexture"));
+			string extra = string.Join(", ", declared.Where(p => !members.Contains(p) && !textures.Contains(p)));
+			string unsampled = string.Join(", ", textures.Where(t => !hlsl.Contains("TEXTURE2D(" + t + ")")));
 			LogAssert.IsTrue(missing.Length == 0, "FishMMO/Water/Inland Water reads these but never declares them, so they are zero: " + missing);
 			LogAssert.IsTrue(extra.Length == 0, "FishMMO/Water/Inland Water declares these but its material block never reads them: " + extra);
+			LogAssert.IsTrue(unsampled.Length == 0, "FishMMO/Water/Inland Water declares these textures but never samples them: " + unsampled);
 		}
 
 		[Test]

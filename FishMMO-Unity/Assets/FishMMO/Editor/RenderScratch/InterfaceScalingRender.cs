@@ -48,21 +48,22 @@ namespace FishMMO.RenderScratch
 			public Action<GameObject, UIDocument> Populate;
 		}
 
+		/// <summary>
+		/// The windows mounted for each size outside the HUD scene, with their sorting order. Modules add theirs (the Items
+		/// module the equipment sheet at 100 and the inventory at 101).
+		/// </summary>
+		public static readonly List<(string uxml, int sortingOrder, Action<GameObject, UIDocument> populate)> Windows =
+			new List<(string uxml, int sortingOrder, Action<GameObject, UIDocument> populate)>();
+
 		/// <summary>The HUD mounted for each size. Modules add theirs (Social adds the party frame).</summary>
 		public static readonly List<HudMount> Hud = new List<HudMount>
 		{
 			new HudMount { Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", PanelType = typeof(UITKHealthBar) },
 			new HudMount { Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", PanelType = typeof(UITKManaBar) },
 			new HudMount { Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", PanelType = typeof(UITKStaminaBar) },
-			new HudMount { Uxml = ROOT + "Buff/UIBuff.uxml", PanelType = typeof(UITKBuff) },
-			new HudMount { Uxml = ROOT + "Buff/UIDebuff.uxml", PanelType = typeof(UITKDebuff) },
-			new HudMount { Uxml = ROOT + "HotkeyBar/UIHotkeyBar.uxml", PanelType = typeof(UITKHotkeyBar) },
-			new HudMount { Uxml = ROOT + "Ability/UICastBar.uxml", PanelType = typeof(UITKCastBar) },
-			new HudMount { Uxml = ROOT + "Minimap/UIMinimap.uxml", PanelType = typeof(UITKMinimap) },
 			new HudMount { Uxml = ROOT + "Crosshair/UICrosshair.uxml", PanelType = typeof(UITKCrosshair), LayoutOnly = true },
 			new HudMount { Uxml = ROOT + "Target/UITarget.uxml", PanelType = typeof(UITKTarget) },
 			new HudMount { Uxml = ROOT + "Toast/UIToast.uxml", PanelType = typeof(UITKToast) },
-			new HudMount { Uxml = ROOT + "Chat/UIChat.uxml", PanelType = typeof(UITKChat) },
 		};
 
 		private static readonly List<Job> jobs = new List<Job>();
@@ -198,8 +199,10 @@ namespace FishMMO.RenderScratch
 			}
 			else
 			{
-				Mount(ROOT + "CharacterSheet/UICharacterSheet.uxml", 100, Panels.Equipment, showAll: false);
-				Mount(ROOT + "Inventory/UIInventory.uxml", 101, Panels.Inventory, showAll: false);
+				foreach ((string uxml, int sortingOrder, Action<GameObject, UIDocument> populate) window in Windows)
+				{
+					Mount(window.uxml, window.sortingOrder, window.populate, showAll: false);
+				}
 			}
 
 			/* The game's own path: the first panel registers the asset, and the Options slider calls

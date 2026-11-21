@@ -17,7 +17,9 @@
         "FishMMO.Naming",
         "FishMMO.WorldSimulation",
         "FishMMO.WorldSimulation.Client",
-        "FishMMO.WorldSimulation.Editor"
+        "FishMMO.WorldSimulation.Editor",
+        "FishMMO.Map",
+        "FishMMO.Map.Client"
     ],
     "includePlatforms": [
         "Editor"

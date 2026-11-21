@@ -30,11 +30,15 @@ namespace FishMMO.UnitTests
 			{
 				"Assets/FishMMO/Modules/WorldSimulation/Client/Audio/World/GroundSurface.cs",
 				"Assets/FishMMO/Modules/WorldSimulation/Client/Audio/World/WindBedsPresenter.cs",
-				"Assets/FishMMO/Client/GUI/World/Map/MinimapCameraRenderer.cs",
+				"Assets/FishMMO/Modules/Map/Client/MinimapCameraRenderer.cs",
 				"Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Presentation/WeatherPresentation.cs",
 				"Assets/FishMMO/Modules/WorldSimulation/Client/Looks/CaveSkylights.cs",
 			})
 			{
+				if (InstalledModules.IsAbsent(path))
+				{
+					continue; // the Map module's minimap renderer, when that module is removed
+				}
 				LogAssert.IsFalse(named.IsMatch(SourceScanPins.CodeOnly(ProjectFiles.ReadAllText(path))), path + " names no Terrain type");
 			}
 		}

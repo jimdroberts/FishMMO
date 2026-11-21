@@ -63,10 +63,10 @@ namespace FishMMO.UnitTests
 		}
 
 		[TestCase("Assets/FishMMO/Modules/Commerce/Client/UITKMerchant.cs", true)]
-		[TestCase("Assets/FishMMO/Client/GUI/World/Bank/UITKBank.cs", true)]
-		[TestCase("Assets/FishMMO/Client/GUI/World/NPCDialogue/UITKNPCDialogue.cs", false)]
+		[TestCase("Assets/FishMMO/Modules/Items/Client/UITKBank.cs", true)]
+		[TestCase("Assets/FishMMO/Modules/WorldInteractables/Client/UITKNPCDialogue.cs", false)]
 		[TestCase("Assets/FishMMO/Modules/Commerce/Client/UITKMail.cs", false)]
-		[TestCase("Assets/FishMMO/Client/GUI/World/Container/UITKContainer.cs", false)]
+		[TestCase("Assets/FishMMO/Modules/WorldInteractables/Client/UITKContainer.cs", false)]
 		[TestCase("Assets/FishMMO/Modules/Commerce/Client/UITKLoot.cs", false)]
 		public void EveryInteractPanelHasTheToggle_WithTheAgreedDefault(string path, bool defaultOn)
 		{

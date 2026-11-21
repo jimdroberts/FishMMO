@@ -5,7 +5,6 @@ using UnityEngine;
 using FishNet.Serializing;
 using FishMMO.Shared;
 using NUnit.Framework;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests
 {
@@ -89,100 +88,6 @@ namespace FishMMO.UnitTests
 		}
 
 		// ── CombatEventCoalescer ────────────────────────────────────────
-
-		/// <summary>Repeated hits from one source in a tick become a single number.</summary>
-		/// <remarks>
-		/// A multi-hit ability, or several damage-over-time stacks expiring on the same tick, would
-		/// otherwise put one message on the wire per hit and stack that many labels on top of each
-		/// other over the victim.
-		/// </remarks>
-		[Test]
-		public void Coalescer_MergesSameSourceAndType()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(sourceObjectID: 7, CombatEventKind.Damage, damageTemplateID: 3, amount: 10);
-			coalescer.Add(sourceObjectID: 7, CombatEventKind.Damage, damageTemplateID: 3, amount: 5);
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			Assert.AreEqual(1, flushed.Count);
-			Assert.AreEqual(15, flushed[0].Amount);
-			Assert.AreEqual(0, coalescer.Count, "Flush must empty the buffer so the next tick starts clean.");
-		}
-
-		/// <summary>Different sources, kinds and damage types stay separate numbers.</summary>
-		[Test]
-		public void Coalescer_KeepsDistinctSourcesKindsAndTypesApart()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(1, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(2, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(1, CombatEventKind.Damage, 4, 10);
-			coalescer.Add(1, CombatEventKind.Heal, 0, 10);
-
-			Assert.AreEqual(4, coalescer.Count);
-		}
-
-		/// <summary>
-		/// Heals are normalised to no damage type, so two heals from one source always merge.
-		/// </summary>
-		[Test]
-		public void Coalescer_NormalisesDamageTypeOnHeals()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(1, CombatEventKind.Heal, damageTemplateID: 3, amount: 4);
-			coalescer.Add(1, CombatEventKind.Heal, damageTemplateID: 9, amount: 6);
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			Assert.AreEqual(1, flushed.Count);
-			Assert.AreEqual(10, flushed[0].Amount);
-			Assert.AreEqual(0, flushed[0].DamageTemplateID);
-		}
-
-		/// <summary>Nothing landed means nothing is queued.</summary>
-		[Test]
-		public void Coalescer_IgnoresNonPositiveAmounts()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(1, CombatEventKind.Damage, 0, 0);
-			coalescer.Add(1, CombatEventKind.Damage, 0, -5);
-
-			Assert.AreEqual(0, coalescer.Count);
-		}
-
-		/// <summary>
-		/// Past the entry cap the total is preserved rather than the overflow being dropped.
-		/// </summary>
-		/// <remarks>
-		/// A wide area-of-effect tick can involve more distinct sources than the cap. Losing the
-		/// attribution of the tail is acceptable; losing the damage from the displayed total is not,
-		/// because the number would then disagree with the health bar beside it.
-		/// </remarks>
-		[Test]
-		public void Coalescer_BeyondCapKeepsTheTotal()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			int expectedTotal = 0;
-			for (int i = 1; i <= CombatEventCoalescer.MaxEntries + 5; ++i)
-			{
-				coalescer.Add(sourceObjectID: i, CombatEventKind.Damage, damageTemplateID: 1, amount: i);
-				expectedTotal += i;
-			}
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			Assert.LessOrEqual(flushed.Count, CombatEventCoalescer.MaxEntries);
-			int total = 0;
-			for (int i = 0; i < flushed.Count; ++i)
-			{
-				total += flushed[i].Amount;
-			}
-			Assert.AreEqual(expectedTotal, total, "Damage folded into the overflow bucket must still be reported.");
-		}
 
 		/// <summary>The combat report survives its wire format unchanged.</summary>
 		[Test]

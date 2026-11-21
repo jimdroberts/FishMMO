@@ -24,9 +24,9 @@ namespace FishMMO.AbilityContent
 	/// </remarks>
 	public static partial class TestAbilitySuiteGenerator
 	{
-		public const string BlinkAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Blink";
+		public const string BlinkAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Blink";
 		public const string BlinkPrefabFolder = "Assets/Prefabs/Shared/Entity/Abilities/Types/Blink";
-		public const string BlinkEventFolder = "Assets/Templates/Entity/Abilities/Events/Hit/Blink";
+		public const string BlinkEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Hit/Blink";
 
 		private static void GenerateBlinkOnHit(List<AbilityTemplate> abilities, List<AbilityEvent> events)
 		{

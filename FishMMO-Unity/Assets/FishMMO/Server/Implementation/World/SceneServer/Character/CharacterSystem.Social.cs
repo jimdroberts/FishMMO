@@ -1,4 +1,4 @@
-﻿using FishNet.Broadcast;
+using FishNet.Broadcast;
 using FishNet.Connection;
 using FishNet.Transporting;
 using System;
@@ -17,12 +17,12 @@ using UnityEngine;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// Character broadcast helpers: non-DB data broadcasts (abilities, achievements, inventory, bank, hotkeys), and targeted character broadcasts.
+	/// Character broadcast helpers: non-DB data broadcasts (inventory, bank), and targeted character broadcasts.
 	/// </summary>
 	public partial class CharacterSystem
 	{
 		/// <summary>
-		/// Sends non-database character data (abilities, achievements, inventory, bank, hotkeys) to the owner.
+		/// Sends non-database character data (inventory, bank) to the owner. Module data (abilities, achievements, quests, hotkeys, …) is sent by the module's own system.
 		/// Must be called on the main thread.
 		/// </summary>
 		private void SendNonDbCharacterData(IPlayerCharacter character)
@@ -31,78 +31,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return;
 			}
-
-			#region Abilities
-			if (character.TryGet(out IAbilityController abilityController))
-			{
-				List<KnownAbilityAddBroadcast> knownAbilityBroadcasts = new List<KnownAbilityAddBroadcast>();
-				List<KnownAbilityEventAddBroadcast> knownAbilityEventBroadcasts = new List<KnownAbilityEventAddBroadcast>();
-
-				if (abilityController.KnownBaseAbilities != null)
-				{
-					// get base ability templates
-					foreach (int templateID in abilityController.KnownBaseAbilities)
-					{
-						knownAbilityBroadcasts.Add(new KnownAbilityAddBroadcast()
-						{
-							TemplateID = templateID,
-						});
-					}
-				}
-
-				if (abilityController.KnownAbilityEvents != null)
-				{
-					// and event templates
-					foreach (int templateID in abilityController.KnownAbilityEvents)
-					{
-						knownAbilityEventBroadcasts.Add(new KnownAbilityEventAddBroadcast()
-						{
-							TemplateID = templateID,
-						});
-					}
-				}
-
-				// tell the client they have known abilities
-				if (knownAbilityBroadcasts.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new KnownAbilityAddMultipleBroadcast()
-					{
-						Abilities = knownAbilityBroadcasts.ToArray(),
-					}, true, Channel.Reliable);
-				}
-
-				if (knownAbilityEventBroadcasts.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new KnownAbilityEventAddMultipleBroadcast()
-					{
-						AbilityEvents = knownAbilityEventBroadcasts.ToArray(),
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Achievements
-			if (character.TryGet(out IAchievementController achievementController))
-			{
-				List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
-				foreach (Achievement achievement in achievementController.Achievements.Values)
-				{
-					achievements.Add(new AchievementUpdateBroadcast()
-					{
-						TemplateID = achievement.Template.ID,
-						Value = achievement.CurrentValue,
-						Tier = achievement.CurrentTier,
-					});
-				}
-				if (achievements.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
-					{
-						Achievements = achievements.ToArray(),
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
 
 			#region InventoryItems
 			if (character.TryGet(out IInventoryController inventoryController))
@@ -167,36 +95,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Server.NetworkWrapper.Broadcast(character.Owner, new BankSetMultipleItemsBroadcast()
 					{
 						Items = itemBroadcasts.ToArray(),
-					}, true, Channel.Reliable);
-				}
-			}
-			#endregion
-
-			#region Hotkeys
-			if (character.Component<HotkeyBar>().Slots != null)
-			{
-				List<HotkeySetBroadcast> hotkeyBroadcasts = new List<HotkeySetBroadcast>();
-
-				foreach (HotkeyData hotkey in character.Component<HotkeyBar>().Slots)
-				{
-					// create the new hotkey broadcast
-					hotkeyBroadcasts.Add(new HotkeySetBroadcast()
-					{
-						HotkeyData = new HotkeyData()
-						{
-							Type = hotkey.Type,
-							Slot = hotkey.Slot,
-							ReferenceID = hotkey.ReferenceID,
-						}
-					});
-				}
-
-				// tell the client they have hotkeys
-				if (hotkeyBroadcasts.Count > 0)
-				{
-					Server.NetworkWrapper.Broadcast(character.Owner, new HotkeySetMultipleBroadcast()
-					{
-						Hotkeys = hotkeyBroadcasts.ToArray(),
 					}, true, Channel.Reliable);
 				}
 			}

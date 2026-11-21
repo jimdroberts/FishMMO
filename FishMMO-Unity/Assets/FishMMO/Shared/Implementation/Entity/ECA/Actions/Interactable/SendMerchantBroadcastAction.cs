@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 			SendToOwner(initiator, new MerchantBroadcast()
 			{
 				InteractableID = data.Interactable.ID,
-				TemplateID = merchant.Template.ID,
+				TemplateID = merchant.Template.CachedID,
 			});
 		}
 	}

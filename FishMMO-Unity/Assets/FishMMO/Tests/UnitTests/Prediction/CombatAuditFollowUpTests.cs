@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using FishMMO.Shared;
 using FishNet.Serializing;
 using NUnit.Framework;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 using UnityLogAssert = UnityEngine.TestTools.LogAssert;
 
@@ -21,83 +20,6 @@ namespace FishMMO.UnitTests
 	public class CombatAuditFollowUpTests
 	{
 		#region Coalesced reports settle every prediction they stand for.
-
-		/// <summary>
-		/// A merged entry counts its hits as well as summing their amounts.
-		/// </summary>
-		/// <remarks>
-		/// The count is the whole fix. The server merges every hit sharing a (source, kind, type)
-		/// within one tick into one message — right for display, and wrong for confirmation, because
-		/// the caster drew one predicted label per hit. Without a count the report could only ever
-		/// settle one of them.
-		/// </remarks>
-		[Test]
-		public void Coalescer_CountsMergedHits_AsWellAsSummingThem()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(7, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(7, CombatEventKind.Damage, 3, 15);
-			coalescer.Add(7, CombatEventKind.Damage, 3, 5);
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			LogAssert.AreEqual(1, flushed.Count, "Three hits of one kind and type merge into one entry.");
-			LogAssert.AreEqual(30, flushed[0].Amount, "The amounts sum.");
-			LogAssert.AreEqual(3, flushed[0].Occurrences,
-				"The entry must record that it stands for THREE hits. The caster predicted three " +
-				"labels; a report claiming one would settle one and leave the other two to grey " +
-				"themselves out as denied, marking hits that landed as hits that were refused.");
-		}
-
-		/// <summary>A single unmerged hit reports one occurrence, not zero.</summary>
-		/// <remarks>
-		/// The overwhelmingly common case. Zero here would stop every ordinary hit confirming.
-		/// </remarks>
-		[Test]
-		public void Coalescer_ASingleHit_ReportsOneOccurrence()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(7, CombatEventKind.Damage, 3, 10);
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			LogAssert.AreEqual(1, flushed.Count, "One hit is one entry.");
-			LogAssert.AreEqual(1, flushed[0].Occurrences, "A lone hit stands for exactly itself.");
-		}
-
-		/// <summary>
-		/// Hits that differ in source, kind or damage type stay separate and each count themselves.
-		/// </summary>
-		/// <remarks>
-		/// The merge key has to keep meaning what it meant, or the count would be measuring the
-		/// wrong population. Two damage types from one attacker are two labels on screen and must
-		/// remain two reports.
-		/// </remarks>
-		[Test]
-		public void Coalescer_DistinctKeys_KeepSeparateCounts()
-		{
-			CombatEventCoalescer coalescer = new CombatEventCoalescer();
-			coalescer.Add(7, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(7, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(7, CombatEventKind.Damage, 4, 10);
-			coalescer.Add(9, CombatEventKind.Damage, 3, 10);
-			coalescer.Add(7, CombatEventKind.Heal, 0, 10);
-
-			List<CombatEventCoalescer.Entry> flushed = new List<CombatEventCoalescer.Entry>();
-			coalescer.Flush(flushed);
-
-			LogAssert.AreEqual(4, flushed.Count, "Four distinct (source, kind, type) keys.");
-			int totalOccurrences = 0;
-			for (int i = 0; i < flushed.Count; ++i)
-			{
-				totalOccurrences += flushed[i].Occurrences;
-			}
-			LogAssert.AreEqual(5, totalOccurrences,
-				"Every hit added must be accounted for by exactly one entry's count — a hit whose " +
-				"count is lost is a predicted label that never gets settled.");
-		}
 
 		/// <summary>
 		/// <see cref="CombatEventBroadcast.Occurrences"/> survives the wire.

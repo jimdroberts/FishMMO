@@ -22,10 +22,13 @@ namespace FishMMO.RenderScratch
 
 		public static int BuffArmor, BuffHaste, DebuffPoison, DebuffSlow, DebuffBurn;
 
+		/// <summary>Loads the buff fixtures (installed by the Buffs module's render scratch; the IDs stay 0 without it).</summary>
+		public static System.Action BuffLoader;
+
 		public static void All()
 		{
 			Names();
-			Buffs();
+			BuffLoader?.Invoke();
 		}
 
 		private static void Names()
@@ -45,36 +48,6 @@ namespace FishMMO.RenderScratch
 				map[NamingSystemType.GuildName] = guilds = new Dictionary<long, string>();
 			}
 			guilds[GuildID] = "Tideborn Covenant";
-		}
-
-		/// <remarks>
-		/// AddToCache is not called on load — the shipped path is an addressables loader at boot,
-		/// so an asset pulled from the AssetDatabase has ID 0 and never enters the lookup.
-		/// The project ships no debuff templates, so those are created in memory.
-		/// </remarks>
-		private static void Buffs()
-		{
-			BaseBuffTemplate armor = AssetDatabase.LoadAssetAtPath<BaseBuffTemplate>(
-				"Assets/Templates/Entity/Buffs/Minor Increase Armor.asset");
-			BaseBuffTemplate haste = AssetDatabase.LoadAssetAtPath<BaseBuffTemplate>(
-				"Assets/Templates/Entity/Buffs/Minor Increase Move Speed.asset");
-
-			if (armor != null) { armor.AddToCache(armor.name); BuffArmor = armor.ID; }
-			if (haste != null) { haste.AddToCache(haste.name); BuffHaste = haste.ID; }
-
-			DebuffPoison = Debuff("Creeping Venom");
-			DebuffSlow = Debuff("Mirebound");
-			DebuffBurn = Debuff("Emberbrand");
-		}
-
-		private static int Debuff(string name)
-		{
-			AttributeBuffTemplate t = ScriptableObject.CreateInstance<AttributeBuffTemplate>();
-			t.name = name;
-			t.hideFlags = HideFlags.HideAndDontSave;
-			t.IsDebuff = true;
-			t.AddToCache(name);
-			return t.ID;
 		}
 
 		public static ObservedBuffEntry Buff(int id, int stacks, float remaining, float total)
@@ -187,50 +160,6 @@ namespace FishMMO.RenderScratch
 		}
 
 		// ── Shared panels ───────────────────────────────────────────
-
-		public static void Chat(GameObject h, UIDocument d)
-		{
-			UITKChat c = h.AddComponent<UITKChat>();
-			c.Document = d;
-			c.OnStarting();
-
-			MethodInfo received = typeof(UITKChat).GetMethod("OnClientChatBroadcastReceived",
-				BindingFlags.NonPublic | BindingFlags.Instance);
-
-			(ChatChannel ch, long sender, string text)[] lines =
-			{
-				(ChatChannel.Say,     1002, "Anyone up for the Sunken Cathedral run?"),
-				(ChatChannel.Party,   1001, "Give me two minutes, repairing."),
-				(ChatChannel.Guild,   1003, "Raid forms at 19:00 — read the notice."),
-				(ChatChannel.Say,     1004, "Where does the tide-warding charm drop?"),
-				(ChatChannel.Guild,   1005, "Reef wing, second boss. Rare-ish."),
-				(ChatChannel.Tell,    1002, "Invite me when you're ready?"),
-				(ChatChannel.World,   1008, "Selling Emberbrand scrolls, whisper me."),
-				(ChatChannel.Party,   1001, "Ready. Pulling."),
-			};
-
-			long now = DateTime.UtcNow.Ticks;
-			for (int i = 0; i < lines.Length; ++i)
-			{
-				ChatBroadcast msg = new ChatBroadcast
-				{
-					Channel = lines[i].ch,
-					SenderID = lines[i].sender,
-					Text = lines[i].text,
-					ReceivedUtcTicks = now - (lines[i].Length() * 0),
-				};
-				if (received != null)
-				{
-					/* The second parameter is FishNet's Channel enum. Its default is built from the
-					 * signature so this assembly needs no FishNet reference. */
-					Type channelType = received.GetParameters()[1].ParameterType;
-					object channel = channelType.IsValueType ? Activator.CreateInstance(channelType) : null;
-					received.Invoke(c, new object[] { msg, channel });
-				}
-			}
-		}
-
-		private static int Length(this (ChatChannel ch, long sender, string text) t) => 0;
 
 		public static void Tooltip(GameObject h, UIDocument d)
 		{
@@ -502,45 +431,6 @@ namespace FishMMO.RenderScratch
 			};
 		}
 
-		public static void Inventory(GameObject h, UIDocument d) => Character<UITKInventory>(h, d);
 
-		/// <summary>
-		/// The player's own character sheet — the same window <see cref="Inspect"/> captures, showing
-		/// the viewer's own character and the attribute list the inspect variant holds back.
-		/// </summary>
-		/// <remarks>
-		/// Not the <c>Character&lt;T&gt;</c> one-liner, because this window draws the character: without
-		/// a body and a preview camera on the rig its viewport renders the label over an empty frame,
-		/// and the pair of captures stops being a comparison — the difference between them would be the
-		/// harness's rigging rather than the two components' options.
-		/// <para>
-		/// The rigging comes BEFORE the panel starts, which is the order the client lives in: a
-		/// character has its mesh root and its camera long before anybody opens this window. It also
-		/// matters to the framing — the preview frames itself on the first tick that can see a body and
-		/// keeps what it measured, so a body attached afterwards is photographed by a camera that was
-		/// framed without it.
-		/// </para>
-		/// </remarks>
-		public static void Equipment(GameObject h, UIDocument d)
-		{
-			PlayerCharacter character = Rig.Build(h);
-			Rig.AttachPreview(character);
-
-			UITKEquipment panel = h.AddComponent<UITKEquipment>();
-			panel.Document = d;
-			panel.SetCharacter(character);
-			panel.OnStarting();
-			Tick(panel);
-		}
-		public static void Bank(GameObject h, UIDocument d) => Character<UITKBank>(h, d);
-		public static void Achievements(GameObject h, UIDocument d) => Character<UITKAchievements>(h, d);
-
-		public static void DeathDialog(GameObject h, UIDocument d)
-		{
-			UITKDeathDialog dd = h.AddComponent<UITKDeathDialog>();
-			dd.Document = d;
-			dd.OnStarting();
-			dd.ShowDeathDialog();
-		}
 	}
 }

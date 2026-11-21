@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Transporting;
 using FishMMO.Shared;
 using FishMMO.Logging;
@@ -18,7 +18,9 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
-	/// Validates and processes client interactions with interactable objects: dialogue, containers and portals; modules handle their own kinds through <see cref="OnPlayerInteracting"/>.
+	/// Validates and processes client interactions with interactable objects, and portals; modules handle their own kinds through <see cref="OnPlayerInteracting"/>
+	/// and the interactables' ECA triggers. Dialogue and containers are the World Interactables module's (2026-11-20), which
+	/// holds its requests to this system's interaction guard (<see cref="TryBeginInteraction"/>).
 	/// </summary>
 	[CreateAssetMenu(fileName = "InteractableSystem", menuName = "FishMMO/Server/SceneServer/Interactable System", order = 1)]
 	[RequiresDataContainer(typeof(InteractableSystemMainThreadQueueData))]
@@ -69,8 +71,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 		[SerializeField] private WorldSceneDetailsCache worldSceneDetailsCache;
 
 		/// <summary>
-		/// Initializes the InteractableSystem: validates dependencies, registers all network broadcast handlers,
-		/// subscribes to dialogue events, and clamps configuration values.
+		/// Initializes the InteractableSystem: validates dependencies, registers the interaction request, starts the
+		/// portals, and clamps configuration values.
 		/// </summary>
 		/// <returns>Initialization status indicating success or failure.</returns>
 		public override ServerComponentInitializationStatus InitializeOnce()
@@ -101,32 +103,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Network broadcasts
 			Server.NetworkWrapper.RegisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived, true);
-			/* Three requests, not one. The finder browses, opens and joins, and each is
-			 * authorised on its own terms — DungeonFinderBroadcast is now purely the server's
-			 * message opening the panel and is not accepted from a client at all. */
-			Server.NetworkWrapper.RegisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived, true);
-			Server.NetworkWrapper.RegisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived, true);
-
-			IDialogueInteractable.OnServerDialogueRequested += OnDisplayDialogueActionRequested;
-
-			/* Registered here rather than beside /leaveinstance on the character system, because
-			 * closing an instance is dungeon-finder business: it has to resolve the party's
-			 * instance the same way an entry request does. See OnCloseDungeonCommand. */
-			/* The dialogue choice cache is memory-only and keyed by character ID. Without these
-			 * two hooks it has no idea who is still playing, which is what made its capacity
-			 * sweep evict a connected player's one-time choices; and nothing ever removed an
-			 * entry, so it filled up with characters who had long since logged out. */
-			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
-				dialogueCharacterSystem != null)
-			{
-				dialogueCharacterSystem.OnAfterLoadCharacter += CharacterSystem_OnDialogueCharacterLoaded;
-				dialogueCharacterSystem.OnDisconnect += CharacterSystem_OnDialogueCharacterDisconnected;
-			}
-			else
-			{
-				Log.Warning("InteractableSystem", "InitializeOnce: ICharacterSystem not found; cached dialogue choices will not be released on disconnect, and group finder rows will outlive their characters until the stale sweep.");
-			}
-
+			// Dialogue choices and container takes are the World Interactables module's (WorldInteractableSystem).
 			// Waypoints' fast travel and discovery hooks moved to the Travel module (WaypointTravelSystem).
 
 			// Portals: the activation store, its persistence, and the client reports. See InteractableSystem.Portal.cs.
@@ -145,7 +122,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 		/// <summary>
 		/// Deinitializes the InteractableSystem: drains queued actions, clears ingress guards, unregisters network
-		/// broadcast handlers, unsubscribes from dialogue events, and clears dialogue session state.
+		/// broadcast handlers and tears down the portals.
 		/// </summary>
 		public override void OnDeinitialize()
 		{
@@ -165,38 +142,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			// Network broadcasts
 			Server.NetworkWrapper.UnregisterBroadcast<InteractableBroadcast>(OnServerInteractableBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<DialogueChoiceBroadcast>(OnServerDialogueChoiceBroadcastReceived);
-			Server.NetworkWrapper.UnregisterBroadcast<ContainerTakeItemBroadcast>(OnServerContainerTakeItemBroadcastReceived);
-
-			IDialogueInteractable.OnServerDialogueRequested -= OnDisplayDialogueActionRequested;
-
-			if (Server.BehaviourRegistry.TryGet(out ICharacterSystem<NetworkConnection, UnityEngine.SceneManagement.Scene> dialogueCharacterSystem) &&
-				dialogueCharacterSystem != null)
-			{
-				dialogueCharacterSystem.OnAfterLoadCharacter -= CharacterSystem_OnDialogueCharacterLoaded;
-				dialogueCharacterSystem.OnDisconnect -= CharacterSystem_OnDialogueCharacterDisconnected;
-			}
 
 			DeinitializePortals();
-
-			// Dialogue session cleanup
-			activeDialogueSessions.Clear();
-			characterDialogueChoices.Clear();
-			connectedDialogueCharacters.Clear();
-			if (unconfirmedDialogueChoices.Count > 0)
-			{
-				// Nothing is left to retry them; logged (character, template:mask) so they can be applied by hand.
-				var lines = new List<string>(unconfirmedDialogueChoices.Count);
-				foreach (KeyValuePair<long, Dictionary<int, short>> character in unconfirmedDialogueChoices)
-				{
-					foreach (KeyValuePair<int, short> template in character.Value)
-					{
-						lines.Add($"{character.Key}/{template.Key}:{template.Value}");
-					}
-				}
-				Log.Error("InteractableSystem", $"Shutting down with unconfirmed dialogue choices (CharID/TemplateID:mask): {string.Join(", ", lines)}");
-				unconfirmedDialogueChoices.Clear();
-			}
 		}
 
 		/// <summary>
@@ -454,6 +401,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				}
 			}
 		}
+
+		/// <inheritdoc/>
+		public WorldSceneDetailsCache WorldSceneDetails => worldSceneDetailsCache;
+
+		/// <inheritdoc/>
+		public bool TryBeginInteraction(int connectionId, out long guardKey) => TryBeginIngressGuard(connectionId, out guardKey);
+
+		/// <inheritdoc/>
+		public void EndInteraction(long guardKey) => EndIngressGuard(guardKey);
+
+		/// <inheritdoc/>
+		public bool TryResolveSceneObject(long sceneObjectID, SceneHandle characterSceneHandle, out ISceneObject sceneObject) =>
+			ValidateSceneObject(sceneObjectID, characterSceneHandle, out sceneObject);
 
 		/// <summary>
 		/// Updates an NPC to face the interacting character and enter idle state.

@@ -25,7 +25,7 @@ namespace FishMMO.Client
 	public static class PointOfInterestMapRender
 	{
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
-		private const string MapFolder = "Assets/FishMMO/Client/GUI/World/Map/";
+		private const string MapFolder = "Assets/FishMMO/Modules/Map/Client/";
 		private const int Width = 1600;
 		private const int Height = 1200;
 		private const int SettleFrames = 60;

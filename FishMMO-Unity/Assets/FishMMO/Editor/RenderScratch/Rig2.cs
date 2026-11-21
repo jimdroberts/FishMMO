@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using FishMMO.Shared;
@@ -100,70 +100,4 @@ namespace FishMMO.RenderScratch
 			=> resources.TryGetValue(staminaID, out stamina);
 	}
 
-	/// <summary>Achievement controller fake — the Achievements panel reads <c>Achievements</c>.</summary>
-	public sealed class FakeAchievements : IAchievementController
-	{
-		private readonly Dictionary<int, Achievement> achievements = new Dictionary<int, Achievement>();
-
-		public FakeAchievements(ICharacter character) { Character = character; }
-
-		public ICharacter Character { get; private set; }
-		public bool Initialized => true;
-		public void InitializeOnce(ICharacter character) { Character = character; }
-		public void OnStartCharacter() { }
-		public void OnStopCharacter() { }
-
-		public Dictionary<int, Achievement> Achievements => achievements;
-
-		public void SetAchievement(int templateID, byte tier, uint value, bool skipEvent = false)
-		{
-			achievements[templateID] = new Achievement(templateID, tier, value);
-		}
-
-		public bool TryGetAchievement(int templateID, out Achievement achievement)
-			=> achievements.TryGetValue(templateID, out achievement);
-
-		public void Increment(AchievementTemplate template, uint amount)
-		{
-			if (template != null) { Increment(template.ID, amount); }
-		}
-
-		public void Increment(int templateID, uint amount)
-		{
-			if (achievements.TryGetValue(templateID, out Achievement a))
-			{
-				SetAchievement(templateID, a.CurrentTier, a.CurrentValue + amount);
-			}
-		}
-	}
-
-	/// <summary>Pet controller fake — the pet panel reads <c>Pets</c>, stance and movement order.</summary>
-	public sealed class FakePet : IPetController
-	{
-		public FakePet(ICharacter character) { Character = character; }
-
-		public ICharacter Character { get; private set; }
-		public bool Initialized => true;
-		public void InitializeOnce(ICharacter character) { Character = character; }
-		public void OnStartCharacter() { }
-		public void OnStopCharacter() { }
-
-		private readonly List<Pet> pets = new List<Pet>();
-		public IReadOnlyList<Pet> Pets => pets;
-		public int PetSlots => PetSlotRules.DefaultSlots;
-		public bool AddPet(Pet pet) { if (pet == null || pets.Contains(pet)) return false; pets.Add(pet); return true; }
-		public bool RemovePet(Pet pet) => pets.Remove(pet);
-		public void ClearPets() => pets.Clear();
-		public PetStance Stance { get; set; } = PetStance.Defensive;
-		public PetMovementOrder MovementOrder { get; set; } = PetMovementOrder.Follow;
-		public int AttackPriority { get; set; } = PetAttackPriority.Default;
-
-		public event Action<IPetController, ICharacter> OnOwnerAttacked;
-#pragma warning disable 0067
-		public event Action<IPetController> OnPetSlotsReduced;
-#pragma warning restore 0067
-
-		public List<Trigger> OnPetSummonTriggers { get; } = new List<Trigger>();
-		public List<Trigger> OnPetDismissTriggers { get; } = new List<Trigger>();
-	}
 }

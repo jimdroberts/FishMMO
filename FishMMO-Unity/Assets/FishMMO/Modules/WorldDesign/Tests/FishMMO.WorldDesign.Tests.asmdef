@@ -41,7 +41,12 @@
         "FishMMO.WorldTestBed",
         "FishMMO.WorldSimulation",
         "FishMMO.WorldSimulation.Client",
-        "FishMMO.WorldSimulation.Editor"
+        "FishMMO.WorldSimulation.Editor",
+        "FishMMO.Map",
+        "FishMMO.Map.Client",
+        "FishMMO.WorldInteractables",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server"
     ],
     "includePlatforms": [
         "Editor"

@@ -1,0 +1,31 @@
+{
+    "name": "FishMMO.Abilities.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Combat",
+        "FishMMO.Combat.Server",
+        "FishMMO.Server",
+        "FishMMO.Core",
+        "FishNet.Runtime",
+        "Unity.AI.Navigation",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "KinematicCharacterController",
+        "FishMMO.Buffs"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

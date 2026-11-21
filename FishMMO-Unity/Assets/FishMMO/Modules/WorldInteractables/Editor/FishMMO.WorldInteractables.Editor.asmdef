@@ -1,0 +1,20 @@
+{
+    "name": "FishMMO.WorldInteractables.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.WorldInteractables",
+        "FishMMO.Shared.Tools.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

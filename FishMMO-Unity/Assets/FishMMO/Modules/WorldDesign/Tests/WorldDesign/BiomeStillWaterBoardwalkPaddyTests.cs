@@ -61,6 +61,11 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				templates++;
+				// An authored round uses the new fields on purpose (BiomeAuthoredRounds; pinned biome by biome in BiomeAuthoredRoundTests).
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				Assert.That(Regex.IsMatch(text, @"^  floatingPlants:\s*\n  - ", RegexOptions.Multiline), Is.False, $"{Path.GetFileName(path)} floats something");
 				Match walks = Regex.Match(text, @"^  boardwalks: (\d+)", RegexOptions.Multiline);
 				Assert.That(!walks.Success || walks.Groups[1].Value == "0", Is.True, $"{Path.GetFileName(path)} raises ways");

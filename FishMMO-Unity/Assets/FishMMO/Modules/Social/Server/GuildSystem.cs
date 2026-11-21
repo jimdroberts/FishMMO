@@ -372,12 +372,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		[SerializeField] private float applicationCooldownSeconds = 30.0f;
 
 		[Header("Achievements")]
-		public AchievementTemplate GuildCreateAchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject GuildCreateAchievementTemplate;
 
 		/// <summary>
 		/// Achievement to increment when a player joins a guild.
 		/// </summary>
-		public AchievementTemplate GuildJoinAchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject GuildJoinAchievementTemplate;
 
 		/// <summary>
 		/// Operation keys used by guild ingress guards.

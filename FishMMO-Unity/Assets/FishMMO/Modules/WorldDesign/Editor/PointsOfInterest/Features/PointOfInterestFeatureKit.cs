@@ -26,8 +26,8 @@ namespace FishMMO.Shared.WorldDesign
 	public static class PointOfInterestFeatureKit
 	{
 		public const string WaypointPrefabPath = "Assets/Prefabs/Shared/Entity/Interactables/Waypoints/Waypoint.prefab";
-		public const string TeleporterTriggerPath = "Assets/Templates/Entity/ECA/Interactions/Teleporter Interact.asset";
-		public const string DungeonEntranceTriggerPath = "Assets/Templates/Entity/ECA/Interactions/Dungeon Entrance Interact.asset";
+		public const string TeleporterTriggerPath = "Assets/FishMMO/Templates/Entity/ECA/Interactions/Teleporter Interact.asset";
+		public const string DungeonEntranceTriggerPath = "Assets/FishMMO/Templates/Entity/ECA/Interactions/Dungeon Entrance Interact.asset";
 		public const string RegionNameTriggerPath = "Assets/Prefabs/Shared/Entity/Regions/DisplayName/AreaOfInterestDisplayNameAction.asset";
 
 		/// <summary>The site's display name: its record's, else its kind's.</summary>

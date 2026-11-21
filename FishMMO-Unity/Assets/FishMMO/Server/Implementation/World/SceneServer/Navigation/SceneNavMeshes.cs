@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using FishMMO.Shared;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 {
@@ -19,7 +18,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 	/// <b>And its climbables' links.</b> Each of the scene's ladders, rope ladders and ropes
 	/// (<see cref="ScenePointsOfInterest.Climbables"/>) becomes a two-way link from its foot on the lower floor to its
 	/// landing on the upper one (<see cref="ClimbingRules.LinkEnds"/>), in the "Climb" area so only archetypes that climb
-	/// path over them (<see cref="AIController.ClimbArea"/>). Links are global like the NavMesh, so they too are added
+	/// path over them (<see cref="ClimbArea"/>). Links are global like the NavMesh, so they too are added
 	/// once per scene and go with it. Made at load from the same list the players' climbing reads, so the two never
 	/// disagree and no bake is needed for them.
 	/// </para>
@@ -29,6 +28,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 	/// </remarks>
 	public sealed class SceneNavMeshes
 	{
+		/// <summary>The name of the NavMesh area the climbables' links are in (the NPCs module's AI climbs them).</summary>
+		public const string ClimbAreaName = "Climb";
+
+		private static int climbArea = -2;
+
+		/// <summary>The climb NavMesh area's index; -1 when the project has none.</summary>
+		public static int ClimbArea => climbArea != -2 ? climbArea : (climbArea = NavMesh.GetAreaFromName(ClimbAreaName));
+
 		private sealed class Loaded
 		{
 			public NavMeshDataInstance Instance;
@@ -92,7 +99,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Navigation
 			{
 				return;
 			}
-			int area = AIController.ClimbArea;
+			int area = ClimbArea;
 			int agentTypes = NavMesh.GetSettingsCount();
 			for (int i = 0; i < climbables.Count && i < SceneClimbables.MaxPerScene; i++)
 			{

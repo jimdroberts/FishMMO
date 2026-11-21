@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.Core;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -23,7 +22,6 @@ namespace FishMMO.Shared
 				"Assets/Prefabs/Shared",
 				"FishMMO/World Scene Details");
 
-			list.Dashboard.RegisterSpawnTablesCategory();
 			list.AddToolPage(DashboardToolAttribute.WorldMap, "World");
 			list.Dashboard.RegisterFullPageCategories("World");
 		}

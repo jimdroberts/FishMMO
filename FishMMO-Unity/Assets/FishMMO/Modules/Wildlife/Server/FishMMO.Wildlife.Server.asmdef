@@ -1,0 +1,36 @@
+{
+    "name": "FishMMO.Wildlife.Server",
+    "rootNamespace": "FishMMO.Server",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "KinematicCharacterController",
+        "FishMMO.Wildlife",
+        "FishMMO.NPCs",
+        "FishMMO.Abilities",
+        "FishMMO.Combat",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Combat.Server"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

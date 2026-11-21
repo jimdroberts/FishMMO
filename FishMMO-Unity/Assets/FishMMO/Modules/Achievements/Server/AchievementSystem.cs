@@ -1,0 +1,462 @@
+using FishNet.Transporting;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using FishNet.Broadcast;
+using FishMMO.Database;
+using FishMMO.Database.Data;
+using FishMMO.Database.Npgsql.Services.Interfaces;
+using FishMMO.Server.Core;
+using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
+using FishMMO.Shared;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using FishNet.Connection;
+using FishMMO.Logging;
+
+namespace FishMMO.Server.Implementation.World.SceneServer
+{
+	/// <summary>
+	/// Manages server-side achievement tracking, updates, and completion rewards for player characters.
+	/// Game logic and Broadcasts run synchronously on the main thread.
+	/// Database persistence is fire-and-forget async to avoid blocking the main thread.
+	/// </summary>
+	[CreateAssetMenu(fileName = "AchievementSystem", menuName = "FishMMO/Server/SceneServer/Achievement System", order = 1)]
+	[RequiresDataContainer(typeof(AsyncWorkerData))]
+	public class AchievementSystem : ServerBehaviour, IAchievementSystem
+	{
+		/// <summary>
+		/// Initializes the achievement system, subscribing to achievement update and completion events.
+		/// </summary>
+		public override ServerComponentInitializationStatus InitializeOnce()
+		{
+			if (Server == null)
+			{
+				Log.Error("AchievementSystem", "InitializeOnce: Server is null");
+				return ServerComponentInitializationStatus.FailedToFindRequiredDependency;
+			}
+
+			// Achievement events
+			IAchievementController.OnUpdateAchievement += IAchievementController_OnUpdateAchievement;
+			IAchievementController.OnCompleteAchievement += IAchievementController_HandleAchievementRewards;
+
+			if (Server.BehaviourRegistry.TryGet(out characterSystem))
+			{
+				characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
+				characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
+			}
+
+			Log.Debug("AchievementSystem", "Initialized");
+			return ServerComponentInitializationStatus.Initialized;
+		}
+
+		/// <summary>
+		/// Cleans up the achievement system, unsubscribing from achievement update and completion events.
+		/// </summary>
+		public override void OnDeinitialize()
+		{
+			if (Server == null)
+			{
+				Log.Error("AchievementSystem", "OnDeinitialize: Server is null");
+				return;
+			}
+
+			// Achievement events
+			IAchievementController.OnUpdateAchievement -= IAchievementController_OnUpdateAchievement;
+			IAchievementController.OnCompleteAchievement -= IAchievementController_HandleAchievementRewards;
+
+			if (characterSystem != null)
+			{
+				characterSystem.OnSpawnCharacter -= CharacterSystem_OnSpawnCharacter;
+				characterSystem = null;
+			}
+
+			pendingProgress.Clear();
+			completedThisUpdate.Clear();
+			progressFlushElapsed = 0.0f;
+		}
+
+		/// <summary>The character system whose spawns send a player its achievements.</summary>
+		private ICharacterSystem<NetworkConnection, Scene> characterSystem;
+
+		/// <summary>
+		/// Sends a player who has just spawned the achievements it loaded with (<see cref="AchievementPersistence"/>). Moved
+		/// from <c>CharacterSystem</c>'s login data with the module (2026-11-20). Sent as one batch: the client applies it
+		/// without announcing completions.
+		/// </summary>
+		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)
+		{
+			if (character == null || character.Owner == null || !character.Owner.IsActive ||
+				!character.TryGet(out IAchievementController achievementController))
+			{
+				return;
+			}
+			List<AchievementUpdateBroadcast> achievements = new List<AchievementUpdateBroadcast>();
+			foreach (Achievement achievement in achievementController.Achievements.Values)
+			{
+				achievements.Add(new AchievementUpdateBroadcast()
+				{
+					TemplateID = achievement.Template.ID,
+					Value = achievement.CurrentValue,
+					Tier = achievement.CurrentTier,
+				});
+			}
+			if (achievements.Count > 0)
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
+				{
+					Achievements = achievements.ToArray(),
+				}, true, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// Handles achievement update events for characters, validates input, and broadcasts achievement changes to the player client.
+		/// </summary>
+		/// <param name="character">The character whose achievement was updated.</param>
+		/// <param name="achievement">The updated achievement data.</param>
+		private void IAchievementController_OnUpdateAchievement(ICharacter character, Achievement achievement)
+		{
+			if (character == null || achievement == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+			if (playerCharacter == null)
+			{
+				return;
+			}
+
+			int templateID = achievement.Template.ID;
+
+			/* A completed tier goes out at once and on its own: the owner's client announces a tier
+			 * rise it sees in a single update (AchievementController.ApplyServerUpdate). Anything of
+			 * this achievement still waiting in the batch is superseded by it. */
+			if (completedThisUpdate.Remove((playerCharacter.ID, templateID)))
+			{
+				if (pendingProgress.TryGetValue(playerCharacter, out Dictionary<int, Achievement> waiting))
+				{
+					waiting.Remove(templateID);
+				}
+				Server.NetworkWrapper.Broadcast(playerCharacter.Owner, new AchievementUpdateBroadcast()
+				{
+					TemplateID = templateID,
+					Value = achievement.CurrentValue,
+					Tier = achievement.CurrentTier,
+				});
+				return;
+			}
+
+			/* Progress alone waits for the next flush. Damage and healing count on every hit, so an
+			 * update per increment would be a packet per hit to the attacker and another to the
+			 * target; batched, a fight costs one message a second whatever its rate. */
+			if (!pendingProgress.TryGetValue(playerCharacter, out Dictionary<int, Achievement> pending))
+			{
+				pendingProgress.Add(playerCharacter, pending = new Dictionary<int, Achievement>());
+			}
+			pending[templateID] = achievement;
+		}
+
+		/// <summary>Seconds between flushes of batched achievement progress.</summary>
+		private const float ProgressFlushInterval = 1.0f;
+
+		/// <summary>Time since the last progress flush.</summary>
+		private float progressFlushElapsed;
+
+		/// <summary>
+		/// Progress-only updates waiting for the next flush, per character, latest value per achievement.
+		/// </summary>
+		private readonly Dictionary<IPlayerCharacter, Dictionary<int, Achievement>> pendingProgress = new Dictionary<IPlayerCharacter, Dictionary<int, Achievement>>();
+
+		/// <summary>
+		/// (character, template) pairs whose increment just completed a tier. Set by the completion
+		/// event, which <see cref="AchievementController.Increment(AchievementTemplate, uint)"/> raises
+		/// before the update event of the same increment, and consumed by that update.
+		/// </summary>
+		private readonly HashSet<(long, int)> completedThisUpdate = new HashSet<(long, int)>();
+
+		/// <summary>Reused flush buffers.</summary>
+		private readonly List<AchievementUpdateBroadcast> flushBuffer = new List<AchievementUpdateBroadcast>();
+
+		/// <summary>
+		/// Sends each character's batched achievement progress once per <see cref="ProgressFlushInterval"/>.
+		/// </summary>
+		protected override void OnUpdate(float deltaTime)
+		{
+			progressFlushElapsed += deltaTime;
+			if (progressFlushElapsed < ProgressFlushInterval || pendingProgress.Count == 0)
+			{
+				return;
+			}
+			progressFlushElapsed = 0.0f;
+
+			foreach (KeyValuePair<IPlayerCharacter, Dictionary<int, Achievement>> entry in pendingProgress)
+			{
+				IPlayerCharacter character = entry.Key;
+				// A character despawned since: its client is gone or will be told on its next login.
+				if (character == null || (character is UnityEngine.Object unityObject && unityObject == null) ||
+					character.Owner == null || !character.Owner.IsActive || entry.Value.Count == 0)
+				{
+					continue;
+				}
+
+				flushBuffer.Clear();
+				foreach (Achievement achievement in entry.Value.Values)
+				{
+					flushBuffer.Add(new AchievementUpdateBroadcast()
+					{
+						TemplateID = achievement.Template.ID,
+						Value = achievement.CurrentValue,
+						Tier = achievement.CurrentTier,
+					});
+				}
+				Server.NetworkWrapper.Broadcast(character.Owner, new AchievementUpdateMultipleBroadcast()
+				{
+					Achievements = flushBuffer.ToArray(),
+				});
+			}
+			pendingProgress.Clear();
+			flushBuffer.Clear();
+		}
+
+		/// <summary>
+		/// Handles achievement completion events, validates input, and processes achievement rewards for the player character.
+		/// Game logic and Broadcasts are synchronous on the main thread. DB writes are fire-and-forget async.
+		/// </summary>
+		/// <param name="character">The character who completed the achievement.</param>
+		/// <param name="template">The achievement template.</param>
+		/// <param name="tier">The achievement tier completed.</param>
+		private void IAchievementController_HandleAchievementRewards(ICharacter character, AchievementTemplate template, AchievementTier tier)
+		{
+			if (character == null || template == null || tier == null)
+			{
+				return;
+			}
+
+			IPlayerCharacter playerCharacter = character as IPlayerCharacter;
+			if (playerCharacter == null)
+			{
+				return;
+			}
+
+			// The update event that follows sends this achievement at once rather than batching it.
+			completedThisUpdate.Add((playerCharacter.ID, template.ID));
+
+			// Resolve services once for all reward handlers
+			if (Server.Database?.ServiceRegistry == null)
+			{
+				return;
+			}
+
+			Server.Database.ServiceRegistry.TryGet<ICharacterKnownAbilityService>(out var knownAbilityService);
+			Server.Database.ServiceRegistry.TryGet<ICharacterItemService>(out var itemService);
+
+			HandleAbilityRewards(knownAbilityService, playerCharacter, tier);
+			HandleAbilityEventRewards(knownAbilityService, playerCharacter, tier);
+			HandleItemRewards(itemService, playerCharacter, tier);
+		}
+
+		/// <summary>
+		/// Generic handler for ability rewards, processes learning and broadcasting new abilities to the player character.
+		/// Game logic and Broadcasts are synchronous. DB persistence is fire-and-forget async.
+		/// </summary>
+		/// <typeparam name="TTemplate">Type of ability template.</typeparam>
+		/// <typeparam name="TBroadcast">Type of single ability broadcast.</typeparam>
+		/// <typeparam name="TMultiBroadcast">Type of multiple ability broadcast.</typeparam>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="rewards">List of ability rewards.</param>
+		/// <param name="knowsFunc">Function to check if ability is already known.</param>
+		/// <param name="learnFunc">Function to learn new abilities.</param>
+		/// <param name="idSelector">Function to select ability ID.</param>
+		/// <param name="singleBroadcastFactory">Factory to create single ability broadcast.</param>
+		/// <param name="multiBroadcastFactory">Factory to create multiple ability broadcast.</param>
+		private void HandleAbilityGenericRewards<TTemplate, TBroadcast, TMultiBroadcast>(
+			ICharacterKnownAbilityService knownAbilityService,
+			IPlayerCharacter character,
+			List<TTemplate> rewards,
+			Func<IAbilityKnowledgeController, int, bool> knowsFunc,
+			Action<IAbilityKnowledgeController, List<TTemplate>> learnFunc,
+			Func<TTemplate, int> idSelector,
+			Func<TTemplate, TBroadcast> singleBroadcastFactory,
+			Func<List<TBroadcast>, TMultiBroadcast> multiBroadcastFactory
+		)
+			where TTemplate : class
+			where TBroadcast : struct, IBroadcast
+			where TMultiBroadcast : struct, IBroadcast
+		{
+			if (rewards == null || rewards.Count < 1) return;
+			if (!character.TryGet(out IAbilityKnowledgeController abilityController)) return;
+
+			/* Every row quotes the session claim the reward was earned under, captured here with it,
+			 * and lands only while that claim is still held (the service's PersistOwnedAsync). A
+			 * character with no claim here is not ours to write; the reward is still learned in
+			 * memory, and the character save — gated the same way — is what would carry it. */
+			bool claimed = TryCaptureSessionClaim(character.ID, out CharacterSessionLeaseData claim);
+			if (!claimed && knownAbilityService != null)
+			{
+				Log.Warning("AchievementSystem", $"This server holds no session claim for CharID={character.ID}; its ability rewards are learned in memory only.");
+			}
+
+			List<TBroadcast> broadcasts = new List<TBroadcast>();
+
+			foreach (var reward in rewards)
+			{
+				int id = idSelector(reward);
+				if (knowsFunc(abilityController, id)) continue;
+
+				learnFunc(abilityController, new List<TTemplate> { reward });
+
+				/* Fire-and-forget async DB persist — game state already updated in-memory. Keyed on the
+				 * character, so it queues on the lane its save-and-release runs on, ahead of the
+				 * release its claim would be refused after. */
+				if (knownAbilityService != null && claimed)
+				{
+					long characterId = character.ID;
+					EnqueuePersistence(() => PersistKnownAbilityAsync(knownAbilityService, characterId, id, claim), characterId);
+				}
+
+				broadcasts.Add(singleBroadcastFactory(reward));
+			}
+
+			if (broadcasts.Count > 0)
+			{
+				Server.NetworkWrapper.Broadcast(character.Owner, multiBroadcastFactory(broadcasts), true, Channel.Reliable);
+			}
+		}
+
+		/// <summary>
+		/// Asynchronously persists a known ability to the database.
+		/// </summary>
+		/// <param name="service">The known ability service.</param>
+		/// <param name="characterId">The character ID.</param>
+		/// <param name="templateId">The ability template ID.</param>
+		/// <param name="claim">The session claim the reward was earned under.</param>
+		private async Task PersistKnownAbilityAsync(ICharacterKnownAbilityService service, long characterId, int templateId, CharacterSessionLeaseData claim)
+		{
+			try
+			{
+				/* The batched owned write, with one row. Knowledge rows carry no per-entry version (every
+				 * one is written at 1), so a row already stored comes back superseded — benign — where
+				 * the single-row write reported it as a failed duplicate. */
+				DatabaseResult<BulkWriteResult> result = await service.PersistOwnedAsync(
+					new[] { new CharacterKnownAbilityData(0, 1, characterId, templateId) },
+					ClaimsOf(claim));
+				await BulkWriteReporting.ReportAsync("AchievementSystem", "Known ability reward save", result,
+					$"CharID={characterId}, TemplateID={templateId}");
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("AchievementSystem", $"Error persisting known ability (CharID={characterId}, TemplateID={templateId}): {ex}");
+			}
+		}
+
+		/// <summary>
+		/// Handles ability rewards for achievement tiers, processes learning and broadcasting new base abilities.
+		/// </summary>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing ability rewards.</param>
+		private void HandleAbilityRewards(ICharacterKnownAbilityService knownAbilityService, IPlayerCharacter character, AchievementTier tier)
+		{
+			HandleAbilityGenericRewards<BaseAbilityTemplate, KnownAbilityAddBroadcast, KnownAbilityAddMultipleBroadcast>(
+				knownAbilityService,
+				character,
+				tier.AbilityRewards,
+				(abilityController, id) => abilityController.KnowsAbility(id),
+				(abilityController, list) => abilityController.LearnBaseAbilities(list),
+				t => t.ID,
+				t => new KnownAbilityAddBroadcast { TemplateID = t.ID },
+				list => new KnownAbilityAddMultipleBroadcast { Abilities = list.ToArray() }
+			);
+		}
+
+		/// <summary>
+		/// Handles ability event rewards for achievement tiers, processes learning and broadcasting new ability events.
+		/// </summary>
+		/// <param name="knownAbilityService">Async service for persisting known abilities, or null if unavailable.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing ability event rewards.</param>
+		private void HandleAbilityEventRewards(ICharacterKnownAbilityService knownAbilityService, IPlayerCharacter character, AchievementTier tier)
+		{
+			HandleAbilityGenericRewards<AbilityEvent, KnownAbilityEventAddBroadcast, KnownAbilityEventAddMultipleBroadcast>(
+				knownAbilityService,
+				character,
+				tier.AbilityEventRewards,
+				(abilityController, id) => abilityController.KnowsAbilityEvent(id),
+				(abilityController, list) => abilityController.LearnAbilityEvents(list),
+				t => t.ID,
+				t => new KnownAbilityEventAddBroadcast { TemplateID = t.ID },
+				list => new KnownAbilityEventAddMultipleBroadcast { AbilityEvents = list.ToArray() }
+			);
+		}
+
+		/// <summary>
+		/// Handles item rewards for achievement tiers: grants each item through the inventory
+		/// system's funnel, into the inventory when it has room for all of them and the bank
+		/// otherwise.
+		/// </summary>
+		/// <remarks>
+		/// The funnel is what completes an item — it places it, tells the client, persists it and
+		/// hands it the identity the database assigns. This system used to place items itself and
+		/// fire a write that discarded the returned id, so every reward stayed at <c>ID == 0</c>,
+		/// unequippable and rewritten as a fresh row on every save until a snapshot repaired it.
+		/// </remarks>
+		/// <param name="itemService">Unused; kept so the call site reads as before.</param>
+		/// <param name="character">Player character receiving rewards.</param>
+		/// <param name="tier">Achievement tier containing item rewards.</param>
+		private void HandleItemRewards(ICharacterItemService itemService, IPlayerCharacter character, AchievementTier tier)
+		{
+			List<BaseItemTemplate> itemRewards = tier.ItemRewards;
+			if (itemRewards == null ||
+				itemRewards.Count < 1)
+			{
+				return;
+			}
+
+			if (!Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			{
+				Log.Error("AchievementSystem", $"Achievement item rewards dropped for CharID={character.ID}: no inventory system to grant through.");
+				return;
+			}
+
+			InventoryType destination;
+			if (character.TryGet(out IInventoryController inventoryController) &&
+				inventoryController.FreeSlots() >= itemRewards.Count)
+			{
+				destination = InventoryType.Inventory;
+			}
+			else if (character.TryGet(out IBankController bankController) &&
+					 bankController.FreeSlots() >= itemRewards.Count)
+			{
+				destination = InventoryType.Bank;
+			}
+			else
+			{
+				// Both inventory and bank are full — notify the player so items are not silently lost.
+				Log.Warning("AchievementSystem", $"Achievement item rewards dropped for CharID={character.ID}: both inventory and bank are full ({itemRewards.Count} items lost).");
+				Server.NetworkWrapper.Broadcast(character.Owner, new ChatBroadcast()
+				{
+					Channel = ChatChannel.System,
+					Text = "Your inventory and bank are full. Achievement item rewards could not be delivered.",
+				}, true, Channel.Reliable);
+				return;
+			}
+
+			for (int i = 0; i < itemRewards.Count; ++i)
+			{
+				if (itemRewards[i] == null)
+				{
+					continue;
+				}
+				if (!inventorySystem.TryGrantItem(character, new Item(itemRewards[i], 1), destination))
+				{
+					Log.Warning("AchievementSystem", $"Achievement item reward '{itemRewards[i].Name}' could not be placed for CharID={character.ID}.");
+				}
+			}
+		}
+
+	}
+}

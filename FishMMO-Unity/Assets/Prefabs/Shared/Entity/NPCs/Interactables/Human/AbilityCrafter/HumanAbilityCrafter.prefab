@@ -112,14 +112,10 @@ GameObject:
   - component: {fileID: -3382641068409518765}
   - component: {fileID: -4468559157413045786}
   - component: {fileID: 2119787057571980410}
-  - component: {fileID: 7824644601122125574}
-  - component: {fileID: 2150267445961412781}
   - component: {fileID: 2590329384573566316}
   - component: {fileID: 2898743231479186744}
   - component: {fileID: 1969692536659621655}
-  - component: {fileID: 9168136948286660220}
   - component: {fileID: 1880843646148751759}
-  - component: {fileID: 6308388451046359136}
   - component: {fileID: 883309660528142514}
   - component: {fileID: 5683718218547824251}
   - component: {fileID: 7268034718613146375}
@@ -296,8 +292,8 @@ MonoBehaviour:
   - {fileID: -3382641068409518765}
   - {fileID: 0}
   - {fileID: 2119787057571980410}
-  - {fileID: 7824644601122125574}
-  - {fileID: 2150267445961412781}
+  - {fileID: 0}
+  - {fileID: 0}
   - {fileID: 0}
   - {fileID: 2590329384573566316}
   - {fileID: 2898743231479186744}
@@ -343,48 +339,6 @@ MonoBehaviour:
   observedResourcePushInterval: 6
   observedResourceOutOfCombatPushInterval: 12
   observedResourceSecondaryPushInterval: 30
---- !u!114 &7824644601122125574
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 284d97b8349b8724788d1bc43d606024, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 4
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
-  onBuffApplyTriggers: []
-  onBuffRemoveTriggers: []
---- !u!114 &2150267445961412781
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ef74936c7389fd247bbf0437fe619b20, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _componentIndexCache: 5
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
-  onDamageTriggers: []
-  onDamagedTriggers: []
-  onHealTriggers: []
-  onHealedTriggers: []
-  onKillTriggers: []
-  onKilledTriggers: []
-  onResurrectTriggers: []
-  onResurrectedTriggers: []
-  immortal: 0
-  combatDurationTicks: 600
 --- !u!114 &2590329384573566316
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -480,31 +434,6 @@ MonoBehaviour:
   _updateHostVisibility: 1
   _observerConditions:
   - {fileID: 11400000, guid: 1fb3c09f53bd2c3c5998626e7d841b22, type: 2}
---- !u!114 &9168136948286660220
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eb1b972667baff74aabba2d7602c53d0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityController
-  _componentIndexCache: 255
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
-  AbilitySpawner: {fileID: 8284866284985655959}
-  AttackSpeedReductionTemplate: {fileID: 0}
-  CastSpeedReductionTemplate: {fileID: 0}
-  CooldownReductionTemplate: {fileID: 0}
-  ObserverPredictionWindowTicks: 1
-  BloodResourceConversionTemplate: {fileID: 0}
-  ChargedTemplate: {fileID: 0}
-  ChanneledTemplate: {fileID: 0}
-  onAbilityActivateTriggers: []
-  onAbilityCompleteTriggers: []
 --- !u!114 &1880843646148751759
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -517,21 +446,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: caae36f1c31918fb3b93631b89c69b12, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CharacterPredictionController
-  _componentIndexCache: 255
-  _addedNetworkObject: {fileID: -4468559157413045786}
-  _networkObjectCache: {fileID: -4468559157413045786}
---- !u!114 &6308388451046359136
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4811273059840484731}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f852b64f675784b4ebdf6e98b0726660, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.CooldownController
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: -4468559157413045786}
   _networkObjectCache: {fileID: -4468559157413045786}

@@ -101,7 +101,7 @@ namespace FishMMO.Shared
 		/// <param name="template">The buff being applied.</param>
 		/// <param name="caster">The character applying it; null for a source with none.</param>
 		/// <returns>True when the application must be refused.</returns>
-		public static bool RefusesBuff(ICharacter target, BaseBuffTemplate template, ICharacter caster)
+		public static bool RefusesBuff(ICharacter target, IBuffTemplateInfo template, ICharacter caster)
 		{
 			if (target == null || template == null)
 			{

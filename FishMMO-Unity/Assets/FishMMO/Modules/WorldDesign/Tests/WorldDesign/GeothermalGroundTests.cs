@@ -652,7 +652,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				string name = Path.GetFileNameWithoutExtension(path);
 				bool basin = name == "Geyser Basin", sulphur = name == "Sulphur Flats";
 				BiomeGeothermalShares expected = basin ? Basin : sulphur ? new BiomeGeothermalShares(0f, 0f, 0.7f, 0f)
-					: name == "Volcanic Temple" ? new BiomeGeothermalShares(0f, 0.15f, 0.6f, 0.25f) : BiomeGeothermalShares.Today;
+					: name == "Volcanic Temple" ? new BiomeGeothermalShares(0f, 0.15f, 0.6f, 0.25f)
+					// An authored round may write its own split (Salt Flat's brine springs and chimneys, round G7): its file's.
+					: BiomeAuthoredRounds.Contains(name) && BiomeArtSpec.For(name)?.GeothermalShares is BiomeGeothermalShares own ? own
+					: BiomeGeothermalShares.Today;
 				Match split = Regex.Match(text, @"\n  geothermal:\n    Geyser: ([\d.]+)\n    HotSpring: ([\d.]+)\n    Fumarole: ([\d.]+)\n    MudPot: ([\d.]+)");
 				if (split.Success)
 				{
@@ -665,7 +668,11 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(basin, Is.False, "the basin's split is authored");
 				}
 				Assert.That(Regex.IsMatch(text, @"\n    Hot: 1"), Is.EqualTo(basin || sulphur), path);
-				Assert.That(Regex.IsMatch(text, @"useHeatBand: 1"), Is.False, path);
+				// A heat band is a round's to author (the basin's G12 round authors one).
+				if (!BiomeAuthoredRounds.Contains(name))
+				{
+					Assert.That(Regex.IsMatch(text, @"useHeatBand: 1"), Is.False, path);
+				}
 				if (basin)
 				{
 					StringAssert.Contains("Fingerprint: Steam@5000", text, "the basin emits Steam at 0.5, authored");

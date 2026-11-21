@@ -80,15 +80,23 @@ namespace FishMMO.UnitTests.PointsOfInterest
 		[Test]
 		public void GatheringCatalogue_NamesAreUniqueAndNeverShareAnAddress()
 		{
-			var addresses = new HashSet<string>();
+			/* Each node is one template and one networked prefab: their names never repeat, and no prefab's address is another
+			 * row's node or item. An item is its own asset type (a CachedScriptableObject's ID is its type's name and its own), so
+			 * it may carry its node's name (Galerna-stone, Dulse: half the catalogue) and several nodes may yield one item
+			 * (Copper Ore); the generator registers entries by GUID and the game loads them by label, never by address. */
+			var nodes = new HashSet<string>();
+			var prefabs = new HashSet<string>();
 			foreach (GatheringResource resource in GatheringResourceCatalogue.All)
 			{
-				Assert.IsTrue(addresses.Add(resource.Node), $"node '{resource.Node}' repeats an address");
-				Assert.IsTrue(addresses.Add(resource.Node + " Node"), $"prefab of '{resource.Node}' repeats an address");
-				Assert.IsTrue(addresses.Add(resource.Item), $"item '{resource.Item}' repeats an address");
+				Assert.IsTrue(nodes.Add(resource.Node), $"node '{resource.Node}' repeats");
+				Assert.IsTrue(prefabs.Add(resource.Node + " Node"), $"prefab of '{resource.Node}' repeats an address");
 				Assert.That(resource.Tier, Is.InRange(1, 4), resource.Node);
 				Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path($"{GatheringResourceCatalogue.VisualFolder}/{resource.Visual}.prefab")),
 					$"'{resource.Node}' names a visual that does not exist: {resource.Visual}");
+			}
+			foreach (GatheringResource resource in GatheringResourceCatalogue.All)
+			{
+				Assert.IsFalse(prefabs.Contains(resource.Node) || prefabs.Contains(resource.Item), $"'{resource.Node}' or its item is spelled like a node prefab");
 			}
 			foreach (GatheringFamily family in System.Enum.GetValues(typeof(GatheringFamily)))
 			{

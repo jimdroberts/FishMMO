@@ -94,7 +94,10 @@ namespace FishMMO.RenderScratch
 					 * the two components applied, not a difference between two pieces of markup. */
 					if (name == "UICharacterSheet")
 					{
-						queue.Add(Make("UIEquipment", path, Panels.Equipment));
+						if (CharacterSheetEquipment != null)
+						{
+							queue.Add(Make("UIEquipment", path, CharacterSheetEquipment));
+						}
 						queue.Add(Make("UIInspect", path, Panels.Inspect));
 						continue;
 					}
@@ -158,6 +161,12 @@ namespace FishMMO.RenderScratch
 		/// <summary>Modules' panels (Factions adds UIFactions).</summary>
 		public static readonly Dictionary<string, Action<GameObject, UIDocument>> ExtraPopulators = new Dictionary<string, Action<GameObject, UIDocument>>();
 
+		/// <summary>
+		/// The equipment window's capture of the shared character sheet, beside the inspect window's; the Items module sets it
+		/// (null without the module: the sheet is captured as the inspect window only).
+		/// </summary>
+		public static Action<GameObject, UIDocument> CharacterSheetEquipment;
+
 		/// <summary>Modules' windows captured several times, one capture per (label, populator): the guild's tabs.</summary>
 		public static readonly Dictionary<string, List<(string label, Action<GameObject, UIDocument> populate)>> ExtraCaptures =
 			new Dictionary<string, List<(string label, Action<GameObject, UIDocument> populate)>>();
@@ -166,17 +175,12 @@ namespace FishMMO.RenderScratch
 		{
 			return new Dictionary<string, Action<GameObject, UIDocument>>
 			{
-				{ "UIChat",           Panels.Chat },
 				{ "UITooltip",        Panels.Tooltip },
 				{ "UIContextMenu",    Panels.ContextMenu },
 				{ "UIDropdown",       Panels.Dropdown },
 				{ "UIDialogBox",      Panels.DialogBox },
 				{ "UIColorPicker",    Panels.ColorPicker },
 				{ "UILoadingScreen",  Panels.LoadingScreen },
-				{ "UIDeathDialog",    Panels.DeathDialog },
-				{ "UIInventory",      Panels.Inventory },
-				{ "UIBank",           Panels.Bank },
-				{ "UIAchievements",   Panels.Achievements },
 				{ "UIInstance",       Panels.InstancePanel },
 			};
 		}

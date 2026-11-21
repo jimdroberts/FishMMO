@@ -5,6 +5,7 @@ using FishNet.Object;
 using FishNet.Observing;
 using FishNet.Transporting;
 using UnityEngine;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -344,7 +345,7 @@ namespace FishMMO.Shared
 					 * whether that client could attack this character, and so whether its view of it
 					 * has to be tick-exact. */
 					float engagementRange = ObserverStreamingPolicy.ResolveEngagementRange(
-						observerObject.TryGetComponent(out AbilityController observerAbilities)
+						observerObject.TryGetComponent(out IAbilityController observerAbilities)
 							? observerAbilities.LongestKnownAbilityRange
 							: 0f);
 

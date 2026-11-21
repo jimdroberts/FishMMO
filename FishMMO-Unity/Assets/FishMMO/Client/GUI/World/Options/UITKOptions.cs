@@ -398,7 +398,7 @@ namespace FishMMO.Client
 			/* The extra hotkey bars' modifier and page actions are created at run time, as many as
 			 * the game has bars, so they cannot be rows in a fixed table; the class that creates
 			 * them names them. */
-			return HotkeyKeyMap.TryGetDisplayName(actionName, out display) ? display : actionName;
+			return ModuleInputActions.TryGetDisplayName(actionName, out display) ? display : actionName;
 		}
 
 		/// <summary>

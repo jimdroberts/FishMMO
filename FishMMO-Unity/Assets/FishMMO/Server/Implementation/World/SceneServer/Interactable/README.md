@@ -4,6 +4,11 @@
 per-connection interaction guard, dispatch to the interactable's ECA triggers and to module handlers, server-authoritative
 dialogue, container looting, and portal activations.
 
+> Dialogue sessions and container takes moved to the [World Interactables module](../../../../../Modules/WorldInteractables/README.md)
+> on 2026-11-20 (`WorldInteractableSystem`; its [Server/README.md](../../../../../Modules/WorldInteractables/Server/README.md)
+> documents them). Its requests take this system's interaction guard (`IInteractableSystem.TryBeginInteraction`) and
+> resolve object IDs through `TryResolveSceneObject`.
+
 ## Overview
 
 **Interaction behaviour is data, not code.** There is no server-side handler registry: `InteractableSystem` validates
@@ -15,8 +20,6 @@ the triggers run.
 | Partial class | Handles |
 |---|---|
 | `InteractableSystem.cs` | Broadcast registration, validation, ingress guard, dispatch, `OnPlayerInteracting`, NPC look-at, main-thread queue drain, `SendNewItemBroadcast` |
-| `InteractableSystem.Dialogue.cs` | `DialogueChoiceBroadcast`: server-authoritative dialogue sessions and the per-character choice cache |
-| `InteractableSystem.Container.cs` | `ContainerTakeItemBroadcast`: taking items from an open container |
 | `InteractableSystem.Portal.cs` | The server's `PortalActivationStore`: reads and writes `character_portals` and `world_portal_state`, and tells clients which portals are open for them. The use of a portal is decided by `PortalGate` in the shared assembly. |
 
 **What moved to modules** (each with its own system and README): merchants, mail and corpse loot (Commerce), ability
@@ -45,7 +48,6 @@ cleanup.
 
 | Constant | Value | Description |
 |---|---|---|
-| `MaxActiveDialogueSessions` | 2048 | Concurrent dialogue sessions before new ones are refused |
 | `MaxCachedChoiceCharacters` | 4096 | Characters with cached dialogue choices before eviction |
 
 ## Broadcast Handlers
@@ -53,8 +55,6 @@ cleanup.
 | Broadcast | Handler | Partial | Purpose |
 |---|---|---|---|
 | `InteractableBroadcast` | `OnServerInteractableBroadcastReceived` | `InteractableSystem.cs` | Use an interactable |
-| `DialogueChoiceBroadcast` | `OnServerDialogueChoiceBroadcastReceived` | `InteractableSystem.Dialogue.cs` | Choose a dialogue option |
-| `ContainerTakeItemBroadcast` | `OnServerContainerTakeItemBroadcastReceived` | `InteractableSystem.Container.cs` | Take an item from a container |
 
 ## Usage
 
@@ -76,37 +76,6 @@ cleanup.
 8. Calls `interactable.ExecuteOnInteract(new PlayerInteractionEventData(...))` to run the prefab's
    `OnInteractTriggers`. The event data carries a `SendNewItemBroadcast` callback so triggers that
    grant items can tell the client.
-
-### Dialogue Session
-
-**Start** (`StartDialogueSession` / `StartECADialogueSession`):
-1. Ends any existing session for the character.
-2. Checks bounded session capacity (`MaxActiveDialogueSessions`).
-3. Evaluates start node conditions via ECA.
-4. Executes start node on-enter actions.
-5. Loads cached choices for the character + template.
-6. Creates `DialogueSession` and broadcasts `DialogueStartBroadcast`.
-
-**Choice** (`OnServerDialogueChoiceBroadcastReceived`):
-1. Validates session exists and node matches.
-2. Validates template, scene, and range (skipped for ECA sessions).
-3. Validates choice index bounds.
-4. Evaluates choice conditions via ECA.
-5. Executes current node on-exit actions and choice on-select actions.
-6. Updates choice bitmask.
-7. If `NextNodeId < 0`: persists cached choices if enabled, broadcasts `DialogueEndBroadcast`.
-8. Otherwise: evaluates next node conditions, executes on-enter actions, advances session, broadcasts `DialogueChoiceResultBroadcast`.
-
-### Container Take Item
-
-`OnServerContainerTakeItemBroadcastReceived(conn, msg, channel)`:
-
-1. Validates connection, character, inventory controller, and ingress guard.
-2. Validates scene object and interactable in range.
-3. Confirms interactable is `IContainer` + `IItemContainer` with a template.
-4. Removes item from container slot.
-5. Calls `SendNewItemBroadcast` to add to inventory; on failure, puts item back.
-6. If container is empty and `DespawnWhenEmpty` is enabled, despawns.
 
 ### Inventory Persistence
 
@@ -170,7 +139,6 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 - Invalid requests fail closed with no mutation.
 - Scene/object/range checks prevent cross-scene and spoofed interaction attempts.
 - Ability craft event selection rejects duplicates and unknown/unowned events.
-- Dialogue sessions are bounded; excess sessions are rejected with a warning.
 - World item pickup uses `ConcurrentDictionary` to prevent item duplication.
 - Async enqueue failures are handled explicitly: known-ability and crafted-ability grants fail closed (no learn mutation, no charge on rejection); writes that must not be dropped go through `EnqueuePersistence`, which the worker admits even past its backpressure threshold.
 - Main-thread completion paths revalidate runtime state before mutating or broadcasting.
@@ -183,14 +151,6 @@ list is empty is interactable but inert — see [Operational Checks](#operationa
 | Initialization success | Confirm `InteractableSystem` logs "Initialized" without errors on server startup |
 | Trigger wiring | Confirm each interactable prefab has its `OnInteractTriggers` list populated; an empty list means interacting does nothing |
 | Data containers available | Verify `IInteractableSystemRuntimeData` and `IInteractableSystemMainThreadQueueData` resolve from `DataContainerRegistry` |
-| Dialogue start | Interact with `DialogueInteractable`; confirm `DialogueStartBroadcast` with template ID and start node |
-| Dialogue choice | Send `DialogueChoiceBroadcast` with valid node/choice; confirm `DialogueChoiceResultBroadcast` or `DialogueEndBroadcast` |
-| Dialogue range check | Move out of range during dialogue; confirm session ends with `DialogueEndBroadcast` |
-| ECA dialogue | Trigger `DisplayDialogueAction`; confirm dialogue session starts without physical interactable |
-| Dialogue session cap | Fill `MaxActiveDialogueSessions`; confirm new sessions are rejected with warning |
-| Container take item | Send `ContainerTakeItemBroadcast`; confirm item appears in inventory via `InventorySetMultipleItemsBroadcast` |
-| Container auto-despawn | Take last item from `DespawnWhenEmpty` container; confirm container despawns |
-| Container failed pickup | Take item with full inventory; confirm item is returned to container slot |
 | World item pickup | Interact with `WorldItem`; confirm item added to inventory and world item despawned |
 | World item duplication guard | Interact with same `WorldItem` from two connections simultaneously; confirm only one succeeds |
 | Gathering node | Interact with `GatheringNode`; confirm `GatheringNodeBroadcast` and item grant |
@@ -241,39 +201,6 @@ OnServerInteractableBroadcastReceived(conn, msg, channel)
 └─ 7. RaisePlayerInteracting (modules), then interactable.ExecuteOnInteract(...)
        │
        └── (Trigger actions: broadcast, state change, achievement, etc.)
-```
-
-### Dialogue Flow
-
-```
-StartDialogueSession(character, sceneObject, dialogue)
-│
-├─ EndDialogueSession (close any existing)
-├─ Bounded capacity check
-├─ Evaluate start node conditions (ECA)
-├─ Execute start node on-enter actions
-├─ Load cached choices
-├─ Create DialogueSession
-└─ Broadcast DialogueStartBroadcast
-
-OnServerDialogueChoiceBroadcastReceived(conn, msg, channel)
-│
-├─ 1. Validate connection + character + ingress guard
-├─ 2. Validate session exists + node matches
-├─ 3. Validate template + scene + range
-├─ 4. Validate choice index bounds
-├─ 5. Evaluate choice conditions (ECA)
-├─ 6. Execute current node on-exit actions
-├─ 7. Execute choice on-select actions
-├─ 8. Update choice bitmask
-└─ 9. If NextNodeId < 0:
-       │    ├── Cache choices if enabled
-       │    └── EndDialogueSessionWithBroadcast
-       └── Else:
-            ├── Evaluate next node conditions
-            ├── Execute next node on-enter actions
-            ├── Advance session (CurrentNodeId = NextNodeId)
-            └── Broadcast DialogueChoiceResultBroadcast
 ```
 
 ## License

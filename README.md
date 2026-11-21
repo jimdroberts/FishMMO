@@ -103,7 +103,7 @@ All three are launched from a single `GameServer` executable with a command-line
 ### Core and modules
 
 The Unity code is split into a **core** and optional **modules**. The core is what every game needs: log in, create a
-character, enter a world scene, move, fight, chat and save. A module is a feature a game may leave out: delete its
+character, enter a world scene, move and save; everything else is moving into modules (2026-11-20). A module is a feature a game may leave out: delete its
 folder under `FishMMO-Unity/Assets/FishMMO/Modules/` and the game still compiles, builds and runs. Its database tables
 and rows stay in place, unused. The core never names a module; modules plug in through assembly attributes
 (`GameModule`, `CharacterPart`, `CharacterPersistence`, `HarmRelation`, `OperatorCommandProvider`) and Addressables
@@ -112,16 +112,22 @@ labels (`SceneServer_Systems` for server systems, `ClientWorldGUI_Panels` for wi
 | Module | What it is | Remove together with |
 |---|---|---|
 | Ability Crafting | Crafting new abilities at an ability crafter | |
+| Achievements | Achievement progress, tiers, rewards, the window | |
+| Appearance | Race proportions and blend shapes, body regions hidden under armour, equipment drawn on the body | |
 | Archetypes | A player's archetype: set, announced, saved, checked | |
+| Chat | Conversation: the channels, delivery across servers, the chat window | |
 | Commerce | Merchants, mail, corpse loot, player trade | |
 | Factions | Faction standings, the aggression toggle | |
+| Hotkeys | The hotkey bar: bindings, keys, stacked or paged bars | |
 | Housing | Plots, building, rent, guests, the house vault | |
 | Leaderboards | PvP and PvE boards | |
+| Map | The world map, the minimap, fog of war, map notes | World Design |
 | Matchmaking | Group finder, dungeon finder and instances, arenas | |
 | Quests | Quests, the quest log, quest givers | |
 | Social | Friends, party, guild | |
 | Staff and Support | `/gm`, `/admin`, the staff console, reports and tickets | |
 | Travel | Waypoint discovery and fast travel | |
+| World Interactables | Containers, NPC dialogue, gathering, lore, shrines, capture points, switches, bindstones | World Design |
 | World Simulation | Sky, time, weather, climate, biomes, the atlas | All world modules |
 | Water | Sea, shores, rivers, lakes, lava | All world modules |
 | Terrain | GPU drawing of trees, props, grass and scatter | World Test Bed, World Design, Naming |

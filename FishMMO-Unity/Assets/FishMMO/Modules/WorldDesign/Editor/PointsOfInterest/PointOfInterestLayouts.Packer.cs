@@ -1023,7 +1023,22 @@ namespace FishMMO.Shared.WorldDesign
 					Station a = stations[i], b = stations[(i + 1) % S];
 					float gap = S == 1 ? circumference : Mathf.Repeat(b.U - a.U, circumference);
 					runLength[i] = gap - a.Join - b.Join;
-					runModules[i] = runLength[i] < module * 0.5f ? 0 : ModulesFor(runLength[i], module);
+					/* Counted on the longer of the line's arc and the straight span between the stations' jambs (the path off a lone
+					 * gate's jambs and round the line where it is the only station): a small ring's big gate or tower stands off the line,
+					 * so its jambs can lie further apart than the arc between them, and one module counted on the arc was laid 9-11 m
+					 * long for a 6 m module (FortificationLayoutTests). */
+					Vector2 jambA = a.At + a.Side * a.Join, jambB = b.At - b.Side * b.Join;
+					float counted = S == 1
+						? runLength[i] + Vector2.Distance(jambA, PointAt(a.U + a.Join)) + Vector2.Distance(jambB, PointAt(a.U + a.Join + runLength[i]))
+						: Mathf.Max(runLength[i], Vector2.Distance(jambA, jambB));
+					runModules[i] = runLength[i] < module * 0.5f ? 0 : ModulesFor(counted, module);
+					if (S == 1 && counted < 5f * module)
+					{
+						/* A lone gate filling most of a tiny ring (a pass gate at its smallest: a 12 m gatehouse on a 14 m site) leaves
+						 * a loop no row of modules lays round without folding back on itself: the gate stands alone, as when the ring is
+						 * too small at all (above). */
+						return null;
+					}
 				}
 				// A walked curtain's stairs: beside each gate, on alternate sides round the ring (both where no tower stands on it),
 				// against the first two modules off the gate, laid straight for it.

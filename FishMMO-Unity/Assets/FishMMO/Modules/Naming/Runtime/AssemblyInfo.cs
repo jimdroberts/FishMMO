@@ -7,3 +7,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.Shared.NameGenerator.Editor")]
 [assembly: InternalsVisibleTo("FishMMO.WorldDesign.Editor")]
 [assembly: InternalsVisibleTo("FishMMO.WorldDesign.Tests")]
+[assembly: InternalsVisibleTo("FishMMO.Buffs.Tests")]

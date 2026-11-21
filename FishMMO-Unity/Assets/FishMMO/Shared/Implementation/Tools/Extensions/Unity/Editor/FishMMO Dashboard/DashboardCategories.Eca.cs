@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.Core;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -20,7 +19,7 @@ namespace FishMMO.Shared
 		public void AddCategories(DashboardCategoryList list)
 		{
 			list.Add<Trigger>("Triggers", "ECA",
-				"Assets/Templates/Entity/ECA",
+				"Assets/FishMMO/Templates/Entity/ECA",
 				"FishMMO/ECA/Trigger");
 		}
 	}

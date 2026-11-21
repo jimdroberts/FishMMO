@@ -40,7 +40,7 @@ namespace FishMMO.RenderScratch
 			if (!InterfaceScalingRender.Hud.Exists(m => m.Uxml == PartyUxml))
 			{
 				// Before the chat, where it always stood: later mounts draw over earlier ones.
-				int chat = InterfaceScalingRender.Hud.FindIndex(m => m.PanelType == typeof(UITKChat));
+				int chat = InterfaceScalingRender.Hud.FindIndex(m => m.Uxml != null && m.Uxml.EndsWith("/UIChat.uxml", StringComparison.Ordinal));
 				InterfaceScalingRender.Hud.Insert(chat < 0 ? InterfaceScalingRender.Hud.Count : chat,
 					new InterfaceScalingRender.HudMount { Uxml = PartyUxml, Populate = PartyPanel });
 			}

@@ -123,6 +123,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			int seen = 0;
 			foreach (string path in Directory.GetFiles(ProjectFiles.Folder(folder), "*.asset"))
 			{
+				// A round names its own modes (BiomeAuthoredRounds), the unauthored biomes none.
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				string text = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 				foreach (Match m in block.Matches(text))
 				{
@@ -494,8 +499,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Wiring_SourceScan()
 		{
 			string atlas = Read(Client + "/Scatter/DetailScatterAtlas.cs");
-			StringAssert.Contains("data[cb + 8] = c < st.Channels ? ch.ModeWord : 0u;", atlas);
-			StringAssert.Contains("data[cb + 9] = c < st.Channels ? ch.ModeAngles : 0u;", atlas);
+			// Written for the terrain's own channels only (the GPU reads up to the header's channel count).
+			StringAssert.Contains("for (int c = 0; c < st.Channels; c++)", atlas);
+			StringAssert.Contains("data[cb + 8] = ch.ModeWord;", atlas);
+			StringAssert.Contains("data[cb + 9] = ch.ModeAngles;", atlas);
 
 			string terrain = Read(Client + "/Scatter/DetailScatterTerrain.cs");
 			StringAssert.Contains("terrain.GetComponent<FishMMO.Shared.TerrainScatterModes>()", terrain);

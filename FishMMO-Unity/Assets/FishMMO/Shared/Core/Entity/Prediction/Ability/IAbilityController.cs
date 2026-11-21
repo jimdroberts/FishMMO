@@ -9,7 +9,12 @@ namespace FishMMO.Shared.Core
 	/// Consumers that only need to query or modify known abilities should depend on
 	/// IAbilityKnowledgeController instead for better interface segregation.
 	/// </summary>
-	public interface IAbilityController : IAbilityKnowledgeController
+	/// <remarks>
+	/// The core's view of a character's casting (2026-11-20): the Abilities module's controller implements it, and the core's
+	/// movement, prediction and observer streaming read it without naming the module. Known abilities and their events are
+	/// the module's <c>IAbilityKnowledgeController</c>.
+	/// </remarks>
+	public interface IAbilityController : ICharacterBehaviour
 	{
 		/// <summary>
 		/// Fired when a consumable changed the inventory row that held it. Arguments: the character,
@@ -126,5 +131,11 @@ namespace FishMMO.Shared.Core
 		/// Triggers invoked on the server when an ability activation completes (non-replay).
 		/// </summary>
 		List<Trigger> OnAbilityCompleteTriggers { get; }
+
+		/// <summary>The longest range among the abilities the character knows (observer streaming keeps that far in view).</summary>
+		float LongestKnownAbilityRange { get; }
+
+		/// <summary>True while an ability object this character cast is live (prediction holds its replays for them).</summary>
+		bool HasLiveObjects { get; }
 	}
 }

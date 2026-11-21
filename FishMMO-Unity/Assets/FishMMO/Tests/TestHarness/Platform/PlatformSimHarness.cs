@@ -603,6 +603,12 @@ namespace FishMMO.TestHarness
 			// on the live state it replaced.
 			KinematicCharacterMotorState liveBefore = client.Motor.GetState();
 			rollbacks++;
+			// Capture trace (SimCapture overlay): where the rollback landed and the path the replay re-walked.
+			LastRollbackSnapshot = snapshot.MotorState.Position;
+			LastRollbackLive = liveBefore.Position;
+			LastRollbackTick = snapshot.Tick;
+			LastReplayPath.Clear();
+			LastReplayPath.Add(snapshot.MotorState.Position);
 
 			client.Motor.ApplyState(snapshot.MotorState);
 			client.Rider.transform.SetPositionAndRotation(client.Motor.TransientPosition, client.Motor.TransientRotation);
@@ -632,6 +638,7 @@ namespace FishMMO.TestHarness
 				Vector3 replayPlatformVelocity = PlatformVelocityUnder(client, live: false, ringTick: j);
 				client.Rider.SimulateTick(inputs[j % RingSize], replayPlatformVelocity, TickDelta);
 				predictedStates[j % RingSize] = client.Motor.GetState();
+				LastReplayPath.Add(client.Motor.TransientPosition);
 			}
 
 			if (livePlatformPoses != null)
@@ -1084,6 +1091,22 @@ namespace FishMMO.TestHarness
 		public int WaterEntries => waterEntries;
 
 		public int CompletedCrossings => completedCrossings;
+
+		/// <summary>Snapshots compared, mispredictions among them, and rollbacks run (capture captions).</summary>
+		public long SnapshotsChecked => snapshotsChecked;
+		public long Mispredictions => mispredictions;
+		public long Rollbacks => rollbacks;
+		public long IdentityChecks => identityChecks;
+
+		/// <summary>The latest rollback: the authoritative pose it restored, the live pose it replaced, and its tick.</summary>
+		public Vector3 LastRollbackSnapshot { get; private set; }
+		public Vector3 LastRollbackLive { get; private set; }
+		public uint LastRollbackTick { get; private set; }
+		/// <summary>The rider positions the latest replay re-simulated, snapshot first.</summary>
+		public readonly List<Vector3> LastReplayPath = new List<Vector3>(64);
+		/// <summary>Collision layers of the two twin worlds.</summary>
+		public static int ClientWorldLayer => ClientLayer;
+		public static int ServerWorldLayer => ServerLayer;
 
 		/// <summary>One-line live state for headless diagnosis: where is the rider, where is the
 		/// ferry, and what does the brain think it is doing.</summary>

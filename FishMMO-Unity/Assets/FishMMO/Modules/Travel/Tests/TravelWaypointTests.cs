@@ -309,43 +309,6 @@ namespace FishMMO.UnitTests
 			Assert.IsFalse(receiver.IsUnlocked("Town", 0));
 		}
 
-		// ── MapContent ───────────────────────────────────────────────────────────
-
-		[Test]
-		public void AppendWaypoints_DrawsOnlyUnlockedOnes_RegardlessOfFog()
-		{
-			WaypointController controller = NewHost("Controller").AddComponent<WaypointController>();
-			controller.InitializeOnce(new MockCharacter(1));
-			controller.Restore("Town", 0, 0b10UL);
-
-			WorldSceneDetails details = new WorldSceneDetails();
-			details.Waypoints.Add(0, new SceneWaypointDetails() { Index = 0, Name = "Hidden", Position = Vector3.zero });
-			details.Waypoints.Add(1, new SceneWaypointDetails() { Index = 1, Name = "Found", Description = "A stone.", Position = new Vector3(10, 0, 10) });
-
-			List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
-			MapContent.AppendWaypoints(results, details, "Town", controller, forWorldMap: true);
-
-			Assert.AreEqual(1, results.Count);
-			Assert.IsTrue(results[0].IsWaypoint);
-			Assert.AreEqual(1, results[0].WaypointIndex);
-			Assert.AreEqual(MapMarkerType.Waypoint, results[0].Type);
-			Assert.AreEqual("Found", results[0].Label);
-			StringAssert.Contains("A stone.", results[0].Tooltip);
-
-			results.Clear();
-			MapContent.AppendWaypoints(results, details, "Town", controller, forWorldMap: false);
-			Assert.AreEqual(1, results.Count);
-			Assert.IsNull(results[0].Label, "The minimap has no room for labels.");
-
-			results.Clear();
-			MapContent.AppendWaypoints(results, details, "OtherScene", controller, forWorldMap: true);
-			Assert.AreEqual(0, results.Count, "Unlocks are per scene.");
-
-			results.Clear();
-			MapContent.AppendWaypoints(results, details, "Town", null, forWorldMap: true);
-			Assert.AreEqual(0, results.Count, "No record, nothing drawn.");
-		}
-
 		private static void SetIndex(Waypoint waypoint, int index)
 		{
 			FieldInfo field = typeof(Waypoint).GetField("waypointIndex", BindingFlags.NonPublic | BindingFlags.Instance);

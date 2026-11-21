@@ -162,8 +162,17 @@ namespace FishMMO.UnitTests
 			 * pooled respawn, so only that is held to the symmetry rule. */
 			Regex registerPattern = new Regex(@"ClientManager\.RegisterBroadcast<(\w+)>", RegexOptions.Compiled);
 
+			/* The character controllers that register on start are mostly the modules' since 2026-11-20 (abilities,
+			 * pets, items, ...), so the sweep reads every module's runtime code as well as the core's. */
+			var files = new System.Collections.Generic.List<string>(Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories));
+			string modules = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules");
+			foreach (string runtime in Directory.GetDirectories(ProjectFiles.Folder(modules), "Runtime", SearchOption.AllDirectories))
+			{
+				files.AddRange(Directory.GetFiles(runtime, "*.cs", SearchOption.AllDirectories));
+			}
+
 			int checkedFiles = 0;
-			foreach (string file in Directory.GetFiles(ProjectFiles.Folder(root), "*.cs", SearchOption.AllDirectories))
+			foreach (string file in files)
 			{
 				string source = ProjectFiles.ReadAllText(file);
 				if (!source.Contains("OnStartCharacter"))

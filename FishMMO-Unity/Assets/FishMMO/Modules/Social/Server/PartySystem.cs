@@ -316,11 +316,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Achievement template awarded when a character creates a party.
 		/// </summary>
-		public AchievementTemplate PartyCreateAchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject PartyCreateAchievementTemplate;
 		/// <summary>
 		/// Achievement template awarded when a character joins a party.
 		/// </summary>
-		public AchievementTemplate PartyJoinAchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject PartyJoinAchievementTemplate;
 
 		/// <summary>
 		/// Unscaled time at which the next bounded combat-meter sweep is due.
@@ -798,9 +800,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				/* A pet is an NPC, so without this a hunter fighting entirely through their pet
 				 * would show a flat zero on the party frame for a fight they carried. */
-				if (source is Pet pet)
+				if (source is NPC companion && companion.CompanionOwner != null)
 				{
-					credit = pet.PetOwner as IPlayerCharacter;
+					credit = companion.CompanionOwner as IPlayerCharacter;
 				}
 
 				if (credit == null)

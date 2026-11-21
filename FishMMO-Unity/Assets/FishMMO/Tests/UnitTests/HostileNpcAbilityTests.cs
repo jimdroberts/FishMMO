@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -97,7 +96,8 @@ namespace FishMMO.UnitTests
 		{
 			Dictionary<string, string> names = new Dictionary<string, string>();
 
-			string templates = Path.Combine(Directory.GetCurrentDirectory(), "Assets/Templates");
+			// The archetypes are the NPCs module's templates since 2026-11-20.
+			string templates = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/NPCs/Templates");
 			if (!ProjectFiles.FolderExists(templates))
 			{
 				return names;

@@ -256,10 +256,10 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		/// <summary>The character whose relations <paramref name="character"/> acts under: a pet's owner, else itself.</summary>
+		/// <summary>The character whose relations <paramref name="character"/> acts under: a companion's (a pet's) owner, else itself.</summary>
 		public static ICharacter Principal(ICharacter character)
 		{
-			return character is Pet pet && pet.PetOwner != null ? pet.PetOwner : character;
+			return character is NPC npc && npc.CompanionOwner != null ? npc.CompanionOwner : character;
 		}
 
 		/// <summary>Adds a relation by hand (tests); a type already installed is replaced.</summary>

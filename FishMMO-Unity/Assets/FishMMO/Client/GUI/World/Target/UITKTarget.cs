@@ -125,7 +125,7 @@ namespace FishMMO.Client
 			/// <summary>Stack count label.</summary>
 			public Label Label;
 			/// <summary>The template this icon is currently bound to.</summary>
-			public BaseBuffTemplate Template;
+			public IBuffTemplateInfo Template;
 			/// <summary>True while this icon carries the debuff modifier class.</summary>
 			public bool IsDebuff;
 		}
@@ -175,7 +175,7 @@ namespace FishMMO.Client
 			/// <summary>The framed target's attribute controller, or null.</summary>
 			public ICharacterAttributeController Attributes;
 			/// <summary>The framed target's buff controller, or null.</summary>
-			public IBuffController Buffs;
+			public ICharacterBuffs Buffs;
 			/// <summary>The framed target's character component, or null.</summary>
 			public ICharacter Character;
 			/// <summary>The framed target's interactable component, or null.</summary>
@@ -328,8 +328,8 @@ namespace FishMMO.Client
 			hoverCard.QueryElements(root);
 			pinnedCard.QueryElements(root);
 
-			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
-			IBuffController.OnObservedBuffsChanged += BuffController_OnObservedBuffsChanged;
+			ICharacterBuffs.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
+			ICharacterBuffs.OnObservedBuffsChanged += BuffController_OnObservedBuffsChanged;
 
 			highlightInteractables = ClientSettings.GetGameplayToggle(ClientSettings.HighlightInteractablesKey);
 			ClientSettings.OnGameplayChanged -= ClientSettings_OnGameplayChanged;
@@ -341,7 +341,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
-			IBuffController.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
+			ICharacterBuffs.OnObservedBuffsChanged -= BuffController_OnObservedBuffsChanged;
 			ClientSettings.OnGameplayChanged -= ClientSettings_OnGameplayChanged;
 			TargetOutline.Clear();
 
@@ -691,7 +691,7 @@ namespace FishMMO.Client
 		/// character.
 		/// </summary>
 		/// <param name="buffController">The controller whose observed list changed.</param>
-		private void BuffController_OnObservedBuffsChanged(IBuffController buffController)
+		private void BuffController_OnObservedBuffsChanged(ICharacterBuffs buffController)
 		{
 			/* Static event: fires for every character on the client. Only the framed ones matter.
 			 * This is the same class of bug the local buff strips had — an unscoped static buff
@@ -726,7 +726,7 @@ namespace FishMMO.Client
 			 * change and an absurd one twenty times a second, which is what the update path used
 			 * to pay by routing straight back into this method. */
 			ICharacterAttributeController characterAttributeController = target.GetComponent<ICharacterAttributeController>();
-			IBuffController buffController = target.GetComponent<IBuffController>();
+			ICharacterBuffs buffController = target.GetComponent<ICharacterBuffs>();
 			/* Resolved through the shared rule, not a raw GetComponent. The target frame and the
 			 * interact key have to agree about which component the player is looking at: a dead
 			 * merchant carries both a Merchant and the NPC that is its own corpse, and
@@ -808,29 +808,12 @@ namespace FishMMO.Client
 			 * own TimeManager — so there is no separate display list to read, and the remaining
 			 * seconds below are computed against THIS client's tick rather than re-based by however
 			 * long ago a message arrived. */
-			if (card.Buffs?.Buffs == null)
+			if (card.Buffs == null)
 			{
 				return;
 			}
 
-			uint currentTick = card.Buffs.GetCurrentDomainTick();
-
-			foreach (Buff buff in card.Buffs.Buffs.Values)
-			{
-				BaseBuffTemplate template = buff?.Template;
-				if (template == null)
-				{
-					continue;
-				}
-
-				card.ObservedBuffModel.Add(new ObservedBuffEntry()
-				{
-					TemplateID = template.ID,
-					Stacks = buff.Stacks,
-					RemainingSeconds = buff.RemainingSeconds(currentTick),
-					TotalSeconds = template.Duration,
-				});
-			}
+			card.Buffs.CaptureObserved(card.ObservedBuffModel);
 		}
 
 		/// <summary>
@@ -1056,8 +1039,9 @@ namespace FishMMO.Client
 			{
 				ObservedBuffEntry entry = card.ObservedBuffModel[i];
 
-				BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(entry.TemplateID);
-				if (template == null)
+				// The Buffs module's template, read through the core view.
+				if (!CachedScriptableObject.TryGetByID(entry.TemplateID, out CachedScriptableObject cached) ||
+					!(cached is IBuffTemplateInfo template))
 				{
 					continue;
 				}
@@ -1188,7 +1172,7 @@ namespace FishMMO.Client
 		/// <param name="template">The buff template.</param>
 		/// <param name="stacks">Stack count above the base application.</param>
 		/// <param name="fraction">Remaining duration fraction (0-1).</param>
-		private static void BindIcon(BuffIcon icon, BaseBuffTemplate template, int stacks, float fraction)
+		private static void BindIcon(BuffIcon icon, IBuffTemplateInfo template, int stacks, float fraction)
 		{
 			icon.Template = template;
 
@@ -1228,7 +1212,10 @@ namespace FishMMO.Client
 
 			if (UIManager.TryGetTK(TOOLTIP_NAME, out UITKTooltip tooltip))
 			{
-				tooltip.Open(icon.Template, icon.Root);
+				if (icon.Template is ITooltip content)
+				{
+					tooltip.Open(content, icon.Root);
+				}
 			}
 		}
 

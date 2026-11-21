@@ -265,7 +265,7 @@ namespace FishMMO.Shared
 			// ── The asset's class, before its folder ──
 			// A server-only class must never reach a group the client loads (the catalogue names its assembly, and
 			// "Could not load the file 'FishMMO.Server'" follows), wherever the asset lives: the NPC AI templates sit
-			// under Assets/Templates. A cached class (CachedScriptableObject) is found only in the cache the boot fills
+			// under Assets/FishMMO/Templates. A cached class (CachedScriptableObject) is found only in the cache the boot fills
 			// from the preloaded labels, so it must be in the permanent group of its side, wherever it lives: the
 			// weather profiles sit under Assets/Prefabs/Client, whose folder rule made them dynamic and invisible.
 			Type mainType = AssetDatabase.GetMainAssetTypeAtPath(normalized);
@@ -324,7 +324,7 @@ namespace FishMMO.Shared
 
 			// ── Templates: always shared + permanent ──
 			// Constant data both the client and the server need at launch.
-			if (normalized.StartsWith("Assets/Templates/", StringComparison.OrdinalIgnoreCase))
+			if (normalized.StartsWith("Assets/FishMMO/Templates/", StringComparison.OrdinalIgnoreCase) || IsModuleTemplatePath(normalized))
 			{
 				return new AssetCategory
 				{
@@ -678,6 +678,18 @@ namespace FishMMO.Shared
 			}
 
 			EditorUtility.SetDirty(group);
+		}
+
+		/// <summary>True for a module's template data: Assets/FishMMO/Modules/&lt;Module&gt;/Templates/… (2026-11-20).</summary>
+		private static bool IsModuleTemplatePath(string normalized)
+		{
+			const string modules = "Assets/FishMMO/Modules/";
+			if (!normalized.StartsWith(modules, StringComparison.OrdinalIgnoreCase))
+			{
+				return false;
+			}
+			int slash = normalized.IndexOf('/', modules.Length);
+			return slash > 0 && normalized.Substring(slash).StartsWith("/Templates/", StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }

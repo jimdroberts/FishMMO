@@ -135,6 +135,8 @@ Shader "FishMMO/World HLOD"
 
             HLSLPROGRAM
             #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "Assets/FishMMO/Shaders/FishIndirectPerDraw.hlsl"
             #pragma target 4.5
 
             // -------------------------------------
@@ -223,6 +225,8 @@ Shader "FishMMO/World HLOD"
             ZWrite On ColorMask R Cull [_Cull]
             HLSLPROGRAM
             #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "Assets/FishMMO/Shaders/FishIndirectPerDraw.hlsl"
             #pragma target 4.5
             #pragma vertex DepthOnlyVertex
             #pragma fragment DepthOnlyFragment
@@ -240,6 +244,8 @@ Shader "FishMMO/World HLOD"
             ZWrite On Cull [_Cull]
             HLSLPROGRAM
             #pragma use_dxc vulkan
+            // First: the per-draw matrices the procedural setup writes, as statics DXC lets it write (FishIndirectPerDraw.hlsl).
+            #include "Assets/FishMMO/Shaders/FishIndirectPerDraw.hlsl"
             #pragma target 4.5
             #pragma vertex DepthNormalsVertex
             #pragma fragment DepthNormalsFragment

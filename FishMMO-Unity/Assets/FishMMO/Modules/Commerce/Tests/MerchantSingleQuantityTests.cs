@@ -4,6 +4,7 @@ using System.IO;
 using NUnit.Framework;
 using UnityEngine;
 using FishMMO.Shared;
+using FishMMO.Shared.Core;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -20,7 +21,7 @@ namespace FishMMO.UnitTests
 	/// not merely hidden but impossible, so a client that asks for twenty anyway still gets one.
 	/// </para>
 	/// <para>
-	/// The grant is proved against a real <c>InventoryController</c> rather than read off the
+	/// The grant is proved against a real <c>IInventoryController</c> rather than read off the
 	/// purchase handler, because the guarantee does not come from the handler's clamp alone —
 	/// <c>Item</c> refuses to build a stackable component at all below a max of two, so the
 	/// quantity has nowhere to live even if the clamp were bypassed.
@@ -34,15 +35,31 @@ namespace FishMMO.UnitTests
 
 		private readonly List<GameObject> gameObjects = new List<GameObject>();
 		private readonly List<UnityEngine.Object> assets = new List<UnityEngine.Object>();
-		private InventoryController inventory;
+		private IInventoryController inventory;
+
+		/// <summary>
+		/// A real inventory: the Items module's container, found by name so Commerce builds without the module (its trades and
+		/// sales need an inventory to move items into, so without it these tests have nothing to exercise).
+		/// </summary>
+		private static IInventoryController NewInventory(GameObject go)
+		{
+			System.Type type = System.Type.GetType("FishMMO.Shared.InventoryController, FishMMO.Items");
+			if (type == null)
+			{
+				Assert.Ignore("The Items module (the inventory) is not installed.");
+			}
+			IInventoryController inventory = (IInventoryController)go.AddComponent(type);
+			// OnAwake sizes the container; AddComponent alone does not run it in edit mode.
+			type.GetMethod("OnAwake").Invoke(inventory, null);
+			return inventory;
+		}
 
 		[SetUp]
 		public void SetUp()
 		{
 			GameObject go = new GameObject("MerchantSingleQuantityProbe");
 			gameObjects.Add(go);
-			inventory = go.AddComponent<InventoryController>();
-			inventory.OnAwake();
+			inventory = NewInventory(go);
 			inventory.InitializeOnce(new FishMMO.UnitTests.Harness.StubCharacter { ID = 11 });
 		}
 

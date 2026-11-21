@@ -481,6 +481,11 @@ namespace FishMMO.UnitTests.WorldDesign
 					continue;
 				}
 				biomes++;
+				// An authored round uses the new fields on purpose (BiomeAuthoredRounds; pinned biome by biome in BiomeAuthoredRoundTests).
+				if (BiomeAuthoredRounds.Contains(Path.GetFileNameWithoutExtension(path)))
+				{
+					continue;
+				}
 				// A layer's band, not a spawn rule's (which shares the name): Unity writes the layer's four band fields and then its ways.
 				Assert.That(Regex.IsMatch(text, @"useClimateBand: 1\r?\n(?:[^\n]*\n){4}\s*ways:"), Is.False, path);
 				foreach (Match match in Regex.Matches(text, @"TextureLayerOverrides:(.*)"))

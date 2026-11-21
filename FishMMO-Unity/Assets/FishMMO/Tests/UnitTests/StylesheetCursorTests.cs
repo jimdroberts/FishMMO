@@ -296,8 +296,10 @@ namespace FishMMO.UnitTests
 				"the theme is expected to document the legal texture form; if that moved, move this control with it");
 
 			string stripped = StripCssComments(raw);
-			LogAssert.IsFalse(stripped.IndexOf("cursor", StringComparison.OrdinalIgnoreCase) >= 0,
-				"the theme mentions cursors only in prose, so stripping its comments must leave none behind");
+			/* A `cursor` property, not the word: the theme sets the text caret's colour (--unity-cursor-color), which is not a
+			 * cursor declaration and is not swept. */
+			LogAssert.IsFalse(Regex.IsMatch(stripped, @"(?<![-\w])cursor\s*:", RegexOptions.IgnoreCase),
+				"the theme mentions cursors only in prose, so stripping its comments must leave no cursor declaration behind");
 		}
 
 		/// <summary>

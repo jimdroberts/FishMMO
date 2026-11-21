@@ -1,8 +1,6 @@
 using FishMMO.Core;
 using FishMMO.Shared.Core;
 
-[assembly: GameModule(typeof(FishMMO.Shared.AchievementModule))]
-
 namespace FishMMO.Shared
 {
 	/// <summary>
@@ -16,13 +14,13 @@ namespace FishMMO.Shared
 		public readonly ICharacter Character;
 
 		/// <summary>The achievement the content ties to it.</summary>
-		public readonly AchievementTemplate Template;
+		public readonly CachedScriptableObject Template;
 
 		/// <summary>How much progress it is worth.</summary>
 		public readonly uint Amount;
 
 		/// <summary>Builds the fact.</summary>
-		public Accomplishment(ICharacter character, AchievementTemplate template, uint amount)
+		public Accomplishment(ICharacter character, CachedScriptableObject template, uint amount)
 		{
 			Character = character;
 			Template = template;
@@ -38,7 +36,7 @@ namespace FishMMO.Shared
 		/// character's world, at once: whatever counts it has done so before this returns, so a save that follows
 		/// carries it. Nothing happens when the template is null or no achievements module is installed.
 		/// </summary>
-		public static void Record(ICharacter character, AchievementTemplate template, uint amount = 1)
+		public static void Record(ICharacter character, CachedScriptableObject template, uint amount = 1)
 		{
 			if (character == null || template == null || amount == 0)
 			{
@@ -51,34 +49,6 @@ namespace FishMMO.Shared
 				return;
 			}
 			link.World.Publish(new Accomplishment(character, template, amount));
-		}
-	}
-
-	/// <summary>
-	/// Achievements as a module: counts every <see cref="Accomplishment"/> on the server toward the character's
-	/// achievement, so the features that cause progress never reach for the achievement system.
-	/// </summary>
-	public sealed class AchievementModule : GameModule
-	{
-		/// <summary>The module's id.</summary>
-		public const string ModuleId = "achievements";
-
-		/// <inheritdoc />
-		public override string Id => ModuleId;
-
-		/// <inheritdoc />
-		public override void Install(ModuleBuilder builder)
-		{
-			builder.OnSignal<Accomplishment>(SimulationSide.Server, Count);
-		}
-
-		private static void Count(World world, in Accomplishment accomplishment)
-		{
-			if (accomplishment.Character != null &&
-				accomplishment.Character.TryGet(out IAchievementController achievementController))
-			{
-				achievementController.Increment(accomplishment.Template, accomplishment.Amount);
-			}
 		}
 	}
 }

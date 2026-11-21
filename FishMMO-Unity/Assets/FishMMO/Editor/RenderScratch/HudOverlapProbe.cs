@@ -80,11 +80,6 @@ namespace FishMMO.RenderScratch
 			new Mount { Name = "UIHealthBar",  Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", Selector = "bar-root",        PanelType = typeof(UITKHealthBar) },
 			new Mount { Name = "UIManaBar",    Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", Selector = "bar-root",        PanelType = typeof(UITKManaBar) },
 			new Mount { Name = "UIStaminaBar", Uxml = ROOT + "ResourceBar/UIResourceBar.uxml", Selector = "bar-root",        PanelType = typeof(UITKStaminaBar) },
-			new Mount { Name = "UIBuff",       Uxml = ROOT + "Buff/UIBuff.uxml",                Selector = "buff-root",       PanelType = typeof(UITKBuff) },
-			new Mount { Name = "UIDebuff",     Uxml = ROOT + "Buff/UIDebuff.uxml",              Selector = "buff-root",       PanelType = typeof(UITKDebuff) },
-			new Mount { Name = "UIHotkeyBar",  Uxml = ROOT + "HotkeyBar/UIHotkeyBar.uxml",      Selector = "hotkey-list",     PanelType = typeof(UITKHotkeyBar) },
-			new Mount { Name = "UICastBar",    Uxml = ROOT + "Ability/UICastBar.uxml",          Selector = "castbar-root",    PanelType = typeof(UITKCastBar) },
-			new Mount { Name = "UIMinimap",    Uxml = ROOT + "Minimap/UIMinimap.uxml",          Selector = "minimap-frame",   PanelType = typeof(UITKMinimap) },
 			/* Measures crosshair-icon, not crosshair-root: the root is a flex-grow container that
 			 * fills the viewport so it can centre its child, so naming it reports every other panel
 			 * as an overlap. LayoutOnly because OnStarting throws in this harness (the crosshair
@@ -99,8 +94,6 @@ namespace FishMMO.RenderScratch
 			new Mount { Name = "UICrosshair",  Uxml = ROOT + "Crosshair/UICrosshair.uxml",      Selector = "crosshair-icon",  PanelType = typeof(UITKCrosshair), LayoutOnly = true, IgnoreOverlap = true },
 			new Mount { Name = "UITarget",     Uxml = ROOT + "Target/UITarget.uxml",            Selector = "target-root",     PanelType = typeof(UITKTarget) },
 			new Mount { Name = "UIToast",      Uxml = ROOT + "Toast/UIToast.uxml",              Selector = "toast-stack",     PanelType = typeof(UITKToast) },
-			new Mount { Name = "UIChat",       Uxml = ROOT + "Chat/UIChat.uxml",                Selector = "chat-root",       PanelType = typeof(UITKChat) },
-			new Mount { Name = "UIPetControl", Uxml = ROOT + "Pet/UIPetControl.uxml",          Selector = "pet-root",        PanelType = typeof(UITKPetControl) },
 		};
 
 		private static PanelSettings settings;
@@ -216,7 +209,8 @@ namespace FishMMO.RenderScratch
 
 			panels.Add(panel);
 
-			if (mount.PanelType == typeof(UITKBuff) || mount.PanelType == typeof(UITKDebuff))
+			// The buff strips (the Buffs module's mounts, by name).
+			if (mount.Name == "UIBuff" || mount.Name == "UIDebuff")
 			{
 				strips.Add(new Strip
 				{

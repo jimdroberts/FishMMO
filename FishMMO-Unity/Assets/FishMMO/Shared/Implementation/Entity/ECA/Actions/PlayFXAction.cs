@@ -152,7 +152,7 @@ namespace FishMMO.Shared
 				collision = found;
 			}
 			GameObject targetObject = eventData?.Target;
-			bool hasAbilityObject = AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject) &&
+			bool hasAbilityObject = AbilityObjects.TryResolveFrom(eventData, out IAbilityObject abilityObject) &&
 									abilityObject.Transform != null;
 			bool hasInitiator = initiator != null && initiator.Transform != null;
 
@@ -242,12 +242,12 @@ namespace FishMMO.Shared
 			/* An effect a SPAWN chain plays is drawn with the object it belongs to, not the moment the object is created:
 			 * at the caster's spawner as this client draws it, and on an observer when the playback clock reaches the
 			 * cast (AbilityObject.TryHoldSpawnEffect). Outside a spawn chain nothing is held and it plays now. */
-			AbilityObject anchor = null;
+			IAbilityObject anchor = null;
 			if (origin == FXOrigin.AbilityObject)
 			{
-				AbilityObject.TryResolveFrom(eventData, out anchor);
+				AbilityObjects.TryResolveFrom(eventData, out anchor);
 			}
-			if (AbilityObject.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition, Size, HeightOffset))
+			if (AbilityObjects.TryHoldSpawnEffect(FXPrefab, scene, anchor, spawnPosition, Size, HeightOffset))
 			{
 				return;
 			}
@@ -312,7 +312,7 @@ namespace FishMMO.Shared
 		/// </remarks>
 		internal static Scene ResolveSpawnScene(ICharacter initiator, EventData eventData)
 		{
-			if (AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject) &&
+			if (AbilityObjects.TryResolveFrom(eventData, out IAbilityObject abilityObject) &&
 				IsUsableScene(abilityObject.GameObject))
 			{
 				return abilityObject.GameObject.scene;

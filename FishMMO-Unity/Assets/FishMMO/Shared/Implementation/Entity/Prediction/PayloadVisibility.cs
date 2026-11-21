@@ -26,8 +26,13 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			NetworkObject nob = behaviour.NetworkObject;
-			return nob != null && nob.Owner == conn;
+			return IsOwner(behaviour.NetworkObject, conn);
+		}
+
+		/// <summary>True when <paramref name="conn"/> owns <paramref name="nob"/> (a character part asks with its character's object).</summary>
+		public static bool IsOwner(NetworkObject nob, NetworkConnection conn)
+		{
+			return nob != null && conn != null && conn.IsValid && nob.Owner == conn;
 		}
 	}
 }

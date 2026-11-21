@@ -165,7 +165,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			/// <summary>Players needed: the finder's group size, or the arena's full match size.</summary>
 			public int GroupSize;
 			public WorldSceneDetails SceneDetails;
-			public AchievementTemplate AchievementTemplate;
+			public CachedScriptableObject AchievementTemplate;
 
 			/// <summary>The entrance they queued at; the leash is measured from it.</summary>
 			public IInteractable Entrance;

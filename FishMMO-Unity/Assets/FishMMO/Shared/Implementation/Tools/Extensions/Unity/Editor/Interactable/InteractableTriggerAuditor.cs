@@ -65,7 +65,7 @@ namespace FishMMO.Shared
 			report.AppendLine();
 			report.AppendLine("Interaction behaviour comes entirely from ECA triggers. An interactable with none " +
 							  "accepts the interaction and does nothing. Assign a Trigger asset " +
-							  "(FishMMO/ECA/Trigger, or the shipped ones under Assets/Templates/Entity/ECA/Interactions).");
+							  "(FishMMO/ECA/Trigger, or the shipped ones under Assets/FishMMO/Templates/Entity/ECA/Interactions).");
 
 			Debug.LogWarning(report.ToString());
 		}

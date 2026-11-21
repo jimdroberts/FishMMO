@@ -1,0 +1,396 @@
+﻿/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMap.uss
+    World Map Panel  —  Structure & Layout only
+    Unity UIToolkit  (Unity 6.x LTS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Marker styling lives in UIMapShared.uss, loaded by both map panels.
+
+    LOAD ORDER in UXML (required):
+        <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+        <Style src="UIMapShared.uss" />
+        <Style src="UIMapPOI.uss" />
+        <Style src="UIMap.uss" />
+
+    Sized against the 1200x800 reference resolution declared by
+    Assets/UI Toolkit/PanelSettings.asset.
+
+    Large — 860x600 of a 1200x800 screen. A world map is read rather
+    than glanced at, and a small one defeats the point of having a
+    second map at all: the minimap already covers "what is near me".
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+
+/* ═══════════════════════════════════════════════════════════
+   PANEL ROOT
+   ═══════════════════════════════════════════════════════════ */
+
+/* Centred. Absolute because dragging writes left/top. */
+.map-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 860px;
+    height: 600px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════ */
+
+.map-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    height: 48px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.map-header__text {
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.map-header__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-header__subtitle {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   BODY
+   ═══════════════════════════════════════════════════════════ */
+
+.map-body {
+    flex-direction: row;
+    flex-grow: 1;
+    padding: 8px;
+    overflow: hidden;
+}
+
+.map-surface-column {
+    flex-grow: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/*
+    The map itself. Clipped, because the surface draws a quad the size of the element and the
+    markers are absolutely positioned inside it; without the clip a marker at the edge draws over
+    the side bar.
+*/
+.map-view {
+    flex-grow: 1;
+    overflow: hidden;
+    border-width: 1px;
+    border-color: var(--map-frame);
+    border-radius: 3px;
+    background-color: var(--map-surface);
+}
+
+/*
+    The compass (MapCompass): a dial over the map's top-right corner whose needle points at the
+    planet's north as the map draws it (TrueNorth: the scene sits on its planet turned by its atlas
+    heading, so the map's top is not north). The needle is painted in its own colour, the "N"
+    stays upright at its tip. Over the map and clear of its edge; takes no clicks.
+*/
+.map-compass {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 22px;
+    border-width: 1px;
+    border-color: var(--map-frame);
+    background-color: rgba(6, 12, 17, 0.72);
+}
+
+.map-compass__needle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 26px;
+    translate: -50% -50%;
+    color: var(--map-north);
+}
+
+.map-compass__letter {
+    position: absolute;
+    translate: -50% -50%;
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--text-bright);
+    text-shadow: 1px 1px 2px var(--shadow-text-hard);
+}
+
+/* Readouts under the map: the region and the coordinates under the pointer. */
+.map-status {
+    flex-direction: row;
+    align-items: center;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 4px;
+}
+
+.map-status__region {
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-status__spacer {
+    flex-grow: 1;
+}
+
+.map-status__coords {
+    font-size: 11px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   SIDE BAR
+   ═══════════════════════════════════════════════════════════ */
+
+.map-side {
+    width: 230px;
+    flex-shrink: 0;
+    flex-direction: column;
+    margin-left: 8px;
+    overflow: hidden;
+}
+
+/*
+    Holds everything below the waypoint section. The zero basis is what makes it scroll: without
+    it the view sizes to its content and pushes past the bottom of the side bar, which clips.
+*/
+.map-side-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+    min-height: 0;
+}
+
+.map-section {
+    flex-direction: column;
+    padding: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.map-section__title {
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.map-filters {
+    flex-direction: column;
+}
+
+/*
+    No letter spacing: the section's 2px is inherited otherwise, and the names do not fit with it.
+*/
+.map-filter {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    font-size: 11px;
+    letter-spacing: 0;
+}
+
+.map-section__subtitle {
+    font-size: 10px;
+    letter-spacing: 1px;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+/* The point-of-interest groups under PLACES: a size smaller than the rows above them. */
+.map-filter--place {
+    margin-top: 1px;
+    margin-bottom: 1px;
+    font-size: 10px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   WAYPOINT
+   ═══════════════════════════════════════════════════════════ */
+
+.map-waypoint__name {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-waypoint__description {
+    font-size: 10px;
+    white-space: normal;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.map-waypoint__travel {
+    height: 26px;
+    font-size: 11px;
+}
+
+.map-waypoint__hint {
+    margin-top: 4px;
+    font-size: 10px;
+    white-space: normal;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   NOTES
+   ═══════════════════════════════════════════════════════════ */
+
+.map-note-list {
+    flex-direction: column;
+}
+
+.map-note-row {
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.map-note-row__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 6px;
+    border-width: 1px;
+    border-color: var(--shadow-text-hard);
+}
+
+.map-note-row__title {
+    flex: 1;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-note-row__button {
+    width: 20px;
+    height: 18px;
+    min-width: 20px;
+    padding: 0;
+    margin-left: 2px;
+    font-size: 10px;
+}
+
+.map-note-editor {
+    flex-direction: column;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.map-note-field {
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+
+.map-note-field--body {
+    height: 44px;
+}
+
+.map-note-colors {
+    flex-direction: row;
+    margin-bottom: 6px;
+}
+
+/*
+    A colour swatch. Its background colour is written from the note palette in C#, because USS
+    cannot index a palette and duplicating the six values here would be a second place for them to
+    disagree with the pins actually drawn on the map.
+*/
+.map-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    margin-right: 4px;
+    border-width: 1px;
+    border-color: var(--swatch-border);
+}
+
+.map-swatch--selected {
+    border-width: 2px;
+    border-color: var(--white);
+}
+
+.map-note-add {
+    height: 24px;
+    font-size: 11px;
+}
+
+.map-note-hint {
+    margin-top: 4px;
+    font-size: 10px;
+    white-space: normal;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════ */
+
+.map-footer {
+    flex-direction: row;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.map-footer__explored {
+    font-size: 11px;
+}
+
+.map-footer__spacer {
+    flex-grow: 1;
+}
+
+.map-footer__button {
+    height: 22px;
+    font-size: 10px;
+    margin-right: 10px;
+}
+
+/*
+    Same box height as the button beside it, so the row's align-items: center
+    lands both on the same line. Without a height the slider sizes to its own
+    content and its track sat noticeably above the button's centre.
+*/
+.map-footer__zoom {
+    width: 160px;
+    height: 22px;
+    flex-shrink: 0;
+}

@@ -160,7 +160,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Log.Debug("CharacterSystem", $"{player.CharacterName} fell into the clouds in '{player.CurrentSceneName()}'.");
 					SendSystemMessage(player.Owner, "You fell into the clouds.");
 				}
-				else if (character is NPC npc && !(character is Pet) && npc.IsCorpse)
+				else if (character is NPC npc && npc.CompanionOwner == null && npc.IsCorpse)
 				{
 					/* A corpse down there is one nobody can reach or loot, held for its whole decay. Returned at
 					 * once instead, which is also what schedules the spawner's respawn. Whoever knocked it off

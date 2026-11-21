@@ -46,7 +46,7 @@ namespace FishMMO.UnitTests
 	public class PendingSlotWatchdogTests
 	{
 		private const string LootPath = "Assets/FishMMO/Modules/Commerce/Client/UITKLoot.cs";
-		private const string ContainerPath = "Assets/FishMMO/Client/GUI/World/Container/UITKContainer.cs";
+		private const string ContainerPath = "Assets/FishMMO/Modules/WorldInteractables/Client/UITKContainer.cs";
 		private const string SharedSetPath = "Assets/FishMMO/Client/GUI/World/ItemContainers/ItemSlotPendingSet.cs";
 		private const string GuardPath = "Assets/FishMMO/Client/GUI/Core/PendingReplyGuard.cs";
 		private const string MerchantPath = "Assets/FishMMO/Modules/Commerce/Client/UITKMerchant.cs";
@@ -149,8 +149,7 @@ namespace FishMMO.UnitTests
 			/* The duplication itself. Both panels must hold the shared set rather than a private
 			 * slot-to-timestamp dictionary, because a private one is where the clock can drift out
 			 * of agreement again without anybody noticing. */
-			string container = CodeOnly(ReadSource(ContainerPath));
-			// The loot window is the Commerce module's.
+			// The loot window is the Commerce module's; the container window the World Interactables module's.
 			if (Installed(LootPath))
 			{
 				string loot = CodeOnly(ReadSource(LootPath));
@@ -160,10 +159,14 @@ namespace FishMMO.UnitTests
 					"the loot panel must not keep its own slot-to-send-time map");
 			}
 
-			LogAssert.IsTrue(container.Contains("new ItemSlotPendingSet()"),
-				"the container panel must track pending slots with the shared set");
-			LogAssert.IsFalse(SlotTimestampMap.IsMatch(container),
-				"the container panel must not keep its own slot-to-send-time map");
+			if (Installed(ContainerPath))
+			{
+				string container = CodeOnly(ReadSource(ContainerPath));
+				LogAssert.IsTrue(container.Contains("new ItemSlotPendingSet()"),
+					"the container panel must track pending slots with the shared set");
+				LogAssert.IsFalse(SlotTimestampMap.IsMatch(container),
+					"the container panel must not keep its own slot-to-send-time map");
+			}
 		}
 
 		[Test]
@@ -173,9 +176,14 @@ namespace FishMMO.UnitTests
 			 * helper struct does not slip past. A panel is allowed to hold no pending set at all —
 			 * the inventory-side panels share the static ones in ItemOperationTracker — but it is
 			 * not allowed to hold a map from slot to a timestamp. */
-			AssertNoHandRolledPendingMap(typeof(UITKContainer));
-			LogAssert.IsTrue(HasFieldOfType(typeof(UITKContainer), typeof(ItemSlotPendingSet)),
-				"UITKContainer must hold an ItemSlotPendingSet");
+			// The container window is the World Interactables module's.
+			Type containerPanel = Type.GetType("FishMMO.Client.UITKContainer, FishMMO.WorldInteractables.Client");
+			if (containerPanel != null)
+			{
+				AssertNoHandRolledPendingMap(containerPanel);
+				LogAssert.IsTrue(HasFieldOfType(containerPanel, typeof(ItemSlotPendingSet)),
+					"UITKContainer must hold an ItemSlotPendingSet");
+			}
 
 			// The loot window is the Commerce module's.
 			Type lootPanel = Type.GetType("FishMMO.Client.UITKLoot, FishMMO.Commerce.Client");
@@ -271,7 +279,10 @@ namespace FishMMO.UnitTests
 			{
 				AssertTimeoutIsPassedExplicitly(LootPath);
 			}
-			AssertTimeoutIsPassedExplicitly(ContainerPath);
+			if (Installed(ContainerPath))
+			{
+				AssertTimeoutIsPassedExplicitly(ContainerPath);
+			}
 		}
 
 		/// <summary>

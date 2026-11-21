@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
@@ -93,14 +93,14 @@ namespace FishMMO.UnitTests
 
 				// Handlers that answer each refusal with its own reason.
 				{ "Modules/AbilityCrafting/Server/AbilityCraftingSystem.Craft.cs", 1 },
-				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.Container.cs", 1 },
+				{ "Modules/WorldInteractables/Server/WorldInteractableSystem.Container.cs", 1 },
 				{ "Modules/Commerce/Server/CommerceSystem.Mail.cs", 3 },
 				{ "Modules/Commerce/Server/CommerceSystem.Merchant.cs", 2 },
 				{ "Modules/Travel/Server/WaypointTravelSystem.cs", 1 },
 				{ "Implementation/World/SceneServer/Interactable/InteractableSystem.cs", 1 },
 
 				// Resolved after the guard, inside a try/finally that reports the failure reason.
-				{ "Implementation/World/SceneServer/CharacterInventory/CharacterInventorySystem.cs", 5 },
+				{ "Modules/Items/Server/CharacterInventorySystem.cs", 5 },
 
 				// Not the state gate at all: these require IsLoaded, to close a name-enumeration oracle.
 				{ "Implementation/World/SceneServer/Naming/NamingSystem.cs", 2 },
@@ -306,14 +306,13 @@ namespace FishMMO.UnitTests
 
 				LogAssert.AreEqual(total, guarded,
 					$"every TryBeginPlayerRequest in {entry.Key} must be used as a refusal, not called and ignored");
-				// The floor counts the core's own handlers: a module's handlers leave with the module.
-				if (!entry.Key.StartsWith("Modules/", StringComparison.Ordinal))
-				{
-					callSites += guarded;
-				}
+				callSites += guarded;
 			}
 
-			LogAssert.IsTrue(callSites >= 11,
+			/* Every player-request handler is a module's since 2026-11-20 (the last core ones, the ability forget and the
+			 * pet commands, left with the Abilities and Pets modules), so the floor counts what the sweep reads in the
+			 * installed modules: one guarded call is enough to show the sweep is not vacuous. */
+			LogAssert.IsTrue(callSites >= 1,
 				"the migrated handlers must still go through the shared entry point");
 		}
 

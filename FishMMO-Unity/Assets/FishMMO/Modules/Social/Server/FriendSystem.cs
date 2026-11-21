@@ -66,7 +66,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Achievement to increment when a player adds a friend.
 		/// </summary>
 		[Header("Achievements")]
-		public AchievementTemplate FriendAddAchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject FriendAddAchievementTemplate;
 
 		/// <summary>
 		/// Operation codes used for ingress guards.

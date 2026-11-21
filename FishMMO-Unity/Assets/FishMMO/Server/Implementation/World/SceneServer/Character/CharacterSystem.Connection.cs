@@ -555,131 +555,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles character killed events, processes player and NPC deaths, respawns, and updates state.
-		/// </summary>
-		/// <param name="killer">Character that performed the kill.</param>
-		/// <param name="defender">Character that was killed.</param>
-		private void CharacterDamageController_OnKilled(ICharacter killer, ICharacter defender)
-		{
-			if (defender == null)
-			{
-				return;
-			}
-
-			IPlayerCharacter playerCharacter = defender as IPlayerCharacter;
-
-			/* Flag the death before running anything else.
-			 *
-			 * CharacterDamageController.Kill guards re-entry with this exact flag, and now sets
-			 * it itself before it dispatches OnKilled, so it is already set when this handler
-			 * runs. Setting it again here is a harmless backstop: nothing side-effecting may run
-			 * while it is clear, or a second Kill on the same character would sail straight past
-			 * the guard and recurse. Buff removal below is exactly such a call: it invokes each
-			 * buff's removal effects, which run game logic.
-			 *
-			 * Do NOT revive or teleport here — the player chooses Respawn or Resurrect. */
-			if (playerCharacter != null)
-			{
-				playerCharacter.EnableFlags(CharacterFlags.IsDead);
-			}
-
-			if (defender.TryGet(out IBuffController buffController))
-			{
-				buffController.RemoveAll(false);
-			}
-
-			// Handle Player deaths
-			if (playerCharacter != null)
-			{
-				/* A difficulty that limits lives spends one here.
-				 *
-				 * After the death flag is set and the buffs are gone, so the character is in the
-				 * state the rest of the death path expects before anything can move it. */
-				ApplyInstanceDeathRules(playerCharacter);
-
-				//Log.Debug("CharacterSystem", $"PlayerCharacter: {playerCharacter.GameObject.name} Died");
-
-				// A combat-logged body has no owner to notify — it was killed precisely because
-				// nobody was driving it. Skip the broadcast and end the linger now: the death is
-				// the outcome the body was left exposed for, and persisting it immediately means
-				// a crash cannot undo it.
-				if (playerCharacter.Owner == null || !playerCharacter.Owner.IsActive)
-				{
-					if (lingeringCharacters.ContainsKey(playerCharacter.ID))
-					{
-						FinalizeCombatLinger(playerCharacter.ID, "killed while logged out");
-					}
-					else
-					{
-						/* Ownerless and not lingering. There is no connection to notify and no
-						 * linger to finalise, so the character is flagged dead with nothing
-						 * driving it out of that state — the periodic save will persist the
-						 * flag and the player will meet the death dialog on their next login.
-						 * Not known to be reachable, but silence here would make it invisible
-						 * if it ever became so. */
-						Log.Warning("CharacterSystem",
-							$"Character {playerCharacter.ID} was killed with no active owner and no combat-logout linger; " +
-							"no death notification was sent. It will be flagged dead on its next load.");
-					}
-					return;
-				}
-
-				// Send the death broadcast to the owning client so the death dialog appears.
-				Server.NetworkWrapper.Broadcast(playerCharacter.Owner,
-					new DeathBroadcast(), true, FishNet.Transporting.Channel.Reliable);
-			}
-			else
-			{
-				// Handle NPC deaths
-				NPC npc = defender as NPC;
-				if (npc != null)
-				{
-					Pet pet = defender as Pet;
-					if (pet != null)
-					{
-						//Log.Debug("CharacterSystem", $"Pet: {pet.GameObject.name} Died");
-
-						IPlayerCharacter petOwner = pet.PetOwner as IPlayerCharacter;
-						if (petOwner != null)
-						{
-							/* The owner's NetworkObject is checked rather than assumed. A pet is
-							 * despawned alongside its owner's character, but the two can land in
-							 * the same frame — an owner despawned first leaves PetOwner pointing
-							 * at a destroyed Unity object, and dereferencing it throws out of
-							 * this handler, skipping the despawn below and every remaining
-							 * OnKilled subscriber. */
-							NetworkObject ownerObject = petOwner.NetworkObject;
-							if (ownerObject != null)
-							{
-								OnPetKilled?.Invoke(ownerObject.Owner, petOwner, pet);
-							}
-						}
-
-						/* Outside the owner check, deliberately. A pet whose owner reference has
-						 * already been cleared — or which was never owned by a player — still has
-						 * to leave the world. Nested inside, such a pet was left spawned, flagged
-						 * dead, with its brain still enabled and nothing anywhere that would ever
-						 * collect it: Pet.Despawn skips the corpse timer that reclaims an NPC. */
-						pet.Despawn();
-					}
-					else
-					{
-						//Log.Debug("CharacterSystem", $"NPC: {npc.GameObject.name} Died");
-						npc.Despawn();
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Handles a dead player requesting respawn at their bind point.
-		/// Revives the character at full health and teleports to bind.
-		/// Rate-limited per-connection to prevent spam.
-		/// </summary>
-		/// <param name="conn">The network connection of the dead player.</param>
-		/// <param name="msg">The respawn-at-bind-point broadcast message.</param>
-		/// <param name="channel">The channel on which the broadcast was received.</param>
-		/// <summary>
 		/// Installs a client's reported target frame onto its character's
 		/// <see cref="ITargetController"/>, after verifying the claim.
 		/// </summary>
@@ -737,7 +612,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// tests are on this side of the wire, which is what makes the tooltip's "Left Mouse Button
 		/// to remove" a description of what will happen rather than a hope.
 		/// <para>
-		/// Nothing is sent back. <see cref="BuffController.Remove"/> marks the snapshot dirty, and
+		/// Nothing is sent back. The removal marks the snapshot dirty, and
 		/// the buff's absence reaches the owner on the reconcile it already receives.
 		/// </para>
 		/// </remarks>
@@ -758,99 +633,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
 				return;
-			if (player == null || !player.TryGet(out IBuffController buffController))
+			if (player == null || !player.TryGet(out ICharacterBuffs buffController))
 				return;
 
-			if (!buffController.Buffs.TryGetValue(msg.TemplateID, out Buff buff))
-				return;
-			if (buff == null || buff.Template == null || !buff.Template.CanBeDismissedByPlayer)
-				return;
-
-			buffController.Remove(msg.TemplateID);
-		}
-
-		private void OnClientRespawnAtBindPointBroadcastReceived(NetworkConnection conn, RespawnAtBindPointBroadcast msg, FishNet.Transporting.Channel channel)
-		{
-			if (!TryBeginRespawnResurrectGuard(conn.ClientId, RespawnOperation, out long guardKey))
-				return;
-
-			try
-			{
-				if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-					return;
-				if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
-					return;
-
-				// Only dead players can respawn at bind point.
-				if (!player.IsFlagged(CharacterFlags.IsDead))
-					return;
-
-				// Choosing the bind point declines any resurrect that was on the table.
-				pendingResurrectOffers.Remove(player.ID);
-
-				player.DisableFlags(CharacterFlags.IsDead);
-				if (player.TryGet(out ICharacterDamageController damageController))
-					damageController.Revive(null, 999999);
-
-				if ((player.IsInInstance() && player.InstanceSceneName != player.BindScene) ||
-					(!player.IsInInstance() && player.SceneName != player.BindScene))
-				{
-					// Respawning at a bind point in another scene is a scene-server transfer, so it
-					// has to follow the same order as the teleporter path.
-					//
-					// Previously this only mutated the character and disconnected, leaving the
-					// save and session release to the connection-stopped handler. By then SceneName
-					// had already been overwritten with BindScene, so every OnDisconnect subscriber
-					// — party, guild, and the scene server's own per-scene bookkeeping — was told
-					// the player left the scene they were respawning *into* rather than the one
-					// they died in.
-					bool leavingInstance = player.IsInInstance();
-
-					DispatchCharacterEvent(OnDisconnect, conn, player, nameof(OnDisconnect));
-
-					player.SceneName = player.BindScene;
-					player.Motor.SetPositionAndRotationAndVelocity(player.BindPosition, player.Motor.Transform.rotation, Vector3.zero);
-					player.DisableFlags(CharacterFlags.IsInInstance);
-					player.DisableFlags(CharacterFlags.IsLoaded);
-
-					if (leavingInstance)
-					{
-						/* Clear the instance bookkeeping, exactly as the teleport and
-						 * leave-instance paths do. Dropping only the flag left InstanceID on the
-						 * character, and BuildCharacterData persists it unconditionally — so a
-						 * player who died in a dungeon and respawned at their bind point kept a
-						 * row pointing at that dungeon's scene instance. Nothing reads it while
-						 * the flag is clear, which is exactly what makes it dangerous: it is a
-						 * live instance reference sitting on a character that is demonstrably not
-						 * in one, waiting for anything that sets the flag without also setting
-						 * the id.
-						 *
-						 * The transform is the bind point now, so the open-world position the save
-						 * writes must be that too. */
-						player.InstanceID = 0;
-						player.InstanceSceneName = null;
-						player.InstanceSceneHandle = 0;
-						player.LastWorldPosition = player.BindPosition;
-						player.LastWorldRotation = player.Motor.Transform.rotation;
-					}
-
-					// Save and release the session before dropping the connection so the
-					// destination scene server can claim the character.
-					RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true);
-
-					conn.Disconnect(false);
-				}
-				else
-				{
-					// The bind point, unless this is a cloud world and the bind point is open air in it.
-					ResolveSameSceneRespawn(player, out Vector3 respawnPosition, out Quaternion respawnRotation);
-					player.Motor.SetPositionAndRotationAndVelocity(respawnPosition, respawnRotation, Vector3.zero);
-				}
-			}
-			finally
-			{
-				EndRespawnResurrectGuard(guardKey);
-			}
+			// Refused unless the buff is on and a player may dismiss it (the Buffs module's controller decides).
+			buffController.TryDismissByPlayer(msg.TemplateID);
 		}
 
 		/// <summary>
@@ -1083,181 +870,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// Handles a dead player accepting a resurrect from another player.
-		/// Revives at the current position (corpse location), no teleport.
-		/// Rate-limited per-connection to prevent spam.
-		/// </summary>
-		/// <param name="conn">The network connection of the dead player.</param>
-		/// <param name="msg">The resurrect-accept broadcast message.</param>
-		/// <param name="channel">The channel on which the broadcast was received.</param>
-		private void OnClientResurrectAcceptBroadcastReceived(NetworkConnection conn, ResurrectAcceptBroadcast msg, FishNet.Transporting.Channel channel)
-		{
-			if (!TryBeginRespawnResurrectGuard(conn.ClientId, ResurrectOperation, out long guardKey))
-				return;
-
-			try
-			{
-				if (!Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data))
-					return;
-				if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter player))
-					return;
-
-				// Only dead players can accept a resurrect.
-				if (!player.IsFlagged(CharacterFlags.IsDead))
-					return;
-
-				/* Re-checked here, not just at the offer.
-				 *
-				 * An offer recorded outside a no-resurrection dungeon stands for thirty seconds,
-				 * and a character can be moved into one inside that window — so the offer check
-				 * alone is a prompt filter, and this is the rule. Where the character is standing
-				 * when it redeems is what decides. */
-				if (!IsResurrectionAllowed(player))
-				{
-					pendingResurrectOffers.Remove(player.ID);
-					SendSystemMessage(conn, "The dead cannot be raised in this dungeon.");
-					return;
-				}
-
-				/* The accept must answer an offer this server actually recorded. Checking only
-				 * that the named resurrector existed and shared the scene — as this did — let a
-				 * dead player revive themselves at full health whenever anyone else was nearby,
-				 * with no resurrect ever cast. */
-				if (!pendingResurrectOffers.TryGetValue(player.ID, out PendingResurrectOffer offer))
-				{
-					return;
-				}
-
-				if (MonotonicClock.NowSeconds >= offer.ExpiresAt)
-				{
-					pendingResurrectOffers.Remove(player.ID);
-					return;
-				}
-
-				if (msg.ResurrectorID <= 0 || msg.ResurrectorID != offer.ResurrectorID)
-				{
-					return;
-				}
-
-				/* The resurrector must still be present and in the same scene instance when the
-				 * offer is accepted.
-				 *
-				 * Compared by scene handle, not by name. CharactersByID holds every character on
-				 * this scene server, across every scene instance it hosts — and scene stacking
-				 * means two channels of one open-world scene, or two copies of one dungeon, share
-				 * a name. Inside an instance it is worse: SceneName keeps naming the open-world
-				 * scene the character will return to, so every character who entered a dungeon
-				 * from the same zone compares equal regardless of which instance they are in.
-				 * The handle is unambiguous within this process, which is the only place this
-				 * check runs. Same rule as BindstoneAction. */
-				if (!data.CharactersByID.TryGetValue(offer.ResurrectorID, out IPlayerCharacter resurrector) ||
-					resurrector.GameObject == null ||
-					player.GameObject == null ||
-					resurrector.GameObject.scene.handle != player.GameObject.scene.handle)
-				{
-					return;
-				}
-
-				pendingResurrectOffers.Remove(player.ID);
-
-				player.DisableFlags(CharacterFlags.IsDead);
-				if (player.TryGet(out ICharacterDamageController damageController))
-				{
-					// The offer's amount rather than a blanket full heal, credited to the
-					// resurrector so their ECA resurrect triggers fire.
-					damageController.Revive(resurrector, offer.Amount);
-				}
-			}
-			finally
-			{
-				EndRespawnResurrectGuard(guardKey);
-			}
-		}
-
-		/// <summary>
-		/// A resurrect that has been offered to a character and is awaiting their answer.
-		/// </summary>
-		private sealed class PendingResurrectOffer
-		{
-			/// <summary>Character that cast the resurrect.</summary>
-			public long ResurrectorID;
-			/// <summary>Health the offer restores, as configured on the ability that made it.</summary>
-			public int Amount;
-			/// <summary>When the offer lapses if it is not answered, in <see cref="MonotonicClock"/> seconds.</summary>
-			public double ExpiresAt;
-		}
-
-		/// <summary>
-		/// Outstanding resurrect offers, keyed by the character they were made to. Main-thread only.
-		/// </summary>
-		/// <remarks>
-		/// Accepting a resurrect used to be validated only by checking that the named resurrector
-		/// existed and stood in the same scene — never that they had offered anything. A dead player
-		/// could therefore revive themselves at full health at will, by naming any other character
-		/// in the scene, without a resurrect ever being cast. Recording the offer makes the accept
-		/// answerable to something real, and carries the ability's configured heal amount through to
-		/// the revive instead of substituting a blanket full heal.
-		/// </remarks>
-		private readonly Dictionary<long, PendingResurrectOffer> pendingResurrectOffers =
-			new Dictionary<long, PendingResurrectOffer>();
-
-		/// <summary>How long an unanswered resurrect offer stands.</summary>
-		private static readonly TimeSpan ResurrectOfferLifetime = TimeSpan.FromSeconds(30);
-
-		/// <summary>
-		/// Records a resurrect offer and tells the target's client, so its death dialog can present
-		/// the accept option.
-		/// </summary>
-		/// <param name="initiator">Character casting the resurrect.</param>
-		/// <param name="target">Character being offered the resurrect.</param>
-		/// <param name="amount">Health the offer would restore.</param>
-		private void CharacterDamageController_OnResurrectOffered(ICharacter initiator, ICharacter target, int amount)
-		{
-			if (initiator == null || amount <= 0)
-			{
-				return;
-			}
-
-			IPlayerCharacter player = target as IPlayerCharacter;
-			if (player == null || player.Owner == null || !player.Owner.IsActive)
-			{
-				return;
-			}
-
-			// Only a dead character has anything to accept.
-			if (!player.IsFlagged(CharacterFlags.IsDead))
-			{
-				return;
-			}
-
-			/* Some dungeons forbid resurrection outright, and offering one there would put a
-			 * button on a dead player's screen that the accept path is going to refuse. Recording
-			 * nothing is also what makes that refusal safe: there is no stale offer to redeem the
-			 * moment they leave. */
-			if (!IsResurrectionAllowed(player))
-			{
-				SendSystemMessage(player.Owner, "The dead cannot be raised in this dungeon.");
-				return;
-			}
-
-			pendingResurrectOffers[player.ID] = new PendingResurrectOffer
-			{
-				ResurrectorID = initiator.ID,
-				Amount = amount,
-				ExpiresAt = MonotonicClock.NowSeconds + ResurrectOfferLifetime.TotalSeconds,
-			};
-
-			Server.NetworkWrapper.Broadcast(player.Owner,
-				new ResurrectOfferBroadcast { ResurrectorID = initiator.ID }, true, FishNet.Transporting.Channel.Reliable);
-		}
-
-		/// <summary>
-		/// Ingress guard for respawn and resurrect broadcasts to prevent rate-limit spam.
+		/// Ingress guard for the instance, leave-instance, target and buff-dismiss broadcasts, against rate-limit spam (named for
+		/// the respawn and resurrect it once guarded too; those are the Combat module's).
 		/// </summary>
 		private readonly IngressGuard respawnResurrectGuard = new IngressGuard();
 
-		private const byte RespawnOperation = 1;
-		private const byte ResurrectOperation = 2;
+		// 1 and 2 were respawn and resurrect, which the Combat module's system guards on its own since 2026-11-20.
 		private const byte LeaveInstanceOperation = 3;
 		private const int RespawnResurrectDebounceMs = 2000;
 
@@ -1289,44 +907,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 
 			respawnResurrectGuard.Sweep(30f, 120f, 128);
-
-			SweepExpiredResurrectOffers();
 		}
 
-		/// <summary>
-		/// Drops resurrect offers that were never answered.
-		/// </summary>
-		/// <remarks>
-		/// The accept path rejects an expired offer on its own, so this is about not retaining one
-		/// entry per unanswered resurrect for the life of the process — a player who is offered a
-		/// resurrect and respawns instead, or simply logs out, leaves nothing behind to remove it.
-		/// </remarks>
-		private void SweepExpiredResurrectOffers()
-		{
-			if (pendingResurrectOffers.Count == 0)
-			{
-				return;
-			}
-
-			double now = MonotonicClock.NowSeconds;
-			List<long> expired = null;
-			foreach (var kvp in pendingResurrectOffers)
-			{
-				if (now >= kvp.Value.ExpiresAt)
-				{
-					(expired ??= new List<long>()).Add(kvp.Key);
-				}
-			}
-
-			if (expired == null)
-			{
-				return;
-			}
-
-			for (int i = 0; i < expired.Count; ++i)
-			{
-				pendingResurrectOffers.Remove(expired[i]);
-			}
-		}
 	}
 }

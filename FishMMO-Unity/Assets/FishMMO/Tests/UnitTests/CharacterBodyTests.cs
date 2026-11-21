@@ -148,7 +148,7 @@ namespace FishMMO.UnitTests
 			string testHuman = Guid(PrefabPath);
 			foreach (string race in new[] { "Human", "Elf", "Orc" })
 			{
-				string text = ProjectFiles.ReadAllText($"Assets/Templates/Entity/Races/Humanoid/{race}.asset");
+				string text = ProjectFiles.ReadAllText($"Assets/FishMMO/Templates/Entity/Races/Humanoid/{race}.asset");
 				Match placeholder = Regex.Match(text, @"PlaceholderModel:\s*\n\s*m_AssetGUID: (\w+)");
 				Assert.That(placeholder.Success, Is.True, race);
 				Assert.That(placeholder.Groups[1].Value, Is.EqualTo(testHuman), $"{race} wears the TestHuman");

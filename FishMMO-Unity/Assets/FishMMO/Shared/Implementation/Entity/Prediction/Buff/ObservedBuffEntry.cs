@@ -1,4 +1,5 @@
 ﻿using System;
+using FishMMO.Shared.Core;
 using FishNet.Serializing;
 using UnityEngine;
 
@@ -157,8 +158,8 @@ namespace FishMMO.Shared
 			/* Authored data, not runtime state: the receiver holds the same template database the
 			 * sender does. A miss leaves 0, which every bar treats as "nothing to fill" rather than
 			 * dividing by it. */
-			BaseBuffTemplate template = BaseBuffTemplate.Get<BaseBuffTemplate>(entry.TemplateID);
-			entry.TotalSeconds = template != null ? template.Duration : 0f;
+			entry.TotalSeconds = CachedScriptableObject.TryGetByID(entry.TemplateID, out CachedScriptableObject cached) &&
+				cached is IBuffTemplateInfo template ? template.Duration : 0f;
 			return entry;
 		}
 

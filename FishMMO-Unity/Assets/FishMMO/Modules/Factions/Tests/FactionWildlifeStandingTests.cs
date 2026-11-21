@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	public class FactionWildlifeStandingTests
 	{
 		private const string OrcHordePath = "Assets/FishMMO/Modules/Factions/Templates/Orc Horde.asset";
-		private const string OrcRacePath = "Assets/Templates/Entity/Races/Humanoid/Orc.asset";
+		private const string OrcRacePath = "Assets/FishMMO/Templates/Entity/Races/Humanoid/Orc.asset";
 
 		private readonly List<GameObject> temporaries = new List<GameObject>();
 		private readonly List<Object> created = new List<Object>();

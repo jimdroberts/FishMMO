@@ -378,7 +378,8 @@ namespace FishMMO.UnitTests
 			string body = MethodBody(CodeOnly(ReadSource(ChatSystemPath)), "private void ProcessNewChatMessage(");
 			int command = body.IndexOf("ChatHelper.TryParseCommand(", StringComparison.Ordinal);
 			int mute = body.IndexOf("Component<ChatState>().MutedUntilTicks >", StringComparison.Ordinal);
-			int chat = body.IndexOf("ChatHelper.TryParseChatCommand(", StringComparison.Ordinal);
+			// Every channel is reached through the hand-off to the Chat module (IChatLineHandler, 2026-11-20).
+			int chat = body.IndexOf(".HandleChatLine(", StringComparison.Ordinal);
 
 			LogAssert.IsTrue(command >= 0 && mute >= 0 && chat >= 0, "all three must still be in ProcessNewChatMessage");
 			LogAssert.IsTrue(command < mute, "the mute must come after commands, so a muted player can still /helpme");

@@ -28,6 +28,28 @@ namespace FishMMO.RenderScratch
 	/// </remarks>
 	public static class PlayLeakProbe
 	{
+		/// <summary>A probe mode a module adds (the Map module's minimap and marker modes), registered at editor load.</summary>
+		public interface ILeakProbeMode
+		{
+			/// <summary>Whether this handles the named mode (<c>FISHMMO_LEAK_MODES</c>).</summary>
+			bool Handles(string mode);
+
+			/// <summary>Builds the mode's content into the probe's document, which is attached to a panel.</summary>
+			void Build(UIDocument document);
+
+			/// <summary>One frame of the mode.</summary>
+			void Step(string mode);
+
+			/// <summary>The mode's state and counters, for the DIAG and RESULT lines.</summary>
+			string Describe();
+
+			/// <summary>Destroys what <see cref="Build"/> made.</summary>
+			void Release();
+		}
+
+		/// <summary>The modes modules add.</summary>
+		public static readonly System.Collections.Generic.List<ILeakProbeMode> ModuleModes = new System.Collections.Generic.List<ILeakProbeMode>();
+
 		private const string ARMED_KEY = "FishMMO.PlayLeakProbe.Armed";
 		private const string SCENE_PATH = "Assets/FishMMO/Editor/RenderScratch/PlayLeakProbeScene.unity";
 
@@ -115,17 +137,18 @@ namespace FishMMO.RenderScratch
 		private GameObject host;
 		private UIDocument document;
 		private PanelSettings settings;
-		private UITKEquipment panel;
+		/// <summary>The equipment window (the Items module's; found by name so the probe builds without it).</summary>
+		private UITKCharacterControl panel;
+
+		/// <summary>The Items module's equipment window, or null when the module is not installed.</summary>
+		private static Type EquipmentPanelType => Type.GetType("FishMMO.Client.UITKEquipment, FishMMO.Items.Client");
 		private CharacterSheetView sheet;
 		private EquipmentPreviewRenderer renderer;
 		private PlayerCharacter character;
 		private bool enabledCameraArmed;
 
-		// Minimap modes: the real renderer and map view, in a document attached to a screen panel.
-		private MinimapCameraRenderer minimapRenderer;
-		private UITKMapView mapView;
-		private GameObject minimapCameraObject;
-		private int minimapRenders;
+		// A module's modes (the Map module's minimap and marker modes): built into the document, stepped each frame.
+		private PlayLeakProbe.ILeakProbeMode moduleMode;
 		private double nextGiTime;
 
 		private void Start()
@@ -162,17 +185,14 @@ namespace FishMMO.RenderScratch
 			host.SetActive(true);
 			EnsureDocumentAttached();
 
-			minimapRenders = 0;
 			nextGiTime = 0;
-			nextStandardTime = 0;
 			toggles = 0;
-			markerRefreshes = 0;
-			nextMarkerRefresh = 0;
-			if (IsMinimapMode(modes[modeIndex]) || modes[modeIndex].StartsWith("gi") || modes[modeIndex].StartsWith("showhide") || modes[modeIndex].StartsWith("doc-toggle") || modes[modeIndex].StartsWith("launcher"))
+			moduleMode = PlayLeakProbe.ModuleModes.Find(m => m.Handles(modes[modeIndex]));
+			if (moduleMode != null || modes[modeIndex].StartsWith("gi") || modes[modeIndex].StartsWith("showhide") || modes[modeIndex].StartsWith("doc-toggle") || modes[modeIndex].StartsWith("launcher"))
 			{
-				if (IsMinimapMode(modes[modeIndex]))
+				if (moduleMode != null)
 				{
-					BuildMinimap();
+					moduleMode.Build(document);
 				}
 				if (modes[modeIndex].StartsWith("showhide"))
 				{
@@ -201,14 +221,19 @@ namespace FishMMO.RenderScratch
 				main.transform.LookAt(new Vector3(0f, 1f, 0f));
 			}
 
-			panel = host.AddComponent<UITKEquipment>();
+			Type equipmentPanel = EquipmentPanelType;
+			if (equipmentPanel == null)
+			{
+				throw new InvalidOperationException("The equipment preview modes need the Items module (its equipment window); run the module modes only.");
+			}
+			panel = (UITKCharacterControl)host.AddComponent(equipmentPanel);
 			panel.Document = document;
 			panel.OnStarting();
 			panel.SetCharacter(character);
 			// The real panel only measures (and so only renders) while it is shown.
 			panel.Show();
 
-			sheet = typeof(UITKEquipment).GetField("sheet", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(panel) as CharacterSheetView;
+			sheet = equipmentPanel.GetField("sheet", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(panel) as CharacterSheetView;
 			renderer = sheet == null ? null : typeof(CharacterSheetView).GetField("previewRenderer", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(sheet) as EquipmentPreviewRenderer;
 			if (sheet == null || renderer == null) throw new InvalidOperationException("sheet/renderer not found");
 
@@ -231,8 +256,7 @@ namespace FishMMO.RenderScratch
 				if (frame == 60 || frame == 300)
 				{
 					VisualElement rootElement = document?.rootVisualElement;
-					string map = mapView == null ? "n/a" : $"{mapView.resolvedStyle.width}x{mapView.resolvedStyle.height} panel={(mapView.panel == null ? "none" : "attached")} texture={(minimapRenderer?.Texture == null ? "none" : minimapRenderer.Texture.width + "x" + minimapRenderer.Texture.height)} renders={minimapRenders}";
-					Debug.Log($"[PlayLeakProbe] DIAG {mode} frame {frame}: docPanel={(rootElement?.panel == null ? "none" : "attached")} rootSize={rootElement?.resolvedStyle.width}x{rootElement?.resolvedStyle.height} map={map} previewTexture={(renderer?.Texture == null ? "none" : "yes")}");
+					Debug.Log($"[PlayLeakProbe] DIAG {mode} frame {frame}: docPanel={(rootElement?.panel == null ? "none" : "attached")} rootSize={rootElement?.resolvedStyle.width}x{rootElement?.resolvedStyle.height} module={moduleMode?.Describe() ?? "n/a"} previewTexture={(renderer?.Texture == null ? "none" : "yes")}");
 				}
 
 				if (frame == WARMUP_FRAMES)
@@ -255,7 +279,7 @@ namespace FishMMO.RenderScratch
 				GC.Collect();
 				GC.WaitForPendingFinalizers();
 				GC.Collect();
-				string line = $"{mode,-8} over {frame - WARMUP_FRAMES} frames ({Time.realtimeSinceStartupAsDouble - modeStart:0}s, {renders} renders, texture {(renderer?.Texture == null ? "none" : renderer.Texture.width + "x" + renderer.Texture.height)}, minimap renders {minimapRenders}, show cycles {toggles}, theme roots {ThemeRootCount()}, marker refreshes {markerRefreshes}, markers laid out {mapView?.childCount}, managed garbage {managedGarbage / 1024.0 / (frame - WARMUP_FRAMES):0.0} KB/frame): {Delta(frame - WARMUP_FRAMES, true)}";
+				string line = $"{mode,-8} over {frame - WARMUP_FRAMES} frames ({Time.realtimeSinceStartupAsDouble - modeStart:0}s, {renders} renders, texture {(renderer?.Texture == null ? "none" : renderer.Texture.width + "x" + renderer.Texture.height)}, {moduleMode?.Describe() ?? "no module mode"}, show cycles {toggles}, theme roots {ThemeRootCount()}, managed garbage {managedGarbage / 1024.0 / (frame - WARMUP_FRAMES):0.0} KB/frame): {Delta(frame - WARMUP_FRAMES, true)}";
 				Debug.Log("[PlayLeakProbe] RESULT " + line);
 				report.AppendLine(line);
 
@@ -277,24 +301,14 @@ namespace FishMMO.RenderScratch
 
 		private void Step(string mode)
 		{
+			if (moduleMode != null)
+			{
+				moduleMode.Step(mode);
+				return;
+			}
 			switch (mode)
 			{
 				case "none":
-					return;
-
-				case "minimap":
-				case "minimap-render":
-				case "minimap-refresh":
-					StepMinimap(mode);
-					return;
-
-				case "markers":
-				case "markers-still":
-					StepMarkers(mode == "markers");
-					return;
-
-				case "minimap-standard":
-					StepMinimapStandard();
 					return;
 
 				case "showhide":
@@ -406,82 +420,6 @@ namespace FishMMO.RenderScratch
 			}
 		}
 
-		private static bool IsMinimapMode(string mode) => mode.StartsWith("minimap") || mode.StartsWith("markers");
-
-		private const int MarkerCount = 40;
-		private readonly System.Collections.Generic.List<MapMarkerSnapshot> markerBuffer = new System.Collections.Generic.List<MapMarkerSnapshot>(MarkerCount);
-		private double nextMarkerRefresh;
-		private int markerRefreshes;
-
-		/// <summary>
-		/// UITKMinimap.LateUpdate with NPC markers: render at the capped rate, collect and set markers
-		/// ten times a second, and re-lay them out on every other frame. Positions move every frame
-		/// when <paramref name="moving"/>, as wandering NPCs do; the still mode is the control.
-		/// </summary>
-		private void StepMarkers(bool moving)
-		{
-			if (minimapRenderer == null || mapView == null)
-			{
-				return;
-			}
-
-			MapViewTransform view = new MapViewTransform(Vector3.zero, 25.0f, 0.0f);
-			mapView.View = view;
-			if (minimapRenderer.Render(view))
-			{
-				++minimapRenders;
-				mapView.MapTexture = minimapRenderer.Texture;
-				mapView.RefreshSurface();
-			}
-
-			double now = Time.unscaledTimeAsDouble;
-			if (now >= nextMarkerRefresh)
-			{
-				nextMarkerRefresh = now + 0.1;
-				++markerRefreshes;
-				markerBuffer.Clear();
-				for (int i = 0; i < MarkerCount; ++i)
-				{
-					float phase = moving ? frame * 0.01f + i : i;
-					markerBuffer.Add(new MapMarkerSnapshot
-					{
-						Source = null,
-						Position = new Vector3(Mathf.Sin(phase) * 18f, 0f, Mathf.Cos(phase * 0.7f) * 18f),
-						TracksSource = false,
-						HasFacing = false,
-						Type = MapMarkerType.NPC,
-						Relationship = default,
-						Icon = null,
-						Tint = Color.white,
-						Label = "Wandering NPC " + (i % 5),
-						Tooltip = "NPC",
-						Size = 12f,
-						ClampToEdge = false,
-						Priority = i,
-					});
-				}
-				mapView.SetMarkers(markerBuffer);
-			}
-			else
-			{
-				if (moving)
-				{
-					for (int i = 0; i < markerBuffer.Count; ++i)
-					{
-						MapMarkerSnapshot m = markerBuffer[i];
-						float phase = frame * 0.01f + i;
-						m.Position = new Vector3(Mathf.Sin(phase) * 18f, 0f, Mathf.Cos(phase * 0.7f) * 18f);
-						markerBuffer[i] = m;
-					}
-					mapView.SetMarkers(markerBuffer);
-				}
-				else
-				{
-					mapView.RelayoutMarkers();
-				}
-			}
-		}
-
 		/// <summary>
 		/// Reports the document's state after enabling and, when it built no root, runs its own
 		/// rebuild and attach routines. Without a root attached to a panel nothing repaints, and a
@@ -514,111 +452,6 @@ namespace FishMMO.RenderScratch
 			}
 
 			Debug.Log($"[PlayLeakProbe] DOC after fallback: root={(document.rootVisualElement != null)} panel={(document.rootVisualElement?.panel != null)}");
-		}
-
-		/// <summary>Builds the minimap exactly as UITKMinimap does: a view-aligned map view fed by the shared renderer.</summary>
-		private void BuildMinimap()
-		{
-			minimapCameraObject = new GameObject("LeakProbeMinimapCamera");
-			Camera camera = minimapCameraObject.AddComponent<Camera>();
-			camera.enabled = false;
-
-			minimapRenderer = new MinimapCameraRenderer();
-			minimapRenderer.Configure(camera, 0, Cartography.MinimapResolution);
-			minimapRenderer.FramesPerSecond = 30.0f;
-
-			mapView = new UITKMapView();
-			mapView.MapTextureIsViewAligned = true;
-			mapView.style.position = Position.Absolute;
-			mapView.style.left = 20;
-			mapView.style.top = 20;
-			mapView.style.width = 256;
-			mapView.style.height = 256;
-			if (document.rootVisualElement == null || document.rootVisualElement.panel == null)
-			{
-				throw new InvalidOperationException("the document has no root attached to a panel, so the minimap would never repaint; the measurement would be meaningless");
-			}
-			document.rootVisualElement.Add(mapView);
-		}
-
-		/// <summary>UITKMinimap.LateUpdate's render path, optionally split into its render and surface-refresh halves.</summary>
-		private void StepMinimap(string mode)
-		{
-			if (minimapRenderer == null || mapView == null)
-			{
-				return;
-			}
-
-			MapViewTransform view = new MapViewTransform(new Vector3(Mathf.Sin(frame * 0.01f) * 5f, 0f, 0f), 25.0f, 0.0f);
-			mapView.View = view;
-
-			if (mode == "minimap-refresh")
-			{
-				// Refresh half only: one render to have a texture, then reassign and repaint at the render rate.
-				if (minimapRenderer.Texture == null || minimapRenders == 0)
-				{
-					if (minimapRenderer.Render(view, true)) { ++minimapRenders; mapView.MapTexture = minimapRenderer.Texture; }
-					return;
-				}
-				if (frame % 2 == 0)
-				{
-					mapView.MapTexture = minimapRenderer.Texture;
-					mapView.RefreshSurface();
-				}
-				return;
-			}
-
-			if (minimapRenderer.Render(view))
-			{
-				++minimapRenders;
-				if (mode == "minimap")
-				{
-					mapView.MapTexture = minimapRenderer.Texture;
-					mapView.RefreshSurface();
-				}
-			}
-		}
-
-		private double nextStandardTime;
-
-		/// <summary>
-		/// The minimap path exactly as the shipped client ran it before the working-tree change: the
-		/// renderer's texture and settings, but a RenderPipeline.StandardRequest at 30 per second,
-		/// then the surface refresh.
-		/// </summary>
-		private void StepMinimapStandard()
-		{
-			if (minimapRenderer == null || mapView == null)
-			{
-				return;
-			}
-
-			MapViewTransform view = new MapViewTransform(new Vector3(Mathf.Sin(frame * 0.01f) * 5f, 0f, 0f), 25.0f, 0.0f);
-			mapView.View = view;
-
-			if (minimapRenderer.Texture == null)
-			{
-				// One ordinary render creates the texture and applies the camera settings.
-				if (minimapRenderer.Render(view, true)) { ++minimapRenders; mapView.MapTexture = minimapRenderer.Texture; }
-				return;
-			}
-
-			double now = Time.unscaledTimeAsDouble;
-			if (now < nextStandardTime)
-			{
-				return;
-			}
-			nextStandardTime = now + (1.0 / 30.0);
-
-			Camera camera = minimapCameraObject.GetComponent<Camera>();
-			UnityEngine.Rendering.RenderPipeline.StandardRequest request = new UnityEngine.Rendering.RenderPipeline.StandardRequest { destination = minimapRenderer.Texture };
-			if (UnityEngine.Rendering.RenderPipeline.SupportsRenderRequest(camera, request))
-			{
-				camera.SubmitRenderRequest(request);
-				++minimapRenders;
-				mapView.MapTexture = minimapRenderer.Texture;
-				mapView.RefreshSurface();
-			}
 		}
 
 		private const string TARGET_UXML_PATH = "Assets/FishMMO/Client/GUI/World/Target/UITarget.uxml";
@@ -756,10 +589,8 @@ namespace FishMMO.RenderScratch
 			if (targetHost != null) { Destroy(targetHost); targetHost = null; targetPanel = null; }
 			if (bareHost != null) { Destroy(bareHost); bareHost = null; bareDocument = null; }
 			if (launcherHost != null) { Destroy(launcherHost); launcherHost = null; launcherSettings = null; }
-			if (mapView != null) { mapView.RemoveFromHierarchy(); mapView = null; }
-			minimapRenderer?.Dispose();
-			minimapRenderer = null;
-			if (minimapCameraObject != null) { Destroy(minimapCameraObject); minimapCameraObject = null; }
+			moduleMode?.Release();
+			moduleMode = null;
 			sheet?.ReleasePreview();
 			if (host != null) Destroy(host);
 			if (settings != null) Destroy(settings);

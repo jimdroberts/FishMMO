@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Proofs that forgetting an ability removes the row it actually names, tells the people who can
-	/// see the character, and leaves no hotkey pointing at something that no longer resolves.
+	/// see the character, and announces it (the Hotkeys module clears the bindings that name it).
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -29,12 +29,6 @@ namespace FishMMO.UnitTests
 	{
 		private const string SystemPath =
 			"Assets/FishMMO/Server/Implementation/World/SceneServer/Ability/AbilitySystem.cs";
-
-		private const string HotkeySystemPath =
-			"Assets/FishMMO/Server/Implementation/World/SceneServer/Hotkey/HotkeySystem.cs";
-
-		private const string HotkeyInterfacePath =
-			"Assets/FishMMO/Server/Core/World/SceneServer/Hotkey/IHotkeySystem.cs";
 
 		private const string BroadcastPath =
 			"Assets/FishMMO/Shared/Implementation/Network/Character/AbilityBroadcasts.cs";
@@ -124,8 +118,8 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(body.Contains("abilityController.RemoveAbility(abilityID)"),
 				"the landed forget must drop the ability from the controller the panel is built from");
 
-			LogAssert.IsTrue(body.Contains("hotkeySystem.ForgetAbilityBindings(character, abilityID)"),
-				"and clear the bindings that name it, or the bar shows a dead slot until the next login");
+			LogAssert.IsTrue(body.Contains("OnAbilityForgotten?.Invoke(character, abilityID)"),
+				"and announce it, so a module holding bindings that name it (the Hotkeys module's bar) can clear them; otherwise the bar shows a dead slot until the next login");
 
 			LogAssert.IsTrue(body.Contains("SendForgetResult(character.Owner, abilityID, AbilityForgetFailure.None)"),
 				"and answer, which is what removes the row from the panel");
@@ -187,39 +181,6 @@ namespace FishMMO.UnitTests
 
 			LogAssert.IsTrue(worker.Contains("EndIngressGuard(guardKey)"),
 				"the guard is released where the delete finishes, which is the whole point of holding it");
-		}
-
-		[Test]
-		public void ForgettingPrunesAndEchoesHotkeys()
-		{
-			/* Bindings are validated when they are MADE and in the login prune and nowhere in between,
-			 * so without this the server's bar and the database row keep naming a dead ability until
-			 * the character relogs. */
-			string source = ReadSource(HotkeySystemPath);
-			string body = MethodBody(source,
-				"public bool ForgetAbilityBindings(IPlayerCharacter playerCharacter, long abilityID)",
-				"private static bool IsHotkeyReferenceValid(IPlayerCharacter playerCharacter, HotkeyData hotkey)");
-
-			LogAssert.IsTrue(body.Contains("hotkey.Type != HotkeyTypeAbility"),
-				"only ability bindings may be cleared: the id spaces are not disjoint, so an id alone is not a match");
-
-			LogAssert.IsTrue(body.Contains("hotkey.ReferenceID != abilityID"),
-				"and only the bindings that actually name the forgotten ability");
-
-			LogAssert.IsTrue(body.Contains("EmptyHotkey(hotkey.Slot)"),
-				"a clear must be the same clear the login prune writes, or the client cannot recognise it as empty");
-
-			LogAssert.IsTrue(body.Contains("StageHotkeyPersist(playerCharacter)"),
-				"the correction has to reach the database row, not just the session");
-
-			LogAssert.IsTrue(body.Contains("AcknowledgeAllHotkeys(conn, playerCharacter)"),
-				"and the client's bar has to be told, or it draws the dead binding for the rest of the session");
-
-			LogAssert.IsTrue(body.Contains("if (!changed)"),
-				"a forget that cleared nothing must not write the bar back");
-
-			LogAssert.IsTrue(ReadSource(HotkeyInterfacePath).Contains("bool ForgetAbilityBindings("),
-				"the cleanup is reached through the interface, not by casting the concrete system");
 		}
 
 		[Test]

@@ -14,8 +14,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	public static class PointOfInterestGameplayContent
 	{
-		public const string AchievementPath = "Assets/Templates/Entity/Achievements/Exploration/Places Discovered.asset";
-		public const string DiscoveryTriggerPath = "Assets/Templates/Entity/ECA/Interactions/Site Discovered.asset";
+		public const string AchievementPath = "Assets/FishMMO/Modules/Achievements/Templates/Exploration/Places Discovered.asset";
+		public const string DiscoveryTriggerPath = "Assets/FishMMO/Modules/Achievements/Templates/Counters/Site Discovered.asset";
 
 		/// <summary>
 		/// Everything the generated points of interest need before a cut: gathering content, the NPC table, the discovery

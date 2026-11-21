@@ -168,7 +168,8 @@ namespace FishMMO.Shared.Weather
 
 		[Header("What it does")]
 		[Tooltip("The buff applied while the state is held. Optional: a state with no buff is still tracked, and can still feed a recipe.")]
-		public BaseBuffTemplate Buff;
+		[TemplateOf("BaseBuffTemplate")]
+		public CachedScriptableObject Buff;
 		[Tooltip("The level at or above which the buff is applied.")]
 		[Range(0f, 1f)] public float ApplyAt = 0.6f;
 		[Tooltip("The level at or below which the buff is removed. Keep it under Apply at, so a state on the edge does not flicker.")]

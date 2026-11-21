@@ -66,7 +66,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// <summary>
 		/// List of ability template IDs to grant to new characters on creation.
 		/// </summary>
-		[SerializeField, TemplateReference(typeof(AbilityTemplate))] private List<int> startingAbilityIDs = new List<int>();
+		[SerializeField, TemplateReference("AbilityTemplate")] private List<int> startingAbilityIDs = new List<int>();
 		/// <summary>
 		/// List of item template IDs to add to new characters' inventory on creation.
 		/// </summary>
@@ -785,16 +785,17 @@ namespace FishMMO.Server.Implementation.LoginServer
 			return false;
 		}
 
-		private void BuildStartingAbilityEntries(List<AbilityTemplate> startingAbilities, List<PreparedAbilityEntry> abilities)
+		private void BuildStartingAbilityEntries(List<CachedScriptableObject> startingAbilities, List<PreparedAbilityEntry> abilities)
 		{
 			if (startingAbilities == null)
 			{
 				return;
 			}
 
-			foreach (AbilityTemplate startingAbility in startingAbilities)
+			// The race's starting abilities are the Abilities module's templates (2026-11-20), read through IAbilityTemplateInfo.
+			foreach (CachedScriptableObject entry in startingAbilities)
 			{
-				if (startingAbility == null || AlreadyPrepared(abilities, startingAbility.ID))
+				if (!(entry is IAbilityTemplateInfo startingAbility) || AlreadyPrepared(abilities, startingAbility.ID))
 				{
 					continue;
 				}
@@ -815,8 +816,8 @@ namespace FishMMO.Server.Implementation.LoginServer
 
 			foreach (int id in templateIDs)
 			{
-				AbilityTemplate startingAbility = AbilityTemplate.Get<AbilityTemplate>(id);
-				if (startingAbility != null && !AlreadyPrepared(abilities, startingAbility.ID))
+				if (CachedScriptableObject.TryGetByID(id, out CachedScriptableObject entry) &&
+					entry is IAbilityTemplateInfo startingAbility && !AlreadyPrepared(abilities, startingAbility.ID))
 				{
 					abilities.Add(new PreparedAbilityEntry(startingAbility.ID, startingAbility.GetAllAbilityEventIDs()));
 				}

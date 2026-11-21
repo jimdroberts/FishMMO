@@ -22,7 +22,7 @@ namespace FishMMO.UnitTests
 			string guid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(ModuleFolder + "/Server/StaffSystem.asset"));
 			string group = ProjectFiles.ReadAllText("Assets/AddressableAssetsData/AssetGroups/Server_Static_Permanent.asset").Replace("\r\n", "\n");
 			LogAssert.IsTrue(Regex.IsMatch(group, $@"- m_GUID: {guid}\n(?:    .*\n)*?    - SceneServer_Systems\n"), "it carries the SceneServer_Systems label");
-			string currency = AssetDatabase.AssetPathToGUID(ProjectFiles.Path("Assets/Templates/Entity/CharacterAttributes/Misc/Currency.asset"));
+			string currency = AssetDatabase.AssetPathToGUID(ProjectFiles.Path("Assets/FishMMO/Templates/Entity/CharacterAttributes/Misc/Currency.asset"));
 			LogAssert.IsTrue(ProjectFiles.ReadAllText(ModuleFolder + "/Server/StaffSystem.asset").Contains("currencyTemplate: {fileID: 11400000, guid: " + currency),
 				"/admin gold acts on the Currency attribute, as it did from the scene server's asset");
 			LogAssert.IsFalse(ProjectFiles.ReadAllText("Assets/Prefabs/Server/SceneServer/SceneServerSystem.asset").Contains("currencyTemplate"),

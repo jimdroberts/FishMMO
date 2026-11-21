@@ -339,7 +339,7 @@ damage type (`TryResolveRefusalReport`; a dead target reports nothing, and Evade
 `CombatEventRules` classifies every kind in one place: a refusal moves no health, carries its damage
 type, and is delivered **only** to the connection that owns the attacker, reliably — bystanders get
 nothing. On the attacker's client `PredictedCombatEvents.TryRefuse` settles the matching predictions
-at once and raises `OnPredictionRefused`, and `ClientCombatDisplay` re-texts each predicted number to
+at once and raises `OnPredictionRefused`, and the Combat module's `CombatTextDisplay` re-texts each predicted number to
 "Evade" or "Immune"; with nothing predicted (an immortal target refuses on the caster's own peer too)
 it draws the word itself. The two kinds were appended to the existing `Kind` byte, so the message
 layout did not change.
@@ -575,12 +575,12 @@ CharacterAttribute/
 ├── CharacterAttribute.cs                  # Runtime attribute instance (value layers, formula propagation)
 ├── CharacterResourceAttribute.cs          # Depletable resource (HP/MP/Stamina) with CurrentValue
 ├── CharacterAttributeController.cs        # Per-entity controller (CharacterBehaviour, ICharacterAttributeController, IPredictableController Order=95)
-├── CharacterDamageController.cs           # Damage, heal, and kill logic (CharacterBehaviour, ICharacterDamageController)
+│   (CharacterDamageController.cs, the damage, heal and kill logic, is the Combat module's character part since 2026-11-20:
+│    Modules/Combat/Runtime, with CombatEventCoalescer.cs)
 ├── CharacterAttributeResourceState.cs     # Snapshot struct for resource reconciliation [UseGlobalCustomSerializer]
 ├── CharacterAttributeResourceStateSerializer.cs # Regular + delta serializer; [RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] registers the delta delegates
 ├── AttributeReconcileEntry.cs             # Snapshot entry for NON-resource attributes (Value + ExternalModifier) with index-delta WriteArrayDelta/ReadArrayDelta
 ├── ModifierSource.cs                      # ModifierSourceKind + the (Kind, Id, Index) key of the attributed ledger, with the Item/Buff/Region/DungeonScaling/NpcBonus factories
-├── CombatEventCoalescer.cs                # Merges a tick's combat events per (source, kind, type); MaxEntries = 8, Occurrences counted
 ├── PredictedCombatEvents.cs               # The caster's own predicted numbers, confirmed or swept after ConfirmationWindowSeconds
 ├── ObservedResourcePushScheduler.cs       # Per-tick decision for the observer resource push: primary vs secondary cadence + one confirmation re-send
 └── Template/

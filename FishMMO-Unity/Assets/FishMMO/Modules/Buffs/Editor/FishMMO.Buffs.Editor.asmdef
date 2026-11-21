@@ -1,0 +1,27 @@
+{
+    "name": "FishMMO.Buffs.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Buffs",
+        "FishMMO.Server",
+        "FishMMO.Core",
+        "FishNet.Runtime",
+        "Unity.AI.Navigation",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "KinematicCharacterController"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishNet.Object;
 using FishNet.Object.Prediction;
 using FishNet.Transporting;
@@ -20,9 +20,10 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <b>Dynamic components:</b> The sorted <see cref="IPredictableController"/> array
-	/// is built once in <c>Awake</c>. Components added after <c>Awake</c> completes
-	/// will not participate in the prediction pipeline. All <see cref="IPredictableController"/>
-	/// implementations must be attached to the GameObject before the scene loads.
+	/// is built in <c>Awake</c> and once more at the object's first network start, after every
+	/// Awake on the object, so a module's controller added as a <see cref="CharacterPart"/> by
+	/// <c>BaseCharacter.Awake</c> takes part (the Items module's equipment). Components added
+	/// later than that do not participate in the prediction pipeline.
 	/// </remarks>
 	public class CharacterPredictionController : NetworkBehaviour
 	{
@@ -150,6 +151,18 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void Awake()
 		{
+			DiscoverControllers();
+
+			// An NPC — monster, townsperson or pet — is driven by the server's brain on every peer.
+			serverDrivenInput = GetComponent<NPC>() != null;
+		}
+
+		/// <summary>True once the controllers were found again after every Awake on the object (see <see cref="OnStartNetwork"/>).</summary>
+		private bool controllersSettled;
+
+		/// <summary>Finds and sorts this object's <see cref="IPredictableController"/>s.</summary>
+		private void DiscoverControllers()
+		{
 			List<IPredictableController> list = new List<IPredictableController>();
 			GetComponents(list);
 			List<IPredictableController> sortedList = list
@@ -157,9 +170,6 @@ namespace FishMMO.Shared
 				.ThenBy(c => c.GetType().FullName)
 				.ToList();
 			controllers = sortedList.ToArray();
-
-			// An NPC — monster, townsperson or pet — is driven by the server's brain on every peer.
-			serverDrivenInput = GetComponent<NPC>() != null;
 		}
 
 		/// <summary>
@@ -169,6 +179,15 @@ namespace FishMMO.Shared
 		public override void OnStartNetwork()
 		{
 			base.OnStartNetwork();
+
+			/* Once more, now that every Awake on the object has run: a module's predicted controller is a CharacterPart that
+			 * BaseCharacter.Awake adds (the Items module's equipment), and the two Awakes run in no fixed order, so the first
+			 * look could miss it. Once per object; a pooled object keeps its components. */
+			if (!controllersSettled)
+			{
+				DiscoverControllers();
+				controllersSettled = true;
+			}
 
 			/* State forwarding off is the INTENDED configuration for playable characters, not a
 			 * misconfiguration. It used to warn here that "predicted observers will desync", which
@@ -493,21 +512,28 @@ namespace FishMMO.Shared
 			}
 		}
 
-		/// <summary>Frame of the last replicate failure logged, so a failure repeating every tick logs once a second.</summary>
-		private float lastReplicateFailureLogTime = float.NegativeInfinity;
+		/// <summary>Tick of the last replicate failure logged, so a failure repeating every tick logs once a second.</summary>
+		/// <remarks>Counted in ticks, not read from the wall clock: nothing in the prediction path reads one
+		/// (ObserverSynchronizationProofTests), and a second of ticks is the same second.</remarks>
+		private uint lastReplicateFailureLogTick;
+
+		/// <summary>Whether a replicate failure has been logged yet.</summary>
+		private bool replicateFailureLogged;
 
 		/// <summary>Number of replicate failures since the last one logged.</summary>
 		private int suppressedReplicateFailures;
 
 		private void ReportReplicateFailure(IPredictableController failed, Exception ex)
 		{
-			float now = UnityEngine.Time.realtimeSinceStartup;
-			if (now - lastReplicateFailureLogTime < 1f)
+			uint now = base.TimeManager != null ? base.TimeManager.LocalTick : 0u;
+			uint perSecond = base.TimeManager != null ? (uint)base.TimeManager.TickRate : 1u;
+			if (replicateFailureLogged && now - lastReplicateFailureLogTick < perSecond)
 			{
 				++suppressedReplicateFailures;
 				return;
 			}
-			lastReplicateFailureLogTime = now;
+			replicateFailureLogged = true;
+			lastReplicateFailureLogTick = now;
 			string repeats = suppressedReplicateFailures > 0 ? $" ({suppressedReplicateFailures} more since the last report)" : string.Empty;
 			suppressedReplicateFailures = 0;
 			FishMMO.Logging.Log.Error("CharacterPredictionController",
@@ -760,7 +786,7 @@ namespace FishMMO.Shared
 				if (!castSourceResolved)
 				{
 					castSourceResolved = true;
-					castSource = GetComponent<AbilityController>();
+					castSource = GetComponent<IAbilityController>();
 				}
 				return castSource != null && castSource.HasLiveObjects;
 			}
@@ -786,13 +812,13 @@ namespace FishMMO.Shared
 				if (!castSourceResolved)
 				{
 					castSourceResolved = true;
-					castSource = GetComponent<AbilityController>();
+					castSource = GetComponent<IAbilityController>();
 				}
 				return castSource != null && castSource.IsActivating;
 			}
 		}
 
-		private AbilityController castSource;
+		private IAbilityController castSource;
 		private bool castSourceResolved;
 
 		/// <summary>

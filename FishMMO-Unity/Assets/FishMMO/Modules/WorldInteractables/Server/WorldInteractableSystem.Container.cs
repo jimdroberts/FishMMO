@@ -1,0 +1,223 @@
+﻿using System.Collections.Generic;
+using FishNet.Connection;
+using FishNet.Transporting;
+using FishMMO.Shared;
+using FishMMO.Server.Core.World.SceneServer;
+using FishMMO.Shared.Core;
+
+namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
+{
+	/// <summary>
+	/// Container item operations: validates take-item requests and transfers items from container to player inventory.
+	/// </summary>
+	public partial class WorldInteractableSystem
+	{
+		/// <summary>
+		/// Handles a <see cref="ContainerTakeItemBroadcast"/> request from a client.
+		/// Validates the container interactable, removes the item from the container slot,
+		/// and transfers it into the player's inventory. Despawns the container if it is
+		/// configured to despawn when empty.
+		/// </summary>
+		private void OnServerContainerTakeItemBroadcastReceived(NetworkConnection conn, ContainerTakeItemBroadcast msg, Channel channel)
+		{
+			if (conn == null || conn.FirstObject == null)
+			{
+				return;
+			}
+
+			/* The throttle is taken FIRST. Every refusal this handler gives is an answer — the reply
+			 * is what releases the client's pending lock on the slot — and an answer that is sent
+			 * before the throttle is an answer the throttle does not cover: a dead or teleporting
+			 * client spamming a chest slot got one reply and one log line per packet. Keyed on the
+			 * connection, the guard needs no character to be taken. */
+			if (!TryBeginIngressGuard(conn.ClientId, out long guardKey))
+			{
+				SendContainerResult(conn, msg.InteractableID, msg.Slot, false, ContainerFailureReason.ServerError);
+				return;
+			}
+
+			bool succeeded = false;
+			ContainerFailureReason reason = ContainerFailureReason.ServerError;
+			IContainer takenFrom = null;
+
+			try
+			{
+				IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
+
+				if (character == null ||
+					!character.TryGet(out IInventoryController inventoryController) ||
+					!CharacterStateValidation.CanAct(character))
+				{
+					/* Answered, not dropped — by the finally, with the ServerError it starts on. A
+					 * player who is dead, stunned, teleporting or mid-load clicking a chest slot used
+					 * to get silence, and the slot stayed locked in their client until the window was
+					 * closed. Resolved by hand rather than through TryBeginPlayerRequest for exactly
+					 * that reason: the entry point refuses in silence. */
+					return;
+				}
+
+				if (!ValidateSceneObject(msg.InteractableID, character.GameObject.scene.handle, out ISceneObject sceneObject))
+				{
+					return;
+				}
+
+				// Resolved through the shared rule and gated on CanInteract rather than InRange —
+				// see the note on the merchant purchase path for why the raw GetComponent pair was
+				// both order-dependent and missing the corpse gate.
+				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
+				IContainer container = interactable as IContainer;
+				IItemContainer itemContainer = interactable as IItemContainer;
+				if (container == null ||
+					itemContainer == null ||
+					container.Template == null ||
+					!interactable.CanInteract(character))
+				{
+					reason = ContainerFailureReason.NoContainer;
+					return;
+				}
+
+				takenFrom = container;
+
+				if (!itemContainer.IsValidSlot(msg.Slot))
+				{
+					reason = ContainerFailureReason.AlreadyTaken;
+					return;
+				}
+
+				Item takenItem = itemContainer.RemoveItem(msg.Slot);
+				if (takenItem == null)
+				{
+					reason = ContainerFailureReason.AlreadyTaken;
+					return;
+				}
+
+				if (!interactableSystem.SendNewItemBroadcast(conn, character, inventoryController, takenItem))
+				{
+					// Failed to add to inventory, put item back
+					itemContainer.SetItemSlot(takenItem, msg.Slot);
+					reason = ContainerFailureReason.InventoryFull;
+					return;
+				}
+
+				succeeded = true;
+				reason = ContainerFailureReason.None;
+
+				// If container is empty and configured to despawn, despawn it
+				if (container.Template.DespawnWhenEmpty && itemContainer.FilledSlots() <= 0)
+				{
+					container.Despawn();
+					// Despawned out from under the player: the window has to close, and a refresh
+					// naming a scene object that no longer resolves would be worse than none.
+					takenFrom = null;
+				}
+			}
+			finally
+			{
+				EndIngressGuard(guardKey);
+
+				SendContainerResult(conn, msg.InteractableID, msg.Slot, succeeded, reason);
+
+				/* Re-send the whole contents after a take, rather than trusting the client to
+				 * remove one row: what THE TAKER sees comes from the server's copy, so a client
+				 * that dropped an update converges on the next one instead of compounding the
+				 * error.
+				 *
+				 * Only the taker. This is deliberately narrower than the corpse equivalent and
+				 * the previous wording here claimed otherwise — it said the refresh existed
+				 * because "two players can be looking at the same chest", which is true of the
+				 * world but is not what this line does. A second player standing at the same
+				 * chest keeps a row for an item that is gone until they click it themselves and
+				 * are answered with ContainerFailureReason.AlreadyTaken. Corrected rather than
+				 * implemented, because:
+				 *
+				 *   - There is no per-container viewer registry to send to. Corpses have one
+				 *     (ILootableCorpse.AddLootViewer / RemoveLootViewer, refreshed through
+				 *     RefreshCorpseViewers and torn down on OnCorpseExpired); containers have
+				 *     nothing equivalent. Building it means a viewer set on IContainer and
+				 *     Container, registration in SendContainerOpenBroadcastAction, a new
+				 *     client → server close message with its handler registration, a client that
+				 *     sends it when the panel hides, and despawn-time teardown — five files, a
+				 *     new wire message and a new lifecycle, none of which belongs behind a
+				 *     comment fix.
+				 *
+				 *   - The obvious shortcut is actively wrong. ContainerOpenBroadcast doubles as
+				 *     the OPEN message: UITKContainer calls Show() on receipt. Sending it to the
+				 *     interactable's network observers would force a chest window open on every
+				 *     client in range and tell them what is inside a box they never touched —
+				 *     which is exactly what was deleted from Container's spawn payload (see the
+				 *     remark on Container.items) and must not come back through this path.
+				 *
+				 * So the staleness is real, bounded, and self-correcting on the next click. The
+				 * fix is a viewer registry mirroring the corpse one; until then this comment says
+				 * what the code does. */
+				if (succeeded && takenFrom != null)
+				{
+					SendContainerContents(conn, takenFrom);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Sends the reply that releases the client's pending lock on a container slot.
+		/// </summary>
+		private void SendContainerResult(NetworkConnection conn, long interactableID, int slot, bool success, ContainerFailureReason reason)
+		{
+			if (conn == null || !conn.IsActive)
+			{
+				return;
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new ContainerTakeResultBroadcast()
+			{
+				InteractableID = interactableID,
+				Slot = slot,
+				Success = success,
+				Reason = reason,
+			}, true, Channel.Reliable);
+		}
+
+		/// <summary>
+		/// Sends one connection a container's current contents.
+		/// </summary>
+		/// <remarks>
+		/// The same message the container's ECA open action sends, reused as the refresh — so the
+		/// client has exactly one code path for "here is what is in the box" and cannot end up
+		/// with an open window whose contents came from two different shapes of update.
+		/// </remarks>
+		private void SendContainerContents(NetworkConnection conn, IContainer container)
+		{
+			if (conn == null || !conn.IsActive || container?.Template == null)
+			{
+				return;
+			}
+
+			if (container is not IItemContainer itemContainer)
+			{
+				return;
+			}
+
+			List<ContainerSlotData> slots = new List<ContainerSlotData>(itemContainer.Items.Count);
+			for (int i = 0; i < itemContainer.Items.Count; ++i)
+			{
+				Item item = itemContainer.Items[i];
+				if (item == null || item.Template == null)
+				{
+					continue;
+				}
+				slots.Add(new ContainerSlotData()
+				{
+					Slot = i,
+					TemplateID = item.Template.ID,
+					Amount = item.IsStackable ? item.Stackable.Amount : 1,
+				});
+			}
+
+			Server.NetworkWrapper.Broadcast(conn, new ContainerOpenBroadcast()
+			{
+				InteractableID = container.ID,
+				TemplateID = container.Template.ID,
+				Items = slots.ToArray(),
+			}, true, Channel.Reliable);
+		}
+	}
+}

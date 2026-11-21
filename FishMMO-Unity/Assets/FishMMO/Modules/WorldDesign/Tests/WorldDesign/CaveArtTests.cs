@@ -112,9 +112,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			var payload = new HashSet<string>(ProceduralArtCatalogue.PayloadPaths());
 			var wrappers = new HashSet<string>(ProceduralArtCatalogue.WrapperPaths());
 			var prefabs = new HashSet<string>(ProceduralArtCatalogue.AllPrefabNames());
-			Assert.That(payload, Does.Contain(ProceduralArtCatalogue.CaveGlowAlbedoPath));
-			Assert.That(payload, Does.Contain(ProceduralArtCatalogue.CaveGlowEmissionPath));
-			Assert.That(payload, Does.Contain(ProceduralArtCatalogue.CaveOreAlbedoPath));
+			// The three maps are slices of the cave glow look array now (ProceduralArtLookArrays), one payload file for them all.
+			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.CaveGlowSetName))
+			{
+				Assert.That(payload, Does.Contain(layout.Path));
+			}
 			Assert.That(wrappers, Does.Contain(ProceduralArtCatalogue.MaterialPath(ProceduralArtCatalogue.CaveGangueMaterial)));
 			foreach (CaveGlowFamily f in ProceduralArtCatalogue.CaveGlowFamilies)
 			{

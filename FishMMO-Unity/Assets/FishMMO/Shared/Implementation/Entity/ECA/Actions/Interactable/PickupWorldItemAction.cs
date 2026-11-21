@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using FishMMO.Shared.Core;
 
@@ -67,10 +67,12 @@ namespace FishMMO.Shared
 
 				if (data.OnGrantItem != null && data.OnGrantItem(initiator, inventoryController, newItem))
 				{
-					if (worldItem.AchievementTemplateID != 0 &&
-						initiator.TryGet(out IAchievementController achievementController))
+					if (worldItem.AchievementTemplateID != 0)
 					{
-						achievementController.Increment(worldItem.AchievementTemplateID, 1);
+						if (CachedScriptableObject.TryGetByID(worldItem.AchievementTemplateID, out CachedScriptableObject achievement))
+						{
+							Accomplishments.Record(initiator, achievement);
+						}
 					}
 
 					/* A successful grant always takes the WHOLE pile, so the pickup always

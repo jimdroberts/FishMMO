@@ -135,6 +135,8 @@ namespace FishMMO.UnitTests
 		[TestCase("FishBackdropGround ForwardLit []")]
 		[TestCase("FishGrassBlades ForwardLit []")]
 		[TestCase("FishWorldHlod ForwardLit []")]
+		// The first case compiles every program for the cache (about three minutes for WebGPU), past the default limit.
+		[Timeout(600000)]
 		public void HotLitPassesReadTheTable(string label)
 		{
 			var match=Compiled().Where(c=>c.label==label).ToArray();
@@ -175,9 +177,10 @@ namespace FishMMO.UnitTests
 		/// <summary>The URP sources the table's copies come from (FishLightTableLighting.hlsl, FishLightTable.hlsl, the gather's declarations).</summary>
 		static readonly (string file,string sha)[] UrpSources =
 		{
-			("Input.hlsl","72ce05de8f49228c"),("RealtimeLights.hlsl","59d1d75a99532078"),("Shadows.hlsl","caa3e10c26476cd4"),
-			("GlobalIllumination.hlsl","1f920be6e525dbb4"),("LightCookie/LightCookie.hlsl","2660a79e9653764b"),
-			("LightCookie/LightCookieInput.hlsl","e548590c9f8bc05d"),("Lighting.hlsl","1132ec024298a9e3"),
+			// URP 17.6 (editor 6000.6, 2026-11-07); the copies were re-checked against it on 2026-11-20 (SSR in the glossy reflection).
+			("Input.hlsl","de458480e1b73f20"),("RealtimeLights.hlsl","53bb9d68a177dc59"),("Shadows.hlsl","41dbe5965ef3f3cd"),
+			("GlobalIllumination.hlsl","23938dcb7faf56b4"),("LightCookie/LightCookie.hlsl","2660a79e9653764b"),
+			("LightCookie/LightCookieInput.hlsl","b223f4665570d9e5"),("Lighting.hlsl","73021044223c60c2"),
 		};
 
 		// A URP upgrade that touches any of them must re-copy the table's versions (and check no new reader of an array appeared).

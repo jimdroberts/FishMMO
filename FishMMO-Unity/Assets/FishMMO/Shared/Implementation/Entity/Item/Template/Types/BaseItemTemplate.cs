@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using System.Collections.Generic;
@@ -163,20 +163,12 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (icon != null && icon.RuntimeKeyIsValid())
 			{
-				icon.LoadAssetAsync<Sprite>().Completed += (handle) =>
-				{
-					if (handle.Status == AsyncOperationStatus.Succeeded)
-						loadedIcon = handle.Result;
-				};
+				TemplateAssets.Load<Sprite>(icon, asset => loadedIcon = asset);
 			}
 
 			if (MeshReference != null && MeshReference.RuntimeKeyIsValid())
 			{
-				MeshReference.LoadAssetAsync<Mesh>().Completed += (handle) =>
-				{
-					if (handle.Status == AsyncOperationStatus.Succeeded)
-						loadedMesh = handle.Result;
-				};
+				TemplateAssets.Load<Mesh>(MeshReference, asset => loadedMesh = asset);
 			}
 #endif
 		}

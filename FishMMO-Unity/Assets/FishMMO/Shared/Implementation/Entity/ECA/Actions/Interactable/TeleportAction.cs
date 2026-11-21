@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishMMO.Shared.Core;
 using UnityEngine;
 
@@ -77,10 +77,9 @@ namespace FishMMO.Shared
 				player.Teleport(TeleporterKey.Normalize(data.Interactable.GameObject.name));
 			}
 
-			if (teleporter.AchievementTemplate != null &&
-				player.TryGet(out IAchievementController achievementController))
+			if (teleporter.AchievementTemplate != null)
 			{
-				achievementController.Increment(teleporter.AchievementTemplate, 1);
+				Accomplishments.Record(player, teleporter.AchievementTemplate);
 			}
 		}
 	}

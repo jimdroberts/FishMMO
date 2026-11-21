@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// the player chooses.
 	/// </summary>
 	/// <remarks>
-	/// Distinct from <see cref="UITKChatChannelPicker"/>, which selects a chat channel and has
+	/// Distinct from <c>UITKChatChannelPicker</c> (Chat module), which selects a chat channel and has
 	/// nothing to do with scene instances.
 	/// <para>
 	/// The list is a MODEL (<see cref="channels"/>, plain data) rendered into a VIEW that is

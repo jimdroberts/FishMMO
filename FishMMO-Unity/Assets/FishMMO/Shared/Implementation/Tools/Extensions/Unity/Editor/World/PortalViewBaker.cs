@@ -163,7 +163,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static int BakeScenes(bool onlyOutOfDate)
 		{
-			List<string> scenes = SpawnTableBaker.FindWorldScenePaths();
+			List<string> scenes = FishMMO.Shared.WorldDesign.WorldScenePaths.FindAll();
 			if (scenes.Count == 0)
 			{
 				Debug.LogWarning("[Portal views] No world scenes found; nothing to bake.");

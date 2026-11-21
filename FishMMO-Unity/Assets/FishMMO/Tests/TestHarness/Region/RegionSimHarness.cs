@@ -103,7 +103,7 @@ namespace FishMMO.TestHarness
 			if (BoostedAttribute == null)
 			{
 				BoostedAttribute = UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(
-					"Assets/Templates/Entity/CharacterAttributes/Speed/Attack Speed.asset");
+					"Assets/FishMMO/Templates/Entity/CharacterAttributes/Speed/Attack Speed.asset");
 			}
 #endif
 			if (PlayerPrefab == null)

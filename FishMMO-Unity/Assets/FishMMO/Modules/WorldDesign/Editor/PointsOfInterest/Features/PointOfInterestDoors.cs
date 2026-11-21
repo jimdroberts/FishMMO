@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		static PointOfInterestDoors() => PointOfInterestSiteBuilders.Register(new PointOfInterestDoors());
 
-		public const string TriggerPath = "Assets/Templates/Entity/ECA/Interactions/Door Interact.asset";
+		public const string TriggerPath = "Assets/FishMMO/Modules/WorldInteractables/Templates/Interactions/Door Interact.asset";
 		/// <summary>How far a door swings open, degrees (short of square, so it never touches the wall it opens against).</summary>
 		public const float SwingDegrees = 86f;
 		/// <summary>Seconds a door takes to open or shut.</summary>

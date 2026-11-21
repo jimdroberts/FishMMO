@@ -6,7 +6,12 @@
         "Unity.Addressables",
         "Unity.Addressables.Editor",
         "Unity.ResourceManager",
-        "FishMMO.Shared.Tools.Editor"
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Abilities",
+        "FishMMO.Combat",
+        "FishMMO.Core",
+        "FishMMO.Commerce",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [
         "Editor"

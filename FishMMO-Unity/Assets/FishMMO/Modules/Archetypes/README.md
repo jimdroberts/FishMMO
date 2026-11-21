@@ -7,7 +7,7 @@ the archetype condition.
 |---|---|
 | **Module id** | `archetypes` (`ArchetypesModule`) |
 | **Assemblies** | `FishMMO.Archetypes`, `.Server`, `.Tests` |
-| **Depends on** | The core |
+| **Depends on** | The core; Abilities (an archetype's abilities); Buffs (an archetype's buffs). `ArchetypeTemplate` is the module's since 2026-11-20 |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
 | **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17 |

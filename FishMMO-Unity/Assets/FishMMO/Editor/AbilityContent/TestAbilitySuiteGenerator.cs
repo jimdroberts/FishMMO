@@ -64,13 +64,13 @@ namespace FishMMO.AbilityContent
 		public const string FXFolder = "Assets/Prefabs/Client/FX/Abilities";
 		public const string HealPrefabFolder = "Assets/Prefabs/Shared/Entity/Abilities/Types/Heal";
 		public const string AreaPrefabFolder = "Assets/Prefabs/Shared/Entity/Abilities/Types/Area";
-		public const string HealAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Heal";
-		public const string AreaAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Area";
-		public const string HealHitEventFolder = "Assets/Templates/Entity/Abilities/Events/Hit/Heal";
-		public const string AreaHitEventFolder = "Assets/Templates/Entity/Abilities/Events/Hit/Area";
-		public const string AreaSpawnEventFolder = "Assets/Templates/Entity/Abilities/Events/Spawn/Area";
-		public const string DestroyEventFolder = "Assets/Templates/Entity/Abilities/Events/Destroy";
-		public const string PremadeFolder = "Assets/Templates/Entity/Abilities/Premade";
+		public const string HealAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Heal";
+		public const string AreaAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Area";
+		public const string HealHitEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Hit/Heal";
+		public const string AreaHitEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Hit/Area";
+		public const string AreaSpawnEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Spawn/Area";
+		public const string DestroyEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Destroy";
+		public const string PremadeFolder = "Assets/FishMMO/Modules/Commerce/Templates/Premade";
 
 		// ── What is reused ──────────────────────────────────────────────────────────────────────
 		private const string PathFireFX = "Assets/Prefabs/Client/FX/Abilities/Fire.prefab";
@@ -78,14 +78,14 @@ namespace FishMMO.AbilityContent
 		private const string PathArmorBuffFX = "Assets/Prefabs/Client/FX/Abilities/TestBuffFX.prefab";
 		private const string PathSpeedBuffFX = "Assets/Prefabs/Client/FX/Abilities/TestBuffFX 2.prefab";
 		private const string PathFireballPrefab = "Assets/Prefabs/Shared/Entity/Abilities/Types/Fireball/Lesser Fireball.prefab";
-		private const string PathProjectileMove = "Assets/Templates/Entity/Abilities/Events/Move/Projectile Forward Move Event.asset";
-		private const string PathArmorBuff = "Assets/Templates/Entity/Buffs/Minor Increase Armor.asset";
-		private const string PathSpeedBuff = "Assets/Templates/Entity/Buffs/Minor Increase Move Speed.asset";
-		private const string PathFireDamage = "Assets/Templates/Entity/CharacterAttributes/Damage/Fire Damage.asset";
-		private const string PathPhysicalDamage = "Assets/Templates/Entity/CharacterAttributes/Damage/Physical Damage.asset";
-		private const string PathMana = "Assets/Templates/Entity/CharacterAttributes/Resource/Mana.asset";
-		private const string PathStamina = "Assets/Templates/Entity/CharacterAttributes/Resource/Stamina.asset";
-		private const string PathGeneralGoods = "Assets/Templates/Entity/Interactables/NPCs/Human/Merchants/GeneralGoods/GeneralGoods.asset";
+		private const string PathProjectileMove = "Assets/FishMMO/Modules/Abilities/Templates/Events/Move/Projectile Forward Move Event.asset";
+		private const string PathArmorBuff = "Assets/FishMMO/Modules/Buffs/Templates/Minor Increase Armor.asset";
+		private const string PathSpeedBuff = "Assets/FishMMO/Modules/Buffs/Templates/Minor Increase Move Speed.asset";
+		private const string PathFireDamage = "Assets/FishMMO/Templates/Entity/CharacterAttributes/Damage/Fire Damage.asset";
+		private const string PathPhysicalDamage = "Assets/FishMMO/Templates/Entity/CharacterAttributes/Damage/Physical Damage.asset";
+		private const string PathMana = "Assets/FishMMO/Templates/Entity/CharacterAttributes/Resource/Mana.asset";
+		private const string PathStamina = "Assets/FishMMO/Templates/Entity/CharacterAttributes/Resource/Stamina.asset";
+		private const string PathGeneralGoods = "Assets/FishMMO/Modules/Commerce/Templates/NPCs/Human/Merchants/GeneralGoods/GeneralGoods.asset";
 
 		private const string SharedGroup = "Shared_Static_Permanent";
 		private const string ClientFXGroup = "Client_Dynamic";
@@ -947,8 +947,9 @@ namespace FishMMO.AbilityContent
 		}
 
 		/// <summary>
-		/// Who a heal mends: you, your allies, and any player who is not hostile to you — never wildlife, neutral NPCs or pets
-		/// Buffs stay with <see cref="Friends"/>: allies only.
+		/// Who a heal mends: you, your allies, and any player or NPC that is not hostile to you — never wildlife or someone
+		/// else's pet (Jim, 2026-11-21: neutral NPCs too, "it will be helpful later on"). Buffs stay with <see cref="Friends"/>:
+		/// allies only.
 		/// </summary>
 		private static T Healable<T>(T selector) where T : TargetSelector
 		{
@@ -957,7 +958,8 @@ namespace FishMMO.AbilityContent
 				ApplyToSelf = true,
 				ApplyToEnemy = false,
 				ApplyToNeutral = true,
-				NeutralPlayersOnly = true,
+				NeutralPlayersOnly = false,
+				NeutralExcludesWildlifeAndPets = true,
 				ApplyToAllies = true,
 			});
 			selector.Conditions.Add(new IsCharacterAliveCondition());

@@ -235,13 +235,14 @@ namespace FishMMO.UnitTests.Weather
 				"the froxel volume references its compositing shader");
 			string height = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishHeightFogFeature.cs");
 			SourceScanPins.HoldsAndFires("height fog shader", height,
-				code => code.Contains("FogShader != null ? FogShader : Shader.Find(ShaderName)") ? null : "the height fog does not use its referenced shader",
-				SourceScanPins.Replace("FogShader != null ? FogShader : Shader.Find(ShaderName)", "Shader.Find(ShaderName)"),
+				// The name fallback goes through ShaderLookup (Shader.Find that also finds shaders loaded from bundles) since 2026-11-18; the reference comes first as before.
+				code => code.Contains("FogShader != null ? FogShader : ShaderLookup.Find(ShaderName)") ? null : "the height fog does not use its referenced shader",
+				SourceScanPins.Replace("FogShader != null ? FogShader : ShaderLookup.Find(ShaderName)", "ShaderLookup.Find(ShaderName)"),
 				"found by name alone");
 			string froxel = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishVolumetricFogFeature.cs");
 			SourceScanPins.HoldsAndFires("froxel apply shader", froxel,
-				code => code.Contains("ApplyShader != null ? ApplyShader : Shader.Find(ApplyShaderName)") ? null : "the froxel volume does not use its referenced shader",
-				SourceScanPins.Replace("ApplyShader != null ? ApplyShader : Shader.Find(ApplyShaderName)", "Shader.Find(ApplyShaderName)"),
+				code => code.Contains("ApplyShader != null ? ApplyShader : ShaderLookup.Find(ApplyShaderName)") ? null : "the froxel volume does not use its referenced shader",
+				SourceScanPins.Replace("ApplyShader != null ? ApplyShader : ShaderLookup.Find(ApplyShaderName)", "ShaderLookup.Find(ApplyShaderName)"),
 				"found by name alone");
 			// The material made at run time is the feature's own, never written into the serialized field, which
 			// Dispose would otherwise destroy whatever it held — an assigned material asset included.

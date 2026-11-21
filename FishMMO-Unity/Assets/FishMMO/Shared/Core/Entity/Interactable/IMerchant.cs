@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
@@ -9,11 +10,11 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// The merchant template defining available items, abilities, and ability events for sale.
 		/// </summary>
-		MerchantTemplate Template { get; }
+		CachedScriptableObject Template { get; }
 
 		/// <summary>
 		/// Achievement template to increment when a player purchases from this merchant.
 		/// </summary>
-		AchievementTemplate AchievementTemplate { get; }
+		CachedScriptableObject AchievementTemplate { get; }
 	}
 }

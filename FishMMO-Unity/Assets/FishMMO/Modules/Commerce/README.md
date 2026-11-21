@@ -7,7 +7,7 @@ player-to-player trade, with their windows.
 |---|---|
 | **Module id** | `commerce` (`CommerceModule`) |
 | **Assemblies** | `FishMMO.Commerce`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
-| **Depends on** | The core (items, inventory, currency) |
+| **Depends on** | The core (items, inventory, currency); Abilities (premade abilities and the knowledge a merchant sells). `MerchantTemplate`, `PremadeAbilityTemplate` and the merchant component are the module's since 2026-11-20 (`Runtime/Merchant`, `Templates/`) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
 | **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17 |

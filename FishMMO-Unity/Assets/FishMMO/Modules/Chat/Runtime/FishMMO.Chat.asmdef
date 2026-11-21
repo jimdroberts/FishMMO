@@ -1,0 +1,19 @@
+{
+    "name": "FishMMO.Chat",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "KinematicCharacterController"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

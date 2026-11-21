@@ -33,8 +33,8 @@ namespace FishMMO.AbilityContent
 	/// </remarks>
 	public static partial class TestAbilitySuiteGenerator
 	{
-		public const string DispelAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Dispel";
-		public const string DispelEventFolder = "Assets/Templates/Entity/Abilities/Events/Hit/Dispel";
+		public const string DispelAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Dispel";
+		public const string DispelEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Hit/Dispel";
 
 		private static readonly Palette DispelPalette = new Palette(new Color(0.95f, 0.20f, 0.70f), new Color(1.0f, 0.90f, 1.0f));
 

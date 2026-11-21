@@ -21,7 +21,7 @@ namespace FishMMO.Client
 	/// texture can only be sized by whoever knows how big the viewport is.</para>
 	///
 	/// <para><b>Why the camera is disabled and rendered by hand.</b> Same reason as
-	/// <see cref="MinimapCameraRenderer"/>: a <c>Camera</c> component that is enabled renders once
+	/// the Map module's <c>MinimapCameraRenderer</c>: a <c>Camera</c> component that is enabled renders once
 	/// per frame for as long as it is enabled, whether or not the panel is on screen. Here the
 	/// subject is one character rather than the world, so a render is cheap — but "cheap" is not
 	/// "free", and submitting explicitly is also what makes the camera's state (target texture,

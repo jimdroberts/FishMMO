@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -1045,83 +1045,79 @@ namespace FishMMO.Client
 		/// <param name="result">The guild operation result.</param>
 		public void GuildController_OnReceiveGuildResult(GuildResultType result)
 		{
-			if (!UIManager.TryGetTK("UIChat", out UITKChat chat))
-			{
-				return;
-			}
 			switch (result)
 			{
 				case GuildResultType.Success:
 					break;
 				case GuildResultType.InvalidGuildName:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "The requested guild name is invalid.");
+					ChatWindow.ShowSystem("The requested guild name is invalid.");
 					break;
 				case GuildResultType.NameAlreadyExists:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "A guild with that name already exists.");
+					ChatWindow.ShowSystem("A guild with that name already exists.");
 					break;
 				case GuildResultType.AlreadyInGuild:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "You are already in a guild!");
+					ChatWindow.ShowSystem("You are already in a guild!");
 					break;
 				case GuildResultType.GuildNotFound:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild no longer exists.");
+					ChatWindow.ShowSystem("That guild no longer exists.");
 					break;
 				case GuildResultType.GuildFull:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild is full.");
+					ChatWindow.ShowSystem("That guild is full.");
 					break;
 				case GuildResultType.InvitationExpired:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild invitation is no longer valid.");
+					ChatWindow.ShowSystem("That guild invitation is no longer valid.");
 					break;
 				case GuildResultType.TargetIsBlocked:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That player is not accepting invitations from you.");
+					ChatWindow.ShowSystem("That player is not accepting invitations from you.");
 					break;
 				case GuildResultType.InviteOnCooldown:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "You have invited that player too recently.");
+					ChatWindow.ShowSystem("You have invited that player too recently.");
 					break;
 				case GuildResultType.InsufficientRank:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild rank does not allow that.");
+					ChatWindow.ShowSystem("Your guild rank does not allow that.");
 					break;
 				case GuildResultType.RankNotFound:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild rank does not exist.");
+					ChatWindow.ShowSystem("That guild rank does not exist.");
 					break;
 				case GuildResultType.InvalidRankName:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
+					ChatWindow.ShowSystem("That rank name is not allowed.");
 					break;
 				case GuildResultType.TooManyRanks:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild cannot have any more ranks.");
+					ChatWindow.ShowSystem("Your guild cannot have any more ranks.");
 					break;
 				case GuildResultType.RankInUse:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That rank still has members in it.");
+					ChatWindow.ShowSystem("That rank still has members in it.");
 					break;
 				case GuildResultType.WouldOrphanGuild:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That change would leave nobody able to manage the guild's ranks.");
+					ChatWindow.ShowSystem("That change would leave nobody able to manage the guild's ranks.");
 					break;
 				case GuildResultType.Failed:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild request could not be completed.");
+					ChatWindow.ShowSystem("That guild request could not be completed.");
 					break;
 				case GuildResultType.InsufficientFunds:
-					chat.InstantiateChatMessage(ChatChannel.System, "", $"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
+					ChatWindow.ShowSystem($"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
 					break;
 
 				/* The recruitment results. Every one of these was sent and then dropped here by the
 				 * default branch, so applying to a guild produced no answer at all — not the
 				 * confirmation, not the reason it was refused (issue #267). */
 				case GuildResultType.ApplicationSent:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "Your application has been sent.");
+					ChatWindow.ShowSystem("Your application has been sent.");
 					break;
 				case GuildResultType.AlreadyApplied:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "You have already applied to that guild.");
+					ChatWindow.ShowSystem("You have already applied to that guild.");
 					break;
 				case GuildResultType.NotRecruiting:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That guild is not recruiting.");
+					ChatWindow.ShowSystem("That guild is not recruiting.");
 					break;
 				case GuildResultType.ApplyOnCooldown:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "You have applied too recently. Try again shortly.");
+					ChatWindow.ShowSystem("You have applied too recently. Try again shortly.");
 					break;
 				case GuildResultType.ApplicationNotFound:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "That application is no longer pending.");
+					ChatWindow.ShowSystem("That application is no longer pending.");
 					break;
 				case GuildResultType.TooManyApplications:
-					chat.InstantiateChatMessage(ChatChannel.System, "", "You have too many guild applications waiting. Withdraw one or wait for an answer.");
+					ChatWindow.ShowSystem("You have too many guild applications waiting. Withdraw one or wait for an answer.");
 					break;
 				default:
 					return;
@@ -1197,10 +1193,7 @@ namespace FishMMO.Client
 					CharacterAttributeTemplate currency = CharacterAttributeTemplate.Get<CharacterAttributeTemplate>(guildController.CreationCostCurrencyTemplateID);
 					if (currency != null && !CharacterCurrency.CanAfford(Character, currency, guildController.CreationCost))
 					{
-						if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-						{
-							chat.InstantiateChatMessage(ChatChannel.System, "", $"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
-						}
+						ChatWindow.ShowSystem($"You cannot afford to found a guild. It costs {DescribeCreationFee()}.");
 						return;
 					}
 
@@ -1384,10 +1377,7 @@ namespace FishMMO.Client
 
 			if (!guildController.HasGuildPermission(GuildPermissions.Disband))
 			{
-				if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-				{
-					chat.InstantiateChatMessage(ChatChannel.System, "", "Your guild rank does not allow that.");
-				}
+				ChatWindow.ShowSystem("Your guild rank does not allow that.");
 				return;
 			}
 
@@ -2354,10 +2344,7 @@ namespace FishMMO.Client
 				{
 					entries.Add(("Message", () =>
 					{
-						if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
-						{
-							uiChat.SetInputText(ChatTellAddress.FormatCommand(displayName));
-						}
+						ChatWindow.BeginTell(displayName);
 					}
 					));
 				}
@@ -2965,10 +2952,7 @@ namespace FishMMO.Client
 				 * a limit is never the limit. */
 				if (!GuildRankDefaults.TrySanitizeRankName(s, out string sanitized))
 				{
-					if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-					{
-						chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
-					}
+					ChatWindow.ShowSystem("That rank name is not allowed.");
 					return;
 				}
 
@@ -3066,10 +3050,7 @@ namespace FishMMO.Client
 			{
 				if (!GuildRankDefaults.TrySanitizeRankName(s, out string sanitized))
 				{
-					if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-					{
-						chat.InstantiateChatMessage(ChatChannel.System, "", "That rank name is not allowed.");
-					}
+					ChatWindow.ShowSystem("That rank name is not allowed.");
 					return;
 				}
 

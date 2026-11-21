@@ -7,7 +7,7 @@ own core module, so a game can have chat without Social.
 |---|---|
 | **Module id** | `social` (`SocialModule`) |
 | **Assemblies** | `FishMMO.Social`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
-| **Depends on** | The core |
+| **Depends on** | The core; Buffs (the party frame shows members' buffs) |
 | **Depended on by** | None. Matchmaking, Factions, Housing and chat read parties and guilds through core contracts. |
 | **Remove together with** | Nothing |
 | **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-16 |

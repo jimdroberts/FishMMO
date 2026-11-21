@@ -369,7 +369,7 @@ namespace FishMMO.Shared
 			PartyID = partyController != null ? partyController.ID : 0;
 			GuildID = guildController != null ? guildController.ID : 0;
 			InCombat = damageController != null && damageController.IsInCombat;
-			LongestAbilityRange = abilityController is AbilityController abilities ? abilities.LongestKnownAbilityRange : 0f;
+			LongestAbilityRange = abilityController != null ? abilityController.LongestKnownAbilityRange : 0f;
 
 			CurrentTargetObjectId = 0;
 			if (targetController != null)

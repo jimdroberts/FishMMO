@@ -375,11 +375,26 @@ namespace FishMMO.Shared
 			CoreLink = EntityLink.None;
 		}
 
+		/// <summary>Forwards the network start to the character's parts (both peers; before OnStartServer and OnStartClient).</summary>
+		public override void OnStartNetwork()
+		{
+			base.OnStartNetwork();
+			CharacterParts.Forward(this, part => part.OnStartNetwork());
+		}
+
+		/// <summary>Forwards the network stop to the character's parts (both peers).</summary>
+		public override void OnStopNetwork()
+		{
+			CharacterParts.Forward(this, part => part.OnStopNetwork());
+			base.OnStopNetwork();
+		}
+
 		/// <summary>
 		/// On the server, every character keeps the scene's prop colliders (trees, rocks, boulders) streamed in round
 		/// itself while it is spawned: players and NPCs alike, so none walks through a rock a client draws. It also
 		/// gets its Core entity, unless its load already made one.
 		/// </summary>
+
 		public override void OnStartServer()
 		{
 			base.OnStartServer();
@@ -414,6 +429,14 @@ namespace FishMMO.Shared
 					ownerPropFocus = true;
 				}
 			}
+			CharacterParts.Forward(this, part => part.OnStartClient());
+		}
+
+		/// <summary>Forwards a client-side ownership change to the character's parts.</summary>
+		public override void OnOwnershipClient(FishNet.Connection.NetworkConnection prevOwner)
+		{
+			base.OnOwnershipClient(prevOwner);
+			CharacterParts.Forward(this, part => part.OnOwnershipClient(prevOwner));
 		}
 
 		/// <summary>True while this client keeps prop colliders round its own character (see OnStartClient).</summary>
@@ -422,6 +445,7 @@ namespace FishMMO.Shared
 		/// <summary>Ends the client's entity for this character.</summary>
 		public override void OnStopClient()
 		{
+			CharacterParts.Forward(this, part => part.OnStopClient());
 			if (!base.IsServerStarted)
 			{
 				ReleaseCoreLink();

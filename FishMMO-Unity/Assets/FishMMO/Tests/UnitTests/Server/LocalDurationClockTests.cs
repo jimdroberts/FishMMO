@@ -85,7 +85,7 @@ namespace FishMMO.UnitTests
 			new ClockCase("Assets/FishMMO/Modules/Matchmaking/Server/MatchmakingSystem.ArenaMatch.cs"),
 			new ClockCase(SceneServer + "Naming/NamingSystem.cs"),
 			new ClockCase(SceneServer + "Naming/NamingSystemRuntimeData.cs"),
-			new ClockCase(SceneServer + "CharacterInventory/CharacterInventorySystem.cs"),
+			new ClockCase("Assets/FishMMO/Modules/Items/Server/CharacterInventorySystem.cs"),
 			new ClockCase(SceneServer + "SceneServer/SceneServerSystem.cs"),
 			new ClockCase("Assets/FishMMO/Modules/Staff/Server/StaffSystem.StaffConsole.cs",
 				// The roster's "muted" flag, against a mute's persisted "until".

@@ -44,7 +44,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement to increment when a player enters this dungeon.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <inheritdoc />
 		string IDungeonEntrance.DungeonName => DungeonName;
@@ -53,7 +54,7 @@ namespace FishMMO.Shared
 		int IDungeonEntrance.DungeonTemplateID => Template != null ? Template.ID : 0;
 
 		/// <inheritdoc />
-		AchievementTemplate IDungeonEntrance.AchievementTemplate => AchievementTemplate;
+		CachedScriptableObject IDungeonEntrance.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// Gets the display title for the dungeon entrance.

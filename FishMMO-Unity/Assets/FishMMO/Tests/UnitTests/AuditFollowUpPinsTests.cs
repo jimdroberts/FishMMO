@@ -14,23 +14,22 @@ namespace FishMMO.UnitTests
 	/// Deliberately text scans, in the style of <c>SlotPanelSharingTests</c>: what each exists to
 	/// prevent is the old order quietly coming back in a refactor. Where a behaviour could be
 	/// exercised cheaply it is, in <c>AbilityKnowledgeReverseIndexTests</c> and
-	/// <c>HotkeyBarLiftTests</c>; this fixture holds what could not.
+	/// the Hotkeys module's <c>HotkeyBarLiftTests</c>; this fixture holds what could not.
 	/// </remarks>
 	[TestFixture]
 	public class AuditFollowUpPinsTests
 	{
 		private const string GuildSystemPath = "Assets/FishMMO/Modules/Social/Server/GuildSystem.cs";
-		private const string ChatPanelPath = "Assets/FishMMO/Client/GUI/World/Chat/UITKChat.cs";
+		private const string ChatPanelPath = "Assets/FishMMO/Modules/Chat/Client/UITKChat.cs";
 		private const string AbilitySystemPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/Ability/AbilitySystem.cs";
 		private const string AbilityCraftPath = "Assets/FishMMO/Modules/AbilityCrafting/Server/AbilityCraftingSystem.Craft.cs";
 		private const string MerchantPath = "Assets/FishMMO/Modules/Commerce/Server/CommerceSystem.Merchant.cs";
-		private const string ContainerSystemPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.Container.cs";
-		private const string HotkeySystemPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/Hotkey/HotkeySystem.cs";
+		private const string ContainerSystemPath = "Assets/FishMMO/Modules/WorldInteractables/Server/WorldInteractableSystem.Container.cs";
 		private const string SavingPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs";
 		private const string InspectPath = "Assets/FishMMO/Client/GUI/World/Inspect/UITKInspect.cs";
 		private const string SheetViewPath = "Assets/FishMMO/Client/GUI/World/CharacterSheet/CharacterSheetView.cs";
 		private const string LootPath = "Assets/FishMMO/Modules/Commerce/Client/UITKLoot.cs";
-		private const string ContainerPanelPath = "Assets/FishMMO/Client/GUI/World/Container/UITKContainer.cs";
+		private const string ContainerPanelPath = "Assets/FishMMO/Modules/WorldInteractables/Client/UITKContainer.cs";
 		private const string ControlPath = "Assets/FishMMO/Client/GUI/UITKControl.cs";
 
 		private static string ReadSource(string relativePath)
@@ -104,6 +103,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void GuildChat_RendersEveryCodeInTheTable()
 		{
+			InstalledModules.Require("Chat");
 			/* TARGET_OFFLINE now arrives on the guild channel; a handler matching one hard-coded
 			 * code printed it as the raw FISHMMO_ token. */
 			string body = MethodBody(ReadSource(ChatPanelPath),
@@ -182,6 +182,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ContainerTake_TakesTheThrottle_BeforeResolvingTheCharacter()
 		{
+			InstalledModules.Require("WorldInteractables");
 			/* A state-gate reply sent before the throttle is a reply the throttle does not cover:
 			 * a dead client spamming a chest slot got one answer per packet. */
 			string body = MethodBody(ReadSource(ContainerSystemPath),
@@ -190,33 +191,6 @@ namespace FishMMO.UnitTests
 
 			AssertOrdered(body, "TryBeginIngressGuard(", "GetComponent<IPlayerCharacter>()",
 				"the ingress guard must be taken before the character is resolved, so every answer is throttled");
-		}
-
-		[Test]
-		public void HotkeyHandlers_EchoTheAuthoritativeSlot_WhenTheStateGateRefuses()
-		{
-			/* The client applies a binding the instant the icon is dropped, so a silent refusal
-			 * leaves it holding a binding the server never took until the next login. */
-			string source = ReadSource(HotkeySystemPath);
-
-			string single = MethodBody(source,
-				"public void OnServerHotkeySetBroadcastReceived(",
-				"public void OnServerHotkeySetMultipleBroadcastReceived(");
-			LogAssert.IsTrue(single.Contains("PlayerRequestGate.SkipCanAct"),
-				"the single-slot handler applies the state gate itself so it can answer");
-			AssertOrdered(single, "CharacterStateValidation.CanAct(playerCharacter)", "AcknowledgeHotkey(conn, playerCharacter, msg.HotkeyData.Slot)",
-				"...and answers the refusal with the authoritative slot");
-
-			/* Ended at the acknowledgement helpers, which are declared directly after the bulk handler.
-			 * It used to end at TryApplyHotkey, which now sits earlier in the file, so the slice could no
-			 * longer find its end and the pin failed against a handler that still did the right thing. */
-			string multiple = MethodBody(source,
-				"public void OnServerHotkeySetMultipleBroadcastReceived(",
-				"private void AcknowledgeHotkey(");
-			LogAssert.IsTrue(multiple.Contains("PlayerRequestGate.SkipCanAct"),
-				"the bulk handler applies the state gate itself so it can answer");
-			AssertOrdered(multiple, "CharacterStateValidation.CanAct(playerCharacter)", "AcknowledgeAllHotkeys(conn, playerCharacter)",
-				"...and answers the refusal with the whole bar");
 		}
 
 		#endregion
@@ -307,9 +281,13 @@ namespace FishMMO.UnitTests
 					"a loot row puts the drag down before it would take");
 			}
 
-			string container = ReadSource(ContainerPanelPath);
-			AssertOrdered(container, "TryPutDownCarriedDrag()", "OnRowPointerDown(capturedSlot)",
-				"a container row puts the drag down before it would take");
+			// The container window is the World Interactables module's.
+			if (InstalledModules.Has("WorldInteractables"))
+			{
+				string container = ReadSource(ContainerPanelPath);
+				AssertOrdered(container, "TryPutDownCarriedDrag()", "OnRowPointerDown(capturedSlot)",
+					"a container row puts the drag down before it would take");
+			}
 
 			LogAssert.AreEqual(1, Occurrences(ReadSource(ControlPath), "protected static bool TryPutDownCarriedDrag()"),
 				"the put-down lives once, on the shared control base");

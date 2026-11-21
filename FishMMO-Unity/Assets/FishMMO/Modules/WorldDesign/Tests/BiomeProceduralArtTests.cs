@@ -555,11 +555,13 @@ namespace FishMMO.UnitTests
 
 			var first = new BiomeArtAuthoring.Report();
 			Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
-			Assert.AreSame(source.Layer(SurfaceCatalogue.PathGroundFor(Ground.Sand)), biome.SmallPathTextureLayer.terrainLayer, "the path wears to what sand wears to");
-			Assert.AreSame(source.Layer(SurfaceCatalogue.RoadGroundFor(Ground.Sand)), biome.RoadTextureLayer.terrainLayer);
-			Assert.AreSame(source.Layer(Ground.Flagstone), biome.CobbleTextureLayer.terrainLayer);
-			Assert.AreSame(source.Layer(Ground.Sand), biome.BarSandTextureLayer.terrainLayer);
-			Assert.AreSame(source.Layer(Ground.Gravel), biome.BarGravelTextureLayer.terrainLayer);
+			// The spec's ways and bars: the desert's own since its round (camel pads, caravan tracks, flagstone slabs, wadi bars),
+			// and what its ground wears to where a file names none.
+			Assert.AreSame(source.Layer(entry.PathGround), biome.SmallPathTextureLayer.terrainLayer, "the path is the spec's");
+			Assert.AreSame(source.Layer(entry.RoadGround), biome.RoadTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(entry.CobbleGround), biome.CobbleTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(entry.BarSand), biome.BarSandTextureLayer.terrainLayer);
+			Assert.AreSame(source.Layer(entry.BarGravel), biome.BarGravelTextureLayer.terrainLayer);
 			Assert.That(biome.OwnRock, Is.EqualTo(CliffRocks.OwnRock(entry)));
 			Assert.That(biome.AcceptedRocks, Is.EqualTo(entry.Rocks));
 			Assert.That(biome.CliffTextureLayers[0].rockType, Is.EqualTo(CliffRocks.RockTypeFor(entry.Cliffs[0].Family, entry) ?? CliffTextureLayer.NoRock));
@@ -657,7 +659,8 @@ namespace FishMMO.UnitTests
 			Assert.That(biome.CaveShells, Is.EqualTo(entry.CaveShells()));
 			foreach (CaveForm form in (CaveForm[])System.Enum.GetValues(typeof(CaveForm)))
 			{
-				Assert.That(BiomeTemplateArt.CaveShell(biome, form), Is.EqualTo(BiomeArtSpec.DefaultCaveShell(form)), form.ToString());
+				// The Lake's own shells since its round (molasse caves, limestone grottos and mines), the defaults elsewhere.
+				Assert.That(BiomeTemplateArt.CaveShell(biome, form), Is.EqualTo(entry.CaveShellFor(form)), form.ToString());
 			}
 
 			var second = new BiomeArtAuthoring.Report();
@@ -702,22 +705,27 @@ namespace FishMMO.UnitTests
 				byName[kind] = weight;
 			}
 			Assert.That(BiomeTemplateArt.SiteKinds(desert, rules), Is.EquivalentTo(byName), "unauthored: the rows' weights by its name");
-			Assert.That(BiomeTemplateArt.Weathering(desert), Is.EqualTo(BiomeArtSpec.WeatheringByName("Desert")), "unauthored: its name's weathering");
+			// Unauthored: what its spec file gives, else its name (BiomeTemplateArt.Weathering's fallback, in that order).
+			Assert.That(BiomeTemplateArt.Weathering(desert), Is.EqualTo(BiomeArtSpec.For("Desert")?.Weathering() ?? BiomeArtSpec.WeatheringByName("Desert")), "unauthored: its file's weathering");
 
 			var first = new BiomeArtAuthoring.Report();
 			Assert.IsTrue(BiomeArtAuthoring.Author(desert, entry, source, first, true));
-			Assert.That(BiomeTemplateArt.SiteKinds(desert, null), Is.EquivalentTo(byName), "authored: the same weights, off the template");
-			Assert.That(desert.SiteVariants, Is.EqualTo(entry.SiteVariants()));
-			Assert.That(desert.SiteStyles, Is.Empty);
-			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SiteStyles), Is.True);
-			Assert.That(desert.Weathering, Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.None, 0f, 0f)));
-			Assert.That(BiomeTemplateArt.Weathering(desert).Finish, Is.EqualTo(BiomeStructureFinish.None));
-			Assert.That(desert.FieldCrops.ConvertAll(c => c.ToString()), Is.EqualTo(new[] { "Detail_GrassWheat×1" }));
-			Assert.That(desert.StructurePalette.Signature(), Is.EqualTo(BiomeStructurePalette.Kit().Signature()));
-			foreach (BiomeStructureStyle style in BiomeStructurePalette.Styles)
+			// Authored: its file's own (the desert's round and the fantasy wave give it its own weights since), off the template.
+			var byFile = new Dictionary<FishMMO.Shared.NameGeneration.POIType, float>();
+			foreach (BiomeSiteKind k in entry.SiteKinds())
 			{
-				Assert.That(BiomeTemplateArt.StructurePalette(desert).BuildsAsKit(style), Is.True, style.ToString());
+				byFile[k.Kind] = k.Weight;
 			}
+			Assert.That(BiomeTemplateArt.SiteKinds(desert, null), Is.EquivalentTo(byFile), "authored: its file's weights, off the template");
+			Assert.That(desert.SiteVariants, Is.EqualTo(entry.SiteVariants()));
+			// The desert's own favoured styles since its round (none before it).
+			Assert.That(desert.SiteStyles, Is.EqualTo(entry.SiteStyles()));
+			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SiteStyles), Is.True);
+			// The spec's: the desert's drifted sand coat, its crops and its sandstone and adobe palette since its round.
+			Assert.That(desert.Weathering, Is.EqualTo(entry.Weathering()));
+			Assert.That(BiomeTemplateArt.Weathering(desert).Finish, Is.EqualTo(entry.Weathering().Finish));
+			Assert.That(desert.FieldCrops.ConvertAll(c => (c.Prefab != null ? c.Prefab.name : null, c.Weight)), Is.EqualTo(entry.FieldCrops()));
+			Assert.That(desert.StructurePalette.Signature(), Is.EqualTo(entry.StructurePalette().Signature()));
 
 			var second = new BiomeArtAuthoring.Report();
 			Assert.IsFalse(BiomeArtAuthoring.Author(desert, entry, source, second, true), "a second run changed something:\n" + second);
@@ -735,7 +743,9 @@ namespace FishMMO.UnitTests
 			Assert.That(desert.Weathering.Finish, Is.EqualTo(BiomeStructureFinish.Charred));
 			Assert.That(BiomeTemplateArt.FieldCrops(desert), Is.Empty, "crops cleared by hand grew again");
 			Assert.That(BiomeTemplateArt.StructurePalette(desert).BuildsAsKit(BiomeStructureStyle.Timber), Is.False);
-			Assert.That(third.ValuesKept, Is.EqualTo(4));
+			// The kinds, the weathering and the palette; the crops too where the file grows any (the desert's round grows none:
+			// its gardens are the oasis's), since clearing them is then no edit.
+			Assert.That(third.ValuesKept, Is.EqualTo(entry.FieldCrops().Count > 0 ? 4 : 3));
 		}
 
 		/// <summary>
@@ -761,14 +771,17 @@ namespace FishMMO.UnitTests
 			Assert.That(desert.MoatWater, Is.EqualTo(BiomeMoatWater.Dry));
 			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.MoatWater), Is.True);
 			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Town, out BiomeWayLight town), Is.True);
-			Assert.That(town.Light, Is.EqualTo(BiomeWayLightKind.LanternPost));
-			Assert.That(town.Spacing, Is.EqualTo(13f));
-			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Keep, out _), Is.False);
+			// The desert's own since its round: pierced jars every 18 m.
+			Assert.That(town.Light, Is.EqualTo(BiomeWayLightKind.PiercedJar));
+			Assert.That(town.Spacing, Is.EqualTo(18f));
+			// Its keeps burn cressets (the round's; the old rule lit no keep).
+			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Keep, out BiomeWayLight keep), Is.True);
+			Assert.That(keep.Light, Is.EqualTo(BiomeWayLightKind.Cresset));
 			Assert.That(BiomeSiteVariant.TryWeight(desert.SiteVariants, FishMMO.Shared.NameGeneration.POIType.Village, "Sand Domes", out float w) ? w : -1f, Is.EqualTo(4f),
 				"a hand-made template naming the biome joins its variants:\n" + first);
 			Assert.That(desert.AuthoredFingerprint(BiomeTemplate.Authored.SiteKinds), Is.EqualTo(BiomeEntryMarks.PerEntry));
 			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.SiteKinds).Count, Is.EqualTo(desert.SiteKinds.Count));
-			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.WayLights).Count, Is.EqualTo(BiomeWayLights.Default().Count));
+			Assert.That(desert.EntryMarks(BiomeTemplate.Authored.WayLights).Count, Is.EqualTo(entry.WayLights().Count));
 
 			var second = new BiomeArtAuthoring.Report();
 			Assert.IsFalse(BiomeArtAuthoring.Author(desert, entry, source, second, true, new[] { domes }), "a second run changed something:\n" + second);

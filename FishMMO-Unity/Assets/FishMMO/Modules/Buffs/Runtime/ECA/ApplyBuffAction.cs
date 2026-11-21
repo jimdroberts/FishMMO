@@ -1,0 +1,177 @@
+﻿using System;
+using UnityEngine;
+using FishMMO.Logging;
+using FishMMO.Shared.Core;
+
+namespace FishMMO.Shared
+{
+	/// <summary>
+	/// Action that applies a specified buff to a target character, potentially stacking it multiple times.
+	/// </summary>
+	[Serializable]
+	[UnityEngine.Scripting.APIUpdating.MovedFrom(true, sourceNamespace: "FishMMO.Shared", sourceAssembly: "FishMMO.Shared")]
+	public class ApplyBuffAction : BaseAction
+	{
+		/// <summary>
+		/// The value provider that determines the number of stacks to apply.
+		/// </summary>
+		[Tooltip("The value provider that determines the number of buff stacks to apply.")]
+		[SerializeReference, SubclassSelector]
+		public IIntValueProvider StacksValue;
+
+		/// <summary>
+		/// The buff template to apply to the target.
+		/// </summary>
+		public BaseBuffTemplate BuffTemplate;
+
+		/// <summary>Names the buff it applies, and how many stacks when that is fixed.</summary>
+		/// <returns>The wording, or null when no buff is configured.</returns>
+		public override string GetTooltipContribution()
+		{
+			if (BuffTemplate == null)
+			{
+				return null;
+			}
+
+			string stacks = StacksValue?.Describe();
+			return string.IsNullOrEmpty(stacks) || stacks == "1"
+				? $"Applies {BuffTemplate.Name}"
+				: $"Applies {BuffTemplate.Name} ({stacks} stacks)";
+		}
+
+		/// <summary>What this changes is corrected state, so a replayed self-cast applies it again (see BaseAction.ReappliesOnReplay).</summary>
+		public override bool ReappliesOnReplay => true;
+
+		/// <summary>
+		/// Applies the specified buff to the target character, stacking it the computed number of times.
+		/// </summary>
+		/// <param name="initiator">The character initiating the action.</param>
+		/// <param name="eventData">The event data containing the target information.</param>
+		public override void Execute(ICharacter initiator, EventData eventData)
+		{
+			if (StacksValue == null)
+			{
+				Log.Warning("ApplyBuffAction", "StacksValue provider is null.");
+				return;
+			}
+
+			if (!TryResolveTargetOrInitiator(initiator, eventData, out ICharacter target))
+			{
+				return;
+			}
+
+			if (!target.TryGet(out IBuffController buffController))
+			{
+				return;
+			}
+
+			int stacks = StacksValue.GetValue(initiator, eventData);
+
+			if (BuffTemplate == null)
+			{
+				Log.Warning("ApplyBuffAction", "BuffTemplate is null.");
+				return;
+			}
+
+			if (stacks <= 0)
+			{
+				Log.Warning("ApplyBuffAction", $"StacksValue returned {stacks} for BuffTemplate '{BuffTemplate?.name}'. No stacks applied.");
+				return;
+			}
+
+			/* An evading NPC refuses every debuff another character tries to put on it — stun,
+			 * root, mesmerize, slow and the rest; CharacterEvade.IsHostileBuff says why it is every
+			 * debuff and not a list. Asked after the stacks are drawn, so the shared generator
+			 * advances the same on every peer whatever this answers (the brain, and so the answer,
+			 * exists only on the server), and ahead of the contribution record below, so a refused
+			 * debuff earns no loot rights either. A caster's client that predicted the debuff is
+			 * corrected by the next full buff set, which does not name it. */
+			if (CharacterEvade.RefusesBuff(target, BuffTemplate, initiator))
+			{
+				return;
+			}
+
+			// Only same-character replicate-domain TickEventData can go through Apply
+			// directly. A caster's replicate tick is not necessarily in the target's
+			// controller domain, so cross-character effects must route through the
+			// target controller's authoritative mapper.
+			TickEventData tickData = null;
+			bool hasTickData = eventData != null && eventData.TryGet(out tickData);
+			// Prediction-path (direct Apply) is only safe when the tick belongs to the target controller domain.
+			bool isPredictionPath = hasTickData && tickData.IsReplicateTick && tickData.IsForCharacter(target);
+
+			/* The server, the owner-prediction path above, or the client that OWNS the initiator —
+			 * see EcaAuthority.MayPredict.
+			 *
+			 * isPredictionPath remains its own branch: it is the owner simulating a buff on ITSELF
+			 * inside a replicate, where the reconcile corrects it. MayPredict adds the caster
+			 * applying a buff to somebody ELSE, which used to wait a full round trip before any
+			 * icon appeared.
+			 *
+			 * Safe now, and it was not before. A buff landing on another character goes into that
+			 * character's container on this peer, where BuffController.SimulatesBuffEffects is false
+			 * — so it is TRACKED and its duration counted down, but its attribute modifiers are not
+			 * applied, because the attribute broadcast already carries them. If the server disagrees,
+			 * the next full-set message drops anything it does not name. An observer watching
+			 * somebody else's cast still answers false and waits to be told. */
+			if (!isPredictionPath && !EcaAuthority.MayPredict(initiator, eventData))
+			{
+				return;
+			}
+
+			// For cross-character authoritative application, the target controller chooses
+			// its own domain stamp. The initiator's replicate tick is in the INITIATOR's domain
+			// and must not be written directly into target-owned buff state.
+			uint authoritativeTick;
+			if (hasTickData && !tickData.IsReplicateTick)
+			{
+				// Already a raw authoritative tick (e.g. from AbilityObject.OnTick/OnCollision)
+				authoritativeTick = (uint)tickData.Tick;
+			}
+			else
+			{
+				// No tick data or already a replicate tick — use the target controller's current domain-mapped tick as authoritative.
+				authoritativeTick = buffController.GetCurrentDomainTick();
+			}
+
+			// Whether this prediction CREATES the buff on the target, or refreshes one the target already has (see below).
+			bool hadBuff = buffController.Buffs != null && buffController.Buffs.ContainsKey(BuffTemplate.ID);
+
+			for (int i = 0; i < stacks; ++i)
+			{
+				/* The initiator is snapshotted onto the buff so periodic effects have somebody to
+				 * credit. A damage-over-time tick fires long after the ability that applied it has
+				 * gone, and without this it would land with no attacker: no threat, no kill
+				 * credit, and no combat state for whoever cast it. */
+				if (isPredictionPath)
+				{
+					buffController.Apply(BuffTemplate, tickData.Tick, initiator);
+				}
+				else
+				{
+					buffController.ApplyAuthoritative(BuffTemplate, authoritativeTick, initiator);
+				}
+			}
+
+			/* A caster's client predicting on somebody else: provisional until the server names it (MarkPredictedByCaster). Only
+			 * a buff this prediction CREATED: one the target already carried is the server's, confirmed, and a refresh of it is
+			 * a timing change the server pushes nothing about, so marking it let the sweep take a debuff the server still has
+			 * off the caster's screen. */
+			if (!hadBuff && !isPredictionPath && !EcaAuthority.IsServer(initiator, eventData) && buffController is BuffController predictedOn)
+			{
+				predictedOn.MarkPredictedByCaster(BuffTemplate.ID);
+			}
+
+			/* Debuffing something is participating in killing it, so it earns loot rights the same
+			 * way a hit does. Recorded here rather than in BuffController because the controller is
+			 * only ever told WHAT to apply, never by whom — this action is the last point at which
+			 * the caster is still known. */
+			if (BuffTemplate.IsDebuff &&
+				!ReferenceEquals(initiator, target) &&
+				target.TryGet(out ICharacterDamageController targetDamageController))
+			{
+				targetDamageController.RecordCombatContribution(initiator, CombatContributionKind.Debuff);
+			}
+		}
+	}
+}

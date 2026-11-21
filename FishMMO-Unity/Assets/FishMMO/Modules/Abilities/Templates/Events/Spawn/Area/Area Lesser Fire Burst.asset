@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c436e9b2cc1a904891ecd559911ba4b, type: 3}
+  m_Name: Area Lesser Fire Burst
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.AbilityOnSpawnEvent
+  TargetSelector:
+    rid: -2
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 4295713125095964716
+  - rid: 4295713125095964717
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon:
+    m_AssetGUID: 4c12f37fdabc0412c8f13d4b31b6bca0
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  WeatherModifiers: []
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713125095964716
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        FXPrefab: {fileID: 3834848836648782069, guid: ef38041b162e1ee4dab8acc274e21509, type: 3}
+        Size: 12
+        HeightOffset: 0
+    - rid: 4295713125095964717
+      type: {class: AbilityApplyAreaAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        RadiusValue:
+          rid: 4295713125095964718
+        MaxHitsValue:
+          rid: 4295713125095964719
+        TargetLayerMask:
+          serializedVersion: 2
+          m_Bits: 4294967295
+    - rid: 4295713125095964718
+      type: {class: ConstantFloatValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 6
+    - rid: 4295713125095964719
+      type: {class: ConstantValue, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Amount: 5

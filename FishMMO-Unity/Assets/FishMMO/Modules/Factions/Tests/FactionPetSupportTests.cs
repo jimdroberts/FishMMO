@@ -18,13 +18,13 @@ namespace FishMMO.UnitTests.AI
 	public class FactionPetSupportTests
 	{
 		private const string Scripts = "Assets/FishMMO";
-		private const string SummonFireElemental = "Assets/Templates/Entity/Abilities/Types/Summons/Summon Fire Elemental.asset";
-		private const string SummonLesserFireElemental = "Assets/Templates/Entity/Abilities/Types/Summons/Summon Lesser Fire Elemental.asset";
-		private const string TeachLesserHeal = "Assets/Templates/Entity/Abilities/Events/Summon/Teach Pet Lesser Heal.asset";
-		private const string TeachLesserFireball = "Assets/Templates/Entity/Abilities/Events/Summon/Teach Pet Lesser Fireball.asset";
-		private const string LesserHeal = "Assets/Templates/Entity/Abilities/Types/Heal/Lesser Heal.asset";
-		private const string LesserFireball = "Assets/Templates/Entity/Abilities/Types/Lesser Fireball.asset";
-		private const string GeneralGoods = "Assets/Templates/Entity/Interactables/NPCs/Human/Merchants/GeneralGoods/GeneralGoods.asset";
+		private const string SummonFireElemental = "Assets/FishMMO/Modules/Abilities/Templates/Types/Summons/Summon Fire Elemental.asset";
+		private const string SummonLesserFireElemental = "Assets/FishMMO/Modules/Abilities/Templates/Types/Summons/Summon Lesser Fire Elemental.asset";
+		private const string TeachLesserHeal = "Assets/FishMMO/Modules/Abilities/Templates/Events/Summon/Teach Pet Lesser Heal.asset";
+		private const string TeachLesserFireball = "Assets/FishMMO/Modules/Abilities/Templates/Events/Summon/Teach Pet Lesser Fireball.asset";
+		private const string LesserHeal = "Assets/FishMMO/Modules/Abilities/Templates/Types/Heal/Lesser Heal.asset";
+		private const string LesserFireball = "Assets/FishMMO/Modules/Abilities/Templates/Types/Lesser Fireball.asset";
+		private const string GeneralGoods = "Assets/FishMMO/Modules/Commerce/Templates/NPCs/Human/Merchants/GeneralGoods/GeneralGoods.asset";
 
 		private readonly List<GameObject> temporaries = new List<GameObject>();
 

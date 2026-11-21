@@ -29,13 +29,13 @@ namespace FishMMO.AbilityContent
 	/// </remarks>
 	public static partial class TestAbilitySuiteGenerator
 	{
-		public const string MovementAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Movement";
-		public const string ControlAbilityFolder = "Assets/Templates/Entity/Abilities/Types/Control";
+		public const string MovementAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Movement";
+		public const string ControlAbilityFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types/Control";
 		public const string MovementPrefabFolder = "Assets/Prefabs/Shared/Entity/Abilities/Types/Movement";
 		public const string ControlPrefabFolder = "Assets/Prefabs/Shared/Entity/Abilities/Types/Control";
-		public const string MovementEventFolder = "Assets/Templates/Entity/Abilities/Events/Movement";
-		public const string ControlEventFolder = "Assets/Templates/Entity/Abilities/Events/Control";
-		public const string BuffFolder = "Assets/Templates/Entity/Buffs";
+		public const string MovementEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Movement";
+		public const string ControlEventFolder = "Assets/FishMMO/Modules/Abilities/Templates/Events/Control";
+		public const string BuffFolder = "Assets/FishMMO/Modules/Buffs/Templates";
 
 		private static readonly Palette ArcanePalette = new Palette(new Color(0.55f, 0.25f, 1.0f), new Color(0.55f, 0.90f, 1.0f));
 		private static readonly Palette RootPalette = new Palette(new Color(0.22f, 0.45f, 0.10f), new Color(0.62f, 0.46f, 0.22f));

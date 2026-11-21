@@ -30,6 +30,9 @@ namespace FishMMO.UnitTests
 		private const string SavingPath =
 			"Assets/FishMMO/Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs";
 
+		/// <summary>The Abilities module's side of the character load and save.</summary>
+		private const string ControllerPersistencePath = "Assets/FishMMO/Modules/Abilities/Runtime/Ability/AbilityController.Persistence.cs";
+
 		private const string LoadingPath =
 			"Assets/FishMMO/Server/Implementation/World/SceneServer/Character/CharacterSystem.Loading.cs";
 
@@ -126,9 +129,13 @@ namespace FishMMO.UnitTests
 		{
 			/* Base abilities and effects share character_known_ability, keyed by template id, and
 			 * they live in different caches. Asking only one of them dropped the other. */
-			string source = ReadSource(LoadingPath);
-			int restore = source.IndexOf("private static void RestoreKnownAbilities", StringComparison.Ordinal);
-			LogAssert.IsTrue(restore >= 0, "the restore helper must exist");
+			/* The core load hands the rows to the Abilities module's controller (IAbilityPersistence.RestoreKnowledge,
+			 * 2026-11-20), which resolves them. */
+			LogAssert.IsTrue(ReadSource(LoadingPath).Contains("abilityController.RestoreKnowledge(templateIDs, unknown);"),
+				"the core load must hand every known row to the controller");
+			string source = ReadSource(ControllerPersistencePath);
+			int restore = source.IndexOf("public void RestoreKnowledge(", StringComparison.Ordinal);
+			LogAssert.IsTrue(restore >= 0, "the restore must exist");
 
 			string body = source.Substring(restore, Math.Min(2600, source.Length - restore));
 			LogAssert.IsTrue(body.Contains("BaseAbilityTemplate.Get<BaseAbilityTemplate>"),
@@ -144,8 +151,8 @@ namespace FishMMO.UnitTests
 		{
 			/* Everything applied by a restore is already in the database. Leaving the mark set
 			 * would rewrite the whole knowledge set on the first save after every login. */
-			string source = ReadSource(LoadingPath);
-			int restore = source.IndexOf("private static void RestoreKnownAbilities", StringComparison.Ordinal);
+			string source = ReadSource(ControllerPersistencePath);
+			int restore = source.IndexOf("public void RestoreKnowledge(", StringComparison.Ordinal);
 			string body = source.Substring(restore, Math.Min(2600, source.Length - restore));
 
 			LogAssert.IsTrue(body.Contains("KnowledgeDirty = false"),

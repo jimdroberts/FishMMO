@@ -27,12 +27,12 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		private const string LOG = "[GatheringContent]";
 
-		public const string ItemFolder = "Assets/Templates/Entity/Items/Resources";
-		public const string NodeTemplateFolder = "Assets/Templates/Entity/Interactables/Gathering";
-		public const string TriggerPath = "Assets/Templates/Entity/ECA/Interactions/Gathering Node Gather.asset";
-		public const string PrefabFolder = "Assets/Prefabs/Shared/Entity/Interactables/Gathering";
-		public const string MaterialFolder = "Assets/Prefabs/Shared/Entity/Interactables/Gathering/Materials";
-		public const string BasePrefabPath = "Assets/Prefabs/Shared/Entity/Interactables/Containers/Dungeon Chest.prefab";
+		public const string ItemFolder = "Assets/FishMMO/Modules/Items/Templates/Materials";
+		public const string NodeTemplateFolder = "Assets/FishMMO/Modules/WorldInteractables/Templates/Gathering";
+		public const string TriggerPath = "Assets/FishMMO/Modules/WorldInteractables/Templates/Interactions/Gathering Node Gather.asset";
+		public const string PrefabFolder = "Assets/FishMMO/Modules/WorldInteractables/Prefabs/Gathering";
+		public const string MaterialFolder = "Assets/FishMMO/Modules/WorldInteractables/Prefabs/Gathering/Materials";
+		public const string BasePrefabPath = "Assets/FishMMO/Modules/WorldInteractables/Prefabs/Containers/Dungeon Chest.prefab";
 
 		/// <summary>The prefab a resource's node is saved as.</summary>
 		public static string PrefabPath(GatheringResource resource) => $"{PrefabFolder}/{resource.Node} Node.prefab";

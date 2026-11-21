@@ -14,7 +14,8 @@
         "FishMMO.UnitTests",
         "FishMMO.Leaderboards",
         "FishMMO.Leaderboards.Server",
-        "FishMMO.Leaderboards.Client"
+        "FishMMO.Leaderboards.Client",
+        "FishMMO.Achievements"
     ],
     "includePlatforms": [
         "Editor"

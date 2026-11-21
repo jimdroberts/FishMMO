@@ -15,7 +15,21 @@
         "KinematicCharacterController",
         "FishMMO.Commerce",
         "FishMMO.Commerce.Server",
-        "FishMMO.Commerce.Client"
+        "FishMMO.Commerce.Client",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Shared.Map.Editor",
+        "FishMMO.Client.GUI.Editor",
+        "FishMMO.Items",
+        "FishMMO.Items.Server",
+        "FishMMO.Items.Client",
+        "FishMMO.Combat",
+        "FishMMO.Combat.Server",
+        "FishMMO.Combat.Client",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Abilities.Client",
+        "FishMMO.Abilities.Editor",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [
         "Editor"

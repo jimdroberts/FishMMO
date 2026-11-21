@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement template ID to increment when a player picks up this world item.
 		/// </summary>
-		[TemplateReference(typeof(AchievementTemplate))]
+		[TemplateReference("AchievementTemplate")]
 		public int AchievementTemplateID;
 
 		/// <inheritdoc />

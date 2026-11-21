@@ -10,13 +10,13 @@ dangling 41f73c28208285445b37a7980665ead3 in Assets/Prefabs/Shared/WorldSceneDet
 dangling 41f73c28208285445b37a7980665ead3 in Assets/Scenes/Client/ClientPreboot.unity
 dangling 41f73c28208285445b37a7980665ead3 in Assets/Scenes/WorldScene/Dungeon.unity
 dangling 4ae8ae7350b67b44785d874c413a2e03 in Assets/FishMMO/Modules/Water/Materials/WaterMaterial_FromGraph.mat
-dangling 66305a19e3614694f868c75a982e6b68 in Assets/Templates/Entity/Items/Chest/Test Tunic.asset
-dangling 66305a19e3614694f868c75a982e6b68 in Assets/Templates/Entity/Items/Hands/Test Gloves.asset
-dangling 66305a19e3614694f868c75a982e6b68 in Assets/Templates/Entity/Items/Head/Test Helmet.asset
-dangling 66305a19e3614694f868c75a982e6b68 in Assets/Templates/Entity/Items/Legs/Test Leggings.asset
-dangling 66305a19e3614694f868c75a982e6b68 in Assets/Templates/Entity/Items/Secondary/Test Shield.asset
+dangling 66305a19e3614694f868c75a982e6b68 in Assets/FishMMO/Modules/Items/Templates/Chest/Test Tunic.asset
+dangling 66305a19e3614694f868c75a982e6b68 in Assets/FishMMO/Modules/Items/Templates/Hands/Test Gloves.asset
+dangling 66305a19e3614694f868c75a982e6b68 in Assets/FishMMO/Modules/Items/Templates/Head/Test Helmet.asset
+dangling 66305a19e3614694f868c75a982e6b68 in Assets/FishMMO/Modules/Items/Templates/Legs/Test Leggings.asset
+dangling 66305a19e3614694f868c75a982e6b68 in Assets/FishMMO/Modules/Items/Templates/Secondary/Test Shield.asset
 dangling 8f9333d1d50759749b86feeaf8c086f3 in Assets/Prefabs/Shared/Entity/Regions/DaySkybox.mat
 dangling 8f9333d1d50759749b86feeaf8c086f3 in Assets/Prefabs/Shared/Entity/Regions/NightSkybox.mat
 dangling a6376d356d9fe9d1b80f42ad5e90d4a5 in Assets/Scenes/Test/WorldSim.unity
-dangling e04e6c970b950d946a782ea08e5f971d in Assets/Templates/Entity/Items/Primary/Swords/Test Sword.asset
+dangling e04e6c970b950d946a782ea08e5f971d in Assets/FishMMO/Modules/Items/Templates/Primary/Swords/Test Sword.asset
 dangling e0542c8851c689547bb3a6f78e9b5845 in Assets/Prefabs/Shared/Entity/Regions/DaySkybox.mat

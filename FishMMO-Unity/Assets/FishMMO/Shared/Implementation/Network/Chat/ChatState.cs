@@ -1,12 +1,12 @@
 using FishMMO.Core;
 
-[assembly: GameModule(typeof(FishMMO.Shared.ChatModule))]
+[assembly: GameModule(typeof(FishMMO.Shared.MessagingModule))]
 
 namespace FishMMO.Shared
 {
 	/// <summary>
 	/// A player's chat state, on the player's Core entity: the repeat filter, the rate gate and any mute. Each
-	/// spawn gets a fresh one from the <see cref="ChatModule"/>, so nothing carries over a pooled character.
+	/// spawn gets a fresh one from the <see cref="MessagingModule"/>, so nothing carries over a pooled character.
 	/// </summary>
 	/// <remarks>
 	/// The tick fields start at zero, meaning "never": no gap pending, no refill yet. Each side keeps them on
@@ -53,11 +53,15 @@ namespace FishMMO.Shared
 		public string MuteReason;
 	}
 
-	/// <summary>Chat as a module: gives every player its <see cref="ChatState"/>.</summary>
-	public sealed class ChatModule : GameModule
+	/// <summary>
+	/// The core's messaging state as a Core module: gives every player its <see cref="ChatState"/>, which the core chat
+	/// intake (rate gate, mute) and the Chat module (repeat filter) use. Named "chat" until the Chat module took that id
+	/// (2026-11-20).
+	/// </summary>
+	public sealed class MessagingModule : GameModule
 	{
 		/// <summary>The module's id.</summary>
-		public const string ModuleId = "chat";
+		public const string ModuleId = "messaging";
 
 		/// <inheritdoc />
 		public override string Id => ModuleId;

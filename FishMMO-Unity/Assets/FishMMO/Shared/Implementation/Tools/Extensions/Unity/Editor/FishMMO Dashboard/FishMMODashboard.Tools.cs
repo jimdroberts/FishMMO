@@ -317,9 +317,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ShowCategoryLanding(TemplateCategory cat)
 		{
-			if (cat.DisplayName == SPAWN_TABLES_CATEGORY)
+			if (cat.ShowLanding != null)
 			{
-				ShowSpawnTablesOverview();
+				cat.ShowLanding();
 			}
 			else if (ToolsFor(cat.DisplayName).Count > 0)
 			{

@@ -1,0 +1,32 @@
+{
+    "name": "FishMMO.NPCs.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Abilities",
+        "FishMMO.Combat",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Combat.Server",
+        "FishMMO.Server",
+        "FishMMO.Core",
+        "FishNet.Runtime",
+        "Unity.AI.Navigation",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "KinematicCharacterController"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

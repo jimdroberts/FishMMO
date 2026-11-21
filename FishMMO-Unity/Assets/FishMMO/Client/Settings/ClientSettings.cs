@@ -141,7 +141,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The key is <c>ShowAchievementCompletion</c> and not <c>ShowAchievements</c>, which is
 		/// what the options panel used to write. Nothing read that name: the only consumer,
-		/// <see cref="ClientCombatDisplay"/>, has always read <c>ShowAchievementCompletion</c>, so
+		/// the combat display (now <see cref="ClientMilestoneDisplay"/> and the Combat module's combat text), has always read <c>ShowAchievementCompletion</c>, so
 		/// the toggle wrote one key and the popups read another and the setting did nothing at all.
 		/// Naming it once, here, is what stops that recurring.
 		/// </remarks>
@@ -169,7 +169,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The default belongs here rather than at each call site, because the panel and the code
 		/// that acts on a setting have to agree about it. They did not:
-		/// <see cref="ClientCombatDisplay"/> treated a missing key as <c>false</c> while the panel
+		/// The combat display treated a missing key as <c>false</c> while the panel
 		/// showed the same missing key as a ticked box, so a fresh install displayed no damage
 		/// numbers while its own settings screen said it did — and ticking the box off and on again
 		/// was the only way to make the display match the UI.

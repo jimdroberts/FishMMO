@@ -24,13 +24,14 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement to increment when a player uses this teleporter.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <inheritdoc />
 		Transform ITeleporter.Target => Target;
 
 		/// <inheritdoc />
-		AchievementTemplate ITeleporter.AchievementTemplate => AchievementTemplate;
+		CachedScriptableObject ITeleporter.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// Gets the display title for this teleporter, used in UI elements.

@@ -1,0 +1,53 @@
+{
+    "name": "FishMMO.Achievements.Tests",
+    "rootNamespace": "FishMMO.UnitTests",
+    "references": [
+        "FishMMO.Core",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "FishMMO.UnitTests",
+        "KinematicCharacterController",
+        "FishMMO.Achievements",
+        "FishMMO.Achievements.Server",
+        "FishMMO.Achievements.Client",
+        "FishMMO.Items",
+        "FishMMO.Items.Server",
+        "FishMMO.Combat",
+        "FishMMO.Combat.Server",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Abilities.Client",
+        "FishMMO.Buffs"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "FishMMO-AuthShared.dll",
+        "FishMMO-ClientAuth.dll",
+        "FishMMO-ServerAuth.dll",
+        "FishMMO-Logger.dll",
+        "FishMMO-SharedUtility.dll",
+        "FishMMO-DB.dll",
+        "srp.dll",
+        "BouncyCastle.Cryptography.dll",
+        "Otp.NET.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

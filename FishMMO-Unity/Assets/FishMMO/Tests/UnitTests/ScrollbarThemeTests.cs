@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 	public class ScrollbarThemeTests
 	{
 		private const string PanelSettingsPath = "Assets/UI Toolkit/PanelSettings.asset";
-		private const string UxmlPath = "Assets/FishMMO/Client/GUI/World/Achievement/UIAchievements.uxml";
+		private const string UxmlPath = "Assets/FishMMO/Client/GUI/Login/ServerSelect/UIServerSelect.uxml";
 
 		/// <summary>--brand-500 in FishMMO-Theme.uss: the thumb at rest.</summary>
 		private static readonly Color32 Brand500 = new Color32(0, 115, 192, 255);
@@ -45,7 +45,7 @@ namespace FishMMO.UnitTests
 			PanelSettings settings = AssetDatabase.LoadAssetAtPath<PanelSettings>(ProjectFiles.Path(PanelSettingsPath));
 			VisualTreeAsset uxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ProjectFiles.Path(UxmlPath));
 			LogAssert.IsNotNull(settings, $"panel settings must exist at {PanelSettingsPath}");
-			LogAssert.IsNotNull(uxml, $"the achievements UXML must exist at {UxmlPath} (a core panel with a themed ScrollView)");
+			LogAssert.IsNotNull(uxml, $"the server select UXML must exist at {UxmlPath} (a core panel with a themed ScrollView)");
 
 			host = new GameObject("ScrollbarThemeTest");
 			document = host.AddComponent<UIDocument>();
@@ -103,8 +103,8 @@ namespace FishMMO.UnitTests
 		/// <summary>Fills the panel's scroll view past its height so a vertical scroller appears.</summary>
 		private ScrollView Overfill()
 		{
-			ScrollView scroll = document.rootVisualElement.Q<ScrollView>("achievement-scroll");
-			LogAssert.IsNotNull(scroll, "UIAchievements.uxml must still carry achievement-scroll");
+			ScrollView scroll = document.rootVisualElement.Q<ScrollView>("server-scroll");
+			LogAssert.IsNotNull(scroll, "UIServerSelect.uxml must still carry server-scroll");
 			for (int i = 0; i < 120; ++i)
 			{
 				scroll.Add(new Label($"row {i}") { style = { height = 24 } });

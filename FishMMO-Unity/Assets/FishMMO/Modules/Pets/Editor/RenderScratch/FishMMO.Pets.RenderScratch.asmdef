@@ -1,0 +1,27 @@
+{
+    "name": "FishMMO.Pets.RenderScratch",
+    "rootNamespace": "",
+    "references": [
+        "FishMMO.Render.Scratch",
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Pets",
+        "FishMMO.Pets.Client",
+        "FishMMO.NPCs"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

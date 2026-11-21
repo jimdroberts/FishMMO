@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 using UnityEngine;
 
 namespace FishMMO.Shared.Core
@@ -16,6 +17,6 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Achievement template to increment when a player uses this teleporter.
 		/// </summary>
-		AchievementTemplate AchievementTemplate { get; }
+		CachedScriptableObject AchievementTemplate { get; }
 	}
 }

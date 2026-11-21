@@ -74,6 +74,9 @@ namespace FishMMO.TestHarness
 			yield return new WaitUntil(() => NetworkManager.ServerManager.Started);
 		}
 
+		/// <summary>Every clone <see cref="Spawn"/> made, destroyed by <see cref="Shutdown"/>.</summary>
+		private readonly System.Collections.Generic.List<GameObject> spawned = new System.Collections.Generic.List<GameObject>();
+
 		public void Shutdown()
 		{
 			AddressableLoadProcessor.OnAddressableLoaded -= OnAddressableLoaded;
@@ -83,6 +86,18 @@ namespace FishMMO.TestHarness
 				{
 					NetworkManager.ServerManager.StopConnection(true);
 				}
+				/* Everything Spawn made, explicitly. Stopping the server does not destroy them (the
+				 * characters are root objects and stayed live, labels and colliders included), so each
+				 * sim used to leave its cast standing in the next test's scene: colliders a later
+				 * query could hit, and bodies in a later capture. */
+				foreach (GameObject clone in spawned)
+				{
+					if (clone != null)
+					{
+						Object.Destroy(clone);
+					}
+				}
+				spawned.Clear();
 				/* Explicit, not left to hierarchy teardown: the manager prefab sets
 				 * _dontDestroyOnLoad false, but if that ever regresses FishNet reparents the GO
 				 * out of the harness hierarchy and a "destroyed" harness leaves a live manager
@@ -129,6 +144,7 @@ namespace FishMMO.TestHarness
 
 			NetworkObject nob = clone.GetComponent<NetworkObject>();
 			NetworkManager.ServerManager.Spawn(nob, null, scene);
+			spawned.Add(clone);
 			return clone;
 		}
 	}

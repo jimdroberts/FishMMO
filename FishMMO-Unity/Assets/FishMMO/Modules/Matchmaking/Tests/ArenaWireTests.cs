@@ -27,7 +27,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheArenaResultsReachThePedestal()
 		{
-			ArenaResultsBroadcast received = KnowledgeSyncWireTests.RoundTrip(new ArenaResultsBroadcast
+			ArenaResultsBroadcast received = FishMMO.UnitTests.Harness.WireRoundTrip.RoundTrip(new ArenaResultsBroadcast
 			{
 				ArenaTemplateID = 4242,
 				Format = 3,

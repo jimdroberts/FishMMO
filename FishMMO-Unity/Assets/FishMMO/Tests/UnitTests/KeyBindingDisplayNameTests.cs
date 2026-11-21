@@ -88,8 +88,7 @@ namespace FishMMO.UnitTests
 			 * the rows below this one are captioned "Hotbar 2 Modifier" — "Hotbar 1" for the first
 			 * key would read as the first bar. */
 			LogAssert.AreEqual("Hotbar Key 1", Caption("Hotkey1"), "a numbered action still needs its noun");
-			LogAssert.AreEqual("Hotbar 2 Modifier", Caption("Hotbar2Modifier"),
-				"actions created at run time for extra bars are captioned too, not shown by name");
+			// The extra bars' run-time actions are the Hotkeys module's; HotkeysModuleTests pins their captions.
 		}
 
 		/// <summary>

@@ -274,7 +274,7 @@ namespace FishMMO.RenderScratch
 			}
 
 			var templates = new List<BaseItemTemplate>();
-			foreach (string guid in AssetDatabase.FindAssets("t:BaseItemTemplate", new[] { "Assets/Templates/Entity/Items" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:BaseItemTemplate", new[] { "Assets/FishMMO/Modules/Items/Templates" }))
 			{
 				BaseItemTemplate template = AssetDatabase.LoadAssetAtPath<BaseItemTemplate>(AssetDatabase.GUIDToAssetPath(guid));
 				if (template == null) continue;
@@ -310,7 +310,7 @@ namespace FishMMO.RenderScratch
 
 		private static int ResolveCurrencyTemplateID()
 		{
-			foreach (string guid in AssetDatabase.FindAssets("t:CharacterAttributeTemplate", new[] { "Assets/Templates/Entity/CharacterAttributes" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:CharacterAttributeTemplate", new[] { "Assets/FishMMO/Templates/Entity/CharacterAttributes" }))
 			{
 				var template = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(AssetDatabase.GUIDToAssetPath(guid));
 				if (template != null && template.name == "Currency")

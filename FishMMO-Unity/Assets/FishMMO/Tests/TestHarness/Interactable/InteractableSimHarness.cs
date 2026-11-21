@@ -379,6 +379,8 @@ namespace FishMMO.TestHarness
 		// ── Accessors for the PlayMode suite ────────────────────────────────────────
 
 		public bool Ready => ready;
+		/// <summary>The scripted player (capture camera follow).</summary>
+		public Transform InteractorTransform => interactorTransform;
 		public long Attempts => attempts;
 
 		public int TotalWrong

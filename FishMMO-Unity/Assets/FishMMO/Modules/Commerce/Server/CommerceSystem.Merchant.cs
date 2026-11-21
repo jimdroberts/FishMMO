@@ -133,7 +133,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				 * lines above: InteractableResolver.Resolve, which picks the merchant out of an
 				 * object that may carry several interactables, and CanInteract, which is where the
 				 * range and corpse gates live. */
-				MerchantTemplate merchantTemplate = merchant.Template;
+				MerchantTemplate merchantTemplate = merchant.Template as MerchantTemplate;
 
 				switch (msg.Type)
 				{
@@ -440,7 +440,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// merchant does not buy either.
 				IInteractable interactable = InteractableResolver.Resolve(sceneObject);
 				IMerchant merchant = interactable as IMerchant;
-				MerchantTemplate merchantTemplate = merchant?.Template;
+				MerchantTemplate merchantTemplate = merchant?.Template as MerchantTemplate;
 				if (merchantTemplate == null ||
 					!merchantTemplate.BuysItems ||
 					!interactable.CanInteract(character))
@@ -632,7 +632,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 
 			AbilityTemplate template = offer.Ability;
 
-			if (!character.TryGet(out IAbilityController abilityController))
+			if (!character.TryGet(out IAbilityKnowledgeController abilityController))
 			{
 				SendPurchaseResult(conn, msg, MerchantPurchaseFailure.Unavailable);
 				return false;
@@ -789,8 +789,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			NetworkConnection conn,
 			IPlayerCharacter character,
 			TTemplate template,
-			Func<IAbilityController, int, bool> knowsFunc,
-			Action<IAbilityController, List<TTemplate>> learnFunc,
+			Func<IAbilityKnowledgeController, int, bool> knowsFunc,
+			Action<IAbilityKnowledgeController, List<TTemplate>> learnFunc,
 			Func<TTemplate, int> idSelector,
 			Func<TTemplate, int> priceSelector,
 			Func<TTemplate, TBroadcast> broadcastFactory)
@@ -801,7 +801,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			{
 				return MerchantPurchaseFailure.InvalidEntry;
 			}
-			if (character == null || !character.TryGet(out IAbilityController abilityController))
+			if (character == null || !character.TryGet(out IAbilityKnowledgeController abilityController))
 			{
 				return MerchantPurchaseFailure.Unavailable;
 			}

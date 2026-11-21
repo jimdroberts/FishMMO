@@ -1,0 +1,34 @@
+{
+    "name": "FishMMO.Map.Client",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Map",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.Client.Input.Generated",
+        "Unity.InputSystem",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

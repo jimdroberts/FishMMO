@@ -67,7 +67,8 @@ reports it across every prefab and scene in the project.
 
 ### Shipped interaction triggers
 
-Under `Assets/Templates/Entity/ECA/Interactions/`:
+Under `Assets/FishMMO/Templates/Entity/ECA/Interactions/` (the Bindstone, Door, Gathering Node and Container triggers are the World
+Interactables module's, in `Modules/WorldInteractables/Templates/Interactions/`):
 
 | Asset | Actions | Used by |
 |---|---|---|
@@ -277,7 +278,7 @@ This is an integrated module within the FishMMO project. No separate installatio
 
 The contents are rolled from `Template.LootTable` in `OnStartServer`, on every spawn including pool reuse, and cleared again in `ResetState`; a loot table's currency range is ignored by containers. The window opens through a trigger holding `SendContainerOpenBroadcastAction` (`Templates/Entity/ECA/Interactions/Container Open.asset`) in `onInteractTriggers`, and `InteractableSystem` handles each take. A template must be in the shared addressable group: the client looks it up by the ID the open broadcast carries.
 
-**Shipped container:** `Prefabs/Shared/Entity/Interactables/Containers/Dungeon Chest.prefab` — `Dungeon Chest Container` (8 slots, despawns when emptied) rolling `Dungeon Chest Loot` (potions, rations, fire scrolls, a small chance of a test armour or weapon piece). Its pivot is at its base, so its spawner uses a fixed position on the floor rather than a random one: the random placement adds the collider's full height above the ground hit. Spawned by the Dungeon's `Chest` spawner, respawning 5–10 minutes after it is emptied.
+**Shipped container:** `Modules/WorldInteractables/Prefabs/Containers/Dungeon Chest.prefab` (the World Interactables module) — `Dungeon Chest Container` (8 slots, despawns when emptied) rolling `Dungeon Chest Loot` (potions, rations, fire scrolls, a small chance of a test armour or weapon piece). Its pivot is at its base, so its spawner uses a fixed position on the floor rather than a random one: the random placement adds the collider's full height above the ground hit. Spawned by the Dungeon's `Chest` spawner, respawning 5–10 minutes after it is emptied.
 
 ### GatheringNodeTemplate
 

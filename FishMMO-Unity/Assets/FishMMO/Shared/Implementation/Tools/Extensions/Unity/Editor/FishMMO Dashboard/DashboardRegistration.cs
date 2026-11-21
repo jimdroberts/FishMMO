@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace FishMMO.Shared
 {
@@ -175,6 +176,33 @@ namespace FishMMO.Shared
 					descriptions[page.Name] = page.Description;
 				}
 			}
+		}
+	}
+
+	/// <summary>
+	/// Small extension points of the dashboard for modules (2026-11-20): where a new asset of a type is filed, and extra
+	/// buttons under an asset's inspector. Modules add to them from an <c>[InitializeOnLoadMethod]</c>.
+	/// </summary>
+	public static class DashboardHooks
+	{
+		/// <summary>Asked in order for the folder a new asset of a type goes in; null means no opinion.</summary>
+		public static readonly List<Func<Type, string>> AssetFolderResolvers = new List<Func<Type, string>>();
+
+		/// <summary>Called with the selected asset and the inspector area, after the asset's inspector.</summary>
+		public static readonly List<Action<UnityEngine.Object, VisualElement>> InspectorExtras = new List<Action<UnityEngine.Object, VisualElement>>();
+
+		/// <summary>The first folder a resolver names for <paramref name="assetType"/>, or null.</summary>
+		public static string FolderFor(Type assetType)
+		{
+			foreach (Func<Type, string> resolve in AssetFolderResolvers)
+			{
+				string folder = resolve(assetType);
+				if (!string.IsNullOrEmpty(folder))
+				{
+					return folder;
+				}
+			}
+			return null;
 		}
 	}
 }

@@ -9,7 +9,7 @@ precipitation, clouds and fog, the biome templates and maps, the world atlas, an
 | **Module id** | `world-simulation` (`WorldSimulationModule`) |
 | **Assemblies** | `FishMMO.WorldSimulation`, `.Server`, `.Client`, `.Editor`, `.Tests`; editor `FishMMO.Client.Weather.Editor`, `FishMMO.Shared.Biomes.Editor` |
 | **Depends on** | The core; its tests reference Water |
-| **Depended on by** | Water, Terrain, Ambient Life, Naming, World Design, World Test Bed |
+| **Depended on by** | Water, Terrain, Ambient Life, Naming, World Design, World Test Bed; Abilities (`WeatherAbilityModifier`, which moved into the Abilities module 2026-11-20) |
 | **Remove together with** | All six: the seven world modules go together |
 | **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18. Sky and Time, Climate and Weather, Biomes and the atlas referenced each other in a cycle, so they are one module (Jim, 2026-11-18). |
 

@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
@@ -26,6 +27,6 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Achievement template to increment when a player enters this dungeon.
 		/// </summary>
-		AchievementTemplate AchievementTemplate { get; }
+		CachedScriptableObject AchievementTemplate { get; }
 	}
 }

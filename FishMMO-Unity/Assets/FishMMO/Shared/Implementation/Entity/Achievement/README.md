@@ -1,6 +1,6 @@
 # Achievement System
 
-**Short description:** A data-driven, template-based framework for tracking player milestones with multi-tier progression, categorized grouping, tier-based rewards, FishNet network synchronization, and fire-and-forget database persistence in FishMMO.
+**Short description:** (Templates and the accomplishment signal are core; progress, rewards and the window are the [Achievements module](../../../../Modules/Achievements/README.md).) A data-driven, template-based framework for tracking player milestones with multi-tier progression, categorized grouping, tier-based rewards, FishNet network synchronization, and fire-and-forget database persistence in FishMMO.
 
 ## Table of Contents
 
@@ -309,26 +309,25 @@ Tier 2:    │         │          ├───────────┤
 
 ### Directory Structure
 
+The achievement system is split between the core and the Achievements module (2026-11-20). What content names stays in
+the core; what tracks a player's progress is the module's.
+
 ```
-Achievement/
-├── Achievement.cs                 # Runtime achievement instance (tier, value, template ref)
+Shared/Implementation/Entity/Achievement/        (core)
+├── Accomplishment.cs              # The Accomplishment signal and Accomplishments.Record, which features call
 ├── AchievementCategory.cs         # Enum of achievement categories (Combat, Exploration, etc.)
-├── AchievementController.cs       # Per-entity controller (CharacterBehaviour / NetworkBehaviour)
 └── Template/
     ├── AchievementTemplate.cs         # ScriptableObject blueprint (icon, category, tiers)
     ├── AchievementTemplateDatabase.cs # Name-to-template lookup database (ScriptableObject)
     └── AchievementTier.cs             # Serializable tier definition (value threshold, rewards)
-```
 
-### Related Files (Outside This Directory)
+Shared/Implementation/Entity/ECA/Actions/Character/Achievement/AchievementIncrementAction.cs   (core: records an accomplishment)
 
-```
-Shared/Core/Entity/Achievement/IAchievementController.cs                       # Achievement controller interface + static events
-Shared/Implementation/Network/Character/AchievementBroadcasts.cs              # FishNet broadcast structs for achievement updates
-Server/Implementation/World/SceneServer/Achievement/AchievementSystem.cs       # Server-side achievement tracking, rewards, and DB persistence
-Shared/Implementation/Entity/ECA/Actions/Character/Achievement/AchievementIncrementAction.cs  # ECA action calling Increment()
-Client/Client.cs                                                               # Client-side OnCompleteAchievement handler
-Client/GUI/World/Achievement/UITKAchievements.cs                               # Achievement UI Toolkit panel
+Modules/Achievements/                            (the module; see its README)
+├── Runtime/   AchievementController (a CharacterPart), IAchievementController, Achievement, AchievementBroadcasts,
+│              AchievementCompletedCondition, AchievementModule (counts accomplishments)
+├── Server/    AchievementSystem, IAchievementSystem, AchievementPersistence
+└── Client/    UITKAchievements (the window), AchievementsClient (the completed-tier announcement)
 ```
 
 ### Inheritance Hierarchies

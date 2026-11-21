@@ -7,7 +7,13 @@
         "FishMMO.Server",
         "FishNet.Runtime",
         "Unity.Addressables",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Combat",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [
         "Editor",

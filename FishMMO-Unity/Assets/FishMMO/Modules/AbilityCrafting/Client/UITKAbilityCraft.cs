@@ -292,7 +292,7 @@ namespace FishMMO.Client
 		private void MainEntry_OnLeftClick()
 		{
 			if (Character == null ||
-				!Character.TryGet(out IAbilityController abilityController) ||
+				!Character.TryGet(out IAbilityKnowledgeController abilityController) ||
 				!UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
 			{
 				return;
@@ -344,7 +344,7 @@ namespace FishMMO.Client
 			}
 
 			if (Character == null ||
-				!Character.TryGet(out IAbilityController abilityController) ||
+				!Character.TryGet(out IAbilityKnowledgeController abilityController) ||
 				!UIManager.TryGetTK("UISelector", out UITKSelector uiSelector))
 			{
 				return;

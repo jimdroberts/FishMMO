@@ -15,7 +15,9 @@
         "KinematicCharacterController",
         "FishMMO.Staff",
         "FishMMO.Staff.Server",
-        "FishMMO.Staff.Client"
+        "FishMMO.Staff.Client",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server"
     ],
     "includePlatforms": [
         "Editor"

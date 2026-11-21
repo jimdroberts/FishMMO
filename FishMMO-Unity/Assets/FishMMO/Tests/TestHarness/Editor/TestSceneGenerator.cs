@@ -117,7 +117,7 @@ namespace FishMMO.TestHarness.Editor
 		private const string NpcPrefabPath =
 			"Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc warrior.prefab";
 
-		/// <summary>Scans <c>Assets/Templates</c> for mock content and (re)writes the manifest
+		/// <summary>Scans <c>Assets/FishMMO/Templates</c> for mock content and (re)writes the manifest
 		/// asset the CombatSim bootstrap reads at runtime.</summary>
 		private static CombatSimManifest BuildCombatManifest()
 		{
@@ -147,7 +147,7 @@ namespace FishMMO.TestHarness.Editor
 			manifest.ChannelMarker = null;
 			manifest.ChargeMarker = null;
 
-			foreach (string guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { "Assets/Templates" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { "Assets/FishMMO/Templates", "Assets/FishMMO/Modules" }))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
 				if (!path.Contains("/Mock"))
@@ -179,7 +179,7 @@ namespace FishMMO.TestHarness.Editor
 
 			if (manifest.Roster.Count == 0)
 			{
-				Debug.LogError("[TestSceneGenerator] No mock AbilityTemplates found under Assets/Templates — " +
+				Debug.LogError("[TestSceneGenerator] No mock AbilityTemplates found under Assets/FishMMO/Templates — " +
 					"run the mock generator first (FishMMO Dashboard → Core → Maintenance → Generate Mock Abilities).");
 			}
 			if (manifest.ChannelMarker == null || manifest.ChargeMarker == null)

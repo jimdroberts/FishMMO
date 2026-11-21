@@ -931,14 +931,9 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void AnnounceNewLeader(MemberModel model)
 		{
-			if (!UIManager.TryGetTK("UIChat", out UITKChat chat))
-			{
-				return;
-			}
-
 			if (Character != null && model.CharacterID == Character.ID)
 			{
-				chat.InstantiateChatMessage(ChatChannel.System, "", "You are now the party leader.");
+				ChatWindow.ShowSystem("You are now the party leader.");
 				return;
 			}
 
@@ -948,7 +943,7 @@ namespace FishMMO.Client
 				? model.CharacterID.ToString()
 				: model.Name;
 
-			chat.InstantiateChatMessage(ChatChannel.System, "", $"{displayName} is now the party leader.");
+			ChatWindow.ShowSystem($"{displayName} is now the party leader.");
 		}
 
 		/// <summary>
@@ -2026,10 +2021,7 @@ namespace FishMMO.Client
 			{
 				entries.Add(("Message", () =>
 				{
-					if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
-					{
-						uiChat.SetInputText(ChatTellAddress.FormatCommand(displayName));
-					}
+					ChatWindow.BeginTell(displayName);
 				}
 				));
 			}

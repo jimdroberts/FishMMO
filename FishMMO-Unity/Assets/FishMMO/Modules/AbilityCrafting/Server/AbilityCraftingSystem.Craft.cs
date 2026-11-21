@@ -72,7 +72,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			IPlayerCharacter character = conn.FirstObject.GetComponent<IPlayerCharacter>();
 
 			if (character == null ||
-				!character.TryGet(out IAbilityController abilityController))
+				!character.TryGet(out IAbilityKnowledgeController abilityController))
 			{
 				SendCraftResult(conn, msg.TemplateID, AbilityCraftFailure.Unavailable);
 				return;

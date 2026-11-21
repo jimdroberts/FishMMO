@@ -2,18 +2,16 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Draws descriptive Scene view labels for interactables, object spawners, and teleporters.
+	/// Draws descriptive Scene view labels for interactables and teleporters; its helpers serve the modules' labels (the NPCs module's object spawners).
 	/// </summary>
 	public static class SceneObjectGizmoLabelDrawer
 	{
-		private const string UnassignedText = "Unassigned";
+		public const string UnassignedText = "Unassigned";
 		private const string MissingText = "Missing";
-		private const int MaxSpawnableRows = 4;
 		private const int MaxIncomingTeleporterRows = 4;
 		private const float LabelPadding = 0.35f;
 		private const float DetailedLabelScreenRadius = 0.035f;
@@ -22,14 +20,11 @@ namespace FishMMO.Shared
 		private const float BasicLabelAlpha = 0.86f;
 
 		private static readonly Color InteractableLabelColor = new Color(0.55f, 0.9f, 1.0f, 1.0f);
-		private static readonly Color ObjectSpawnerLabelColor = new Color(1.0f, 0.68f, 0.25f, 1.0f);
 		private static readonly Color SceneTeleporterLabelColor = new Color(1.0f, 0.45f, 0.95f, 1.0f);
 		private static readonly Color TeleporterDestinationLabelColor = new Color(0.55f, 1.0f, 0.55f, 1.0f);
 
 		private static readonly GUIStyle InteractableLabelStyle = CreateLabelStyle(InteractableLabelColor);
 		private static readonly GUIStyle InteractableBasicLabelStyle = CreateLabelStyle(CreateBasicLabelColor(InteractableLabelColor));
-		private static readonly GUIStyle ObjectSpawnerLabelStyle = CreateLabelStyle(ObjectSpawnerLabelColor);
-		private static readonly GUIStyle ObjectSpawnerBasicLabelStyle = CreateLabelStyle(CreateBasicLabelColor(ObjectSpawnerLabelColor));
 		private static readonly GUIStyle SceneTeleporterLabelStyle = CreateLabelStyle(SceneTeleporterLabelColor);
 		private static readonly GUIStyle SceneTeleporterBasicLabelStyle = CreateLabelStyle(CreateBasicLabelColor(SceneTeleporterLabelColor));
 		private static readonly GUIStyle TeleporterDestinationLabelStyle = CreateLabelStyle(TeleporterDestinationLabelColor);
@@ -74,45 +69,6 @@ namespace FishMMO.Shared
 			if (useDetailedLabel && teleporter != null)
 			{
 				DrawTeleporterConnection(teleporter.transform, teleporter.Target, teleporter.DestinationID, Color.cyan);
-			}
-		}
-
-		/// <summary>
-		/// Draws a descriptive label for an object spawner.
-		/// </summary>
-		/// <param name="spawner">The object spawner to label.</param>
-		/// <param name="gizmoType">The gizmo draw context.</param>
-		[DrawGizmo(GizmoType.Active | GizmoType.InSelectionHierarchy | GizmoType.NonSelected | GizmoType.Selected)]
-		public static void DrawObjectSpawnerLabel(ObjectSpawner spawner, GizmoType gizmoType)
-		{
-			if (!ShouldDrawSceneLabels() || spawner == null)
-			{
-				return;
-			}
-
-			GameObject gameObject = spawner.gameObject;
-			if (gameObject == null)
-			{
-				return;
-			}
-			float distance;
-			bool isInDetailedScreenFocus;
-			if (!TryGetSceneViewLabelContext(gameObject.transform.position, out distance, out isInDetailedScreenFocus))
-			{
-				return;
-			}
-
-			GUIStyle labelStyle;
-			bool useDetailedLabel;
-			GetLabelStyle(isInDetailedScreenFocus, ObjectSpawnerLabelStyle, ObjectSpawnerBasicLabelStyle, out labelStyle, out useDetailedLabel);
-
-			Vector3 labelPosition = GetLabelPosition(gameObject.transform, 1.6f, useDetailedLabel);
-			string labelText = useDetailedLabel ? BuildSpawnerLabel(spawner) : gameObject.name;
-			DrawOrderedLabel(labelPosition, labelText, labelStyle, distance);
-
-			if (useDetailedLabel)
-			{
-				DrawSpawnerSpawnArea(spawner);
 			}
 		}
 
@@ -192,7 +148,7 @@ namespace FishMMO.Shared
 		/// Returns whether label drawing should run for the current editor event.
 		/// </summary>
 		/// <returns>True when labels should be drawn.</returns>
-		private static bool ShouldDrawSceneLabels()
+		public static bool ShouldDrawSceneLabels()
 		{
 			Event currentEvent = Event.current;
 			return currentEvent == null || currentEvent.type == EventType.Repaint;
@@ -203,7 +159,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="color">The label text color.</param>
 		/// <returns>The configured label style.</returns>
-		private static GUIStyle CreateLabelStyle(Color color)
+		public static GUIStyle CreateLabelStyle(Color color)
 		{
 			return new GUIStyle(EditorStyles.boldLabel)
 			{
@@ -217,7 +173,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="detailColor">The detailed label color.</param>
 		/// <returns>The matching basic label color.</returns>
-		private static Color CreateBasicLabelColor(Color detailColor)
+		public static Color CreateBasicLabelColor(Color detailColor)
 		{
 			return new Color(
 				detailColor.r * BasicLabelBrightnessMultiplier,
@@ -234,7 +190,7 @@ namespace FishMMO.Shared
 		/// <param name="basicStyle">The basic label style.</param>
 		/// <param name="labelStyle">The selected label style.</param>
 		/// <param name="useDetailedLabel">True when the detailed label should be built and drawn.</param>
-		private static void GetLabelStyle(bool isInDetailedScreenFocus, GUIStyle detailedStyle, GUIStyle basicStyle, out GUIStyle labelStyle, out bool useDetailedLabel)
+		public static void GetLabelStyle(bool isInDetailedScreenFocus, GUIStyle detailedStyle, GUIStyle basicStyle, out GUIStyle labelStyle, out bool useDetailedLabel)
 		{
 			useDetailedLabel = isInDetailedScreenFocus;
 			labelStyle = useDetailedLabel ? detailedStyle : basicStyle;
@@ -247,7 +203,7 @@ namespace FishMMO.Shared
 		/// <param name="text">The label text.</param>
 		/// <param name="style">The label style.</param>
 		/// <param name="distance">The Scene view camera distance.</param>
-		private static void DrawOrderedLabel(Vector3 position, string text, GUIStyle style, float distance)
+		public static void DrawOrderedLabel(Vector3 position, string text, GUIStyle style, float distance)
 		{
 			if (string.IsNullOrWhiteSpace(text))
 			{
@@ -286,48 +242,6 @@ namespace FishMMO.Shared
 				AppendTeleporterDestination(builder, teleporter.Target, teleporter.DestinationID);
 			}
 
-			return builder.ToString();
-		}
-
-		/// <summary>
-		/// Builds a human-readable ObjectSpawner label.
-		/// </summary>
-		/// <param name="spawner">The object spawner.</param>
-		/// <returns>A descriptive label string.</returns>
-		private static string BuildSpawnerLabel(ObjectSpawner spawner)
-		{
-			StringBuilder builder = new StringBuilder(384);
-			builder.Append(spawner.gameObject.name);
-			builder.Append("\nObjectSpawner | Scene: ");
-			builder.Append(spawner.gameObject.scene.name);
-			builder.Append("\nType: ");
-			builder.Append(spawner.SpawnType);
-			builder.Append(" | Count: ");
-			builder.Append(spawner.InitialSpawnCount);
-			builder.Append('/');
-			builder.Append(spawner.MaxSpawnCount);
-			builder.Append(" | Entries: ");
-			builder.Append(spawner.Spawnables == null ? 0 : spawner.Spawnables.Count);
-			if (!spawner.CompareTag(ObjectSpawner.EditorOnlyTag))
-			{
-				// Anything else ships the spawner to every client build.
-				builder.Append(" | NOT EditorOnly");
-			}
-			builder.Append("\nPosition: ");
-			builder.Append(spawner.RandomSpawnPosition ? "Random" : "Fixed");
-			builder.Append(" | Bounds: ");
-			AppendVector3(builder, spawner.BoundingBoxSize);
-			builder.Append(" | Probe: ");
-			AppendFloat(builder, spawner.SphereRadius);
-			builder.Append(" | Respawn: ");
-			builder.Append(spawner.RandomRespawnTime ? "Random" : "Fixed");
-			builder.Append("\nRespawn Time: ");
-			AppendFloat(builder, spawner.InitialRespawnTime);
-			builder.Append("s | OR Conditions: ");
-			builder.Append(spawner.OrConditions == null ? 0 : spawner.OrConditions.Count);
-			builder.Append(" | AND Conditions: ");
-			builder.Append(spawner.TrueConditions == null ? 0 : spawner.TrueConditions.Count);
-			AppendSpawnables(builder, spawner.Spawnables);
 			return builder.ToString();
 		}
 
@@ -431,74 +345,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Appends a compact spawnable summary.
-		/// </summary>
-		/// <param name="builder">The string builder to append to.</param>
-		/// <param name="spawnables">The spawnable settings list.</param>
-		private static void AppendSpawnables(StringBuilder builder, System.Collections.Generic.List<SpawnableSettings> spawnables)
-		{
-			if (spawnables == null || spawnables.Count < 1)
-			{
-				builder.Append("\nSpawnables: None");
-				return;
-			}
-
-			int rowCount = Mathf.Min(spawnables.Count, MaxSpawnableRows);
-			for (int index = 0; index < rowCount; index++)
-			{
-				SpawnableSettings settings = spawnables[index];
-				builder.Append("\n[");
-				builder.Append(index);
-				builder.Append("] ");
-				AppendSpawnableName(builder, settings);
-				builder.Append(" | Chance: ");
-				AppendFloat(builder, settings == null ? 0.0f : settings.SpawnChance);
-				builder.Append(" | Respawn: ");
-				AppendFloat(builder, settings == null ? 0.0f : settings.MinimumRespawnTime);
-				builder.Append('-');
-				AppendFloat(builder, settings == null ? 0.0f : settings.MaximumRespawnTime);
-				builder.Append('s');
-			}
-
-			if (spawnables.Count > MaxSpawnableRows)
-			{
-				builder.Append("\n...");
-				builder.Append(spawnables.Count - MaxSpawnableRows);
-				builder.Append(" more spawnables");
-			}
-		}
-
-		/// <summary>
-		/// Appends the best display name for spawnable settings.
-		/// </summary>
-		/// <param name="builder">The string builder to append to.</param>
-		/// <param name="settings">The spawnable settings.</param>
-		private static void AppendSpawnableName(StringBuilder builder, SpawnableSettings settings)
-		{
-			if (settings == null)
-			{
-				builder.Append("Null settings");
-				return;
-			}
-
-			builder.Append(settings.GetType().Name);
-			builder.Append(": ");
-			if (settings.NetworkObject == null)
-			{
-				builder.Append(UnassignedText);
-				return;
-			}
-
-			builder.Append(settings.NetworkObject.name);
-			ItemSpawnableSettings itemSettings = settings as ItemSpawnableSettings;
-			if (itemSettings != null && itemSettings.ItemTemplate != null)
-			{
-				builder.Append(" -> ");
-				builder.Append(itemSettings.ItemTemplate.Name);
-			}
-		}
-
-		/// <summary>
 		/// Appends incoming teleporter links for a destination.
 		/// </summary>
 		/// <param name="builder">The string builder to append to.</param>
@@ -584,25 +430,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Draws additional spawner area indicators.
-		/// </summary>
-		/// <param name="spawner">The object spawner.</param>
-		private static void DrawSpawnerSpawnArea(ObjectSpawner spawner)
-		{
-			if (spawner == null || !spawner.RandomSpawnPosition)
-			{
-				return;
-			}
-
-			Color previousColor = Handles.color;
-			Handles.color = new Color(1.0f, 0.35f, 0.1f, 0.8f);
-			Handles.DrawWireCube(spawner.transform.position, spawner.BoundingBoxSize);
-			Handles.CubeHandleCap(0, spawner.transform.position, Quaternion.identity, 0.2f, EventType.Repaint);
-			Handles.DrawWireDisc(spawner.transform.position, Vector3.up, spawner.SphereRadius);
-			Handles.color = previousColor;
-		}
-
-		/// <summary>
 		/// Resolves a destination position for local gizmo lines.
 		/// </summary>
 		/// <param name="sourceScene">The source scene.</param>
@@ -670,7 +497,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="builder">The string builder to append to.</param>
 		/// <param name="value">The vector value.</param>
-		private static void AppendVector3(StringBuilder builder, Vector3 value)
+		public static void AppendVector3(StringBuilder builder, Vector3 value)
 		{
 			builder.Append('(');
 			AppendFloat(builder, value.x);
@@ -686,7 +513,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <param name="builder">The string builder to append to.</param>
 		/// <param name="value">The float value.</param>
-		private static void AppendFloat(StringBuilder builder, float value)
+		public static void AppendFloat(StringBuilder builder, float value)
 		{
 			builder.Append(value.ToString("0.##"));
 		}
@@ -715,7 +542,7 @@ namespace FishMMO.Shared
 		/// <param name="fallbackHeight">Fallback height when no collider exists.</param>
 		/// <param name="useColliderBounds">True to use collider bounds for precise placement.</param>
 		/// <returns>The world-space label position.</returns>
-		private static Vector3 GetLabelPosition(Transform transform, float fallbackHeight, bool useColliderBounds)
+		public static Vector3 GetLabelPosition(Transform transform, float fallbackHeight, bool useColliderBounds)
 		{
 			if (useColliderBounds)
 			{
@@ -737,7 +564,7 @@ namespace FishMMO.Shared
 		/// <param name="distance">The resolved Scene view camera distance.</param>
 		/// <param name="isInDetailedScreenFocus">True when the position is near the Scene view mouse cursor.</param>
 		/// <returns>True if labels should draw for this position.</returns>
-		private static bool TryGetSceneViewLabelContext(Vector3 position, out float distance, out bool isInDetailedScreenFocus)
+		public static bool TryGetSceneViewLabelContext(Vector3 position, out float distance, out bool isInDetailedScreenFocus)
 		{
 			SceneView sceneView = SceneView.currentDrawingSceneView;
 			Camera camera = sceneView == null ? null : sceneView.camera;

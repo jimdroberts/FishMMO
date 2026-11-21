@@ -36,7 +36,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// List of archetypes associated with this guild.
 		/// </summary>
-		public List<ArchetypeTemplate> Archetypes = new List<ArchetypeTemplate>();
+		[TemplateOf("ArchetypeTemplate")]
+		public List<CachedScriptableObject> Archetypes = new List<CachedScriptableObject>();
 
 		/// <summary>
 		/// Requirements that a player must meet to join or interact with this guild.
@@ -61,11 +62,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (IconReference != null && IconReference.RuntimeKeyIsValid())
 			{
-				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
-				{
-					if (handle.Status == AsyncOperationStatus.Succeeded)
-						loadedIcon = handle.Result;
-				};
+				TemplateAssets.Load<Sprite>(IconReference, asset => loadedIcon = asset);
 			}
 #endif
 		}

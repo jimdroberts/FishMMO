@@ -6,7 +6,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// ECA action that increments achievement progress for a character.
+	/// ECA action that records progress on an achievement for a character (<see cref="Accomplishments.Record"/>).
 	/// Server-only execution.
 	/// </summary>
 	[Serializable]
@@ -16,7 +16,8 @@ namespace FishMMO.Shared
 		/// The achievement template to increment.
 		/// </summary>
 		[Tooltip("The achievement template to increment.")]
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <summary>
 		/// The value provider that determines the amount to increment by.
@@ -53,16 +54,10 @@ namespace FishMMO.Shared
 			 * so evaluating it behind the gate advanced it only on the server and left an ungated
 			 * action later in the chain reading a different number. The two guards above may
 			 * precede it — both are authoring faults that answer the same on every peer — but the
-			 * gate may not, and neither may the controller lookup below: an achievement controller
-			 * is a server-side component, so a client would have returned before drawing. */
+			 * gate may not: a client would have returned before drawing. */
 			int value = AmountValue.GetValue(initiator, eventData);
 
 			if (!EcaAuthority.IsServer(initiator, eventData))
-			{
-				return;
-			}
-
-			if (!initiator.TryGet(out IAchievementController achievementController))
 			{
 				return;
 			}
@@ -71,7 +66,10 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			achievementController.Increment(AchievementTemplate, (uint)value);
+			/* A fact published on the character's Core world; the Achievements module counts it, and without that module
+			 * it counts toward nothing. The action stays in the core so the core triggers that carry it (Count Death,
+			 * Count Monster Kill, …) never name a module type. */
+			Accomplishments.Record(initiator, AchievementTemplate, (uint)value);
 		}
 	}
 }

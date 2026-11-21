@@ -123,7 +123,8 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// List of starting abilities for the race.
 		/// </summary>
-		public List<AbilityTemplate> StartingAbilities = new List<AbilityTemplate>();
+		[TemplateOf("AbilityTemplate")]
+		public List<CachedScriptableObject> StartingAbilities = new List<CachedScriptableObject>();
 
 		/// <summary>
 		/// List of starting inventory items for the race.

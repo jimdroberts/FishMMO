@@ -31,7 +31,8 @@ namespace FishMMO.UnitTests
 			{
 				Assert.That(crop.Surface, Is.EqualTo(BiomeFieldSurface.Flat));
 			}
-			Assert.That(forest.FieldCrops.ConvertAll(c => c.ToString()), Is.EqualTo(new[] { "Detail_GrassWheat×1" }));
+			// The spec's crops: the forest's oats, spelt and field beans in its assarts since its round.
+			Assert.That(forest.FieldCrops.ConvertAll(c => (c.Prefab != null ? c.Prefab.name : null, c.Weight)), Is.EqualTo(entry.FieldCrops()));
 
 			var second = new BiomeArtAuthoring.Report();
 			Assert.IsFalse(BiomeArtAuthoring.Author(forest, entry, source, second, true), "a second run changed something:\n" + second);

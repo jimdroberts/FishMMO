@@ -197,46 +197,10 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void Filter_DropsAnyMarkerComponentOfTheWaypointType()
+		public void MarkerType_WaypointIsAppendedLast()
 		{
-			/* Registered by hand: OnEnable does not run for an edit-mode AddComponent, which is
-			 * also how MapSystemTests builds its fixtures. */
-			MapMarker marker = NewHost("Leak").AddComponent<MapMarker>();
-			marker.Type = MapMarkerType.Waypoint;
-			marker.Visibility = MapMarkerVisibility.Always;
-			MapMarkerRegistry.Register(marker);
-
-			MapMarker landmark = NewHost("Landmark").AddComponent<MapMarker>();
-			landmark.Type = MapMarkerType.Landmark;
-			landmark.Visibility = MapMarkerVisibility.Always;
-			MapMarkerRegistry.Register(landmark);
-
-			try
-			{
-				List<MapMarkerSnapshot> results = new List<MapMarkerSnapshot>();
-				new MapMarkerFilter().Collect(results, null, true, null);
-
-				bool sawWaypoint = false, sawLandmark = false;
-				for (int i = 0; i < results.Count; ++i)
-				{
-					if (results[i].Source == marker) sawWaypoint = true;
-					if (results[i].Source == landmark) sawLandmark = true;
-				}
-				Assert.IsFalse(sawWaypoint, "A MapMarker of the waypoint type would reveal an undiscovered waypoint to anyone who streamed it.");
-				Assert.IsTrue(sawLandmark, "The guard is specific to the waypoint type.");
-			}
-			finally
-			{
-				MapMarkerRegistry.Unregister(marker);
-				MapMarkerRegistry.Unregister(landmark);
-			}
-		}
-
-		[Test]
-		public void MarkerType_WaypointIsAppendedLast_AndClassifiedAsLandmark()
-		{
+			/* The Map module's map filter (MapWaypointTests) classifies it as a landmark. */
 			Assert.AreEqual((byte)MapMarkerType.Note + 1, (byte)MapMarkerType.Waypoint, "The ordinal is draw order; append, never insert.");
-			Assert.AreEqual(MapFilterCategory.Landmarks, MapFilters.Categorize(MapMarkerType.Waypoint));
 		}
 
 		// ── WaypointRegistry ─────────────────────────────────────────────────────
@@ -291,26 +255,6 @@ namespace FishMMO.UnitTests
 			FieldInfo field = typeof(Waypoint).GetField("waypointIndex", BindingFlags.NonPublic | BindingFlags.Instance);
 			Assert.IsNotNull(field);
 			field.SetValue(waypoint, index);
-		}
-
-		// ── Achievement dirty tracking ───────────────────────────────────────────
-
-		[Test]
-		public void Achievement_MarkChanged_AdvancesVersion_AndAStaleConfirmationDoesNotClear()
-		{
-			Achievement achievement = new Achievement(12345, 0, 0);
-			Assert.IsFalse(achievement.PersistenceDirty, "A restored row is clean until something changes it.");
-
-			achievement.MarkChanged();
-			Assert.IsTrue(achievement.PersistenceDirty);
-			long snapshot = ++achievement.Version; // the save snapshot bumps once more
-
-			achievement.MarkChanged(); // changed while the write was in flight
-			achievement.MarkPersisted(snapshot);
-			Assert.IsTrue(achievement.PersistenceDirty, "The confirmation is for an older state.");
-
-			achievement.MarkPersisted(achievement.Version);
-			Assert.IsFalse(achievement.PersistenceDirty);
 		}
 	}
 }

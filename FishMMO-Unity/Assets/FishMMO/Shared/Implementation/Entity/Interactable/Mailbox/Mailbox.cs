@@ -13,10 +13,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement to increment when a player uses this mailbox.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <inheritdoc />
-		AchievementTemplate IMailbox.AchievementTemplate => AchievementTemplate;
+		CachedScriptableObject IMailbox.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// Display title shown above the mailbox.

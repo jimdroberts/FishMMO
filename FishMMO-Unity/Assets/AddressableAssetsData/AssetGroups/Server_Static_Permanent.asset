@@ -29,6 +29,13 @@ MonoBehaviour:
     - SceneServer_Systems
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 08e6cbd6774b0d6bf9a41c088868ab86
+    m_Address: Wildlife Flee State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0abe9137cceb5fe83026def40795bdc0
     m_Address: Pet Balanced Personality
     m_ReadOnly: 0
@@ -51,9 +58,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 17ec716b3eb745a9bc8e26e6b64ebba0
-    m_Address: Assets/Prefabs/Server/SceneServer/AbilitySystem.asset
+    m_Address: AbilitySystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -143,6 +151,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3011f4f80a62463c881f7f7269c2de7e
+    m_Address: WorldInteractableSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 36ffc773df7e677d46d6958c8baa7820
     m_Address: Aggressive Melee Personality
     m_ReadOnly: 0
@@ -214,6 +230,13 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 46b4f2113db9e56288655a9be0e7166f
+    m_Address: Civilian - Simulated Player
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4b5c7f379033ce27c2487579df700602
     m_Address: Rogue Personality
     m_ReadOnly: 0
@@ -222,9 +245,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 4d40e4ae150539895a659c9da4e7b15c
-    m_Address: Assets/Prefabs/Server/SceneServer/AchievementSystem.asset
+    m_Address: AchievementSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -249,10 +273,19 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
-    m_Address: Assets/Prefabs/Server/SceneServer/AISystem.asset
+  - m_GUID: 52815dee0e994ea5ac5e394941539a8f
+    m_Address: ChatChannelSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 52b7d40e4f9b4f8abf005afa870e8ad2
+    m_Address: AISystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -292,6 +325,13 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5f2b5f321d9eeba97af4765740120b77
+    m_Address: Simulated Player Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 628fe87f664e5783a2ea13da979a75d7
     m_Address: Determined Personality
     m_ReadOnly: 0
@@ -315,6 +355,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 69f773f7b940a847d9e2ad75e2f1cd34
     m_Address: Assets/Prefabs/Server/SceneServer/NamingSystem.asset
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6e798e2ad3941655eaf189dba5684e1d
+    m_Address: Wildlife - Predator
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent
@@ -376,11 +423,25 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 817ca41b5f860ddc791230f60cf37f92
+    m_Address: Wildlife Territorial Attack State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 81dcf0a7a5664a1c83d8b72c607d5648
     m_Address: LeaderboardSystem
     m_ReadOnly: 0
     m_SerializedLabels:
     - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8246ec1831e1f6efc93c65048ba09716
+    m_Address: Wildlife - Territorial
+    m_ReadOnly: 0
+    m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -413,9 +474,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 8989a761202af17c98c3437f210f1826
-    m_Address: Assets/Prefabs/Server/SceneServer/PetSystem.asset
+    m_Address: PetSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -431,6 +493,20 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8c7b67da34d8e69bd97e839391902102
+    m_Address: Wildlife Wander State
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8e8c694b2cea07d2cb175ef593556baf
+    m_Address: Wildlife - Prey
+    m_ReadOnly: 0
+    m_SerializedLabels:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -464,9 +540,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 95f857a74d9b4f87a71060f2e717e0e2
-    m_Address: Assets/Prefabs/Server/SceneServer/SpawnerSystem.asset
+    m_Address: SpawnerSystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -590,9 +667,10 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: b71d352744ff0b27e8736d3f49fcc44f
-    m_Address: Assets/Prefabs/Server/SceneServer/HotkeySystem.asset
+    m_Address: HotkeySystem
     m_ReadOnly: 0
     m_SerializedLabels:
+    - SceneServer_Systems
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
@@ -702,6 +780,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: ce2b2f178f7f460f967760bbf983065a
+    m_Address: CombatSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: cfab38130929316f08ac6e1f44fa64bd
     m_Address: Assets/Prefabs/Server/KickRequestSystem.asset
     m_ReadOnly: 0
@@ -753,7 +839,15 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: dfdce6e33e2616ef0b55cad7b8cd1a28
-    m_Address: Assets/Prefabs/Server/SceneServer/CharacterInventorySystem.asset
+    m_Address: CharacterInventorySystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e05f2336b895516e481fafe89d1793d1
+    m_Address: Wildlife Predator Attack State
     m_ReadOnly: 0
     m_SerializedLabels:
     - Server_Static_Permanent

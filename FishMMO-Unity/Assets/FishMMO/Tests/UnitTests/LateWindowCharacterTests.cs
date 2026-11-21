@@ -44,6 +44,30 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void AHudPanelShownBeforeItRegistered_IsShownWhenItDoes()
+		{
+			/* The spawn shows the HUD by name (PlayerInputController.OnEnable: the chat, the hotkey bar, the minimap). Those
+			 * are module panels now, placed by ModulePanelHost after an Addressables load that can finish after the spawn;
+			 * they start hidden, so a Show that missed them left them hidden for the session. */
+			string ui = Code("Assets/FishMMO/Client/GUI/Core/UIManager.cs");
+			int show = ui.IndexOf("public static void Show(string name)", StringComparison.Ordinal);
+			int apply = ui.IndexOf("internal static void ApplyPendingShow(UITKControl control)", StringComparison.Ordinal);
+			LogAssert.IsTrue(show >= 0 && apply > show && ui.Substring(show, apply - show).Contains("pendingShows.Add(name);"),
+				"a Show that finds no control remembers the name");
+			int hide = ui.IndexOf("public static void Hide(string name)", StringComparison.Ordinal);
+			LogAssert.IsTrue(hide >= 0 && ui.IndexOf("pendingShows.Remove(name);", hide, StringComparison.Ordinal) > hide,
+				"a Hide of the name cancels it");
+			LogAssert.IsTrue(ui.Contains("pendingShows.Clear();"), "and the character leaving clears them all");
+
+			string control = Code("Assets/FishMMO/Client/GUI/UITKControl.cs");
+			int awake = control.IndexOf("private void Awake()", StringComparison.Ordinal);
+			int startOpen = control.IndexOf("if (!StartOpen)", awake, StringComparison.Ordinal);
+			int applied = control.IndexOf("UIManager.ApplyPendingShow(this);", awake, StringComparison.Ordinal);
+			LogAssert.IsTrue(awake >= 0 && startOpen > awake && applied > startOpen,
+				"the panel applies a pending Show after its own StartOpen hide, which would otherwise undo it");
+		}
+
+		[Test]
 		public void TheTradeWindow_DeclinesARequestItCannotShow_RatherThanDroppingIt()
 		{
 			const string path = "Assets/FishMMO/Modules/Commerce/Client/UITKTrade.cs";

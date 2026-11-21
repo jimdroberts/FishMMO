@@ -248,13 +248,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (IconReference != null && IconReference.RuntimeKeyIsValid())
 			{
-				IconReference.LoadAssetAsync<Sprite>().Completed += (handle) =>
-				{
-					if (handle.Status == AsyncOperationStatus.Succeeded)
-					{
-						loadedIcon = handle.Result;
-					}
-				};
+				TemplateAssets.Load<Sprite>(IconReference, asset => loadedIcon = asset);
 			}
 #endif
 		}

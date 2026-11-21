@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -29,10 +29,9 @@ namespace FishMMO.Shared
 			SendToOwner(player, new MailboxBroadcast() { InteractableID = data.Interactable.ID });
 
 			IMailbox mailbox = data.Interactable as IMailbox;
-			if (mailbox?.AchievementTemplate != null &&
-				player.TryGet(out IAchievementController achievementController))
+			if (mailbox?.AchievementTemplate != null)
 			{
-				achievementController.Increment(mailbox.AchievementTemplate, 1);
+				Accomplishments.Record(player, mailbox.AchievementTemplate);
 			}
 		}
 	}

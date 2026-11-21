@@ -29,13 +29,29 @@ namespace FishMMO.Server.Core.World.SceneServer
 		/// <param name="interactable">The interactable NPC being engaged.</param>
 		void OnInteractNPC(IPlayerCharacter character, IInteractable interactable);
 
+		/// <summary>The scene details interactions are validated against.</summary>
+		WorldSceneDetailsCache WorldSceneDetails { get; }
 		/// <summary>
-		/// Starts a dialogue session between a player character and a dialogue interactable.
+		/// Takes the one per-connection interaction guard every interaction kind shares (the debounce: a player interacts
+		/// with one thing at a time). A module's own interaction requests (the World Interactables module's dialogue choices
+		/// and container takes) take it too, and release it with <see cref="EndInteraction"/>.
 		/// </summary>
-		/// <param name="character">The player character.</param>
-		/// <param name="sceneObject">The scene object associated with the dialogue.</param>
-		/// <param name="dialogue">The dialogue interactable containing the dialogue data.</param>
-		void StartDialogueSession(IPlayerCharacter character, ISceneObject sceneObject, IDialogueInteractable dialogue);
+		/// <param name="connectionId">The client connection ID.</param>
+		/// <param name="guardKey">When successful, the key to release.</param>
+		/// <returns>False while the debounce is active.</returns>
+		bool TryBeginInteraction(int connectionId, out long guardKey);
+		/// <summary>Releases a guard taken by <see cref="TryBeginInteraction"/>.</summary>
+		/// <param name="guardKey">The key it returned.</param>
+		void EndInteraction(long guardKey);
+		/// <summary>
+		/// Resolves a client's scene object ID as the interaction path does: registered, live (a pooled, despawned object keeps
+		/// its ID), and in the character's scene.
+		/// </summary>
+		/// <param name="sceneObjectID">The ID the client named.</param>
+		/// <param name="characterSceneHandle">The handle of the scene the character is in.</param>
+		/// <param name="sceneObject">The scene object, when it resolves.</param>
+		/// <returns>True when it resolves.</returns>
+		bool TryResolveSceneObject(long sceneObjectID, UnityEngine.SceneManagement.SceneHandle characterSceneHandle, out ISceneObject sceneObject);
 
 		/// <summary>
 		/// Sends a new item broadcast notification to the specified connection.

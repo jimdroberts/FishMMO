@@ -7,7 +7,7 @@ crafter, paid in currency, and the crafting window.
 |---|---|
 | **Module id** | `abilitycrafting` (`AbilityCraftingModule`) |
 | **Assemblies** | `FishMMO.AbilityCrafting`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
-| **Depends on** | The core (abilities, currency) |
+| **Depends on** | The core (currency); Abilities (templates, events, the ability system that records a craft) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
 | **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17. The predicted core (items, abilities, combat) stays in the core until Phase 6; crafting is the part of abilities that became a module. |

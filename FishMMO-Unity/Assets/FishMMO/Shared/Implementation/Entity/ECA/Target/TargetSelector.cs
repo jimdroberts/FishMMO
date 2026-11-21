@@ -183,7 +183,7 @@ namespace FishMMO.Shared
 		{
 			/* An ability-driven selection is judged by the OBJECT, not by the event's initiator —
 			 * see the detached-object note above. */
-			if (AbilityObject.TryResolveFrom(eventData, out AbilityObject abilityObject))
+			if (AbilityObjects.TryResolveFrom(eventData, out IAbilityObject abilityObject))
 			{
 				return abilityObject.ResolvesHitsLocally;
 			}

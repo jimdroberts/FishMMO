@@ -236,10 +236,16 @@ namespace FishMMO.UnitTests
 				"private void AppendAbilityData(IPlayerCharacter character, List<CharacterAbilityData> abilities)",
 				"private void AppendPetData(");
 
-			LogAssert.IsTrue(body.Contains("id: ability.ID"),
+			/* Since 2026-11-20 the core save reaches abilities through IAbilityPersistence: the Abilities module's
+			 * controller hands over each dirty ability with its identity, and the save writes that identity. */
+			LogAssert.IsTrue(body.Contains("abilityController.CaptureDirtyAbilities((id, version, templateID, eventIds) =>") && body.Contains("id: id,"),
 				"a saved ability must carry the identity its row has, not a placeholder");
 
-			LogAssert.IsTrue(body.Contains("if (!ability.PersistenceDirty)"),
+			string capture = MethodBody(ReadSource("Assets/FishMMO/Modules/Abilities/Runtime/Ability/AbilityController.Persistence.cs"),
+				"public void CaptureDirtyAbilities(", "public void MarkAbilityPersisted(");
+			LogAssert.IsTrue(capture.Contains("emit(ability.ID, ability.Version, ability.Template.ID, eventIds);"),
+				"the controller hands over the ability's own identity");
+			LogAssert.IsTrue(capture.Contains("!ability.PersistenceDirty"),
 				"and it must still be skipped when nothing about it changed");
 		}
 

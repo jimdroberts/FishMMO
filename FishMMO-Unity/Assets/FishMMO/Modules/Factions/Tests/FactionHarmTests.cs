@@ -45,7 +45,8 @@ namespace FishMMO.UnitTests
 				"arena, then wildlife, then companions, then factions: aggression is never friendly fire");
 
 			string rule = Read("Shared/Implementation/Entity/Relations/HarmRule.cs");
-			LogAssert.IsTrue(rule.Contains("character is Pet pet && pet.PetOwner != null ? pet.PetOwner : character"),
+			// Through the core companion seam since 2026-11-20 (a pet answers NPC.CompanionOwner).
+			LogAssert.IsTrue(rule.Contains("character is NPC npc && npc.CompanionOwner != null ? npc.CompanionOwner : character"),
 				"a pet answers as its owner, attacking and attacked");
 			LogAssert.IsTrue(rule.Contains("party.ID != 0 && party.ID == otherParty.ID") && rule.Contains("guild.ID != 0 && guild.ID == otherGuild.ID"),
 				"companions are the same non-zero party or guild");

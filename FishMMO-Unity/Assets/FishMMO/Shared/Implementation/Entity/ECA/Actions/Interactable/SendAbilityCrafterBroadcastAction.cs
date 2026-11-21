@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -29,10 +29,9 @@ namespace FishMMO.Shared
 			SendToOwner(player, new AbilityCrafterBroadcast() { InteractableID = data.Interactable.ID });
 
 			IAbilityCrafter abilityCrafter = data.Interactable as IAbilityCrafter;
-			if (abilityCrafter?.AchievementTemplate != null &&
-				player.TryGet(out IAchievementController achievementController))
+			if (abilityCrafter?.AchievementTemplate != null)
 			{
-				achievementController.Increment(abilityCrafter.AchievementTemplate, 1);
+				Accomplishments.Record(player, abilityCrafter.AchievementTemplate);
 			}
 		}
 	}

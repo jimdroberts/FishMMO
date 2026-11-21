@@ -20,7 +20,7 @@ files checks `InstalledModules` and skips when the module is removed.
 | **World** | `Weather/`, `WorldDesign/`, `PointsOfInterest/` | 9 | Weather exposure, the core surface and indirect shaders, terrain strippers, scene settings, floating boats, portal activation |
 | **Servers & operations** | `Server/` | 14 | Scene placement and instance lifetimes, world routing and its clock, the world-queue place memory, shutdown countdowns, maintenance and daemon clocks, server bandwidth |
 | **PlayMode sims** | `PlayMode/` | 7 | The four simulation scenes, the prediction probe, the prop collider streamer, and an `Update`-dispatch cost probe |
-| **Currency / Map** | `Currency/`, `Map/` | 8 | Spend/grant paths, the persisted ledger numbering, map projection, markers and the explored readout |
+| **Currency** | `Currency/` | 3 | Spend/grant paths and the persisted ledger numbering (the map's tests are the Map module's) |
 | **Persistence, travel, NPC designer, modules** | `Persistence/`, `Teleport/`, `Waypoint/`, `NPC/`, `CoreModules/` | 6 | The 2026-09-07 persistence audit invariants, teleporter keys, waypoint unlock bits, the dashboard NPC designer, the core's own modules |
 
 The suite is a **regression ledger** as much as a test suite: a large share of the
@@ -65,7 +65,7 @@ recurring pattern rather than an accident:
 
 Panel fixtures (`MerchantPanelTests`, `TradePanelTests`, `AbilitiesPanelTests`,
 `EquipmentPanelLayoutTests`, `ColorPickerTests`, `ScrollbarThemeTests`,
-`Map/ExploredReadoutTests`, `NameGeneratorWindowTests`, `BuffDismissTooltipTests`) mount the real
+the Map module's `ExploredReadoutTests`, `NameGeneratorWindowTests`, `BuffDismissTooltipTests`) mount the real
 panel on a real `UIDocument`: clone `Assets/UI Toolkit/PanelSettings.asset`, set `visualTreeAsset`
 to the panel's UXML, `AddComponent` the panel class, then call its `OnStarting()` directly —
 Unity's own callbacks never fire in edit mode. There is no shared helper; each fixture builds its
@@ -157,7 +157,6 @@ Assets/FishMMO/Tests/UnitTests/
 ├── Celestial/                    (1)         # Planet surface generated from a seed
 ├── Currency/                     (3)         # Spend/grant path, persisted ledger numbering, trade currency settlement
 ├── Housing/                     (14)         # Plot identity, access, placement, lifecycle, tax billing and routing, fees, sync window
-├── Map/                          (5)         # Map projection, explored readout, marker click and culling, dungeon entrances
 ├── NPC/                          (1)         # Dashboard NPC designer / NPCPrefabFactory
 ├── Persistence/                  (1)         # 2026-09-07 persistence audit invariants
 ├── Prediction/                  (97)         # Prediction, combat, observers, bandwidth
@@ -266,17 +265,17 @@ The other 160 root fixtures, by theme. Each one's `<summary>` states the invaria
 | Accounts, sign-in and admission (14) | `AccountNameIdentityTests`, `AccountVerificationRulesTests`, `AuthDatabaseFaultTests`, `AuthClockPinsTests`, `AuthTrackerClockTests`, `FixedWindowCounterTests`, `PendingAuthTrackerTests`, `PendingAuthTrackingTests`, `TwoFactorEndingTests`, `TokenRenewalScheduleTests`, `LoginQueueAdmissionTests`, `IpAbuseTrackerTests`, `CharacterLockAtSelectTests`, `WorldQueueDisplayTests` |
 | Server hot paths, persistence and dispatch (14) | `HotPathFixPassPinsTests`, `PersistenceHotPathTests`, `CharacterWriteGateTests`, `RepeatingFaultLogTests`, `IngressGuardTests`, `SingleFlightCacheTests`, `PersistentPoolTests`, `QuestEventDispatchTests`, `PlayerRequestPreambleTests`, `LogLevelGatingTests`, `AuditFollowUpPinsTests`, `BroadcastArrayLengthBoundTests`, `BroadcastArraySerializerTests`, `DashboardToolTests` |
 | Items, trade, merchants (17) | `ItemStackConservationTests`, `ItemStackSplitMergeTests`, `ItemAttributeRollTests`, `ItemGrantAccountingTests`, `ItemWriteSequenceTests`, `QuickTransferTests`, `SlotPanelSharingTests`, `PendingSlotWatchdogTests`, `TradeSessionTests`, `TradeExchangeTests`, `TradePanelTests`, `MerchantPanelTests`, `MerchantPurchaseResultTests`, `MerchantQuantityFieldTests`, `MerchantSingleQuantityTests`, `BankCapacityReadoutTests`, `ConsumableTemplateTests` |
-| Equipment (6) | `PredictedEquipmentTests`, `UnequipDestinationTests`, `UnequipSlotAgreementTests`, `EquipmentPanelLayoutTests`, `EquipmentPreviewTests`, `EquipmentVisualLifetimeTests` |
+| Equipment (5; the visual lifetime pins are the Appearance module's) | `PredictedEquipmentTests`, `UnequipDestinationTests`, `UnequipSlotAgreementTests`, `EquipmentPanelLayoutTests`, `EquipmentPreviewTests` |
 | Abilities and buffs (17) | `AbilityAuthoringContractTests`, `AbilityCompositionTests`, `AbilityCraftResultTests`, `AbilitySelfHitTests`, `AbilityForgetTests`, `AbilityGrantIdentityTests`, `AbilityKnowledgeReverseIndexTests`, `StartingAbilityTests`, `KnownAbilityPersistenceTests`, `KnowledgeSyncWireTests`, `KnowledgeTabRealContentTests`, `HostileNpcAbilityTests`, `AbilitiesPanelTests`, `AbilitiesPanelForgetTests`, `BuffSetPersistenceTests`, `BuffDismissTooltipTests`, `BuffStripBandTests` |
 | NPCs, death and observers (5) | `NpcTargetControllerTests`, `NpcCombatEdgeCaseTests`, `DeathResetTests`, `CastVisibilityTests`, `ObserverPayloadShapingTests` |
 | Guilds, groups, arenas, leaderboards (13) | `GuildCreationFeeTests`, `GuildRankEditTests`, `GuildRankInsertTests`, `GuildRosterRaceTests`, `GuildSocialFollowUpTests`, `SocialUpdatePumpTests`, `InviteByNameHelperTests`, `GroupFinderRulesTests`, `ArenaRulesTests`, `ArenaHotPathPinsTests`, `FactionPanelTests` (leaderboard tests live in `Assets/FishMMO/Modules/Leaderboards/Tests`) |
 | Chat and naming (9) | `ChatSanitizerTests`, `ChatTellAddressTests`, `ChatFloodMuteTests`, `ChatPumpTests`, `ChatReadWindowTests`, `ChatScrollBehaviourTests`, `ChatHelpCommandTests`, `NamingBatchTests`, `NamingRequestBudgetTests` |
 | Staff tools, moderation, support (13) | `StaffCommandLineTests`, `StaffConsoleLayoutTests`, `StaffConsolePanelTests`, `StaffConsoleReadAuditTests`, `StaffConsoleSecurityTests`, `OperatorCommandBoundaryTests`, `OperatorCommandParsingTests`, `GameMasterRescueEscalateTableTests`, `PlayerUnstuckCommandTests`, `RescuePointsTests`, `ReportCommandParseTests`, `ReportPlayerPanelTests`, `SupportTicketTierEnforcementTests` |
 | Network statistics (5) | `NetworkStatsPresentationTests`, `NetworkStatsPanelTests`, `NetworkStatsOptionsTests`, `TransportTrafficMathTests`, `TransportTrafficPinsTests` |
-| Naming and content data (7) | `NameGenerationTemplateTests`, `NameGeneratorWindowTests`, `TitleGenerationTests`, `RaceCatalogTests`, `BiomeSystemTests`, `SceneObjectNamerTests`, `BodyRegionDiscoveryTests` |
+| Naming and content data (7; body region discovery is the Appearance module's) | `NameGenerationTemplateTests`, `NameGeneratorWindowTests`, `TitleGenerationTests`, `RaceCatalogTests`, `BiomeSystemTests`, `SceneObjectNamerTests`, `NameRequestLifetimeTests` |
 | World and scenes (4) | `WorldMapDefinitionTests`, `WorldSceneDetailsCacheBuilderTests`, `WorldLabelProjectionOrderTests`, `CharacterGroundingLayerTests` |
 | Nameplates (4) | `NameplateModelTests`, `NameplateOptionsTests`, `NameplateVisibilityTests`, `NameplateIconTests` |
-| HUD, hotkeys, targeting, camera (11) | `HotkeyBarLayoutTests`, `HotkeyBarLiftTests`, `HotkeyBarStackLayoutTests`, `ResourceBarCentringTests`, `PinnedTargetRulesTests`, `PinnedTargetInteractionTests`, `TooltipSlotRefreshTests`, `CameraObstructionTests`, `CameraRestTests`, `CameraSettingsTests`, `CrosshairSettingsTests` |
+| HUD, targeting, camera (8; the hotkey bar's are the Hotkeys module's) | `ResourceBarCentringTests`, `PinnedTargetRulesTests`, `PinnedTargetInteractionTests`, `TooltipSlotRefreshTests`, `CameraObstructionTests`, `CameraRestTests`, `CameraSettingsTests`, `CrosshairSettingsTests` |
 | Options and UI chrome (19) | `AudioChannelRoutingTests`, `AnisotropicFilteringTests`, `AntialiasingSettingTests`, `KeyBindingDisplayNameTests`, `ShippedKeyBindingTests`, `OptionsRowLayoutTests`, `CloseButtonConsistencyTests`, `TextInputHeightTests`, `ScrollbarThemeTests`, `ColorPickerTests`, `InteractPanelInventoryTests`, `PanelHideKeepsTreeTests`, `PanelReopenStateTests`, `PanelSettingsScaleModeTests`, `StylesheetCursorTests`, `WindowOverlapTests`, `RegisterPanelLayoutTests`, `LauncherSettingsOverlayTests`, `LauncherSettingsReachableTests` |
 | Prefab authoring (2) | `PrefabNetworkObjectBindingTests`, `NetworkBehaviourOwnerRebindTests` |
 
@@ -428,7 +427,7 @@ One line per fixture, from its `<summary>`.
 | `WorldSceneSettingsOwnSceneTests.cs` | Tests for the scene a `WorldSceneSettings` resolves once and the biome sampler reads, in place of asking the engine for `gameObject.scene` on every sample. |
 | `WorldSystemsAuditTests.cs` | Whether a world scene is set up for the weather, cloud and sky systems — and, just as much, whether the audit knows the difference between a scene that opted out and one nobody finished. |
 
-#### Smaller folders (`Celestial/`, `Currency/`, `Map/`, `NPC/`, `Persistence/`, `Teleport/`, `Waypoint/`)
+#### Smaller folders (`Celestial/`, `Currency/`, `NPC/`, `Persistence/`, `Teleport/`, `Waypoint/`)
 
 | File | Pins |
 | --- | --- |
@@ -436,11 +435,6 @@ One line per fixture, from its `<summary>`.
 | `Currency/CharacterCurrencyTests.cs` | Tests for `CharacterCurrency`, the shared read/spend/grant path. |
 | `Currency/CurrencyLedgerStateTests.cs` | Tests for the currency ledger's persisted numbering. |
 | `Currency/TradeCurrencySettlementTests.cs` | Proofs for the currency half of a trade's commit: credits applied at the apply and held, exact reversal on a refusal, and the save path leaving a settling attribute to the trade. |
-| `Map/DungeonEntranceMapMarkerTests.cs` | A dungeon entrance puts itself on the minimap and the world map. |
-| `Map/ExploredReadoutTests.cs` | The world map's "Explored %" readout, and the thing that actually moves it. |
-| `Map/MapMarkerClickTests.cs` | A marker is drawn where it is, and is clickable over everything it draws (issue #270). |
-| `Map/MapMarkerCullTests.cs` | A marker is hidden when it has left the frame, and not while any of it is still on it (issue #271). |
-| `Map/MapSystemTests.cs` | Covers the parts of the map system that are pure arithmetic or pure file format, where a mistake is invisible in a screenshot but wrong in a way that compounds. |
 | `NPC/NPCPrefabFactoryTests.cs` | Pins what the dashboard's NPC designer produces: a prefab cloned from a working base with exactly the recipe's race, brain, stats, kit and role written onto it, and nothing foreign left inside. |
 | `Persistence/PersistenceAuditTests.cs` | Pins the invariants the 2026-09-07 persistence audit restored: factions and archetypes carry a dirty mark and a version that advances on mutation, restored rows are clean, a pooled attribute forgets its previous occupant's version stream, the faction reader refuses a frame too short to hold its header, and the player prefab requires every controller the save legs write. |
 | `Teleport/TeleportTests.cs` | Pins the teleport-system rules that were fixed on 2026-09-08: the one spelling of a teleporter's lookup key, and the live-vs-baked waypoint comparison. |

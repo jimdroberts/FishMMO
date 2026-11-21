@@ -180,7 +180,7 @@ namespace FishMMO.UnitTests
 		{
 			string code = SourceScanPins.ReadCode(ChatDirectory + "/ChatSystem.cs");
 			Func<string, string> check = c => SourceScanPins.InOrder(SourceScanPins.Body(c, "private void ProcessNewChatMessage("),
-				"ChatHelper.TryParseCommand(", "TryRefuseFloodMuted(conn, sender)", "ChatHelper.TryParseChatCommand(");
+				"ChatHelper.TryParseCommand(", "TryRefuseFloodMuted(conn, sender)", ".HandleChatLine(");
 			SourceScanPins.HoldsAndFires("O8 order", code, check,
 				SourceScanPins.Replace("if (TryRefuseFloodMuted(conn, sender))", "if (false)"),
 				"a flood-muted sender chatting on");

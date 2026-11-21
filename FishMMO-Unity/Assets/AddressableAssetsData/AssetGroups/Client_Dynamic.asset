@@ -72,6 +72,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0ab2122a0c90438da8e685243081cafc
+    m_Address: UIMap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0b52380d721af12c082d0d4cf7c756bd
     m_Address: UIAbilities
     m_ReadOnly: 0
@@ -89,6 +96,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0f294842af0d47d6850819405735fa05
+    m_Address: UIDebuff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 1062212255550964e974f3ffb3cbaae3
@@ -123,6 +137,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1496d480e4d4417a89fdd29ce6a1850f
+    m_Address: UIChatChannelPicker
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 14f2b39e9ee2084a9aedb8eddd8dd1f7
@@ -206,6 +227,20 @@ MonoBehaviour:
     m_Address: UIOptions
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1f95120ca1fa43c29c13743d0ea0be73
+    m_Address: UIMinimap
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 21471fe1fe404d57ac95ad6541a03d9d
+    m_Address: UIChat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 22dfa6041deb460882327211ae4f655c
@@ -299,10 +334,31 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2e8cb3b620244230ad0fec31d461fe92
+    m_Address: UIEquipment
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2f06165249874dcc9fc24df5a945690b
+    m_Address: UIContainer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2f684d4298cafc81b81f69b8ff9d1ef6
     m_Address: UICharacterSheet.uss
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3058c7933cae4575a1353bdb7e02168a
+    m_Address: UICastBar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 34d77da399cb0eebca890e86e13ff0c9
@@ -329,6 +385,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3d0b2ec2701f40b8ac80e0409834866a
+    m_Address: UICapturePoint
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4144ebf7b8a09f09e9eda165ee924d7a
     m_Address: UINPCDialogue
     m_ReadOnly: 0
@@ -346,6 +409,13 @@ MonoBehaviour:
     m_Address: UILogin
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4423d6bbb7cf49b48dc785ece813b933
+    m_Address: UIBuff
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 452d97f0ca3d4293be784854f4521bb0
@@ -443,6 +513,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5754d8b8ed03485f9b40f6b71c037b99
+    m_Address: UIAchievements
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 577d676684e692eff96926fda6d32dd3
     m_Address: UIParty
     m_ReadOnly: 0
@@ -495,6 +572,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 5fb04704efda42218ad00eaafd3608c8
     m_Address: UIReportPlayer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6123988970ac490d9c4b287c4f13679e
+    m_Address: UILore
     m_ReadOnly: 0
     m_SerializedLabels:
     - ClientWorldGUI_Panels
@@ -576,6 +660,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7221b39559d94a9ab3b0a3a1c1827ef9
+    m_Address: UINPCDialogue
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7221dd3893d3494383f760f853c677fd
     m_Address: UIHousingVault
     m_ReadOnly: 0
@@ -639,6 +730,13 @@ MonoBehaviour:
     - Client_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7f40ade01d4e4ef189f0a39e192fa924
+    m_Address: UIInventory
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 826021c4fa63bc380b9162b7e4405054
     m_Address: UIChat
     m_ReadOnly: 0
@@ -668,6 +766,13 @@ MonoBehaviour:
     m_Address: UIAbilities
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8cb3833e9e724fa5ab3988eb390cbdda
+    m_Address: UIGathering
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 8db89d0f289644d4bee5efd45f77712c
@@ -700,6 +805,13 @@ MonoBehaviour:
     m_Address: UICrosshair
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9327285961a84100805e1aa7bd6bbb0b
+    m_Address: UIAbilities
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 93323d08d0a349599a83caf5ce945eb2
@@ -781,6 +893,13 @@ MonoBehaviour:
     m_Address: UINPCDialogue
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a977a75642dc4aea8764f3bce024be5a
+    m_Address: UIPetControl
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: a9797c5cd7e3d0158a7a10a5501bd100
@@ -1042,6 +1161,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: d98bdb6324614b0d8067303318fdea4f
+    m_Address: UIBank
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: da90952a04e5e163da4110e5350fb456
     m_Address: UICharacterSelect
     m_ReadOnly: 0
@@ -1053,6 +1179,13 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Dynamic
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: de5225a71c36487681500da92b33762d
+    m_Address: UIDeathDialog
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: df5d88ae5f0c0e5e5a130c3e809523d0
@@ -1110,6 +1243,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e7ee28202b5d4b148c267ba2fbb4e8af
+    m_Address: UIShrine
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e8a270587e4af630d850155570ccfa50
     m_Address: UIFactions
     m_ReadOnly: 0
@@ -1159,6 +1299,13 @@ MonoBehaviour:
     m_Address: UIInstance
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f5d5e58417da47d0ba72e0bf990d825e
+    m_Address: UIHotkeyBar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: f62accea0da84ea1914b87fa5eb6eb67

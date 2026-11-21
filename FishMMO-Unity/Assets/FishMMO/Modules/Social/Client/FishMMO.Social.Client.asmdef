@@ -7,7 +7,8 @@
         "FishMMO.Client",
         "FishMMO.Social",
         "FishNet.Runtime",
-        "KinematicCharacterController"
+        "KinematicCharacterController",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [],
     "excludePlatforms": [

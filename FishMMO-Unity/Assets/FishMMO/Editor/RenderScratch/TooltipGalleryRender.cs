@@ -51,19 +51,25 @@ namespace FishMMO.RenderScratch
 		private static Page current;
 		private static int framesWaited;
 
+		/// <summary>Modules' tooltip pages, as (label, cards): the Abilities module adds its abilities.</summary>
+		public static readonly List<(string label, System.Func<List<(string, TooltipContent)>> cards)> ExtraPages =
+			new List<(string label, System.Func<List<(string, TooltipContent)>> cards)>();
+
 		[DashboardTool(DashboardToolAttribute.UITests, "Render Tooltip Gallery", Section = "Renders", Order = 5)]
 		public static void Render()
 		{
 			try
 			{
 				Directory.CreateDirectory(OUTPUT_DIR);
-				AbilityFixtures.Load();
 				TooltipSubjects.Load();
 
 				queue.Clear();
 				queue.Add(new Page { Label = "Tooltips-items", Cards = TooltipSubjects.Items() });
-				queue.Add(new Page { Label = "Tooltips-abilities", Cards = TooltipSubjects.Abilities() });
-				queue.Add(new Page { Label = "Tooltips-buffs", Cards = TooltipSubjects.Buffs() });
+				// Modules' pages (the Abilities module's ability tooltips), after the items'.
+				foreach ((string label, System.Func<List<(string, TooltipContent)>> cards) in ExtraPages)
+				{
+					queue.Add(new Page { Label = label, Cards = cards() });
+				}
 
 				EditorApplication.update -= Pump;
 				EditorApplication.update += Pump;
@@ -237,15 +243,14 @@ namespace FishMMO.RenderScratch
 			}
 			loaded = true;
 
-			RegisterAll<BaseItemTemplate>("Assets/Templates/Entity/Items");
-			RegisterAll<ItemAttributeTemplate>("Assets/Templates/Entity/Items");
-			RegisterAll<BaseBuffTemplate>("Assets/Templates/Entity/Buffs");
-			RegisterAll<CharacterAttributeTemplate>("Assets/Templates/Entity/CharacterAttributes");
-			RegisterAll<PremadeAbilityTemplate>("Assets/Templates/Entity/Abilities");
-			RegisterAll<AbilityEvent>("Assets/Templates/Entity/Abilities");
+			RegisterAll<BaseItemTemplate>("Assets/FishMMO/Modules/Items/Templates");
+			RegisterAll<ItemAttributeTemplate>("Assets/FishMMO/Modules/Items/Templates");
+			RegisterAll<CharacterAttributeTemplate>("Assets/FishMMO/Templates/Entity/CharacterAttributes");
+			// Module templates (abilities, premades) are registered by the module's own page (TooltipGalleryRender.ExtraPages).
 		}
 
-		private static void RegisterAll<T>(string folder) where T : ScriptableObject
+		/// <summary>Adds every <typeparamref name="T"/> under <paramref name="folder"/> to its cache, as the boot loader would.</summary>
+		public static void RegisterAll<T>(string folder) where T : ScriptableObject
 		{
 			foreach (string guid in AssetDatabase.FindAssets("t:" + typeof(T).Name, new[] { folder }))
 			{
@@ -305,23 +310,7 @@ namespace FishMMO.RenderScratch
 				cards.Add(("Multi-resource consumable — " + restorative.name, restorative.BuildContent()));
 			}
 
-			KnowledgeScrollTemplate abilityScroll = Find<KnowledgeScrollTemplate>("Scroll of Lesser Fireball");
-			if (abilityScroll != null)
-			{
-				cards.Add(("Knowledge scroll (ability) — " + abilityScroll.name, abilityScroll.BuildContent()));
-			}
-
-			KnowledgeScrollTemplate effectScroll = Find<KnowledgeScrollTemplate>("Scroll of Flame Impact");
-			if (effectScroll != null)
-			{
-				cards.Add(("Knowledge scroll (effects) — " + effectScroll.name, effectScroll.BuildContent()));
-			}
-
-			KnowledgeScrollTemplate codex = Find<KnowledgeScrollTemplate>("Codex of the Burning Sphere");
-			if (codex != null)
-			{
-				cards.Add(("Knowledge scroll (both) — " + codex.name, codex.BuildContent()));
-			}
+			// Knowledge scrolls are the Abilities module's page.
 
 			if (stackable != null)
 			{
@@ -331,127 +320,8 @@ namespace FishMMO.RenderScratch
 			return cards;
 		}
 
-		/// <summary>Every ability-side tooltip: base ability, effect, crafted ability, override, premade.</summary>
-		public static List<(string, TooltipContent)> Abilities()
-		{
-			List<(string, TooltipContent)> cards = new List<(string, TooltipContent)>();
-
-			AbilityTemplate fireball = AbilityFixtures.Base("Lesser Fireball");
-			if (fireball != null)
-			{
-				cards.Add(($"Base ability — {fireball.name}", fireball.BuildContent()));
-
-				Ability crafted = new Ability(9101, fireball, new List<int>
-				{
-					AbilityFixtures.Effect("Giant")?.ID ?? 0,
-					AbilityFixtures.Effect("Swiftfire")?.ID ?? 0,
-				});
-				cards.Add(($"Crafted ability — {crafted.Name}", crafted.BuildContent()));
-
-				/* The crafting preview: the same composition, with the deltas the panel draws. */
-				AbilitySummary summary = AbilitySummary.Compose(fireball, new List<ITooltip>
-				{
-					AbilityFixtures.Effect("Giant"),
-					AbilityFixtures.Effect("Swiftfire"),
-				});
-				TooltipContent preview = new TooltipContent();
-				summary.BuildTooltip(preview, showDeltas: true);
-				cards.Add(("Crafting preview (with deltas)", preview));
-			}
-
-			AbilityEvent effect = AbilityFixtures.Effect("Lesser Fire Damage");
-			if (effect != null)
-			{
-				cards.Add(($"Ability effect — {effect.name}", effect.BuildContent()));
-			}
-
-			AbilityEvent modifier = AbilityFixtures.Effect("Giant");
-			if (modifier != null)
-			{
-				cards.Add(($"Ability effect (modifier) — {modifier.name}", modifier.BuildContent()));
-			}
-
-			if (AbilityFixtures.Overrides.Count > 0)
-			{
-				AbilityTypeOverrideEventType typeOverride = AbilityFixtures.Overrides[0];
-				cards.Add(($"Type override — {typeOverride.name}", typeOverride.BuildContent()));
-			}
-
-			PremadeAbilityTemplate premade = First<PremadeAbilityTemplate>();
-			if (premade != null)
-			{
-				cards.Add(($"Premade ability (merchant) — {premade.name}", premade.BuildContent()));
-			}
-
-			CharacterAttributeTemplate attribute = FirstWhere<CharacterAttributeTemplate>(t => t.name == "Health")
-				?? First<CharacterAttributeTemplate>();
-			if (attribute != null)
-			{
-				cards.Add(($"Character attribute — {attribute.name}", attribute.BuildContent()));
-			}
-
-			return cards;
-		}
-
-		/// <summary>Every buff kind, including the three the project ships no example of.</summary>
-		public static List<(string, TooltipContent)> Buffs()
-		{
-			List<(string, TooltipContent)> cards = new List<(string, TooltipContent)>();
-
-			foreach (string guid in AssetDatabase.FindAssets("t:BaseBuffTemplate", new[] { "Assets/Templates/Entity/Buffs" }))
-			{
-				BaseBuffTemplate buff = AssetDatabase.LoadAssetAtPath<BaseBuffTemplate>(AssetDatabase.GUIDToAssetPath(guid));
-				if (buff != null)
-				{
-					cards.Add(($"{buff.GetType().Name} — {buff.name}", buff.BuildContent()));
-				}
-			}
-
-			/* The kinds with no shipped asset. Each has its own tooltip override, so leaving them
-			 * out would mean the gallery could not show whether they render at all. */
-			cards.Add(("StateBuffTemplate (mock)", MockState().BuildContent()));
-			cards.Add(("DamageNegationBuffTemplate (mock)", MockNegation().BuildContent()));
-			cards.Add(("DeflectBuffTemplate (mock)", MockDeflect().BuildContent()));
-			cards.Add(("CompositeBuffTemplate (mock)", MockComposite().BuildContent()));
-
-			return cards;
-		}
-
-		private static StateBuffTemplate MockState()
-		{
-			StateBuffTemplate buff = Temp<StateBuffTemplate>("Dazed");
-			buff.Description = "Leaves the target unable to act.";
-			buff.Flag = CharacterFlags.IsStunned;
-			return buff;
-		}
-
-		private static DamageNegationBuffTemplate MockNegation()
-		{
-			DamageNegationBuffTemplate buff = Temp<DamageNegationBuffTemplate>("Stone Ward");
-			buff.Description = "Absorbs the next blows to land.";
-			buff.Amount = 250;
-			return buff;
-		}
-
-		private static DeflectBuffTemplate MockDeflect()
-		{
-			DeflectBuffTemplate buff = Temp<DeflectBuffTemplate>("Parry Stance");
-			buff.Description = "Turns aside what comes at the front.";
-			buff.DeflectAngleDegrees = 120.0f;
-			buff.MaxDeflections = 3;
-			return buff;
-		}
-
-		private static CompositeBuffTemplate MockComposite()
-		{
-			CompositeBuffTemplate buff = Temp<CompositeBuffTemplate>("Tideborn Blessing");
-			buff.Description = "The reef's favour, in several forms at once.";
-			buff.Flags = new List<CharacterFlags> { CharacterFlags.IsFrozen };
-			return buff;
-		}
-
 		/// <summary>Creates a throwaway template that lives only for this run.</summary>
-		private static T Temp<T>(string name) where T : ScriptableObject
+		public static T Temp<T>(string name) where T : ScriptableObject
 		{
 			T asset = ScriptableObject.CreateInstance<T>();
 			asset.hideFlags = HideFlags.HideAndDontSave;
@@ -461,19 +331,19 @@ namespace FishMMO.RenderScratch
 		}
 
 		/// <summary>Finds an asset of a type by its exact name, anywhere under Templates.</summary>
-		private static T Find<T>(string name) where T : ScriptableObject
+		public static T Find<T>(string name) where T : ScriptableObject
 		{
 			return FirstWhere<T>(t => t.name == name);
 		}
 
-		private static T First<T>() where T : ScriptableObject
+		public static T First<T>() where T : ScriptableObject
 		{
 			return FirstWhere<T>(_ => true);
 		}
 
-		private static T FirstWhere<T>(Func<T, bool> predicate) where T : ScriptableObject
+		public static T FirstWhere<T>(Func<T, bool> predicate) where T : ScriptableObject
 		{
-			foreach (string guid in AssetDatabase.FindAssets("t:" + typeof(T).Name, new[] { "Assets/Templates" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:" + typeof(T).Name, new[] { "Assets/FishMMO/Templates", "Assets/FishMMO/Modules" }))
 			{
 				T asset = AssetDatabase.LoadAssetAtPath<T>(AssetDatabase.GUIDToAssetPath(guid));
 				if (asset != null && predicate(asset))

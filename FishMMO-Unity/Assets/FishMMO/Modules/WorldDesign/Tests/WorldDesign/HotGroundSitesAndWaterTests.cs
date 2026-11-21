@@ -84,7 +84,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			// Only the fantasy wave follows them (2026-10-27, FantasyWaveKindsTests pins the rest).
 			Assert.That((int)POIType.DragonLair, Is.EqualTo((int)POIType.SulphurPool + 1));
 			PointOfInterestRules rules = PointOfInterestRules.Default();
-			string sheet = Code("Assets/FishMMO/Client/GUI/World/Map/UIMapPOI.uss");
+			string sheet = Code("Assets/FishMMO/Modules/Map/Client/UIMapPOI.uss");
 			foreach (POIType kind in kinds)
 			{
 				Assert.That(Enum.TryParse(kind.ToString(), false, out MapMarkerType marker), Is.True, $"{kind} has its marker type");

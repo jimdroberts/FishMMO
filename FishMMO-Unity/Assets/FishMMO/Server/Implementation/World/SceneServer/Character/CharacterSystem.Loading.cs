@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Object;
 using SceneManager = FishNet.Managing.Scened.SceneManager;
 using FishNet.Transporting;
@@ -588,7 +588,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAbilityData> abilityData = null;
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = null;
 				var participantData = new Dictionary<CharacterPersistenceParticipant, object>();
-				IReadOnlyList<CharacterHotkeyData> hotkeyData = null;
 				IReadOnlyList<CharacterBuffData> buffData = null;
 				CharacterChatMuteState? chatMute = null;
 
@@ -912,16 +911,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						}
 						participantData[participant] = fetched.Data;
 					}
-					if (serviceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
-					{
-						var result = await hotkeyService.FetchAsync(characterID);
-						if (!result.IsSuccess)
-						{
-							await AbandonLoadAfterFetchFailure("hotkeys", result.ErrorCode.ToString(), result.ErrorMessage);
-							return;
-						}
-						hotkeyData = result.Data;
-					}
 					if (serviceRegistry.TryGet<ICharacterBuffService>(out var buffService))
 					{
 						var result = await buffService.FetchAsync(characterID);
@@ -965,7 +954,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					itemData,
 					attributeData, abilityData, knownAbilityData,
 					participantData,
-					hotkeyData, buffData, chatMute);
+					buffData, chatMute);
 				/* The main-thread queue is bounded and drops work when it is saturated, and this
 				 * hand-off is the only thing that installs the claim in SessionTokens. A dropped
 				 * item therefore left the character Online with nothing left holding its token —
@@ -1352,7 +1341,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterAttributeData> attributeData = ctx.AttributeData;
 			IReadOnlyList<CharacterAbilityData> abilityData = ctx.AbilityData;
 			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData = ctx.KnownAbilityData;
-			IReadOnlyList<CharacterHotkeyData> hotkeyData = ctx.HotkeyData;
 			IReadOnlyList<CharacterBuffData> buffData = ctx.BuffData;
 
 			if (conn == null || !conn.IsActive)
@@ -1645,15 +1633,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * templates and effects but not yet crafted anything — every new character, and anyone
 			 * saving up for a craft — was handed an empty Knowledge tab on every login. Their rows
 			 * were in the database and were fetched; nothing read them. */
-			if (character.TryGet(out IAbilityController abilityController))
+			if (character.TryGet(out IAbilityPersistence abilityController))
 			{
 				if (abilityData != null)
 				{
 					foreach (CharacterAbilityData ability in abilityData)
 					{
-						Ability newAbility = new Ability(ability.ID, ability.TemplateID, ability.AbilityEvents);
-						newAbility.Version = ability.Version;
-						abilityController.LearnAbility(newAbility, ability.Cooldown);
+						abilityController.RestoreAbility(ability.ID, ability.TemplateID, ability.AbilityEvents, ability.Version, ability.Cooldown);
 					}
 				}
 
@@ -1669,48 +1655,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 
-			// Hotkeys
-			if (hotkeyData != null && hotkeyData.Count > 0)
-			{
-				foreach (CharacterHotkeyData hotkey in hotkeyData)
-				{
-					if (hotkey.Slot >= 0 && hotkey.Slot < character.Component<HotkeyBar>().Slots.Count)
-					{
-						character.Component<HotkeyBar>().Slots[hotkey.Slot] = new HotkeyData()
-						{
-							Type = hotkey.Type,
-							Slot = hotkey.Slot,
-							ReferenceID = hotkey.ReferenceID,
-						};
-					}
-				}
-			}
-
 			// Buffs
 			if (buffData != null && buffData.Count > 0 &&
-				character.TryGet(out IBuffController buffController))
+				character.TryGet(out IBuffPersistence buffController))
 			{
 				float loadTickDelta = (float)Server.NetworkWrapper.NetworkManager.TimeManager.TickDelta;
 				uint loadCurrentTick = Server.NetworkWrapper.NetworkManager.TimeManager.LocalTick;
 				foreach (CharacterBuffData buff in buffData)
 				{
-					/* A row for a permanent buff predates the rule that leaves them out of the save
-					 * (IsPersistedBuff). Restored, it would come back as a buff that expires on its
-					 * first tick; skipped, the exposure system applies the real one from the weather
-					 * the character is standing in, and the next save deletes the row. A template this
-					 * server cannot resolve is restored as before. */
-					BaseBuffTemplate buffTemplate = BaseBuffTemplate.Get<BaseBuffTemplate>(buff.TemplateID);
-					if (buffTemplate != null && !IsPersistedBuff(buffTemplate))
-					{
-						continue;
-					}
-
-					uint expiryTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.RemainingTime / loadTickDelta));
-					uint nextTickTick = loadCurrentTick + (uint)Math.Max(1.0, Math.Ceiling(buff.TickTime / loadTickDelta));
-					// No per-buff version to restore: the set is written whole with the character row,
-					// under the row's version. See CharacterSystem.CaptureBuffSet.
-					Buff newBuff = new Buff(buff.TemplateID, expiryTick, nextTickTick, loadTickDelta, buff.Stacks, buff.TickCount);
-					buffController.Apply(newBuff);
+					/* The Buffs module's controller converts the row (and skips a permanent buff's stale row: the
+					 * environment re-applies it, the next save deletes the row). No per-buff version to restore: the set is
+					 * written whole with the character row, under the row's version. See CharacterSystem.CaptureBuffSet. */
+					buffController.RestoreBuff(buff.TemplateID, (float)buff.RemainingTime, (float)buff.TickTime, buff.Stacks, buff.TickCount, loadCurrentTick, loadTickDelta);
 				}
 			}
 
@@ -1976,14 +1932,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				// Ensure the character is marked as loaded so that controllers can check this flag to prevent actions before the character is fully in the world
 				character.EnableFlags(CharacterFlags.IsLoaded);
 
-				// If the player was dead when they loaded into the scene,
-				// re-send the death broadcast so the death dialog reappears.
-				// Handles reconnect-while-dead and scene transitions.
-				if (character.IsFlagged(CharacterFlags.IsDead))
-				{
-					Server.NetworkWrapper.Broadcast(conn,
-						new DeathBroadcast(), true, FishNet.Transporting.Channel.Reliable);
-				}
+				/* A player who loads dead (reconnect-while-dead, a scene transfer) is told again by the Combat module's combat
+				 * system, which owns the death dialog, on OnSpawnCharacter. */
 
 				// Spawn the nob over the network
 				ServerManager.Spawn(character.NetworkObject, conn, scene);
@@ -2058,7 +2008,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <b>Both kinds come out of one table.</b> Every grant path writes to
 		/// <c>character_known_ability</c> keyed by template id, whether the id names a base ability
 		/// or an ability event. The restore resolved every row as a
-		/// <see cref="BaseAbilityTemplate"/> — which an <see cref="AbilityEvent"/> is not; it
+		/// base ability template (the Abilities module's) — which an ability event is not; it
 		/// derives from <c>Trigger</c> and lives in a different cache — so every effect a character
 		/// owned came back null and was dropped. Effects bought from a merchant survived exactly
 		/// until the player logged out.
@@ -2072,7 +2022,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="character">The character being loaded.</param>
 		/// <param name="abilityController">Its ability controller.</param>
 		/// <param name="knownAbilityData">The rows fetched for it.</param>
-		private static void RestoreKnownAbilities(IPlayerCharacter character, IAbilityController abilityController,
+		private static void RestoreKnownAbilities(IPlayerCharacter character, IAbilityPersistence abilityController,
 			IReadOnlyList<CharacterKnownAbilityData> knownAbilityData)
 		{
 			if (knownAbilityData == null || knownAbilityData.Count == 0)
@@ -2081,40 +2031,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			List<BaseAbilityTemplate> baseAbilities = new List<BaseAbilityTemplate>();
-			List<AbilityEvent> abilityEvents = new List<AbilityEvent>();
-
+			var templateIDs = new List<int>(knownAbilityData.Count);
 			foreach (CharacterKnownAbilityData known in knownAbilityData)
 			{
-				/* Base abilities first, because AbilityTypeOverrideEventType is one of them: it
-				 * extends BaseAbilityTemplate despite being an "event", and asking the event cache
-				 * for it would come back empty. */
-				BaseAbilityTemplate template = BaseAbilityTemplate.Get<BaseAbilityTemplate>(known.TemplateID);
-				if (template != null)
-				{
-					baseAbilities.Add(template);
-					continue;
-				}
-
-				AbilityEvent abilityEvent = AbilityEvent.Get<AbilityEvent>(known.TemplateID);
-				if (abilityEvent != null)
-				{
-					abilityEvents.Add(abilityEvent);
-					continue;
-				}
-
-				/* Neither cache has it. Content that was removed, or an addressable that did not
-				 * load — either way the row survives untouched and says so once, rather than
-				 * disappearing on the next save. */
-				Log.Warning("CharacterSystem",
-					$"Character {character.ID} knows template {known.TemplateID}, which this build has not loaded. It stays in the database.");
+				templateIDs.Add(known.TemplateID);
 			}
+			var unknown = new List<int>();
+			// The controller resolves base templates first, then events, and clears the dirty mark: restored, not learned.
+			abilityController.RestoreKnowledge(templateIDs, unknown);
 
-			abilityController.LearnBaseAbilities(baseAbilities);
-			abilityController.LearnAbilityEvents(abilityEvents);
-
-			// Restored, not learned: the database already holds every row just applied.
-			abilityController.KnowledgeDirty = false;
+			/* Neither cache has it. Content that was removed, or an addressable that did not load — either way the row
+			 * survives untouched and says so once, rather than disappearing on the next save. */
+			foreach (int templateID in unknown)
+			{
+				Log.Warning("CharacterSystem",
+					$"Character {character.ID} knows template {templateID}, which this build has not loaded. It stays in the database.");
+			}
 		}
 
 		/// <summary>
@@ -2147,8 +2079,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly IReadOnlyList<CharacterKnownAbilityData> KnownAbilityData;
 			/// <summary>What each <see cref="CharacterPersistenceParticipant"/> fetched, for its apply.</summary>
 			public readonly IReadOnlyDictionary<CharacterPersistenceParticipant, object> ParticipantData;
-			/// <summary>Pre-fetched hotkey bar data.</summary>
-			public readonly IReadOnlyList<CharacterHotkeyData> HotkeyData;
 			/// <summary>Pre-fetched active buff data.</summary>
 			public readonly IReadOnlyList<CharacterBuffData> BuffData;
 			/// <summary>Pre-fetched chat mutes, or null when they could not be read (the load fails open).</summary>
@@ -2168,7 +2098,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			/// <param name="abilityData">Pre-fetched crafted ability data.</param>
 			/// <param name="knownAbilityData">Pre-fetched known ability and ability-event data.</param>
 			/// <param name="participantData">What each persistence participant fetched.</param>
-			/// <param name="hotkeyData">Pre-fetched hotkey bar data.</param>
 			/// <param name="buffData">Pre-fetched active buff data.</param>
 			public CharacterLoadContext(
 				NetworkConnection connection, CharacterData characterData,
@@ -2179,7 +2108,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				IReadOnlyList<CharacterAbilityData> abilityData,
 				IReadOnlyList<CharacterKnownAbilityData> knownAbilityData,
 				IReadOnlyDictionary<CharacterPersistenceParticipant, object> participantData,
-				IReadOnlyList<CharacterHotkeyData> hotkeyData,
 				IReadOnlyList<CharacterBuffData> buffData,
 				CharacterChatMuteState? chatMute)
 			{
@@ -2194,7 +2122,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AbilityData = abilityData;
 				KnownAbilityData = knownAbilityData;
 				ParticipantData = participantData;
-				HotkeyData = hotkeyData;
 				BuffData = buffData;
 				ChatMute = chatMute;
 			}

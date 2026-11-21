@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AI;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.UnitTests.AI
 {

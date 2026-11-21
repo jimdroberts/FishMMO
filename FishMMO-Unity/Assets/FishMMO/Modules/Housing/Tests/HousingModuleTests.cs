@@ -68,8 +68,13 @@ namespace FishMMO.UnitTests
 			HousingClient.Install(); // [RuntimeInitializeOnLoadMethod] does not run in EditMode.
 			LogAssert.IsTrue(BankWindowLinks.All.Any(l => l.Id == HousingClient.VaultLinkId && l.Label == "House vault"), "the module registers the link");
 
-			string bank = ProjectFiles.ReadAllText("Assets/FishMMO/Client/GUI/World/Bank/UITKBank.cs");
-			string bankUxml = ProjectFiles.ReadAllText("Assets/FishMMO/Client/GUI/World/Bank/UIBank.uxml");
+			// The bank window is the Items module's; without it there is no window to offer the link from.
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/Items/Client/UITKBank.cs")))
+			{
+				Assert.Ignore("The Items module (the bank window) is not installed.");
+			}
+			string bank = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Items/Client/UITKBank.cs");
+			string bankUxml = ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Items/Client/UIBank.uxml");
 			LogAssert.IsFalse(bank.Contains("UITKHousingVault") || bankUxml.Contains("bank-vault-button"), "the bank names nothing of housing");
 			LogAssert.IsTrue(bankUxml.Contains("name=\"bank-module-links\""), "it has a place for module links");
 		}

@@ -16,26 +16,33 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesBedLayersAndRiverbedRules_OnceAndKeepsHandEdits()
 		{
+			/* The Lake's own beds since its round (G10): the pondweed halde at 3-9 m and the varved gyttja below. A spec entry is
+			 * shared by every fixture, so the riverbed rule added here and the band moved below are put back after: clearing the
+			 * entry's beds instead, as this test once did, took the Lake's real beds away from every test that ran after it. */
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Lake");
+			Assume.That(entry.BedLayers.Count, Is.GreaterThan(0), "the Lake names its beds");
+			BiomeArtSpec.Layer riverBed = entry.RiverBed;
+			Vector2 firstDepth = entry.BedLayers[0].Depth;
 			try
 			{
-				// A spec entry is shared, so its beds are set here and taken off after.
-				var quillwort = new BiomeArtSpec.Scatter { Name = "Quillwort", Channel = PrefabSpawnChannel.DetailLayer, Prefabs = new[] { "Detail_Quillwort" }, Density = 4f, Depth = new Vector2(1f, 6f), Waters = BiomeBedWaters.Lake };
 				var weed = new BiomeArtSpec.Scatter { Name = "FennelWeed", Channel = PrefabSpawnChannel.DetailLayer, Prefabs = new[] { "Detail_FennelWeed" }, Density = 3f, Current = new Vector2(0f, 1.2f) };
-				entry.BedLayer(Ground.Silt, BiomeBedWaters.Lake, 3f, 9f, scatter: quillwort);
 				entry.UnderRiver(weed);
 				BiomeTemplate biome = MakeBiome("Lake");
 				var source = new FakeSource(created);
 
 				var first = new BiomeArtAuthoring.Report();
 				Assert.IsTrue(BiomeArtAuthoring.Author(biome, entry, source, first, true));
-				Assert.That(biome.BedTextureLayers.Count, Is.EqualTo(1), "one bed layer:\n" + first);
+				Assert.That(biome.BedTextureLayers.Count, Is.EqualTo(entry.BedLayers.Count), "a bed layer for each the spec names:\n" + first);
+				BiomeArtSpec.Entry.BedSpec spec = entry.BedLayers[0];
 				BedTextureLayer halde = biome.BedTextureLayers[0];
-				Assert.AreSame(source.Layer(Ground.Silt), halde.terrainLayer);
-				Assert.That(halde.waters, Is.EqualTo(BiomeBedWaters.Lake));
-				Assert.That(halde.depthRange, Is.EqualTo(new Vector2(3f, 9f)));
-				Assert.That(halde.useCurrentBand, Is.False);
-				Assert.That(halde.prefabSpawnRules.Exists(r => r.ruleName == "Quillwort" && r.waters == BiomeBedWaters.Lake && r.depthRange == new Vector2(1f, 6f)), Is.True);
+				Assert.AreSame(source.Layer(spec.Layer.Family), halde.terrainLayer);
+				Assert.That(halde.waters, Is.EqualTo(spec.Waters));
+				Assert.That(halde.depthRange, Is.EqualTo(spec.Depth));
+				Assert.That(halde.useCurrentBand, Is.EqualTo(spec.Current.HasValue));
+				foreach (BiomeArtSpec.Scatter scatter in spec.Layer.Scatter)
+				{
+					Assert.That(halde.prefabSpawnRules.Exists(r => r.ruleName == scatter.Name), Is.True, "the bed's rule " + scatter.Name);
+				}
 				Assert.That(biome.RiverbedTextureLayer.prefabSpawnRules.Exists(r => r.ruleName == "FennelWeed" && r.currentRange == new Vector2(0f, 1.2f)), Is.True, "the riverbed's rule");
 				Assert.That(BiomeLocalArt.SlotsOf(biome), Does.Contain("bed/0"));
 				Assert.AreSame(halde, BiomeLocalArt.CommittedLayer(biome, "bed/0"));
@@ -52,8 +59,8 @@ namespace FishMMO.UnitTests
 			}
 			finally
 			{
-				entry.BedLayers.Clear();
-				entry.RiverBed = null;
+				entry.BedLayers[0].Depth = firstDepth;
+				entry.RiverBed = riverBed;
 			}
 		}
 

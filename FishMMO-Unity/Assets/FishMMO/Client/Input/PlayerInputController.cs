@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using UnityEngine;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
@@ -92,11 +92,11 @@ namespace FishMMO.Client
 
 			Controls = new PlayerControls();
 
-			/* Between the two, and nowhere else. The extra hotkey bars' modifier and page actions are
+			/* Between the two, and nowhere else. A module's run-time actions (the Hotkeys module's extra bars' modifier and page actions) are
 			 * created at run time because how many there are is a game setting; an enabled map
 			 * refuses new actions, and the saved overrides can only be applied to bindings that
 			 * already exist — so after the asset, before the overrides. */
-			HotkeyKeyMap.AddBarActions(Controls);
+			ModuleInputActions.AddActions(Controls);
 
 			LoadBindingOverrides();
 		}
@@ -1087,10 +1087,7 @@ namespace FishMMO.Client
 			 * mid-sentence, the same gap the panel toggles closed with TypingIntoField. */
 			if (TypingIntoField)
 			{
-				if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-				{
-					chat.LeaveInputToAimMode();
-				}
+				ChatWindow.Current?.LeaveInputToAimMode();
 				return;
 			}
 			PlayerInputController.ToggleMouseMode(!PlayerInputController.MouseMode);
@@ -1118,9 +1115,15 @@ namespace FishMMO.Client
 		/// </summary>
 		private void OnChatPerformed(InputAction.CallbackContext context)
 		{
-			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
+			bool enter = context.control is UnityEngine.InputSystem.Controls.KeyControl key && key.keyCode == Key.Enter;
+			if (ChatWindow.Current != null)
 			{
-				chat.OnChatKey(context.control is UnityEngine.InputSystem.Controls.KeyControl key && key.keyCode == Key.Enter);
+				ChatWindow.Current.OnChatKey(enter);
+			}
+			else
+			{
+				// No chat window (the Chat module is not installed): the key opens the core command line.
+				CommandLine.OnChatKey(enter);
 			}
 		}
 
@@ -1135,10 +1138,8 @@ namespace FishMMO.Client
 		private void OnEquipmentPerformed(InputAction.CallbackContext context)
 		{
 			if (TypingIntoField) return;
-			if (UIManager.TryGetTK("UIEquipment", out UITKEquipment equipment))
-			{
-				equipment.ToggleVisibility();
-			}
+			// By name, like the other window keys: the equipment window is the Items module's (absent: the key does nothing).
+			UIManager.ToggleVisibility("UIEquipment");
 		}
 
 		// --- UI Toggle Callbacks ---

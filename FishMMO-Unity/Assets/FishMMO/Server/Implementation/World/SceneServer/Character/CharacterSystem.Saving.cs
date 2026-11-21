@@ -1,4 +1,4 @@
-﻿using FishNet.Connection;
+using FishNet.Connection;
 using FishNet.Object;
 using System;
 using System.Collections.Concurrent;
@@ -196,12 +196,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public readonly List<PetSnapshot> Pets;
 			public readonly List<CharacterKnownAbilityData> KnownAbilities;
 			/// <summary>
-			/// A departing character's whole hotkey bar, or nothing. Captured only by the departure
-			/// paths (<see cref="AppendDepartureSubEntities"/>); a resident's changes are written by
-			/// the hotkey system's own pump. See <c>IHotkeySystemRuntimeData.TakeDepartingBar</c>.
-			/// </summary>
-			public readonly List<CharacterHotkeyData> Hotkeys;
-			/// <summary>
 			/// Each installed <see cref="CharacterPersistenceParticipant"/>'s rows, made on first capture. The
 			/// features still listed above are the ones not yet moved onto participants.
 			/// </summary>
@@ -235,7 +229,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Abilities = new List<CharacterAbilityData>(n * 8);
 				Pets = new List<PetSnapshot>(n);
 				KnownAbilities = new List<CharacterKnownAbilityData>(n * 8);
-				Hotkeys = new List<CharacterHotkeyData>();
 				KnowledgeVersions = new Dictionary<long, long>(n);
 				Claims = new Dictionary<long, CharacterSessionLeaseData>(n);
 			}
@@ -288,7 +281,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Abilities.AddRange(other.Abilities);
 					Pets.AddRange(other.Pets);
 					KnownAbilities.AddRange(other.KnownAbilities);
-					Hotkeys.AddRange(other.Hotkeys);
 				}
 				else
 				{
@@ -296,7 +288,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					Abilities.AddRange(other.Abilities.Where(r => !conflicting.Contains(r.CharacterID)));
 					Pets.AddRange(other.Pets.Where(r => !conflicting.Contains(r.Pet.CharacterID)));
 					KnownAbilities.AddRange(other.KnownAbilities.Where(r => !conflicting.Contains(r.CharacterID)));
-					Hotkeys.AddRange(other.Hotkeys.Where(r => !conflicting.Contains(r.CharacterID)));
 				}
 
 				foreach (KeyValuePair<CharacterPersistenceParticipant, CharacterRows> participant in other.Participants)
@@ -366,15 +357,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>The hotkey bar.</b> A resident's bar is written by the hotkey system's pump, a few
-		/// seconds after each change, under the claim it captures then. A departing character's
-		/// bar is written here instead, whole and from the live bar, inside the work that ends in
-		/// the release — the same move that folded the item flush into the save-and-release. It
-		/// used to be flushed from <c>OnDisconnect</c>, a write of its own that only the lane order
-		/// kept ahead of the release (not the unkeyed retry queue's, nor the shutdown flush's,
-		/// which runs after the hotkey system has already torn down). Every hotkey write is
-		/// ownership-gated now, so a write that lands after its release is refused and lost, not
-		/// merely late.
+		/// <b>Departure-only rows.</b> A participant may capture rows only as the character leaves
+		/// (<see cref="CharacterPersistenceParticipant.CaptureDeparture"/>): the Hotkeys module's bar,
+		/// written whole from the live bar inside the work that ends in the release. Every such write is
+		/// ownership-gated, so one that lands after its release is refused and lost, not merely late.
 		/// </para>
 		/// <para>
 		/// Only with a claim: <see cref="AppendSubEntities"/> records it first and captures nothing
@@ -387,17 +373,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void AppendDepartureSubEntities(IPlayerCharacter character, SubEntitySnapshot snapshot, CharacterSessionInfo? claim)
 		{
 			AppendSubEntities(character, snapshot, claim);
-			if (!claim.HasValue ||
-				Server?.DataContainerRegistry == null ||
-				!Server.DataContainerRegistry.TryGet(out IHotkeySystemRuntimeData hotkeyData))
+			if (!claim.HasValue)
 			{
 				return;
 			}
-
-			List<CharacterHotkeyData> bar = hotkeyData.TakeDepartingBar(character.ID, character.Component<HotkeyBar>().Slots);
-			if (bar != null)
+			IReadOnlyList<CharacterPersistenceParticipant> participants = CharacterPersistenceParticipants.All;
+			for (int i = 0; i < participants.Count; i++)
 			{
-				snapshot.Hotkeys.AddRange(bar);
+				participants[i].CaptureDeparture(this, character, snapshot.RowsFor(participants[i]));
 			}
 		}
 
@@ -468,19 +451,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					CharacterPersistenceParticipant writer = participant.Key;
 					CharacterRows rows = participant.Value;
-					EnqueuePersistence(() => writer.SaveAsync(this, rows, claims));
+					if (writer.SavesPerCharacter)
+					{
+						// Keyed like the abilities, behind anything the participant's own pump queued for the character.
+						foreach (KeyValuePair<long, CharacterRows> part in rows.ByCharacter())
+						{
+							CharacterRows characterRows = part.Value;
+							EnqueuePersistence(() => writer.SaveAsync(this, characterRows, claims), part.Key);
+						}
+					}
+					else
+					{
+						EnqueuePersistence(() => writer.SaveAsync(this, rows, claims));
+					}
 				}
 			}
 			if (s.KnownAbilities.Count > 0) EnqueuePersistence(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims));
-			if (s.Hotkeys.Count > 0)
-			{
-				// Keyed like the abilities, behind any bar the hotkey pump queued for the character.
-				foreach (var group in s.Hotkeys.GroupBy(h => h.CharacterID))
-				{
-					List<CharacterHotkeyData> rows = group.ToList();
-					EnqueuePersistence(() => SaveHotkeysAsync(rows, claims), group.Key);
-				}
-			}
 		}
 
 		/// <summary>
@@ -537,7 +523,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 			if (s.KnownAbilities.Count > 0) done &= await SaveWithRetryAsync(() => SaveKnownAbilitiesAsync(s.KnownAbilities, s.KnowledgeVersions, claims), "known abilities", characterID);
-			if (s.Hotkeys.Count > 0) done &= await SaveWithRetryAsync(() => SaveHotkeysAsync(s.Hotkeys, claims), "hotkey bar", characterID);
 			return done;
 		}
 
@@ -1904,7 +1889,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </para>
 		/// <para>
 		/// Permanent buffs are left out, which deletes any rows they had: they are rebuilt from the
-		/// environment after the login. See <see cref="IsPersistedBuff"/>.
+		/// environment after the login. See <c>BuffController.IsPersistedBuff</c> (the Buffs module).
 		/// </para>
 		/// </remarks>
 		/// <param name="character">The character whose buffs to capture.</param>
@@ -1916,7 +1901,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </returns>
 		private List<CharacterBuffData> CaptureBuffSet(IPlayerCharacter character, long version)
 		{
-			if (!character.TryGet(out IBuffController buffController))
+			if (!character.TryGet(out IBuffPersistence buffController))
 			{
 				return null;
 			}
@@ -1927,69 +1912,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return null;
 			}
 
-			var buffs = new List<CharacterBuffData>(buffController.Buffs.Count);
-			if (buffController.Buffs.Count == 0)
-			{
-				return buffs;
-			}
-
-			float tickDelta = (float)timeManager.TickDelta;
-			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
-
-			foreach (var kvp in buffController.Buffs)
-			{
-				Buff buff = kvp.Value;
-				// Permanent buffs are the environment's, not the character's. See IsPersistedBuff.
-				if (buff == null || !IsPersistedBuff(buff.Template))
-				{
-					continue;
-				}
-
-				// Convert absolute ticks → remaining seconds. Clamp negatives to 0 (about to expire).
-				int remainingTicks = (int)(buff.ExpiryTick - currentTick);
-				int nextTickTicks = (int)(buff.NextTickTick - currentTick);
-				float remainingTime = remainingTicks > 0 ? remainingTicks * tickDelta : 0f;
-				float tickTime = nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f;
-
-				buffs.Add(new CharacterBuffData(
+			// The Buffs module's controller emits the buffs saved with their owner, with their remaining time.
+			var buffs = new List<CharacterBuffData>();
+			long characterID = character.ID;
+			buffController.CaptureBuffs(timeManager.LocalTick, (float)timeManager.TickDelta,
+				(templateID, remainingTime, tickTime, stacks, tickCount) => buffs.Add(new CharacterBuffData(
 					id: 0,
 					version: version,
-					characterID: character.ID,
-					templateID: buff.Template.ID,
+					characterID: characterID,
+					templateID: templateID,
 					remainingTime: remainingTime,
 					tickTime: tickTime,
-					stacks: buff.Stacks,
-					tickCount: buff.TickCount
-				));
-			}
+					stacks: stacks,
+					tickCount: tickCount)));
 			return buffs;
-		}
-
-		/// <summary>
-		/// Whether a buff is written to the database with its owner. Pure.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// <b>Permanent buffs are not.</b> They are the weather-exposure buffs, and they belong to the
-		/// environment rather than the character: <c>WeatherExposureController</c> (and a buff volume)
-		/// applies and removes them every tick from where the character is standing, so after a login
-		/// they come back on their own within a tick. A saved one could only come back wrong: a
-		/// permanent buff has no expiry (<c>ExpiryTick</c> is <c>UNSET_TICK</c>), so it was captured
-		/// with no time remaining and restored as a buff that expires on its first tick — an icon that
-		/// flickers, an apply and a remove, and an exposure system that briefly thinks it already has
-		/// the buff on.
-		/// </para>
-		/// <para>
-		/// Leaving them out of the set is also what deletes the rows saved before this rule: the set
-		/// replaces everything the database holds for the character (see <see cref="CaptureBuffSet"/>),
-		/// so the first save afterwards drops them. The load skips any it still finds until then.
-		/// </para>
-		/// </remarks>
-		/// <param name="template">The buff's template; null is never persisted.</param>
-		/// <returns>True when the buff is saved and restored with its owner.</returns>
-		public static bool IsPersistedBuff(BaseBuffTemplate template)
-		{
-			return template != null && !template.IsPermanent;
 		}
 
 		/// <summary>
@@ -2076,39 +2012,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private void AppendAbilityData(IPlayerCharacter character, List<CharacterAbilityData> abilities)
 		{
-			if (!character.TryGet(out IAbilityController abilityController) || abilityController.KnownAbilities.Count == 0)
+			if (!character.TryGet(out IAbilityPersistence abilityController))
 			{
 				return;
 			}
 
-			foreach (var kvp in abilityController.KnownAbilities)
-			{
-				Ability ability = kvp.Value;
-				if (ability == null || ability.Template == null)
-				{
-					continue;
-				}
-
-				/* Unchanged since the database last confirmed it. Skipping ahead of the ToList also
-				 * avoids building an event-id list per ability per save for a row nobody will
-				 * write. */
-				if (!ability.PersistenceDirty)
-				{
-					continue;
-				}
-
-				List<int> eventIds = ability.AbilityEvents.Keys.ToList();
-
-				ability.Version++;
-				abilities.Add(new CharacterAbilityData(
-					id: ability.ID,
-					version: ability.Version,
-					characterID: character.ID,
-					templateID: ability.Template.ID,
-					abilityEvents: eventIds,
-					cooldown: 0.0f
-				));
-			}
+			/* Only abilities changed since the database last confirmed them; the controller bumps each one's version as it
+			 * hands it over. */
+			long characterID = character.ID;
+			abilityController.CaptureDirtyAbilities((id, version, templateID, eventIds) => abilities.Add(new CharacterAbilityData(
+				id: id,
+				version: version,
+				characterID: characterID,
+				templateID: templateID,
+				abilityEvents: eventIds,
+				cooldown: 0.0f
+			)));
 		}
 
 		/// <summary>
@@ -2170,7 +2089,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="pets">Destination for the snapshots.</param>
 		private void AppendPetData(IPlayerCharacter character, List<PetSnapshot> pets)
 		{
-			if (!character.TryGet(out IPetController petController))
+			if (!character.TryGet(out IPetRoster petController))
 			{
 				return;
 			}
@@ -2179,9 +2098,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * written to spawned = false by whichever path dismissed or killed that pet — and
 			 * writing a row here would only be able to say "no template", which is not a state
 			 * the schema can express. The same holds per slot: an empty slot is left alone. */
-			for (int i = 0; i < petController.Pets.Count; ++i)
+			for (int i = 0; i < petController.PetSlotCount; ++i)
 			{
-				Pet pet = petController.Pets[i];
+				IPersistedPet pet = petController.PetAt(i);
 				if (pet != null)
 				{
 					AppendOnePetData(character, pet, pets);
@@ -2192,14 +2111,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Appends one pet's snapshot; see <see cref="AppendPetData"/>.
 		/// </summary>
-		private void AppendOnePetData(IPlayerCharacter character, Pet pet, List<PetSnapshot> pets)
+		private void AppendOnePetData(IPlayerCharacter character, IPersistedPet pet, List<PetSnapshot> pets)
 		{
 
 			/* Zero is "no template", and nothing else is. Template ids are signed deterministic
 			 * hashes, so a negative one is as valid as a positive one — refusing everything below
 			 * one skipped the save of roughly half of all pets. (ICharacterPetService applies the
 			 * same wrong test on its side, and must be corrected there too before those pets land.) */
-			int templateID = pet.PetAbilityTemplate != null ? pet.PetAbilityTemplate.ID : 0;
+			int templateID = pet.PersistedTemplateID;
 			if (templateID == 0)
 			{
 				Log.Warning("CharacterSystem", $"Character {character.ID} has a pet with no resolvable ability template; its state was not persisted.");
@@ -2232,7 +2151,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterID: character.ID,
 				slot: pet.Slot,
 				templateID: templateID,
-				abilities: pet.PetAbilityIDs != null ? new List<int>(pet.PetAbilityIDs) : new List<int>(),
+				abilities: pet.PersistedAbilityIDs != null ? new List<int>(pet.PersistedAbilityIDs) : new List<int>(),
 				spawned: IsPetOut(currentHealth, character.IsFlagged(CharacterFlags.IsDead)));
 
 			var attributeData = new List<CharacterPetAttributeData>(16);
@@ -2320,9 +2239,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="version">Version to stamp every row with.</param>
 		/// <param name="pet">The pet.</param>
 		/// <param name="buffs">Destination for the rows.</param>
-		private void AppendPetBuffData(long characterID, int slot, long version, Pet pet, List<CharacterPetBuffData> buffs)
+		private void AppendPetBuffData(long characterID, int slot, long version, IPersistedPet pet, List<CharacterPetBuffData> buffs)
 		{
-			if (!pet.TryGet(out IBuffController buffController) || buffController.Buffs.Count == 0)
+			if (!pet.TryGet(out IBuffPersistence buffController))
 			{
 				return;
 			}
@@ -2333,33 +2252,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return;
 			}
 
-			float tickDelta = (float)timeManager.TickDelta;
-			uint currentTick = buffController.ResolveAuthoritativeTick(timeManager.LocalTick);
-
-			foreach (var kvp in buffController.Buffs)
-			{
-				Buff buff = kvp.Value;
-				// A pet stands in the same weather its owner does. See IsPersistedBuff.
-				if (buff == null || !IsPersistedBuff(buff.Template))
-				{
-					continue;
-				}
-
-				// Absolute ticks → remaining seconds. Clamp negatives to 0 (about to expire).
-				int remainingTicks = (int)(buff.ExpiryTick - currentTick);
-				int nextTickTicks = (int)(buff.NextTickTick - currentTick);
-
-				buffs.Add(new CharacterPetBuffData(
+			// A pet stands in the same weather its owner does: the controller leaves the permanent buffs out.
+			buffController.CaptureBuffs(timeManager.LocalTick, (float)timeManager.TickDelta,
+				(templateID, remainingTime, tickTime, stacks, tickCount) => buffs.Add(new CharacterPetBuffData(
 					id: 0,
 					version: version,
 					characterID: characterID,
 					slot: slot,
-					templateID: buff.Template.ID,
-					remainingTime: remainingTicks > 0 ? remainingTicks * tickDelta : 0f,
-					tickTime: nextTickTicks > 0 ? nextTickTicks * tickDelta : 0f,
-					stacks: buff.Stacks,
-					tickCount: buff.TickCount));
-			}
+					templateID: templateID,
+					remainingTime: remainingTime,
+					tickTime: tickTime,
+					stacks: stacks,
+					tickCount: tickCount)));
 		}
 
 		/// <summary>
@@ -2427,38 +2331,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			catch (Exception ex)
 			{
 				await Log.Error("CharacterSystem", $"SavePetsAsync failed: {ex}");
-				return false;
-			}
-		}
-
-		/// <summary>
-		/// Writes a departing character's hotkey bar under the claim it was captured with.
-		/// </summary>
-		/// <remarks>
-		/// No dirty marks to clear: the bar is written whole, from the live bar, and the character is
-		/// on its way out. A superseded row is a newer bar already stored — the hotkey pump's, taken
-		/// later — and is fine. See <see cref="AppendDepartureSubEntities"/>.
-		/// </remarks>
-		/// <param name="hotkeys">The rows, one per slot.</param>
-		/// <param name="claims">The claims the rows were captured under.</param>
-		/// <returns>False only when the write failed in a way worth another attempt.</returns>
-		private async Task<bool> SaveHotkeysAsync(List<CharacterHotkeyData> hotkeys, IReadOnlyCollection<CharacterSessionLeaseData> claims)
-		{
-			try
-			{
-				if (Server?.Database?.ServiceRegistry == null ||
-					!Server.Database.ServiceRegistry.TryGet<ICharacterHotkeyService>(out var hotkeyService))
-				{
-					return true;
-				}
-
-				DatabaseResult<BulkWriteResult> result = await hotkeyService.PersistOwnedAsync(hotkeys, claims);
-				bool written = await BulkWriteReporting.ReportAsync("CharacterSystem", "Hotkey bar save", result);
-				return written || !result.IsTransient;
-			}
-			catch (Exception ex)
-			{
-				await Log.Error("CharacterSystem", $"SaveHotkeysAsync failed: {ex}");
 				return false;
 			}
 		}
@@ -2645,16 +2517,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				/* Lingering bodies too, as every other mark does: one is saved every pass but is not
 				 * in CharactersByID, so its abilities stayed marked and were rewritten each pass. */
 				if (!TryGetResidentCharacter(saved.CharacterID, out IPlayerCharacter character) ||
-					!character.TryGet(out IAbilityController abilityController))
+					!character.TryGet(out IAbilityPersistence abilityController))
 				{
 					continue;
 				}
 
-				if (abilityController.KnownAbilities.TryGetValue(saved.ID, out Ability ability) &&
-					ability != null)
-				{
-					ability.MarkPersisted(saved.Version);
-				}
+				abilityController.MarkAbilityPersisted(saved.ID, saved.Version);
 			}
 		}
 
@@ -2671,7 +2539,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <para>
 		/// Written whole rather than per row because the controller keeps knowledge as two id sets
 		/// with nothing to hang a per-entry version on. That is affordable because it is gated on
-		/// <see cref="IAbilityKnowledgeController.KnowledgeDirty"/>, which is set only when
+		/// <see cref="IAbilityPersistence.KnowledgeDirty"/>, which is set only when
 		/// something genuinely new is learned — a character that learns nothing writes nothing, and
 		/// the rows are versioned upserts, so a re-write of a row the database already has is
 		/// filtered rather than applied.
@@ -2679,7 +2547,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private void AppendKnownAbilityData(IPlayerCharacter character, List<CharacterKnownAbilityData> knownAbilities, Dictionary<long, long> knowledgeVersions)
 		{
-			if (!character.TryGet(out IAbilityController abilityController) ||
+			if (!character.TryGet(out IAbilityPersistence abilityController) ||
 				!abilityController.KnowledgeDirty)
 			{
 				return;
@@ -2778,7 +2646,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (KeyValuePair<long, long> captured in knowledgeVersions)
 			{
 				if (TryGetResidentCharacter(captured.Key, out IPlayerCharacter character) &&
-					character.TryGet(out IAbilityController abilityController) &&
+					character.TryGet(out IAbilityPersistence abilityController) &&
 					abilityController.KnowledgeVersion == captured.Value)
 				{
 					abilityController.KnowledgeDirty = false;

@@ -1059,9 +1059,9 @@ namespace FishMMO.Shared
 			 * panel stayed on the old one: frozen at full health while the pinned target frame, reading the new one, showed
 			 * it at 65% (2026-11-18). */
 			bool ownPet = viewer.Character != null &&
-				observed.Character is Pet pet &&
-				pet.PetOwner != null &&
-				pet.PetOwner.ID == viewer.Character.ID &&
+				observed.Character is NPC companion &&
+				companion.CompanionOwner != null &&
+				companion.CompanionOwner.ID == viewer.Character.ID &&
 				distance <= ObserverStreamingPolicy.EngagementRangeCeiling;
 			bool pinned = (sameParty && distance <= ObserverStreamingPolicy.EngagementRangeCeiling) ||
 				targeted ||

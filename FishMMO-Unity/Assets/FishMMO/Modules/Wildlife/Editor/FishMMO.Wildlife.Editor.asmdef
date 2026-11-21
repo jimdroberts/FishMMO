@@ -1,0 +1,35 @@
+{
+    "name": "FishMMO.Wildlife.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Wildlife",
+        "FishMMO.Wildlife.Server",
+        "FishMMO.NPCs",
+        "FishMMO.Abilities",
+        "FishMMO.Combat",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Abilities.Server",
+        "FishMMO.Combat.Server",
+        "FishMMO.Server",
+        "FishMMO.Core",
+        "FishNet.Runtime",
+        "Unity.AI.Navigation",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "KinematicCharacterController",
+        "FishMMO.NPCs.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

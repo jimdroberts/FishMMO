@@ -371,15 +371,15 @@ namespace FishMMO.Shared
 			}
 
 			bool holding = recipesHeld.Contains(recipe.ID);
-			bool applied = Character.TryGet(out IBuffController buffs) && buffs.Buffs.ContainsKey(recipe.Buff.ID);
+			bool applied = Character.TryGet(out ICharacterBuffs buffs) && buffs.HasBuff(recipe.Buff.CachedID);
 
 			if (holding && !applied && buffs != null)
 			{
-				buffs.Apply(recipe.Buff, predictionTick);
+				buffs.ApplyTemplate(recipe.Buff as IBuffTemplateInfo, predictionTick);
 			}
 			else if (!holding && applied)
 			{
-				buffs.Remove(recipe.Buff.ID);
+				buffs.Remove(recipe.Buff.CachedID);
 			}
 		}
 
@@ -411,9 +411,9 @@ namespace FishMMO.Shared
 				if (holding)
 				{
 					held.Remove(template.ID);
-					if (Character.TryGet(out IBuffController owner))
+					if (Character.TryGet(out ICharacterBuffs owner))
 					{
-						owner.Remove(template.Buff.ID);
+						owner.Remove(template.Buff.CachedID);
 					}
 				}
 				return;
@@ -422,19 +422,19 @@ namespace FishMMO.Shared
 			if (!holding && level >= template.ApplyAt)
 			{
 				held.Add(template.ID);
-				if (Character.TryGet(out IBuffController buffs))
+				if (Character.TryGet(out ICharacterBuffs buffs))
 				{
 					// The PREDICTED apply: the tick is already in the replicate domain, which is the
 					// domain the buff's own expiry is evaluated against.
-					buffs.Apply(template.Buff, predictionTick);
+					buffs.ApplyTemplate(template.Buff as IBuffTemplateInfo, predictionTick);
 				}
 			}
 			else if (holding && level <= template.ReleaseAt)
 			{
 				held.Remove(template.ID);
-				if (Character.TryGet(out IBuffController buffs))
+				if (Character.TryGet(out ICharacterBuffs buffs))
 				{
-					buffs.Remove(template.Buff.ID);
+					buffs.Remove(template.Buff.CachedID);
 				}
 			}
 		}
@@ -576,7 +576,7 @@ namespace FishMMO.Shared
 				else if (serverBuffs != null && template.Buff != null)
 				{
 					// In the band: held exactly when the server has the buff on.
-					if (ServerHasBuff(serverBuffs, template.Buff.ID))
+					if (ServerHasBuff(serverBuffs, template.Buff.CachedID))
 					{
 						held.Add(entry.TemplateID);
 					}
@@ -602,7 +602,7 @@ namespace FishMMO.Shared
 				for (int i = 0; i < recipes.Count; ++i)
 				{
 					WeatherExposureRecipe recipe = recipes[i];
-					if (recipe != null && recipe.Buff != null && ServerHasBuff(serverBuffs, recipe.Buff.ID))
+					if (recipe != null && recipe.Buff != null && ServerHasBuff(serverBuffs, recipe.Buff.CachedID))
 					{
 						recipesHeld.Add(recipe.ID);
 					}

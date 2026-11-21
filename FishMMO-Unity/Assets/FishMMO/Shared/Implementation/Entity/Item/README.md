@@ -2,6 +2,14 @@
 
 **Short description:** A component-based, template-driven framework for items, inventories, equipment, and banking in FishMMO.
 
+> **The Items module (2026-11-20).** This folder is the item **data** the core keeps: `Item` and its components,
+> `ItemSlot`, the templates and loot tables, `ItemGenerator`, `ServerItemHooks`, `InventoryType`, and (under
+> `Shared/Core/Entity/Item/`) the container contracts. The containers themselves (`ItemContainer`,
+> `InventoryController`, `BankController`, `EquipmentController`, `ItemStackTransfer`), the scene server's
+> `CharacterInventorySystem` and the inventory, bank and equipment windows are the
+> [Items module](../../../../Modules/Items/README.md)'s, under `Assets/FishMMO/Modules/Items`. The paths below name the module
+> folder where a file moved.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -25,7 +33,7 @@
 
 ## Overview
 
-The Item system is a component-based, template-driven framework for items, inventories, equipment, and banking in FishMMO. Each `Item` instance is composed of optional sub-components (`ItemStackable`, `ItemEquippable`, `ItemGenerator`) determined by its template type. Items live inside slot-based `ItemContainer` controllers (`InventoryController`, `EquipmentController`, `BankController`) attached to characters as `CharacterBehaviour` components. The system supports seed-based deterministic attribute generation, stacking, equip/unequip with character stat modification, cross-container slot swaps, and FishNet network synchronization via broadcasts.
+The Item system is a component-based, template-driven framework for items, inventories, equipment, and banking in FishMMO. Each `Item` instance is composed of optional sub-components (`ItemStackable`, `ItemEquippable`, `ItemGenerator`) determined by its template type. Items live inside slot-based `ItemContainer` controllers (`InventoryController`, `EquipmentController`, `BankController`) which the Items module adds to every player as character parts (`CharacterPart`). The system supports seed-based deterministic attribute generation, stacking, equip/unequip with character stat modification, cross-container slot swaps, and FishNet network synchronization via broadcasts.
 
 ## Supported Platforms
 
@@ -704,12 +712,7 @@ Item/
 ├── ItemStackable.cs                           # Stack management component (IStackable<Item>); RemainingCapacity, TryUnstack
 ├── ServerItemHooks.cs                         # Server-installed grant / changed callbacks + RemovedItemRecord
 ├── Container/
-│   ├── ItemContainer.cs                       # Abstract base container (CharacterBehaviour); slots, locks, ResetState
-│   ├── ItemStackTransfer.cs                   # Static split / merge (issue #198)
-│   ├── Bank/
-│   │   └── BankController.cs                  # Bank container (100 slots)
 │   └── Inventory/
-│       ├── InventoryController.cs             # Main inventory container (32 slots); Activate routes consumables
 │       └── InventoryType.cs                   # Enum: Inventory, Equipment, Bank
 ├── Loot/
 │   ├── LootTableEntry.cs                      # One weighted drop entry
@@ -740,19 +743,23 @@ Shared/Core/Entity/Item/Container/IItemContainer.cs                             
 Shared/Core/Entity/Item/Container/Bank/IBankController.cs                        # Bank interface (LastInteractableID, swap validation)
 Shared/Core/Entity/Item/Container/Equipment/IEquipmentController.cs              # Equipment interface (equip, unequip, OnServerEquipmentChanged)
 Shared/Core/Entity/Item/Container/Inventory/IInventoryController.cs              # Inventory interface (Activate, swap validation)
-Shared/Implementation/Entity/Prediction/Equipment/EquipmentController.cs         # Equipment container, predicted at Order 93
+Modules/Items/Runtime/ItemContainer.cs                                           # Abstract base container (CharacterPart); slots, locks, ResetState
+Modules/Items/Runtime/ItemStackTransfer.cs                                       # Static split / merge (issue #198)
+Modules/Items/Runtime/InventoryController.cs                                     # Main inventory container (32 slots); Activate routes consumables
+Modules/Items/Runtime/BankController.cs                                          # Bank container (100 slots)
+Modules/Items/Runtime/EquipmentController.cs                                     # Equipment container, predicted at Order 93
 Shared/Implementation/Network/Character/Inventory/InventoryBroadcasts.cs         # Inventory broadcast structs
 Shared/Implementation/Network/Character/Inventory/EquipmentBroadcasts.cs         # Equipment broadcast structs
 Shared/Implementation/Network/Character/Inventory/EquipmentObserverBroadcasts.cs # Observed equipment slot broadcast
 Shared/Implementation/Network/Character/Inventory/BankBroadcasts.cs              # Bank broadcast structs
 Shared/Implementation/Network/Character/Inventory/ItemOperationBroadcasts.cs     # Refusal broadcast + operation/reason enums
-Server/Implementation/World/SceneServer/CharacterInventory/CharacterInventorySystem.cs # Persists items, installs ServerItemHooks
-UnitTests/ItemStackSplitMergeTests.cs                                            # Split / merge conservation
+Modules/Items/Server/CharacterInventorySystem.cs                                 # Persists items, installs ServerItemHooks
+Modules/Items/Tests/ItemStackSplitMergeTests.cs                                  # Split / merge conservation
 UnitTests/ItemStackConservationTests.cs                                          # Stacking conservation
 ```
 
 > The container **interfaces** live under `Shared/Core/Entity/Item/`, not beside the
-> implementations. `EquipmentController.cs` lives under `Prediction/Equipment/`.
+> implementations, which are the Items module's (`Modules/Items/Runtime/`).
 
 ### Inheritance Hierarchies
 
@@ -782,17 +789,17 @@ CachedScriptableObject<ItemAttributeTemplate>
 └── ItemAttributeTemplate
 ```
 
-#### Containers (NetworkBehaviour)
+#### Containers (character parts; the Items module)
 
 ```
-CharacterBehaviour
+CharacterPart (MonoBehaviour)
 └── ItemContainer (abstract) : IItemContainer
     ├── InventoryController : IInventoryController
     ├── EquipmentController : IEquipmentController, IPredictableController (Order 93)
     └── BankController      : IBankController
 ```
 
-> **Note:** `EquipmentController.cs` lives under `Prediction/Equipment/` and implements
+> **Note:** `EquipmentController.cs` (the Items module's `Runtime/`) is a character part that implements
 > `IPredictableController` at Order 93. Equip and unequip requests ride
 > `CharacterReplicateData.EquipmentRequest` rather than a broadcast, and equipment state is
 > reconciled alongside the rest of the predicted state. The two remaining messages are

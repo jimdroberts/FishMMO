@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
@@ -87,10 +87,8 @@ namespace FishMMO.RenderScratch
 			Register<IEquipmentController>(behaviours, new FakeEquipment(character));
 			Register<IBankController>(behaviours, new FakeBank(character));
 			Register<ICharacterAttributeController>(behaviours, new FakeAttributes(character));
-			Register<IAchievementController>(behaviours, new FakeAchievements(character));
 			// Modules' fakes (Factions registers its own: Assets/FishMMO/Modules/Factions/Editor/RenderScratch).
 			ExtraFakes?.Invoke(character, behaviours);
-			Register<IPetController>(behaviours, new FakePet(character));
 
 			Fixtures.Apply(character);
 			return character;

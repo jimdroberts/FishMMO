@@ -231,6 +231,16 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("PalaceWing", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 6f, 6f),
 			// The corner tower (2026-10-19): its square variant's pyramid is the square wall tower's.
 			new StructureRoofFollower("CornerTower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 4.85f, 4.6f),
+			// The fantasy wave's thatched cones (2026-10-27), as their builders lay them (GreenCone, the round hut's own roof).
+			new StructureRoofFollower("Talan", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 1.9f, 1.65f),
+			new StructureRoofFollower("Talan", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 1.9f, 1.65f),
+			new StructureRoofFollower("PileRoundHouse", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.2f, 3.1f + 0.9f),
+			new StructureRoofFollower("PileRoundHouse", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.2f, 3.1f + 0.9f),
+			new StructureRoofFollower("RoundHut", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 2.2f, 1.7f + 0.38f + 0.55f),
+			new StructureRoofFollower("RoundHut", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 2.6f, 2.2f + 0.38f + 0.9f),
+			// The hanging cloister's hall (v0) and chapel (v1) gables (2026-10-27, StructurePieces.Fantasy.Shapes.cs), as its builder works them.
+			new StructureRoofFollower("HangingCloister", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 0.5f * 6.6f * 1.1f, 6.6f * 0.5f),
+			new StructureRoofFollower("HangingCloister", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 0.5f * 5.2f * 1.3f, 5.2f * 0.5f),
 		};
 
 		/// <summary>Every pitch, in order.</summary>

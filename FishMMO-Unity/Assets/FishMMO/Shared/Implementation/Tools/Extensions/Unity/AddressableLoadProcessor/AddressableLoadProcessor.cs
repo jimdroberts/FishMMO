@@ -1181,7 +1181,45 @@ namespace FishMMO.Shared
 				currentPrefabOperations.Remove(key);
 			}
 
+#if UNITY_EDITOR
+			/* Outside play mode the prefab comes straight from the AssetDatabase, with no Addressables operation and so
+			 * nothing to unload (see TemplateAssets): an edit-mode load went through the last player build's catalog,
+			 * which after a server build has no client groups, and failed inside whichever test was running. */
+			if (!Application.isPlaying)
+			{
+				onLoadComplete?.Invoke(assetReference.editorAsset as GameObject);
+				return;
+			}
+#endif
+
+			/* The reference itself may already hold a load these tables do not track (a failed one they dropped, or one
+			 * started outside the processor). A second LoadAssetAsync on it is an Addressables error ("already been
+			 * loaded") that answers an INVALID handle, and subscribing to that throws inside whatever asked, such as a
+			 * broadcast handler (2026-11-20, character select). A held load that is live or succeeded is handed over; a
+			 * failed one is released so this request loads afresh. */
+			AsyncOperationHandle held = assetReference.OperationHandle;
+			if (held.IsValid())
+			{
+				if (!held.IsDone)
+				{
+					held.Completed += op => onLoadComplete?.Invoke(op.Status == AsyncOperationStatus.Succeeded ? op.Result as GameObject : null);
+					return;
+				}
+				if (held.Status == AsyncOperationStatus.Succeeded && held.Result is GameObject heldPrefab)
+				{
+					onLoadComplete?.Invoke(heldPrefab);
+					return;
+				}
+				assetReference.ReleaseAsset();
+			}
+
 			AsyncOperationHandle<GameObject> newHandle = assetReference.LoadAssetAsync<GameObject>();
+			if (!newHandle.IsValid())
+			{
+				Log.Warning("AddressableLoadProcessor", $"Addressables returned no load for {key}.");
+				onLoadComplete?.Invoke(null);
+				return;
+			}
 
 			currentPrefabOperations[key] = newHandle;
 
@@ -1199,6 +1237,11 @@ namespace FishMMO.Shared
 				{
 					Log.Warning("AddressableLoadProcessor", $"Failed to load addressable {key}: {op.OperationException?.Message}");
 					loadedPrefabs.Remove(key);
+					// Released, so the reference holds no failed load and the next request tries again.
+					if (assetReference.OperationHandle.IsValid())
+					{
+						assetReference.ReleaseAsset();
+					}
 					onLoadComplete?.Invoke(null);
 				}
 			};

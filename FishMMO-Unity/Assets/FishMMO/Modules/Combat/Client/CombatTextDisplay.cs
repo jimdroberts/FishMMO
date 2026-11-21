@@ -1,0 +1,519 @@
+using System.Collections.Generic;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using KinematicCharacterController;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace FishMMO.Client
+{
+	/// <summary>
+	/// The Combat module's combat text (2026-11-20): floating damage and heal numbers (the server's reports and this client's
+	/// own predictions), refusals ("Evade", "Immune"), and the death dialog closed on a resurrect. A client service
+	/// (<see cref="ClientServices"/>); it was the core's ClientCombatDisplay, whose milestone label stayed in the core as
+	/// <see cref="ClientMilestoneDisplay"/>.
+	/// </summary>
+	/// <remarks>
+	/// Every method here runs on the hottest path the client has — one invocation per damage or
+	/// heal event, on every character in view, which in an AoE fight is dozens per frame. What it
+	/// used to do per invocation was a <c>GetComponent&lt;Collider&gt;</c> (a native call that walks
+	/// the GameObject's component list), a config dictionary probe with a string key, and an
+	/// <c>int.ToString()</c>. The first two are cached below; the third is served from a table for
+	/// the small values that make up almost all combat numbers.
+	/// </remarks>
+	public class CombatTextDisplay : IClientService
+	{
+		/// <summary>The service's id.</summary>
+		public const string ServiceId = "combat.text";
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void Register()
+		{
+			ClientServices.Register(ServiceId, () => new CombatTextDisplay());
+		}
+
+		/// <inheritdoc />
+		void IClientService.Initialize(FishNet.Managing.NetworkManager manager) => Initialize();
+
+		/// <inheritdoc />
+		void IClientService.Tick(float deltaTime) => Tick();
+
+		/// <inheritdoc />
+		void IClientService.Clear() { }
+
+		/// <inheritdoc />
+		void IClientService.Shutdown() => Shutdown();
+
+		/// <summary>
+		/// Cached label height per character GameObject, keyed by instance ID.
+		/// </summary>
+		/// <remarks>
+		/// The height comes from the collider's dimensions or the capsule height, neither of which
+		/// changes over a character's life, so resolving it once per character is enough. Keyed by
+		/// instance ID rather than by the object so a destroyed character cannot be kept alive by
+		/// this dictionary; the entries are cleared on scene change and when the cache grows past
+		/// its bound, which is what keeps it from accumulating dead ids over a long session.
+		/// </remarks>
+		private readonly Dictionary<EntityId, float> displayHeights = new Dictionary<EntityId, float>();
+
+		/// <summary>
+		/// Maximum height cache entries before the whole cache is dropped.
+		/// </summary>
+		/// <remarks>
+		/// A flat clear rather than an eviction policy: the cost of a miss is one
+		/// <c>GetComponent</c>, so being occasionally cold is cheap and an LRU would cost more to
+		/// maintain than it saves. The bound exists to stop the dictionary growing without limit
+		/// on a busy server, not to maximise hit rate.
+		/// </remarks>
+		private const int MaxHeightCacheEntries = 512;
+
+		/// <summary>
+		/// Pre-rendered decimal strings for the values combat numbers almost always take.
+		/// </summary>
+		/// <remarks>
+		/// <c>int.ToString()</c> allocates a fresh string every call, and every one of them is
+		/// garbage a frame later. Damage and heal values below this bound are served from the table
+		/// instead; larger hits still allocate, which is correct — they are rare.
+		/// </remarks>
+		private static readonly string[] SmallNumberCache = BuildSmallNumberCache(2048);
+
+		/// <summary>
+		/// False until the cached values below were read from real settings.
+		/// </summary>
+		/// <remarks>
+		/// <see cref="Initialize"/> runs from <c>Client.Initialize</c>, which happens while the
+		/// postboot Addressable batch is completing — <c>Configuration.GlobalSettings</c> does not
+		/// exist yet at that point. Reading the three flags per event, as this used to, hid that:
+		/// the first damage event arrived long after settings had loaded. Caching them at startup
+		/// is the right optimisation but it moved the read in front of its dependency, so the
+		/// cache is now filled on first use if startup was too early, and the flags stay at their
+		/// safe default of false until then.
+		/// </remarks>
+		private bool configLoaded;
+
+		/// <summary>Cached "ShowDamage" config value.</summary>
+		private bool showDamage;
+		/// <summary>Cached "ShowHeals" config value.</summary>
+		private bool showHeals;
+
+		/// <summary>Subscribes to damage/heal/kill/resurrect events. Call during startup.</summary>
+		public void Initialize()
+		{
+			RefreshConfig();
+
+			/* Without this the cache below is never invalidated: the values were read once at
+			 * start-up and the options panel had no way to reach them, so turning damage numbers
+			 * off did nothing until the client was restarted. */
+			ClientSettings.OnGameplayChanged += RefreshConfig;
+
+			/* Numbers come from the server's combat report, not from the local OnDamaged/OnHealed
+			 * events. Those fire wherever the arithmetic runs: on the server for every ability hit,
+			 * which reaches no client at all, and on the owning client for its own predicted
+			 * damage-over-time ticks, which repeat on every reconcile replay. The report fires once,
+			 * on every client that can see the target, carrying the amount that actually landed. */
+			/* The caster draws its OWN numbers before the server confirms them, so the report is no
+			 * longer the only source. See PredictedCombatEvents for why absence is the rejection
+			 * signal and why the server cannot send one. */
+			PredictedCombatEvents.OnPredicted += OnPredictedCombatEvent;
+			PredictedCombatEvents.OnPredictionRejected += OnPredictionRejected;
+			PredictedCombatEvents.OnPredictionConfirmed += OnPredictionConfirmed;
+			PredictedCombatEvents.OnPredictionRefused += OnPredictionRefused;
+
+			CharacterDamageController.OnCombatEventReceived += OnCombatEvent;
+			ICharacterDamageController.OnKilled += OnKilled;
+			ICharacterDamageController.OnResurrected += OnResurrected;
+
+			SceneManager.activeSceneChanged += OnActiveSceneChanged;
+		}
+
+		/// <summary>Unsubscribes from all combat events. Call during teardown.</summary>
+		public void Shutdown()
+		{
+			ClientSettings.OnGameplayChanged -= RefreshConfig;
+
+			PredictedCombatEvents.OnPredicted -= OnPredictedCombatEvent;
+			PredictedCombatEvents.OnPredictionRejected -= OnPredictionRejected;
+			PredictedCombatEvents.OnPredictionConfirmed -= OnPredictionConfirmed;
+			PredictedCombatEvents.OnPredictionRefused -= OnPredictionRefused;
+			PredictedCombatEvents.Clear();
+			predictedLabels.Clear();
+
+			CharacterDamageController.OnCombatEventReceived -= OnCombatEvent;
+			ICharacterDamageController.OnKilled -= OnKilled;
+			ICharacterDamageController.OnResurrected -= OnResurrected;
+
+			SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+
+			displayHeights.Clear();
+		}
+
+		/// <summary>
+		/// Re-reads the display toggles from the global settings.
+		/// </summary>
+		/// <remarks>
+		/// Public so the options panel can call it after a settings change. The values were
+		/// previously read out of the settings dictionary on every single damage event, by string
+		/// key, which is a dictionary probe and a hash of a literal per hit.
+		/// </remarks>
+		public void RefreshConfig()
+		{
+			if (Configuration.GlobalSettings == null)
+			{
+				// Too early. EnsureConfig retries on the first event that needs a value.
+				configLoaded = false;
+				return;
+			}
+
+			/* Through ClientSettings, which supplies the default declared alongside the toggle.
+			 * Reading these with an implicit default of false — which a bare TryGetBool gives —
+			 * meant a fresh install showed no damage numbers while its own options screen showed
+			 * the box ticked, and ticking it off and on again was the only way to reconcile them. */
+			showDamage = ClientSettings.GetGameplayToggle(ClientSettings.ShowDamageKey);
+			showHeals = ClientSettings.GetGameplayToggle(ClientSettings.ShowHealsKey);
+			configLoaded = true;
+		}
+
+		/// <summary>
+		/// Fills the config cache if <see cref="RefreshConfig"/> ran before settings existed.
+		/// </summary>
+		/// <remarks>
+		/// Costs one boolean test per event once loaded, which is the whole point of the cache;
+		/// before then it costs the dictionary probe this used to pay on every hit anyway.
+		/// </remarks>
+		private void EnsureConfig()
+		{
+			if (!configLoaded)
+			{
+				RefreshConfig();
+			}
+		}
+
+		/// <summary>
+		/// Drops the per-character height cache when the scene changes.
+		/// </summary>
+		private void OnActiveSceneChanged(Scene from, Scene to)
+		{
+			displayHeights.Clear();
+		}
+
+		/// <summary>
+		/// Returns the vertical offset a floating label should sit at above a character.
+		/// </summary>
+		/// <param name="character">The character the label belongs to.</param>
+		private float GetDisplayHeight(ICharacter character)
+		{
+			GameObject go = character.GameObject;
+			if (go == null)
+			{
+				return 1f;
+			}
+
+			EntityId key = go.GetEntityId();
+			if (displayHeights.TryGetValue(key, out float cached))
+			{
+				return cached;
+			}
+
+			float h = 1f;
+			var col = go.GetComponent<Collider>();
+			if (col != null) { col.TryGetDimensions(out h, out _); }
+			else if (character is IPlayerCharacter pc) { h = pc.CharacterController.FullCapsuleHeight; }
+
+			if (displayHeights.Count >= MaxHeightCacheEntries)
+			{
+				displayHeights.Clear();
+			}
+			displayHeights[key] = h;
+			return h;
+		}
+
+		/// <summary>
+		/// Builds the small-integer string table.
+		/// </summary>
+		/// <param name="count">Number of entries (values 0..count-1).</param>
+		private static string[] BuildSmallNumberCache(int count)
+		{
+			string[] cache = new string[count];
+			for (int i = 0; i < count; ++i)
+			{
+				cache[i] = i.ToString();
+			}
+			return cache;
+		}
+
+		/// <summary>
+		/// Returns a decimal string for a combat value, without allocating for common magnitudes.
+		/// </summary>
+		/// <param name="value">The value to render.</param>
+		private static string ToDisplayString(int value)
+		{
+			if (value >= 0 && value < SmallNumberCache.Length)
+			{
+				return SmallNumberCache[value];
+			}
+			return value.ToString();
+		}
+
+		/// <summary>One predicted label and the pool lease it was captured under.</summary>
+		private readonly struct PredictedLabel
+		{
+			public readonly UITKWorldLabel Label;
+			public readonly uint Lease;
+
+			public PredictedLabel(UITKWorldLabel label, uint lease)
+			{
+				Label = label;
+				Lease = lease;
+			}
+		}
+
+		/// <summary>Labels drawn from a prediction, by the handle that can later reject them.</summary>
+		private readonly Dictionary<long, PredictedLabel> predictedLabels = new Dictionary<long, PredictedLabel>();
+
+		/// <summary>Colour a rejected number fades to: readable, obviously not a real hit.</summary>
+		private static readonly Color RejectedColor = new Color(0.55f, 0.55f, 0.55f, 0.75f);
+
+		/// <summary>
+		/// Colour of a refusal word ("Evade", "Immune"): brighter than a rejected number, because
+		/// this is the server saying exactly what happened rather than a guess from silence, and
+		/// neutral, because nothing was dealt.
+		/// </summary>
+		private static readonly Color RefusedColor = new Color(0.9f, 0.9f, 0.9f, 1f);
+
+		/// <summary>Word drawn for a hit an evading NPC turned away.</summary>
+		private const string EvadeText = "Evade";
+
+		/// <summary>Word drawn for a hit an immortal character turned away.</summary>
+		private const string ImmuneText = "Immune";
+
+		/// <summary>How long a server-reported number stays on screen.</summary>
+		private const float ReportedLabelPersistSeconds = 1.0f;
+
+		/// <summary>
+		/// How long a PREDICTED number stays on screen past the confirmation window.
+		/// </summary>
+		/// <remarks>
+		/// A prediction can only be rejected once <see cref="PredictedCombatEvents.ConfirmationWindowSeconds"/>
+		/// has fully elapsed, so a predicted label must outlive that window or the grey-out lands on
+		/// a label that has just expired — the "that did not land" signal was never visible, and in
+		/// a busy fight the recycled label was somebody else's live number. This margin is how long
+		/// the greyed number remains readable after the window closes.
+		/// </remarks>
+		private const float RejectedVisibleSeconds = 0.75f;
+
+		/// <summary>Routes one server-reported combat event to the right floating number.</summary>
+		/// <remarks>
+		/// <b>The number only, deliberately.</b> The same report also moves the victim's health bar,
+		/// and that happens once at the receive seam in
+		/// <c>CharacterDamageController.OnCombatEventBroadcast</c> — before this event is raised, and
+		/// whether or not damage numbers are switched on. Applying it here as well would move the bar
+		/// twice for every hit.
+		/// <para>
+		/// A report the caster already drew as a prediction is consumed rather than drawn again.
+		/// Everyone else — every observer, and the caster for hits it did not predict — draws here
+		/// as before. The SOURCE is part of the match: this report reaches every client observing the
+		/// victim, so without it another player's hit on the same target would consume this client's
+		/// prediction and go undrawn.
+		/// </para>
+		/// <para>
+		/// <paramref name="occurrences"/> is how many hits the server merged into this one report,
+		/// and therefore how many predicted labels it settles. See
+		/// <c>CombatEventBroadcast.Occurrences</c>.
+		/// </para>
+		/// </remarks>
+		private void OnCombatEvent(ICharacter source, ICharacter target, int amount, DamageAttributeTemplate dmg, CombatEventKind kind, int occurrences)
+		{
+			/* A refusal settles this client's predictions of the refused hits as REFUSED — each
+			 * predicted number turns into the word — and draws the word itself only when nothing
+			 * was predicted: an immortal target, which the caster's own copy of the flag refused
+			 * locally, so no number was ever drawn. The server sends a refusal to the attacker
+			 * alone, so this is always this client's own hit. */
+			if (kind.IsRefusal())
+			{
+				if (!PredictedCombatEvents.TryRefuse(source, target, kind, occurrences, dmg))
+				{
+					OnRefused(target, kind);
+				}
+				return;
+			}
+
+			/* Periodic reports never touch the prediction pairing: this client predicts DIRECT
+			 * hits and heals, never DoT/HoT ticks (those run server-side on the victim's buff
+			 * controller), so a periodic report has nothing to settle — pairing it would consume
+			 * a direct hit's pending entry of the same type. Drawn straight away instead. */
+			if (kind == CombatEventKind.PeriodicDamage)
+			{
+				OnDamaged(source, target, amount, dmg);
+				return;
+			}
+			if (kind == CombatEventKind.PeriodicHeal)
+			{
+				OnHealed(source, target, amount);
+				return;
+			}
+
+			PredictedCombatEvents.Kind predictedKind = kind == CombatEventKind.Heal
+				? PredictedCombatEvents.Kind.Heal
+				: PredictedCombatEvents.Kind.Damage;
+
+			/* One report can stand for several hits — the server merges everything sharing a
+			 * (source, kind, type) within a tick — and this client drew one predicted label for each
+			 * of them. Settling only one left the rest to grey themselves out as denied. The damage
+			 * TYPE rides along so one of this caster's streams (a server-ticked DoT it never
+			 * predicted) cannot consume the pending entry of another (its predicted projectile). */
+			if (PredictedCombatEvents.TryConfirm(source, target, predictedKind, occurrences,
+					kind == CombatEventKind.Heal ? null : dmg))
+			{
+				return;
+			}
+
+			if (kind == CombatEventKind.Heal)
+			{
+				OnHealed(source, target, amount);
+				return;
+			}
+			OnDamaged(source, target, amount, dmg);
+		}
+
+		/// <summary>Draws a number this client predicted, keeping the label so it can be rejected.</summary>
+		/// <remarks>
+		/// Predicted labels persist for the confirmation window PLUS the rejected-visible margin —
+		/// with the same lifetime as reported labels, every rejection arrived at the exact moment
+		/// its label expired, so the grey-out either marked nothing or marked the label's next
+		/// occupant.
+		/// </remarks>
+		private void OnPredictedCombatEvent(long id, ICharacter target, int amount, PredictedCombatEvents.Kind kind, DamageAttributeTemplate dmg)
+		{
+			float persist = PredictedCombatEvents.ConfirmationWindowSeconds + RejectedVisibleSeconds;
+			UITKWorldLabel label = kind == PredictedCombatEvents.Kind.Heal
+				? OnHealed(null, target, amount, persist)
+				: OnDamaged(null, target, amount, dmg, persist);
+
+			if (label != null)
+			{
+				predictedLabels[id] = new PredictedLabel(label, label.Lease);
+			}
+		}
+
+		/// <summary>
+		/// Releases the handle for a number the server confirmed.
+		/// </summary>
+		/// <remarks>
+		/// The label itself is correct and stays exactly as drawn — this only drops the entry that
+		/// would have let it be greyed out later. Without it the map kept one entry, and one reference
+		/// to a since-recycled pooled label, for every hit that went RIGHT, which is nearly all of
+		/// them.
+		/// </remarks>
+		private void OnPredictionConfirmed(long id)
+		{
+			predictedLabels.Remove(id);
+		}
+
+		/// <summary>
+		/// Greys out a number the server never confirmed.
+		/// </summary>
+		/// <remarks>
+		/// Recoloured rather than removed. A number that vanishes mid-flight reads as a rendering
+		/// glitch; one that greys out reads as "that did not land", which is what happened. The
+		/// lease comparison is what makes the recolor safe: a pooled label whose lease moved on has
+		/// been re-issued as somebody else's number, and recoloring it through the stale reference
+		/// marked a live, unrelated hit as denied.
+		/// </remarks>
+		private void OnPredictionRejected(long id)
+		{
+			if (predictedLabels.TryGetValue(id, out PredictedLabel predicted))
+			{
+				predictedLabels.Remove(id);
+				if (predicted.Label != null &&
+					!predicted.Label.IsPooled &&
+					predicted.Label.Lease == predicted.Lease)
+				{
+					predicted.Label.SetColor(RejectedColor);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Turns a predicted number into the reason the server refused its hit.
+		/// </summary>
+		/// <remarks>
+		/// Re-texted in place rather than greyed out and joined by a second label: the number was
+		/// never true, and one label that now says "Evade" is what happened. Lease-guarded exactly as
+		/// the rejection recolor is — a label whose lease moved on is somebody else's number now.
+		/// </remarks>
+		private void OnPredictionRefused(long id, CombatEventKind reason)
+		{
+			if (predictedLabels.TryGetValue(id, out PredictedLabel predicted))
+			{
+				predictedLabels.Remove(id);
+				if (predicted.Label != null &&
+					!predicted.Label.IsPooled &&
+					predicted.Label.Lease == predicted.Lease)
+				{
+					predicted.Label.SetText(RefusalText(reason));
+					predicted.Label.SetColor(RefusedColor);
+				}
+			}
+		}
+
+		/// <summary>The word a refusal is drawn as.</summary>
+		private static string RefusalText(CombatEventKind reason)
+		{
+			return reason == CombatEventKind.Immune ? ImmuneText : EvadeText;
+		}
+
+		/// <summary>Draws a refusal nothing on screen stood for yet.</summary>
+		/// <remarks>Behind the damage-number toggle: it is this client's own hit's result.</remarks>
+		private UITKWorldLabel OnRefused(ICharacter target, CombatEventKind reason)
+		{
+			EnsureConfig();
+			if (target == null || !showDamage) return null;
+			var pos = target.Transform.position;
+			pos.y += GetDisplayHeight(target);
+			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
+			return UITKLabelMaker.Display3D(RefusalText(reason), pos, RefusedColor, 0.5f, ReportedLabelPersistSeconds, false, fx);
+		}
+
+		/// <summary>Ages out predictions the server never confirmed. Driven by the client loop.</summary>
+		public void Tick()
+		{
+			PredictedCombatEvents.Sweep(Time.unscaledTime);
+		}
+
+		private UITKWorldLabel OnDamaged(ICharacter attacker, ICharacter target, int amount, DamageAttributeTemplate dmg, float persistTime = ReportedLabelPersistSeconds)
+		{
+			EnsureConfig();
+			if (target == null || !showDamage) return null;
+			var pos = target.Transform.position;
+			pos.y += GetDisplayHeight(target);
+			int fx = 0; fx.EnableBit(LabelEffect.FloatRandom); fx.EnableBit(LabelEffect.FadeOut);
+			/* Typeless damage still gets a number. Environmental and "true" damage carry no damage
+			 * attribute, and the report is free to arrive before this client has resolved the
+			 * template, so the colour falls back rather than the number being skipped. */
+			Color damageColor = dmg != null ? dmg.DisplayColor : new TinyColor(255, 64, 64).ToUnityColor();
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, damageColor, 0.5f, persistTime, false, fx);
+		}
+
+		private UITKWorldLabel OnHealed(ICharacter healer, ICharacter healed, int amount, float persistTime = ReportedLabelPersistSeconds)
+		{
+			EnsureConfig();
+			if (healed == null || !showHeals) return null;
+			var pos = healed.Transform.position;
+			pos.y += GetDisplayHeight(healed);
+			int fx = 0; fx.EnableBit(LabelEffect.FloatUp); fx.EnableBit(LabelEffect.FadeOut);
+			return UITKLabelMaker.Display3D(ToDisplayString(amount), pos, new TinyColor(64, 64, 255).ToUnityColor(), 0.5f, persistTime, false, fx);
+		}
+
+		private void OnKilled(ICharacter killer, ICharacter victim)
+		{
+			if (victim == null || !victim.NetworkObject.IsOwner) return;
+			if (UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog d)) d.ShowDeathDialog();
+		}
+
+		private void OnResurrected(ICharacter resurrector, ICharacter resurrected)
+		{
+			if (resurrected == null || !resurrected.NetworkObject.IsOwner) return;
+			if (UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog d)) d.Hide();
+		}
+	}
+}

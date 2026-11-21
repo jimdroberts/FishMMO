@@ -36,7 +36,7 @@ namespace FishMMO.UnitTests
 	{
 		private const string SavingPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs";
 		private const string CommitPath = "Assets/FishMMO/Modules/Commerce/Server/Trade/TradeSystem.Commit.cs";
-		private const string InventoryPath = "Assets/FishMMO/Server/Implementation/World/SceneServer/CharacterInventory/CharacterInventorySystem.cs";
+		private const string InventoryPath = "Assets/FishMMO/Modules/Items/Server/CharacterInventorySystem.cs";
 
 		private GameObject gameObject;
 		private CharacterAttributeController controller;
@@ -358,6 +358,10 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheExchangeWritesTheSheetAsMemoryHoldsIt()
 		{
+			if (!ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), InventoryPath)))
+			{
+				Assert.Ignore("The exchange is written by the Items module's inventory system, which is not installed.");
+			}
 			string capture = CodeOnly(MethodBody(ReadSource(InventoryPath),
 				"private ItemWriteBatch CaptureExchangeLeg(ExchangeRun run, ItemExchangeLeg leg)",
 				"private async Task FinishExchangeAsync("));

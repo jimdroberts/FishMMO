@@ -191,7 +191,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Followers_AreEveryRoofOfTheKit_ThatchPlanksOrTurf()
 		{
-			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(71), "34, the 26 roofs of the town's other buildings, the 6 of the cathedral and the outskirts, the 4 of the palace and the corner tower's (2026-10-19)");
+			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(79), "34, the 26 roofs of the town's other buildings, the 6 of the cathedral and the outskirts, the 4 of the palace and the corner tower's (2026-10-19), the fantasy wave's 6 thatched cones and the hanging cloister's 2 gables (2026-10-27)");
 			Assert.That(StructureRoofs.Followers.Count(f => f.Shape == StructureRoofShape.House), Is.EqualTo(33),
 				"the 18 house roofs of I6e, the turf longhouse, 13 house-kit roofs of the town's other buildings and the shepherd's turf bothy (2026-10-19)");
 			var seen = new HashSet<(string, int)>();
@@ -422,7 +422,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			List<StructureRoofVariant> all = StructureRoofs.Needed(every);
 			Assert.That(all, Is.EquivalentTo(StructureRoofs.EveryVariant()));
-			Assert.That(all.Count, Is.EqualTo(410), "71 roofs × 6 pitches, less 16 a class leaves as the kit builds them (2026-10-18; 26 roofs of the town's other buildings, the keep's and the square tower's re-pitched, 6 of the cathedral and the outskirts, 4 of the palace and the corner tower's, 2026-10-19): the art's worst case");
+			Assert.That(all.Count, Is.EqualTo(450), "79 roofs × 6 pitches, less 24 a class leaves as the kit builds them (2026-10-18; 26 roofs of the town's other buildings, the keep's and the square tower's re-pitched, 6 of the cathedral and the outskirts, 4 of the palace and the corner tower's, 2026-10-19; the fantasy wave's 8, 2026-10-27): the art's worst case");
 			Assert.That(all.Count, Is.LessThan(StructureRoofs.Followers.Length * (StructureRoofs.Pitches.Length - 1)));
 		}
 
@@ -593,6 +593,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Followers_AreWhatTheBuildersLay_AndTheKitsPitchIsTheKit()
 		{
+			// Every disagreement, with what the builder lays, so one run names every row to add or drop.
+			var mismatches = new List<string>();
 			foreach (StructurePiece piece in StructurePieces.All)
 			{
 				for (int v = 0; v < piece.Variants; v++)
@@ -600,7 +602,12 @@ namespace FishMMO.UnitTests.WorldDesign
 					StructureDraft draft = StructurePieces.Draft(piece, v, StructurePieces.LevelCount - 1, Seed);
 					bool listed = StructureRoofs.TryFollower(piece, v, out StructureMaterial roof);
 					bool built = piece.RuinOf == null && draft.FollowingRoofs.Count > 0;
-					Assert.That(listed, Is.EqualTo(built), $"{piece.Id} v{v}: {(built ? "builds a house roof that follows, unlisted" : "listed, but builds no such roof")}");
+					if (listed != built)
+					{
+						string laid = string.Join("; ", draft.FollowingRoofs.Select(f => $"{f.Item1} rise {f.Item2.ToString("R", System.Globalization.CultureInfo.InvariantCulture)} half {f.Item3.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}"));
+						mismatches.Add($"{piece.Id} v{v}: {(built ? "builds a house roof that follows, unlisted (" + laid + ")" : "listed, but builds no such roof")}");
+						continue;
+					}
 					if (listed)
 					{
 						StructureRoofs.TryGetFollower(piece, v, out StructureRoofFollower follower);
@@ -613,6 +620,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
+			Assert.That(mismatches, Is.Empty, string.Join("\n", mismatches));
 		}
 
 		/// <summary>

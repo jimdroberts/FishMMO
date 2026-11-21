@@ -184,6 +184,21 @@ namespace FishMMO.TestHarness
 			}
 			brainHost?.Stop();
 			brainHost = null;
+			// The ghosts and trails are root objects; the fighters themselves go with server.Shutdown.
+			foreach (Fighter fighter in fighters)
+			{
+				if (fighter.RewindGhost != null) Destroy(fighter.RewindGhost);
+				if (fighter.Trail != null) Destroy(fighter.Trail.gameObject);
+			}
+			/* Ability objects in flight are plain scene objects driven by this server's ticks: with the
+			 * server gone they never end, and stood in every later test's scene (hit-able, and drawn). */
+			foreach (AbilityObject abilityObject in FindObjectsByType<AbilityObject>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+			{
+				if (abilityObject != null && abilityObject.gameObject.scene == gameObject.scene)
+				{
+					Destroy(abilityObject.gameObject);
+				}
+			}
 			server.Shutdown();
 		}
 
@@ -242,7 +257,14 @@ namespace FishMMO.TestHarness
 					configuring.Abilities.Clear();
 					configuring.Abilities.AddRange(Manifest.Roster);
 
+					/* AbilityController is a CharacterPart: BaseCharacter.Awake attaches it on activation, so
+					 * an inactive clone has none yet. Adding it here is what Attach would do (it skips a
+					 * part that already exists), and lets the markers be set before Awake runs. */
 					AbilityController casting = go.GetComponent<AbilityController>();
+					if (casting == null)
+					{
+						casting = go.AddComponent<AbilityController>();
+					}
 					casting.ChanneledTemplate = Manifest.ChannelMarker;
 					casting.ChargedTemplate = Manifest.ChargeMarker;
 				},
@@ -412,6 +434,7 @@ namespace FishMMO.TestHarness
 			damageEvents++;
 			totalDamage += amount;
 			lastDamagedAt[defender] = Time.time;
+			NoteCaptureHit(attacker, defender);
 			if (defender?.Transform != null)
 			{
 				string kind = template != null ? template.name : "Damage";

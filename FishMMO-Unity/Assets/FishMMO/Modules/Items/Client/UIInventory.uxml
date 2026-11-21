@@ -1,0 +1,98 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIInventory.uxml   —   FishMMO Inventory Panel               ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss  — colors, fonts, transitions        ║
+    ║    2. UIInventory.uss    — sizes, flex, spacing              ║
+    ║                                                              ║
+    ║  Class naming convention:                                    ║
+    ║    fish-*   Visual theme class  (FishMMO-Theme.uss)          ║
+    ║    inv-*    Layout class        (UIInventory.uss)            ║
+    ║                                                              ║
+    ║  Slot elements are created at runtime by UITKInventory.cs    ║
+    ║  and appended to #slot-grid.                                 ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="UIInventory.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel inv-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header inv-header">
+
+            <ui:VisualElement name="header-left" class="inv-header__left">
+                <ui:VisualElement name="header-icon" class="fish-panel__icon inv-header__icon" />
+                <ui:VisualElement name="header-titles" class="inv-header__titles">
+                    <ui:Label name="header-title"
+                              class="fish-panel__title inv-header__title"
+                              text="INVENTORY" />
+
+                    <!--
+                        Capacity, drawn as a resource bar — track, fill, and the count
+                        centred over them. This replaces a bare "0 / 32 slots" line here
+                        plus a second count either side of a second bar in the footer:
+                        three statements of one fact. The bar and its fill keep the
+                        names the panel resolves them by, so only the markup moved.
+                    -->
+                    <ui:VisualElement name="inv-capacity-track" class="fish-bar inv-capacity">
+                        <ui:VisualElement name="inv-capacity-fill" class="fish-bar__fill inv-capacity__fill" />
+                        <ui:Label name="header-subtitle"
+                                  class="fish-bar__label inv-capacity__label"
+                                  text="0 / 0" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
+
+        </ui:VisualElement>
+
+        <!-- ── BODY : scrollable slot grid ──────────────────── -->
+        <ui:ScrollView name="inventory-scroll"
+                       class="fish-scroll inv-scroll"
+                       vertical-scroller-visibility="Auto"
+                       horizontal-scroller-visibility="Hidden"
+                       mode="Vertical">
+
+            <!-- Slots injected at runtime by UITKInventory.CreateSlot():
+                     Slot root   →  fish-slot inv-slot
+                     Icon        →  fish-slot__icon inv-slot__icon
+                     Amount      →  fish-slot__amount inv-slot__amount
+                     Lock        →  fish-slot__lock inv-slot__lock
+            -->
+            <ui:VisualElement name="slot-grid" class="inv-grid" />
+
+        </ui:ScrollView>
+
+        <!-- ── FOOTER : currency ────────────────────────────── -->
+        <!--
+            The footer used to restate the capacity readout as two more counts either
+            side of a second bar. It shows the character's currency instead, drawn as
+            the same chip the equipment panel uses for its HP / MP / STM readouts: a
+            coloured dot, a name, and the value.
+
+            The name and value labels are filled in by UITKItemGridPanel from the
+            attribute template named by its CurrencyTemplateID. With no template
+            configured the whole chip is hidden rather than left showing a placeholder.
+        -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer inv-footer">
+            <ui:VisualElement name="inv-currency-chip" class="inv-currency">
+                <ui:VisualElement class="fish-chip__dot inv-currency__dot" />
+                <ui:Label name="inv-currency-name"
+                          class="fish-chip__label inv-currency__name"
+                          text="Currency" />
+                <ui:Label name="inv-currency-value"
+                          class="fish-chip__value inv-currency__value"
+                          text="0" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine.UIElements;
 using FishNet.Transporting;
@@ -539,10 +539,7 @@ namespace FishMMO.Client
 			{
 				entries.Add(("Message", () =>
 				{
-					if (UIManager.TryGetTK("UIChat", out UITKChat uiChat))
-					{
-						uiChat.SetInputText(ChatTellAddress.FormatCommand(displayName));
-					}
+					ChatWindow.BeginTell(displayName);
 				}
 				));
 			}

@@ -56,11 +56,9 @@ except where noted. Each folder has its own README with the detail; this table i
 | Scene server lifecycle | `SceneServerSystem` (+ `.NetworkSchedule`, `.ServerControl`, `.WorldClock` partials) | Scene load/unload, instance placement via `SceneServerPlacementPolicy`, instance lifetimes (`SceneInstanceLifetime`), server lock and shutdown, the world clock. Starts the modules' `ISceneServerModuleService`s (`SceneServerModuleServices`). Hosts the operator command contracts (`OperatorCommandContracts.cs`, `OperatorCommandParsing.cs`). |
 | Character | `CharacterSystem` (+ `.Connection`, `.Loading`, `.Saving`, `.Social`, `.Instance`, `.CombatLogout`, `.Unstuck`, `.CloudWorld` partials) | Spawn/despawn, load and save (modules join through `CharacterPersistenceParticipant`), combat-logout. |
 | Character inventory | `CharacterInventorySystem` | Inventory/equipment/bank/bag operations and the exchange funnel (`TryRunExchange`). |
-| Interactable | `InteractableSystem` (+ `.Container`, `.Dialogue`, `.Portal` partials) | Containers, dialogue, portals; raises `OnPlayerInteracting` for modules. |
-| Chat | `ChatSystem` (+ `.LocalChat`, `.WorldChat`, `.TellChat`, `.GroupChat`, `.ArenaChat`, `.Help`, `.Audit`, `.FloodMute` partials) | Per-sender rate gate (`ChatRateGate`) and flood mute (`ChatFloodMute`); `OnSendSystemMessage` for modules. |
-| Achievement | `AchievementSystem`, `AchievementPersistence` | Counts `Accomplishments.Record` and grants tier rewards. |
+| Interactable | `InteractableSystem` (+ `.Portal` partial) | The interaction request, its guard and object validation, portals; raises `OnPlayerInteracting` for modules. Dialogue and containers are the World Interactables module's. |
+| Chat intake | `ChatSystem` (+ `.Help`, `.Audit`, `.FloodMute` partials) | Every line players send: rate gate (`ChatRateGate`), sanitising, slash commands, the stored mute and the flood mute, then the hand-off to the Chat module (`IChatLineHandler`); `OnSendSystemMessage` for modules. |
 | Pet | `PetSystem` | |
-| Hotkey | `HotkeySystem` | |
 | Naming | `NamingSystem` | Name resolution/caching for IDs the client has not seen. |
 | Scene channel | `SceneChannelSystem` | |
 | Ability | `AbilitySystem` | Granting and forgetting abilities (`TryGrantAbility`). |
@@ -74,7 +72,7 @@ except where noted. Each folder has its own README with the detail; this table i
 **Module systems** are not in `SceneServer.unity`'s list. Each module's asset carries the `SceneServer_Systems`
 Addressables label and the scene server adopts it at start (`Server.AdoptModuleSystems`): `AbilityCraftingSystem`,
 `CommerceSystem` and `TradeSystem` (Commerce), `FactionSystem`, `HousingSystem`, `LeaderboardSystem`,
-`MatchmakingSystem` (group finder, dungeon finder, arenas), `QuestSystem`, `FriendSystem` / `PartySystem` /
+`MatchmakingSystem` (group finder, dungeon finder, arenas), `AchievementSystem`, `ChatChannelSystem` (the chat channels), `HotkeySystem` (Hotkeys), `WorldInteractableSystem` (dialogue and containers, World Interactables), `QuestSystem`, `FriendSystem` / `PartySystem` /
 `GuildSystem` (Social), `StaffSystem` (the `/gm` and `/admin` commands, the staff console, support), and
 `WaypointTravelSystem` (Travel). World Simulation adds `WeatherServerService` as a scene server module service. See
 [Assets/FishMMO/README.md](../../README.md#modules).
@@ -360,8 +358,8 @@ flowchart TD
    │ · LoginQueue │  │ · WorldScene   │  │ · Character          │
    │ · AcctCreate │  │ · Auth         │  │ · CharacterInventory │
    │ · CharCreate │  │                │  │ · Interactable       │
-   │ · CharSelect │  └────────────────┘  │ · Chat / Achievement │
-   │ · ServerSel  │                      │ · Pet / Hotkey       │
+   │ · CharSelect │  └────────────────┘  │ · Chat               │
+   │ · ServerSel  │                      │ · Pet                │
    └──────────────┘                      │ · Naming             │
                                          │ · SceneChannel       │
    KickRequestSystem polls the database  │ · AI / Spawner       │
@@ -439,15 +437,13 @@ Implementation/
 └── World/                                       # World and scene server systems
     ├── SceneServer/                             #   Scene-server-specific systems (module systems live in their modules)
     │   ├── Ability/                             #     AbilitySystem
-    │   ├── Achievement/                         #     AchievementSystem, AchievementPersistence
     │   ├── AI/                                  #     AISystem, AIBrainHost, brains, packs (NPCGroup)
     │   ├── Authentication/                      #     SceneServerAuthenticator
     │   ├── Character/                           #     CharacterSystem + 8 partials, CharacterPersistence (participants)
     │   ├── CharacterInventory/                  #     CharacterInventorySystem
-    │   ├── Chat/                                #     ChatSystem + 8 partials, ChatRateGate, ChatFloodMute, ChatMutePolicy
+    │   ├── Chat/                                #     ChatSystem (intake) + Help/Audit/FloodMute, ChatRateGate, ChatFloodMute, ChatMutePolicy
     │   ├── Clock/                               #     WorldClockHost
-    │   ├── Hotkey/                              #     HotkeySystem
-    │   ├── Interactable/                        #     InteractableSystem + Container, Dialogue, Portal partials
+    │   ├── Interactable/                        #     InteractableSystem + Portal partial
     │   ├── Naming/                              #     NamingSystem
     │   ├── Navigation/                          #     NavMeshSystem
     │   ├── Pet/                                 #     PetSystem
@@ -502,10 +498,10 @@ ScriptableObject
     ├── KickRequestSystem
     ├── ServerWindowTitleUpdater
     ├── (scene-server systems: CharacterSystem, CharacterInventorySystem, InteractableSystem,
-    │    ChatSystem, AchievementSystem, PetSystem, HotkeySystem, NamingSystem,
+    │    ChatSystem, PetSystem, NamingSystem,
     │    SceneChannelSystem, AbilitySystem, AISystem, SpawnerSystem, NavMeshSystem —
     │    several of them `partial`)
-    └── (module systems, in Assets/FishMMO/Modules: AbilityCraftingSystem, CommerceSystem,
+    └── (module systems, in Assets/FishMMO/Modules: AbilityCraftingSystem, AchievementSystem, ChatChannelSystem, CommerceSystem, HotkeySystem, WorldInteractableSystem,
          TradeSystem, FactionSystem, HousingSystem, LeaderboardSystem, MatchmakingSystem,
          QuestSystem, FriendSystem, PartySystem, GuildSystem, StaffSystem, WaypointTravelSystem)
 

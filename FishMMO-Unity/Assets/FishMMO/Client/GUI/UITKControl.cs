@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using System;
 using UnityEngine;
@@ -779,6 +779,9 @@ namespace FishMMO.Client
 				}
 			}
 
+			// A panel placed after the HUD was shown by name (a module's, by ModulePanelHost) is shown now.
+			UIManager.ApplyPendingShow(this);
+
 			if (!TryStart())
 			{
 				StartCoroutine(WaitForVisualTree());
@@ -1297,10 +1300,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		protected static void ShowSystemMessage(string message)
 		{
-			if (UIManager.TryGetTK(ChatPanelName, out UITKChat chat))
-			{
-				chat.InstantiateChatMessage(ChatChannel.System, "", message);
-			}
+			ChatWindow.ShowSystem(message);
 		}
 
 		/// <summary>

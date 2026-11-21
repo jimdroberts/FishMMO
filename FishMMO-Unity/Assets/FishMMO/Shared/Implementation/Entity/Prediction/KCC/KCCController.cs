@@ -943,6 +943,10 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void BeforeCharacterUpdate(float deltaTime)
 		{
+			/* Before this tick's move the motor still holds the last tick's solved velocity and grounding, both reconciled
+			 * motor state, so a replay reads exactly what the first run read: no field of its own on the wire. */
+			motionSlowedLastTick = motionTicks > 0 && IsMotionSlowed(Motor.BaseVelocity, Motor.GroundingStatus);
+
 			// On the first tick after spawn or teleport, seed the motor ground-probe
 			// history so it uses a full capsule-radius probe instead of the 0.005f
 			// minimum. Without this, characters appear airborne for 1-3 frames.
@@ -1437,10 +1441,30 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>Whether the last tick's motion, set before this tick's move (see BeforeCharacterUpdate), was already slowed.</summary>
+		private bool motionSlowedLastTick;
+
+		/// <summary>
+		/// Whether a solved velocity is under half the rush speed, measured ALONG the surface the character stands on (across
+		/// the horizontal in the air), so climbing a slope is not mistaken for being stopped.
+		/// </summary>
+		private bool IsMotionSlowed(Vector3 velocity, CharacterGroundingReport grounding)
+		{
+			Vector3 plane = grounding.IsStableOnGround ? grounding.GroundNormal : Motor.CharacterUp;
+			return Vector3.ProjectOnPlane(velocity, plane).magnitude < 0.5f * (motionSpeed / 100f);
+		}
+
 		/// <summary>
 		/// Counts a rush down after the motor has moved, and ends it early when something stopped it: the motor's solved
-		/// velocity across the ground fell below half the rush speed (a wall, a body). Pure motor state on both peers.
+		/// velocity along the ground stayed under half the rush speed for two ticks running (a wall, a body). Pure motor
+		/// state on both peers.
 		/// </summary>
+		/// <remarks>
+		/// Two ticks, not one (2026-11-21, "Short Charge stops on slopes"): crossing sloped ground the capsule meets triangle
+		/// edges whose contact normal is steeper than either face, the motor rates that one hit unstable and projects the
+		/// velocity on it, and the next tick it is back on stable ground at full speed. A single slowed tick ended the rush
+		/// there. A wall or a body slows it every tick, so it still stops, one tick later.
+		/// </remarks>
 		private void TickMotion()
 		{
 			if (motionTicks == 0)
@@ -1453,8 +1477,7 @@ namespace FishMMO.Shared
 				return;
 			}
 			--motionTicks;
-			Vector3 across = Vector3.ProjectOnPlane(Motor.BaseVelocity, Motor.CharacterUp);
-			if (across.magnitude < 0.5f * (motionSpeed / 100f))
+			if (motionSlowedLastTick && IsMotionSlowed(Motor.BaseVelocity, Motor.GroundingStatus))
 			{
 				motionTicks = 0;
 			}

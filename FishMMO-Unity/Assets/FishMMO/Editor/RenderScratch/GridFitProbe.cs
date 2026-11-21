@@ -19,7 +19,6 @@ namespace FishMMO.RenderScratch
 	public static class GridFitProbe
 	{
 		private const string PANEL_SETTINGS_PATH = "Assets/UI Toolkit/PanelSettings.asset";
-		private const string ROOT = "Assets/FishMMO/Client/GUI/World/";
 		private static readonly string OUT = ProbeOutput.Path("PanelRenders", "interface-scaling", "gridfit.txt");
 		private const int SETTLE_FRAMES = 30;
 
@@ -28,14 +27,8 @@ namespace FishMMO.RenderScratch
 			(1200, 675), (1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440), (3440, 1440), (3840, 2160),
 		};
 
-		/// <summary>The windows checked. Modules add theirs (Social adds the party frame).</summary>
-		public static readonly List<(string uxml, Action<GameObject, UIDocument> populate)> Windows = new List<(string uxml, Action<GameObject, UIDocument> populate)>
-		{
-			(ROOT + "Inventory/UIInventory.uxml", Panels.Inventory),
-			(ROOT + "Bank/UIBank.uxml", Panels.Bank),
-			(ROOT + "CharacterSheet/UICharacterSheet.uxml", Panels.Equipment),
-			(ROOT + "Achievement/UIAchievements.uxml", Panels.Achievements),
-		};
+		/// <summary>The windows checked. Modules add theirs (Social adds the party frame, Items the inventory, bank and equipment).</summary>
+		public static readonly List<(string uxml, Action<GameObject, UIDocument> populate)> Windows = new List<(string uxml, Action<GameObject, UIDocument> populate)>();
 
 		private static readonly StringBuilder log = new StringBuilder();
 		private static readonly List<GameObject> hosts = new List<GameObject>();

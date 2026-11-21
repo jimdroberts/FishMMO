@@ -12,7 +12,7 @@
 // Lighting.hlsl. DebuggingCommon, not Debugging3D: Debugging3D's debug-view code is left to compile where Lighting.hlsl
 // puts it, after the pass's own material defines (FishWeatherLitInput.hlsl defines _NORMALMAP, which it tests).
 //
-// Each copy is URP 17.4's body with only the array reads changed (WebGpuLightTableTests pins this against the package
+// Each copy is URP 17.6's body with only the array reads changed (WebGpuLightTableTests pins this against the package
 // source, so a URP upgrade that changes one fails the test rather than drifting).
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/BRDF.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Debug/DebuggingCommon.hlsl"
@@ -149,9 +149,22 @@ Light FishTableGetAdditionalPerObjectLight(int perObjectLightIndex, float3 posit
     float3 lightVector = lightPositionWS.xyz - positionWS * lightPositionWS.w;
     float distanceSqr = max(dot(lightVector, lightVector), HALF_MIN);
 
+#if (UNITY_PLATFORM_META_QUEST) // This is platform specific change targeting performance only
+    float distRsqrt = rsqrt(distanceSqr);
+    half3 lightDirection = half3(lightVector * distRsqrt);
+    float distAtten = DistanceAttenuation(distanceSqr, distanceAndSpotAttenuation.xy, distRsqrt);
+#else
     half3 lightDirection = half3(lightVector * rsqrt(distanceSqr));
+    float distAtten = DistanceAttenuation(distanceSqr, distanceAndSpotAttenuation.xy);
+#endif
+
+#if (META_QUEST_NO_SPOTLIGHTS_LIGHT_LOOP)
     // full-float precision required on some platforms
-    float attenuation = DistanceAttenuation(distanceSqr, distanceAndSpotAttenuation.xy) * AngleAttenuation(spotDirection.xyz, lightDirection, distanceAndSpotAttenuation.zw);
+    float attenuation = distAtten;
+#else
+    // full-float precision required on some platforms
+    float attenuation = distAtten * AngleAttenuation(spotDirection.xyz, lightDirection, distanceAndSpotAttenuation.zw);
+#endif
 
     Light light;
     light.direction = lightDirection;
@@ -276,37 +289,52 @@ half3 FishTableCalculateIrradianceFromReflectionProbes(half3 reflectVector, floa
 
 half3 FishTableGlossyEnvironmentReflection(half3 reflectVector, float3 positionWS, half perceptualRoughness, half occlusion, float2 normalizedScreenSpaceUV)
 {
-    half3 irradiance;
+    half3 irradiance = 0;
+    #if defined(_SCREENSPACEREFLECTIONS_OFF)
+    half4 ssrColor = 0;
+    #else
+    half4 ssrColor = GetScreenSpaceReflection(normalizedScreenSpaceUV, positionWS, perceptualRoughness);
+    #endif
 
-#if !defined(_ENVIRONMENTREFLECTIONS_OFF)
-    if (_REFLECTION_PROBE_BLENDING)
+    // We skip sampling reflection probes if they would be overwritten by SSR anyways.
+    // This optimization causes a miscompilation when using FXC, and the rendering path
+    // is single pass stereo instancing, so disable it in that path.
+    #if !defined(STEREO_INSTANCING_ON) || defined(UNITY_COMPILER_DXC)
+    if (ssrColor.a < 1.0)
+    #endif
     {
-        irradiance = FishTableCalculateIrradianceFromReflectionProbes(reflectVector, positionWS, perceptualRoughness, normalizedScreenSpaceUV);
-    }
-    else
-    {
-        if (_REFLECTION_PROBE_BOX_PROJECTION)
+        #if !defined(_ENVIRONMENTREFLECTIONS_OFF)
+        if (_REFLECTION_PROBE_BLENDING)
         {
-            #if defined(REFLECTION_PROBE_ROTATION)
-            float3 probeCenterPosWS0 = unity_SpecCube0_BoxMin.xyz + (unity_SpecCube0_BoxMax.xyz - unity_SpecCube0_BoxMin.xyz) / 2;
-            float3 rotPosWS0 = RotateVectorByQuat(unity_SpecCube0_Rotation, positionWS - probeCenterPosWS0) + probeCenterPosWS0;
-            half3 rotReflectVector0 = RotateVectorByQuat(unity_SpecCube0_Rotation, reflectVector);
-            float4 inverseRotation0 = -unity_SpecCube0_Rotation;
-            inverseRotation0.w = -inverseRotation0.w;
-            reflectVector = BoxProjectedCubemapDirection(rotReflectVector0, rotPosWS0, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-            reflectVector = RotateVectorByQuat(inverseRotation0, reflectVector);
-            #else
-            reflectVector = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-            #endif
+            irradiance = FishTableCalculateIrradianceFromReflectionProbes(reflectVector, positionWS, perceptualRoughness, normalizedScreenSpaceUV);
         }
-        half mip = PerceptualRoughnessToMipmapLevel(perceptualRoughness);
-        half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflectVector, mip));
+        else
+        {
+            if (_REFLECTION_PROBE_BOX_PROJECTION)
+            {
+                #if defined(REFLECTION_PROBE_ROTATION)
+                float3 probeCenterPosWS0 = unity_SpecCube0_BoxMin.xyz + (unity_SpecCube0_BoxMax.xyz - unity_SpecCube0_BoxMin.xyz) / 2;
+                float3 rotPosWS0 = RotateVectorByQuat(unity_SpecCube0_Rotation, positionWS - probeCenterPosWS0) + probeCenterPosWS0;
+                half3 rotReflectVector0 = RotateVectorByQuat(unity_SpecCube0_Rotation, reflectVector);
+                float4 inverseRotation0 = -unity_SpecCube0_Rotation;
+                inverseRotation0.w = -inverseRotation0.w;
+                reflectVector = BoxProjectedCubemapDirection(rotReflectVector0, rotPosWS0, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+                reflectVector = RotateVectorByQuat(inverseRotation0, reflectVector);
+                #else
+                reflectVector = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+                #endif
+            }
+            half mip = PerceptualRoughnessToMipmapLevel(perceptualRoughness);
+            half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflectVector, mip));
 
-        irradiance = DecodeHDREnvironment(encodedIrradiance, unity_SpecCube0_HDR);
+            irradiance = DecodeHDREnvironment(encodedIrradiance, unity_SpecCube0_HDR);
+        }
+        #else // _ENVIRONMENTREFLECTIONS_OFF
+        irradiance = _GlossyEnvironmentColor.rgb;
+        #endif // !_ENVIRONMENTREFLECTIONS_OFF
     }
-#else // _ENVIRONMENTREFLECTIONS_OFF
-    irradiance = _GlossyEnvironmentColor.rgb;
-#endif // !_ENVIRONMENTREFLECTIONS_OFF
+
+    irradiance = lerp(irradiance.rgb, ssrColor.rgb, ssrColor.a);
 
     return irradiance * occlusion;
 }
@@ -321,8 +349,16 @@ half3 FishTableGlobalIllumination(BRDFData brdfData, BRDFData brdfDataClearCoat,
     half3 bakedGI, half occlusion, float3 positionWS,
     half3 normalWS, half3 viewDirectionWS, float2 normalizedScreenSpaceUV)
 {
+// Prevent calling 'reflect' from causing NdotV to be computed twice on Adreno GPUs
+#if (UNITY_PLATFORM_META_QUEST) // This is platform specific change targeting performance only
+    half NdotV = dot(normalWS, viewDirectionWS);
+    half NdotV2 = NdotV + NdotV;    // 2.0h * normalWS * NdotV was resulting in promotion to 32 bit precision
+    half3 reflectVector = normalWS * NdotV2 - viewDirectionWS;    // reflect(i,n) = i - 2 * n * dot(i n)
+    half NoV = saturate(NdotV);
+#else
     half3 reflectVector = reflect(-viewDirectionWS, normalWS);
     half NoV = saturate(dot(normalWS, viewDirectionWS));
+#endif
     half fresnelTerm = Pow4(1.0 - NoV);
 
     half3 indirectDiffuse = bakedGI;

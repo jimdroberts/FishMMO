@@ -15,7 +15,8 @@
         "KinematicCharacterController",
         "FishMMO.Matchmaking",
         "FishMMO.Matchmaking.Server",
-        "FishMMO.Matchmaking.Client"
+        "FishMMO.Matchmaking.Client",
+        "FishMMO.Wildlife"
     ],
     "includePlatforms": [
         "Editor"

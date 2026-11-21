@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	/// Which way the planet's north lies in a scene, for the maps' compasses.
 	/// </summary>
 	/// <remarks>
-	/// The maps are drawn with the scene's +Z up and call that "world north" (marker facings, <see cref="MapViewTransform"/>),
+	/// The maps are drawn with the scene's +Z up and call that "world north" (marker facings, the Map module's <c>MapViewTransform</c>),
 	/// but a scene sits on its planet turned by its atlas heading (which way +Z faces, clockwise from north), so the planet's
 	/// north is somewhere else on the map. This gives it as a bearing in the maps' own terms, degrees clockwise from +Z,
 	/// measured where the player stands (<see cref="IWorldSceneEntry.NorthBearingAt"/>: near a pole it turns across a

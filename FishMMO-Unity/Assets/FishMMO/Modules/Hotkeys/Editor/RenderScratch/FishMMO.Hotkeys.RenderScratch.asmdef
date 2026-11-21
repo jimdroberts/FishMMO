@@ -1,0 +1,26 @@
+{
+    "name": "FishMMO.Hotkeys.RenderScratch",
+    "rootNamespace": "",
+    "references": [
+        "FishMMO.Render.Scratch",
+        "FishMMO.Hotkeys",
+        "FishMMO.Hotkeys.Client",
+        "FishMMO.Client",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "FishMMO.Shared.Tools.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

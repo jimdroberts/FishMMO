@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string RootName = "Housing Plots";
 
 		/// <summary>The trigger every deed post runs on interaction.</summary>
-		public const string TriggerPath = "Assets/Templates/Entity/ECA/Interactions/Plot Interact.asset";
+		public const string TriggerPath = "Assets/FishMMO/Modules/Housing/Templates/Interactions/Plot Interact.asset";
 
 		/// <summary>Where the plot look's materials are kept.</summary>
 		public const string MaterialFolder = "Assets/Prefabs/Shared/Entity/Interactables/Housing/Materials";

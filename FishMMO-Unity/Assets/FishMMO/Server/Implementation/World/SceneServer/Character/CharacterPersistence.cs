@@ -33,6 +33,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>How many rows there are.</summary>
 		public abstract int Count { get; }
 
+		/// <summary>The rows split by the character each belongs to, in first-seen order.</summary>
+		public abstract IEnumerable<KeyValuePair<long, CharacterRows>> ByCharacter();
+
 		/// <summary>Appends <paramref name="other"/>'s rows, leaving out those of the characters in <paramref name="skip"/>.</summary>
 		internal abstract void AddFrom(CharacterRows other, HashSet<long> skip);
 	}
@@ -54,6 +57,27 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <inheritdoc />
 		public override int Count => Items.Count;
+
+		/// <inheritdoc />
+		public override IEnumerable<KeyValuePair<long, CharacterRows>> ByCharacter()
+		{
+			var groups = new Dictionary<long, CharacterRows<T>>();
+			var order = new List<long>();
+			for (int i = 0; i < Items.Count; i++)
+			{
+				long id = characterOf(Items[i]);
+				if (!groups.TryGetValue(id, out CharacterRows<T> group))
+				{
+					groups[id] = group = new CharacterRows<T>(characterOf);
+					order.Add(id);
+				}
+				group.Items.Add(Items[i]);
+			}
+			foreach (long id in order)
+			{
+				yield return new KeyValuePair<long, CharacterRows>(id, groups[id]);
+			}
+		}
 
 		internal override void AddFrom(CharacterRows other, HashSet<long> skip)
 		{
@@ -147,6 +171,22 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>Captures the character's dirty rows into <paramref name="rows"/>, bumping their versions. Main thread.</summary>
 		public abstract void Capture(ICharacter character, CharacterRows rows);
+
+		/// <summary>
+		/// Captures rows written only as the character departs (despawn, logout, transfer), after <see cref="Capture"/>
+		/// has run for the same departure. By default nothing. The hotkey bar is the one user: its system writes the bar
+		/// whenever it changes, and the departure writes whatever is still waiting. Main thread.
+		/// </summary>
+		public virtual void CaptureDeparture(ICharacterPersistenceHost host, ICharacter character, CharacterRows rows)
+		{
+		}
+
+		/// <summary>
+		/// True when the rows are written per character, each behind any write already queued for that character on the
+		/// persistence lane (the save pump keys a character's writes so they land in order). False, the default: one
+		/// write for every character's rows.
+		/// </summary>
+		public virtual bool SavesPerCharacter => false;
 
 		/// <summary>
 		/// Writes <paramref name="rows"/>, quoting <paramref name="claims"/>, and clears the written rows' dirty

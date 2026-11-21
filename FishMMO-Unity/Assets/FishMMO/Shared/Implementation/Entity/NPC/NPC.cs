@@ -16,12 +16,8 @@ namespace FishMMO.Shared
 	/// Represents a non-player character (NPC) in the game. Handles attribute generation, network payloads, and spawning logic.
 	/// </summary>
 	[RequireComponent(typeof(CharacterPredictionController))]
-	[RequireComponent(typeof(AbilityController))]
 	[RequireComponent(typeof(TargetController))]
-	[RequireComponent(typeof(CooldownController))]
-	[RequireComponent(typeof(BuffController))]
 	[RequireComponent(typeof(CharacterAttributeController))]
-	[RequireComponent(typeof(CharacterDamageController))]
 	[RequireComponent(typeof(NetworkTransform))]
 	[RequireComponent(typeof(NetworkObserver))]
 	public class NPC : BaseCharacter, ISceneObject, ISpawnable, IInteractable, ILootableCorpse
@@ -233,7 +229,8 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Header("Abilities")]
 		[Tooltip("Ability templates this NPC knows. Learned on server start.")]
-		public List<AbilityTemplate> Abilities = new List<AbilityTemplate>();
+		[TemplateOf("AbilityTemplate")]
+		public List<CachedScriptableObject> Abilities = new List<CachedScriptableObject>();
 
 		/// <summary>
 		/// The server-side spawner that created this NPC, or null.
@@ -246,7 +243,17 @@ namespace FishMMO.Shared
 		/// </summary>
 		[Header("Wildlife")]
 		[Tooltip("Set for wild animals: their role and speeds. Wildlife ignores factions; anyone may harm it.")]
-		public WildlifeTemplate Wildlife;
+		[TemplateOf("WildlifeTemplate")]
+		public ScriptableObject Wildlife;
+
+		/// <summary>What the core reads of <see cref="Wildlife"/> (the Wildlife module's template), or null.</summary>
+		public IWildlifeSpecies WildlifeSpecies => Wildlife as IWildlifeSpecies;
+
+		/// <summary>
+		/// The character this NPC fights for, when it is a companion (a pet: the Pets module overrides this); null for every
+		/// other NPC. The harm rule judges a companion as its owner.
+		/// </summary>
+		public virtual ICharacter CompanionOwner => null;
 
 		[Header("Identity")]
 		[Tooltip("The NPC's race: its models, its generated name and, with the Factions module, the standings it starts with.")]
@@ -387,7 +394,8 @@ namespace FishMMO.Shared
 
 			AddNPCAttributes(true);
 			ApplyInstanceDifficulty();
-			LearnNPCAbilities();
+			// Its authored kit, before WritePayload tells clients (the Abilities module equips it; nothing without the module).
+			AbilityGrants.Equip(this, Abilities);
 
 			/* No tick subscription here. Corpse decay used to subscribe every NPC at spawn, so each
 			 * living NPC cost a call on every server tick only to find it was not a corpse, and each
@@ -632,7 +640,7 @@ namespace FishMMO.Shared
 			// Enter corpse state -- stay spawned so clients see the death animation.
 			isCorpse = true;
 			// Wildlife lies for its species' time, loot or not, so it can be skinned and the like.
-			corpseDecayTimer = Wildlife != null ? Wildlife.CorpseSeconds : CorpseDecayDuration;
+			corpseDecayTimer = WildlifeSpecies != null ? WildlifeSpecies.CorpseSeconds : CorpseDecayDuration;
 			corpseDecayShortened = false;
 			corpseInteractionRangeSqr = CorpseInteractionRange * CorpseInteractionRange;
 			StartCorpseDecay();
@@ -1116,45 +1124,6 @@ namespace FishMMO.Shared
 
 		/// <inheritdoc />
 		public double InteractRateLimit => CORPSE_INTERACT_RATE_LIMIT;
-
-		/// <summary>
-		/// Creates <see cref="Ability"/> instances from the inspector-configured
-		/// <see cref="Abilities"/> list and teaches them to the NPC's <see cref="AbilityController"/>.
-		/// Uses the template's <see cref="AbilityTemplate.ID"/> as the ability instance ID so that
-		/// cooldown tracking, activation, and network serialization all work correctly.
-		/// Called during <see cref="OnStartServer"/> before <c>WritePayload</c> broadcasts to clients.
-		/// </summary>
-		private void LearnNPCAbilities()
-		{
-			if (Abilities == null || Abilities.Count < 1)
-			{
-				return;
-			}
-			if (!this.TryGet(out IAbilityController abilityController))
-			{
-				return;
-			}
-
-			for (int i = 0; i < Abilities.Count; i++)
-			{
-				AbilityTemplate template = Abilities[i];
-				if (template == null)
-				{
-					continue;
-				}
-
-				// Use the template ID as the ability instance ID.
-				// NPCs don't craft abilities so there's no DB-assigned ID.
-				Ability ability = new Ability((long)template.ID, template);
-				abilityController.LearnAbility(ability);
-
-				/* What an NPC actually walks away knowing. The AI's ability picker chooses from
-				 * exactly this set, so an NPC that learns nothing here cannot attack whatever its
-				 * archetype or rotation says -- and that failure is otherwise invisible: the mob
-				 * still aggroes, still chases and still repositions, it simply never swings. */
-				Log.Debug("NPC", $"'{name}' learned ability '{template.name}' (ID {template.ID}).");
-			}
-		}
 
 		/// <summary>
 		/// Scales this NPC for the difficulty of the dungeon instance it spawned into.

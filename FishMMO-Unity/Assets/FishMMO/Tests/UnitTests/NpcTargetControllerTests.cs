@@ -2,7 +2,6 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
@@ -62,9 +61,10 @@ namespace FishMMO.UnitTests
 		{
 			LogAssert.IsTrue(ProjectFiles.FolderExists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
 
-			string abilityControllerGuid = ScriptGuid("Implementation/Entity/Prediction/Ability/AbilityController.cs");
+			/* Every NPC casts: the ability controller is a part every character gets as it wakes (the Abilities module's,
+			 * 2026-11-21), so no prefab authors it and the NPC script marks a casting prefab. */
+			string npcGuid = ScriptGuid("Implementation/Entity/NPC/NPC.cs");
 			string targetControllerGuid = ScriptGuid("Implementation/Entity/Target/TargetController.cs");
-			string damageControllerGuid = ScriptGuid("Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");
 
 			string[] prefabs = Directory.GetFiles(ProjectFiles.Folder(NpcRoot), "*.prefab", SearchOption.AllDirectories);
 			LogAssert.IsTrue(prefabs.Length > 0, "there must be NPC prefabs to check");
@@ -75,21 +75,15 @@ namespace FishMMO.UnitTests
 			foreach (string prefab in prefabs)
 			{
 				string source = ProjectFiles.ReadAllText(prefab);
-				if (!source.Contains(abilityControllerGuid))
+				if (!source.Contains(npcGuid))
 				{
 					continue;
 				}
 
 				string name = Path.GetFileNameWithoutExtension(prefab);
 
-				/* An NPC authored immortal has no reason to target anything, and the controller
-				 * short-circuits for it at runtime whatever the prefab says. */
-				Match damage = Regex.Match(source,
-					"m_Script: \\{fileID: 11500000, guid: " + damageControllerGuid + ", type: 3\\}[\\s\\S]*?(?=\\n--- !u!)");
-				if (damage.Success && Regex.IsMatch(damage.Value, "\\n  immortal: 1"))
-				{
-					continue;
-				}
+				/* An NPC authored immortal used to be skipped here. The damage controller is the Combat module's character part
+				 * since 2026-11-20, added as the character wakes, so no prefab authors one and none is immortal by prefab. */
 
 				checkedCount++;
 

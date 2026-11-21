@@ -53,7 +53,8 @@ namespace FishMMO.Shared.Weather
 
 		[Header("What it does")]
 		[Tooltip("The buff applied while the recipe holds. Optional — a recipe with no buff is still tracked and still suppresses, which is how a combined state can simply replace its parts.")]
-		public BaseBuffTemplate Buff;
+		[TemplateOf("BaseBuffTemplate")]
+		public CachedScriptableObject Buff;
 
 		[Tooltip("Take the ingredients' own buffs off while this one holds, so the combined state replaces its parts instead of stacking three icons on top of each other.")]
 		public bool SuppressIngredients = true;

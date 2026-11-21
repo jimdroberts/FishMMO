@@ -64,7 +64,7 @@ namespace FishMMO.UnitTests
 		public void APlayersOwnPets_ArePinnedInTheirObserverBudget()
 		{
 			string code = SourceScanPins.ReadCode("Assets/FishMMO/Shared/Implementation/Entity/Prediction/ObserverStreaming/ObserverStreamingRegistry.cs");
-			LogAssert.IsTrue(code.Contains("observed.Character is Pet pet") && code.Contains("pet.PetOwner.ID == viewer.Character.ID"),
+			LogAssert.IsTrue(code.Contains("observed.Character is NPC companion") && code.Contains("companion.CompanionOwner.ID == viewer.Character.ID"),
 				"a pet whose owner is the viewer");
 			LogAssert.IsTrue(code.Contains("engagedWith ||\n\t\t\t\townPet;") || code.Contains("ownPet;"), "is pinned");
 		}

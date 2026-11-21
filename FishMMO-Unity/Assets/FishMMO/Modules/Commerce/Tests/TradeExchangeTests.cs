@@ -10,7 +10,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Conservation proofs for the in-memory half of a trade (issue #144), against real
-	/// <see cref="InventoryController"/>s.
+	/// <see cref="IInventoryController"/>s.
 	/// </summary>
 	/// <remarks>
 	/// Two totals are pinned on every path: the quantity held across both bags, and the set
@@ -26,8 +26,8 @@ namespace FishMMO.UnitTests
 		private readonly List<GameObject> gameObjects = new List<GameObject>();
 		private readonly List<Object> assets = new List<Object>();
 
-		private InventoryController alice;
-		private InventoryController bob;
+		private IInventoryController alice;
+		private IInventoryController bob;
 		private StackableTestTemplate arrows;
 		private StackableTestTemplate bolts;
 		private SingleTestTemplate sword;
@@ -37,18 +37,33 @@ namespace FishMMO.UnitTests
 		private class StackableTestTemplate : BaseItemTemplate { }
 		private class SingleTestTemplate : BaseItemTemplate { }
 
+		/// <summary>
+		/// A real inventory: the Items module's container, found by name so Commerce builds without the module (its trades and
+		/// sales need an inventory to move items into, so without it these tests have nothing to exercise).
+		/// </summary>
+		private static IInventoryController NewInventory(GameObject go)
+		{
+			System.Type type = System.Type.GetType("FishMMO.Shared.InventoryController, FishMMO.Items");
+			if (type == null)
+			{
+				Assert.Ignore("The Items module (the inventory) is not installed.");
+			}
+			IInventoryController inventory = (IInventoryController)go.AddComponent(type);
+			// OnAwake sizes the container; AddComponent alone does not run it in edit mode.
+			type.GetMethod("OnAwake").Invoke(inventory, null);
+			return inventory;
+		}
+
 		[SetUp]
 		public void SetUp()
 		{
 			GameObject a = new GameObject("TradeExchange_Alice");
 			gameObjects.Add(a);
-			alice = a.AddComponent<InventoryController>();
-			alice.OnAwake();
+			alice = NewInventory(a);
 
 			GameObject b = new GameObject("TradeExchange_Bob");
 			gameObjects.Add(b);
-			bob = b.AddComponent<InventoryController>();
-			bob.OnAwake();
+			bob = NewInventory(b);
 
 			arrows = Template<StackableTestTemplate>("TradeExchange_Arrows", MaxStack);
 			bolts = Template<StackableTestTemplate>("TradeExchange_Bolts", MaxStack);

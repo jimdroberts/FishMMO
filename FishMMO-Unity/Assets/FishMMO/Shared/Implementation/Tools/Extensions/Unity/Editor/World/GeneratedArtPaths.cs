@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static class WeatherContentFolders
 	{
 		/// <summary>The weather content's root folder.</summary>
-		public const string Root = "Assets/Templates/Weather";
+		public const string Root = "Assets/FishMMO/Templates/Weather";
 		/// <summary>The weather substances (rain, snow, ash…).</summary>
 		public const string Substances = Root + "/Substances";
 	}

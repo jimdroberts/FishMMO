@@ -1,0 +1,30 @@
+{
+    "name": "FishMMO.Combat.Client",
+    "rootNamespace": "FishMMO.Client",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Combat",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.Client.Input.Generated",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "defineConstraints": [
+        "!UNITY_SERVER"
+    ],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

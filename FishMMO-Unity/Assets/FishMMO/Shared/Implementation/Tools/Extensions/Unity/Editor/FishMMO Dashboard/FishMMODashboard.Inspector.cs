@@ -1,11 +1,10 @@
 ﻿#if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
-using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 
 namespace FishMMO.Shared
 {
@@ -73,17 +72,10 @@ namespace FishMMO.Shared
 
 			if (asset == null) return;
 
-			// A prefab's own Editor is just the GameObject header; an NPC is edited by component.
-			if (IsNPCPrefab(asset))
+			// A category that brings its own inspector (the NPCs module edits a prefab by component).
+			TemplateCategory current = CurrentCategory();
+			if (current?.ShowInspector != null && current.ShowInspector(asset))
 			{
-				ShowNPCInspector(asset as GameObject);
-				return;
-			}
-
-			// A baked spawn table is build output; it gets a read-only view, not an editor.
-			if (asset is SceneSpawnTable spawnTable)
-			{
-				ShowSpawnTableInspector(spawnTable);
 				return;
 			}
 
@@ -148,24 +140,15 @@ namespace FishMMO.Shared
 
 
 		/// <summary>
-		/// Adds an "open in graph editor" button for asset types that have one.
+		/// Adds the buttons modules register for an asset (the NPCs module's "open in graph editor" for a behaviour tree).
 		/// </summary>
 		/// <param name="asset">The selected asset.</param>
 		private void AddSpecialisedEditorButton(UnityEngine.Object asset)
 		{
-			AIBehaviorTree behaviorTree = asset as AIBehaviorTree;
-			if (behaviorTree == null)
+			foreach (Action<UnityEngine.Object, VisualElement> extra in DashboardHooks.InspectorExtras)
 			{
-				return;
+				extra(asset, inspectorContent);
 			}
-
-			Button openGraphButton = new Button(() => BehaviorTreeEditorWindow.Open(behaviorTree));
-			openGraphButton.text = "Open Behavior Tree Editor";
-			openGraphButton.style.marginTop = 4;
-			openGraphButton.style.height = 26;
-			openGraphButton.style.backgroundColor = new Color(0.22f, 0.30f, 0.45f, 1f);
-			openGraphButton.style.color = new Color(0.80f, 0.88f, 1f, 1f);
-			inspectorContent.Add(openGraphButton);
 		}
 
 		/// <summary>

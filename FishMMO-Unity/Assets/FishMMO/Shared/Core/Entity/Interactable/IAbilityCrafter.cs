@@ -1,3 +1,4 @@
+using FishMMO.Shared;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
@@ -9,6 +10,6 @@ namespace FishMMO.Shared.Core
 		/// <summary>
 		/// Achievement template to increment when a player crafts an ability at this crafter.
 		/// </summary>
-		AchievementTemplate AchievementTemplate { get; }
+		CachedScriptableObject AchievementTemplate { get; }
 	}
 }

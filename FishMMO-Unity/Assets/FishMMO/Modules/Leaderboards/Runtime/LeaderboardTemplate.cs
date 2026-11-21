@@ -70,7 +70,8 @@ namespace FishMMO.Shared
 		public CharacterAttributeTemplate AttributeTemplate;
 
 		[Tooltip("Achievement source: the achievement whose progress is ranked.")]
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		[Tooltip("Arena source: ranked games a character must finish this season to appear. Match your arenas' Placement Games, so a rating the player's own profile still hides as provisional is never ranked publicly.")]
 		[Min(1)]
@@ -101,7 +102,7 @@ namespace FishMMO.Shared
 					case LeaderboardSource.CharacterAttribute:
 						return AttributeTemplate != null ? AttributeTemplate.ID : 0;
 					case LeaderboardSource.Achievement:
-						return AchievementTemplate != null ? AchievementTemplate.ID : 0;
+						return AchievementTemplate != null ? AchievementTemplate.CachedID : 0;
 					default:
 						return 0;
 				}

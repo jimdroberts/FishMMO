@@ -22,7 +22,7 @@ Assets/FishMMO/Modules/Naming/
 │                                                    NamingInstaller (+ SceneObjectNameSource), NamingModule
 ├── Editor/     FishMMO.Shared.NameGenerator.Editor  NameGeneratorWindow, the template loader and CSV tools, the dashboard's
 │                                                    Naming categories and Name Generation page
-├── Templates/                                       The grammar, modifier and title pool assets (from Assets/Templates/Entity/Naming)
+├── Templates/                                       The grammar, modifier and title pool assets (from Assets/FishMMO/Templates/Entity/Naming)
 ├── Tests/      FishMMO.Naming.Tests
 └── README.md
 ```

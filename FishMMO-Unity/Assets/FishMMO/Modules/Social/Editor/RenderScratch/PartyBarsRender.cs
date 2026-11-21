@@ -37,12 +37,9 @@ namespace FishMMO.RenderScratch
 			(ROOT + "ResourceBar/UIResourceBar.uxml", typeof(UITKStaminaBar)),
 			(ROOT + "Buff/UIBuff.uxml", typeof(UITKBuff)),
 			(ROOT + "Buff/UIDebuff.uxml", typeof(UITKDebuff)),
-			(ROOT + "HotkeyBar/UIHotkeyBar.uxml", typeof(UITKHotkeyBar)),
 			(ROOT + "Ability/UICastBar.uxml", typeof(UITKCastBar)),
-			(ROOT + "Minimap/UIMinimap.uxml", typeof(UITKMinimap)),
 			(ROOT + "Target/UITarget.uxml", typeof(UITKTarget)),
 			(ROOT + "Toast/UIToast.uxml", typeof(UITKToast)),
-			(ROOT + "Chat/UIChat.uxml", typeof(UITKChat)),
 		};
 
 		private static readonly List<Job> jobs = new List<Job>
@@ -172,7 +169,18 @@ namespace FishMMO.RenderScratch
 			image.style.backgroundImage = new StyleBackground(noise);
 			bg.rootVisualElement.Add(image);
 
-			foreach ((string uxml, Type type) in hud)
+			/* The chat window, the hotkey bar and the minimap, when their modules are installed, from the shared HUD list
+			 * they add themselves to: this module may not name another optional module's types. */
+			var mounts = new List<(string uxml, Type type)>(hud);
+			foreach (InterfaceScalingRender.HudMount m in InterfaceScalingRender.Hud)
+			{
+				if (m.Uxml != null && (m.Uxml.EndsWith("/UIChat.uxml", StringComparison.Ordinal) || m.Uxml.EndsWith("/UIHotkeyBar.uxml", StringComparison.Ordinal) ||
+					m.Uxml.EndsWith("/UIMinimap.uxml", StringComparison.Ordinal)))
+				{
+					mounts.Add((m.Uxml, m.PanelType));
+				}
+			}
+			foreach ((string uxml, Type type) in mounts)
 			{
 				Mount(type.Name, uxml, (h, d) =>
 				{
@@ -307,9 +315,12 @@ namespace FishMMO.RenderScratch
 			summary.AppendLine(string.Format(CultureInfo.InvariantCulture,
 				"  buff strip right edge {0:0.#} / debuff strip left edge {1:0.#}  (panel centre {2:0.#})",
 				buff.xMax, debuff.xMin, panelW * 0.5f));
-			Rect hotkeys = byName["UITKHotkeyBar"].rootVisualElement.Q("hotkey-list").worldBound;
-			summary.AppendLine(string.Format(CultureInfo.InvariantCulture, "  hotkey-list      {0}  centre offset {1:+0.##;-0.##;0}",
-				R(hotkeys), hotkeys.center.x - panelW * 0.5f));
+			if (byName.TryGetValue("UITKHotkeyBar", out UIDocument hotkeyDocument))
+			{
+				Rect hotkeys = hotkeyDocument.rootVisualElement.Q("hotkey-list").worldBound;
+				summary.AppendLine(string.Format(CultureInfo.InvariantCulture, "  hotkey-list      {0}  centre offset {1:+0.##;-0.##;0}",
+					R(hotkeys), hotkeys.center.x - panelW * 0.5f));
+			}
 		}
 
 		private static void Capture(Job job)

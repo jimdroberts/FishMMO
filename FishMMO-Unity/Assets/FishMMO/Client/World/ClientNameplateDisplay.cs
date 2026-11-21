@@ -75,7 +75,7 @@ namespace FishMMO.Client
 		/// <summary>True while the cached settings above are stale.</summary>
 		/// <remarks>
 		/// Re-read on the next sweep rather than inside the settings event. Settings events can
-		/// arrive before the configuration store exists (see <see cref="ClientCombatDisplay"/>), and
+		/// arrive before the configuration store exists (see the Combat module's CombatTextDisplay), and
 		/// a sweep is the one place that always has a live local character to apply them to.
 		/// </remarks>
 		private bool settingsDirty = true;
@@ -341,19 +341,6 @@ namespace FishMMO.Client
 			return (target.position - origin.position).sqrMagnitude;
 		}
 
-		/// <summary>True when <paramref name="pet"/> is one of <paramref name="pets"/>' pets.</summary>
-		private static bool ContainsPet(IPetController pets, Pet pet)
-		{
-			for (int i = 0; i < pets.Pets.Count; ++i)
-			{
-				if (ReferenceEquals(pets.Pets[i], pet))
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
 		/// <summary>
 		/// The standing colour and mark a viewer gives a character: one rule for the overhead plate and both target cards.
 		/// </summary>
@@ -375,7 +362,8 @@ namespace FishMMO.Client
 			{
 				return NameplateMark.None;
 			}
-			if (character is Pet pet && viewer.TryGet(out IPetController pets) && ContainsPet(pets, pet))
+			// The viewer's own companion (a pet: the Pets module's NPC whose CompanionOwner is the viewer).
+			if (character is NPC companion && ReferenceEquals(companion.CompanionOwner, viewer))
 			{
 				bool aggressive = ownFaction.AggressionEnabled;
 				tint = aggressive ? ColorVision.Hostile : ColorVision.Friendly;

@@ -111,8 +111,12 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(trade.Applies(new CharacterMenuTarget(4, "Al", CharacterMenuSource.Party)), "and on a party row");
 			LogAssert.IsFalse(trade.Applies(new CharacterMenuTarget(4, "Al", CharacterMenuSource.Guild)), "not on the guild roster");
 			LogAssert.IsFalse(InventorySlotClaims.TryClaimRightClick(0), "with no trade window open, the inventory keeps its click");
-			LogAssert.IsFalse(Read("Assets/FishMMO/Client/GUI/World/Inventory/UITKInventory.cs").Contains("UITKTrade"),
-				"the core inventory names nothing of the trade window");
+			const string inventoryWindow = "Assets/FishMMO/Modules/Items/Client/UITKInventory.cs";
+			if (ProjectFiles.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), inventoryWindow)))
+			{
+				LogAssert.IsFalse(Read(inventoryWindow).Contains("UITKTrade"),
+					"the inventory window (the Items module's) names nothing of the trade window");
+			}
 		}
 
 		[Test]

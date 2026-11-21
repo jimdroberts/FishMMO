@@ -13,7 +13,8 @@ deployment. This file covers the Unity project itself.
 |---|---|
 | [Assets/FishMMO/](Assets/FishMMO/README.md) | All of FishMMO's code: the core (`Core`, `Shared`, `Client`, `Server`, `Editor`, `Tests`, `Shaders`) and the optional modules (`Modules/`). Start here. |
 | `Assets/Scenes/` | `MainBootstrap`; `Client/` (`ClientPreboot`, `ClientPostboot`, `ClientLauncher`, `ClientLoginGUI`, `ClientWorldGUI`); `Server/` (`ServerLauncher`, `LoginServer`, `WorldServer`, `SceneServer`); the world scenes under `WorldScene/`; test scenes under `Test/`. |
-| `Assets/Prefabs/`, `Assets/Templates/`, `Assets/Settings/`, `Assets/Textures/`, `Assets/UI Toolkit/` | Content that belongs to the core: prefabs, ScriptableObject templates, URP assets, textures, UI themes. A module's content lives in its own folder. |
+| `Assets/Prefabs/`, `Assets/Settings/`, `Assets/Textures/`, `Assets/UI Toolkit/` | Content that belongs to the core: prefabs, URP assets, textures, UI themes. A module's content lives in its own folder. |
+| `Assets/FishMMO/Templates/` | The core's ScriptableObject templates (races, character attributes, the core interaction triggers, weather exposure). Each module keeps its own in `Assets/FishMMO/Modules/<Module>/Templates/`, so removing a module removes its templates. |
 | `Assets/AddressableAssetsData/` | The Addressables groups. Module systems and windows are found by label (`SceneServer_Systems`, `ClientWorldGUI_Panels`). |
 | `Assets/Dependencies/` | Precompiled DLLs copied in by `FishMMO-Dependencies` (the database layer, EF Core, Npgsql, auth). |
 | `Assets/Plugins/` | Third-party plugins (FishNet, KinematicCharacterController and others). |

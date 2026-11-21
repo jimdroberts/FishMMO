@@ -6,7 +6,9 @@
         "KinematicCharacterController",
         "FishNet.Runtime",
         "Unity.Addressables",
-        "Unity.ResourceManager"
+        "Unity.ResourceManager",
+        "FishMMO.Abilities",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
@@ -36,10 +36,9 @@ namespace FishMMO.Shared
 				SendToOwner(player, new BankerBroadcast());
 			}
 
-			if (banker?.AchievementTemplate != null &&
-				player.TryGet(out IAchievementController achievementController))
+			if (banker?.AchievementTemplate != null)
 			{
-				achievementController.Increment(banker.AchievementTemplate, 1);
+				Accomplishments.Record(player, banker.AchievementTemplate);
 			}
 		}
 	}

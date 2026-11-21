@@ -290,9 +290,9 @@ namespace FishMMO.Shared
 					continue;
 				}
 				NPC npc = prefab.GetComponent<NPC>();
-				if (npc != null && npc.Wildlife != null)
+				if (npc != null && npc.Wildlife is WildlifeTemplate wildlife)
 				{
-					species.Add(new WildlifePlanner.Species(prefab, npc.Wildlife));
+					species.Add(new WildlifePlanner.Species(prefab, wildlife));
 				}
 			}
 			return species;

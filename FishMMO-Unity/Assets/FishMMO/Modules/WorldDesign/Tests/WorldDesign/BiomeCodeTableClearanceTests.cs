@@ -131,7 +131,10 @@ namespace FishMMO.UnitTests.WorldDesign
 				List<(POIType Kind, float Weight)> old = rules.KindWeightsFor(entry.Biome);
 				if (!BiomeAuthoredRounds.Contains(entry.Biome))
 				{
-					Assert.That(spec.Select(k => (k.Kind, k.Weight)), Is.EqualTo(old), entry.Biome);
+					/* The migration lost nothing: the old table's kinds are the file's, in order, once the fantasy wave's are set aside
+					 * (2026-10-27: its kinds, and the keeps and towers it raised to 1, were written among them on purpose; pinned by
+					 * FantasyWaveHostingTests and BiomeTemplateSitesTests). */
+					Assert.That(spec.Where(k => !FantasyWave(k.Kind)).Select(k => (k.Kind, k.Weight)), Is.EqualTo(old.Where(k => !FantasyWave(k.Kind))), entry.Biome);
 				}
 				foreach (BiomeSiteKind k in spec)
 				{
@@ -163,15 +166,19 @@ namespace FishMMO.UnitTests.WorldDesign
 			int variants = 0, unauthored = 0;
 			foreach (BiomeArtSpec.Entry entry in Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
-				Assert.That(Prints(entry.SiteVariants()), Is.EqualTo(Prints(OldVariants(entry.Biome, null))), entry.Biome);
-				Assert.That(Prints(entry.SiteVariants(handMade)), Is.EqualTo(Prints(OldVariants(entry.Biome, handMade))), entry.Biome + " with hand-made templates");
+				/* The migration lost nothing: every old variant is still there with its weight. The fantasy wave's templates
+				 * (2026-10-27) add their own among them, and its biomes list them in the file's own order (the planner draws by
+				 * weight, so the order is no meaning of the list). */
+				Assert.That(Missing(Prints(OldVariants(entry.Biome, null)), Prints(entry.SiteVariants())), Is.Empty,
+					entry.Biome + ": " + string.Join(", ", Prints(OldVariants(entry.Biome, null))) + " within " + string.Join(", ", Prints(entry.SiteVariants())));
+				Assert.That(Missing(Prints(OldVariants(entry.Biome, handMade)), Prints(entry.SiteVariants(handMade))), Is.Empty, entry.Biome + " with hand-made templates");
 				variants += entry.SiteVariants().Count;
 				unauthored++;
 			}
 			// Over 400 among all 83 before the rounds (about five a biome). The rounds take biomes out of this loop with more variants
 			// than the average or fewer, so the floor is the old algorithm's own count for the biomes still unauthored (each pinned above).
 			int oldVariants = Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)).Sum(e => OldVariants(e.Biome, null).Count);
-			Assert.That(variants, Is.EqualTo(oldVariants));
+			Assert.That(variants, Is.GreaterThanOrEqualTo(oldVariants));
 			Assert.That(variants, Is.GreaterThan(unauthored * 3));
 			Assert.That(BiomeArtSpec.For("Forest").SiteVariants(handMade).Any(v => v.Variant == "Hand Built" && v.Weight == 3f), Is.True);
 			Assert.That(BiomeArtSpec.For("Forest").SiteVariants(handMade).Any(v => v.Variant == "Timber" && v.Weight == 9f), Is.False, "the catalogue's own variant is skipped");
@@ -219,6 +226,25 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		private static List<string> Prints(List<BiomeSiteVariant> variants) => variants.ConvertAll(v => v.ToString());
+
+		/// <summary>Whether every item of <paramref name="part"/> appears in <paramref name="whole"/>, in the same order.</summary>
+		/// <summary>The entries of <paramref name="part"/> that <paramref name="whole"/> lacks, counted (a repeat must repeat).</summary>
+		private static List<string> Missing(List<string> part, List<string> whole)
+		{
+			var left = new List<string>(whole);
+			var missing = new List<string>();
+			foreach (string item in part)
+			{
+				if (!left.Remove(item))
+				{
+					missing.Add(item);
+				}
+			}
+			return missing;
+		}
+
+		/// <summary>The fantasy wave's kinds and the keeps and towers it raised to 1 (as BiomeTemplateSitesTests sets them aside).</summary>
+		private static bool FantasyWave(POIType kind) => kind == POIType.Keep || kind == POIType.Tower || FantasyWaveKindsTests.Wave.Contains(kind.ToString());
 
 		/// <summary>The terrain process table's assignments until 2026-10-26, by exact asset name (moved into the files since).</summary>
 		private static readonly (string Biome, string Profile)[] OldTerrainProcesses =
@@ -437,6 +463,13 @@ namespace FishMMO.UnitTests.WorldDesign
 			["PointOfInterestRules.cs"] = "fallback table (kind rows' biome families)",
 			["BiomeArtSpec.cs"] = "fallback keywords (WeatheringByName)",
 			["PointOfInterestTemplateSpecs.cs"] = "POI template authoring: the templates' own biome lists, the variant fallback",
+			// The same class's fantasy wave (2026-10-27), split by pack.
+			["PointOfInterestTemplateSpecs.Fantasy.Cold.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
+			["PointOfInterestTemplateSpecs.Fantasy.Dry.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
+			["PointOfInterestTemplateSpecs.Fantasy.Green.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
+			["PointOfInterestTemplateSpecs.Fantasy.Keeps.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
+			["PointOfInterestTemplateSpecs.Fantasy.Realm.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
+			["PointOfInterestTemplateSpecs.Fantasy.Shapes.cs"] = "POI template authoring: the fantasy wave's templates' biome lists",
 			["SeaLifeSettings.cs"] = "client fallback (SeaLifePlacement.PrefersByName) for a template with no sea life",
 			// Tables still to move (CODE-TABLE CLEARANCE LEFT; see the progress log).
 			["BiomeNamingGenerator.cs"] = "LEFT: naming seeder (fills only missing naming; the template is the store)",

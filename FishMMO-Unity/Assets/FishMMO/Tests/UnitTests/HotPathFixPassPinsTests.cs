@@ -147,31 +147,6 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// A first pump read whose rows are lost before they reach the cursor must not let the next
-		/// read start at a later "now": pinning its start makes the next read cover the span.
-		/// </summary>
-		[Test]
-		public void ChatPump_LostFirstRead_PinsTheFloorAtItsStart()
-		{
-			var cursor = new ChatPumpCursor(TimeSpan.FromSeconds(10));
-			DateTime firstReadStarted = new DateTime(2026, 9, 25, 12, 0, 0, DateTimeKind.Utc);
-
-			LogAssert.IsFalse(cursor.Watermark.HasValue, "before any read the cursor starts at the database's now");
-
-			cursor.PinFloor(firstReadStarted);
-			LogAssert.AreEqual(firstReadStarted, cursor.Watermark.Value, "the next read starts where the lost first read did");
-
-			// A completed read settles normally, never below the pinned floor.
-			cursor.CompleteRead(firstReadStarted.AddSeconds(2), true, null);
-			LogAssert.IsTrue(cursor.Watermark.Value >= firstReadStarted, "the watermark never drops below the floor");
-
-			// Once a read has completed, a late pin changes nothing.
-			DateTime before = cursor.Watermark.Value;
-			cursor.PinFloor(firstReadStarted.AddSeconds(-60));
-			LogAssert.AreEqual(before, cursor.Watermark.Value, "a pin after a completed read is ignored");
-		}
-
-		/// <summary>
 		/// The first tax sweep runs shortly after startup, and retries until something is ready to
 		/// sweep, rather than waiting up to a whole interval.
 		/// </summary>

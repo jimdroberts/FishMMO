@@ -313,7 +313,7 @@ namespace FishMMO.Shared
 		{
 			"Assets/Prefabs",
 			"Assets/Scenes",
-			"Assets/Templates",
+			"Assets/FishMMO/Templates",
 		};
 
 		/// <summary>
@@ -381,7 +381,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Scans Assets/Prefabs, Assets/Scenes, and Assets/Templates, then categorizes
+		/// Scans Assets/Prefabs, Assets/Scenes, and Assets/FishMMO/Templates, then categorizes
 		/// and assigns every discovered asset to the appropriate Addressable group with
 		/// correct packing mode and label. Existing entries in the wrong group are moved.
 		/// </summary>
@@ -404,7 +404,17 @@ namespace FishMMO.Shared
 
 			// Discover candidate assets
 			var candidates = new List<string>();
-			foreach (string dir in SmartGroupScanDirectories)
+			// Each module keeps its templates in Modules/<Module>/Templates (2026-11-20); they are scanned like Assets/FishMMO/Templates.
+			var scanDirectories = new List<string>(SmartGroupScanDirectories);
+			foreach (string moduleTemplates in Directory.GetDirectories("Assets/FishMMO/Modules"))
+			{
+				string templates = moduleTemplates.Replace('\\', '/') + "/Templates";
+				if (AssetDatabase.IsValidFolder(templates))
+				{
+					scanDirectories.Add(templates);
+				}
+			}
+			foreach (string dir in scanDirectories)
 			{
 				if (!AssetDatabase.IsValidFolder(dir)) continue;
 
@@ -440,7 +450,7 @@ namespace FishMMO.Shared
 			if (candidates.Count == 0)
 			{
 				EditorUtility.DisplayDialog("Smart Group",
-					"No addressable assets found in Assets/Prefabs, Assets/Scenes, or Assets/Templates.",
+					"No addressable assets found in Assets/Prefabs, Assets/Scenes, or Assets/FishMMO/Templates.",
 					"OK");
 				return;
 			}

@@ -36,15 +36,8 @@ namespace FishMMO.UnitTests
 		private const string ClientGroup = "Assets/AddressableAssetsData/AssetGroups/Client_Dynamic.asset";
 		private const string UxmlPath = ModuleFolder + "/Client/UILeaderboards.uxml";
 		private const string MenuUxmlPath = "Assets/FishMMO/Client/GUI/World/Menu/UIMenu.uxml";
-		private const string KillTriggerPath = "Assets/Templates/Entity/ECA/Combat/Count Monster Kill.asset";
-		private const string KillsAchievementPath = "Assets/Templates/Entity/Achievements/Combat/Kills.asset";
-
-		private static readonly string[] PlayablePrefabs =
-		{
-			"Assets/Prefabs/Shared/Entity/PlayableCharacters/Human.prefab",
-			"Assets/Prefabs/Shared/Entity/PlayableCharacters/Elf.prefab",
-			"Assets/Prefabs/Shared/Entity/PlayableCharacters/Orc.prefab",
-		};
+		private const string KillTriggerPath = "Assets/FishMMO/Modules/Achievements/Templates/Counters/Count Monster Kill.asset";
+		private const string KillsAchievementPath = "Assets/FishMMO/Modules/Achievements/Templates/Combat/Kills.asset";
 
 		private static string Read(string path) => ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(), path)).Replace("\r\n", "\n");
 
@@ -221,15 +214,18 @@ namespace FishMMO.UnitTests
 			LogAssert.AreSame(kills, increment.AchievementTemplate, "the Kills achievement");
 			LogAssert.IsTrue(increment.AmountValue is ConstantValue one && one.Amount == 1, "by one per kill");
 
-			// Who runs it: every playable character, as the credited killer.
-			foreach (string path in PlayablePrefabs)
+			/* Who runs it: every player, as the credited killer. The damage controller is the Combat module's character part
+			 * since 2026-11-20, so a player's kill triggers are its PlayerCombatTriggers asset's, no longer each race prefab's
+			 * (read as text: this module does not reference the Combat module). */
+			const string playerTriggersPath = "Assets/FishMMO/Modules/Combat/Templates/PlayerCombatTriggers.asset";
+			if (!ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), playerTriggersPath)))
 			{
-				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(ProjectFiles.Path(path));
-				LogAssert.IsNotNull(prefab, $"{path} exists");
-				CharacterDamageController damage = prefab.GetComponentInChildren<CharacterDamageController>(true);
-				LogAssert.IsNotNull(damage, $"{prefab.name} has a damage controller");
-				LogAssert.IsTrue(damage.OnKillTriggers.Contains(killTrigger), $"{prefab.name} counts its kills");
+				Assert.Ignore("The Combat module (which counts kills) is not installed.");
 			}
+			string killGuid = AssetDatabase.AssetPathToGUID(ProjectFiles.Path(KillTriggerPath));
+			string playerTriggers = ProjectFiles.ReadAllText(playerTriggersPath).Replace("\r\n", "\n");
+			Match onKill = Regex.Match(playerTriggers, @"\n  OnKill:\n((?:  - .*\n)*)");
+			LogAssert.IsTrue(onKill.Success && onKill.Groups[1].Value.Contains(killGuid), "every player counts its kills");
 
 			// And the board reads what is counted.
 			LogAssert.IsTrue(ShippedBoards().Any(b => b.Category == LeaderboardCategory.PvE && b.Source == LeaderboardSource.Achievement && b.AchievementTemplate == kills),

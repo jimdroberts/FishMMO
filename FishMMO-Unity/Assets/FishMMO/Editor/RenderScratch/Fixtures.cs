@@ -25,8 +25,7 @@ namespace FishMMO.RenderScratch
 		{
 			Items(character);
 			Attributes(character);
-			Achievements(character);
-			// Modules' fixtures (Factions adds its standings).
+			// Modules' fixtures (Factions adds its standings, Achievements its progress).
 			ExtraFixtures?.Invoke(character);
 		}
 
@@ -66,9 +65,9 @@ namespace FishMMO.RenderScratch
 			/* Attributes first: an ItemAttribute resolves its template by ID through the same cache,
 			 * so without these registered every generated attribute carries a null Template and
 			 * building an item's tooltip throws before any panel gets to draw it. */
-			Load<ItemAttributeTemplate>("Assets/Templates/Entity/Items/ItemAttributes");
+			Load<ItemAttributeTemplate>("Assets/FishMMO/Modules/Items/Templates/ItemAttributes");
 
-			List<BaseItemTemplate> templates = Load<BaseItemTemplate>("Assets/Templates/Entity/Items");
+			List<BaseItemTemplate> templates = Load<BaseItemTemplate>("Assets/FishMMO/Modules/Items/Templates");
 			if (templates.Count == 0) { return; }
 
 			long id = 5000;
@@ -155,7 +154,7 @@ namespace FishMMO.RenderScratch
 			FakeAttributes fake = controller as FakeAttributes;
 
 			List<CharacterAttributeTemplate> templates =
-				Load<CharacterAttributeTemplate>("Assets/Templates/Entity/CharacterAttributes");
+				Load<CharacterAttributeTemplate>("Assets/FishMMO/Templates/Entity/CharacterAttributes");
 
 			CharacterAttributeTemplate health = templates.FirstOrDefault(t => t.name == "Health");
 			CharacterAttributeTemplate mana = templates.FirstOrDefault(t => t.name == "Mana");
@@ -174,25 +173,6 @@ namespace FishMMO.RenderScratch
 				if (t == health || t == mana || t == stamina) { continue; }
 				controller.SetAttribute(t.ID, roll);
 				roll = 6 + (roll * 3) % 87;
-			}
-		}
-
-		// ── Achievements ────────────────────────────────────────────
-
-		private static void Achievements(ICharacter character)
-		{
-			if (!character.TryGet(out IAchievementController controller)) { return; }
-
-			List<AchievementTemplate> templates =
-				Load<AchievementTemplate>("Assets/Templates/Entity/Achievements");
-
-			byte tier = 0;
-			uint value = 5;
-			foreach (AchievementTemplate t in templates)
-			{
-				controller.SetAchievement(t.ID, tier, value);
-				tier = (byte)((tier + 1) % 3);
-				value = value * 4 + 13;
 			}
 		}
 	}

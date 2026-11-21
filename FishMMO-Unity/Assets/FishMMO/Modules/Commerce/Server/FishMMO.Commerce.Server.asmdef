@@ -11,7 +11,9 @@
         "Unity.Addressables",
         "Unity.ResourceManager",
         "KinematicCharacterController",
-        "WebTransport"
+        "WebTransport",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server"
     ],
     "includePlatforms": [
         "Editor",

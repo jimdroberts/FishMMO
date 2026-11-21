@@ -89,7 +89,7 @@ namespace FishMMO.UnitTests
 				"A body with two hitboxes occupies ONE slot of MaxHits, represented by its nearest collider.");
 			LogAssert.IsTrue(picked.Contains(bystander),
 				"And the slot the second hitbox used to consume goes to the next body out. Before the " +
-				"dedupe both hitboxes were kept and this bystander was never selected at all.");
+				"dedupe both hitboxes were kept and this bystander was never selected at all." + Picked(picked));
 		}
 
 		/// <summary>
@@ -107,7 +107,7 @@ namespace FishMMO.UnitTests
 			GameObject context = MakeContext("sceneryContext", Vector3.zero);
 			GameObject panelParent = new GameObject("wall");
 			spawned.Add(panelParent);
-			panelParent.transform.position = new Vector3(2f, 0f, 0f);
+			panelParent.transform.position = Rig + new Vector3(2f, 0f, 0f);
 			GameObject panelA = AddChildCollider(panelParent, "panelA", new Vector3(0f, 0f, 0f));
 			GameObject panelB = AddChildCollider(panelParent, "panelB", new Vector3(0.4f, 0f, 0f));
 			Physics.SyncTransforms();
@@ -139,7 +139,7 @@ namespace FishMMO.UnitTests
 
 			LogAssert.AreEqual(2, picked.Count, "Two slots, two bodies.");
 			LogAssert.AreEqual(1, CountUnder(picked, body), "One body, one slot.");
-			LogAssert.IsTrue(picked.Contains(bystander), "The bystander gets the slot the duplicate used to eat.");
+			LogAssert.IsTrue(picked.Contains(bystander), "The bystander gets the slot the duplicate used to eat." + Picked(picked));
 		}
 
 		// ── Line: a pierce counts bodies, not the faces it passes through ──
@@ -168,7 +168,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(1, CountUnder(picked, body),
 				"A body is pierced once, at the first collider the ray meets — its entry face.");
 			LogAssert.IsTrue(picked.Contains(bystander),
-				"The beam reaches the target behind it. Before the dedupe it stopped on the second hitbox.");
+				"The beam reaches the target behind it. Before the dedupe it stopped on the second hitbox." + Picked(picked));
 		}
 
 		// ── Nearest / Furthest / Random: the caster is excluded by BODY ──
@@ -195,7 +195,7 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(1, picked.Count, "One nearest target.");
 			LogAssert.AreEqual(0, CountUnder(picked, caster),
 				"Never the caster's own hitbox, which sits at distance zero and wins every ranking.");
-			LogAssert.IsTrue(picked.Contains(victim), "The nearest OTHER body.");
+			LogAssert.IsTrue(picked.Contains(victim), "The nearest OTHER body." + Picked(picked));
 		}
 
 		/// <summary>The mirror of the nearest case, with the caster's hitbox offset outward.</summary>
@@ -372,11 +372,17 @@ namespace FishMMO.UnitTests
 			return count;
 		}
 
+		/// <summary>
+		/// Where the rig is built: far from the origin, so a collider another fixture leaves in the edit-mode scene (a full
+		/// run once left a "Terrain" at the origin, inside every selection's 20 m radius) cannot join a selection.
+		/// </summary>
+		private static readonly Vector3 Rig = new Vector3(5000f, 0f, 5000f);
+
 		/// <summary>A spatial origin with no collider of its own, so it is never its own candidate.</summary>
 		private GameObject MakeContext(string name, Vector3 position)
 		{
 			GameObject go = new GameObject(name);
-			go.transform.position = position;
+			go.transform.position = Rig + position;
 			spawned.Add(go);
 			return go;
 		}
@@ -385,7 +391,7 @@ namespace FishMMO.UnitTests
 		private GameObject MakeLooseCollider(string name, Vector3 position)
 		{
 			GameObject go = new GameObject(name);
-			go.transform.position = position;
+			go.transform.position = Rig + position;
 			SphereCollider collider = go.AddComponent<SphereCollider>();
 			collider.radius = 0.3f;
 			spawned.Add(go);
@@ -405,7 +411,7 @@ namespace FishMMO.UnitTests
 		private GameObject MakeCharacterBody(string name, Vector3 position, params Vector3[] hitboxOffsets)
 		{
 			GameObject root = new GameObject(name);
-			root.transform.position = position;
+			root.transform.position = Rig + position;
 			root.AddComponent<StubBodyCharacter>();
 			spawned.Add(root);
 
@@ -462,6 +468,18 @@ namespace FishMMO.UnitTests
 			public void UnregisterCharacterBehaviour(ICharacterBehaviour characterBehaviour) { }
 			public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour { control = null; return false; }
 			public void Invoke(List<Trigger> triggers, EventData eventData) { }
+		}
+
+		/// <summary>What a selection picked, by name, for a failure message: a stray collider left in the scene by another
+		/// test shows up here by name.</summary>
+		private static string Picked(List<GameObject> picked)
+		{
+			var names = new List<string>();
+			foreach (GameObject go in picked)
+			{
+				names.Add(go == null ? "null" : $"{go.name}@{go.transform.position}");
+			}
+			return " (picked: " + string.Join(", ", names) + ")";
 		}
 	}
 }

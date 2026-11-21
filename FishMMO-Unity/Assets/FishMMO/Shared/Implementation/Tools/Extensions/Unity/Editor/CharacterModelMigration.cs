@@ -38,9 +38,9 @@ namespace FishMMO.Shared
 		/// <summary>The races that wore Ethan.</summary>
 		public static readonly string[] Races =
 		{
-			"Assets/Templates/Entity/Races/Humanoid/Human.asset",
-			"Assets/Templates/Entity/Races/Humanoid/Elf.asset",
-			"Assets/Templates/Entity/Races/Humanoid/Orc.asset",
+			"Assets/FishMMO/Templates/Entity/Races/Humanoid/Human.asset",
+			"Assets/FishMMO/Templates/Entity/Races/Humanoid/Elf.asset",
+			"Assets/FishMMO/Templates/Entity/Races/Humanoid/Orc.asset",
 		};
 
 		/// <summary>The NPCs with Ethan baked in as their model.</summary>

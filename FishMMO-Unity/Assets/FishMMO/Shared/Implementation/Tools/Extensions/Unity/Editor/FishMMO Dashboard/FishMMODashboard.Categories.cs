@@ -6,7 +6,6 @@ using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 using FishMMO.Shared.Core;
-using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
@@ -83,6 +82,28 @@ namespace FishMMO.Shared
 		/// whose entries need several decisions before they are usable opens a form here.
 		/// </summary>
 		public Action CreateAsset;
+
+		/// <summary>
+		/// Optional inspector for one of this category's entries, replacing the generic one. The dashboard clears the
+		/// inspector area first; return false to fall back to the generic inspector. Lets a module's category (the NPCs
+		/// module's prefab designer) edit entries the dashboard knows nothing about.
+		/// </summary>
+		public Func<UnityEngine.Object, bool> ShowInspector;
+
+		/// <summary>Optional: forgets whatever <see cref="LoadAssets"/> and <see cref="CountAssets"/> cached. Called on every reload and project change.</summary>
+		public Action Invalidate;
+
+		/// <summary>Optional: called after an entry was duplicated, with the new path and the source path.</summary>
+		public Action<string, string> AfterDuplicate;
+
+		/// <summary>Optional: called after an entry was renamed, with its new path.</summary>
+		public Action<string> AfterRename;
+
+		/// <summary>
+		/// Optional: what the category shows before an entry is selected (an overview), replacing its tool page. The
+		/// dashboard clears nothing first; the category calls <see cref="FishMMODashboard.BeginInspector"/>.
+		/// </summary>
+		public Action ShowLanding;
 	}
 
 	public partial class FishMMODashboard
@@ -575,11 +596,9 @@ namespace FishMMO.Shared
 		private void CreateAssetOfType(TemplateCategory cat, Type assetType, string displayName)
 		{
 
-			/* AI assets file themselves by type. The "AI States" category covers attacking,
-			 * movement, pet and positioning states, which live in different sub-folders, so a
-			 * single DefaultAssetDirectory would drop every new state in the parent folder and
-			 * leave it for the organizer to sort out later. */
-			string dir = AIAssetOrganizer.ResolveFolder(assetType) ?? cat.DefaultAssetDirectory;
+			/* Some assets file themselves by type (the NPCs module's AI states live in per-kind sub-folders), so a
+			 * single DefaultAssetDirectory would drop every new one in the parent folder. */
+			string dir = DashboardHooks.FolderFor(assetType) ?? cat.DefaultAssetDirectory;
 			if (!AssetDatabase.IsValidFolder(dir))
 			{
 				CreateDirectoryRecursive(dir);
@@ -627,12 +646,8 @@ namespace FishMMO.Shared
 
 			if (AssetDatabase.CopyAsset(sourcePath, newPath))
 			{
-				/* A copied prefab is a new guid with no Addressables entry, and a server cannot
-				 * spawn an NPC it cannot load. */
-				if (IsNPCPrefab(asset))
-				{
-					NPCPrefabFactory.RegisterAddressableLike(newPath, sourcePath);
-				}
+				// The category's own follow-up: a copied NPC prefab needs an Addressables entry, for one.
+				CurrentCategory()?.AfterDuplicate?.Invoke(newPath, sourcePath);
 
 				AssetDatabase.Refresh();
 				ReloadCurrentCategory();
@@ -655,11 +670,8 @@ namespace FishMMO.Shared
 					string error = AssetDatabase.RenameAsset(path, result);
 					if (string.IsNullOrEmpty(error))
 					{
-						// An NPC's address is its name; keep the two together.
-						if (IsNPCPrefab(asset))
-						{
-							NPCPrefabFactory.SyncAddress(AssetDatabase.GetAssetPath(asset));
-						}
+						// The category's own follow-up: an NPC's address is its name, for one.
+						CurrentCategory()?.AfterRename?.Invoke(AssetDatabase.GetAssetPath(asset));
 
 						AssetDatabase.Refresh();
 						ReloadCurrentCategory();
@@ -699,7 +711,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		private void ReloadCurrentCategory()
 		{
-			InvalidateNPCPrefabCache();
+			InvalidateCategoryCaches();
 
 			if (selectedCategoryIndex < 0 || selectedCategoryIndex >= categories.Count) return;
 

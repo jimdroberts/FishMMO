@@ -1,0 +1,32 @@
+{
+    "name": "FishMMO.Hotkeys.Server",
+    "rootNamespace": "FishMMO.Server",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Server",
+        "FishMMO.Hotkeys",
+        "FishNet.Runtime",
+        "GameKit.Dependencies",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "KinematicCharacterController",
+        "FishMMO.Abilities",
+        "FishMMO.Abilities.Server"
+    ],
+    "includePlatforms": [
+        "Editor",
+        "LinuxStandalone64Server",
+        "CloudRendering",
+        "WindowsStandalone32Server",
+        "WindowsStandalone64Server"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

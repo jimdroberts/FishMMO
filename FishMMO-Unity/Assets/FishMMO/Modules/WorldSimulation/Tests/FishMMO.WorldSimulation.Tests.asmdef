@@ -30,7 +30,10 @@
         "FishMMO.WorldSimulation.Editor",
         "FishMMO.Shared.Biomes.Editor",
         "Unity.RenderPipelines.Core.Runtime",
-        "Unity.Collections"
+        "Unity.Collections",
+        "FishMMO.Abilities",
+        "FishMMO.NPCs.Server",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [
         "Editor"

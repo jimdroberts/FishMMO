@@ -112,26 +112,30 @@ namespace FishMMO.UnitTests
 			return false;
 		}
 
+		/// <summary>
+		/// Every character prefab can lose health: its attribute controller resolves a health resource attribute. Every
+		/// character gets a damage controller (the Combat module's part, added as it wakes, 2026-11-20), so every character
+		/// prefab is checked, not only those that authored one.
+		/// </summary>
 		[Test]
-		public void EveryPrefabWithADamageController_ResolvesAHealthResourceAttribute()
+		public void EveryCharacterPrefab_ResolvesAHealthResourceAttribute()
 		{
-			int damageControllers = 0;
+			int characters = 0;
 			List<string> offenders = new List<string>();
 
 			foreach (GameObject prefab in Prefabs())
 			{
 				// Inactive children included: a disabled branch still spawns with the prefab.
-				foreach (CharacterDamageController damage in prefab.GetComponentsInChildren<CharacterDamageController>(true))
+				foreach (BaseCharacter character in prefab.GetComponentsInChildren<BaseCharacter>(true))
 				{
-					damageControllers++;
+					characters++;
 
-					/* Same GameObject, not the prefab root: Character.TryGet resolves behaviours
-					 * registered by one character, and the pairing the damage controller depends on
-					 * is the attribute controller sitting beside it. */
-					CharacterAttributeController attributes = damage.GetComponent<CharacterAttributeController>();
+					/* Same GameObject: Character.TryGet resolves behaviours registered by one character, and the pairing the
+					 * damage controller depends on is the attribute controller beside it. */
+					CharacterAttributeController attributes = character.GetComponent<CharacterAttributeController>();
 					if (attributes == null)
 					{
-						offenders.Add($"{prefab.name} (no CharacterAttributeController beside the damage controller)");
+						offenders.Add($"{prefab.name} (no CharacterAttributeController on the character)");
 						continue;
 					}
 					if (attributes.CharacterAttributeDatabase == null)
@@ -147,11 +151,10 @@ namespace FishMMO.UnitTests
 				}
 			}
 
-			TestContext.WriteLine($"MEASURE CharacterDamageController components scanned across prefabs: {damageControllers}");
-			LogAssert.IsTrue(damageControllers > 0,
-				$"No CharacterDamageController was found under {PREFAB_FOLDER}; this guard is checking nothing.");
+			TestContext.WriteLine($"MEASURE character prefabs scanned: {characters}");
+			LogAssert.IsTrue(characters > 0, $"No character was found under {PREFAB_FOLDER}; this guard is checking nothing.");
 			LogAssert.AreEqual(0, offenders.Count,
-				"These prefabs can take damage but have no health to lose, so IsAlive is false forever and " +
+				"These characters can take damage but have no health to lose, so IsAlive is false forever and " +
 				"the missing-health report fires on every spawn (issue #157): " + string.Join(", ", offenders));
 		}
 

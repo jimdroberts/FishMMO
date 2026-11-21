@@ -6,7 +6,8 @@
         "FishMMO.TestHarness.Server",
         "FishMMO.Shared",
         "FishNet.Runtime",
-        "FishMMO.Shared.Tools.Editor"
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Abilities"
     ],
     "includePlatforms": [
         "Editor"

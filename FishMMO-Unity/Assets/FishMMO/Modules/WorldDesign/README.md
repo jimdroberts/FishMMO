@@ -9,7 +9,7 @@ in a build.
 |---|---|
 | **Module id** | None: there is no runtime assembly and no `GameModule` |
 | **Assemblies** | `FishMMO.WorldDesign.Editor`, `.Client.Editor`, `.RenderScratch`, `.Tests`, `.Harness.Editor` |
-| **Depends on** | World Simulation, Water, Naming; its tests and harness also reference Terrain and the World Test Bed |
+| **Depends on** | World Simulation, Water, Naming, Map (its point-of-interest map preview and map tests draw with the map), World Interactables (its gathering content generator); its tests and harness also reference Terrain and the World Test Bed |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
 | **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18 |

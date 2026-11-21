@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
@@ -86,11 +86,7 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 			if (IconReference != null && IconReference.RuntimeKeyIsValid())
 			{
-				IconReference.LoadAssetAsync<Texture2D>().Completed += (handle) =>
-				{
-					if (handle.Status == AsyncOperationStatus.Succeeded)
-						loadedIcon = handle.Result;
-				};
+				TemplateAssets.Load<Texture2D>(IconReference, asset => loadedIcon = asset);
 			}
 #endif
 		}

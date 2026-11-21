@@ -52,6 +52,13 @@ namespace FishMMO.Client
 		private static IPlayerCharacter currentCharacter;
 
 		/// <summary>
+		/// Names <see cref="Show"/> was asked for before any control answered to them. A module's panel (ModulePanelHost)
+		/// is placed after an Addressables load that can finish after the HUD was shown at spawn; it is shown as it
+		/// registers (<see cref="ApplyPendingShow"/>). A later <see cref="Hide"/> of the name cancels it.
+		/// </summary>
+		private static readonly HashSet<string> pendingShows = new HashSet<string>();
+
+		/// <summary>
 		/// Injects the Client instance into all registered controls for network/UI interaction.
 		/// </summary>
 		/// <param name="value">Client instance to inject.</param>
@@ -119,6 +126,8 @@ namespace FishMMO.Client
 		internal static void UnsetCharacter()
 		{
 			currentCharacter = null;
+			// The HUD a spawn asked for belongs to that spawn; a panel that registers after the character left is not shown.
+			pendingShows.Clear();
 			// Isolated for the same reason as SetCharacter: teardown runs on logout and on
 			// character despawn from Client.OnCharacterStopLocal, which still has to
 			// deinitialize input and destroy the character object afterwards. One panel
@@ -316,12 +325,38 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* A miss here is how a panel goes missing without anything reporting it: the caller
-			 * asked for a HUD element by name, no control answered to that name, and the method
-			 * returned as though it had worked. The name is authored in a scene and the string
-			 * is authored in code, so the two drift apart silently — which looks identical to a
-			 * panel that rendered nothing. */
-			Log.Warning("UIManager", $"Show('{name}') found no registered control with that name. Registered: {string.Join(", ", controls.Keys)}");
+			/* A miss is remembered: a module's panel registers when ModulePanelHost places it, which can be after the HUD
+			 * was shown at spawn, and is shown then (ApplyPendingShow). Without that the chat, the hotkey bar and the
+			 * minimap stayed hidden for the session whenever their prefabs loaded late. A name no control ever answers to
+			 * is a module that is not installed, or a name that drifted from the panel's; the miss is still logged, at
+			 * debug level, since a game without the module asks for it at every spawn. */
+			pendingShows.Add(name);
+			Log.Debug("UIManager", $"Show('{name}') found no registered control with that name yet; it is shown if one registers. Registered: {string.Join(", ", controls.Keys)}");
+		}
+
+		/// <summary>
+		/// Shows a control that has just registered if <see cref="Show"/> asked for its name before it existed. Called by
+		/// the control once its own initial visibility (<c>StartOpen</c>) is applied, so that does not undo it.
+		/// </summary>
+		/// <param name="control">The control that registered.</param>
+		internal static void ApplyPendingShow(UITKControl control)
+		{
+			if (control == null || !pendingShows.Remove(control.Name))
+			{
+				return;
+			}
+			if (!controls.TryGetValue(control.Name, out UITKControl registered) || !ReferenceEquals(registered, control))
+			{
+				return;
+			}
+			try
+			{
+				control.Show();
+			}
+			catch (Exception ex)
+			{
+				Log.Error("UIManager", $"Showing late-registered control '{control.Name}' failed.", ex);
+			}
 		}
 
 		/// <summary>
@@ -331,6 +366,7 @@ namespace FishMMO.Client
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Hide(string name)
 		{
+			pendingShows.Remove(name);
 			if (controls.TryGetValue(name, out UITKControl result) && result.Visible)
 			{
 				result.Hide();

@@ -124,6 +124,8 @@ namespace FishMMO.UnitTests
 		{
 			string path = "Assets/Scenes/WorldScene/Moron/Moron 2 HLOD/WorldHlod 1.asset";
 			var data = AssetDatabase.LoadAssetAtPath<WorldHlodData>(ProjectFiles.Path("Assets/Scenes/WorldScene/Moron/Moron 2 HLOD/WorldHlod.asset")) ?? AssetDatabase.LoadAssetAtPath<WorldHlodData>(ProjectFiles.Path(path)); if (data == null) Assert.Ignore("Local generated HLOD bake not present");
+			// An inspection of the local bake, which is generated and gitignored: one older than its sources says nothing about coverage.
+			if (!data.SourcesMatch()) Assert.Ignore("Local generated HLOD bake is stale; rebake it (WorldHlodBaker.BakeMoron2) to inspect its coverage");
 			var lines = new List<string> {"cluster,x,y,z,radius,min_distance_factor,max_distance_factor,min_size,entry_at_fov60_bias2,exit_at_fov60_bias2"};
 			float factor = TerrainTreeMath.ScreenFactor(60,false,0,2); int usable = 0;
 			foreach (var group in data.Clusters)
@@ -133,7 +135,6 @@ namespace FishMMO.UnitTests
 				lines.Add(string.Join(",",new[] { (float)(lines.Count-1),group.Bounds.center.x,group.Bounds.center.y,group.Bounds.center.z,group.Bounds.extents.magnitude,group.MinDistanceFactor,group.MaxDistanceFactor,group.MinSourceSize,low,high }.Select(v=>v.ToString("R",System.Globalization.CultureInfo.InvariantCulture))));
 			}
 			Directory.CreateDirectory("Library/RenderingBenchmark"); File.WriteAllLines("Library/RenderingBenchmark/hlod-data-coverage.csv",lines);
-			Assert.That(data.SourcesMatch(),Is.True);
 			var materials = new HashSet<Material>(); foreach (var group in data.Clusters) foreach (var part in group.Parts) { materials.Add(part.Material); var uv = new List<Vector4>(); part.Mesh.GetUVs(3,uv); var table = part.Material.GetTexture(TerrainLookMath.TableName); Assert.That(table,Is.Not.Null); foreach (var v in uv) Assert.That(v.x,Is.InRange(0f,table.height-1f)); }
 			Debug.Log($"[HLOD materials] {materials.Count} materials for {data.Clusters.Sum(c=>c.Parts.Length)} parts.");
 			Debug.Log($"[HLOD coverage] {usable}/{data.Clusters.Length} clusters have a conservative usable native-High-Fidelity window.");

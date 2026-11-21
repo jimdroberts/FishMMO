@@ -85,12 +85,16 @@ namespace FishMMO.UnitTests
 
 			var first = new BiomeArtAuthoring.Report();
 			Assert.IsTrue(BiomeArtAuthoring.Author(forest, entry, source, first, true));
-			Assert.That(forest.LiveHabitat, Is.EqualTo(BiomeHabitat.Forest));
-			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Forest));
+			// The spec's habitat: the forest's own and, since its round, the streams' FreshWater (dippers, newts, dragonflies).
+			Assert.That(entry.Habitat & BiomeHabitat.Forest, Is.EqualTo(BiomeHabitat.Forest));
+			Assert.That(forest.LiveHabitat, Is.EqualTo(entry.Habitat));
+			Assert.That(forest.Habitat, Is.EqualTo(entry.Habitat));
 			Assert.That(forest.SeaLife, Is.Empty);
 			VineBiomes.Habitat vines = BiomeTemplateArt.Vines(forest);
-			Assert.That(vines.Species, Is.EqualTo(VineBiomes.For("Forest").Species));
-			Assert.That(vines.Caves, Is.EqualTo(VineBiomes.For("Forest").Caves));
+			// The file's own vines (the Forest round's honeysuckle among them), as the authoring writes them.
+			BiomeVines own = entry.VineGrowth();
+			Assert.That(vines.Species, Is.EqualTo(own.Species.ConvertAll(v => (v.Species, v.Weight)).ToArray()));
+			Assert.That(vines.Caves, Is.EqualTo(own.Caves));
 			Assert.That(BiomeTemplateArt.Gathering(forest), Is.EqualTo(entry.GatheringResources()));
 			Assert.That(forest.HerbGroveHerbs.ConvertAll(p => p.name), Is.EqualTo(entry.GroveHerbs()));
 
@@ -112,13 +116,18 @@ namespace FishMMO.UnitTests
 			// A sea biome's sea life; a dry one's empty lists are decisions, not gaps.
 			BiomeTemplate reef = MakeBiome("Coral Reef");
 			BiomeArtAuthoring.Author(reef, BiomeArtSpec.For("Coral Reef"), source, new BiomeArtAuthoring.Report(), true);
-			Assert.That(reef.SeaLife.ConvertAll(e => e.Kind), Is.EqualTo(new[] { "Reef fish", "Sea turtle", "Crab" }));
-			Assert.That(reef.SeaLife.ConvertAll(e => e.Weight), Is.EqualTo(new[] { 5f, 2f, 2f }), "each at the weight the kind gave its favourites");
+			// Its file's own (the reef's round names its sea life since), kind and weight.
+			List<BiomeSeaLife> reefLife = BiomeArtSpec.For("Coral Reef").SeaLife();
+			Assert.That(reefLife, Is.Not.Empty);
+			Assert.That(reef.SeaLife.ConvertAll(e => e.Kind), Is.EqualTo(reefLife.ConvertAll(e => e.Kind)));
+			Assert.That(reef.SeaLife.ConvertAll(e => e.Weight), Is.EqualTo(reefLife.ConvertAll(e => e.Weight)));
 			BiomeTemplate desert = MakeBiome("Desert");
 			BiomeArtAuthoring.Author(desert, BiomeArtSpec.For("Desert"), source, new BiomeArtAuthoring.Report(), true);
 			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.Vines), Is.True);
 			Assert.That(desert.IsAuthored(BiomeTemplate.Authored.SeaLife), Is.True);
-			Assert.That(BiomeTemplateArt.Vines(desert), Is.Null);
+			Assert.That(desert.SeaLife, Is.Empty);
+			// The desert's own vines since its round (Pergularia on its ruins and trees).
+			Assert.That(BiomeTemplateArt.Vines(desert).Species, Is.EqualTo(BiomeArtSpec.For("Desert").VineGrowth().Species.ConvertAll(v => (v.Species, v.Weight)).ToArray()));
 		}
 
 		/// <summary>

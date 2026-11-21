@@ -1,4 +1,4 @@
-﻿using FishNet.Transporting;
+using FishNet.Transporting;
 using FishNet.Broadcast;
 using FishNet.Managing;
 
@@ -25,7 +25,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Thin orchestrator for the client. Delegates connection lifecycle to
-	/// <see cref="ClientConnectionManager"/>, combat display to <see cref="ClientCombatDisplay"/>,
+	/// <see cref="ClientConnectionManager"/>, the modules' work to their client services,
 	/// and fog to <see cref="ClientFogManager"/>. Handles login server discovery and character
 	/// lifecycle events that must live on the root GameObject.
 	/// </summary>
@@ -37,15 +37,10 @@ namespace FishMMO.Client
 		/// Manages the client's connection lifecycle (connect, disconnect, reconnect).
 		/// </summary>
 		public ClientConnectionManager Connection { get; private set; }
-		/// <summary>
-		/// Displays combat-related UI elements.
-		/// </summary>
-		private ClientCombatDisplay combatDisplay;
 		private ClientNameplateDisplay nameplateDisplay;
 		private ClientBoundaryWarning boundaryWarning;
 
 		/// <summary>Writes what observed characters are casting onto their nameplates.</summary>
-		private ClientCastNameplateDisplay castNameplateDisplay;
 		private ClientWorldClock worldClock;
 		// The modules' client services (ClientServices): the weather's mirror of the scene server's weather.
 		private System.Collections.Generic.List<IClientService> services;
@@ -323,7 +318,6 @@ namespace FishMMO.Client
 			this.clientPostbootSystem?.SetClient(this);
 			UIManager.SetClient(this);
 			ClientNamingSystem.Initialize(this);
-			ClientInteractableStateSystem.Initialize(this);
 			ClientPortalStateSystem.Initialize(this);
 
 			KinematicCharacterSystem.EnsureCreation();
@@ -423,8 +417,8 @@ namespace FishMMO.Client
 				QuitToLogin(forceDisconnect: false);
 			};
 
-			this.combatDisplay = new ClientCombatDisplay();
-			this.combatDisplay.Initialize();
+			// Achievements' and other modules' milestone labels over characters (the combat text is the Combat module's).
+			ClientMilestoneDisplay.Initialize();
 
 			this.nameplateDisplay = new ClientNameplateDisplay();
 			this.nameplateDisplay.Initialize();
@@ -433,8 +427,6 @@ namespace FishMMO.Client
 			this.boundaryWarning = new ClientBoundaryWarning();
 			this.boundaryWarning.Initialize();
 
-			this.castNameplateDisplay = new ClientCastNameplateDisplay();
-			this.castNameplateDisplay.Initialize(NetworkManager);
 
 			// The world clock (core) and the scene's weather on it, mirrored from the scene server.
 			this.worldClock = new ClientWorldClock();
@@ -448,7 +440,6 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient += OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient += OnCharacterStopLocal;
 			IGuildController.OnReadID += OnGuildReadId;
-			Pet.OnReadID += OnPetReadId;
 			this.regionNameLabel = UITKAdvancedLabel.Create("", FontStyle.Normal, null, 0, Color.magenta, 0, false, false, Vector2.zero) as UITKAdvancedLabel;
 			DisplayRegionNameAction.OnDisplay2DLabel += OnRegionNameDisplay;
 		}
@@ -460,15 +451,9 @@ namespace FishMMO.Client
 		{
 			Connection?.Update();
 
-			/* Ages out combat numbers this client predicted and the server never confirmed. Driven
-			 * from here rather than from a timer inside the display, because without a caller the
-			 * sweep never runs and a rejected number stays on screen looking like a real hit. */
-			combatDisplay?.Tick();
-
 			/* Puts up the nameplates of NPCs inside the player's chosen range, and the player's
 			 * own. Same reason it is driven from here: the sweep has no other caller. */
 			nameplateDisplay?.Tick();
-			castNameplateDisplay?.Tick();
 			boundaryWarning?.Tick();
 			if (services != null)
 			{
@@ -478,7 +463,6 @@ namespace FishMMO.Client
 				}
 			}
 
-			TickDeathDialogFallback();
 			TickSceneLoadProgress();
 			TickWorldReady();
 			
@@ -508,14 +492,12 @@ namespace FishMMO.Client
 			IPlayerCharacter.OnStartLocalClient -= OnCharacterStartLocal;
 			IPlayerCharacter.OnStopLocalClient -= OnCharacterStopLocal;
 			IGuildController.OnReadID -= OnGuildReadId;
-			Pet.OnReadID -= OnPetReadId;
 			if (this.regionNameLabel != null) { Destroy(this.regionNameLabel.gameObject); this.regionNameLabel = null; }
 			DisplayRegionNameAction.OnDisplay2DLabel -= OnRegionNameDisplay;
 			this.audioListener = null;
-			this.combatDisplay?.Shutdown();
+			ClientMilestoneDisplay.Shutdown();
 			this.nameplateDisplay?.Shutdown();
 			this.boundaryWarning?.Shutdown();
-			this.castNameplateDisplay?.Shutdown();
 			if (this.services != null)
 			{
 				foreach (IClientService service in this.services)
@@ -547,7 +529,6 @@ namespace FishMMO.Client
 				NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
 			}
 			ClientPortalStateSystem.Destroy();
-			ClientInteractableStateSystem.Destroy();
 			ClientNamingSystem.Destroy();
 			UIManager.SetClient(null);
 			this.clientPostbootSystem?.UnsetClient(this);
@@ -588,11 +569,12 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<ServerBusyBroadcast>(OnServerBusy);
 			NetworkManager.ClientManager.RegisterBroadcast<LoginQueuePositionBroadcast>(OnLoginQueuePosition);
 			NetworkManager.ClientManager.RegisterBroadcast<WorldSceneQueuePositionBroadcast>(OnWorldSceneQueuePosition);
-			NetworkManager.ClientManager.RegisterBroadcast<DeathBroadcast>(OnDeathBroadcast);
 			NetworkManager.ClientManager.RegisterBroadcast<DisconnectNoticeBroadcast>(OnDisconnectNotice);
 			NetworkManager.ClientManager.RegisterBroadcast<SceneTransferRefusedBroadcast>(OnSceneTransferRefused);
 			NetworkManager.ClientManager.RegisterBroadcast<NetworkScheduleBroadcast>(OnNetworkSchedule);
 			NetworkManager.ClientManager.RegisterBroadcast<SiteDiscoveredBroadcast>(OnSiteDiscovered);
+			// System lines when no chat window is installed (the Chat module's window receives chat itself).
+			NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(ChatWindow.OnChatBroadcastFallback);
 			NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
 			NetworkManager.ClientManager.OnClientConnectionState += OnScheduleConnectionState;
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
@@ -688,7 +670,6 @@ namespace FishMMO.Client
 
 			this.fogManager?.Stop();
 			// Every object id these rows are keyed by is about to mean something else.
-			this.castNameplateDisplay?.Clear();
 			// A different scene server keeps its own clock anchor and weather.
 			this.worldClock?.Reset();
 			ClearServices();
@@ -704,9 +685,9 @@ namespace FishMMO.Client
 			this.sceneHandshakePending = false;
 			this.worldReadyPending = false;
 
-			// Nothing about a dead character in the world survives a return to the login screen.
+			// Nothing about a dead character in the world survives a return to the login screen (the Combat module's death
+			// dialog service cancels its fallback when the local character stops).
 			this.localCharacter = null;
-			CancelDeathDialogFallback();
 
 			AddressableLoadProcessor.UnloadSceneByLabelAsync(this.worldPreloadScenes);
 			StopAllCoroutines(); // after unload has been initiated so the async operation isn't cancelled
@@ -1924,55 +1905,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Handles a death broadcast by showing the death dialog UI.
-		/// </summary>
-		/// <param name="msg">The death broadcast message.</param>
-		/// <param name="ch">The network channel.</param>
-		private void OnDeathBroadcast(DeathBroadcast msg, Channel ch)
-		{
-			try
-			{
-				if (TryShowDeathDialog())
-				{
-					return;
-				}
-
-				/* Do NOT respawn from here. Sending the player to their bind point the instant
-				 * one lookup misses would take the decision away from them — including a
-				 * resurrect that another player may already be casting — and it is not
-				 * reversible once the character has left its corpse.
-				 *
-				 * A miss here is far more likely to be a timing artefact than a missing build:
-				 * the world GUI scene that carries the dialog is loaded per world entry, so a
-				 * death notification can in principle be handled a moment before that scene's
-				 * controls have registered. Arm a grace period that keeps retrying instead, and
-				 * let Update decide. */
-				ArmDeathDialogFallback();
-			}
-			catch (Exception ex)
-			{
-				Log.Error("Client", $"OnDeathBroadcast: {ex}");
-			}
-		}
-
-		/// <summary>
-		/// Shows the death dialog if it is currently registered.
-		/// </summary>
-		/// <returns><c>true</c> when the dialog was found and shown.</returns>
-		private bool TryShowDeathDialog()
-		{
-			if (!UIManager.TryGetTK("UIDeathDialog", out UITKDeathDialog deathDialog))
-			{
-				return false;
-			}
-
-			// Idempotent: the control also opens itself when handed a dead character, and
-			// showing an already-visible dialog only refreshes its message.
-			deathDialog.ShowDeathDialog();
-			return true;
-		}
-
-		/// <summary>
 		/// The local player character while one is spawned, or null.
 		/// </summary>
 		/// <remarks>
@@ -1981,171 +1913,6 @@ namespace FishMMO.Client
 		/// has already left this scene server, would move a player who never asked to be moved.
 		/// </remarks>
 		private IPlayerCharacter localCharacter;
-
-		/// <summary>True while waiting for the death dialog to appear before giving up on it.</summary>
-		private bool deathDialogFallbackPending;
-		/// <summary>Unscaled time after which the dialog is treated as genuinely absent.</summary>
-		private float deathDialogFallbackDeadline;
-		/// <summary>Unscaled time of the next attempt to find the dialog.</summary>
-		private float nextDeathDialogRetryTime;
-
-		/// <summary>
-		/// How long to keep looking for the death dialog before falling back to an automatic
-		/// respawn.
-		/// </summary>
-		/// <remarks>
-		/// Long enough to cover the dialog's scene registering after the death notification is
-		/// handled, short enough that a genuinely missing dialog does not leave the player
-		/// staring at a corpse wondering whether the game has stopped responding.
-		/// </remarks>
-		private const float DeathDialogGraceSeconds = 5.0f;
-
-		/// <summary>Seconds between attempts to find the dialog during the grace period.</summary>
-		private const float DeathDialogRetryIntervalSeconds = 0.25f;
-
-		/// <summary>
-		/// Starts the grace period during which the death dialog may still appear.
-		/// </summary>
-		private void ArmDeathDialogFallback()
-		{
-			if (this.deathDialogFallbackPending)
-			{
-				return;
-			}
-
-			this.deathDialogFallbackPending = true;
-			this.deathDialogFallbackDeadline = Time.unscaledTime + DeathDialogGraceSeconds;
-			this.nextDeathDialogRetryTime = Time.unscaledTime + DeathDialogRetryIntervalSeconds;
-
-			Log.Warning("Client",
-				"Character is dead but no death dialog is registered under 'UITKDeathDialog' yet; " +
-				$"waiting up to {DeathDialogGraceSeconds:F0}s for it before falling back to an automatic respawn.");
-		}
-
-		/// <summary>
-		/// Cancels a pending fallback. Called whenever the dead state it was armed for no longer
-		/// applies.
-		/// </summary>
-		private void CancelDeathDialogFallback()
-		{
-			this.deathDialogFallbackPending = false;
-			this.deathDialogFallbackDeadline = 0f;
-			this.nextDeathDialogRetryTime = 0f;
-		}
-
-		/// <summary>
-		/// Retries the death dialog during its grace period and, only once that expires,
-		/// respawns so the character is not stranded.
-		/// </summary>
-		private void TickDeathDialogFallback()
-		{
-			if (!this.deathDialogFallbackPending)
-			{
-				return;
-			}
-
-			float now = Time.unscaledTime;
-			if (now >= this.nextDeathDialogRetryTime)
-			{
-				this.nextDeathDialogRetryTime = now + DeathDialogRetryIntervalSeconds;
-
-				if (TryShowDeathDialog())
-				{
-					// The dialog turned up. The player chooses from here.
-					CancelDeathDialogFallback();
-					return;
-				}
-			}
-
-			if (now < this.deathDialogFallbackDeadline)
-			{
-				return;
-			}
-
-			CancelDeathDialogFallback();
-
-			/* Re-verify before acting. The grace period is long enough for the situation to have
-			 * changed underneath us — another player's resurrect can land, or the character can
-			 * be despawned by a scene transfer — and respawning then would relocate a player who
-			 * is fine, or who is already somewhere else. By this point the client has certainly
-			 * reconciled health, so IsAlive is trustworthy here in a way it would not be in the
-			 * first instants after death. */
-			if (this.localCharacter == null)
-			{
-				Log.Debug("Client", "Death dialog fallback abandoned: the character is no longer spawned locally.");
-				return;
-			}
-
-			if (this.localCharacter.TryGet(out ICharacterDamageController damageController) &&
-				damageController.IsAlive)
-			{
-				Log.Debug("Client", "Death dialog fallback abandoned: the character is alive again.");
-				return;
-			}
-
-			Log.Error("Client",
-				$"No death dialog registered under 'UITKDeathDialog' after {DeathDialogGraceSeconds:F0}s. " +
-				"The respawn and resurrect controls are unreachable, so this character would be stranded dead. " +
-				"Check that the UITKDeathDialog object exists in the world GUI scene, is active, and that its " +
-				"GameObject is named 'UITKDeathDialog'.");
-
-			RequestFallbackRespawn("the death dialog never appeared");
-		}
-
-		/// <summary>
-		/// Earliest unscaled time at which another fallback respawn may be sent.
-		/// </summary>
-		private float nextFallbackRespawnTime;
-
-		/// <summary>
-		/// Minimum seconds between fallback respawn requests.
-		/// </summary>
-		/// <remarks>
-		/// Longer than the server's two-second respawn ingress debounce, so a repeated death
-		/// notification cannot produce a burst the server would only throw away.
-		/// </remarks>
-		private const float FallbackRespawnCooldownSeconds = 3.0f;
-
-		/// <summary>
-		/// Asks the server to respawn this character at its bind point without going through
-		/// the death dialog.
-		/// </summary>
-		/// <remarks>
-		/// A last resort for the case where the dialog cannot be shown at all. Being dead is
-		/// only an intermediate state if something can end it, and every route out of it runs
-		/// through a dialog that is missing here — so the choice is between taking the decision
-		/// away from the player and leaving the character permanently unplayable. Respawning at
-		/// the bind point is the option the player would have had anyway; the resurrect they
-		/// forfeit is speculative, and only offered while they are still lying there.
-		/// <para>
-		/// This is a degraded path that should never run in a correct build, which is why the
-		/// caller logs an error explaining the wiring fault before reaching it.
-		/// </para>
-		/// </remarks>
-		/// <param name="reason">Why the fallback was needed, for diagnostics.</param>
-		private void RequestFallbackRespawn(string reason)
-		{
-			if (Time.unscaledTime < this.nextFallbackRespawnTime)
-			{
-				return;
-			}
-
-			if (!IsConnectionReady())
-			{
-				Log.Warning("Client",
-					$"Cannot send a fallback respawn ({reason}): the connection is not ready. " +
-					"The character stays dead until the connection recovers.");
-				return;
-			}
-
-			this.nextFallbackRespawnTime = Time.unscaledTime + FallbackRespawnCooldownSeconds;
-
-			Log.Warning("Client",
-				$"Automatically respawning at the bind point because {reason}. " +
-				"The player was not offered the choice; fix the death dialog wiring.");
-
-			Broadcast(new RespawnAtBindPointBroadcast(), Channel.Reliable);
-		}
 
 		// ── Auth ────────────────────────────────────────────────────────
 
@@ -2619,15 +2386,6 @@ namespace FishMMO.Client
 				{
 					Log.Error("Client", "OnCharacterStartLocal: input controller setup failed.", ex);
 				}
-
-				try
-				{
-					EnsureDeadCharacterHasAWayOut(c);
-				}
-				catch (Exception ex)
-				{
-					Log.Error("Client", "OnCharacterStartLocal: dead-character check failed.", ex);
-				}
 			}
 			finally
 			{
@@ -2636,42 +2394,6 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Guarantees a character that entered the world already dead can act on it.
-		/// </summary>
-		/// <remarks>
-		/// A character can arrive dead in two ordinary ways: logging in on a corpse, and being
-		/// transferred between scene servers while dead. In both, <c>Flags</c> carries
-		/// <see cref="CharacterFlags.IsDead"/> in the spawn payload, so the state is known here
-		/// without waiting on any message.
-		/// <para>
-		/// <see cref="UITKDeathDialog"/> opens itself from the same state when
-		/// <c>UIManager.SetCharacter</c> hands it the character, which is the normal path and
-		/// runs a moment before this. This exists for the case where that control is not
-		/// present at all: the server's own re-sent <c>DeathBroadcast</c> would reach
-		/// <see cref="OnDeathBroadcast"/> and trigger the same fallback, but only if it arrives
-		/// — and it is sent before the character spawns, so it depends on the world GUI scene
-		/// already being loaded. Checking the spawned character's state does not.
-		/// </para>
-		/// </remarks>
-		/// <param name="c">The local player character that just started.</param>
-		private void EnsureDeadCharacterHasAWayOut(IPlayerCharacter c)
-		{
-			if (c == null || !c.IsFlagged(CharacterFlags.IsDead))
-			{
-				return;
-			}
-
-			if (TryShowDeathDialog())
-			{
-				return;
-			}
-
-			// Same rule as OnDeathBroadcast: never respawn on a single missed lookup. Give the
-			// dialog its grace period first — this path in particular runs during world entry,
-			// which is exactly when its scene may still be settling.
-			ArmDeathDialogFallback();
-		}
-		/// <summary>
 		/// Called when the local character stops. Cleans up input, UI, fog, and destroys the character object.
 		/// </summary>
 		/// <param name="c">The local player character.</param>
@@ -2679,16 +2401,11 @@ namespace FishMMO.Client
 		{
 			this.localCharacter = null;
 
-			// The character this was armed for is gone — despawn, scene transfer, or logout.
-			// Letting it survive would respawn whatever character comes next at its bind point.
-			CancelDeathDialogFallback();
-
 			PlayerInputController.MouseMode = true;
 			c.GameObject.GetComponent<PlayerInputController>()?.Deinitialize();
 			UIManager.UnsetCharacter();
 			if (this.regionNameLabel != null && this.regionNameLabel.gameObject != null) this.regionNameLabel.gameObject.SetActive(false);
 			this.fogManager?.Stop();
-			this.castNameplateDisplay?.Clear();
 			// The next scene sends its own weather when the character arrives there.
 			ClearServices();
 			if (c?.GameObject != null) Destroy(c.GameObject);
@@ -2738,26 +2455,6 @@ namespace FishMMO.Client
 			}
 		}
 		/// <summary>
-		/// Called when a pet ID is read. Sets the pet's label with the owner's name.
-		/// </summary>
-		/// <param name="ownerId">The owner's character ID.</param>
-		/// <param name="pet">The pet instance.</param>
-		private static void OnPetReadId(long ownerId, Pet pet)
-		{
-			if (pet == null || ownerId == 0) return;
-
-			/* The name lookup can go to the server and come back arbitrarily later, by which
-			 * time this pet may have been despawned and handed out of the object pool as some
-			 * other player's pet. Capturing the ID and re-checking it on the way back is what
-			 * stops the callback labelling a stranger's pet with this owner's name. */
-			long petId = pet.ID;
-			ClientNamingSystem.SetName(NamingSystemType.CharacterName, ownerId, name =>
-			{
-				if (pet == null || pet.ID != petId) return;
-				if (pet.CharacterNameplate != null) pet.CharacterNameplate.SetLine(NameplateSlot.GuildName, $"<{name}'s pet>");
-			});
-		}
-		/// <summary>
 		/// Displays the region name label with the specified styling and lifetime parameters.
 		/// </summary>
 		/// <param name="text">The region name text.</param>
@@ -2787,10 +2484,7 @@ namespace FishMMO.Client
 			string name = string.IsNullOrEmpty(msg.SiteName) ? "a place of interest" : msg.SiteName;
 			OnRegionNameDisplay("Discovered: " + name, FontStyle.Bold, null, 28, SiteDiscoveredColor, 4.0f, true, false,
 				new Vector2(0.0f, Screen.height * 0.2f));
-			if (UIManager.TryGetTK("UIChat", out UITKChat chat))
-			{
-				chat.InstantiateChatMessage(ChatChannel.System, "", $"Discovered: {name}.");
-			}
+			ChatWindow.ShowSystem($"Discovered: {name}.");
 		}
 	}
 }

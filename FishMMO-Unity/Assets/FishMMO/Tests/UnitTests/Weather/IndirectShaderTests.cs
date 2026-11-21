@@ -35,6 +35,8 @@ namespace FishMMO.UnitTests
 		private const string IndirectInclude = "#include \"Assets/FishMMO/Shaders/FishIndirectInstancing.hlsl\"";
 		private const string PerDrawInclude = "#include \"Assets/FishMMO/Shaders/FishIndirectPerDraw.hlsl\"";
 		/// <summary>URP's DOTS_INSTANCING_ON pragmas: the BatchRendererGroup path's variants (TerrainGpuRenderer.Brg.cs).</summary>
+		/// <summary>The DXC prelude for DOTS built-ins (statics in a constant buffer; see FishDxcDotsCore.hlsl), which goes before URP's Core.hlsl wherever DOTS.hlsl is included.</summary>
+		private const string DxcDotsCoreInclude = "#include \"Assets/FishMMO/Shaders/FishDxcDotsCore.hlsl\"";
 		private const string DotsInclude = "#include_with_pragmas \"Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl\"";
 
 		private struct Pair
@@ -105,7 +107,7 @@ namespace FishMMO.UnitTests
 			foreach (string line in body.Split('\n'))
 			{
 				string t = line.Trim();
-				if (t == FirstInstancePragma || t == ProceduralPragma || t == IndirectInclude || t == PerDrawInclude || (pair.DotsOnlyInIndirect && t == DotsInclude))
+				if (t == FirstInstancePragma || t == ProceduralPragma || t == IndirectInclude || t == PerDrawInclude || (pair.DotsOnlyInIndirect && (t == DotsInclude || t == DxcDotsCoreInclude)))
 				{
 					continue;
 				}
@@ -160,9 +162,13 @@ namespace FishMMO.UnitTests
 					{
 						file = file.Substring(CoreShaders.Length);
 					}
-					bool passCode = (file.StartsWith("Fish", StringComparison.Ordinal) && file != "FishWeatherLitInput.hlsl" && file != "FishIndirectInstancing.hlsl"
-						&& file != "FishShaderDiagnostics.hlsl" && file != "FishShadowVariants.hlsl" && file != "FishLightCookieVariants.hlsl"
-						&& file != "FishIndirectPerDraw.hlsl")
+					/* Judged by file name, wherever it sits (Surface/FishVegetationPasses.hlsl is pass code too: the name alone, not the
+					 * path, used to decide, so a pass's own code under Surface/ was never counted). The preludes may come first. */
+					string fileName = file.Substring(file.LastIndexOf('/') + 1);
+					bool prelude = fileName == "FishWeatherLitInput.hlsl" || fileName == "FishIndirectInstancing.hlsl" || fileName == "FishShaderDiagnostics.hlsl"
+						|| fileName == "FishShadowVariants.hlsl" || fileName == "FishLightCookieVariants.hlsl" || fileName == "FishIndirectPerDraw.hlsl"
+						|| fileName == "FishDxcDotsCore.hlsl";
+					bool passCode = (fileName.StartsWith("Fish", StringComparison.Ordinal) && !prelude)
 						|| file.Contains("/Shaders/") || file.EndsWith("ObjectMotionVectors.hlsl", StringComparison.Ordinal);
 					if (passCode && other.Index < include)
 					{

@@ -16,10 +16,11 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Achievement to increment when a player crafts an ability at this crafter.
 		/// </summary>
-		public AchievementTemplate AchievementTemplate;
+		[TemplateOf("AchievementTemplate")]
+		public CachedScriptableObject AchievementTemplate;
 
 		/// <inheritdoc />
-		AchievementTemplate IAbilityCrafter.AchievementTemplate => AchievementTemplate;
+		CachedScriptableObject IAbilityCrafter.AchievementTemplate => AchievementTemplate;
 
 		/// <summary>
 		/// The display title for the ability crafter, shown in the UI.

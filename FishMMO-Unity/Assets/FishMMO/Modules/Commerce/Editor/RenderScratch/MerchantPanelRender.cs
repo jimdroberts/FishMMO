@@ -378,7 +378,7 @@ namespace FishMMO.RenderScratch
 		private static List<BaseItemTemplate> BuildCatalogue()
 		{
 			var all = new List<BaseItemTemplate>();
-			foreach (string guid in AssetDatabase.FindAssets("t:BaseItemTemplate", new[] { "Assets/Templates/Entity/Items" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:BaseItemTemplate", new[] { "Assets/FishMMO/Modules/Items/Templates" }))
 			{
 				BaseItemTemplate item = AssetDatabase.LoadAssetAtPath<BaseItemTemplate>(AssetDatabase.GUIDToAssetPath(guid));
 				if (item == null) { continue; }
