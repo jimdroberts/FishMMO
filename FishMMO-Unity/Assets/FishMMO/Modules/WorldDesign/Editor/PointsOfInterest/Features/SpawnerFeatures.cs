@@ -67,6 +67,23 @@ namespace FishMMO.Shared.WorldDesign
 			return context.IsWet(at.x, at.z, 0.1f);
 		}
 
+		/// <summary>True when every choice is a wild beast (its NPC carries a wildlife species).</summary>
+		public static bool AreBeasts(IReadOnlyList<PointOfInterestNpcChoice> choices)
+		{
+			if (choices == null || choices.Count == 0)
+			{
+				return false;
+			}
+			foreach (PointOfInterestNpcChoice choice in choices)
+			{
+				if (choice?.Prefab == null || !choice.Prefab.TryGetComponent(out NPC npc) || npc.WildlifeSpecies == null)
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
 		/// <summary>Whether a role spawns standing on one spot (a vendor at a stall) rather than scattered.</summary>
 		public static bool StandsOnSpot(PointOfInterestNpcRole role)
 		{
@@ -78,7 +95,20 @@ namespace FishMMO.Shared.WorldDesign
 			RaceTemplate race = PointOfInterestFeatureKit.SiteRace(context);
 			PointOfInterestNpcTable table = PointOfInterestNpcTable.LoadOrDefaults();
 			List<PointOfInterestNpcChoice> choices = table.Resolve(race, Role, context.Notes);
-			List<SpawnableSettings> spawnables = PointOfInterestFeatureKit.NpcSpawnables(choices, ApplySiteRace ? race : null);
+			/* Beasts (2026-11-22: the sites' generated monsters, WildlifeBuilder.Monster) are wildlife: each species is its own
+			 * pack and hunts every other, so one spawner draws ONE species for its whole pack, and a beast keeps its own kind
+			 * rather than taking the site's race (a dire wolf is not an elf). */
+			bool beasts = AreBeasts(choices);
+			if (beasts && choices.Count > 1)
+			{
+				GameObject drawn = PointOfInterestNpcTable.Pick(choices, context.Random);
+				choices = choices.FindAll(c => c != null && c.Prefab == drawn);
+				if (choices.Count > 1)
+				{
+					choices.RemoveRange(1, choices.Count - 1);
+				}
+			}
+			List<SpawnableSettings> spawnables = PointOfInterestFeatureKit.NpcSpawnables(choices, ApplySiteRace && !beasts ? race : null);
 			if (spawnables.Count == 0)
 			{
 				PointOfInterestFeatureKit.Note(context, $"its {Role} spawner is empty: assign an NPC.");

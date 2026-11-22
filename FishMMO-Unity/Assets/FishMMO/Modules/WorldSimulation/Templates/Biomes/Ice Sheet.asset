@@ -13,11 +13,7 @@ MonoBehaviour:
   m_Name: Ice Sheet
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.Biomes.BiomeTemplate
   DisplayName: Ice Sheet
-  Description: 'The heart of a continental ice cap: a white dome to every horizon
-    combed into sastrugi by the falling wind, mirror-glazed slopes and fields of
-    old blue ice strewn with black star-stones, dark charnockite nunataks with wind-scooped
-    moats and petrel ledges black with stone-oil. Ice-road carriers cross it from
-    serge post to serge post; the Winter Bull grazes upwind.'
+  Description: 'The heart of a continental ice cap: a white dome to every horizon combed into sastrugi by the falling wind, mirror-glazed slopes and fields of old blue ice strewn with black star-stones, dark charnockite nunataks with wind-scooped moats and petrel ledges black with stone-oil. Ice-road carriers cross it from serge post to serge post; the Winter Bull grazes upwind.'
   BiomeColorId: {r: 0.86, g: 0.93, b: 0.98, a: 1}
   GizmoColor: {r: 0.86, g: 0.93, b: 0.98, a: 1}
   ElevationTier: 9
@@ -147,8 +143,7 @@ MonoBehaviour:
       - Key: peak
         Values:
         - Nunatak Cairn
-      Description: "Sakha voice of the olonkho (ice-road carriers of the middle Lena,
-        600\u20131500): invented names only."
+      Description: "Sakha voice of the olonkho (ice-road carriers of the middle Lena, 600\u20131500): invented names only."
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -463,8 +458,7 @@ MonoBehaviour:
   rareLookB: 0
   grassTypes: []
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 50f9f9eaa1736accae6ad66179737275,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 50f9f9eaa1736accae6ad66179737275, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -836,8 +830,7 @@ MonoBehaviour:
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: b396e5e387c3b565d3684c5a520d8f26,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: b396e5e387c3b565d3684c5a520d8f26, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -1110,8 +1103,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
-  - terrainLayer: {fileID: 8574412962073106934, guid: 13009fd34f6afd48eddd892e734790ea,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 13009fd34f6afd48eddd892e734790ea, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -1381,8 +1373,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
-  - terrainLayer: {fileID: 8574412962073106934, guid: 25b7634e8e15931234062e358937de1e,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 25b7634e8e15931234062e358937de1e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -1458,8 +1449,7 @@ MonoBehaviour:
       Falloff: 0
       Floor: 0
     ways:
-      path: {fileID: 8574412962073106934, guid: 1a4a1cd9d8f0fe3ce908f740a9ae2fa0,
-        type: 2}
+      path: {fileID: 8574412962073106934, guid: 1a4a1cd9d8f0fe3ce908f740a9ae2fa0, type: 2}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules:
@@ -1570,7 +1560,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 0.05
+      densityPer100m2: 1.2
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.45
@@ -1582,8 +1572,8 @@ MonoBehaviour:
       heightFalloff: 0.05
       useSlopeConstraint: 1
       slopeRange:
-        min: 30
-        max: 70
+        min: 0
+        max: 40
       slopeFalloff: 5
       useNonUniformScaling: 0
       uniformScaleRange: {x: 0.8, y: 1.25}
@@ -1634,10 +1624,10 @@ MonoBehaviour:
         FacingSpread: 0
         Lean: 0
         LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
+        Anchor: 7
+        AnchorMetres: 40
         AnchorFloor: 0
-        AnchorNames: 
+        AnchorNames: Nest
         Pattern: 0
         PatternMetres: 0
         PatternShare: 0
@@ -1648,7 +1638,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: dc62c5e52687ce5f
+      specFingerprint: b2b717a88bed717a
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -1950,7 +1940,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 1.5
+      densityPer100m2: 0.5
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.45
@@ -2014,10 +2004,10 @@ MonoBehaviour:
         FacingSpread: 0
         Lean: 0
         LeanDegrees: 0
-        Anchor: 7
-        AnchorMetres: 40
+        Anchor: 0
+        AnchorMetres: 0
         AnchorFloor: 0
-        AnchorNames: Nest
+        AnchorNames: 
         Pattern: 0
         PatternMetres: 0
         PatternShare: 0
@@ -2028,7 +2018,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: c808e1179ced6e78
+      specFingerprint: cdaa3a8e044aec0a
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -2521,8 +2511,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 70c1494242548cb5a15a2b682dcda9f6,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 70c1494242548cb5a15a2b682dcda9f6, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2602,8 +2591,7 @@ MonoBehaviour:
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  - terrainLayer: {fileID: 8574412962073106934, guid: 9d35685f226e0d7939da1f0a8c91d21e,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 9d35685f226e0d7939da1f0a8c91d21e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2876,8 +2864,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: cef2d0a32fe03adc41b10a604bdc3546,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: cef2d0a32fe03adc41b10a604bdc3546, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2957,8 +2944,7 @@ MonoBehaviour:
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  - terrainLayer: {fileID: 8574412962073106934, guid: b1658da2134d85344c0fd962fbd6876c,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: b1658da2134d85344c0fd962fbd6876c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3038,8 +3024,7 @@ MonoBehaviour:
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  - terrainLayer: {fileID: 8574412962073106934, guid: 5431c90142b396f00f7f69378e203c61,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 5431c90142b396f00f7f69378e203c61, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3119,8 +3104,7 @@ MonoBehaviour:
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  - terrainLayer: {fileID: 8574412962073106934, guid: b28e05bc64d8a80eedaa6b614e11e41e,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: b28e05bc64d8a80eedaa6b614e11e41e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3298,8 +3282,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 15322b17706274a00778a4b3d5ebd50c,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 15322b17706274a00778a4b3d5ebd50c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3379,8 +3362,7 @@ MonoBehaviour:
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules: []
-  - terrainLayer: {fileID: 8574412962073106934, guid: 6aa9cdcf4a7358cc22012220d049afef,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 6aa9cdcf4a7358cc22012220d049afef, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3654,8 +3636,7 @@ MonoBehaviour:
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 7d52207fc4a7796a744fafa7accd873c,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 7d52207fc4a7796a744fafa7accd873c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3736,8 +3717,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 02500a43f0ef3e11bd7f32c93f2fae0f,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 02500a43f0ef3e11bd7f32c93f2fae0f, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3818,8 +3798,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 6e33194921aee180cbfa4d851a4fb68a,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 6e33194921aee180cbfa4d851a4fb68a, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3900,8 +3879,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: a98b838521d8a30df020c0df05568645,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: a98b838521d8a30df020c0df05568645, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3990,8 +3968,7 @@ MonoBehaviour:
       max: 1
     rockType: None
     rockTypeAuthored: None
-  - terrainLayer: {fileID: 8574412962073106934, guid: b3ba77f562c9487ca5ff2ff8bc4b2f2b,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: b3ba77f562c9487ca5ff2ff8bc4b2f2b, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4081,8 +4058,7 @@ MonoBehaviour:
     rockType: None
     rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 89de7e464d56b7c29877a85cec8b96a4,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 89de7e464d56b7c29877a85cec8b96a4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4163,8 +4139,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 64441877062403fb050b8cf1b3ef0a75,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 64441877062403fb050b8cf1b3ef0a75, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4245,8 +4220,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 1a4a1cd9d8f0fe3ce908f740a9ae2fa0,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 1a4a1cd9d8f0fe3ce908f740a9ae2fa0, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4327,8 +4301,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 8e1d39efefe79d8935a7e07d844f96c9,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 8e1d39efefe79d8935a7e07d844f96c9, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4810,8 +4783,7 @@ MonoBehaviour:
   - {fileID: 5183624929536887463, guid: fb5bc9fd8fb6f8f65c825bf94c490701, type: 3}
   - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
   - {fileID: 4981490360113623891, guid: 2a215afdac430ca7ebebb77958f95fca, type: 3}
-  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27,
-    type: 3}
+  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27, type: 3}
   caveMouthBoulders: []
   caveMouthLogs: []
   siteKinds:
@@ -6092,11 +6064,7 @@ MonoBehaviour:
   - Field: groundClimate/cliff/1
     Fingerprint: t-|h-|a3
   - Field: Description
-    Fingerprint: 'The heart of a continental ice cap: a white dome to every horizon
-      combed into sastrugi by the falling wind, mirror-glazed slopes and fields of
-      old blue ice strewn with black star-stones, dark charnockite nunataks with
-      wind-scooped moats and petrel ledges black with stone-oil. Ice-road carriers
-      cross it from serge post to serge post; the Winter Bull grazes upwind.'
+    Fingerprint: 'The heart of a continental ice cap: a white dome to every horizon combed into sastrugi by the falling wind, mirror-glazed slopes and fields of old blue ice strewn with black star-stones, dark charnockite nunataks with wind-scooped moats and petrel ledges black with stone-oil. Ice-road carriers cross it from serge post to serge post; the Winter Bull grazes upwind.'
   - Field: naming/Onsets
     Fingerprint: 664d9dabfdd7b9a1
   - Field: naming/Nuclei
@@ -6110,8 +6078,7 @@ MonoBehaviour:
   - Field: naming/POITypeWords
     Fingerprint: a199675bb00d2094
   - Field: naming/Description
-    Fingerprint: "Sakha voice of the olonkho (ice-road carriers of the middle Lena,
-      600\u20131500): invented names only."
+    Fingerprint: "Sakha voice of the olonkho (ice-road carriers of the middle Lena, 600\u20131500): invented names only."
   - Field: TerrainProcess
     Fingerprint: Periglacial
   - Field: acceptedRocks/charnockite

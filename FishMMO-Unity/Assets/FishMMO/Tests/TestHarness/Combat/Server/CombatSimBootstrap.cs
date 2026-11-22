@@ -13,7 +13,7 @@ namespace FishMMO.TestHarness
 {
 	/// <summary>
 	/// End-to-end combat simulation: a real FishNet SERVER runs in-process (no clients, no
-	/// database) and two teams of real NPC fighters cast the entire mock ability roster at each
+	/// database) and two teams of real NPC fighters cast the entire shipped ability roster at each
 	/// other through the production pipeline — replicate-driven input, ECA dispatch, buffs,
 	/// damage, death — while every caster carries a synthetic latency claim (0–500 ms) that
 	/// engages the REAL lag-compensation rewind through <see cref="LagCompensationTick"/>'s
@@ -22,7 +22,7 @@ namespace FishMMO.TestHarness
 	/// <remarks>
 	/// <para>
 	/// What this scene proves: the server-authoritative half of combat runs deterministically
-	/// end-to-end — every mock shape spawns, resolves hits, applies damage/heals/buffs, and
+	/// end-to-end — every ability shape spawns, resolves hits, applies damage/heals/buffs, and
 	/// rewinds targets by exactly the claimed view offset. The client-prediction half
 	/// (rollback identity, replay convergence) is the PlatformSim's job; a single process
 	/// cannot be both peers of a FishNet session, so the two scenes split the model between
@@ -36,7 +36,7 @@ namespace FishMMO.TestHarness
 	/// </remarks>
 	public sealed partial class CombatSimBootstrap : MonoBehaviour
 	{
-		[Tooltip("Direct references to the mock content (unregistered with addressables by design).")]
+		[Tooltip("Direct references to the ability roster and the content it is built from.")]
 		public CombatSimManifest Manifest;
 
 		[Tooltip("Fighters per team.")]
@@ -303,7 +303,7 @@ namespace FishMMO.TestHarness
 			}
 			fighter.RosterOrder = ShuffledIndices(Manifest.Roster.Count);
 			/* The first scripted cast is a buff on the caster itself. The order is shuffled and the scripted casts are
-			 * sparse, so a run could go its whole length without one of the eight buff abilities coming up, and "no buffs
+			 * sparse, so a run could go its whole length without one of the buff abilities coming up, and "no buffs
 			 * applied" then failed a run in which nothing was wrong. One that needs no target and no hit makes the buff
 			 * path certain, the way a recently damaged fighter makes the heal path certain. */
 			for (int i = 0; i < fighter.RosterOrder.Length; ++i)
@@ -508,7 +508,7 @@ namespace FishMMO.TestHarness
 		/// <summary>
 		/// Keeps the fight going forever: re-pairs survivors into the (ranged-standoff)
 		/// AttackingState every cycle — the AI's own enemy sweep is observer-gated and this
-		/// scene has no observers — layers scripted roster casts on top so every mock shape
+		/// scene has no observers — layers scripted roster casts on top so every ability shape
 		/// provably fires, heals damaged fighters, and respawns the fallen.
 		/// </summary>
 		private IEnumerator DirectorLoop()
@@ -621,7 +621,7 @@ namespace FishMMO.TestHarness
 		}
 
 		/// <summary>The roster ability every fighter casts first: a buff on itself, which nothing can make miss.</summary>
-		private const string CertainBuffAbilityName = "Mock Self Armor Buff";
+		private const string CertainBuffAbilityName = "Self Minor Armor";
 
 		private static int[] ShuffledIndices(int count)
 		{
@@ -658,7 +658,7 @@ namespace FishMMO.TestHarness
 				 * where the AI's aim happens to point. The targeted single heal resolves through
 				 * the server's per-cast aim re-trace, which the AI keeps pointed at the ENEMY —
 				 * and its ally-only alliance condition then refuses the traced target. */
-				if (template.name == "Mock Area Heal")
+				if (template.name == "Area Lesser Heal")
 				{
 					break;
 				}

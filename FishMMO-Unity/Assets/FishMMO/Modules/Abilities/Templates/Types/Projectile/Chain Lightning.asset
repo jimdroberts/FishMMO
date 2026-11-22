@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Chain Lightning
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 18ef2a1d1c5c990f44eb2f2760ccf7d5
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'A bolt of lightning that leaps from foe to foe: 5 wind damage to the first it strikes and to up to 3 more, each within 6 m of the last.'
+  ActivationTime: 1.2
+  LifeTime: 1.25
+  Speed: 24
+  Cooldown: 10
+  Modifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713273145458770
+  AbilityObjectPrefab: {fileID: 7216219593733154912, guid: 2f16dfea6a180493ba589a63967b3e16, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 1
+  HitCount: 1
+  StrikesCharactersOnly: 0
+  Type: 4
+  ChargeStages: 0
+  Guard:
+    ReducePercent: 75
+    ArcDegrees: 150
+    CostResource: {fileID: 0}
+    CostPerHit: 5
+    CostPerDamage: 0.5
+  PulseSeconds: 0
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: d45686c41b03ee3eca3a0e30c3d19f21, type: 2}
+  - {fileID: 11400000, guid: ed26d8e07546fd22095cf6822563fffc, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713273145458770
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 15

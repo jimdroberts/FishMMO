@@ -27,9 +27,9 @@ Assets/FishMMO/Modules/Abilities/
 │                                                   Templates/ (scroll consumables)
 ├── Server/               FishMMO.Abilities.Server  IAbilitySystem, AbilitySystem (+ AbilitySystem.asset)
 ├── Client/               FishMMO.Abilities.Client  UITKAbilities, UITKCastBar (+ prefabs, uxml, uss), ClientCastNameplateDisplay
-├── Editor/               FishMMO.Abilities.Editor  Dashboard entries (Abilities, Ability Events), MockAbilityGenerator,
-│                                                   MockConsumableBuilder; RenderScratch/ (cast bar, ability tooltips, panels)
-├── Templates/            Types/, Events/, Mock/ (the ability and ability event assets)
+├── Editor/               FishMMO.Abilities.Editor  Dashboard entries (Abilities, Ability Events), MockConsumableBuilder (the
+│                                                   potions and scrolls); RenderScratch/ (cast bar, ability tooltips, panels)
+├── Templates/            Types/, Events/ (the ability and ability event assets; the Mock/ set was deleted 2026-11-22)
 └── Tests/                FishMMO.Abilities.Tests   The activation, prediction, persistence and wire tests that exercise abilities
 ```
 

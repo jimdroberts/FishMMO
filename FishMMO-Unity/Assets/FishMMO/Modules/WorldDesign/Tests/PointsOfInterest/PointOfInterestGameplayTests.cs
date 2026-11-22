@@ -143,13 +143,22 @@ namespace FishMMO.UnitTests.PointsOfInterest
 		{
 			PointOfInterestNpcTable table = PointOfInterestNpcTable.LoadOrDefaults();
 			Assert.IsNotNull(table.Find("woodelf", "Humanoid", PointOfInterestNpcRole.Banker), "a banker for any race");
-			Assert.IsNotNull(table.Find("orc", "Humanoid", PointOfInterestNpcRole.MonsterPack));
-			Assert.IsNull(table.Find("goblin", "Humanoid", PointOfInterestNpcRole.MonsterPack), "unknown pack race resolves to nothing");
-			Assert.IsNull(table.Find("human", "Humanoid", PointOfInterestNpcRole.Guard), "no guard prefab exists yet");
-
-			var notes = new List<string>();
-			Assert.IsEmpty(table.Resolve(null, PointOfInterestNpcRole.Townsfolk, notes));
-			Assert.AreEqual(1, notes.Count, "an empty role is noted");
+			PointOfInterestNpcEntry orcs = table.Find("orc", "Humanoid", PointOfInterestNpcRole.MonsterPack);
+			Assert.IsNotNull(orcs);
+			Assert.AreEqual("orc", orcs.Race, "the orcs' own row wins over the raiders");
+			// 2026-11-22: every role answers. Any other race's camp gets raiders copied for it; a town its own guards and folk.
+			PointOfInterestNpcEntry goblins = table.Find("goblin", "Humanoid", PointOfInterestNpcRole.MonsterPack);
+			Assert.IsNotNull(goblins, "a goblin camp's pack");
+			Assert.IsTrue(goblins.CloneForRace, "raiders copied for the goblins");
+			PointOfInterestNpcEntry guards = table.Find("human", "Humanoid", PointOfInterestNpcRole.Guard);
+			Assert.IsNotNull(guards, "guards for any town");
+			Assert.IsTrue(guards.CloneForRace, "of the town's race");
+			Assert.IsNotNull(table.Find(null, null, PointOfInterestNpcRole.Townsfolk), "townsfolk for any town");
+			// A beast race's lair is its own beast; one with no body of its own draws from the generated beasts.
+			PointOfInterestNpcEntry boars = table.Find("direboar", "Beast", PointOfInterestNpcRole.MonsterPack);
+			Assert.AreEqual("direboar", boars.Race);
+			Assert.IsFalse(boars.CloneForRace, "a beast keeps its own kind");
+			Assert.AreEqual("Beast", table.Find("giantspider", "Beast", PointOfInterestNpcRole.MonsterPack).RaceCategory);
 		}
 
 		[Test]
@@ -266,7 +275,9 @@ namespace FishMMO.UnitTests.PointsOfInterest
 		{
 			PointOfInterestSiteContext context = Site(POIType.BanditCamp);
 			new NpcSpawnerFeature { Role = PointOfInterestNpcRole.MonsterPack }.Build(context);
-			new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Guard }.Build(context);
+			// A merchant, not a guard: a guard is copied for the site's race, which would save an "Orc a guard" prefab on every
+			// run (the guard rows are pinned by NpcTable_DefaultsServeEveryRaceAndOrcsFillOrcPacks).
+			new NpcSpawnerFeature { Role = PointOfInterestNpcRole.Merchant }.Build(context);
 			new BossSpawnerFeature().Build(context);
 
 			ObjectSpawner[] spawners = context.Root.GetComponentsInChildren<ObjectSpawner>(true);
@@ -283,8 +294,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			RaceTemplate orc = PointOfInterestNpcTable.FindRace("orc");
 			Assert.IsTrue(pack.Spawnables.All(s => s is NPCSpawnableSettings npc && npc.FactionOverride == orc));
 
-			Assert.IsEmpty(spawners[1].Spawnables, "no guard prefab: the spawner is left empty");
-			Assert.IsTrue(context.Notes.Any(n => n.Contains("Guard")), "and noted");
+			Assert.AreEqual(1, spawners[1].Spawnables.Count, "the merchant");
 
 			ObjectSpawner boss = spawners[2];
 			Assert.IsEmpty(boss.Spawnables, "the boss spawner is empty by design");

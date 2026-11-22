@@ -21,6 +21,18 @@ namespace FishMMO.UnitTests
 		/// and guild. The rule now lives where every damage source passes.
 		/// </summary>
 		[Test]
+		public void AggressiveNpcsOfOneFactionAreOneSide()
+		{
+			// 2026-11-22: elf raiders (aggressive, to attack every player) fought each other, because aggression made everyone an
+			// enemy before the factions were asked. Two NPCs of one faction are allies; aggression widens only past it.
+			string controller = ReadModule("Runtime/FactionController.cs");
+			int sameFaction = controller.IndexOf("own == FactionTemplate.InitialFor(otherFactionController.RaceTemplate)", System.StringComparison.Ordinal);
+			int aggression = controller.IndexOf("if (includeAggression && (IsAggressive || otherFactionController.IsAggressive))", System.StringComparison.Ordinal);
+			LogAssert.IsTrue(sameFaction > 0, "the same-faction rule is there");
+			LogAssert.IsTrue(aggression > sameFaction, "and it is asked before aggression makes everyone an enemy");
+		}
+
+		[Test]
 		public void EveryDamageSourceAsksWhoMayBeHarmed()
 		{
 			string damage = Read("Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterDamageController.cs");

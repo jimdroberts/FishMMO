@@ -141,6 +141,15 @@ namespace FishMMO.Shared.Core
 			set => visible = value;
 		}
 
+		/// <summary>
+		/// How many effects are hiding this plate whatever <see cref="Visible"/> says (an invisible character's,
+		/// <c>FXConcealment</c>). Counted, so two overlapping ones show it again only when both have gone.
+		/// </summary>
+		public int ConcealCount { get; set; }
+
+		/// <summary>True while something conceals the plate: the layer draws nothing for it.</summary>
+		public bool Concealed => ConcealCount > 0;
+
 		/// <summary>Draw-order bias; higher paints in front and is dropped last by the budget.</summary>
 		public int Priority
 		{

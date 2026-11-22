@@ -242,12 +242,45 @@ The abstract base for all ability templates. Defines shared fields and ECA-based
 | `RequiresTarget`       | `bool`                        | Whether a target is needed                  |
 | `AdditionalEventSlots` | `byte`                        | Extra crafting slots for events             |
 | `HitCount`             | `int`                         | Max collision hits before destruction       |
-| `Type`                 | `AbilityType`                 | Physical/Magic/Grounded/Aerial type         |
+| `Type`                 | `AbilityType`                 | Physical/Magic/Grounded/Aerial, Block (held guard), Roll, Deflect (parry); picks the caster's animation |
+| `ChargeStages`         | `byte`                        | 2+ = hold to charge through stages; release fires at the stage reached |
+| `StrikesCharactersOnly`| `bool`                        | Pass through scenery (a charge volume)       |
+| `Guard`                | `AbilityGuard`                | Block only: % taken off frontal blows, the arc, and the stamina each blocked blow costs |
 | `OnTickEvents`         | `List<AbilityOnTickEvent>`    | Tick-phase event list                       |
 | `OnHitEvents`          | `List<AbilityOnHitEvent>`     | Hit-phase event list                        |
 | `OnPreSpawnEvents`     | `List<AbilityOnPreSpawnEvent>`| Pre-spawn-phase event list                  |
 | `OnSpawnEvents`        | `List<AbilityOnSpawnEvent>`   | Spawn-phase event list                      |
 | `OnDestroyEvents`      | `List<AbilityOnDestroyEvent>` | Destroy-phase event list                    |
+
+#### Block, Deflect, fork, ricochet, chain (2026-11-22)
+
+- **Block** (`AbilityType.Block`) is HELD: the guard is up from the cast's first tick until release (or `ActivationTime`,
+  the longest hold), then the cooldown starts; nothing spawns. `HeldGuardMitigation` (installed as the core's
+  `DamageMitigation.GuardNegator`, called by `CharacterDamageController.Damage` after the buffs' negation, never for
+  periodic ticks) reads the guard off the defender's live cast: a blow from inside `Guard.ArcDegrees` loses
+  `Guard.ReducePercent`, and costs `CostPerHit + CostPerDamage × blocked` of `Guard.CostResource`; when the pool cannot
+  pay, the blow lands whole and the cast is interrupted (the guard breaks). No buff, so nothing for a replay to double.
+- **Deflect** (`AbilityType.Deflect`) plays the parry clip (`CharacterAnimationSet.Deflect`, `ICharacterAnimationController.TriggerDeflect`);
+  the window itself is a short `DeflectBuffTemplate` applied to the caster.
+- **Fork** is `AbilityForkSplitAction` (OnHit, no selector): `AbilityObject.SpawnForks` splits the object into new child
+  objects fanned about its heading. Fork ids are `ForkChildID(parent, index)`, a pure function, so every peer (observers run
+  the hit chain from the server's hit message) holds the same forks and a hit run twice forks once; forks never fork again
+  and pass through the body that was struck.
+- **Ricochet** is `AbilityRicochetHitAction` (renamed from `AbilityForkHitAction`; `MovedFrom` keeps old assets): it turns
+  the SAME object onto a new heading, mirroring off scenery first with `ReflectOffScenery`.
+- **Chain** damage is `ChainTargetSelector` (server + caster); `PlayChainArcFXAction` draws the leaps on every client with
+  `LightningArc`, walking a look-alike chain locally (presentation only).
+- **Beam** (`AbilityTemplate.PulseSeconds` > 0): HELD and pulsed. From the press until release, `ActivationTime` (the
+  longest hold) or a pulse it cannot pay for, it fires every pulse (`PulseHeldAbility`: spawns its object, so its spawn
+  chain's hitscan runs) and pays its activation costs each pulse. Pulses are counted off the reconciled countdown, so owner
+  and server pulse on the same ticks. `PlayBeamFXAction` redraws the beam line every pulse on every client. (The older
+  `ChanneledTemplate` marker spawns and charges every network tick.)
+- **Bases and effects.** Riders are effect assets (OnHit events) bundled on a base and sold alone: Stun, Freeze, Burn,
+  Interrupt, Hamstring, Lifesteal, Backstab (`IsBehindTargetCondition`: extra damage only from behind). Bases carry
+  `AdditionalEventSlots` so a player can craft effects on. One learned ability per base template, so each named ability
+  stays its own base; "Premade Backstab" is Stab with the Backstab effect.
+- **Invisibility**: `BaseBuffTemplate.BreaksOnAction` buffs end when a cast or item use starts (server,
+  `EndBuffsBrokenByAction`). `AbilityApplyAreaAction.ArcDegrees` < 360 limits an area to a frontal cone (Swipe).
 
 #### PetAbilityTemplate
 
@@ -612,7 +645,7 @@ load-bearing:
 - **Evaluate a value provider before any peer gate, never after.** A draw taken behind
   `EcaAuthority.MayPredict`, an `IsServer` test or `AbilityObject.ResolvesHitsLocally` advances
   the generator only on the peers that pass, and an ungated action later in the same chain
-  (`AbilityForkHitAction`) then reads a different number — which put an observer's copy of a
+  (`AbilityRicochetHitAction`) then reads a different number — which put an observer's copy of a
   forking projectile on a heading the server never took, permanently, from its first hit. Draw,
   then gate on what to *do* with the value. `ResolveTargetAndSpawn` follows the same rule when it
   advances `currentSeed` on a replayed tick whose spawn it skips.

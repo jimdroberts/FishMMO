@@ -29,6 +29,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 00cfe50fe6b06e45facbd15d81b6ae7f
+    m_Address: See Invisible
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 010c1d14c6f1f2d25ada5402642c1648
     m_Address: FeyRing - Ring
     m_ReadOnly: 0
@@ -50,22 +57,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 01a8042eefb9fd59c8ee0a704dc473be
-    m_Address: Mock Interrupt Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 020476d3ff5f7e184b993b76839937e6
     m_Address: Ossuary - Tomb (Medium-Large)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 0208c03b367363bbfb3cba175da7929f
-    m_Address: Mock Consumable Minor Healing
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -288,6 +281,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 052cd6d30fecda2659e2d0afc54f7a62
+    m_Address: Premade Stab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 052d4a8a2c55f7a8eaabed69fe2718c9
     m_Address: AshBuriedCity - Cinder Town (Medium-Large)
     m_ReadOnly: 0
@@ -491,6 +491,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0963305febd225bcdb4a8091c405e92d
+    m_Address: a rootwalker raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 096c0d426d564912918b89c3cb5d554a
     m_Address: Gargoyle
     m_ReadOnly: 0
@@ -575,6 +582,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0a35d943aa1b8593b980adfba5c66d91
+    m_Address: Rejuvenation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0a45324fc4ef46e5bf058abd2434582b
     m_Address: Test Arena
     m_ReadOnly: 0
@@ -584,6 +598,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 0a6aa6eb1dcea50a25afa70dbe803610
     m_Address: Teleporter Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0a87be17112bc0f4c86d67f8b40cfa99
+    m_Address: Burn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -610,13 +631,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 0b101d0f035c9ed29a39bb2627f8ec55
-    m_Address: Mock Cone Blast
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 0b3c277d0f35d2c21a7a69cae479bfc5
     m_Address: Hopper Crystal
     m_ReadOnly: 0
@@ -638,6 +652,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0b9130336945ca308bed50dc3acdf6a6
+    m_Address: Piercing Arrow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0c1ce937b21145688bdba5d3f5d98b0b
     m_Address: Boarfolk
     m_ReadOnly: 0
@@ -654,6 +675,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 0c5ba1085c127029aa24c6584318c14d
     m_Address: Premade Area Minor Armor
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0c7126b77903a424884e402109efe3c3
+    m_Address: Frozen
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -708,15 +736,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 0d58008a9e582b08aa50c366d56358d5
-    m_Address: Mock Destroy FX Event
+  - m_GUID: 0d997ac04c614522b6d25e46cf8ec1e0
+    m_Address: Slime
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 0d997ac04c614522b6d25e46cf8ec1e0
-    m_Address: Slime
+  - m_GUID: 0dc43361dea4e744c9042f6dd6787bd4
+    m_Address: a dire wolf
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -738,6 +766,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 0e021924968127e1f9125965c6058607
     m_Address: Sor Salt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0e425164f51267c7cb82709f07b9e3f5
+    m_Address: Stun
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -778,6 +813,20 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0e946f9d351f8478483fecdffac335ca
+    m_Address: See Invisible Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0ea2d5534b3dab755b227dcc1bde75f1
+    m_Address: Lifesteal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0ec11e24101f9ddd1a002b65004cb524
     m_Address: Minor Healing Potion
     m_ReadOnly: 0
@@ -785,8 +834,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 0ef971633d11f474d94efe1ea839c942
-    m_Address: Mock Hitscan Beam
+  - m_GUID: 0eeaedfc48ff9ddedb43767bc15d0aad
+    m_Address: Ricochet Shot Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -836,6 +885,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 0f472e1f6013a495f9a563ea05bff142
     m_Address: Karst
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0f574451d492e06b890d7da7a026706c
+    m_Address: a guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1401,13 +1457,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 1620b8e92153a6fc6907418be87a52e1
-    m_Address: Mock Nearest Strike
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 162bd13603e4dea8badb29e1d3f63703
     m_Address: Red Ochre
     m_ReadOnly: 0
@@ -1438,13 +1487,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 166891e1257029fd7a669aac4cd1315a
     m_Address: HauntedManor - Burned Grange (Medium-Large)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 16794f965b0ad7e4c86ac5731eb17d0e
-    m_Address: Mock Taunt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1562,13 +1604,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 18016b10e867b9538b74524afae86d16
-    m_Address: Mock Shotgun Projectile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 1870b55ac3702fb038b244beac0d86af
     m_Address: Baobab Fruit Node
     m_ReadOnly: 0
@@ -1674,6 +1709,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 1a36d793494f91c8886d9928b36df7ff
+    m_Address: a forest giant raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1a67f144909691004b79a3d908033dd5
     m_Address: Twinquartz
     m_ReadOnly: 0
@@ -1697,6 +1739,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1ab8069820abc0b45ad5dd91bc796d4c
     m_Address: Highborn Nations
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1ac24ef4c199516aebce2938650beb97
+    m_Address: Stunned
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1732,6 +1781,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1b17c65be22a859d99a262f205bd4fe6
     m_Address: Lesser Heal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1b1bb2564f807f626a536dae22421177
+    m_Address: Premade Ignite
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1774,6 +1830,20 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1c3901a836bd4db39df7f22a2c4b304a
     m_Address: Briarwitch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1c428291e2f86e6b29e0127aebde3c29
+    m_Address: a rat king
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1c4978f14706f3cdf85b725f6b658215
+    m_Address: Premade Drain Life
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -1900,6 +1970,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1db1b0c7798a42628dc6d0c514119f13
     m_Address: Kobold
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1dbb9fd51f3fbc7faa980137e3505184
+    m_Address: Fork Split Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2052,6 +2129,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 20264640e0a5672feb60ec1b7703bf88
+    m_Address: Light Strike Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 202dfadbe2d54389af9f0c35fc62046b
     m_Address: Plot Interact
     m_ReadOnly: 0
@@ -2173,6 +2257,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 21bfeac9a0ac46bc9210e1d1556978a6
     m_Address: Sand Giant
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 22167bcf04a0e4169922a15f6ea2046c
+    m_Address: Stunning Blow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2346,6 +2437,20 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 240dd0d626945646ab2c688035d64837
+    m_Address: a raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 242d559651c503388850b0cf9b1a32e1
+    m_Address: Provoke
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2445eeaf005751d308c1f74272b727f0
     m_Address: BuriedHoard - Cairn
     m_ReadOnly: 0
@@ -2439,6 +2544,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 25d8235feb5968bd8835ac59f0d238ac
     m_Address: FishingCamp - Huts
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2610db2ee494782a5b4d7601416c2a83
+    m_Address: Premade Freezing Bolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2892,8 +3004,29 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2c46a28c5d3e5a60786c107f2331a269
+    m_Address: a ravenfolk guard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2c82df8563528a89a822ff8391037b32
     m_Address: Summer Ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2cbe2f66a0b8a8ad28966a174c0c45b7
+    m_Address: Stab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2cbfc3e9d01691f54934d2da13174507
+    m_Address: Drain Life FX Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2941,6 +3074,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2d657a31f800fe1ea9fd7e84398337ee
+    m_Address: Mesmerize Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2d82d6674b6558552a02911584d8acc6
     m_Address: Mopane Worms Node
     m_ReadOnly: 0
@@ -2978,13 +3118,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 2dd21984ab92ef1ca85df80c940ac00d
     m_Address: Sandfish
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 2dd35c0e41ae12f598e16423b8fc87d0
-    m_Address: Mock Absorb Shield
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3039,15 +3172,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 2e9768318dc5f8ad682acb3ade8da6af
-    m_Address: Mock Knockback Projectile
+  - m_GUID: 2f16dfea6a180493ba589a63967b3e16
+    m_Address: Chain Lightning Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 2f47dc92033251b54a879858d4fd58dd
-    m_Address: Mock Direct Heal Event
+  - m_GUID: 2f488928b33bb6fbebb319ec253d7210
+    m_Address: Drain Life Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3137,6 +3270,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 30a622849f8374f169e59a6b4f4e1374
+    m_Address: Ricochet Shot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 30add282a22812a9386a0a3e2819ff52
     m_Address: ScarecrowField - Tatterfield (Medium-Large)
     m_ReadOnly: 0
@@ -3146,6 +3286,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 30b3331b88e346068a43dac84898c359
     m_Address: Pumice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 30be508a43a3c110a8dabdb721f911a1
+    m_Address: Invisible
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3235,13 +3382,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 323c73c04a475d1a386f9b6fbf22fe07
-    m_Address: Mock Cleanse Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 3243c87cb242a03478e9ee038f7873ed
     m_Address: Elf
     m_ReadOnly: 0
@@ -3286,6 +3426,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 33b1817b43614516815e08d7cc6d7536
     m_Address: Specter
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 33e93bfbd425ec2bbbc123bd2ff95362
+    m_Address: a sabre cat
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3620,6 +3767,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 399b092d330422ae682c0caddb73c1d4
+    m_Address: Premade Backstab
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 39e6b91239057d397ab91af42e34e765
     m_Address: LongshipLanding - Strand Hold (Small)
     m_ReadOnly: 0
@@ -3671,6 +3825,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 3a77547125af551b1ab9bce79c4f8470
     m_Address: JaguarTemple - Maw (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3ab9a9d45f48789e9a00a690898d5fd2
+    m_Address: Premade Arcane Ward
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3732,13 +3893,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 3bbd523bf7bf5320ca7fbea45874b7ce
-    m_Address: Mock Fireball Projectile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 3bbf9309b9d3b3e8c81154523ba7b4e9
     m_Address: Plant of Youth Node
     m_ReadOnly: 0
@@ -3781,6 +3935,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3d107bfe55c6c3560a36b24c94744d60
+    m_Address: a goblin raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3d2d587e02f4ac99fafe2a8239330988
     m_Address: Crannog - Lake Dwelling
     m_ReadOnly: 0
@@ -3797,13 +3958,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 3d4e1283d3d944549883c098371ed863
     m_Address: Sunblessed
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 3d64f6001123c693185e0f314deaf6ee
-    m_Address: Mock Point Blank Nova
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3846,20 +4000,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 3dd004e9e2a1b660890956a535a1ba63
     m_Address: Bridge - Liana
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 3dd24d27fad4b54e8bffb2b3c47197e5
-    m_Address: Mock Piercing Projectile
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 3dd3f343cc5a2a257932168ebc1ce294
-    m_Address: Mock Stun Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4035,6 +4175,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 40a579b3b5b829d5db7a64e04422a066
     m_Address: Windburnt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 40c01df24b3c306789e726bc943d66a4
+    m_Address: Mesmerize Impact FX Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4327,13 +4474,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 4637a288488d62775a18a92d8d7cf78e
-    m_Address: Mock Dispel
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 46492609e1d6f8982841ba25689d51e8
     m_Address: Carnelian Nodule Node
     m_ReadOnly: 0
@@ -4343,6 +4483,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 464a503e8b3717b9097a2b6ab3211b57
     m_Address: Coral-stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 466cc5f04bb8492ee8371219f55f23f7
+    m_Address: Provoke Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4418,6 +4565,20 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 47e81b9373251058882bd597e4229649
+    m_Address: Crossbow Shot Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 48144d4b895d4af39b87cef1fd55c799
+    m_Address: Premade Shield Block
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 48158caf23df88911a12c265a8d4b352
     m_Address: BlightedCrater - Stroke
     m_ReadOnly: 0
@@ -4481,13 +4642,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 48dbdfbf875d44c85882b85120765e3d
-    m_Address: Mock Direct Heal
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 48dcba8474ad6b3738b032ac1cf59d50
     m_Address: SunkenStatue - Toppled
     m_ReadOnly: 0
@@ -4532,13 +4686,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 49456fd3028940d88315032033ad4573
     m_Address: Dawnborn
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 494dff4bda77d7d078a0cba79cc00394
-    m_Address: Mock Attribute Tick Armor Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4621,13 +4768,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 4b0638fbffccc436bb5327fd0deb2b8e
-    m_Address: Mock Charged Shot
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 4b391298b25cf88ba974e2a9a4ab5551
     m_Address: Gesho Leaves
     m_ReadOnly: 0
@@ -4679,6 +4819,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 4c2ebbd6fda0085f2ac754d71d736a75
     m_Address: LongshipLanding - Raid Camp (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4c67d996fde1eeaafb2cb78fbf419020
+    m_Address: Mesmerized
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4782,6 +4929,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 4d9d5efa2348e18cf83394d134ac40fb
+    m_Address: a human townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4daef2f1954d05684904dd3d64b03da7
     m_Address: SmugglersCove - Camp (Medium-Large)
     m_ReadOnly: 0
@@ -4798,13 +4952,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 4dbd08db62fe46b5b6044caa76ebd43a
     m_Address: Hobgoblin
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 4e0fa2784e61b216fac2dd524fee32fd
-    m_Address: Mock Area Pulse Trap
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4936,8 +5083,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 502fdc54c601326af98bbf803b544f56
-    m_Address: Mock Forking Projectile
+  - m_GUID: 4fc73b2e2791ccc57bd9b1e4d8e95626
+    m_Address: Drain Life Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4992,15 +5139,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 519ad2c26141259488b7233901e4d46d
-    m_Address: FactionMatrix
+  - m_GUID: 514f8743eecd4dd08aaa89cc74ebb7b4
+    m_Address: Premade Hamstring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 51a5246fe3203c9eaa1836e90bf55192
-    m_Address: Mock Consumable Self Heal Event
+  - m_GUID: 519ad2c26141259488b7233901e4d46d
+    m_Address: FactionMatrix
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5029,6 +5176,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 51ceef4195e81b66ab248a2e6e8e89dd
     m_Address: Pumice Block
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 51e46a3701c9c29bbb1914641f5df449
+    m_Address: Hamstring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5090,13 +5244,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 52f28517760597d658b581a404304ae8
-    m_Address: Mock Stun Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 52faeb7447c29c763b0c1ff734e5071f
     m_Address: PlanarRift - Torn Arch (Small)
     m_ReadOnly: 0
@@ -5113,13 +5260,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 530499099bc41f4a59b080068b617a66
     m_Address: Wild Pear
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 531387250e89b9ed487b9938ad724a29
-    m_Address: Mock Heal Over Time Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5160,13 +5300,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 534422377d351f2e3937e87597ef9617
-    m_Address: Mock Debuff Slow Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 53568831924d554d19ed946f8c5dbc37
     m_Address: Water Pepper Node
     m_ReadOnly: 0
@@ -5195,13 +5328,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 54077f011c3d2cb83ae660b586c30b24
-    m_Address: Mock Dispel Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 54289926029243edb820a4761fd60d94
     m_Address: Duskherald
     m_ReadOnly: 0
@@ -5225,6 +5351,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 546d6eab4eae2447e8a0d35064489c7e
     m_Address: Flat Oyster
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 546df4324b79245a3a8be60a2c1ecbb9
+    m_Address: Premade Piercing Arrow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5274,13 +5407,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 55419c281c164b72ba4161e45ae88f17
     m_Address: Pigeon Guano
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 55423e7003059d1db86f51cbd0084860
-    m_Address: Mock Heal Over Time
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5370,6 +5496,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 56751493a22a1aba997365609d8706a1
+    m_Address: Hamstrung
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 569af9c6570a461b7be4b9eb6fde371d
     m_Address: OreVein - Spoil
     m_ReadOnly: 0
@@ -5419,6 +5552,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5728052da53ab2a22901bebcdd678cc8
+    m_Address: Invisibility Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 574fb84eaea5033fcb4f6b2576d96ec4
     m_Address: LizardfolkHatchery - Egg Mounds (Small)
     m_ReadOnly: 0
@@ -5428,6 +5568,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 57511c87142b1675082ac7c011db5292
     m_Address: SeaCave - Cache
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 578bac4509bf4b785892b8c0a8b82fa8
+    m_Address: Backstab
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5496,13 +5643,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 5899517cb0158aef98141abd0d8e2536
-    m_Address: Mock Projectile Impact Damage Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 58b39b31950b4104c808244e14478bdb
     m_Address: Water Resistance
     m_ReadOnly: 0
@@ -5561,13 +5701,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 598ad44d9600345498aef4f452b414b8
     m_Address: Grotto - Shrine
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 599e4e5be8619ef4380b3ed1f426b7e0
-    m_Address: Mock Self Armor Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5699,6 +5832,20 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5bb781336a91a2cd7a696c2209446a01
+    m_Address: a ravenfolk townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5bc89c360949c577b9bddf611b2dfe6b
+    m_Address: a spirit raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5bf7c727ffeb8cdb78b535f0bc977420
     m_Address: Manganese Nodules Node
     m_ReadOnly: 0
@@ -5769,6 +5916,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 5db7ef1ac0676d214af2444df94a15b7
+    m_Address: Searing Beam Pulse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5ddee73fffb1eec3d952f8e7fe0996d3
     m_Address: WarbandCamp - Black Host (Small)
     m_ReadOnly: 0
@@ -5792,6 +5946,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 5e56b9ce7e428c9dd84509a6f6cef615
     m_Address: Bison Bone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5e69eecae048d047db0ea9f2cf6d9f79
+    m_Address: Stunning Blow Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5855,13 +6016,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 5eeef51f83920dc7eb83d46b76ed77f5
     m_Address: Fortress - Stone
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 5f19ad0614781477a8f7a053b7ece904
-    m_Address: Mock Channel Marker Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -5944,13 +6098,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 5faebdfb4e2ebc9518562ae7bc405075
-    m_Address: Mock Area Heal
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 5fc1ea969af13c17889c6101fa0a095b
     m_Address: Short Charge Impact
     m_ReadOnly: 0
@@ -5988,6 +6135,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 6062cc72f1e4cd8b2a7641b524b206f0
     m_Address: Short Charge
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 607457f93cb5b141fa12a043c0152f03
+    m_Address: Forked Bolt FX Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6037,6 +6191,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 612185d56997e87a59b14faa979ce4ab
     m_Address: Area Lesser Fire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 615ed8a3d0cf33921bcc31baae5b5437
+    m_Address: a beastman guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6217,8 +6378,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 655842f11b38276f48a7bdf9ad7ad87c
-    m_Address: Mock Fork On Hit Event
+  - m_GUID: 655525e1cfee6581198b7323bbf52692
+    m_Address: Freeze
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6413,6 +6574,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 69e9d0764c42614229c0d13322893462
+    m_Address: Ignite Impact FX Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6a5411d14f521679cbc8d4df9de70e89
     m_Address: Stone-oil Crust
     m_ReadOnly: 0
@@ -6434,15 +6602,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 6adb32216c83abd8bb770d018b8e9bfa
-    m_Address: Mock Furthest Snipe
+  - m_GUID: 6aec4506e766478d68ed4a5d540a17cf
+    m_Address: Root Bolt Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 6aec4506e766478d68ed4a5d540a17cf
-    m_Address: Root Bolt Projectile
+  - m_GUID: 6afb28004c877f3da8eb42379292be89
+    m_Address: a wolffolk guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6616,6 +6784,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6ddb3679b37e822f48181e6e0b5200a5
+    m_Address: Premade Deflect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6dfdb28d2366490c9cf53c3d6e870bf9
     m_Address: Chimera
     m_ReadOnly: 0
@@ -6714,13 +6889,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 6f4d5054b0302ce1f9a830b5a817436f
-    m_Address: Mock Area Damage Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 6f5b01e760d14a829d00f114dce05afc
     m_Address: Sprite
     m_ReadOnly: 0
@@ -6751,13 +6919,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 6fa636778c98d40aea8a361bba0929e7
     m_Address: Yrenara System - Yrenara
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 6fe2945888b8154da84f854d580b107d
-    m_Address: Mock Debuff Slow
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6819,6 +6980,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 70b3d1939734f47f5af8a7bf214b90aa
+    m_Address: Premade Searing Beam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 70ba5c23f3e8ae4dea2e5c0bc9d6a06c
     m_Address: StepPyramid - Sun Steps (Small)
     m_ReadOnly: 0
@@ -6828,6 +6996,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 70bb34a1fa02701618d985bda0545308
     m_Address: Dungeon Chest Loot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 70e0bc2ac8d82faea80dcf5f903e1817
+    m_Address: a foxfolk townsperson
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6917,8 +7092,22 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 72d68fcae7aed9fe58fd53afff77389e
+    m_Address: Premade Provoke
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 72deea210fe89d9158840aabc4da35e5
     m_Address: Sor Salt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 72e79d1071c9b9e48a4b6230402f3529
+    m_Address: Hamstring
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6961,13 +7150,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 73bca6f41ed7947b8a7beaac061a55e7
     m_Address: FireGiantHall - Ember Hall (Small)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 73c8631c2f6724334b6b555a7b3c76ab
-    m_Address: Mock Interrupt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7204,13 +7386,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 782d800db2a3229799240ec2a1911257
-    m_Address: Mock Absorb Shield Buff
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 784713073f5f133de92f97139a666b5e
     m_Address: Cenote - Serpent Well
     m_ReadOnly: 0
@@ -7220,13 +7395,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 785a8896039da5acc98b8a483ef56f81
     m_Address: Glass Sponge
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 787e95cdae6aeae449997a800bc88ef7
-    m_Address: Mock Damage Over Time Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7276,6 +7444,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 79c24563047f6bc6f9dc1dcec1662050
     m_Address: Cholla Buds Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 79f3074d4c978b4e9b70080db89e3cce
+    m_Address: Deflect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7428,6 +7603,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7c480829009d69c23add18566304db96
+    m_Address: Premade Ricochet Shot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7c66ebcd7cddae3a38a3c8eada8465d1
     m_Address: Marsh Clay Node
     m_ReadOnly: 0
@@ -7451,13 +7633,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 7cd12624ca54eabc9aac845ee1f3d076
     m_Address: Nest - Bones (Small)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 7cd43d92272ec5c309d97061f24592c3
-    m_Address: Mock Area Heal Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7525,6 +7700,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7e1bbbb688fc414f3a8c5e31d9d76dd4
+    m_Address: Piercing Arrow Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 7e2c085140d6878d9b3e877468fec17f
     m_Address: Tideborn Restorative
     m_ReadOnly: 0
@@ -7560,13 +7742,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 7eab2880f8bd515669132b5e348f0059
-    m_Address: Mock Damage Over Time Buff
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 7ed37c112e3848db873591af2eb549d2
     m_Address: Dragon
     m_ReadOnly: 0
@@ -7597,6 +7772,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 7f197d9a2bd11e8ada9d7ee59ac9f13f
     m_Address: Apricot Harvest
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 7f1a139254e2cef718e23c7ed2affce3
+    m_Address: Premade Rejuvenate Self
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7700,6 +7882,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 80b76979c58865a08846e9cce9ea8f4d
+    m_Address: Crossbow Shot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 80b8ebbf31eb7401780156db1e353cca
     m_Address: HerbGrove - Stones
     m_ReadOnly: 0
@@ -7756,6 +7945,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 81d76b7143a094c15ae19503dda5e08b
+    m_Address: Disrupting Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 81dd6c8841df66e44ad306e2ef34aaee
     m_Address: Flame
     m_ReadOnly: 0
@@ -7772,6 +7968,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 81f3394cfd23955e49855f2ce9f2c87c
     m_Address: Bog Iron
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 81fdb2d3b49d824148aa4fe19de06e0d
+    m_Address: Chain Lightning
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7805,13 +8008,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 82b83e1c445811210a83a1199be53bad
-    m_Address: Mock Hitscan Bullet Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 82e54404fe2ccc448bd81cbe31657e29
     m_Address: HumanGeneralMerchant
     m_ReadOnly: 0
@@ -7833,13 +8029,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 8317c4c926eb06457a46cef717ee0338
-    m_Address: Mock Single Target Strike
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 833c94ab0de8817509c3dc456cb89458
     m_Address: Carrageen
     m_ReadOnly: 0
@@ -7849,13 +8038,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 834ccfece0f94cd38b690692e5e27dfc
     m_Address: Jadeite
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 8353bd635f2fd582dac35da97561f170
-    m_Address: Mock Cone Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7889,13 +8071,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 840ab52aad01472dea4e8c66d23487a8
-    m_Address: Mock Threat Pulse
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 842e257ff570155a4aaed1d532711fa9
     m_Address: Bardi Pollen
     m_ReadOnly: 0
@@ -7912,6 +8087,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 8462d128604d4cf293e3f82032707cdb
     m_Address: Cinderling
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 846b447eec3b078e2b72b0cf7785a788
+    m_Address: Forked Bolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -7952,6 +8134,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 85677d5ea29aa739dbccd90ba29593fd
+    m_Address: Freezing Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 856c0bf5abf7dd095bfceddb9d2dd833
     m_Address: Lagoonglass Node
     m_ReadOnly: 0
@@ -7982,6 +8171,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 85cc6118e73ffe5359538d04937b0e21
     m_Address: Resurrection Leaf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 85cdcd4f25cbb3fcab4f27236e695819
+    m_Address: a frost wolf
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8043,13 +8239,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 86a5d7685403ecd6890fb5d93f28bb98
-    m_Address: Mock Channeled Flame
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 86b9e7519727d4d94a938da3b7d0cc96
     m_Address: SalamanderLair - Hot Hollow (Medium-Large)
     m_ReadOnly: 0
@@ -8099,15 +8288,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 8738cb874fb6077069ee998d7065a46b
-    m_Address: Halite Crystal Node
+  - m_GUID: 87261611f0ce8557e81661338ea75d42
+    m_Address: Frost Bolt Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 8766246d673041191a07889157e01b58
-    m_Address: Mock Random Bolts
+  - m_GUID: 8738cb874fb6077069ee998d7065a46b
+    m_Address: Halite Crystal Node
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8136,6 +8325,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 87beb4cad83e2f5e8854e2be8b0de7c8
     m_Address: Capital - Stone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 87ef20d9ba0183b7e87a0eb4d5d43eca
+    m_Address: Ignite
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8323,6 +8519,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8c100ed850be89333973e9c1526c2271
+    m_Address: Ignite Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8c10798b399b3a4bb845b72b178518e4
     m_Address: SignalBeacon - Balefire
     m_ReadOnly: 0
@@ -8365,8 +8568,22 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8cc246c285249b143b05137cc65d8c18
+    m_Address: Freezing Bolt Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8ce07605b0fedb5b6ad7493e5b95dcb6
     m_Address: Lajvard Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8cf8fa077cad42886946e3c32ee95f27
+    m_Address: a hobgoblin raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8388,6 +8605,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 8d4760bac1e41eccdbbf60d43e39ad7a
     m_Address: Solarsteinn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8d869c6fc822792ea9e30ebad33a05ec
+    m_Address: a skyfolk raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8659,6 +8883,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 9040f1c3ddd9e485bbd0cfde9a9e28fc
+    m_Address: Burning
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9044df54c932e402db22a4505ab792a5
     m_Address: Allardia Rosette
     m_ReadOnly: 0
@@ -8668,13 +8899,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 9089deedce8cbf32f9b761c226acb8a3
     m_Address: Cotton Boll
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 90b51210c46f889fab3a3a7a9be6404b
-    m_Address: Mock Charge Marker Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8696,6 +8920,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 90db04a2353c8d556be61881ea36bdbc
     m_Address: Breath-ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 90dbfcc60d7783c92acbe622007f76e1
+    m_Address: an elf guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8736,13 +8967,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 9124ebcb2c61069e9a6891cf5fa3643c
-    m_Address: Mock Chain Damage Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 9131b538631f0ebe5ba4ae74dc80c9d2
     m_Address: Belron 1
     m_ReadOnly: 0
@@ -8757,8 +8981,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 915bf5f6fc485ebb2912543aea781533
-    m_Address: Mock Single Target Damage Event
+  - m_GUID: 915df0251de596af1a9a5816884e3619
+    m_Address: Premade Chain Lightning
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8974,13 +9198,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 948fb4b1883942d2a8a95e38e03baf8c
-    m_Address: Mock Stun
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 94b5486aabd89c1fabb2325e5b4aef6c
     m_Address: LizardfolkHatchery - Egg Mounds (Medium-Large)
     m_ReadOnly: 0
@@ -9086,22 +9303,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 95f4190e4464622be9fec7d541e287f8
-    m_Address: Mock Furthest Target Damage Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 95ff40fe5eb69c773a90e94219cf89b9
-    m_Address: Mock Pierce On Hit Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 9618eb022f544efc8ab04b4c1bbeb971
     m_Address: SunkenRuins - Stone (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 961fe2517a786c28290f9f4adb09c213
+    m_Address: Forked Bolt Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9317,6 +9527,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 9aa1817660692501e8e84dfd4d4b295a
+    m_Address: Forked Bolt Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9aa49e0922d75f341a2be18b3000840a
     m_Address: Water Resistance
     m_ReadOnly: 0
@@ -9368,6 +9585,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 9b689d2b035944f195603caf11fc9522
     m_Address: Seraph
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9b79ad725b4396607993fba14e4ff90c
+    m_Address: Arcane Ward
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9527,8 +9751,29 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 9e11d76fde48f030591dd5f593c6d102
+    m_Address: Interrupt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9e1426b26af4b1817822ba9004c92581
     m_Address: FrostGiantSteading - Winter Hold
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9e7592b660291861cba93117e22a3f3e
+    m_Address: Deflecting
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9ea89e7002c04c8a3aca38a6e8830036
+    m_Address: Arcane Ward Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9550,6 +9795,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 9ecc8363d6faedc2a9b1b25c1d37fea4
     m_Address: Calabar Bean
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 9ed834022ac230605b40c8f5fdf7c3e0
+    m_Address: Crossbow Shot Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9687,6 +9939,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a130b76e70976a7fbab85ee35cd97ed9
+    m_Address: Rejuvenate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a143051cf6ed71d51ba237d6519bd123
     m_Address: IceCave - Den (Medium)
     m_ReadOnly: 0
@@ -9757,6 +10016,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a2a571dad3dffbe4384fa571b61ebd92
+    m_Address: a townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a2aa0bf3901de4a03b162000d440b9bf
     m_Address: Kelp Holdfast
     m_ReadOnly: 0
@@ -9780,6 +10046,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a31c8cdaa0c10de2a9f9fe362d1ef4ad
     m_Address: GallowsHill - Gibbet Hill (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a361543dd50345abd81dedd07356b946
+    m_Address: a dire hound
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9843,6 +10116,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a50af1ca9d234d581b271d356dede369
     m_Address: Soapwort
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a5108ca71a6a2022b9b129afa1d1e0d3
+    m_Address: Arcane Ward
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9981,6 +10261,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a7256109ea5fc0cf78fbbfcf4181860d
+    m_Address: Premade Disrupting Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a72725151d2202b71941c49a536e8702
     m_Address: Money Cowrie Node
     m_ReadOnly: 0
@@ -9990,13 +10277,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a7364fafb6a45174babebcc6a5fbdce4
     m_Address: an orc mage
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: a74343c1e5d25ecd2a42503ad6dd1663
-    m_Address: Mock Damage Over Time
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10067,13 +10347,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a83f8d74ff35033dca3f545016781c22
     m_Address: Hazelnut Cluster Node
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: a84d0dae5896e3dc09216006d7c56576
-    m_Address: Mock Minor Armor Buff
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10317,6 +10590,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: ac19979833e0b6a59b82ae0d28aefe0d
+    m_Address: Drain Life
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: ac3a4a75dbcc97a9798cfacf50909753
     m_Address: DragonLair - Burned Hold (Small)
     m_ReadOnly: 0
@@ -10408,8 +10688,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ad5f609ec61a9b9bd9093dd26990f482
-    m_Address: Mock Chain Lightning
+  - m_GUID: ad5b209d4b012f9f2bfd290f585e8bcd
+    m_Address: a frost giant raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10417,13 +10697,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: adc970007212faf8da1045f674727021
     m_Address: Container Open
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: ae3f91470a183af7a803ef3887bcb727
-    m_Address: Mock Line Lance
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10506,6 +10779,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: afc0f19a51e01d33fa06ada8ddc5c100
+    m_Address: Ignite Projectile
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: afc54b2fa316da91286de6bcf6bbda36
     m_Address: Balanites Date
     m_ReadOnly: 0
@@ -10557,6 +10837,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b04d3b47c81aad273aa208f3c9d5ac57
     m_Address: Grange - Walled Barton
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b05f707b1e93edc1195b9c7ee4b445a7
+    m_Address: Premade Swipe
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10681,20 +10968,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: b32b91b8a3545fb4d8b9105322527fb0
-    m_Address: Mock Cleanse
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: b348a99b5bd7906f081a9dd324f5ecd5
-    m_Address: Mock Block Guard Buff
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: b35ddeea5b0721f52bb6c46428d5197c
     m_Address: Solarsteinn
     m_ReadOnly: 0
@@ -10718,13 +10991,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b3c048569fbc422d3b3a490d22ecec02
     m_Address: Sunpetal Patch
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: b3cd782e7ec43b4b7b5d6955a61954bd
-    m_Address: Mock Threat Pulse Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11031,6 +11297,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b8e495744f6f9d97e96ea1bb92456e95
+    m_Address: a skyfolk guard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b8f45415fd0544338ff8c3989d38dd96
     m_Address: Boar
     m_ReadOnly: 0
@@ -11108,6 +11381,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: baeba7136e62562f1961b413c80f2697
+    m_Address: a dire boar
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: bb092e66d6039905483ffa3e5891a9eb
     m_Address: SummitCairn - Cairn
     m_ReadOnly: 0
@@ -11143,6 +11423,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: bb77081b64968d79db5417e652cc4391
+    m_Address: Swipe Strike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: bb7a29d99f564aca8cd681cebd71ca4f
     m_Address: Harpy
     m_ReadOnly: 0
@@ -11152,6 +11439,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: bb806c6a0eacb731182a6ba6dfcb3d5c
     m_Address: Matsutake
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: bb859010a524643c8a67c9632c4e0bf2
+    m_Address: Rejuvenate Self
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11297,13 +11591,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: bd663c781351766ddbb65be6d3962765
-    m_Address: Mock Projectile Move Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: bd9feef207c6fcc1c9f5c5e9c689c5ab
     m_Address: a boar
     m_ReadOnly: 0
@@ -11334,6 +11621,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: be5dccb8fa400281fb382ffd4d61d5b9
     m_Address: BanditCamp - Open (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: be7f84068fed174c8a6b4c1997fa5269
+    m_Address: a frostkin raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11381,6 +11675,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: bf6f430fbe3bfdcaaa846cbe57c3383c
+    m_Address: Premade Invisibility
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: bf79c3a44e6071b9c9c8a9211fe68b05
     m_Address: Places Discovered
     m_ReadOnly: 0
@@ -11409,20 +11710,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: bfe078adfc3a3867791d70c33343ae91
-    m_Address: Mock Random Target Damage Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: c03b3addd5a9a75bd9d5533cffe9eb55
-    m_Address: Mock Hitscan Beam Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: c047fcb62856afe3791e3e559c24229c
     m_Address: Bitumen Seep
     m_ReadOnly: 0
@@ -11432,13 +11719,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: c0995f0c2a12473f98ec02da0c96ca1b
     m_Address: Merfolk
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: c0a6b5cb5391647a7b45feccc953cd6e
-    m_Address: Mock Taunt Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11521,6 +11801,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: c1ad4f15c90196ec490bb4644afc9f65
+    m_Address: Rejuvenate Impact FX Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: c1b6aaccb5ab8d3af8d673a72e091668
     m_Address: Castle - Stone
     m_ReadOnly: 0
@@ -11549,15 +11836,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: c268ae156cc0f50ba82d8b55d8084510
-    m_Address: FireTemple - Pyre
+  - m_GUID: c20732797711dd1028253149b447ba7f
+    m_Address: Mesmerize Bolt Projectile
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: c29928174537ffbcf83f1c7ea6eb39c8
-    m_Address: Mock Deflect Stance Event
+  - m_GUID: c268ae156cc0f50ba82d8b55d8084510
+    m_Address: FireTemple - Pyre
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11759,6 +12046,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: c68e80df1dd3710eb992c2200e4bca20
+    m_Address: a beastman townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: c6bee919a7543dc67a081aa5ffeb84f9
     m_Address: Embersalt Node
     m_ReadOnly: 0
@@ -11913,6 +12207,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: c8d852a7d5a007dc1896b0ef64a3a145
+    m_Address: a werewolf raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: c8e56fbd5ee04fd55920ae69dd10058a
     m_Address: Yrenara System - Oronos
     m_ReadOnly: 0
@@ -11957,6 +12258,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ca1064cf8e824b3459408462685297c2
     m_Address: Bloodroot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ca6e8e009e70fa9429cfa5d4e606c8ee
+    m_Address: Swipe
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12354,8 +12662,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: d143d7217aecd0321b2d18d5a15e5c17
-    m_Address: Mock Absorb Shield Event
+  - m_GUID: d115317164846274f86e0977064df810
+    m_Address: Rejuvenate Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12363,6 +12671,20 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: d18af011aa0d6cfe69441bc4ccfb5d8e
     m_Address: Shabchiragh Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d19684625eacae71f8e69dbee62fe6b1
+    m_Address: Frost Impact FX Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d197782bf0fda8cb2aaf3549c6a65b0d
+    m_Address: a frost giant guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12398,6 +12720,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: d24fa8fc3c554ef9b7e257e1be7433ef
     m_Address: Bramble Beast
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d27af3dc0339f0568b5750e0e88f4605
+    m_Address: Swipe Burst
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12524,6 +12853,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: d451a154657cf1052a93b3a2509fb861
     m_Address: GriffinRoost - Ledge Roost (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d45686c41b03ee3eca3a0e30c3d19f21
+    m_Address: Chain Lightning Strike
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12683,8 +13019,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: d7cfca8d8ec83e2aa9e313854d8bdd11
-    m_Address: Mock Slow Debuff
+  - m_GUID: d76643359dd394f46a7759453cf0124c
+    m_Address: See Invisible
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d7b580e9436a9f857bb3288aa8e6d644
+    m_Address: Premade Crossbow Shot
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12802,13 +13145,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: d9be0f02ed6d9cb21bb01d1c04d30ed3
-    m_Address: Mock Spawn Multiply Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: d9c3035ef31caf82a966d9bc86b3814b
     m_Address: Self Dispel Magic Event
     m_ReadOnly: 0
@@ -12900,13 +13236,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: db9ade9d3353c692b8a57a6ed0e8db96
-    m_Address: Mock Block Raise Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: db9e2f73b5a74b1db36c4163c87d01e4
     m_Address: Phoenix
     m_ReadOnly: 0
@@ -12986,6 +13315,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: dcc03a8f8f28eee61bf25a58fe391bf1
     m_Address: HauntedManor - Grey Manor (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: dcf7442cf97fc12e7838947a99b81315
+    m_Address: an elf raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13075,6 +13411,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: de8f51aec8018fcc793589b41e40940f
+    m_Address: a reedfolk townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: deb2cd96ff9ae3478ae2ee80c75fae81
     m_Address: Chiy Stems
     m_ReadOnly: 0
@@ -13089,22 +13432,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: deced8ea13363bb4ea7e3a4e0876268f
-    m_Address: Mock Shield Block
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: ded0e12287c74ecb9ba5d6c3b4cdad98
     m_Address: LavaTube - Camp (Medium)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: ded2117ceb81012698104c27531c62db
-    m_Address: Mock Knockback Impact Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13138,6 +13467,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: df49ca777005fe471bfaec2d3fdedc10
+    m_Address: Piercing Arrow Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: df75273e9455345c28a4c98a82434a82
     m_Address: Vivianite Node
     m_ReadOnly: 0
@@ -13147,13 +13483,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: df79c6fb87b84576a987639703bcc8f5
     m_Address: Forgekin
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: df79f743556971aa785f17e911525518
-    m_Address: Mock Line Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13439,6 +13768,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e2a278a6fda53dc7b8892436ba8ba632
+    m_Address: a giant rat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e2cabf180689b73989cd2cd9482dc1c8
     m_Address: a wolf
     m_ReadOnly: 0
@@ -13460,15 +13796,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: e31a159aae8e3948fb5e5d715ccbfcd0
-    m_Address: Port - Timber
+  - m_GUID: e30409eeb76624cce9fa9b72d1a22cfe
+    m_Address: Shield Block
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: e320e55d6c61d0e68bbdff9fa2f97e35
-    m_Address: Mock Deflect Stance Buff
+  - m_GUID: e31a159aae8e3948fb5e5d715ccbfcd0
+    m_Address: Port - Timber
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13509,15 +13845,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: e367a61b4631c0ec6bc797f032fef31f
-    m_Address: Mock Pre Spawn Cost Event
+  - m_GUID: e37548aba1d69c14cb2bd288e7882f76
+    m_Address: DungeonFog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: e37548aba1d69c14cb2bd288e7882f76
-    m_Address: DungeonFog
+  - m_GUID: e3b0f75b37b8831e1a8fc9807d4829af
+    m_Address: Premade See Invisible
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13532,20 +13868,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e3de60721fa74f34aaa93d995981f4e6
     m_Address: Count Damage Received
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: e3e463f1607fe984b9712d60b46738ba
-    m_Address: Mock Area Pulse Tick Event
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: e3e5fd0affd66b13599673486c0aed99
-    m_Address: Mock Hitscan Bullet
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13602,6 +13924,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e4d55259cefa1d2d6aa23744978036f6
     m_Address: Labradorite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e5035527ac5499f27bd246e64d2dc3be
+    m_Address: Searing Beam Burn
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13796,6 +14125,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e87507f4e47bd106aab623aa2bca50dc
+    m_Address: Premade Stunning Blow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e889e8c795dac80758f4a61f2c92ff06
     m_Address: MonsterDen - Bones (Small)
     m_ReadOnly: 0
@@ -13845,6 +14181,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e9b7af4016382cd6686707ea004111aa
+    m_Address: a mosskin raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e9e7e644d73a0afca90106992a7784e6
     m_Address: TitansBones - Sunken Skull
     m_ReadOnly: 0
@@ -13868,6 +14211,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ea0ff7b1f46f48959c9c3895367a2322
     m_Address: Giant Bat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ea1285ea11248483d8ad41d5d9a406e3
+    m_Address: an air elemental raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13992,15 +14342,15 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ec195f4536024b189145c327661c5c48
-    m_Address: Thunder Lizard
+  - m_GUID: ebf8c231f0ece317897235232f37a49d
+    m_Address: Stab Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ec2054b3a84c52311a47b23114504552
-    m_Address: Mock Self Armor Buff Event
+  - m_GUID: ec195f4536024b189145c327661c5c48
+    m_Address: Thunder Lizard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14064,6 +14414,20 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ed1a53994f69e50858a4e042f12f87a1
     m_Address: Breath-ice
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ed1d09863b5af68c5aba8f46a49bf677
+    m_Address: Ricochet Bounce Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ed26d8e07546fd22095cf6822563fffc
+    m_Address: Chain Lightning Arcs
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14183,6 +14547,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: eeb51378b442d367897465d5dcd2dbb4
     m_Address: Thatching Reed
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: eec8ed995f29e19d9ad4ead523879fa1
+    m_Address: Ricochet Shot Impact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14321,6 +14692,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f083947a4ac0e63a58bbd2217815b517
+    m_Address: Invisibility
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f09301caed4a8f0c788fd3ad4362d624
     m_Address: Bulrush Bundle
     m_ReadOnly: 0
@@ -14419,6 +14797,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f198ef3b01e722c3b9a19732c64e29c2
+    m_Address: Searing Beam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f1b0165311715cbaea2f7809301910ba
     m_Address: Barrow - Ringed (Medium-Large)
     m_ReadOnly: 0
@@ -14449,6 +14834,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f22b14cdcc91d29298c8bd337ac78882
     m_Address: Premade Area Lesser Heal
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f22e220bbe790559bb5c5429bc9410d9
+    m_Address: a dire bear
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14510,6 +14902,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f331ccdb8c4c84b7b8c095361feaca8c
+    m_Address: Premade Mesmerize
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f3323611ca799ffc9a48d77c5f9a1bf6
     m_Address: BrickKiln - Kiln
     m_ReadOnly: 0
@@ -14540,6 +14939,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f419d95142350619ca48dc9a2ff71cdd
     m_Address: HagsCauldron - Witch Pot (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f4218d025ebbf36bc87965d7a29bc896
+    m_Address: Mesmerize
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14754,6 +15160,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f69f869caf92933b2b4b035210f64798
+    m_Address: Premade Rejuvenate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f6a782f5b5c1ec438a4e0aabdf06e02f
     m_Address: MossColossus - Sleeper
     m_ReadOnly: 0
@@ -14763,6 +15176,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f6a84ae4503b93c0d983d0677ca3732a
     m_Address: Spongilla
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f6ad6fc8d87ad38438bceb1847392108
+    m_Address: a celestial raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14812,6 +15232,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f705680e0c35f3d9b8e38cc14d545696
     m_Address: SunkenTemple - Colonnade (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f715473191a39f0598a542ce67946040
+    m_Address: Premade Forked Bolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14915,6 +15342,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f909e0887791efc9c8deb4a2ce92e357
+    m_Address: Pet Regeneration
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f9116fa7190f01a4a93eb32cafac787b
     m_Address: Stamina
     m_ReadOnly: 0
@@ -14978,6 +15412,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f98fabfbce0d5fd3d9aed8b371a2eb1f
+    m_Address: a boarfolk guard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f9c0129471d85d4f291dbb1c19021d2a
     m_Address: BuriedHoard - Hidden Cache
     m_ReadOnly: 0
@@ -15029,13 +15470,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: fab28f0e7dcaa855380fe26d68e32e9e
     m_Address: GreenwoodHideout - Hollow Oak Camp (Medium-Large)
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: fac5d1080314dd2768e69611fe181bad
-    m_Address: Mock Nearest Target Damage Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -15146,8 +15580,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: fcb385802b73f6dbea289f5510eed315
-    m_Address: Mock Deflect Stance
+  - m_GUID: fd145f53ceaeb06faaced52bab9106d0
+    m_Address: Pet Regeneration
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -15162,6 +15596,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: fdd4e9089edf614e1ad5a0101cf5b996
     m_Address: Bloodroot Patch Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fe0885c6661605ba8b834d0e1921a834
+    m_Address: Rejuvenate Self Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -15265,8 +15706,8 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ff81fe79c8c39b5fc90c7636172097a5
-    m_Address: Mock Heal Over Time Buff
+  - m_GUID: ff758ccf04b8c9480a4636c8d9f8346b
+    m_Address: Deflect Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

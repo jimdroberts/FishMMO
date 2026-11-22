@@ -21,3 +21,6 @@ MonoBehaviour:
   startingAbilityIDs: 225e66f8
   startingInventoryItemIDs: 
   startingEquipmentIDs: 0cc7c5e0231e22e51e5ef24e09715d8b3d1817a7e054811c
+  startingCurrencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e,
+    type: 2}
+  startingCurrencyAmount: 1000

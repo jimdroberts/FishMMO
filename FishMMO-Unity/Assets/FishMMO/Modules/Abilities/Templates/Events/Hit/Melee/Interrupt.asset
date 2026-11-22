@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
+  m_Name: Interrupt
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityOnHitEvent
+  TargetSelector:
+    rid: 4295713273274171435
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 4295713273274171436
+  - rid: 4295713273274171437
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon: {fileID: 21300000, guid: 4fc8fb1e6aa8cd01c026de3e870c2bdc, type: 3}
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  Modifiers: []
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713273274171435
+      type: {class: EventTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Conditions:
+        - rid: 4295713273274171438
+        - rid: 4295713273274171439
+        FallbackToInitiator: 0
+    - rid: 4295713273274171436
+      type: {class: InterruptAction, ns: FishMMO.Shared, asm: FishMMO.Abilities}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+    - rid: 4295713273274171437
+      type: {class: PlayFXAction, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0
+        FXPrefab: {fileID: 5486056790568155295, guid: e9da0e9b871e4aa13aaab4a93c41ffe7, type: 3}
+        Size: 0.8
+        HeightOffset: 1.5
+    - rid: 4295713273274171438
+      type: {class: TargetAllianceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        ApplyToSelf: 0
+        ApplyToEnemy: 1
+        ApplyToNeutral: 1
+        ApplyToAllies: 0
+        NeutralPlayersOnly: 0
+        NeutralExcludesWildlifeAndPets: 0
+        ExcludeOthersPets: 0
+    - rid: 4295713273274171439
+      type: {class: IsCharacterAliveCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0

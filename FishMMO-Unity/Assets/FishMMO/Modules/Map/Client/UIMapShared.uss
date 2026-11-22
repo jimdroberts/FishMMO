@@ -205,6 +205,15 @@
     instead, and this shape is what shows through until it loads — or forever, for a dungeon that
     has no artwork.
 */
+/*
+    A housing plot for sale: a green square, a parcel of land to claim. Squared like the other
+    places, and filled, because it is an offer rather than a threshold.
+*/
+.map-marker--housingplot .map-marker__icon {
+    background-color: var(--map-housing);
+    border-radius: 2px;
+}
+
 .map-marker--dungeonentrance .map-marker__icon {
     background-color: var(--map-dungeon);
     border-radius: 2px;

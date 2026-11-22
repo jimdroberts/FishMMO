@@ -230,9 +230,9 @@ namespace FishMMO.RenderScratch
 				{ "Lesser Fireball", 3 },
 				{ "Lesser Flame", 2 },
 				{ "Punch", 1 },
-				{ "Mock Chain Lightning", 3 },
-				{ "Mock Line Lance", 2 },
-				{ "Mock Point Blank Nova", 2 },
+				{ "Chain Lightning", 3 },
+				{ "Forked Bolt", 2 },
+				{ "Area Lesser Fire", 2 },
 			};
 
 			foreach (string guid in AssetDatabase.FindAssets("t:AbilityTemplate", new[] { "Assets/FishMMO/Modules/Abilities/Templates" }))

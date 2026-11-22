@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Freezing Bolt
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: e336581821cdd4fa4faafbb5c48ead72
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'A shard of winter: 3 water damage, and the first foe it strikes is frozen solid for 3 seconds. It cannot move, turn, cast or use items.'
+  ActivationTime: 1
+  LifeTime: 1.5
+  Speed: 16
+  Cooldown: 20
+  Modifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713273145458711
+  AbilityObjectPrefab: {fileID: 7918519236127067406, guid: 87261611f0ce8557e81661338ea75d42, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 1
+  HitCount: 1
+  StrikesCharactersOnly: 0
+  Type: 4
+  ChargeStages: 0
+  Guard:
+    ReducePercent: 75
+    ArcDegrees: 150
+    CostResource: {fileID: 0}
+    CostPerHit: 5
+    CostPerDamage: 0.5
+  PulseSeconds: 0
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: 8cc246c285249b143b05137cc65d8c18, type: 2}
+  - {fileID: 11400000, guid: 655525e1cfee6581198b7323bbf52692, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents:
+  - {fileID: 11400000, guid: d19684625eacae71f8e69dbee62fe6b1, type: 2}
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713273145458711
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 12

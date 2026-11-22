@@ -2625,6 +2625,9 @@ namespace FishMMO.Shared
 				// ResetDuration is NOT called here — it only runs for existing buffs below.
 				isNew = true;
 				buffInstance = new Buff(template.ID, replicateDomainTick, tickDelta);
+				/* Known before OnApply runs, not only after (below): a template that acts for its caster (a charm turning
+				 * its target to whoever cast it) reads it there. */
+				buffInstance.SetCaster(caster);
 				if (simulates)
 				{
 					buffInstance.Apply(Character);

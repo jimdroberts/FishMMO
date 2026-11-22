@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Crossbow Shot
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 958c503f6ae68ea9634882542de43a35
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'A bolt that arrives as it leaves: 6 physical damage to the first body within 30 m along your aim. Walls stop it.'
+  ActivationTime: 0.5
+  LifeTime: 0.1
+  Speed: 0
+  Cooldown: 3
+  Modifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713273274171476
+  AbilityObjectPrefab: {fileID: 5419506727904623116, guid: 565e0766498da82c2bc22b585fcf1a8b, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 1
+  HitCount: 1
+  StrikesCharactersOnly: 0
+  Type: 3
+  ChargeStages: 0
+  Guard:
+    ReducePercent: 75
+    ArcDegrees: 150
+    CostResource: {fileID: 0}
+    CostPerHit: 5
+    CostPerDamage: 0.5
+  PulseSeconds: 0
+  IntentOverride: 0
+  OnTickEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: 9ed834022ac230605b40c8f5fdf7c3e0, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents:
+  - {fileID: 11400000, guid: 47e81b9373251058882bd597e4229649, type: 2}
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713273274171476
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
+        RequiredAmount: 8

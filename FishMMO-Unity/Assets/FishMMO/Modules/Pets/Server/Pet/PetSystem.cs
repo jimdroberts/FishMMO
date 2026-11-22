@@ -1428,6 +1428,24 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="owner">The summoner, and the event's initiator.</param>
 		/// <param name="summoningAbility">The cast that summoned the pet, or null.</param>
 		/// <param name="pet">The pet that arrived.</param>
+		/// <summary>The owner's learned (crafted) copy of <paramref name="template"/>, or null: one per template, as the crafter allows.</summary>
+		private static Ability FindLearnedSummon(ICharacter owner, PetAbilityTemplate template)
+		{
+			if (owner == null || template == null || !owner.TryGet(out IAbilityKnowledgeController knowledge) ||
+				knowledge.KnownAbilities == null)
+			{
+				return null;
+			}
+			foreach (Ability ability in knowledge.KnownAbilities.Values)
+			{
+				if (ability != null && ReferenceEquals(ability.Template, template))
+				{
+					return ability;
+				}
+			}
+			return null;
+		}
+
 		private static void InvokeSummonEvents(ICharacter owner, Ability summoningAbility, Pet pet)
 		{
 			if (owner == null ||
@@ -1579,10 +1597,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						 * leashed every database-restored pet to world (0,0,0): the moment it entered
 						 * any state with leashing enabled it walked — or warped — to the corner of the
 						 * map. The summon path always passed a real position; only this one did not. */
-						SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, spawnPosition, abilities, conn,
+						if (SpawnAndInitializePet(character, petController, petAbilityTemplate, nob, spawnPosition, abilities, conn,
 							PersistedAttributesFor(attributeRows, petData.Slot, petData.Version),
 							PersistedBuffsFor(buffRows, petData.Slot, petData.Version),
-							restoredSlot: petData.Slot);
+							restoredSlot: petData.Slot))
+						{
+							/* The summon spell's crafted On Summon effects again, from the owner's learned copy of it: a
+							 * permanent effect they put on the pet (a regeneration) is not saved with it (permanent buffs never
+							 * are, BuffController.IsPersistedBuff), so without this a pet came back from a login without it.
+							 * Actions only: the abilities a summon taught are the saved list, as before. */
+							InvokeSummonEvents(character, FindLearnedSummon(character, petAbilityTemplate), nob.GetComponent<Pet>());
+						}
 					}
 				});
 			}

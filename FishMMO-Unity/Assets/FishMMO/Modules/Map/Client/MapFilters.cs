@@ -232,6 +232,7 @@ namespace FishMMO.Client
 					return MapFilterCategory.Players;
 
 				case MapMarkerType.Vendor:
+				case MapMarkerType.HousingPlot:
 				case MapMarkerType.QuestGiver:
 				case MapMarkerType.Trainer:
 				case MapMarkerType.Service:

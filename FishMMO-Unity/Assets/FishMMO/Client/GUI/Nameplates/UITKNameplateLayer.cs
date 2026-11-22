@@ -603,7 +603,7 @@ namespace FishMMO.Client
 
 				// A hidden plate is not drawn — but it stays registered, because its rows are
 				// still being written into while it is down.
-				if (!plate.Visible)
+				if (!plate.Visible || plate.Concealed)
 				{
 					SetDisplayed(binding, false);
 					continue;

@@ -175,6 +175,7 @@ namespace FishMMO.Shared
 		public void TriggerJump() { }
 		public void SetBlocking(bool blocking) { }
 		public void TriggerRoll() { }
+		public void TriggerDeflect() { }
 		public void SetRootMotion(bool enabled) { }
 	}
 

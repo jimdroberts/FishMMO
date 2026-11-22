@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Dire Wolf
+  m_EditorClassIdentifier: FishMMO.Wildlife::FishMMO.Shared.WildlifeTemplate
+  Role: 2
+  WalkSpeed: 1.5
+  RunSpeed: 9.5
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 360
+  Body:
+    Length: 1.45
+    Depth: 0.5
+    Width: 0.4
+    LegLength: 0.7
+    LegThickness: 0.09
+    NeckLength: 0.34
+    NeckRaise: 25
+    HeadLength: 0.42
+    HeadSize: 0.21
+    EarSize: 0.12
+    Horns: 0
+    HornSize: 0
+    TailLength: 0.5
+    TailRaise: 20
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.18, g: 0.17, b: 0.17, a: 1}
+    Belly: {r: 0.35, g: 0.33, b: 0.31, a: 1}
+    Accent: {r: 0.55, g: 0.1, b: 0.08, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 0
+  Shelter: 2
+  Surfaces: 0
+  GroupsPerKm2: 0
+  GroupMin: 1
+  GroupMax: 1
+  DenKinds: 
+  DensInCaveMouths: 0
+  ColoniesInCaves: 0
+  RespawnMinSeconds: 300
+  RespawnMaxSeconds: 600

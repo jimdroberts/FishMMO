@@ -75,6 +75,24 @@ namespace FishMMO.Server.Implementation.LoginServer
 		/// List of equipment template IDs to equip on new characters at creation.
 		/// </summary>
 		[SerializeField, TemplateReference(typeof(EquippableItemTemplate))] private List<int> startingEquipmentIDs = new List<int>();
+		/// <summary>
+		/// The currency attribute a new character starts with <see cref="startingCurrencyAmount"/> of. The same template the
+		/// merchant, trade and /admin gold systems use.
+		/// </summary>
+		[SerializeField]
+		[Tooltip("The currency attribute new characters are given Starting Currency Amount of. Use the same template the trade and merchant systems use. None gives nothing.")]
+		private CharacterAttributeTemplate startingCurrencyTemplate;
+		/// <summary>
+		/// How much of <see cref="startingCurrencyTemplate"/> a new character starts with.
+		/// </summary>
+		/// <remarks>
+		/// Written as the character's currency row at creation, NOT as the template's InitialValue: every sheet (NPCs and
+		/// pets included) starts at InitialValue, and so does an existing character that has never saved a currency row.
+		/// </remarks>
+		[SerializeField]
+		[Tooltip("Currency a new character starts with. Zero gives nothing.")]
+		[Min(0)]
+		private int startingCurrencyAmount = 1000;
 
 		/// <summary>
 		/// Read-only access to the cached world scene details.
@@ -741,14 +759,19 @@ namespace FishMMO.Server.Implementation.LoginServer
 		private List<PreparedAttributeEntry> BuildStartingAttributeEntries(RaceTemplate raceTemplate)
 		{
 			var attributes = new List<PreparedAttributeEntry>();
-			if (raceTemplate?.InitialAttributes?.Attributes == null)
+			if (raceTemplate?.InitialAttributes?.Attributes != null)
 			{
-				return attributes;
+				foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
+				{
+					attributes.Add(new PreparedAttributeEntry(template.ID, template.InitialValue, template.IsResourceAttribute));
+				}
 			}
 
-			foreach (CharacterAttributeTemplate template in raceTemplate.InitialAttributes.Attributes)
+			/* After the race's entries: rows are keyed by template, so this one wins over a race that also lists the
+			 * currency attribute at its InitialValue. */
+			if (startingCurrencyTemplate != null && startingCurrencyAmount > 0)
 			{
-				attributes.Add(new PreparedAttributeEntry(template.ID, template.InitialValue, template.IsResourceAttribute));
+				attributes.Add(new PreparedAttributeEntry(startingCurrencyTemplate.ID, startingCurrencyAmount, startingCurrencyTemplate.IsResourceAttribute));
 			}
 
 			return attributes;

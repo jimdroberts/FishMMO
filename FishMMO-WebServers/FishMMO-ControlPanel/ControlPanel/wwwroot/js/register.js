@@ -498,18 +498,19 @@ export function renderVerification(container, { username, pending, onVerified })
 
 	container.innerHTML = `
 		<div class="stack">
-			${ui.banner('info', places.length === 1 ? 'Enter your verification code' : 'Enter any one of your codes',
-				places.length === 1
-					? `A verification code was sent ${where}. Enter it below, or later from the sign-in screen.`
-					: `A verification code was sent ${where}. Any one of them verifies the account: enter whichever arrives first, here or later from the sign-in screen.`)}
+			${ui.banner('info', 'Confirm your new account',
+				(places.length === 1
+					? `A one-time code was sent ${where}. Enter it below, or later from the sign-in screen.`
+					: `A one-time code was sent ${where}. Any one of them confirms the account: enter whichever arrives first, here or later from the sign-in screen.`)
+				+ ' You need it only once; it is not two-factor sign-in.')}
 			<form class="stack" data-verify>
 				<div class="field">
-					<label for="verify-code">Verification code</label>
+					<label for="verify-code">One-time code</label>
 					<input id="verify-code" name="code" inputmode="numeric" maxlength="${VERIFY_CODE_LENGTH}"
 						autocomplete="one-time-code" placeholder="000000" required />
 				</div>
 				<div data-verify-result></div>
-				<button class="btn btn-primary btn-block" type="submit">Verify account</button>
+				<button class="btn btn-primary btn-block" type="submit">Confirm account</button>
 			</form>
 			${resendable.length ? `
 				<div class="row" style="gap:var(--sp-2);flex-wrap:wrap">

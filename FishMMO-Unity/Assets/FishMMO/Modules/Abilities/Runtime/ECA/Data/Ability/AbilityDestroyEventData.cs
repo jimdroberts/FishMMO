@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// only the caster and a tick. <see cref="AbilityObject.TryResolveFrom"/> reads the collision,
 	/// spawn and tick payloads, so every object-scoped action wired to OnDestroy —
 	/// <c>AbilityApplyAreaAction</c>, <c>AbilityApplyHitscanAction</c>, <c>AbilityHitCountAction</c>,
-	/// <c>AbilityForkHitAction</c>, <c>AbilityMoveTransformAction</c>,
+	/// <c>AbilityRicochetHitAction</c>, <c>AbilityMoveTransformAction</c>,
 	/// <c>AbilitySpawnMultiplyAction</c>, <c>AbilityApplyTargetAction</c> — resolved nothing and
 	/// returned having silently done nothing. That made the most ordinary shape in the genre,
 	/// <i>a projectile that detonates in an area when its lifetime runs out</i>, impossible to

@@ -443,6 +443,12 @@ namespace FishMMO.Client
 		private void ApplyCameraSettings()
 		{
 			camera.orthographic = true;
+			/* A Preview camera, not a Game camera (2026-11-22, Jim: the preview showed the sky and clouds). The layer mask
+			 * only culls renderers; the world's renderer features (clouds, volumetric and height fog, heat shimmer, the
+			 * world passes, the target outline, colour vision) draw full-screen passes for every Game camera whatever it
+			 * culls, so the portrait got the weather behind the character. Each of them stands down for any camera that is
+			 * not Game or SceneView, and the sky's own per-camera work only follows the main camera. */
+			camera.cameraType = CameraType.Preview;
 			camera.clearFlags = CameraClearFlags.SolidColor;
 			camera.backgroundColor = Color.clear;
 			camera.cullingMask = BuildCullingMask();

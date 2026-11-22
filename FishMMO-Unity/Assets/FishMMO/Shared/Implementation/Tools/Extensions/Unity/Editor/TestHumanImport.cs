@@ -44,7 +44,7 @@ namespace FishMMO.Shared
 			"LeftUpLeg", "RightUpLeg", "LeftLeg", "RightLeg", "LeftToeBase", "RightToeBase",
 		};
 
-		public override uint GetVersion() => 7;
+		public override uint GetVersion() => 8;
 
 		private void OnPreprocessModel()
 		{
@@ -74,6 +74,61 @@ namespace FishMMO.Shared
 				description.skeleton = new SkeletonBone[0];
 				importer.humanDescription = description;
 			}
+		}
+
+		/// <summary>The animation set the model's clips are played from.</summary>
+		public const string AnimationSetPath = "Assets/Prefabs/Client/Models/TestHuman/TestHuman Animations.asset";
+
+		/// <summary>
+		/// After the model imports, points every EMPTY clip slot of <see cref="AnimationSetPath"/> whose name matches one of
+		/// the model's clips at that clip (2026-11-22: the Deflect parry). A clip's sub-asset id is the importer's to assign,
+		/// so a new take is wired here, by name, rather than by a hand-written reference. Slots already set are left alone.
+		/// </summary>
+		private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
+		{
+			if (System.Array.IndexOf(importedAssets, ModelPath) >= 0)
+			{
+				FillAnimationSet();
+			}
+		}
+
+		/// <summary>Fills the animation set's empty slots from the model's clips by name. Returns how many it set.</summary>
+		public static int FillAnimationSet()
+		{
+			CharacterAnimationSet set = AssetDatabase.LoadAssetAtPath<CharacterAnimationSet>(AnimationSetPath);
+			if (set == null)
+			{
+				return 0;
+			}
+			var clips = new System.Collections.Generic.Dictionary<string, AnimationClip>();
+			foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(ModelPath))
+			{
+				if (asset is AnimationClip clip && !clip.name.StartsWith("__preview__"))
+				{
+					clips[clip.name] = clip;
+				}
+			}
+			int filled = 0;
+			foreach (System.Reflection.FieldInfo field in typeof(CharacterAnimationSet).GetFields())
+			{
+				if (field.FieldType == typeof(AnimationClip) && field.GetValue(set) as AnimationClip == null &&
+					clips.TryGetValue(field.Name, out AnimationClip match))
+				{
+					field.SetValue(set, match);
+					filled++;
+				}
+			}
+			if (filled == 0)
+			{
+				Debug.Log($"[TestHumanImport] no empty clip slot to fill (model clips: {string.Join(", ", clips.Keys)}).");
+			}
+			if (filled > 0)
+			{
+				EditorUtility.SetDirty(set);
+				AssetDatabase.SaveAssetIfDirty(set);
+				Debug.Log($"[TestHumanImport] {filled} empty clip slot(s) of '{AnimationSetPath}' set from the model's clips.");
+			}
+			return filled;
 		}
 
 		private void OnPreprocessAnimation()

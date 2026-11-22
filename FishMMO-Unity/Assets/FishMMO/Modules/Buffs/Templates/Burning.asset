@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 875884366fb607e29b6a3b4ad989d51e, type: 3}
+  m_Name: Burning
+  m_EditorClassIdentifier: FishMMO.Buffs::FishMMO.Shared.ResourceTickBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 1b48114b8f9a2ee1987dc5d23abca2a8
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Burning: 2 fire damage a second.'
+  icon:
+    m_AssetGUID: c03e5f43dc37fef62c94e1a35538ae9a
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 6
+  TickRate: 1
+  OnTickEvents: []
+  MaxStacks: 3
+  IsPermanent: 0
+  IsDebuff: 1
+  BreaksOnAction: 0
+  TickAttributes:
+  - Value: -2
+    Template: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+  DamageAttribute: {fileID: 11400000, guid: e0d004d1b5e90374fa54e7f9aec2166a, type: 2}

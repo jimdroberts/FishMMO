@@ -129,6 +129,7 @@ namespace FishMMO.Shared
 			seenSwimming = false;
 			// A pooled character reused by another player must not arrive faded.
 			faded = false;
+			concealCount = 0;
 			fade.Restore();
 #endif
 		}
@@ -142,19 +143,81 @@ namespace FishMMO.Shared
 
 		private void ApplyFade()
 		{
-			if (faded && Character != null && Character.MeshRoot != null)
+			/* The deeper of the two fades wins: an invisible character (ConcealedOpacity) is fainter than a hidden one. A
+			 * viewer who sees invisible (ConcealmentView) sees someone else's invisibility at RevealedOpacity; its own is
+			 * always drawn as it is. /gm invis (faded) is a different thing and nothing reveals it. */
+			float concealed = concealCount <= 0 ? 1f
+				: (ConcealmentView.SeesInvisible && !base.IsOwner) ? RevealedOpacity : ConcealedOpacity;
+			float opacity = Mathf.Min(concealed, faded ? HiddenOpacity : 1f);
+			if (opacity < 1f && Character != null && Character.MeshRoot != null)
 			{
-				fade.Apply(Character.MeshRoot, HiddenOpacity);
+				if (fade.IsApplied && !Mathf.Approximately(appliedOpacity, opacity))
+				{
+					fade.Restore();
+				}
+				fade.Apply(Character.MeshRoot, opacity);
+				appliedOpacity = opacity;
 			}
-			else if (!faded && fade.IsApplied)
+			else if (opacity >= 1f && fade.IsApplied)
 			{
 				fade.Restore();
 			}
 		}
 
+		/// <summary>The opacity <see cref="fade"/> was last applied at.</summary>
+		private float appliedOpacity = 1f;
+#endif
+
+		/// <summary>How opaque an invisible character is drawn: 80% gone (Jim, 2026-11-22).</summary>
+		public const float ConcealedOpacity = 0.2f;
+
+		/// <summary>How opaque someone else's invisibility is to a viewer who sees invisible: plain to see, still marked.</summary>
+		public const float RevealedOpacity = 0.55f;
+
+		/// <summary>Re-draws the fade after what the viewer can see has changed (<see cref="ConcealmentView.Changed"/>).</summary>
+		public void RefreshConcealment()
+		{
+#if !UNITY_SERVER
+			ApplyFade();
+#endif
+		}
+
+		/// <summary>How many effects are concealing this character (<see cref="FXConcealment"/>).</summary>
+		private int concealCount;
+
+		/// <summary>
+		/// Draws the model <see cref="ConcealedOpacity"/> see-through (an invisible character), or releases one such hold.
+		/// Counted, like <see cref="HoldPose"/>. Derived on every client from the invisibility buff's effect: nothing on the wire.
+		/// </summary>
+		public void SetConcealed(bool concealed)
+		{
+			concealCount = concealed ? concealCount + 1 : Mathf.Max(0, concealCount - 1);
+#if !UNITY_SERVER
+			ApplyFade();
+#endif
+		}
+#if !UNITY_SERVER
+
 		private void OnEnable()
 		{
-			body?.SetPlaying(true);
+			body?.SetPlaying(poseHolds == 0);
+		}
+
+		/// <summary>How many effects are holding the body still (<see cref="FXFreezePose"/>, a freeze's ice).</summary>
+		private int poseHolds;
+
+		/// <summary>True while something holds the body in its current pose.</summary>
+		public bool IsPoseHeld => poseHolds > 0;
+
+		/// <summary>
+		/// Holds the body in the pose it has now (a frozen character), or releases one hold. Counted, so two overlapping
+		/// freezes release only when both have ended. Derived from what every peer already shows (the freeze's effect is
+		/// instantiated by the buff on the owner and every observer), so nothing goes on the wire.
+		/// </summary>
+		public void HoldPose(bool hold)
+		{
+			poseHolds = hold ? poseHolds + 1 : Mathf.Max(0, poseHolds - 1);
+			body?.SetPlaying(poseHolds == 0 && isActiveAndEnabled);
 		}
 
 		private void OnDisable()
@@ -214,12 +277,16 @@ namespace FishMMO.Shared
 				groundMask &= ~(1 << playerLayer);
 			}
 			RestorePoseForCurrentState();
+			if (poseHolds > 0)
+			{
+				body.SetPlaying(false);
+			}
 		}
 
 		/// <summary>One frame of the body's motion, before the animation is evaluated.</summary>
 		private void Update()
 		{
-			if (body == null || bodyRoot == null)
+			if (body == null || bodyRoot == null || poseHolds > 0)
 			{
 				return;
 			}
@@ -409,6 +476,14 @@ namespace FishMMO.Shared
 		{
 #if !UNITY_SERVER
 			body?.Roll();
+#endif
+		}
+
+		/// <inheritdoc />
+		public void TriggerDeflect()
+		{
+#if !UNITY_SERVER
+			body?.Deflect();
 #endif
 		}
 

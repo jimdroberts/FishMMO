@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b9c07b0c81a2821dbbbeb33f3b87890, type: 3}
+  m_Name: Stunned
+  m_EditorClassIdentifier: FishMMO.Buffs::FishMMO.Shared.StateBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 2e45d4abfebad24b3a69c5ac8f23b3f8
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Stunned: cannot move, turn, cast or use items.'
+  icon:
+    m_AssetGUID: 94417ed9a98a40b703d81c0d0fde536d
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 2
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 1
+  BreaksOnAction: 0
+  Flag: 7

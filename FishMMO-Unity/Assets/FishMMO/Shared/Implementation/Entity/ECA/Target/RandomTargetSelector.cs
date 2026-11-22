@@ -186,7 +186,7 @@ namespace FishMMO.Shared
 		/// shared generator is threaded onto an ability object's OnSpawn/OnTick/OnHit/OnDestroy
 		/// payloads and is advanced by side effect, so a draw taken behind a peer gate advances it
 		/// only on the peers that pass — and an ungated action later in the same chain
-		/// (<c>AbilityForkHitAction</c>) then reads a different number, putting an observer's copy
+		/// (<c>AbilityRicochetHitAction</c>) then reads a different number, putting an observer's copy
 		/// of a forking projectile on a heading the server never took, permanently, from its first
 		/// hit. That is the rule stated on <c>AbilityObject.RNG</c>.
 		/// </para>

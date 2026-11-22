@@ -113,7 +113,7 @@ namespace FishMMO.Shared
 				 *
 				 * eventData.RNG is threaded onto an ability object's event payloads and is advanced
 				 * by side effect, so drawing from it behind a peer gate advances it on the server
-				 * alone — and an ungated action later in the same chain (AbilityForkHitAction) then
+				 * alone — and an ungated action later in the same chain (AbilityRicochetHitAction) then
 				 * reads a different number, putting an observer's copy of a forking projectile on a
 				 * heading the server never took. That is the rule stated on AbilityObject.RNG, and
 				 * a dispel is its worst shape: the loop below draws a VARIABLE number of times,

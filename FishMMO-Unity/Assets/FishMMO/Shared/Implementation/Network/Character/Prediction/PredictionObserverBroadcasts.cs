@@ -502,7 +502,7 @@ namespace FishMMO.Shared
 		/// destroyed the object and played its destroy events and nothing else. The message it sent
 		/// was an ordinary impact, and every observer, the blocker's own client included, ran the
 		/// ability's entire OnHit chain off the back of it: impact effects for a shot that never
-		/// landed, <c>AbilityForkHitAction</c> redirecting a copy off a hit the server rejected, and
+		/// landed, <c>AbilityRicochetHitAction</c> redirecting a copy off a hit the server rejected, and
 		/// RNG draws the server never made (<c>AbilityObject</c>'s parity contract).
 		/// </para>
 		/// <para>

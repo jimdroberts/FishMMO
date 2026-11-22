@@ -118,5 +118,11 @@ namespace FishMMO.Shared
 		WreckersBeacon, SirenRock, SeaWitchGrotto, LongshipLanding, KrakenWreck, FireTemple, FireGiantHall, SalamanderLair,
 		AshBuriedCity, MerfolkVillage, KrakenGrounds, LadyOfTheLake, NymphPool, LakeMonsterLair, Commandery, LostThrone,
 		RoyalMausoleum,
+
+		/// <summary>
+		/// A housing plot for sale (2026-11-22, Jim: "We would like a Plot for sale map marker"), placed by the Housing module
+		/// from the server's list of its scene's unclaimed plots. Appended last: the ordinal is draw order.
+		/// </summary>
+		HousingPlot,
 	}
 }

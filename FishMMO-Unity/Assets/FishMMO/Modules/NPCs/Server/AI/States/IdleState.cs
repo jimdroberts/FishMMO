@@ -57,7 +57,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			/* A pet idles at its owner's heel rather than drifting into a movement state, and
 			 * drifting away from a moving owner is exactly what a wander transition would do.
 			 * Its own follow state handles staying close. */
-			if (controller.OwningPet != null)
+			if (controller.OwningPet != null || controller.IsCharmed)
 			{
 				return;
 			}

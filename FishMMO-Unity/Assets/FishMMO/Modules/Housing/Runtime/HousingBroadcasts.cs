@@ -420,4 +420,35 @@ namespace FishMMO.Shared
 		/// <summary>The plot to give up.</summary>
 		public long PlotID;
 	}
+
+	/// <summary>One plot for sale, as the map marks it.</summary>
+	public struct HousingPlotForSale
+	{
+		/// <summary>The deed post's position.</summary>
+		public Vector3 Position;
+
+		/// <summary>What claiming it costs.</summary>
+		public long Price;
+	}
+
+	/// <summary>
+	/// Asks for the plots for sale in the sender's scene (2026-11-22: the "Plot for sale" map markers). Sent by the client each
+	/// time its character starts in a scene.
+	/// </summary>
+	public struct HousingPlotsForSaleRequestBroadcast : IBroadcast
+	{
+	}
+
+	/// <summary>
+	/// The unclaimed plots of a scene, for the map's "Plot for sale" markers. The answer to a request, and pushed again to
+	/// everybody in the scene whenever one of its plots is claimed or released. The whole list each time: a scene holds tens.
+	/// </summary>
+	public struct HousingPlotsForSaleBroadcast : IBroadcast
+	{
+		/// <summary>The scene the list is for; a client in another scene by the time it lands ignores it.</summary>
+		public string SceneName;
+
+		/// <summary>Every plot of the scene that may be claimed now.</summary>
+		public HousingPlotForSale[] Plots;
+	}
 }

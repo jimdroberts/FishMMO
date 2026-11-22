@@ -64,6 +64,39 @@ namespace FishMMO.Shared
 		public byte ChargeStages;
 
 		/// <summary>
+		/// What a <see cref="AbilityType.Block"/> ability's guard does while it is held. Ignored by every other type.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// A Block ability is HELD (<see cref="AbilityController.RequiresHeld"/>): the guard is up from the first tick of the
+		/// cast until the hotkey is released or <see cref="BaseAbilityTemplate.ActivationTime"/> (the longest hold) runs out,
+		/// and then the cooldown starts. It spawns nothing and costs nothing to raise beyond its activation conditions; each
+		/// hit it takes the edge off costs <see cref="AbilityGuard.CostResource"/> (see <see cref="AbilityGuard"/>).
+		/// </para>
+		/// <para>
+		/// Read off the defender's cast state when a hit lands (<c>HeldGuardMitigation</c>), so there is no buff to keep in
+		/// step with the hold: the guard is up exactly while the cast is, on every peer that knows the cast.
+		/// </para>
+		/// </remarks>
+		[Tooltip("Block abilities only: what the held guard takes off frontal hits, and what each blocked hit costs.")]
+		public AbilityGuard Guard = new AbilityGuard();
+
+		/// <summary>
+		/// Above zero: a HELD, PULSED ability — a beam. While the hotkey is held it fires every this many seconds (its object
+		/// is spawned and its spawn chain runs, a hitscan for a beam) and pays its activation costs each time, from the press
+		/// until release, <see cref="BaseAbilityTemplate.ActivationTime"/> (the longest hold) or a pulse it cannot pay for.
+		/// Then the cooldown starts. Zero is an ordinary cast.
+		/// </summary>
+		/// <remarks>
+		/// Unlike the channel marker (<see cref="AbilityController.ChanneledTemplate"/>), which spawns and charges every
+		/// network tick, the pulse sets the rate. The pulses are counted from the cast's own countdown, which is reconciled,
+		/// so the owner and the server fire on the same ticks.
+		/// </remarks>
+		[Tooltip("Above zero: held and pulsed (a beam). Fires and pays its costs every PulseSeconds while held; ActivationTime is the longest hold.")]
+		[Min(0f)]
+		public float PulseSeconds;
+
+		/// <summary>
 		/// Forces this ability's AI intent instead of deriving it from the action graph.
 		/// </summary>
 		/// <remarks>

@@ -121,7 +121,7 @@ namespace FishMMO.AbilityContent
 		private static readonly Palette EarthPalette = new Palette(new Color(0.45f, 0.33f, 0.22f), new Color(0.85f, 0.78f, 0.62f));
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Test Ability Suite", Section = "Ability Content", Order = 1,
-			Tooltip = "Generates the heals, the five area abilities, Short Charge, Lesser Teleport and Root with their FX, registers them as addressables and adds them to the General Goods merchant.")]
+			Tooltip = "Generates the whole test ability suite (heals, areas, movement, root, blink, dispel, and the crowd-control, over-time, projectile and defence abilities) with their FX, registers them as addressables and adds them to the General Goods merchant.")]
 		public static void GenerateAll()
 		{
 			written.Clear();
@@ -151,7 +151,13 @@ namespace FishMMO.AbilityContent
 				GenerateBlinkOnHit(abilities, allEvents);
 				// Dispel Magic and Self Dispel Magic (TestAbilitySuiteGenerator.Dispel.cs).
 				GenerateDispel(abilities, allEvents);
+				// Stun, Freeze, Mesmerize, over-time, ricochet/fork/chain, Block and Deflect (TestAbilitySuiteGenerator.CombatSuite.cs).
+				GenerateCombatSuite(abilities, allEvents);
+				// Stealth, skirmish and utility, and the Pet Regeneration effect (TestAbilitySuiteGenerator.Skirmish.cs).
+				extraPremades.Clear();
+				GenerateSkirmishSuite(abilities, allEvents);
 				List<PremadeAbilityTemplate> premades = GeneratePremades(abilities);
+				premades.AddRange(extraPremades);
 				WireHasteAnkles(fx);
 				WireMerchant(abilities, allEvents, premades);
 

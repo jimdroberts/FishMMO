@@ -13,10 +13,7 @@ MonoBehaviour:
   m_Name: Glacier
   m_EditorClassIdentifier: 
   DisplayName: Glacier
-  Description: "A valley glacier \u2014 blue ice and leaning s\xE9racs between polished
-    rock, crevasse fields and roaring moulins, striped moraines and a black rubble
-    tongue ending in the ice mouth where the river is born; pilgrims cross by wand
-    lines to ice-cave shrines"
+  Description: "A valley glacier \u2014 blue ice and leaning s\xE9racs between polished rock, crevasse fields and roaring moulins, striped moraines and a black rubble tongue ending in the ice mouth where the river is born; pilgrims cross by wand lines to ice-cave shrines"
   BiomeColorId: {r: 0.8, g: 0.9, b: 1, a: 1}
   GizmoColor: {r: 0.9, g: 0.95, b: 1, a: 1}
   ElevationTier: 8
@@ -282,8 +279,7 @@ MonoBehaviour:
         - Well
         - Rock-spring
         - Spout
-      Description: "A Kashmiri voice of the high valleys (700\u20131300): invented
-        names only."
+      Description: "A Kashmiri voice of the high valleys (700\u20131300): invented names only."
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -829,8 +825,7 @@ MonoBehaviour:
   rareLookA: 0
   rareLookB: 0
   grassTypes:
-  - Prefab: {fileID: 9139736808034026368, guid: 293c63f48ac11c65693c801e8cad9646,
-      type: 3}
+  - Prefab: {fileID: 9139736808034026368, guid: 293c63f48ac11c65693c801e8cad9646, type: 3}
     Density: 1
     Stiffness: 1.6
     Width: 1
@@ -854,8 +849,7 @@ MonoBehaviour:
     - {r: 0.8156863, g: 0.78431374, b: 0.84705883, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.4
-  - Prefab: {fileID: 7540984827243403762, guid: 4e7d87054a69b12e5c8d570febd24697,
-      type: 3}
+  - Prefab: {fileID: 7540984827243403762, guid: 4e7d87054a69b12e5c8d570febd24697, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -878,8 +872,7 @@ MonoBehaviour:
     - {r: 0.8156863, g: 0.1882353, b: 0.5411765, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.3
-  - Prefab: {fileID: 7224664821464754552, guid: 56aefb777824b74927cbe71d0299ebd2,
-      type: 3}
+  - Prefab: {fileID: 7224664821464754552, guid: 56aefb777824b74927cbe71d0299ebd2, type: 3}
     Density: 1
     Stiffness: 1
     Width: 1
@@ -902,8 +895,7 @@ MonoBehaviour:
     - {r: 0.22745098, g: 0.16470589, b: 0.13333334, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.45
-  - Prefab: {fileID: 8188374544074414316, guid: 8f97d97ae2b15d27a6638afebc8e1c11,
-      type: 3}
+  - Prefab: {fileID: 8188374544074414316, guid: 8f97d97ae2b15d27a6638afebc8e1c11, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -928,8 +920,7 @@ MonoBehaviour:
     HeadColoursOverMesh: 1
     GroundTint: 0.35
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 7dddc671ec4d55e185cad757fa8f6da3,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 7dddc671ec4d55e185cad757fa8f6da3, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -1503,7 +1494,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 4
+      densityPer100m2: 1
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.45
@@ -1567,10 +1558,10 @@ MonoBehaviour:
         FacingSpread: 0
         Lean: 0
         LeanDegrees: 0
-        Anchor: 7
-        AnchorMetres: 30
+        Anchor: 0
+        AnchorMetres: 0
         AnchorFloor: 0
-        AnchorNames: Shrine, Temple
+        AnchorNames: 
         Pattern: 0
         PatternMetres: 0
         PatternShare: 0
@@ -1581,7 +1572,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: 532a78df8f67fe12
+      specFingerprint: 9615f8795cd1542d
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -1875,8 +1866,7 @@ MonoBehaviour:
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: ac88521d98c5baad72b3b1c88025a113,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: ac88521d98c5baad72b3b1c88025a113, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2054,8 +2044,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 014216d55f2207f5aec98349756f0fed,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 014216d55f2207f5aec98349756f0fed, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2232,8 +2221,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 5b375deb71efd78699ecda5284e99134,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 5b375deb71efd78699ecda5284e99134, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2700,8 +2688,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 76c5d66b430d511bf9afc45683989776,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 76c5d66b430d511bf9afc45683989776, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3832,8 +3819,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 8f82f7bf149bc26eb449769c18e26ecc,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 8f82f7bf149bc26eb449769c18e26ecc, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3909,10 +3895,8 @@ MonoBehaviour:
       Falloff: 0
       Floor: 0
     ways:
-      path: {fileID: 8574412962073106934, guid: dfbb982881a0645b33c3de0430a56869,
-        type: 2}
-      road: {fileID: 8574412962073106934, guid: dfbb982881a0645b33c3de0430a56869,
-        type: 2}
+      path: {fileID: 8574412962073106934, guid: dfbb982881a0645b33c3de0430a56869, type: 2}
+      road: {fileID: 8574412962073106934, guid: dfbb982881a0645b33c3de0430a56869, type: 2}
       cobbles: {fileID: 0}
     prefabSpawnRules:
     - stableGuid: a9c0528375554ee9a2cce57d42988102
@@ -4298,8 +4282,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 5a769eff55b018fe9dd3025d45be724b,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 5a769eff55b018fe9dd3025d45be724b, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5332,8 +5315,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 28a3e25e6d235306b0ae5e752dcd72e3,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 28a3e25e6d235306b0ae5e752dcd72e3, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5508,8 +5490,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 160
-  - terrainLayer: {fileID: 8574412962073106934, guid: fa2fac3f8f6f5d39df307a7a3e4a1b2b,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: fa2fac3f8f6f5d39df307a7a3e4a1b2b, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5590,8 +5571,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: b529094f2532e3deede0204c12004de2,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: b529094f2532e3deede0204c12004de2, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5672,8 +5652,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: d2b725ba86cd5d5b039704157caa2a73,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: d2b725ba86cd5d5b039704157caa2a73, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5754,8 +5733,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 40f1667949d9ce0d7f09423a79e6646e,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 40f1667949d9ce0d7f09423a79e6646e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5836,8 +5814,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: fcbc40ce91a8936dfdd35d3adff66f76,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: fcbc40ce91a8936dfdd35d3adff66f76, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5927,8 +5904,7 @@ MonoBehaviour:
     rockType: None
     rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: a9f62c26559d335fa77f2c1611b7bbf7,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: a9f62c26559d335fa77f2c1611b7bbf7, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6009,8 +5985,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 32af5a5121ab0e52af86f9b3d940ece4,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 32af5a5121ab0e52af86f9b3d940ece4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6091,8 +6066,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: c742dbb10aa891eb9147374582be079c,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: c742dbb10aa891eb9147374582be079c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6173,8 +6147,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: b3b372415699fce204196bb3d4f0a0f5,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: b3b372415699fce204196bb3d4f0a0f5, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6664,8 +6637,7 @@ MonoBehaviour:
   - {fileID: 5183624929536887463, guid: fb5bc9fd8fb6f8f65c825bf94c490701, type: 3}
   - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
   - {fileID: 4981490360113623891, guid: 2a215afdac430ca7ebebb77958f95fca, type: 3}
-  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27,
-    type: 3}
+  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27, type: 3}
   caveMouthBoulders: []
   caveMouthLogs:
   - {fileID: 6860566960657440131, guid: 75dc9a3b958ea921f016fa47ada91db4, type: 3}
@@ -8059,10 +8031,7 @@ MonoBehaviour:
   - Field: groundClimate/detail/7
     Fingerprint: t-|h-|a3
   - Field: Description
-    Fingerprint: "A valley glacier \u2014 blue ice and leaning s\xE9racs between
-      polished rock, crevasse fields and roaring moulins, striped moraines and a
-      black rubble tongue ending in the ice mouth where the river is born; pilgrims
-      cross by wand lines to ice-cave shrines"
+    Fingerprint: "A valley glacier \u2014 blue ice and leaning s\xE9racs between polished rock, crevasse fields and roaring moulins, striped moraines and a black rubble tongue ending in the ice mouth where the river is born; pilgrims cross by wand lines to ice-cave shrines"
   - Field: naming/Onsets
     Fingerprint: 6872f455dfdbc0ea
   - Field: naming/Nuclei
@@ -8074,8 +8043,7 @@ MonoBehaviour:
   - Field: naming/POISuffixes
     Fingerprint: 428cfb5bdfc84d33
   - Field: naming/Description
-    Fingerprint: "A Kashmiri voice of the high valleys (700\u20131300): invented
-      names only."
+    Fingerprint: "A Kashmiri voice of the high valleys (700\u20131300): invented names only."
   - Field: TerrainProcess
     Fingerprint: Periglacial
   - Field: acceptedRocks/gneiss

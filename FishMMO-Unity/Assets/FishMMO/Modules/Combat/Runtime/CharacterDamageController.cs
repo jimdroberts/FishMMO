@@ -1481,6 +1481,13 @@ namespace FishMMO.Shared
 			 * same bound every other predicted damage number carries. */
 			amount = DamageMitigation.Negate(Character, attacker, amount, SimulatesOwnBuffEffects());
 
+			/* A held guard (a Block ability) next, on what the buffs left: it takes its share off a blow from in front and
+			 * charges stamina for it, or breaks when the stamina is not there. Never a periodic tick: a burn is not a blow. */
+			if (!periodic)
+			{
+				amount = DamageMitigation.Guard(Character, attacker, amount, SimulatesOwnBuffEffects());
+			}
+
 			if (amount < 1)
 			{
 				/* A fully blocked hit still ENGAGES. Standing behind a shield does not mean nobody

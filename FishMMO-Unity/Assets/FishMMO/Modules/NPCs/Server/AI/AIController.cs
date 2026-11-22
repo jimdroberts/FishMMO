@@ -482,6 +482,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				{
 					return cachedPet.PetOwner.Transform.position;
 				}
+				// A charmed NPC's home is its charmer, as a pet's is its owner (AIController.Charm).
+				if (charmMaster != null && charmMaster.Transform != null)
+				{
+					return charmMaster.Transform.position;
+				}
 				return home;
 			}
 			set { home = value; }
@@ -1677,6 +1682,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		private void OnDestroying()
 		{
+			ReleaseCharm();
 			ReleaseCombatSlots();
 			AggressionState?.Destroy();
 
@@ -1729,6 +1735,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		internal void ResetForPool()
 		{
+			ReleaseCharm();
 			Prepared = false;
 			aiTickCounter = 0;
 			enabled = true;
@@ -1863,7 +1870,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				 * while its position is being smoothly interpolated. Matching the send rate is exactly
 				 * right. The brain, meanwhile, has no reason to run at 30 Hz. */
 				// Not while on a ladder or rope: a climber faces the climbable, whatever it is after (AIController.Climbing).
-				if (LookTarget != null && !IsClimbingLink)
+				// Nor while stunned or frozen: it stands as the blow left it.
+				if (LookTarget != null && !IsClimbingLink && !CharacterIncapacitation.IsIncapacitated(Character))
 				{
 					FaceLookTarget(networkTickDelta);
 				}
@@ -1962,6 +1970,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				dt,
 				retreatAsset != null ? retreatAsset.MaxCumulativeRetreatSeconds : 0f,
 				retreatAsset != null ? retreatAsset.RetreatRecoverySeconds : 0f);
+
+			// A charm: break it when its charmer is gone, keep at the charmer's heel out of a fight.
+			TickCharm();
 
 			// --- Dispatch to tier-appropriate update pipeline ---
 			switch (currentLodTier)
@@ -2452,6 +2463,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * being attacked; letting this generic sweep run as well would make every pet
 			 * effectively aggressive regardless of what its owner ordered. */
 			if (Character is IAICompanion)
+			{
+				return;
+			}
+			/* Nor a charmed NPC: by faction it would find its charmer's own side. It fights what strikes its charmer, what
+			 * its charmer strikes, and what strikes it (AIController.Charm). */
+			if (IsCharmed)
 			{
 				return;
 			}
@@ -3561,6 +3578,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public virtual void TransitionToRandomMovementState()
 		{
+			// A charmed NPC does not wander off: it idles at its charmer's heel (TickCharm keeps it there).
+			if (IsCharmed && IdleState != null)
+			{
+				ChangeState(IdleState);
+				return;
+			}
+
 			/* Refilled on every call rather than cached at initialisation, so a spawner that swaps
 			 * the archetype after InitializeOnce gets the new archetype's movement states too. */
 			movementStates.Clear();
@@ -3815,7 +3839,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			/* Rooted (CharacterFlags.IsRooted, a debuff): the feet are held. The NPC neither walks nor turns under its own
 			 * power, though it still fights from where it stands; the agent keeps its path and resumes it when the root
 			 * ends. A shove still moves it, as it does a rooted player: a root holds only what the character does itself. */
-			if (CharacterIncapacitation.IsRooted(Character))
+			/* Stunned, frozen (CharacterIncapacitation, a debuff): the same, and the NPC does not turn either (below). Its
+			 * abilities are refused by the ability controller's own gate; this stops the body. A shove still moves it. */
+			bool incapacitated = CharacterIncapacitation.IsIncapacitated(Character);
+			if (incapacitated || CharacterIncapacitation.IsRooted(Character))
 			{
 				velocity = Vector3.zero;
 			}
@@ -3856,7 +3883,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			// The speed test first, so a standing NPC does not read its rotation just to be told no.
-			if (LookTarget == null &&
+			if (LookTarget == null && !incapacitated &&
 				velocity.sqrMagnitude >= HEADING_SPEED_THRESHOLD * HEADING_SPEED_THRESHOLD &&
 				ResolveTickHeading(t.rotation, velocity, Agent.angularSpeed, tickDelta, out Quaternion heading))
 			{
@@ -4128,6 +4155,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <inheritdoc />
 		public bool SuspendForCorpse()
 		{
+			// A corpse is nobody's: the charm ends with the life it was cast on.
+			ReleaseCharm();
 			bool wasRunning = enabled;
 			enabled = false;
 			HaltMovement();

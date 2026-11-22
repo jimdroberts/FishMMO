@@ -26,6 +26,19 @@ namespace FishMMO.Shared
 		/// <summary>Installed by the Buffs module.</summary>
 		public static System.Action<ICharacter, List<ShieldVolume>> ShieldCollector;
 
+		/// <summary>Installed by the Abilities module (2026-11-22, <c>HeldGuardMitigation</c>): a held Block ability's guard.</summary>
+		public static System.Func<ICharacter, ICharacter, int, bool, int> GuardNegator;
+
+		/// <summary>
+		/// The damage left after a guard the defender is holding (a Block ability, held) takes its share off a hit from in
+		/// front; <paramref name="mutate"/> spends the guard's cost and lets it break. Not for periodic damage: a guard is
+		/// held against blows, not against a burn.
+		/// </summary>
+		public static int Guard(ICharacter defender, ICharacter attacker, int amount, bool mutate)
+		{
+			return GuardNegator != null ? GuardNegator(defender, attacker, amount, mutate) : amount;
+		}
+
 		/// <summary>
 		/// The damage left after the defender's negation buffs absorb what they can (<paramref name="mutate"/> spends their
 		/// charges and removes the emptied ones).

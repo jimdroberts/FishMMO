@@ -11,7 +11,8 @@
         "FishMMO.Combat",
         "FishMMO.Core",
         "FishMMO.Commerce",
-        "FishMMO.Buffs"
+        "FishMMO.Buffs",
+        "FishMMO.NPCs"
     ],
     "includePlatforms": [
         "Editor"

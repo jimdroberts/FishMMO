@@ -22,6 +22,9 @@ MonoBehaviour:
     - cb1cef40-e2d1-4e55-882c-23f0eb4c6be6
     - 06512397-1dfe-471b-af2b-5e1dcfc0c430
     - 6cffa494-e791-462b-aeb6-c0e67901c7ff
+    - c63f92c4-dbce-4834-98ae-c2ecb5f0c489
+    - 74b159de-9b7f-46f5-8d7d-65c468f59d46
+    - 657baf89-6172-4421-9646-5bb6b4885da4
     m_values:
     - DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
       SceneName: Dungeon
@@ -63,6 +66,21 @@ MonoBehaviour:
       DisplayName: Arrival from Moron 1
       Position: {x: 1815, y: 122.47264, z: -1568}
       Rotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: c63f92c4-dbce-4834-98ae-c2ecb5f0c489
+      SceneName: Moron 1
+      DisplayName: Arrival from Moron 2
+      Position: {x: 1063, y: 17.452784, z: -824.0001}
+      Rotation: {x: -0, y: -0.7071053, z: -0, w: 0.7071084}
+    - DestinationID: 74b159de-9b7f-46f5-8d7d-65c468f59d46
+      SceneName: Moron 2
+      DisplayName: Arrival from Moron 1
+      Position: {x: 1814.0623, y: 122.47264, z: -1564.5}
+      Rotation: {x: -0, y: -0.8660241, z: -0, w: 0.5000024}
+    - DestinationID: 657baf89-6172-4421-9646-5bb6b4885da4
+      SceneName: Moron 1
+      DisplayName: Arrival from Moron 2
+      Position: {x: 1063, y: 17.452784, z: -824.0001}
+      Rotation: {x: -0, y: -0.7071053, z: -0, w: 0.7071084}
   Teleporters:
     m_keys:
     - Dungeon/Dungeon A 1 Entrance

@@ -289,6 +289,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					continue;
 				}
 
+				/* Nor anyone invisible (CharacterFlags.IsInvisible): an NPC does not go looking for what it cannot see. One
+				 * that is struck by an invisible attacker still answers (the threat path, not this sweep), and the attack
+				 * ends the invisibility anyway (BaseBuffTemplate.BreaksOnAction). */
+				if (def.IsFlagged(CharacterFlags.IsInvisible) && !controller.Character.IsFlagged(CharacterFlags.SeesInvisible))
+				{
+					continue;
+				}
+
 				// One body, one entry, however many colliders it owns.
 				if (TargetOrdering.ContainsBody(sweepKeys, key))
 				{

@@ -179,7 +179,7 @@ namespace FishMMO.Shared
 		/// after.</b> An action that draws behind <c>EcaAuthority.MayPredict</c>, an
 		/// <c>IsServer</c> test or <see cref="ResolvesHitsLocally"/> advances this generator only
 		/// on the peers that pass — and an ungated action later in the same chain
-		/// (<c>AbilityForkHitAction</c>) then reads a different number. That put an observer's copy
+		/// (<c>AbilityRicochetHitAction</c>) then reads a different number. That put an observer's copy
 		/// of a forking projectile on a heading the server never took, permanently, from its first
 		/// hit. Evaluate the provider, then gate on what to DO with it. This is the same rule
 		/// <c>ResolveTargetAndSpawn</c> already follows when it advances the seed during a replay
@@ -1608,6 +1608,7 @@ namespace FishMMO.Shared
 		{
 			cachedTickEventData = null;
 			destroyed = false;
+			IsForkChild = false;
 			initialized = false;
 			/* The OnHit chain belongs to whichever ability this clone is about to serve, so the
 			 * memoised answer from its previous life must not carry over. */
@@ -2122,7 +2123,7 @@ namespace FishMMO.Shared
 						 * shield stopped it — so the echo fell straight through to RunHitEvents and
 						 * every observer ran the ability's entire OnHit chain for a shot the server
 						 * had rejected. Impact effects played on a shot that never landed, including
-						 * on the blocker's own screen, AbilityForkHitAction redirected the copy off a
+						 * on the blocker's own screen, AbilityRicochetHitAction redirected the copy off a
 						 * hit the server never accepted, and the copy drew RNG the server never did.
 						 *
 						 * Ended rides the same message, so the destroy that follows here does not
@@ -2269,7 +2270,7 @@ namespace FishMMO.Shared
 		/// deflection and the peer that was TOLD about it — cannot start a new leg differently.
 		/// Redirect is what actually re-anchors the closed-form trajectory; writing the rotation
 		/// alone would be overwritten on the next tick, which is the trap
-		/// <c>AbilityForkHitAction</c> fell into.
+		/// <c>AbilityRicochetHitAction</c> fell into.
 		/// </para>
 		/// <para>
 		/// <b>Quantised before it is applied, never after.</b> The peer that DECIDES a deflection
@@ -2639,7 +2640,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// The heading sent is the QUANTISED forward the redirect itself applied
-		/// (<see cref="AbilityForkHitAction"/> quantises before <see cref="Redirect"/>), so what a
+		/// (<see cref="AbilityRicochetHitAction"/> quantises before <see cref="Redirect"/>), so what a
 		/// receiver decodes is bit-identical to what the deciding peers simulate — the same
 		/// invariant the deflect heading keeps.
 		/// </remarks>
@@ -2823,6 +2824,87 @@ namespace FishMMO.Shared
 			reclaimBuffer.Clear();
 		}
 
+		/// <summary>True for a bolt a fork split off (<see cref="SpawnForks"/>): it never forks again.</summary>
+		internal bool IsForkChild;
+
+		/// <summary>Where fork IDs start: far above any id a spawn hands out (0, 1, 2 … for a root and its multiplies).</summary>
+		internal const int ForkIdBase = 1 << 20;
+
+		/// <summary>The most bolts one fork may split into; also the stride between parents' fork ids.</summary>
+		internal const int MaxForks = 8;
+
+		/// <summary>
+		/// The id the <paramref name="index"/>th fork of the object <paramref name="parentID"/> takes in its container: a pure
+		/// function of the two, so every peer that runs the same hit names the same forks, and a fork already there (a hit
+		/// echoed back to the peer that predicted it) is recognised rather than spawned twice.
+		/// </summary>
+		internal static int ForkChildID(int parentID, int index)
+		{
+			return unchecked(ForkIdBase + parentID * MaxForks + index);
+		}
+
+		/// <summary>
+		/// Splits this object into <paramref name="count"/> new ones where it is now, fanned evenly across
+		/// <paramref name="spreadDegrees"/> about its heading (<see cref="AbilityForkSplitAction"/>). Each fork is a full child
+		/// of the same cast (<see cref="InitializeSpawnedChildObject"/>): it lives out what is left of this one's life, strikes
+		/// once, never forks again, and passes through <paramref name="exclude"/> (the body this one just struck).
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <b>Every peer forks the same.</b> The split runs from the hit chain, which the server and the caster's client run
+		/// for their own hits and an observer runs for the hit the server tells it of; the forks' ids, poses and seeds are pure
+		/// functions of this object and the hit, so the server's later hit and destroy messages for a fork find the same fork
+		/// on every copy. A fork already present is skipped, so running the same hit twice (an echo) forks once.
+		/// </para>
+		/// </remarks>
+		/// <returns>How many forks were spawned now.</returns>
+		internal int SpawnForks(int count, float spreadDegrees, GameObject exclude)
+		{
+			if (destroyed || IsForkChild || Ability == null || Ability.Objects == null ||
+				!Ability.Objects.TryGetValue(ContainerID, out Dictionary<int, AbilityObject> container) || container == null)
+			{
+				return 0;
+			}
+			count = Mathf.Clamp(count, 1, MaxForks);
+			Transform from = Transform != null ? Transform : transform;
+			Quaternion heading = SpawnRotation;
+			int spawned = 0;
+			for (int i = 0; i < count; ++i)
+			{
+				int id = ForkChildID(ID, i);
+				if (container.ContainsKey(id))
+				{
+					continue;
+				}
+				float offset = count == 1 ? 0f : Mathf.Lerp(-spreadDegrees * 0.5f, spreadDegrees * 0.5f, i / (float)(count - 1));
+				GameObject go = Instantiate(gameObject);
+				// Into the cast's scene, as every spawn is (AbilitySpawnMultiplyAction gives the reason).
+				if (go.scene != gameObject.scene)
+				{
+					UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, gameObject.scene);
+				}
+				go.SetActive(false);
+				AbilityObject fork = go.GetComponent<AbilityObject>();
+				if (fork == null)
+				{
+					Destroy(go);
+					continue;
+				}
+				go.transform.SetPositionAndRotation(from.position, Quaternion.AngleAxis(offset, Vector3.up) * heading);
+				InitializeSpawnedChildObject(fork, this, id, container, SpawnSeed);
+				fork.IsForkChild = true;
+				fork.HitCount = 1;
+				if (exclude != null)
+				{
+					fork.hitTargets ??= new HashSet<GameObject>();
+					fork.hitTargets.Add(exclude);
+				}
+				go.SetActive(true);
+				++spawned;
+			}
+			return spawned;
+		}
+
 		/// <summary>
 		/// Re-anchors the closed-form trajectory so this object carries on from where it is now, on a
 		/// new heading.
@@ -2830,7 +2912,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <para>
 		/// Writing <c>Transform.rotation</c> alone does NOT steer an ability object, which is what
-		/// <see cref="AbilityForkHitAction"/> used to do. The trajectory is a closed form evaluated from
+		/// <see cref="AbilityRicochetHitAction"/> used to do. The trajectory is a closed form evaluated from
 		/// <see cref="SpawnPosition"/>, <see cref="SpawnRotation"/> and <see cref="ElapsedTicks"/>
 		/// (<see cref="AbilityMoveTransformAction"/>), so the next tick simply recomputed the position
 		/// from the ORIGINAL spawn line and overwrote the turn. Redirecting means starting a new leg:

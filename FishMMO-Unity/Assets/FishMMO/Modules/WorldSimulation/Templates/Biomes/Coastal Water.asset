@@ -13,8 +13,7 @@ MonoBehaviour:
   m_Name: Coastal Water
   m_EditorClassIdentifier: 
   DisplayName: Coastal Water
-  Description: "Atlantic shallows \u2014 kelp forests over dark reefs, pink maerl,
-    and the bells of a drowned city under the swell"
+  Description: "Atlantic shallows \u2014 kelp forests over dark reefs, pink maerl, and the bells of a drowned city under the swell"
   BiomeColorId: {r: 0.4, g: 0.7, b: 0.9, a: 1}
   GizmoColor: {r: 0, g: 1, b: 1, a: 1}
   ElevationTier: 2
@@ -166,8 +165,7 @@ MonoBehaviour:
         Values:
         - Bouchots
         - Oyster Parc
-      Description: "Breton\u2013Cornish: the drowned lands of the Atlantic shelf
-        (Ker, Pen, Tre, Lan; -mor, -ven, -ec, -arvor)"
+      Description: "Breton\u2013Cornish: the drowned lands of the Atlantic shelf (Ker, Pen, Tre, Lan; -mor, -ven, -ec, -arvor)"
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -250,8 +248,7 @@ MonoBehaviour:
   rareLookB: 0
   grassTypes: []
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: ce81d818242661e54fa8e4ccf7ce0a89,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: ce81d818242661e54fa8e4ccf7ce0a89, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -902,8 +899,7 @@ MonoBehaviour:
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 69b48f4e97dbc273cb72798ea8805ab4,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 69b48f4e97dbc273cb72798ea8805ab4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -995,7 +991,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 9
+      densityPer100m2: 18
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.45
@@ -1035,7 +1031,7 @@ MonoBehaviour:
       waters: 1
       currentRange: {x: 0, y: 0}
       useClimateBand: 1
-      temperatureRange: {x: 0.45, y: 1}
+      temperatureRange: {x: -0.4, y: 0.45}
       temperatureFalloff: 0.1
       humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
@@ -1073,7 +1069,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: 71604d38a9536d23
+      specFingerprint: a09a400d6de055d7
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
@@ -2995,8 +2991,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 6ed1c1880b980913aa58b16d24846bd9,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 6ed1c1880b980913aa58b16d24846bd9, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -3361,8 +3356,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 180
-  - terrainLayer: {fileID: 8574412962073106934, guid: cae1afdf16e1bbde6034989a104c3266,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: cae1afdf16e1bbde6034989a104c3266, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4680,8 +4674,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: ac8a7a0cd41cdaf1470315089120d243,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: ac8a7a0cd41cdaf1470315089120d243, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5046,8 +5039,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 180
-  - terrainLayer: {fileID: 8574412962073106934, guid: 637010482856ce4e04b5e907231dcf8c,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 637010482856ce4e04b5e907231dcf8c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5317,8 +5309,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 180
-  - terrainLayer: {fileID: 8574412962073106934, guid: f47456fa66e8fde8f5894bfca3c7d683,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: f47456fa66e8fde8f5894bfca3c7d683, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5589,8 +5580,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 180
-  - terrainLayer: {fileID: 8574412962073106934, guid: a9c8bb4db6cc8ca87b4b97f28b24fe82,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: a9c8bb4db6cc8ca87b4b97f28b24fe82, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5861,8 +5851,7 @@ MonoBehaviour:
       detailDryColor: {r: 0.95, g: 0.95, b: 0.95, a: 1}
       detailInstancesPerSpawn: 180
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 3217cedc15958c5247d0f9c1ae6433eb,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 3217cedc15958c5247d0f9c1ae6433eb, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5943,8 +5932,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 930908ba5a50ea8ef3e3e2fbdb300716,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 930908ba5a50ea8ef3e3e2fbdb300716, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6025,8 +6013,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: bae76e69166b0888cca44969ee5d23ab,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: bae76e69166b0888cca44969ee5d23ab, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6107,8 +6094,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 1f3513d9e94bb8883d5f496d8858f94b,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 1f3513d9e94bb8883d5f496d8858f94b, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6198,8 +6184,7 @@ MonoBehaviour:
     rockType: None
     rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 9cee5a61c7bd995850659dbc9ef3a3ae,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 9cee5a61c7bd995850659dbc9ef3a3ae, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6280,8 +6265,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 5482cab36da2193e74d3ae8f28123dd4,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 5482cab36da2193e74d3ae8f28123dd4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6362,8 +6346,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 41cd146f8bb40dd0d156ee4108ecee26,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 41cd146f8bb40dd0d156ee4108ecee26, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6444,8 +6427,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: f110695bd90ff39e06006bd3053f156a,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: f110695bd90ff39e06006bd3053f156a, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7305,8 +7287,7 @@ MonoBehaviour:
   - {fileID: 5183624929536887463, guid: fb5bc9fd8fb6f8f65c825bf94c490701, type: 3}
   - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
   - {fileID: 4981490360113623891, guid: 2a215afdac430ca7ebebb77958f95fca, type: 3}
-  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27,
-    type: 3}
+  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27, type: 3}
   caveMouthBoulders: []
   caveMouthLogs:
   - {fileID: 6282570450814506671, guid: 64dfdc97245dbeebc09ec6e1278e88c7, type: 3}
@@ -8247,8 +8228,7 @@ MonoBehaviour:
   - Field: groundClimate/detail/6
     Fingerprint: t-10000,-4000,1000|h-|s30000,300000,10000,m
   - Field: Description
-    Fingerprint: "Atlantic shallows \u2014 kelp forests over dark reefs, pink maerl,
-      and the bells of a drowned city under the swell"
+    Fingerprint: "Atlantic shallows \u2014 kelp forests over dark reefs, pink maerl, and the bells of a drowned city under the swell"
   - Field: naming/Onsets
     Fingerprint: 3731548bd31e1248
   - Field: naming/Nuclei
@@ -8272,8 +8252,7 @@ MonoBehaviour:
   - Field: naming/POITypeWords
     Fingerprint: 5da90c0964685d9a
   - Field: naming/Description
-    Fingerprint: "Breton\u2013Cornish: the drowned lands of the Atlantic shelf (Ker,
-      Pen, Tre, Lan; -mor, -ven, -ec, -arvor)"
+    Fingerprint: "Breton\u2013Cornish: the drowned lands of the Atlantic shelf (Ker, Pen, Tre, Lan; -mor, -ven, -ec, -arvor)"
   - Field: TerrainProcess
     Fingerprint: Seabed
   - Field: acceptedRocks/granite

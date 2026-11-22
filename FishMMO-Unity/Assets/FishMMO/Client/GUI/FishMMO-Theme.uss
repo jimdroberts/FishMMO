@@ -225,6 +225,7 @@
     --map-waypoint:     rgb(255, 156, 56);
     --map-waypoint-selected: rgb(96, 232, 150);
     --map-dungeon:      rgb(214, 96, 168);
+    --map-housing:      rgb(120, 220, 160);
     --map-fog:          rgba(3, 7, 11, 0.94);
     --map-north:        rgb(222, 74, 64);
     --map-surface:      rgb(6, 12, 17);

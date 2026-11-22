@@ -44,6 +44,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Release = 13,
 			AccessList = 14,
 			PrepayRent = 15,
+			PlotsForSale = 16,
 		}
 
 		[Header("Request Protection")]
@@ -102,6 +103,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.RegisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit, true);
 			RegisterPanelBroadcasts();
 			Server.NetworkWrapper.RegisterBroadcast<HousingAccessListRequestBroadcast>(OnServerHousingAccessListRequest, true);
+			RegisterPlotMarkerBroadcasts();
 		}
 
 		/// <summary>
@@ -130,6 +132,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			Server.NetworkWrapper.UnregisterBroadcast<HousingVaultForfeitBroadcast>(OnServerHousingVaultForfeit);
 			UnregisterPanelBroadcasts();
 			Server.NetworkWrapper.UnregisterBroadcast<HousingAccessListRequestBroadcast>(OnServerHousingAccessListRequest);
+			UnregisterPlotMarkerBroadcasts();
 		}
 
 		/// <summary>

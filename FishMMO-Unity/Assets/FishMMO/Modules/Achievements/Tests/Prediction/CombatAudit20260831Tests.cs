@@ -195,7 +195,7 @@ namespace FishMMO.UnitTests
 		/// desynchronises everything drawn after it. <c>AbilityHitCountAction</c> gated on
 		/// <c>ResolvesHitsLocally</c> and evaluated its provider AFTER — so on an observer (which
 		/// runs the chain from the server's hit report but spends no count) the draw never happened,
-		/// and the next ungated action in the chain — <c>AbilityForkHitAction</c> — read a different
+		/// and the next ungated action in the chain — <c>AbilityRicochetHitAction</c> — read a different
 		/// number and sent that copy of the projectile down a heading the server never took.
 		/// </para>
 		/// <para>
@@ -500,7 +500,7 @@ namespace FishMMO.UnitTests
 		/// of times, so the two streams do not merely differ by one draw.
 		/// </para>
 		/// <para>
-		/// Either one leaves <c>AbilityForkHitAction</c> — ungated, and run by every peer that
+		/// Either one leaves <c>AbilityRicochetHitAction</c> — ungated, and run by every peer that
 		/// simulates the object — reading a different number on the peers that never ran the
 		/// server-only step, putting an observer's copy of a forking projectile on a heading the
 		/// server never took, permanently, from its first hit.

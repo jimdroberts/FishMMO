@@ -132,6 +132,15 @@ namespace FishMMO.Shared
 		public bool IsStagedCharge => Template != null && Template.ChargeStages > 1;
 
 		/// <summary>
+		/// True when this ability is a held guard (<see cref="AbilityType.Block"/>, <see cref="AbilityTemplate.Guard"/>): up
+		/// for as long as the hotkey is held, down on release.
+		/// </summary>
+		public bool IsHeldGuard => Template != null && Template.Type == AbilityType.Block;
+
+		/// <summary>True when this ability is held and pulsed (<see cref="AbilityTemplate.PulseSeconds"/>, a beam).</summary>
+		public bool IsHeldPulse => Template != null && Template.PulseSeconds > 0f;
+
+		/// <summary>
 		/// Gets the icon sprite from the ability template.
 		/// </summary>
 		public Sprite Icon { get { return Template?.Icon; } }

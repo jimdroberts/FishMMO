@@ -75,6 +75,12 @@ namespace FishMMO.UnitTests
 				{
 					continue;
 				}
+				// A held guard acts through its Guard while held (HeldGuardMitigation); it needs no events either. One
+				// with no reduction does nothing, and is still an offender.
+				if (t.Type == AbilityType.Block && t.Guard != null && t.Guard.ReducePercent > 0)
+				{
+					continue;
+				}
 				if (EventCount(t) == 0 && t.AdditionalEventSlots == 0)
 				{
 					offenders.Add(t.name);

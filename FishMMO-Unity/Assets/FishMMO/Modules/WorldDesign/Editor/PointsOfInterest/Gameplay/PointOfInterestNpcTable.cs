@@ -77,7 +77,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// spawner, empty, and logs it, so a designer can fill it (2026-10-10: unknown → null).</para>
 	/// <para><b>Defaults.</b> Written in code (<see cref="FillDefaults"/>) so the generator works before anyone authors the
 	/// asset: the shipped human banker, merchant and ability crafter serve every race; orcs fill an orc site's pack
-	/// (weighted 0.5 / 0.3 / 0.2, the dungeon's mix) and its elite. Guards and townsfolk have no prefabs yet.
+	/// (weighted 0.5 / 0.3 / 0.2, the dungeon's mix) and its elite; every other race gets the guards, townsfolk and generated monsters of <see cref="SiteRows"/> (2026-11-22).
 	/// <see cref="CreateAsset"/> writes the defaults to <see cref="AssetPath"/> for editing; once it exists it wins.</para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "Point of Interest NPC Table", menuName = "FishMMO/World/Point of Interest NPC Table")]
@@ -94,6 +94,26 @@ namespace FishMMO.Shared.WorldDesign
 		public const string OrcPath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc.prefab";
 		public const string OrcWarriorPath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc warrior.prefab";
 		public const string OrcMagePath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc mage.prefab";
+		/// <summary>A settlement's guard and townsperson, and a camp's raider (SiteNpcBuilder), each copied for the site's race.</summary>
+		public const string GuardPath = "Assets/Prefabs/Shared/Entity/NPCs/Settlement/a guard.prefab";
+		public const string TownspersonPath = "Assets/Prefabs/Shared/Entity/NPCs/Settlement/a townsperson.prefab";
+		public const string RaiderPath = "Assets/Prefabs/Shared/Entity/NPCs/Settlement/a raider.prefab";
+		/// <summary>The generated monsters (WildlifeBuilder.Monster).</summary>
+		public const string MonsterFolder = "Assets/Prefabs/Shared/Entity/NPCs/Wildlife";
+		/// <summary>A beast race with no generated body of its own draws from these.</summary>
+		private static readonly (string Name, float Weight)[] PackMonsters =
+			{ ("a dire wolf", 0.3f), ("a dire hound", 0.2f), ("a giant rat", 0.3f), ("a dire boar", 0.2f) };
+		private static readonly (string Name, float Weight)[] EliteMonsters =
+			{ ("a sabre cat", 0.4f), ("a rat king", 0.3f), ("a dire bear", 0.3f) };
+		/// <summary>Beast races (naming key) and the generated monster that is their pack, then their elite.</summary>
+		private static readonly (string Race, string Pack, string Elite)[] BeastRaces =
+		{
+			("direwolf", "a dire wolf", "a dire wolf"), ("direhound", "a dire hound", "a dire hound"),
+			("frostwolf", "a frost wolf", "a frost wolf"), ("giantrat", "a giant rat", "a rat king"),
+			("ratking", "a giant rat", "a rat king"), ("direboar", "a dire boar", "a dire boar"),
+			("sabrecat", "a sabre cat", "a sabre cat"), ("cavebear", "a dire bear", "a dire bear"),
+			("giantbat", "a giant bat", "a giant bat"),
+		};
 
 		public List<PointOfInterestNpcEntry> Entries = new List<PointOfInterestNpcEntry>();
 
@@ -122,6 +142,82 @@ namespace FishMMO.Shared.WorldDesign
 				Row("orc", PointOfInterestNpcRole.MonsterPack, (OrcPath, 0.5f), (OrcWarriorPath, 0.3f), (OrcMagePath, 0.2f)),
 				Row("orc", PointOfInterestNpcRole.Elite, (OrcWarriorPath, 1.0f)),
 			};
+			Entries.AddRange(SiteRows());
+		}
+
+		/// <summary>
+		/// The rows for the roles that had no prefab until 2026-11-22 (Jim: "add some basic NPCs for the empty spawners";
+		/// "NPCs (specific races) should spawn based on Biome just like points of interest"). A site's race is the biome's
+		/// (PointOfInterestStage.PickRace), and its NPCs follow it: guards and townsfolk copied for the race; a beast race's camp
+		/// or lair its own generated monster; any other race's a raider copied for it (goblins at a goblin camp); a beast race
+		/// with no body of its own, the generated beasts. A race's own authored row (orcs) still wins.
+		/// </summary>
+		public static List<PointOfInterestNpcEntry> SiteRows()
+		{
+			var rows = new List<PointOfInterestNpcEntry>
+			{
+				Clone(Row(null, PointOfInterestNpcRole.Guard, (GuardPath, 1.0f))),
+				Clone(Row(null, PointOfInterestNpcRole.Townsfolk, (TownspersonPath, 1.0f))),
+				Clone(Row(null, PointOfInterestNpcRole.MonsterPack, (RaiderPath, 1.0f))),
+				Clone(Row(null, PointOfInterestNpcRole.Elite, (RaiderPath, 1.0f))),
+				Category(Row(null, PointOfInterestNpcRole.MonsterPack, Monsters(PackMonsters)), "Beast"),
+				Category(Row(null, PointOfInterestNpcRole.Elite, Monsters(EliteMonsters)), "Beast"),
+			};
+			foreach ((string race, string pack, string elite) in BeastRaces)
+			{
+				rows.Add(Row(race, PointOfInterestNpcRole.MonsterPack, ($"{MonsterFolder}/{pack}.prefab", 1.0f)));
+				rows.Add(Row(race, PointOfInterestNpcRole.Elite, ($"{MonsterFolder}/{elite}.prefab", 1.0f)));
+			}
+			return rows;
+		}
+
+		private static PointOfInterestNpcEntry Clone(PointOfInterestNpcEntry row)
+		{
+			row.CloneForRace = true;
+			return row;
+		}
+
+		private static PointOfInterestNpcEntry Category(PointOfInterestNpcEntry row, string category)
+		{
+			row.RaceCategory = category;
+			return row;
+		}
+
+		private static (string Path, float Weight)[] Monsters((string Name, float Weight)[] monsters)
+		{
+			var paths = new (string, float)[monsters.Length];
+			for (int i = 0; i < monsters.Length; i++)
+			{
+				paths[i] = ($"{MonsterFolder}/{monsters[i].Name}.prefab", monsters[i].Weight);
+			}
+			return paths;
+		}
+
+		/// <summary>
+		/// Adds each <see cref="SiteRows"/> row whose role, race and category no row with a prefab answers yet, keeping every
+		/// authored row; an authored row for the same key left empty is replaced. Returns how many were added.
+		/// </summary>
+		public int AddMissingSiteRows()
+		{
+			int added = 0;
+			foreach (PointOfInterestNpcEntry row in SiteRows())
+			{
+				if (row.Choices.Count == 0)
+				{
+					continue;
+				}
+				bool Same(PointOfInterestNpcEntry e) => e != null && e.Role == row.Role &&
+					string.Equals((e.Race ?? "").Trim(), row.Race ?? "", StringComparison.OrdinalIgnoreCase) &&
+					string.Equals((e.RaceCategory ?? "").Trim(), row.RaceCategory ?? "", StringComparison.OrdinalIgnoreCase);
+				if (Entries.Exists(e => Same(e) && HasChoices(e)))
+				{
+					continue;
+				}
+				Entries.RemoveAll(Same);
+				Entries.Add(row);
+				added++;
+			}
+			return added;
 		}
 
 		private static PointOfInterestNpcEntry Row(string race, PointOfInterestNpcRole role, params (string Path, float Weight)[] prefabs)
@@ -208,13 +304,19 @@ namespace FishMMO.Shared.WorldDesign
 				return basePrefab;
 			}
 			recipe.Race = race;
-			recipe.Name = $"{race.name} {basePrefab.name}";
+			recipe.Name = RaceCopyName(race, basePrefab.name);
 			recipe.Folder = $"{ClonedFolder}/{WorldEditorAssets.Sanitize(race.name)}";
 			string path = NPCPrefabFactory.TargetPath(recipe);
 			GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
 			if (existing != null)
 			{
 				return existing;
+			}
+			// A copy made under the old name ("Elf a raider") is renamed, GUID kept, so the scenes that spawn it still do.
+			string old = $"{recipe.Folder}/{race.name} {basePrefab.name}.prefab";
+			if (AssetDatabase.LoadAssetAtPath<GameObject>(old) != null && RenameCopy(old, recipe.Name, notes))
+			{
+				return AssetDatabase.LoadAssetAtPath<GameObject>(path);
 			}
 			var problems = new List<string>();
 			if (!NPCPrefabFactory.Validate(recipe, problems))
@@ -231,6 +333,45 @@ namespace FishMMO.Shared.WorldDesign
 				notes?.Add($"Could not copy '{basePrefab.name}' for {race.name}: {ex.Message}. Using the base prefab.");
 				return basePrefab;
 			}
+		}
+
+		/// <summary>
+		/// A race copy's name, as its nameplate shows it: "an elf raider" from Elf and "a raider", "a frost giant guard" from
+		/// Frost Giant and "a guard" (2026-11-22: it was "Elf a raider"). The base's own article is dropped, the race lowered
+		/// and an article chosen for it.
+		/// </summary>
+		public static string RaceCopyName(RaceTemplate race, string baseName)
+		{
+			string noun = (baseName ?? string.Empty).Trim();
+			foreach (string article in new[] { "a ", "an ", "the " })
+			{
+				if (noun.StartsWith(article, StringComparison.OrdinalIgnoreCase))
+				{
+					noun = noun.Substring(article.Length);
+					break;
+				}
+			}
+			string phrase = $"{race.name.Trim().ToLowerInvariant()} {noun}".Trim();
+			return ("aeiou".IndexOf(char.ToLowerInvariant(phrase[0])) >= 0 ? "an " : "a ") + phrase;
+		}
+
+		/// <summary>Renames a prefab in place (GUID kept) and its Addressables entry's address with it.</summary>
+		public static bool RenameCopy(string path, string newName, List<string> notes)
+		{
+			string error = AssetDatabase.RenameAsset(path, newName);
+			if (!string.IsNullOrEmpty(error))
+			{
+				notes?.Add($"Could not rename '{path}' to '{newName}': {error}");
+				return false;
+			}
+			var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+			UnityEditor.AddressableAssets.Settings.AddressableAssetEntry entry =
+				settings != null ? settings.FindAssetEntry(AssetDatabase.AssetPathToGUID($"{Path.GetDirectoryName(path).Replace('\\', '/')}/{newName}.prefab")) : null;
+			if (entry != null)
+			{
+				entry.SetAddress(newName);
+			}
+			return true;
 		}
 
 		/// <summary>The race whose naming key is <paramref name="namingKey"/>, or null. Scans the assets (the runtime cache is empty in the editor).</summary>

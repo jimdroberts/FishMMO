@@ -1,0 +1,37 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8136b5d45d0dc424d8dd6607909c74a4, type: 3}
+  m_Name: Hamstrung
+  m_EditorClassIdentifier: FishMMO.Buffs::FishMMO.Shared.AttributeBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 60cfff95e732be90193cc03ffe93a0b8
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Hamstrung: 40% slower.'
+  icon:
+    m_AssetGUID: e9ab4ac309908e6605e56599c4db4820
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 6
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 1
+  BreaksOnAction: 0
+  BonusAttributes:
+  - Value: -40
+    Template: {fileID: 11400000, guid: 561336c510b90b546b2650ffa83a09dc, type: 2}

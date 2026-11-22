@@ -153,7 +153,82 @@ namespace FishMMO.Shared
 				Habitats = BiomeHabitat.None, Density = 0f, GroupMin = 3, GroupMax = 6,
 				Shelter = WildlifeShelter.Cave, CaveColonies = true, RespawnMin = 240f, RespawnMax = 480f,
 			},
+			// ── Monsters (2026-11-22, Jim: "generate some like we did with wolves, deer, giant bats" for the points of interest's
+			// monster packs and elites). Never placed in the wild (no habitat, no density): only a site's MonsterPack and Elite
+			// spawners draw them, through the point-of-interest NPC table. Predators, so they hunt players, NPCs and every other
+			// pack; one species to a spawner (SpawnerFeatures), since each species is its own pack.
+			Monster("Dire Wolf", "a dire wolf", "Dire Wolf", 1.5f, 9.5f, new WildlifeBodySpec
+			{
+				Length = 1.45f, Depth = 0.5f, Width = 0.4f, LegLength = 0.7f, LegThickness = 0.09f, NeckLength = 0.34f, NeckRaise = 25f,
+				HeadLength = 0.42f, HeadSize = 0.21f, EarSize = 0.12f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 0.5f, TailRaise = 20f,
+				Back = new Color(0.18f, 0.17f, 0.17f), Belly = new Color(0.35f, 0.33f, 0.31f), Accent = new Color(0.55f, 0.1f, 0.08f),
+			}),
+			Monster("Dire Hound", "a dire hound", "Dire Hound", 1.6f, 10f, new WildlifeBodySpec
+			{
+				Length = 1.15f, Depth = 0.36f, Width = 0.26f, LegLength = 0.66f, LegThickness = 0.06f, NeckLength = 0.32f, NeckRaise = 35f,
+				HeadLength = 0.36f, HeadSize = 0.15f, EarSize = 0.13f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 0.45f, TailRaise = 40f,
+				Back = new Color(0.1f, 0.09f, 0.09f), Belly = new Color(0.2f, 0.18f, 0.17f), Accent = new Color(0.75f, 0.3f, 0.05f),
+			}),
+			Monster("Frost Wolf", "a frost wolf", "Frost Wolf", 1.5f, 9.5f, new WildlifeBodySpec
+			{
+				Length = 1.3f, Depth = 0.46f, Width = 0.36f, LegLength = 0.64f, LegThickness = 0.085f, NeckLength = 0.32f, NeckRaise = 28f,
+				HeadLength = 0.38f, HeadSize = 0.19f, EarSize = 0.11f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 0.5f, TailRaise = 25f,
+				Back = new Color(0.86f, 0.88f, 0.9f), Belly = new Color(0.95f, 0.96f, 0.97f), Accent = new Color(0.35f, 0.55f, 0.75f),
+			}),
+			Monster("Giant Rat", "a giant rat", "Giant Rat", 1.3f, 7.5f, new WildlifeBodySpec
+			{
+				Length = 0.95f, Depth = 0.32f, Width = 0.3f, LegLength = 0.22f, LegThickness = 0.06f, NeckLength = 0.1f, NeckRaise = 10f,
+				HeadLength = 0.3f, HeadSize = 0.15f, EarSize = 0.1f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 0.9f, TailRaise = 5f,
+				Back = new Color(0.33f, 0.28f, 0.24f), Belly = new Color(0.55f, 0.48f, 0.42f), Accent = new Color(0.85f, 0.62f, 0.6f),
+			}),
+			Monster("Dire Boar", "a dire boar", "Dire Boar", 1.2f, 7.5f, new WildlifeBodySpec
+			{
+				Length = 1.5f, Depth = 0.75f, Width = 0.62f, LegLength = 0.45f, LegThickness = 0.12f, NeckLength = 0.15f, NeckRaise = 5f,
+				HeadLength = 0.55f, HeadSize = 0.36f, EarSize = 0.13f, Horns = WildlifeHorns.Tusks, HornSize = 0.3f,
+				TailLength = 0.2f, TailRaise = 15f,
+				Back = new Color(0.2f, 0.15f, 0.12f), Belly = new Color(0.28f, 0.22f, 0.18f), Accent = new Color(0.85f, 0.8f, 0.7f),
+			}),
+			// Elites: one stronger beast leading a pack (bigger, so a longer reach and more to hit).
+			Monster("Sabre Cat", "a sabre cat", "Sabre Cat", 1.4f, 10.5f, new WildlifeBodySpec
+			{
+				Length = 1.7f, Depth = 0.55f, Width = 0.45f, LegLength = 0.62f, LegThickness = 0.11f, NeckLength = 0.3f, NeckRaise = 20f,
+				HeadLength = 0.38f, HeadSize = 0.26f, EarSize = 0.09f, Horns = WildlifeHorns.Tusks, HornSize = 0.22f,
+				TailLength = 0.7f, TailRaise = 15f,
+				Back = new Color(0.7f, 0.52f, 0.3f), Belly = new Color(0.88f, 0.8f, 0.65f), Accent = new Color(0.25f, 0.17f, 0.1f),
+			}),
+			Monster("Rat King", "a rat king", "Rat King", 1.2f, 7f, new WildlifeBodySpec
+			{
+				Length = 1.6f, Depth = 0.6f, Width = 0.55f, LegLength = 0.34f, LegThickness = 0.1f, NeckLength = 0.15f, NeckRaise = 10f,
+				HeadLength = 0.45f, HeadSize = 0.25f, EarSize = 0.16f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 1.4f, TailRaise = 5f,
+				Back = new Color(0.25f, 0.22f, 0.2f), Belly = new Color(0.45f, 0.4f, 0.35f), Accent = new Color(0.8f, 0.65f, 0.2f),
+			}),
+			Monster("Dire Bear", "a dire bear", "Cave Bear", 1.3f, 8f, new WildlifeBodySpec
+			{
+				Length = 2.2f, Depth = 1.0f, Width = 1.0f, LegLength = 0.75f, LegThickness = 0.24f, NeckLength = 0.3f, NeckRaise = 15f,
+				HeadLength = 0.55f, HeadSize = 0.42f, EarSize = 0.1f, Horns = WildlifeHorns.None, HornSize = 0f,
+				TailLength = 0.08f, TailRaise = 20f,
+				Back = new Color(0.15f, 0.12f, 0.1f), Belly = new Color(0.22f, 0.18f, 0.15f), Accent = new Color(0.55f, 0.5f, 0.45f),
+			}),
 		};
+
+		/// <summary>
+		/// A monster for the sites' packs: a predator with no habitat and no density, so the wild never places it, that may stand
+		/// on any ground in or out of a cave (a lair is often a cave).
+		/// </summary>
+		private static Species Monster(string name, string prefabName, string race, float walk, float run, WildlifeBodySpec body)
+		{
+			return new Species
+			{
+				Name = name, PrefabName = prefabName, Race = race, Role = WildlifeRole.Predator, Walk = walk, Run = run, Corpse = 360f,
+				Body = body, Habitats = BiomeHabitat.None, Density = 0f, GroupMin = 1, GroupMax = 1,
+				Shelter = WildlifeShelter.Anywhere, Surfaces = SurfaceMask.Any, RespawnMin = 300f, RespawnMax = 600f,
+			};
+		}
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Build wildlife", Section = "World", Order = 20,
 			Tooltip = "Makes the wildlife species (templates, AI, prefabs) and the catalogue the scene cut places their spawners from.")]

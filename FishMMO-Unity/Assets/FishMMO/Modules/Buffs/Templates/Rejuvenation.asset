@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 875884366fb607e29b6a3b4ad989d51e, type: 3}
+  m_Name: Rejuvenation
+  m_EditorClassIdentifier: FishMMO.Buffs::FishMMO.Shared.ResourceTickBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 47e99ee280626d4f190d04ca75a0a45b
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Rejuvenation: 3 health a second.'
+  icon:
+    m_AssetGUID: 8d4ebdf9f53fdfaf36bb9d2456a52319
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 8
+  TickRate: 1
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 0
+  TickAttributes:
+  - Value: 3
+    Template: {fileID: 11400000, guid: e5c10a046ee277f46a57ee2048ae5ec9, type: 2}
+  DamageAttribute: {fileID: 0}

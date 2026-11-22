@@ -757,8 +757,11 @@ namespace FishMMO.Client
 			// Waiting on the player, not on the server. See OnTwoFactorSetupReceived.
 			replyGuard.Clear();
 
-			const string prompt = "Enter the verification code we sent you. It may arrive by email, by text message, or as a " +
-				"direct message from our Discord bot once you are in our Discord server. Any one of them verifies your account.";
+			// Said plainly as a one-time confirmation: players read "verification code" right after registering as two-factor
+			// sign-in, which they may just have turned off (2026-11-22).
+			const string prompt = "Confirm your new account: enter the 6-digit code we just sent you, by email, by text message, " +
+				"or as a direct message from our Discord bot once you are in our Discord server. Any one of them works.\n\n" +
+				"This is needed only once. It is not two-factor sign-in.";
 
 			if (UIManager.TryGetTK("UIDialogInputBox", out UITKDialogInputBox uiDialogInputBox))
 			{

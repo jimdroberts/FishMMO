@@ -1,8 +1,8 @@
 # Buffs module
 
 **Short description:** Buffs and debuffs: the buff controller and its predicted ticking, every buff template kind
-(attribute, attribute tick, resource tick, state, composite, damage negation, deflect), the buff ECA actions and condition
-(apply, dispel, region buff, has buff), buff volumes, what a defender's buffs do to a hit (shields, deflection, guard
+(attribute, attribute tick, resource tick, state, composite, damage negation, deflect, charm), the buff ECA actions and
+conditions (apply, dispel, region buff, has buff, can be charmed), buff volumes, what a defender's buffs do to a hit (shields, deflection, guard
 blocks), and the client's buff and debuff strips.
 
 | | |
@@ -48,5 +48,24 @@ Assets/FishMMO/Modules/Buffs/
 The wire shapes: `BuffReconcileEntry` (in the owner's reconcile payload), `ObservedBuffEntry` and `CharacterBuffsBroadcast`
 (what observers see), `DismissBuffBroadcast` and its handler; `ShieldVolume`; `ModifierSource.Buff` (an attribute
 modifier's source kind); the contracts above; and `CharacterEvade.RefusesBuff`.
+
+## Crowd control and charm (2026-11-22)
+
+- **Stun and freeze** are `StateBuffTemplate`s (`IsStunned`, `IsFrozen`): `CharacterIncapacitation` stops a player's input,
+  casting and item use, and since 2026-11-22 an NPC's walking and turning too (`AIController.StepAgent`). A freeze's effect
+  carries `FXFreezePose`, which holds the body's animation still on every client that shows the ice.
+- **Charm** (`CharmBuffTemplate`, the Mesmerize ability) hands a charmable NPC's server brain to the buff's caster through the
+  core seam `INPCCharm` (the NPCs module's `AIController.Charm`): `NPC.CharmedBy` makes the harm rule, kill credit and threat
+  see it as the caster's; it follows, fights what the caster fights and what strikes either, and is itself again when the
+  buff ends. `CanBeCharmedCondition` keeps players, pets and wildlife out. It sets no state flag: `IsMesmerized` still means
+  "cannot act". `BuffController.Apply` now sets a new buff's caster before `OnApply` runs, so a template can read it there.
+
+- **Invisibility** (`CharacterFlags.IsInvisible`, a `StateBuffTemplate` with `BreaksOnAction`): NPC enemy sweeps skip
+  the character unless the NPC has `SeesInvisible`; the buff's effect carries `FXConcealment`, which draws the model at
+  20% and hides the nameplate (`Nameplate.ConcealCount`) on every client. **See Invisible** (`SeesInvisible`, effect
+  `FXSeeInvisible`) makes the local client (`ConcealmentView`) draw other invisible characters at 55% with their
+  nameplates. `/gm invis` is observer culling plus `SetFaded`, and nothing here reveals it.
+- **Permanent pet effects**: a permanent buff is never saved, so `PetSystem` re-runs the owner's learned summon spell's
+  summon effects when it restores a pet at login (Pet Regeneration: +10 Health Regeneration = 2/s).
 
 Further detail: [Buff README](Runtime/Buff/README.md).

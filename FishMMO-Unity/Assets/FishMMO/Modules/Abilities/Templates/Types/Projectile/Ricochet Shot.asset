@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Ricochet Shot
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: 8f622b45f25d1bce155a606fed36ed47
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'A hard shot that glances off what it strikes: 4 physical damage to each of up to three foes, turning off bodies and bouncing off walls.'
+  ActivationTime: 0.4
+  LifeTime: 1.5
+  Speed: 20
+  Cooldown: 6
+  Modifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713273145458752
+  AbilityObjectPrefab: {fileID: 7602790655608042480, guid: 0eeaedfc48ff9ddedb43767bc15d0aad, type: 3}
+  AbilitySpawnTarget: 6
+  RequiresTarget: 0
+  AdditionalEventSlots: 1
+  HitCount: 3
+  StrikesCharactersOnly: 0
+  Type: 3
+  ChargeStages: 0
+  Guard:
+    ReducePercent: 75
+    ArcDegrees: 150
+    CostResource: {fileID: 0}
+    CostPerHit: 5
+    CostPerDamage: 0.5
+  PulseSeconds: 0
+  IntentOverride: 0
+  OnTickEvents:
+  - {fileID: 11400000, guid: 4d4ceeca1eb78ef9cae0e864a6e3645f, type: 2}
+  OnHitEvents:
+  - {fileID: 11400000, guid: eec8ed995f29e19d9ad4ead523879fa1, type: 2}
+  - {fileID: 11400000, guid: ed1d09863b5af68c5aba8f46a49bf677, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713273145458752
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f9116fa7190f01a4a93eb32cafac787b, type: 2}
+        RequiredAmount: 10

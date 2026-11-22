@@ -48,6 +48,18 @@ namespace FishMMO.Shared
 			public static event Action<SceneHandle> OnSceneGainedFoundations;
 
 			/// <summary>
+			/// Raised on the server when a foundation's state changes (claimed, built, released): what the "Plot for sale" map
+			/// markers are pushed again on.
+			/// </summary>
+			public static event Action<PlotFoundation> OnStateApplied;
+
+			/// <summary>Raises <see cref="OnStateApplied"/>.</summary>
+			internal static void RaiseStateApplied(PlotFoundation foundation)
+			{
+				OnStateApplied?.Invoke(foundation);
+			}
+
+			/// <summary>
 			/// Raised when a player asks to claim a foundation.
 			/// </summary>
 			/// <remarks>
@@ -413,6 +425,23 @@ namespace FishMMO.Shared
 		public event Action<PlotState> OnStateChanged;
 
 		/// <inheritdoc />
+		/// <summary>
+		/// A plot keeps its authored name. The namer is here only because every interactable of this kind carries one, and a
+		/// namer added by <c>RequireComponent</c> starts in Character mode, which needs a race a deed post has not got: every
+		/// plot logged "keeps its authored name: Character names need a race" on each client (2026-11-22). Set on every
+		/// peer in Awake, before the namer writes or reads its payload, so the plots already cut into scenes are right
+		/// without a re-cut.
+		/// </summary>
+		public override void OnAwake()
+		{
+			base.OnAwake();
+			SceneObjectNamer namer = GetComponent<SceneObjectNamer>();
+			if (namer != null)
+			{
+				namer.Settings.Mode = SceneObjectNamingMode.Authored;
+			}
+		}
+
 		public override void OnStartClient()
 		{
 			base.OnStartClient();
@@ -678,7 +707,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void ApplyState(PlotState state)
 		{
+			bool changed = plotState.Value != (int)state;
 			plotState.Value = (int)state;
+			if (changed)
+			{
+				Registry.RaiseStateApplied(this);
+			}
 		}
 
 		/// <summary>

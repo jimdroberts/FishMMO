@@ -13,9 +13,7 @@ MonoBehaviour:
   m_Name: Desert
   m_EditorClassIdentifier: 
   DisplayName: Desert
-  Description: "The great sand sea \u2014 star dunes and black gravel plains, slab-stone
-    towns the dunes are drowning, leather-tent caravans steering by wells and cairns,
-    and the tombs of an older people beneath the sand"
+  Description: "The great sand sea \u2014 star dunes and black gravel plains, slab-stone towns the dunes are drowning, leather-tent caravans steering by wells and cairns, and the tombs of an older people beneath the sand"
   BiomeColorId: {r: 0.9, g: 0.7, b: 0.4, a: 1}
   GizmoColor: {r: 1, g: 0.8, b: 0.4, a: 1}
   ElevationTier: 4
@@ -48,8 +46,7 @@ MonoBehaviour:
     - The Cold-dune
     - The Ice-sand
     TextureLayerOverrides:
-    - terrainLayer: {fileID: 8574412962073106934, guid: 48f1f9d221b985260f315f4451a30ee0,
-        type: 2}
+    - terrainLayer: {fileID: 8574412962073106934, guid: 48f1f9d221b985260f315f4451a30ee0, type: 2}
       albedoTexture: {fileID: 0}
       normalTexture: {fileID: 0}
       maskTexture: {fileID: 0}
@@ -370,8 +367,7 @@ MonoBehaviour:
       - Key: monsterden
         Values:
         - Wyrm Ribs
-      Description: 'Saharan caravaneers'' voice (Tin, Ta, Ag, Tad, Tiz, Ezz; -ert,
-        -ane, -akh, -ouft, -ezzaf): the erg and the reg'
+      Description: 'Saharan caravaneers'' voice (Tin, Ta, Ag, Tad, Tiz, Ezz; -ert, -ane, -akh, -ouft, -ezzaf): the erg and the reg'
   LooseGround: {fileID: 11400000, guid: 43aa1a985dafd6fb3934b9a2f349ba62, type: 2}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -801,8 +797,7 @@ MonoBehaviour:
   rareLookA: 0
   rareLookB: 0
   grassTypes:
-  - Prefab: {fileID: 6544195285705895503, guid: daf60db2314c564f4a31989504e00e06,
-      type: 3}
+  - Prefab: {fileID: 6544195285705895503, guid: daf60db2314c564f4a31989504e00e06, type: 3}
     Density: 1
     Stiffness: 2
     Width: 0.6
@@ -825,8 +820,7 @@ MonoBehaviour:
     - {r: 0.9254902, g: 0.9019608, b: 0.8392157, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.2
-  - Prefab: {fileID: 6638705962901750659, guid: ef28721c18d0b1359b0a3433b70fff74,
-      type: 3}
+  - Prefab: {fileID: 6638705962901750659, guid: ef28721c18d0b1359b0a3433b70fff74, type: 3}
     Density: 1
     Stiffness: 1.5
     Width: 0.8
@@ -849,8 +843,7 @@ MonoBehaviour:
     - {r: 0.6039216, g: 0.47843137, b: 0.5411765, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.25
-  - Prefab: {fileID: 4879183900436568383, guid: 427b7f31174bbfa2f1c61836e717bd05,
-      type: 3}
+  - Prefab: {fileID: 4879183900436568383, guid: 427b7f31174bbfa2f1c61836e717bd05, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -873,8 +866,7 @@ MonoBehaviour:
     - {r: 0.9647059, g: 0.9490196, b: 0.91764706, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.3
-  - Prefab: {fileID: 5592287133313280680, guid: 895abf521efef76dd48ab484931fe15c,
-      type: 3}
+  - Prefab: {fileID: 5592287133313280680, guid: 895abf521efef76dd48ab484931fe15c, type: 3}
     Density: 1
     Stiffness: 1
     Width: 0.3
@@ -897,8 +889,7 @@ MonoBehaviour:
     - {r: 0.9490196, g: 0.9254902, b: 0.8784314, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.35
-  - Prefab: {fileID: 7672633937314370968, guid: c527713cd59d93695aa710566c5c979e,
-      type: 3}
+  - Prefab: {fileID: 7672633937314370968, guid: c527713cd59d93695aa710566c5c979e, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -921,8 +912,7 @@ MonoBehaviour:
     - {r: 0.7529412, g: 0.3764706, b: 0.65882355, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.4
-  - Prefab: {fileID: 6100224525256806195, guid: 86044bbf418194a98964094f7272ff4f,
-      type: 3}
+  - Prefab: {fileID: 6100224525256806195, guid: 86044bbf418194a98964094f7272ff4f, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -947,8 +937,7 @@ MonoBehaviour:
     HeadColoursOverMesh: 1
     GroundTint: 0.35
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 4b8242bbc1f2920bbea3424f1ef00788,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 4b8242bbc1f2920bbea3424f1ef00788, type: 2}
     albedoTexture: {fileID: 2800000, guid: b33352ab540cd3d4fb8c872eaf34569a, type: 3}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -1705,7 +1694,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 1
+      densityPer100m2: 0.1
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.45
@@ -1769,10 +1758,10 @@ MonoBehaviour:
         FacingSpread: 0
         Lean: 0
         LeanDegrees: 0
-        Anchor: 7
-        AnchorMetres: 40
+        Anchor: 0
+        AnchorMetres: 0
         AnchorFloor: 0
-        AnchorNames: Waystation,Spring,Camp
+        AnchorNames: 
         Pattern: 0
         PatternMetres: 0
         PatternShare: 0
@@ -1783,7 +1772,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: 077ba6d97e66ae63
+      specFingerprint: c061a872a71b8803
       detailNoiseSpread: 1.2
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
@@ -2359,8 +2348,7 @@ MonoBehaviour:
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: a97bbe8a76c5c1d75cf2a8848e1707ba,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: a97bbe8a76c5c1d75cf2a8848e1707ba, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2535,8 +2523,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 0.97, b: 0.9, a: 1}
       detailDryColor: {r: 0.85, g: 0.78, b: 0.62, a: 1}
       detailInstancesPerSpawn: 160
-  - terrainLayer: {fileID: 8574412962073106934, guid: 2e8ca0f9eadf02d05f2148a76a8cf281,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 2e8ca0f9eadf02d05f2148a76a8cf281, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2613,8 +2600,7 @@ MonoBehaviour:
       Floor: 0
     ways:
       path: {fileID: 0}
-      road: {fileID: 8574412962073106934, guid: 232dfc7d3e42425ed8c6049f090155de,
-        type: 2}
+      road: {fileID: 8574412962073106934, guid: 232dfc7d3e42425ed8c6049f090155de, type: 2}
       cobbles: {fileID: 0}
     prefabSpawnRules:
     - stableGuid: 07055597ee2846ca88ead820c3776f2c
@@ -3104,7 +3090,7 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
-      densityPer100m2: 0.2
+      densityPer100m2: 2
       maxPerChunk: 0
       minSpacing: 0
       minTextureWeight: 0.4
@@ -3143,10 +3129,10 @@ MonoBehaviour:
       depthRange: {x: 0, y: 0}
       waters: 0
       currentRange: {x: 0, y: 0}
-      useClimateBand: 1
+      useClimateBand: 0
       temperatureRange: {x: -1, y: 1}
       temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: -0.8}
+      humidityRange: {x: -1, y: 1}
       humidityFalloff: 0.1
       worldGate:
         air: 0
@@ -3182,7 +3168,7 @@ MonoBehaviour:
         HalfWidth: 0
         Falloff: 0
         MinSlope: 0
-      specFingerprint: d216afd78fa31bc5
+      specFingerprint: 26d795f7e4e56d2e
       detailNoiseSpread: 2.5
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
@@ -3763,8 +3749,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 8b3f064941738aaa1ee1e7436714c5a0,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 8b3f064941738aaa1ee1e7436714c5a0, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4414,8 +4399,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
-  - terrainLayer: {fileID: 8574412962073106934, guid: 4a226d1f09104591d7282174edfaf86e,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 4a226d1f09104591d7282174edfaf86e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5370,8 +5354,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: efe7129200d0a439a2da3d8054695845,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: efe7129200d0a439a2da3d8054695845, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5641,8 +5624,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 0.97, b: 0.9, a: 1}
       detailDryColor: {r: 0.85, g: 0.78, b: 0.62, a: 1}
       detailInstancesPerSpawn: 200
-  - terrainLayer: {fileID: 8574412962073106934, guid: e6ee1cb69766e3e478392b167d80674d,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: e6ee1cb69766e3e478392b167d80674d, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7053,8 +7035,7 @@ MonoBehaviour:
       detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
       detailInstancesPerSpawn: 64
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: d753fde545ca3209df4145ba677f05e5,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: d753fde545ca3209df4145ba677f05e5, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7135,8 +7116,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: f8e95623164638030ef18f45c840ddf0,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: f8e95623164638030ef18f45c840ddf0, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7217,8 +7197,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 956d2648c447a288de418b568888cea5,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 956d2648c447a288de418b568888cea5, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7299,8 +7278,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 9a374d1642e5d6ea09f39cf721997e44,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 9a374d1642e5d6ea09f39cf721997e44, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7390,8 +7368,7 @@ MonoBehaviour:
     rockType: None
     rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 1b93d210688b1818d59e74663b9e1d8d,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 1b93d210688b1818d59e74663b9e1d8d, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7472,8 +7449,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: cde964143890606547b52c90da4a8d24,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: cde964143890606547b52c90da4a8d24, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7554,8 +7530,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: ae7744d57e2d23f72d046e51d3571d36,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: ae7744d57e2d23f72d046e51d3571d36, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7636,8 +7611,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: d8a755098e3425e9e7c540640b9bba96,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: d8a755098e3425e9e7c540640b9bba96, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -8145,8 +8119,7 @@ MonoBehaviour:
   - {fileID: 5183624929536887463, guid: fb5bc9fd8fb6f8f65c825bf94c490701, type: 3}
   - {fileID: 7040531935600446957, guid: 49db2bc4e07ba3e829ff499ebf213bfe, type: 3}
   - {fileID: 4981490360113623891, guid: 2a215afdac430ca7ebebb77958f95fca, type: 3}
-  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27,
-    type: 3}
+  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27, type: 3}
   caveMouthBoulders:
   - {fileID: 5138814022513917458, guid: ef7add5a8fbd55099f81ccd6b5b75599, type: 3}
   - {fileID: 6872075154151577264, guid: 7e681c1777be805533ab67f8cda89adf, type: 3}
@@ -9652,9 +9625,7 @@ MonoBehaviour:
   - Field: groundClimate/detail/5
     Fingerprint: t-|h-6000,10000,1000
   - Field: Description
-    Fingerprint: "The great sand sea \u2014 star dunes and black gravel plains, slab-stone
-      towns the dunes are drowning, leather-tent caravans steering by wells and cairns,
-      and the tombs of an older people beneath the sand"
+    Fingerprint: "The great sand sea \u2014 star dunes and black gravel plains, slab-stone towns the dunes are drowning, leather-tent caravans steering by wells and cairns, and the tombs of an older people beneath the sand"
   - Field: naming/Onsets
     Fingerprint: 190e909b72092893
   - Field: naming/Nuclei
@@ -9678,8 +9649,7 @@ MonoBehaviour:
   - Field: naming/POITypeWords
     Fingerprint: e68c2d0e078cf3f2
   - Field: naming/Description
-    Fingerprint: 'Saharan caravaneers'' voice (Tin, Ta, Ag, Tad, Tiz, Ezz; -ert,
-      -ane, -akh, -ouft, -ezzaf): the erg and the reg'
+    Fingerprint: 'Saharan caravaneers'' voice (Tin, Ta, Ag, Tad, Tiz, Ezz; -ert, -ane, -akh, -ouft, -ezzaf): the erg and the reg'
   - Field: LooseGround
     Fingerprint: Silicate Sand
   - Field: TerrainProcess

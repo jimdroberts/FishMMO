@@ -219,6 +219,33 @@ namespace FishMMO.Client
 			base.OnDestroying();
 		}
 
+		/// <summary>Listens for the server's whole-map reveal (<c>/gm reveal map</c>).</summary>
+		public override void OnClientSet()
+		{
+			base.OnClientSet();
+			Client.NetworkManager.ClientManager.RegisterBroadcast<MapRevealBroadcast>(OnMapRevealBroadcast);
+		}
+
+		/// <summary>Stops listening for the whole-map reveal.</summary>
+		public override void OnClientUnset()
+		{
+			base.OnClientUnset();
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<MapRevealBroadcast>(OnMapRevealBroadcast);
+		}
+
+		/// <summary>
+		/// Explores the whole of the scene the reveal names, when the map is showing it. One that arrives after a scene
+		/// change is dropped rather than exploring the scene the character went on to.
+		/// </summary>
+		private void OnMapRevealBroadcast(MapRevealBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			if (string.IsNullOrEmpty(msg.SceneName) || msg.SceneName != ClientMapSystem.SceneName)
+			{
+				return;
+			}
+			ClientMapSystem.ExploreEverything();
+		}
+
 		/// <summary>
 		/// Grants map exploration that was not walked for — a map item, a discovery, a reward.
 		/// </summary>

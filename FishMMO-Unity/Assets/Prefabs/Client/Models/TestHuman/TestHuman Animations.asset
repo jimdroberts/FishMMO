@@ -21,23 +21,19 @@ MonoBehaviour:
   MidAir: {fileID: 7400008, guid: 0d9d26e2162aa4d11ab075b34c029673, type: 3}
   Fall: {fileID: 7400004, guid: 0d9d26e2162aa4d11ab075b34c029673, type: 3}
   Tread: {fileID: 6202810446056523315, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
-  SwimSurface: {fileID: -6814249880567116991, guid: 1415d177248ae8f059f8ca1795391d82,
-    type: 3}
-  SwimUnder: {fileID: -6034337262517105249, guid: 1415d177248ae8f059f8ca1795391d82,
-    type: 3}
+  SwimSurface: {fileID: -6814249880567116991, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
+  SwimUnder: {fileID: -6034337262517105249, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   StrokePace: 2
   Climb: {fileID: 971892840174998316, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   ClimbCycleMetres: 1.2
-  PunchRight: {fileID: -787603644472486635, guid: 1415d177248ae8f059f8ca1795391d82,
-    type: 3}
-  PunchLeft: {fileID: 5968595673727718525, guid: 1415d177248ae8f059f8ca1795391d82,
-    type: 3}
+  PunchRight: {fileID: -787603644472486635, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
+  PunchLeft: {fileID: 5968595673727718525, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   Cast: {fileID: -7173468826789573748, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   Block: {fileID: -3062953579286211453, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
+  Deflect: {fileID: 879768358417296607, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   Roll: {fileID: -7717331278317410300, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   Death: {fileID: -226045024758429151, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
-  SitGround: {fileID: -4928298704102107645, guid: 1415d177248ae8f059f8ca1795391d82,
-    type: 3}
+  SitGround: {fileID: -4928298704102107645, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   SitSeat: {fileID: 8232304437931070248, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   SeatHeight: 0.46
   KeyedHeight: 1.8

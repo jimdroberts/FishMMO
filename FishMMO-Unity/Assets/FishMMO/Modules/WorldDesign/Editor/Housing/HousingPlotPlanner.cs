@@ -50,8 +50,11 @@ namespace FishMMO.Shared
 		/// <summary>The most lots one run of a district's lane (one side, one direction) takes.</summary>
 		public const int LotsPerRun = 6;
 
-		/// <summary>How far a district stands from its settlement's edge, metres (tried in order).</summary>
-		public static readonly float[] RingMetres = { 30f, 60f, 100f };
+		/// <summary>
+		/// How far a district stands from its settlement's edge, metres (tried in order). 150 and 220 added 2026-11-22: Moron 1's
+		/// capital stands on the coast, and every spot within 100 m of it was sea or shore, so it had no district at all.
+		/// </summary>
+		public static readonly float[] RingMetres = { 30f, 60f, 100f, 150f, 220f };
 
 		/// <summary>Angles tried round a settlement.</summary>
 		public const int RingAngles = 16;
@@ -111,7 +114,11 @@ namespace FishMMO.Shared
 			public List<Disc> Sites = new List<Disc>();
 			/// <summary>Lots a previous cut laid; laid again first, never moved.</summary>
 			public List<ScenePlotManifest.Lot> Kept = new List<ScenePlotManifest.Lot>();
-			public float MaxRelief = 2f;
+			/// <summary>
+			/// How far the ground may vary under a lot (and its margin), metres. 4 (2026-11-22, was 2): the cut levels every lot to
+			/// its post, so a gentler limit only refused ground the levelling handles; Moron 1 had no lot at all by its capital.
+			/// </summary>
+			public float MaxRelief = 4f;
 			public float SampleStep = 4f;
 			/// <summary>Margin sampled round a footprint, metres.</summary>
 			public float Margin = 2f;

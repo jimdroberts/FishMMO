@@ -5,11 +5,11 @@ using UnityEngine;
 namespace FishMMO.TestHarness
 {
 	/// <summary>
-	/// Direct references to everything the CombatSim needs that the addressable labels do NOT
-	/// carry: the mock content is deliberately unregistered (inert in builds), so the harness
-	/// caches it by hand from these references instead. Populated by the scene generator
-	/// (FishMMO Dashboard → Core → Maintenance, Test Scenes section) scanning <c>Assets/FishMMO/Templates/**/Mock/</c>; regenerating the scene
-	/// refreshes it.
+	/// Direct references to everything the CombatSim needs: its fighter, its network prefabs, and the ability roster with
+	/// the events and buffs it is built from, cached by hand so the sim does not wait on the addressable labels. Populated
+	/// by the scene generator (FishMMO Dashboard → Maintenance, Test Scenes: Generate Combat Sim, or Refresh Combat Sim
+	/// Roster) from the shipped test ability suite under <c>Modules/Abilities/Templates/Types</c> (2026-11-22: the Mock
+	/// set it was built from is gone).
 	/// </summary>
 	public sealed class CombatSimManifest : ScriptableObject
 	{
@@ -38,10 +38,10 @@ namespace FishMMO.TestHarness
 		/// <summary>The mock ability templates each fighter learns (a subset of CacheAssets).</summary>
 		public List<AbilityTemplate> Roster = new List<AbilityTemplate>();
 
-		/// <summary>Mock Channel Marker Event — every prefab ships ChanneledTemplate null.</summary>
+		/// <summary>A channel marker event for the fighters' ChanneledTemplate, or null (none ships; held casts then end on release).</summary>
 		public AbilityEvent ChannelMarker;
 
-		/// <summary>Mock Charge Marker Event — every prefab ships ChargedTemplate null.</summary>
+		/// <summary>A charge marker event for the fighters' ChargedTemplate, or null (none ships; staged charges need none).</summary>
 		public AbilityEvent ChargeMarker;
 	}
 }

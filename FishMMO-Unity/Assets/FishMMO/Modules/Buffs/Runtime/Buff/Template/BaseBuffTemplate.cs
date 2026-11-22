@@ -90,6 +90,14 @@ namespace FishMMO.Shared
 		public bool IsDebuff;
 
 		/// <summary>
+		/// Ends the moment its carrier acts: starts any ability (an attack included) or uses a consumable. Invisibility is the
+		/// case: it lasts until the character does something. Ended by the server when the cast or the use starts
+		/// (<c>AbilityController</c>); the owner hears of it through the buff reconcile like any other removal.
+		/// </summary>
+		[Tooltip("Ends when its carrier starts any ability or uses a consumable (invisibility).")]
+		public bool BreaksOnAction;
+
+		/// <summary>
 		/// True when the player may click this buff off their own HUD strip.
 		/// </summary>
 		/// <remarks>

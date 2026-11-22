@@ -96,8 +96,8 @@ namespace FishMMO.TestHarness.Editor
 		}
 
 		/// <summary>Creates <c>CombatSim.unity</c>: the zero-client server combat + lag-comp scene,
-		/// refreshing its manifest of mock content (which is deliberately not addressable-registered,
-		/// so the bootstrap needs direct references).</summary>
+		/// refreshing its manifest of the ability roster (direct references, so the bootstrap does not wait on
+		/// the addressable labels).</summary>
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Combat Sim", Section = "Test Scenes", Order = 4)]
 		public static void GenerateCombatSim()
 		{
@@ -113,12 +113,39 @@ namespace FishMMO.TestHarness.Editor
 			SaveScene(scene, SceneFolder + "/CombatSim.unity");
 		}
 
+		/// <summary>Rebuilds only the CombatSim manifest (its roster and cache) from the shipped ability suite; no scene is touched.</summary>
+		[DashboardTool(DashboardToolAttribute.Maintenance, "Refresh Combat Sim Roster", Section = "Test Scenes", Order = 5,
+			Tooltip = "Rebuilds the CombatSim manifest's roster from the ability templates under Modules/Abilities/Templates/Types. The scene is left alone.")]
+		public static void RefreshCombatManifest()
+		{
+			EnsureFolder();
+			BuildCombatManifest();
+		}
+
 		private const string ManifestPath = "Assets/FishMMO/Tests/TestHarness/Combat/CombatSimManifest.asset";
+
+		/// <summary>Where the roster comes from: every ability the test suite ships (2026-11-22: the Mock set is gone).</summary>
+		private const string RosterFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types";
+
+		/// <summary>What the roster's abilities are built from, cached beside them.</summary>
+		private static readonly string[] RosterContentFolders =
+		{
+			"Assets/FishMMO/Modules/Abilities/Templates/Types",
+			"Assets/FishMMO/Modules/Abilities/Templates/Events",
+			"Assets/FishMMO/Modules/Buffs/Templates",
+		};
+
+		/// <summary>
+		/// Left out of the sim's roster: Mesmerize turns a fighter to the other team mid-fight (the fighters are charmable
+		/// orcs), and Invisibility takes a fighter out of the other team's sweeps; both are different tests from the one the
+		/// sim runs.
+		/// </summary>
+		private static readonly string[] RosterExcluded = { "Mesmerize", "Invisibility" };
 		private const string NpcPrefabPath =
 			"Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc warrior.prefab";
 
-		/// <summary>Scans <c>Assets/FishMMO/Templates</c> for mock content and (re)writes the manifest
-		/// asset the CombatSim bootstrap reads at runtime.</summary>
+		/// <summary>Scans the shipped ability suite (<see cref="RosterFolder"/>) and (re)writes the manifest asset the CombatSim
+		/// bootstrap reads at runtime.</summary>
 		private static CombatSimManifest BuildCombatManifest()
 		{
 			CombatSimManifest manifest = AssetDatabase.LoadAssetAtPath<CombatSimManifest>(ManifestPath);
@@ -147,45 +174,29 @@ namespace FishMMO.TestHarness.Editor
 			manifest.ChannelMarker = null;
 			manifest.ChargeMarker = null;
 
-			foreach (string guid in AssetDatabase.FindAssets("t:ScriptableObject", new[] { "Assets/FishMMO/Templates", "Assets/FishMMO/Modules" }))
+			foreach (string guid in AssetDatabase.FindAssets("t:ScriptableObject", RosterContentFolders))
 			{
 				string path = AssetDatabase.GUIDToAssetPath(guid);
-				if (!path.Contains("/Mock"))
-				{
-					continue;
-				}
 				ScriptableObject asset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
-				if (asset == null || !(asset is ICachedObject))
+				if (asset == null || !(asset is ICachedObject) || manifest.CacheAssets.Contains(asset))
 				{
 					continue;
 				}
 				manifest.CacheAssets.Add(asset);
-				if (asset is AbilityTemplate template)
+				if (asset is AbilityTemplate template && path.StartsWith(RosterFolder + "/") &&
+					System.Array.IndexOf(RosterExcluded, asset.name) < 0)
 				{
 					manifest.Roster.Add(template);
 				}
-				if (asset is AbilityEvent abilityEvent)
-				{
-					if (asset.name == "Mock Channel Marker Event")
-					{
-						manifest.ChannelMarker = abilityEvent;
-					}
-					else if (asset.name == "Mock Charge Marker Event")
-					{
-						manifest.ChargeMarker = abilityEvent;
-					}
-				}
 			}
+			// Sorted, so a regenerated manifest differs only where the content did.
+			manifest.Roster.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+			manifest.CacheAssets.Sort((a, b) => string.CompareOrdinal(AssetDatabase.GetAssetPath(a), AssetDatabase.GetAssetPath(b)));
 
 			if (manifest.Roster.Count == 0)
 			{
-				Debug.LogError("[TestSceneGenerator] No mock AbilityTemplates found under Assets/FishMMO/Templates — " +
-					"run the mock generator first (FishMMO Dashboard → Core → Maintenance → Generate Mock Abilities).");
-			}
-			if (manifest.ChannelMarker == null || manifest.ChargeMarker == null)
-			{
-				Debug.LogWarning("[TestSceneGenerator] Channel/Charge marker events not found — channelled and " +
-					"charged mocks will degrade to instant casts in the sim.");
+				Debug.LogError($"[TestSceneGenerator] No AbilityTemplates found under {RosterFolder} — " +
+					"run the test ability suite generator first (FishMMO Dashboard → Maintenance → Ability Content).");
 			}
 
 			if (created)
@@ -194,9 +205,8 @@ namespace FishMMO.TestHarness.Editor
 			}
 			EditorUtility.SetDirty(manifest);
 			AssetDatabase.SaveAssetIfDirty(manifest);
-			Debug.Log($"[TestSceneGenerator] Manifest: {manifest.CacheAssets.Count} mock assets cached, " +
-				$"{manifest.Roster.Count} roster abilities, markers " +
-				$"{(manifest.ChannelMarker != null ? "ok" : "MISSING")}/{(manifest.ChargeMarker != null ? "ok" : "MISSING")}.");
+			Debug.Log($"[TestSceneGenerator] Manifest: {manifest.CacheAssets.Count} assets cached, " +
+				$"{manifest.Roster.Count} roster abilities.");
 			return manifest;
 		}
 

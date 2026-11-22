@@ -50,5 +50,11 @@
 		/// Roll/dodge ability — evasive movement. Triggers Roll animation.
 		/// </summary>
 		Roll,
+
+		/// <summary>
+		/// Deflect (parry) ability — a quick sweep of the forearm that turns projectiles away. Triggers the Deflect
+		/// animation. Appended (2026-11-22): the value is serialised in every ability template.
+		/// </summary>
+		Deflect,
 	}
 }

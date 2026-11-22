@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Dire Boar
+  m_EditorClassIdentifier: FishMMO.Wildlife::FishMMO.Shared.WildlifeTemplate
+  Role: 2
+  WalkSpeed: 1.2
+  RunSpeed: 7.5
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 360
+  Body:
+    Length: 1.5
+    Depth: 0.75
+    Width: 0.62
+    LegLength: 0.45
+    LegThickness: 0.12
+    NeckLength: 0.15
+    NeckRaise: 5
+    HeadLength: 0.55
+    HeadSize: 0.36
+    EarSize: 0.13
+    Horns: 3
+    HornSize: 0.3
+    TailLength: 0.2
+    TailRaise: 15
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.2, g: 0.15, b: 0.12, a: 1}
+    Belly: {r: 0.28, g: 0.22, b: 0.18, a: 1}
+    Accent: {r: 0.85, g: 0.8, b: 0.7, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 0
+  Shelter: 2
+  Surfaces: 0
+  GroupsPerKm2: 0
+  GroupMin: 1
+  GroupMax: 1
+  DenKinds: 
+  DensInCaveMouths: 0
+  ColoniesInCaves: 0
+  RespawnMinSeconds: 300
+  RespawnMaxSeconds: 600

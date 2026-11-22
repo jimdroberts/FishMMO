@@ -251,6 +251,12 @@ namespace FishMMO.Client
 		/// <summary>Scratch set of the member IDs in the payload being applied.</summary>
 		private readonly HashSet<long> presentMembers = new HashSet<long>();
 
+		/// <summary>USS class marking the row of the member pinned to the target frame (the theme's selected row).</summary>
+		private const string ROW_PINNED_CLASS = "fish-row--selected";
+
+		/// <summary>The local character's target controller, whose pin events mark the pinned member's row.</summary>
+		private ITargetController pinSource;
+
 		/// <summary>
 		/// True once any vitals payload has arrived for the current party.
 		/// </summary>
@@ -506,6 +512,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public override void OnDestroying()
 		{
+			UnbindPinSource();
 			ClearRoster();
 
 			base.OnDestroying();
@@ -544,6 +551,7 @@ namespace FishMMO.Client
 				partyController.OnRemovePartyMember += OnPartyRemoveMember;
 				partyController.OnLeaveParty += OnLeaveParty;
 			}
+			BindPinSource();
 		}
 
 		/// <summary>
@@ -554,6 +562,7 @@ namespace FishMMO.Client
 			base.OnPreUnsetCharacter();
 
 			UnsubscribePartyEvents();
+			UnbindPinSource();
 		}
 
 		/// <summary>
@@ -1271,6 +1280,8 @@ namespace FishMMO.Client
 			 * and the ID is the only identity that stays true across one. */
 			long characterID = model.CharacterID;
 			rowRoot.RegisterCallback<PointerDownEvent>(evt => OnMemberPointerDown(evt, characterID));
+			rowRoot.RegisterCallback<ClickEvent>(evt => OnMemberClicked(evt, characterID));
+			rowRoot.EnableInClassList(ROW_PINNED_CLASS, characterID == PinnedMemberID());
 
 			memberList.Add(rowRoot);
 			rows.Add(characterID, row);
@@ -2009,6 +2020,106 @@ namespace FishMMO.Client
 		}
 
 		#endregion
+
+		/// <summary>
+		/// Left-clicking a member's row pins them to the target frame (Jim, 2026-11-21), as clicking a pet's row does.
+		/// </summary>
+		/// <remarks>
+		/// A pin follows a character the client has spawned, so only a member streamed to this client can be pinned: one in
+		/// another zone, or beyond what the observer stream sends, is not in <see cref="BaseCharacter.ClientCharacters"/>, and
+		/// the click says so instead of doing nothing. One past the pin's own release range (<see cref="PinnedTargetRules.RELEASE_DISTANCE"/>) would be released on the
+		/// next validation tick, so the same message covers it. Your own row pins nothing; the pin never targets yourself.
+		/// </remarks>
+		private void OnMemberClicked(ClickEvent evt, long characterID)
+		{
+			if (evt.button != 0)
+			{
+				return;
+			}
+			evt.StopPropagation();
+			PinMember(characterID);
+		}
+
+		/// <summary>Pins a party member as the target, or says why it cannot.</summary>
+		private void PinMember(long characterID)
+		{
+			if (Character == null || characterID == Character.ID || !Character.TryGet(out ITargetController targetController))
+			{
+				return;
+			}
+			if (BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter member) &&
+				member != null && member.Transform != null &&
+				WithinPinRange(member.Transform.position) &&
+				targetController.TryPinTarget(member.Transform))
+			{
+				ApplyPinnedRows();
+				return;
+			}
+			string name = roster.TryGetValue(characterID, out MemberModel model) && !string.IsNullOrEmpty(model.Name) ? model.Name : "That party member";
+			if (UIManager.TryGetTK("UIToast", out UITKToast toast))
+			{
+				toast.Show(name + " is too far away to target.", ToastSeverity.Info);
+			}
+		}
+
+		/// <summary>Inside the pin's release range, so a click never pins what the next validation tick drops (0 = any range).</summary>
+		private bool WithinPinRange(Vector3 position)
+		{
+			float range = PinnedTargetRules.RELEASE_DISTANCE;
+			return range <= 0.0f || (position - Character.Transform.position).sqrMagnitude <= range * range;
+		}
+
+		/// <summary>The character ID of the pinned target when it is a party member's character, else 0.</summary>
+		private long PinnedMemberID()
+		{
+			Transform pinned = pinSource != null ? pinSource.PinnedTarget : null;
+			if (pinned == null || !pinned.TryGetComponent(out ICharacter character))
+			{
+				return 0;
+			}
+			return character.ID;
+		}
+
+		/// <summary>Marks the pinned member's row, and only that one.</summary>
+		private void ApplyPinnedRows()
+		{
+			long pinnedID = PinnedMemberID();
+			foreach (KeyValuePair<long, MemberRow> kvp in rows)
+			{
+				kvp.Value.Root?.EnableInClassList(ROW_PINNED_CLASS, pinnedID != 0 && kvp.Key == pinnedID);
+			}
+		}
+
+		/// <summary>A pin was taken or released (by this panel, the pin key or an auto-release): re-mark the rows.</summary>
+		private void TargetController_OnPinChanged(Transform target)
+		{
+			ApplyPinnedRows();
+		}
+
+		/// <summary>Listens to the local character's pin events.</summary>
+		private void BindPinSource()
+		{
+			UnbindPinSource();
+			if (Character != null && Character.TryGet(out ITargetController targetController))
+			{
+				pinSource = targetController;
+				pinSource.OnPinTarget += TargetController_OnPinChanged;
+				pinSource.OnUnpinTarget += TargetController_OnPinChanged;
+			}
+			ApplyPinnedRows();
+		}
+
+		/// <summary>Stops listening to the outgoing character's pin events.</summary>
+		private void UnbindPinSource()
+		{
+			if (pinSource == null)
+			{
+				return;
+			}
+			pinSource.OnPinTarget -= TargetController_OnPinChanged;
+			pinSource.OnUnpinTarget -= TargetController_OnPinChanged;
+			pinSource = null;
+		}
 
 		/// <summary>
 		/// Opens the per-member context menu on right-click.

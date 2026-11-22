@@ -297,6 +297,18 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(WildlifePlanner.Lives(bat, BiomeHabitat.Forest), "a cave under a forest");
 		}
 
+		[Test]
+		public void ASiteMonsterAsksNothingOfTheBiomeButTheWildNeverPlacesIt()
+		{
+			// WildlifeBuilder.Monster: no habitat, no density, any shelter; only a point of interest's spawner draws it.
+			WildlifeTemplate monster = Species(WildlifeRole.Predator, BiomeHabitat.None, 0f);
+			monster.Shelter = WildlifeShelter.Anywhere;
+			LogAssert.IsTrue(WildlifeRules.Lives(monster, BiomeHabitat.Desert), "a lair's pack spawns whatever the biome");
+			LogAssert.IsTrue(WildlifeRules.LivesOn(monster, Ground(true, SurfaceKind.Stone)) && WildlifeRules.LivesOn(monster, Ground(false, SurfaceKind.Grass)),
+				"in a cave lair or a camp in the open");
+			LogAssert.AreEqual(0f, monster.GroupsPerKm2, "and the wild's planner gives it no animals");
+		}
+
 		private static SceneCaveLifeSpot Floor(int site, Vector3 at, float dark, float headroom, SceneCaveForm form = SceneCaveForm.Cave)
 		{
 			return new SceneCaveLifeSpot

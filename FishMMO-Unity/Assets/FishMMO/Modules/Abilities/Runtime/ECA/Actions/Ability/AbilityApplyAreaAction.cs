@@ -34,6 +34,18 @@ namespace FishMMO.Shared
 		public LayerMask TargetLayerMask = ~0;
 
 		/// <summary>
+		/// The arc, in degrees, about the ability object's facing that the area reaches: 360 (the default) is all round it,
+		/// a smaller arc a cone in front of it — a swipe. The object's facing is the caster's for a point-blank area.
+		/// </summary>
+		/// <remarks>
+		/// Measured flat (height does not matter) through <see cref="TargetOrdering.IsWithinCone"/>, the test every cone
+		/// uses. The cap (<see cref="MaxHitsValue"/>) counts only bodies inside the arc, nearest first.
+		/// </remarks>
+		[Tooltip("Arc in degrees about the object's facing the area reaches. 360 = all round; less = a cone in front (a swipe).")]
+		[Range(1f, 360f)]
+		public float ArcDegrees = 360f;
+
+		/// <summary>
 		/// Reused result list, lent out for the duration of one <see cref="Execute"/>.
 		/// </summary>
 		/// <remarks>
@@ -138,9 +150,14 @@ namespace FishMMO.Shared
 				 * character allocated a fresh list forever. */
 				try
 				{
+					/* A cone asks for more than it will take: the query caps nearest-first, and the nearest may be behind. */
+					bool cone = ArcDegrees < 360f;
 					int hitCount = LagCompensatedQuery.OverlapSphereNearest(
 						eventData, abilityObject.GameObject, center, radius, TargetLayerMask,
-						maxHits, charactersOnly: true, hitBuffer);
+						cone && maxHits > 0 ? Mathf.Max(maxHits * 4, 16) : maxHits, charactersOnly: true, hitBuffer);
+					Vector3 facing = abilityObject.Transform.forward;
+					facing.y = 0f;
+					int taken = 0;
 
 					var onHitEvents = abilityObject.OnHitEvents;
 					if (onHitEvents == null)
@@ -163,6 +180,20 @@ namespace FishMMO.Shared
 						if (targetCharacter == null)
 						{
 							continue;
+						}
+						if (cone)
+						{
+							Vector3 at = targetCharacter.Transform != null ? targetCharacter.Transform.position : hitBuffer[i].Point;
+							at.y = center.y;
+							if (facing.sqrMagnitude < 1e-6f || !TargetOrdering.IsWithinCone(center, facing.normalized, at, ArcDegrees))
+							{
+								continue;
+							}
+							if (maxHits > 0 && taken >= maxHits)
+							{
+								break;
+							}
+							++taken;
 						}
 
 						/* The impact point and normal travel now that the query measures them inside the

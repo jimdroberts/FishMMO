@@ -58,6 +58,11 @@ namespace FishMMO.Shared
 		void TriggerRoll();
 
 		/// <summary>
+		/// Triggers a deflect (parry) animation: a quick sweep of the forearm across the body.
+		/// </summary>
+		void TriggerDeflect();
+
+		/// <summary>
 		/// Triggers a spell cast animation.
 		/// </summary>
 		void TriggerCast();

@@ -358,6 +358,22 @@ namespace FishMMO.Shared
 		public bool IsActivating { get { return currentAbilityID != NO_ABILITY; } }
 
 		/// <summary>
+		/// The guard this character is holding up right now (a <see cref="AbilityType.Block"/> ability mid-cast), or false.
+		/// Read when a hit lands (<see cref="HeldGuardMitigation"/>): the guard is up exactly while the cast is.
+		/// </summary>
+		public bool TryGetActiveGuard(out AbilityGuard guard)
+		{
+			guard = null;
+			if (currentAbilityID == NO_ABILITY || KnownAbilities == null ||
+				!KnownAbilities.TryGetValue(currentAbilityID, out Ability ability) || ability == null || !ability.IsHeldGuard)
+			{
+				return false;
+			}
+			guard = ability.Template.Guard;
+			return guard != null && guard.ReducePercent > 0;
+		}
+
+		/// <summary>
 		/// True if an ability is queued to activate after the current one.
 		/// </summary>
 		public bool AbilityQueued { get { return queuedAbilityID != NO_ABILITY; } }

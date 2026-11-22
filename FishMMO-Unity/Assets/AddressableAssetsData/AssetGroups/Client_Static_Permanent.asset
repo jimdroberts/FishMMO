@@ -22,13 +22,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 00e17b38d526d6a94b54e4336609c61e
-    m_Address: AbilityIcon_Cone
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 01283b7c4d8046e13989d8bbd2db9c1d
     m_Address: Generated Grass
     m_ReadOnly: 0
@@ -44,13 +37,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 01cf0b9857cbe3410b2f67786a3b4c0d
     m_Address: ItemIcon_SeaGrape
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 02ead420d755d5e8535fe17f080d5c9e
-    m_Address: AbilityIcon_PulseTrap
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -77,13 +63,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 05daaabb6ca6c4c92730fe0d08f366ce
-    m_Address: AbilityIcon_Cleanse
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 05e3f25f21ba55765ff0f67d912bcbe6
     m_Address: AbilityIcon_FrozenDrop
     m_ReadOnly: 0
@@ -100,6 +79,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 06223db2442efd5294bea9e0c7e9169c
     m_Address: AbilityIcon_HealMoteSummonEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 069372521f400e7a7c4d5cbd81663c79
+    m_Address: AbilityIcon_HealOverTimeHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -144,6 +130,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0a3cf503443def4ca7cba15786374e98
+    m_Address: AbilityIcon_SnailHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0b7ea11686b5ccf44bb4871d2facee3a
     m_Address: BiomeTexture_Badlands_B2664C
     m_ReadOnly: 0
@@ -166,6 +159,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 0ce152ea246287c6f879b2808edd04df
     m_Address: ItemIcon_Spongilla
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 0d164198edb92cbe30f03f6c3f0592a2
+    m_Address: AbilityIcon_FlameTickEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -356,6 +356,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 19838560426083e6c185aa4145fed928
+    m_Address: AbilityIcon_DrainLife
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 199db50cac29cd3e78674432ce68a0cd
     m_Address: Truffle Patch 0
     m_ReadOnly: 0
@@ -372,6 +379,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1a49b80f27d38c4749bea1720d91bc32
     m_Address: Precipitation
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1c596cf694742eee44a4d324ca3563d4
+    m_Address: AbilityIcon_HealOverTimeSelf
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -407,6 +421,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 1eb18bb28518e00fcab80b970b5ed096
     m_Address: FishRockfallStones
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1f0927ebe8c1587ba6fbfdc4e9071b41
+    m_Address: AbilityIcon_ForkHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -558,13 +579,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 2d623a057603f8553f3e169b6a2c5be5
-    m_Address: AbilityIcon_BleedingDagger
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 2e1182e35568a9eb677a3770282abef6
     m_Address: ItemIcon_SeaWormwood
     m_ReadOnly: 0
@@ -574,6 +588,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 2ecf9a69c1cfaffcdff75cfe16c52a97
     m_Address: AbilityIcon_Fork
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2fb936abc3a741b938d73a8d6d67c8b3
+    m_Address: AbilityIcon_HealOverTimeFXEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -759,13 +780,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 3778dcb4d66a118f7717e1d9058efd17
-    m_Address: AbilityIcon_Lance
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 3789a936b37816b843f3bc5678c6c1f1
     m_Address: ItemIcon_SaxaulWood
     m_ReadOnly: 0
@@ -789,6 +803,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 387f3793de35e08a591c1cc60f4c9087
     m_Address: ItemIcon_Voidstone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 38d10effa79064326884cfdf3cdbfbbf
+    m_Address: AbilityIcon_SlamHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -829,6 +850,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3ba214ee7eba537c94b7896234c4a350
+    m_Address: AbilityIcon_ForkSplitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3c0fe7c0a0e64f5e9d6b2a4c8e1f7a21
     m_Address: FishCaveCover
     m_ReadOnly: 0
@@ -848,8 +876,22 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3c41819c02796de3ccb12418aaee4d9a
+    m_Address: AbilityIcon_FistHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3c67ae9c759d4229aae740ce8a7e3177
     m_Address: Bloodroot Patch 0
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3c7ae017d638da4d3b502d336d04f764
+    m_Address: AbilityIcon_DrainLifeHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -859,13 +901,6 @@ MonoBehaviour:
     m_Address: BiomeTexture_Jungle_1A9933
     m_ReadOnly: 0
     m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 3d9af5acd88bb17ed226fa577fd3c3b6
-    m_Address: AbilityIcon_ThreatPulse
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 3e581399c26581c179ec5da226ad9e37
@@ -901,6 +936,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3f414d8fe5346a435b54cbf5af21a282
+    m_Address: AbilityIcon_RicochetHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 40255954c5a8dbb81e8807fca4961373
     m_Address: ItemIcon_KingOakHeartwood
     m_ReadOnly: 0
@@ -924,6 +966,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 41aaf5ba6dd0740932a26609168d355e
     m_Address: ItemIcon_Amber
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 41d0bf3cb20dc1a149b61a26896502aa
+    m_Address: AbilityIcon_DaggerHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1034,6 +1083,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 475d0b06d9058766cda4b5ca91060b82
     m_Address: ItemIcon_TanninBark
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 47a40cf5f26aaef4f8d536c3769ecc96
+    m_Address: AbilityIcon_InvisibleHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1198,13 +1254,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 4eeb27fcd8bb085a4e75ea78595a0fb9
-    m_Address: AbilityIcon_RandomBolts
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 4f82a6e22336fb501de659e4deec6e46
     m_Address: ItemIcon_Ebbspar
     m_ReadOnly: 0
@@ -1214,6 +1263,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 4f916dbb988cfc2ba6d963ba5392605e
     m_Address: ItemIcon_Sunspoke
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 4fc8fb1e6aa8cd01c026de3e870c2bdc
+    m_Address: AbilityIcon_InterruptHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1267,8 +1323,8 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 531050b1ea8f11470e7da22730638a06
-    m_Address: AbilityIcon_CuirassPlus
+  - m_GUID: 532f92436bd0110a5df7bf937fa32f44
+    m_Address: AbilityIcon_StunTickEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1302,6 +1358,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 54d6d7a79401a1955e848a19c118641f
+    m_Address: AbilityIcon_RicochetBounceEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 54daef9394b95ea4cb9b1d26e02236b0
     m_Address: MinimapRenderTexture
     m_ReadOnly: 0
@@ -1313,6 +1376,13 @@ MonoBehaviour:
     m_Address: Albedo 14x1
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 5591e191912b2f0bf59d7cc5c4047917
+    m_Address: AbilityIcon_Mesmerize
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 55c12c7a458da853e5da55e52afb2b36
@@ -1373,13 +1443,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 59487f7c596587f8156e864b071fd9c8
     m_Address: ItemIcon_MasaClay
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 5a180a741c50cbff494ba77da2625848
-    m_Address: AbilityIcon_FlameJet
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1530,6 +1593,20 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6287cd309f2d5bccfce5046dd7e85a62
+    m_Address: AbilityIcon_DrainLifeFXEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 62d9aabc0e618f2ac3e8acfe72353c6c
+    m_Address: AbilityIcon_PierceHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 62f244baa47b85bc294c4fdd7df349ee
     m_Address: ItemIcon_Samphire
     m_ReadOnly: 0
@@ -1579,6 +1656,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 64f10bfd36c56d8819572a1f80045bb1
+    m_Address: AbilityIcon_BeamHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 654aedf53eeb18f55bc0b27e74a9cfd3
     m_Address: Frostpine Elder 0
     m_ReadOnly: 0
@@ -1601,6 +1685,20 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 66b1e9b4de7869ebb45108f29341cc5c
     m_Address: ItemIcon_KengerGum
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6700c534bc7c61665b2705cfb5ddd965
+    m_Address: AbilityIcon_HealOverTimeSelfHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 67b5113a3262ef0ed182617372453359
+    m_Address: AbilityIcon_MesmerizeHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1725,6 +1823,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6dbb938abab2a763a3762399d2af69c2
+    m_Address: AbilityIcon_FrostBoltHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6f2a893185ed8dc5e89839da192b2d62
     m_Address: Wall
     m_ReadOnly: 0
@@ -1733,6 +1838,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 6f4c4570f9726618463ae49ccfcbc4ad
     m_Address: AbilityIcon_ShatterSelf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6fc5841b70ae4dedd0602ab6128583cc
+    m_Address: AbilityIcon_ChainLightningHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1863,6 +1975,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 7542c2da1d4cb9969c306deac039af60
+    m_Address: AbilityIcon_IgniteFXEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 755bcd3f3b9b29b66a7310725a5e5f14
     m_Address: ItemIcon_BlueMussel
     m_ReadOnly: 0
@@ -1877,6 +1996,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 76a7f226a21c99fde748165fc4a38327
+    m_Address: AbilityIcon_AbsorbBubbleHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 76b238c8457928486ce4440d6603c6d5
     m_Address: ItemIcon_BlackCoral
     m_ReadOnly: 0
@@ -1886,6 +2012,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 774c253a421cafe2740bcfab45ae95ed
     m_Address: ItemIcon_CistancheSpike
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 7757ebf073e358fe7fe799b94c40ac79
+    m_Address: AbilityIcon_StunHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -1954,13 +2087,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 79b0fe8fee848bcbb180daa6e617b3aa
-    m_Address: AbilityIcon_Strip
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 79bb5214b9c0afe39916ed9dce2d3abf
     m_Address: ItemIcon_LureBulb
     m_ReadOnly: 0
@@ -1995,8 +2121,8 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 7c65fcb82d031358ecee480be92f9970
-    m_Address: AbilityIcon_Nova
+  - m_GUID: 7ca5d1604ef679bf333ce7a310e227d9
+    m_Address: AbilityIcon_BoltHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2060,13 +2186,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 803d643f92cf7e0b3b8408315368d371
     m_Address: FishTerrainInstancing
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 80b432362196fad835b137a9472057b9
-    m_Address: AbilityIcon_Reticle
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2161,6 +2280,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8822135ded011a9e557ecc6d32eeb4d6
+    m_Address: AbilityIcon_SeeInvisible
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 884ea650471f017b09eb5a4c0d20f444
     m_Address: ItemIcon_Dioptase
     m_ReadOnly: 0
@@ -2212,6 +2338,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 8bd7189a93a941d9b60c4f759d719be6
     m_Address: FishGrassBlades
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8c11b9c019b22a827f63fbe45731cde1
+    m_Address: AbilityIcon_ChainLightningFXEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2280,6 +2413,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8e7fc09001f69a712ce404ba8de5c338
+    m_Address: AbilityIcon_BeamSpawnEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8f12d92ef06f3459d0f66da7132911f8
     m_Address: ItemIcon_Wormwood
     m_ReadOnly: 0
@@ -2287,8 +2427,22 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8f622b45f25d1bce155a606fed36ed47
+    m_Address: AbilityIcon_Ricochet
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8fe621b1d1dde1baeaa438a00267f07b
     m_Address: AbilityIcon_TeleportBehindEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 8ff23644aa1fb9760cf439b29c69dac4
+    m_Address: AbilityIcon_IgniteHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2310,6 +2464,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 90fc40c3296f5c69a4d5afe1536202aa
     m_Address: ItemIcon_Mirewort
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 91bfee5a5338bcdf32e9b480ca5e3e36
+    m_Address: AbilityIcon_ForkFXEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2512,6 +2673,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 9f1a871e99322a447a31aac763d715a9
+    m_Address: AbilityIcon_Dagger
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 9f41c7ef3508e9c1e6bedc8c8a528a88
     m_Address: ItemIcon_Pumice
     m_ReadOnly: 0
@@ -2602,6 +2770,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a72a2236c9797a7ec2d7065ed006b823
+    m_Address: AbilityIcon_BoltSpawnEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a805c1e22b45b882bbc02a288629234c
     m_Address: FishCurtain
     m_ReadOnly: 0
@@ -2658,6 +2833,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: aa76ed897ffd4264db8bb02574a97b54
+    m_Address: AbilityIcon_SnowflakeHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: aba081c18ad174da9ffde25654ac2098
     m_Address: ItemIcon_LumenQuartz
     m_ReadOnly: 0
@@ -2667,6 +2849,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ac0a5ce694412694b1719da0abd5f2b3
     m_Address: ItemIcon_LakeBall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ac4e47ecb0c92c0f22df22aab2d78370
+    m_Address: AbilityIcon_FrostBoltFXEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2698,8 +2887,8 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ad4c7a80c09a5756bf95f97d052d7e49
-    m_Address: AbilityIcon_HeartHeal
+  - m_GUID: ad5dc8f2a96296a75cfb371261fca89b
+    m_Address: AbilityIcon_HeartHealHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2747,6 +2936,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b03cf4345668dd31ded6d663c6e896d6
+    m_Address: AbilityIcon_SeeInvisibleHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b064443fe544e2d0ea26b1697b4d2a56
     m_Address: ItemIcon_ScrollofLesserFlame
     m_ReadOnly: 0
@@ -2756,13 +2952,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b0a5188b4c3e6ddfcfabae9beec7fae9
     m_Address: AbilityIcon_ClawStrike
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: b0b6b0d2a917c2c0190356db57b5fcc6
-    m_Address: AbilityIcon_ChargedShot
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2790,6 +2979,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b26d1aa17b044faae39c1522d88e4e80
     m_Address: AbilityIcon_HealMote
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b272c328a5d46a4df7a11c02e7e9baa2
+    m_Address: AbilityIcon_DeflectHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2868,6 +3064,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b8a2ea59e3a907ccbe3339f976028376
+    m_Address: AbilityIcon_MesmerizeFXEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b94ebc2a1797eff9f8fe5047bd0427f8
     m_Address: Emberglass Cluster 0
     m_ReadOnly: 0
@@ -2905,6 +3108,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: bb1254a0f5ecb3b239b87631320dba90
     m_Address: Cloud Cookie
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: bb3d1b19b507da83281b8ca624d02e1c
+    m_Address: AbilityIcon_TauntHitEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3001,8 +3211,8 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: c1a09166678121c7eb3521e7328c3757
-    m_Address: AbilityIcon_HealTrio
+  - m_GUID: c03e5f43dc37fef62c94e1a35538ae9a
+    m_Address: AbilityIcon_Ignite
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3075,6 +3285,13 @@ MonoBehaviour:
     m_Address: Generated Sand
     m_ReadOnly: 0
     m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: c6b5e2787d0a37a2abb202e2c8e96346
+    m_Address: AbilityIcon_ClawStrikeHitEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: c7c3281985dd0672796e8c983ce814bb
@@ -3163,13 +3380,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ce8c98f267d4a424799e2fe49fde661a
     m_Address: BiomeTexture_Scrubland_999966
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: cf71fca02d0093a4a7b44f18a8fcabc9
-    m_Address: AbilityIcon_Sword
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3382,6 +3592,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: d927959ea1c1538bfa20230f0399fccf
+    m_Address: AbilityIcon_HealOverTimeSummonEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: d944ebae650c08fc79300e91d6b8e11a
     m_Address: ItemIcon_HydrophaneOpal
     m_ReadOnly: 0
@@ -3398,6 +3615,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: d9afedf16ae61e2c6da438af2cf87519
     m_Address: AbilityIcon_TeleportRightEffect
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: d9bcec6fcf74664de01d46c59453574c
+    m_Address: AbilityIcon_DaggerBehindEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3430,22 +3654,8 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: dbe76a6ced26a6f980be825286868a0c
-    m_Address: AbilityIcon_KnockbackOrb
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: dc44d037d539f7422a465853240c147f
     m_Address: ItemIcon_GlassSpicule
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: dc631212bdfeecef69683dbc69b0cd07
-    m_Address: AbilityIcon_CuirassRising
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3550,6 +3760,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e302efeff3187e5389d0fa071296e1ad
     m_Address: ItemIcon_KossoBlossom
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e336581821cdd4fa4faafbb5c48ead72
+    m_Address: AbilityIcon_FrostBolt
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3746,15 +3963,15 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ee3b7318f4bc2a2bc7945ba46047e7a5
-    m_Address: AbilityIcon_Spread
+  - m_GUID: ee3cbafa15201c2f30b8c9614f8e4267
+    m_Address: ItemIcon_IrishMoss
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: ee3cbafa15201c2f30b8c9614f8e4267
-    m_Address: ItemIcon_IrishMoss
+  - m_GUID: eea19a34339424447d73b6d1b5379e38
+    m_Address: AbilityIcon_Invisible
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3838,6 +4055,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f34c4db69faaaadc432c71e293a854f4
     m_Address: ItemIcon_MountainRoot
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f40d5d5f3dab6d8cd8b50de7317da1e6
+    m_Address: AbilityIcon_ClawStrikeSpawnEffect
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -3942,13 +4166,6 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: fb39f83f063ab5c249fbc769828acbc9
     m_Address: ItemIcon_TestTunic
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: fbdfeb3ee5cbcc972db7150bcba197c2
-    m_Address: AbilityIcon_Potion
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

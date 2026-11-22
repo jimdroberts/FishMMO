@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Giant Rat
+  m_EditorClassIdentifier: FishMMO.Wildlife::FishMMO.Shared.WildlifeTemplate
+  Role: 2
+  WalkSpeed: 1.3
+  RunSpeed: 7.5
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 360
+  Body:
+    Length: 0.95
+    Depth: 0.32
+    Width: 0.3
+    LegLength: 0.22
+    LegThickness: 0.06
+    NeckLength: 0.1
+    NeckRaise: 10
+    HeadLength: 0.3
+    HeadSize: 0.15
+    EarSize: 0.1
+    Horns: 0
+    HornSize: 0
+    TailLength: 0.9
+    TailRaise: 5
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.33, g: 0.28, b: 0.24, a: 1}
+    Belly: {r: 0.55, g: 0.48, b: 0.42, a: 1}
+    Accent: {r: 0.85, g: 0.62, b: 0.6, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 0
+  Shelter: 2
+  Surfaces: 0
+  GroupsPerKm2: 0
+  GroupMin: 1
+  GroupMax: 1
+  DenKinds: 
+  DensInCaveMouths: 0
+  ColoniesInCaves: 0
+  RespawnMinSeconds: 300
+  RespawnMaxSeconds: 600

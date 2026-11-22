@@ -13,9 +13,7 @@ MonoBehaviour:
   m_Name: Jungle
   m_EditorClassIdentifier: 
   DisplayName: Jungle
-  Description: "Living lowland rainforest \u2014 buttressed giants over a dim, dripping
-    floor, oil palms in every gap, grey domes of bare granite above the canopy, and
-    the red-walled, ditch-ringed towns of the brass-casters"
+  Description: "Living lowland rainforest \u2014 buttressed giants over a dim, dripping floor, oil palms in every gap, grey domes of bare granite above the canopy, and the red-walled, ditch-ringed towns of the brass-casters"
   BiomeColorId: {r: 0.1, g: 0.6, b: 0.2, a: 1}
   GizmoColor: {r: 0, g: 0.8, b: 0.2, a: 1}
   ElevationTier: 4
@@ -157,8 +155,7 @@ MonoBehaviour:
       - Key: bridge
         Values:
         - Liana Bridge
-      Description: Edo-Yoruba-flavoured invented voice of the forest kingdoms (O,
-        Ad, Ak, Ob, Og; -n, -ba, -de, -ro; Compound, Quarter, Grove, Iya)
+      Description: Edo-Yoruba-flavoured invented voice of the forest kingdoms (O, Ad, Ak, Ob, Og; -n, -ba, -de, -ro; Compound, Quarter, Grove, Iya)
   LooseGround: {fileID: 0}
   Emits: {fileID: 0}
   EmissionRate: 0
@@ -356,8 +353,7 @@ MonoBehaviour:
   rareLookA: 0
   rareLookB: 0
   grassTypes:
-  - Prefab: {fileID: 8848099006792253514, guid: e0f6992782ca660d7005120301de6375,
-      type: 3}
+  - Prefab: {fileID: 8848099006792253514, guid: e0f6992782ca660d7005120301de6375, type: 3}
     Density: 0.5
     Stiffness: 1
     Width: 0.6
@@ -380,8 +376,7 @@ MonoBehaviour:
     - {r: 0.36, g: 0.25, b: 0.14, a: 1}
     HeadColoursOverMesh: 0
     GroundTint: 0.3
-  - Prefab: {fileID: 8547278715612887967, guid: 16ab2ad32b8fb81a5f1f17e470125443,
-      type: 3}
+  - Prefab: {fileID: 8547278715612887967, guid: 16ab2ad32b8fb81a5f1f17e470125443, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -405,8 +400,7 @@ MonoBehaviour:
     - {r: 0.78431374, g: 0.1882353, b: 0.11764706, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.25
-  - Prefab: {fileID: 6826487918806066109, guid: f30304ecfa540a97e13b504d501ffe23,
-      type: 3}
+  - Prefab: {fileID: 6826487918806066109, guid: f30304ecfa540a97e13b504d501ffe23, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -430,8 +424,7 @@ MonoBehaviour:
     - {r: 0.95686275, g: 0.9254902, b: 0.78431374, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.2
-  - Prefab: {fileID: 6468530528223569742, guid: 464cd12998a035ca25d7c37bef1e9f0b,
-      type: 3}
+  - Prefab: {fileID: 6468530528223569742, guid: 464cd12998a035ca25d7c37bef1e9f0b, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -454,8 +447,7 @@ MonoBehaviour:
     - {r: 0.8784314, g: 0.16470589, b: 0.101960786, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.3
-  - Prefab: {fileID: 7957384709544190578, guid: d8084af7bd14e85c751a77bd917f71c2,
-      type: 3}
+  - Prefab: {fileID: 7957384709544190578, guid: d8084af7bd14e85c751a77bd917f71c2, type: 3}
     Density: 1
     Stiffness: 1.4
     Width: 0.5
@@ -478,8 +470,7 @@ MonoBehaviour:
     - {r: 0.9490196, g: 0.9411765, b: 0.91764706, a: 1}
     HeadColoursOverMesh: 1
     GroundTint: 0.4
-  - Prefab: {fileID: 8520538296115250250, guid: d30859ab52c87c501a844ab11c7e5cbd,
-      type: 3}
+  - Prefab: {fileID: 8520538296115250250, guid: d30859ab52c87c501a844ab11c7e5cbd, type: 3}
     Density: 1
     Stiffness: 1.3
     Width: 0.8
@@ -504,8 +495,7 @@ MonoBehaviour:
     HeadColoursOverMesh: 1
     GroundTint: 0.35
   mainTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: e3c1f3144463b66de995dc424feaa102,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: e3c1f3144463b66de995dc424feaa102, type: 2}
     albedoTexture: {fileID: 2800000, guid: 3d80aba0e85f202419137bd5cd05427f, type: 3}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -2405,6 +2395,101 @@ MonoBehaviour:
       carpetClumpMetres: 16
       carpetClumpFloor: 0.45
       carpetWeightRamp: 0.25
+      densityPer100m2: 0.85
+      maxPerChunk: 0
+      minSpacing: 1.3
+      minTextureWeight: 0.45
+      spawnProbabilityMultiplier: 1
+      useHeightConstraint: 0
+      heightRange:
+        min: 0
+        max: 1
+      heightFalloff: 0.05
+      useSlopeConstraint: 1
+      slopeRange:
+        min: 0
+        max: 35
+      slopeFalloff: 5
+      useNonUniformScaling: 1
+      uniformScaleRange: {x: 0.85, y: 1.2}
+      widthScaleRange: {x: 0.8, y: 1.2}
+      heightScaleRange: {x: 0.8, y: 1.2}
+      scaleSkew: 1
+      yRotationRange: {x: 0, y: 360}
+      alignToTerrainNormal: 0
+      seedOffset: 17842
+      clusterMetres: 6
+      clusterSize: 5
+      clusterSpacing: 4
+      clusterBackground: 0.25
+      clusterScaleBias: 0.4
+      forestMetres: 0
+      forestCover: 0.6
+      forestEdge: 0.3
+      forestOpen: 0.05
+      forestMix: 0.5
+      forestScaleBias: 0.3
+      sinkRange: {x: 0.04, y: 0.1}
+      sinkSlopeFactor: 0.3
+      depthRange: {x: 0, y: 0}
+      waters: 0
+      currentRange: {x: 0, y: 0}
+      useClimateBand: 1
+      temperatureRange: {x: -1, y: 1}
+      temperatureFalloff: 0.1
+      humidityRange: {x: 0.6, y: 1}
+      humidityFalloff: 0.1
+      worldGate:
+        air: 0
+        requires: 0
+        useTemperature: 0
+        temperatureRange: {x: 0, y: 0}
+      useHeatBand: 0
+      heatRange: {x: 0, y: 1}
+      heatFalloff: 0.1
+      landformBand:
+        On: 0
+        Part: 0
+        Kind: 
+        Outside: 0
+      talusGrading: 0
+      scatterMode:
+        Facing: 0
+        FacingOffset: 0
+        FacingSpread: 0
+        Lean: 0
+        LeanDegrees: 0
+        Anchor: 0
+        AnchorMetres: 0
+        AnchorFloor: 0
+        AnchorNames: 
+        Pattern: 0
+        PatternMetres: 0
+        PatternShare: 0
+        SizePower: 0
+      facingBand:
+        On: 0
+        Toward: 0
+        HalfWidth: 0
+        Falloff: 0
+        MinSlope: 0
+      specFingerprint: da66693108fef100
+      detailNoiseSpread: 1.5
+      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
+      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
+      detailInstancesPerSpawn: 64
+    - stableGuid: e3f61a39e3534e74891ec0064c478019
+      enableSpawning: 1
+      ruleName: 'Bush: WildCoffee'
+      prefabs:
+      - {fileID: 8725478876353370858, guid: a4fc37f6d90877edbb6eddc156067656, type: 3}
+      spawnChannel: 0
+      detailRenderMode: 1
+      detailPlacement: 0
+      carpetCoverage: 0.85
+      carpetClumpMetres: 16
+      carpetClumpFloor: 0.45
+      carpetWeightRamp: 0.25
       densityPer100m2: 0.78
       maxPerChunk: 0
       minSpacing: 1.3
@@ -2484,101 +2569,6 @@ MonoBehaviour:
         Falloff: 0
         MinSlope: 0
       specFingerprint: 1be4fd2147ac5e43
-      detailNoiseSpread: 1.5
-      detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
-      detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
-      detailInstancesPerSpawn: 64
-    - stableGuid: e3f61a39e3534e74891ec0064c478019
-      enableSpawning: 1
-      ruleName: 'Bush: WildCoffee'
-      prefabs:
-      - {fileID: 8725478876353370858, guid: a4fc37f6d90877edbb6eddc156067656, type: 3}
-      spawnChannel: 0
-      detailRenderMode: 1
-      detailPlacement: 0
-      carpetCoverage: 0.85
-      carpetClumpMetres: 16
-      carpetClumpFloor: 0.45
-      carpetWeightRamp: 0.25
-      densityPer100m2: 1
-      maxPerChunk: 0
-      minSpacing: 1.3
-      minTextureWeight: 0.45
-      spawnProbabilityMultiplier: 1
-      useHeightConstraint: 0
-      heightRange:
-        min: 0
-        max: 1
-      heightFalloff: 0.05
-      useSlopeConstraint: 1
-      slopeRange:
-        min: 0
-        max: 35
-      slopeFalloff: 5
-      useNonUniformScaling: 1
-      uniformScaleRange: {x: 0.85, y: 1.2}
-      widthScaleRange: {x: 0.8, y: 1.2}
-      heightScaleRange: {x: 0.8, y: 1.2}
-      scaleSkew: 1
-      yRotationRange: {x: 0, y: 360}
-      alignToTerrainNormal: 0
-      seedOffset: 17842
-      clusterMetres: 6
-      clusterSize: 5
-      clusterSpacing: 4
-      clusterBackground: 0.25
-      clusterScaleBias: 0.4
-      forestMetres: 0
-      forestCover: 0.6
-      forestEdge: 0.3
-      forestOpen: 0.05
-      forestMix: 0.5
-      forestScaleBias: 0.3
-      sinkRange: {x: 0.04, y: 0.1}
-      sinkSlopeFactor: 0.3
-      depthRange: {x: 0, y: 0}
-      waters: 0
-      currentRange: {x: 0, y: 0}
-      useClimateBand: 1
-      temperatureRange: {x: -1, y: 1}
-      temperatureFalloff: 0.1
-      humidityRange: {x: -1, y: 0.6}
-      humidityFalloff: 0.1
-      worldGate:
-        air: 0
-        requires: 0
-        useTemperature: 0
-        temperatureRange: {x: 0, y: 0}
-      useHeatBand: 0
-      heatRange: {x: 0, y: 1}
-      heatFalloff: 0.1
-      landformBand:
-        On: 0
-        Part: 0
-        Kind: 
-        Outside: 0
-      talusGrading: 0
-      scatterMode:
-        Facing: 0
-        FacingOffset: 0
-        FacingSpread: 0
-        Lean: 0
-        LeanDegrees: 0
-        Anchor: 0
-        AnchorMetres: 0
-        AnchorFloor: 0
-        AnchorNames: 
-        Pattern: 0
-        PatternMetres: 0
-        PatternShare: 0
-        SizePower: 0
-      facingBand:
-        On: 0
-        Toward: 0
-        HalfWidth: 0
-        Falloff: 0
-        MinSlope: 0
-      specFingerprint: d10d2237a83c67ed
       detailNoiseSpread: 1.5
       detailHealthyColor: {r: 0.92, g: 0.97, b: 0.92, a: 1}
       detailDryColor: {r: 0.8, g: 0.76, b: 0.58, a: 1}
@@ -3062,8 +3052,7 @@ MonoBehaviour:
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
   detailTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 4a4bd08c8592ac0d722f1430593e2df7,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 4a4bd08c8592ac0d722f1430593e2df7, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -4188,8 +4177,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
-  - terrainLayer: {fileID: 8574412962073106934, guid: 68ccfa98b61e0503405ab7e7bab1acf4,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 68ccfa98b61e0503405ab7e7bab1acf4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5125,8 +5113,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 1, g: 1, b: 1, a: 1}
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
-  - terrainLayer: {fileID: 8574412962073106934, guid: e68e732afeafc3df7be8d1c3bbef35e9,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: e68e732afeafc3df7be8d1c3bbef35e9, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -5202,8 +5189,7 @@ MonoBehaviour:
       Falloff: 0
       Floor: 0
     ways:
-      path: {fileID: 8574412962073106934, guid: 4723824b9902edfa9baac73a204e002f,
-        type: 2}
+      path: {fileID: 8574412962073106934, guid: 4723824b9902edfa9baac73a204e002f, type: 2}
       road: {fileID: 0}
       cobbles: {fileID: 0}
     prefabSpawnRules:
@@ -5777,8 +5763,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 128
-  - terrainLayer: {fileID: 8574412962073106934, guid: 59801923ce8f12f3eeae1f42ea207d01,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 59801923ce8f12f3eeae1f42ea207d01, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6437,8 +6422,7 @@ MonoBehaviour:
       detailHealthyColor: {r: 0.9, g: 0.95, b: 0.9, a: 1}
       detailDryColor: {r: 0.75, g: 0.7, b: 0.55, a: 1}
       detailInstancesPerSpawn: 255
-  - terrainLayer: {fileID: 8574412962073106934, guid: 5c30119c553fd2e0a42bb70dd16cf6ca,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 5c30119c553fd2e0a42bb70dd16cf6ca, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6906,8 +6890,7 @@ MonoBehaviour:
       detailDryColor: {r: 1, g: 1, b: 1, a: 1}
       detailInstancesPerSpawn: 96
   roadTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 68bde2fb84857e6e45bd2113d7b43a76,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 68bde2fb84857e6e45bd2113d7b43a76, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -6988,8 +6971,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   smallPathTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: aee0aba2b4d4c76566a90d60e0b377c4,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: aee0aba2b4d4c76566a90d60e0b377c4, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7070,8 +7052,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cobbleTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: ab6e2eb330e8d3e9a5758ea63a13030c,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: ab6e2eb330e8d3e9a5758ea63a13030c, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7152,8 +7133,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   cliffTextureLayers:
-  - terrainLayer: {fileID: 8574412962073106934, guid: 4af0b395b86286c49e014f9b92b887e2,
-      type: 2}
+  - terrainLayer: {fileID: 8574412962073106934, guid: 4af0b395b86286c49e014f9b92b887e2, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7243,8 +7223,7 @@ MonoBehaviour:
     rockType: None
     rockTypeAuthored: None
   riverbedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: a03e9600dc64ef519f2c51588a9abbaa,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: a03e9600dc64ef519f2c51588a9abbaa, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7325,8 +7304,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barSandTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: 43519c2600c8e857d8db0ce26c059f08,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: 43519c2600c8e857d8db0ce26c059f08, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7407,8 +7385,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   barGravelTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: a556293b3a3571e3cfeffb3b1e29a245,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: a556293b3a3571e3cfeffb3b1e29a245, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7489,8 +7466,7 @@ MonoBehaviour:
       cobbles: {fileID: 0}
     prefabSpawnRules: []
   lakebedTextureLayer:
-    terrainLayer: {fileID: 8574412962073106934, guid: ef51b930a950802df26523501eb0c19e,
-      type: 2}
+    terrainLayer: {fileID: 8574412962073106934, guid: ef51b930a950802df26523501eb0c19e, type: 2}
     albedoTexture: {fileID: 0}
     normalTexture: {fileID: 0}
     maskTexture: {fileID: 0}
@@ -7997,8 +7973,7 @@ MonoBehaviour:
   - {fileID: 6284329346455307793, guid: 981c525fc8023d16efaa55a26963e67d, type: 3}
   caveMouthFerns:
   - {fileID: 7354718149827377524, guid: 175294bc17ffd7d755f4d053ed0e0c39, type: 3}
-  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27,
-    type: 3}
+  caveMouthCreeper: {fileID: 6749608030677438891, guid: 262dfb52568ed2aaa1bda9d6dab02d27, type: 3}
   caveMouthBoulders:
   - {fileID: 5453182286131716446, guid: 345dc0cc5023fc0d057e94821e3b8143, type: 3}
   - {fileID: 6975888628970705459, guid: 058614efbf99a42def91c5ec8451d56e, type: 3}
@@ -8493,20 +8468,17 @@ MonoBehaviour:
     CoatStrength: 0.8
     CoatTint: {r: 0, g: 0, b: 0, a: 0}
   fieldCrops:
-  - Prefab: {fileID: 7979677770104501644, guid: 7848ab884e54b50757f9cb9646915e77,
-      type: 3}
+  - Prefab: {fileID: 7979677770104501644, guid: 7848ab884e54b50757f9cb9646915e77, type: 3}
     Weight: 0.6
     Surface: 5
     Riser: 0
     Rows: 0
-  - Prefab: {fileID: 5623486443633211045, guid: 6ed556d790fc001ce33d5ee1771b6a51,
-      type: 3}
+  - Prefab: {fileID: 5623486443633211045, guid: 6ed556d790fc001ce33d5ee1771b6a51, type: 3}
     Weight: 0.25
     Surface: 0
     Riser: 0
     Rows: 0
-  - Prefab: {fileID: 5484714354734045197, guid: 8718959b2bc3c19f09a6f49956c6ef9f,
-      type: 3}
+  - Prefab: {fileID: 5484714354734045197, guid: 8718959b2bc3c19f09a6f49956c6ef9f, type: 3}
     Weight: 0.15
     Surface: 0
     Riser: 0
@@ -8515,22 +8487,19 @@ MonoBehaviour:
   - Tree: {fileID: 7543715159133235354, guid: 252c8e58c4dd601ca4da7a8a7296da9b, type: 3}
     Weight: 0.4
     Spacing: 9
-    Understorey: {fileID: 7957384709544190578, guid: d8084af7bd14e85c751a77bd917f71c2,
-      type: 3}
+    Understorey: {fileID: 7957384709544190578, guid: d8084af7bd14e85c751a77bd917f71c2, type: 3}
     Surface: 0
     Riser: 0
   - Tree: {fileID: 6044375041772042121, guid: 96154203cb20283c8c0382417f8aec08, type: 3}
     Weight: 0.3
     Spacing: 8
-    Understorey: {fileID: 7354718149827377524, guid: 175294bc17ffd7d755f4d053ed0e0c39,
-      type: 3}
+    Understorey: {fileID: 7354718149827377524, guid: 175294bc17ffd7d755f4d053ed0e0c39, type: 3}
     Surface: 0
     Riser: 0
   - Tree: {fileID: 5732865730547075207, guid: 785a8d03c5c02b44294dd8181bac1855, type: 3}
     Weight: 0.3
     Spacing: 4
-    Understorey: {fileID: 5623486443633211045, guid: 6ed556d790fc001ce33d5ee1771b6a51,
-      type: 3}
+    Understorey: {fileID: 5623486443633211045, guid: 6ed556d790fc001ce33d5ee1771b6a51, type: 3}
     Surface: 0
     Riser: 0
   fieldLayout:
@@ -9434,9 +9403,7 @@ MonoBehaviour:
   - Field: groundWays/detail/2/path
     Fingerprint: Ground_PathFrondMat
   - Field: Description
-    Fingerprint: "Living lowland rainforest \u2014 buttressed giants over a dim,
-      dripping floor, oil palms in every gap, grey domes of bare granite above the
-      canopy, and the red-walled, ditch-ringed towns of the brass-casters"
+    Fingerprint: "Living lowland rainforest \u2014 buttressed giants over a dim, dripping floor, oil palms in every gap, grey domes of bare granite above the canopy, and the red-walled, ditch-ringed towns of the brass-casters"
   - Field: naming/Onsets
     Fingerprint: 750af912eb2e8236
   - Field: naming/Nuclei
@@ -9458,8 +9425,7 @@ MonoBehaviour:
   - Field: naming/POITypeWords
     Fingerprint: c157a3c5121ac1ef
   - Field: naming/Description
-    Fingerprint: Edo-Yoruba-flavoured invented voice of the forest kingdoms (O, Ad,
-      Ak, Ob, Og; -n, -ba, -de, -ro; Compound, Quarter, Grove, Iya)
+    Fingerprint: Edo-Yoruba-flavoured invented voice of the forest kingdoms (O, Ad, Ak, Ob, Og; -n, -ba, -de, -ro; Compound, Quarter, Grove, Iya)
   - Field: TerrainProcess
     Fingerprint: Rainforest
   - Field: acceptedRocks/gneiss
@@ -9823,8 +9789,7 @@ MonoBehaviour:
   - Field: linearFeatures/Fence/Wattle/Folds
     Fingerprint: "Fence/Wattle@Folds \xD71 h0 s0 g0 b0 Both 0 r0 [] [] "
   - Field: linearFeatures/Hedge/Wild/SiteBounds
-    Fingerprint: "Hedge/Wild@SiteBounds \xD71 h0 s0 g0 b0 Both 0 r0 [Detail_Bush_Dracaena]
-      [] "
+    Fingerprint: "Hedge/Wild@SiteBounds \xD71 h0 s0 g0 b0 Both 0 r0 [Detail_Bush_Dracaena] [] "
   - Field: linearFeatures/Wall/EarthBank/SiteBounds
     Fingerprint: "Wall/EarthBank@SiteBounds \xD71 h0 s0 g0 b0 Both 0 r0 [] [] "
   - Field: orchards/Tree_Kola

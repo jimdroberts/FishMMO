@@ -17,45 +17,216 @@ MonoBehaviour:
     RaceCategory: 
     Role: 0
     Choices:
-    - Prefab: {fileID: 4811273059840484731, guid: f7377f38d08b9c84ab957eb9d610e043,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: f7377f38d08b9c84ab957eb9d610e043, type: 3}
       Weight: 1
     CloneForRace: 0
   - Race: 
     RaceCategory: 
     Role: 1
     Choices:
-    - Prefab: {fileID: 4811273059840484731, guid: 82e54404fe2ccc448bd81cbe31657e29,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: 82e54404fe2ccc448bd81cbe31657e29, type: 3}
       Weight: 1
     CloneForRace: 0
   - Race: 
     RaceCategory: 
     Role: 2
     Choices:
-    - Prefab: {fileID: 4811273059840484731, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: 2ce4d12b80ddd9f4ca8a389e6c91c7e3, type: 3}
       Weight: 1
     CloneForRace: 0
   - Race: orc
     RaceCategory: 
     Role: 5
     Choices:
-    - Prefab: {fileID: 4811273059840484731, guid: f69ceb06ce90da94fbf1cbff95f3b7f0,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: f69ceb06ce90da94fbf1cbff95f3b7f0, type: 3}
       Weight: 0.5
-    - Prefab: {fileID: 4811273059840484731, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: ecf1db3ea5ffe04438c0c425adb9bb32, type: 3}
       Weight: 0.3
-    - Prefab: {fileID: 4811273059840484731, guid: a7364fafb6a45174babebcc6a5fbdce4,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: a7364fafb6a45174babebcc6a5fbdce4, type: 3}
       Weight: 0.2
     CloneForRace: 0
   - Race: orc
     RaceCategory: 
     Role: 6
     Choices:
-    - Prefab: {fileID: 4811273059840484731, guid: ecf1db3ea5ffe04438c0c425adb9bb32,
-        type: 3}
+    - Prefab: {fileID: 4811273059840484731, guid: ecf1db3ea5ffe04438c0c425adb9bb32, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: 
+    RaceCategory: 
+    Role: 3
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 0f574451d492e06b890d7da7a026706c, type: 3}
+      Weight: 1
+    CloneForRace: 1
+  - Race: 
+    RaceCategory: 
+    Role: 4
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: a2a571dad3dffbe4384fa571b61ebd92, type: 3}
+      Weight: 1
+    CloneForRace: 1
+  - Race: 
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 240dd0d626945646ab2c688035d64837, type: 3}
+      Weight: 1
+    CloneForRace: 1
+  - Race: 
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 240dd0d626945646ab2c688035d64837, type: 3}
+      Weight: 1
+    CloneForRace: 1
+  - Race: 
+    RaceCategory: Beast
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 0dc43361dea4e744c9042f6dd6787bd4, type: 3}
+      Weight: 0.3
+    - Prefab: {fileID: 4811273059840484731, guid: a361543dd50345abd81dedd07356b946, type: 3}
+      Weight: 0.2
+    - Prefab: {fileID: 4811273059840484731, guid: e2a278a6fda53dc7b8892436ba8ba632, type: 3}
+      Weight: 0.3
+    - Prefab: {fileID: 4811273059840484731, guid: baeba7136e62562f1961b413c80f2697, type: 3}
+      Weight: 0.2
+    CloneForRace: 0
+  - Race: 
+    RaceCategory: Beast
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 33e93bfbd425ec2bbbc123bd2ff95362, type: 3}
+      Weight: 0.4
+    - Prefab: {fileID: 4811273059840484731, guid: 1c428291e2f86e6b29e0127aebde3c29, type: 3}
+      Weight: 0.3
+    - Prefab: {fileID: 4811273059840484731, guid: f22e220bbe790559bb5c5429bc9410d9, type: 3}
+      Weight: 0.3
+    CloneForRace: 0
+  - Race: direwolf
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 0dc43361dea4e744c9042f6dd6787bd4, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: direwolf
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 0dc43361dea4e744c9042f6dd6787bd4, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: direhound
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: a361543dd50345abd81dedd07356b946, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: direhound
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: a361543dd50345abd81dedd07356b946, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: frostwolf
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 85cdcd4f25cbb3fcab4f27236e695819, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: frostwolf
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 85cdcd4f25cbb3fcab4f27236e695819, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: giantrat
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: e2a278a6fda53dc7b8892436ba8ba632, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: giantrat
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 1c428291e2f86e6b29e0127aebde3c29, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: ratking
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: e2a278a6fda53dc7b8892436ba8ba632, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: ratking
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 1c428291e2f86e6b29e0127aebde3c29, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: direboar
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: baeba7136e62562f1961b413c80f2697, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: direboar
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: baeba7136e62562f1961b413c80f2697, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: sabrecat
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 33e93bfbd425ec2bbbc123bd2ff95362, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: sabrecat
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: 33e93bfbd425ec2bbbc123bd2ff95362, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: cavebear
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: f22e220bbe790559bb5c5429bc9410d9, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: cavebear
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: f22e220bbe790559bb5c5429bc9410d9, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: giantbat
+    RaceCategory: 
+    Role: 5
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: f8c0e6d26a6c7b3ceb312689a50284e0, type: 3}
+      Weight: 1
+    CloneForRace: 0
+  - Race: giantbat
+    RaceCategory: 
+    Role: 6
+    Choices:
+    - Prefab: {fileID: 4811273059840484731, guid: f8c0e6d26a6c7b3ceb312689a50284e0, type: 3}
       Weight: 1
     CloneForRace: 0

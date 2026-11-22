@@ -12,6 +12,7 @@
   <Project Path="FishMMO.AmbientLife.Client.csproj" />
   <Project Path="FishMMO.AbilityCrafting.csproj" />
   <Project Path="FishNet.Runtime.csproj" />
+  <Project Path="FishMMO.Abilities.csproj" />
   <Project Path="KinematicCharacterController.csproj" />
   <Project Path="FishMMO.WorldSimulation.Tests.csproj" />
   <Project Path="FishMMO.Shared.csproj" />
@@ -25,13 +26,13 @@
   <Project Path="FishMMO.Terrain.Tests.csproj" />
   <Project Path="FishMMO.Commerce.Server.csproj" />
   <Project Path="FishMMO.Water.csproj" />
-  <Project Path="FishMMO.Abilities.csproj" />
   <Project Path="FishMMO.Buffs.Tests.csproj" />
   <Project Path="FishMMO.Render.Scratch.csproj" />
   <Project Path="FishMMO.Combat.Server.csproj" />
   <Project Path="FishMMO.Abilities.Server.csproj" />
   <Project Path="FishMMO.Naming.csproj" />
   <Project Path="FishMMO.WorldSimulation.Server.csproj" />
+  <Project Path="FishMMO.Housing.Client.csproj" />
   <Project Path="FishMMO.Quests.csproj" />
   <Project Path="FishMMO.WorldDesign.Harness.Editor.csproj" />
   <Project Path="FishMMO.Leaderboards.Client.csproj" />
@@ -47,7 +48,6 @@
   <Project Path="FishMMO.Staff.Tests.csproj" />
   <Project Path="FishMMO.Core.csproj" />
   <Project Path="FishMMO.Housing.Tests.csproj" />
-  <Project Path="FishMMO.Abilities.Editor.csproj" />
   <Project Path="FishMMO.WorldInteractables.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="FishMMO.Combat.csproj" />
@@ -78,6 +78,7 @@
   <Project Path="FishMMO.WorldSimulation.Editor.csproj" />
   <Project Path="FishMMO.Pets.Tests.csproj" />
   <Project Path="FishMMO.Shared.Map.Editor.csproj" />
+  <Project Path="FishMMO.Abilities.Editor.csproj" />
   <Project Path="FishMMO.Hotkeys.Server.csproj" />
   <Project Path="FishMMO.UnitTests.PlayMode.csproj" />
   <Project Path="FishMMO.GeneratedFiles.Editor.csproj" />
@@ -122,7 +123,6 @@
   <Project Path="FishMMO.Achievements.Server.csproj" />
   <Project Path="FishMMO.Pets.Server.csproj" />
   <Project Path="FishMMO.Items.Client.csproj" />
-  <Project Path="FishMMO.Housing.Client.csproj" />
   <Project Path="FishMMO.Leaderboards.csproj" />
   <Project Path="FishMMO.WorldInteractables.Tests.csproj" />
   <Project Path="FishMMO.Hotkeys.Client.csproj" />
@@ -144,6 +144,7 @@
   <Project Path="FishMMO.Chat.Client.csproj" />
   <Project Path="FishMMO.Hotkeys.RenderScratch.csproj" />
   <Project Path="FishMMO.TestHarness.Weather.Editor.csproj" />
+  <Project Path="FishMMO.Map.Server.csproj" />
   <Project Path="FishMMO.WorldTestBed.csproj" />
   <Project Path="FishMMO.Shared.Housing.Editor.csproj" />
   <Project Path="FishMMO.Shared.Faction.Editor.csproj" />

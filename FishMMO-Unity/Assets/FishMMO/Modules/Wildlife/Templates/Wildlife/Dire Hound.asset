@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d43a95dbb684d5d9fa1869da3cdf93e, type: 3}
+  m_Name: Dire Hound
+  m_EditorClassIdentifier: FishMMO.Wildlife::FishMMO.Shared.WildlifeTemplate
+  Role: 2
+  WalkSpeed: 1.6
+  RunSpeed: 10
+  FleeLegMetres: 14
+  SafeMetres: 40
+  CorpseSeconds: 360
+  Body:
+    Length: 1.15
+    Depth: 0.36
+    Width: 0.26
+    LegLength: 0.66
+    LegThickness: 0.06
+    NeckLength: 0.32
+    NeckRaise: 35
+    HeadLength: 0.36
+    HeadSize: 0.15
+    EarSize: 0.13
+    Horns: 0
+    HornSize: 0
+    TailLength: 0.45
+    TailRaise: 40
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.1, g: 0.09, b: 0.09, a: 1}
+    Belly: {r: 0.2, g: 0.18, b: 0.17, a: 1}
+    Accent: {r: 0.75, g: 0.3, b: 0.05, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  Habitats: 0
+  Shelter: 2
+  Surfaces: 0
+  GroupsPerKm2: 0
+  GroupMin: 1
+  GroupMax: 1
+  DenKinds: 
+  DensInCaveMouths: 0
+  ColoniesInCaves: 0
+  RespawnMinSeconds: 300
+  RespawnMaxSeconds: 600

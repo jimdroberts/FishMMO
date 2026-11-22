@@ -56,7 +56,7 @@ namespace FishMMO.Shared
 		private const int Idle = 0, Walk = 1, Run = 2, JumpUp = 3, MidAir = 4, Fall = 5, CrouchIdle = 6, CrouchWalk = 7,
 			Tread = 8, Surface = 9, Under = 10, Climb = 11, SitGround = 12, SitSeat = 13, Rolling = 14, Dying = 15, Inputs = 16;
 		// The arms layer's inputs.
-		private const int PunchRight = 0, PunchLeft = 1, CastArms = 2, BlockArms = 3, ArmInputs = 4;
+		private const int PunchRight = 0, PunchLeft = 1, CastArms = 2, BlockArms = 3, DeflectArms = 4, ArmInputs = 5;
 
 		/// <summary>How quickly the blend follows the character's speed and footing, per second.</summary>
 		private const float BlendRate = 10f;
@@ -139,7 +139,7 @@ namespace FishMMO.Shared
 		private float seatBack;
 		private Vector3 seatOffset;
 
-		private enum ArmsAction { None, Punch, Cast, Block }
+		private enum ArmsAction { None, Punch, Cast, Block, Deflect }
 		private ArmsAction armsAction;
 		private int armsInput;
 		private float armsTime = -1f;
@@ -279,6 +279,7 @@ namespace FishMMO.Shared
 			ConnectArms(PunchLeft, set.PunchLeft);
 			ConnectArms(CastArms, set.Cast);
 			ConnectArms(BlockArms, set.Block);
+			ConnectArms(DeflectArms, set.Deflect);
 			graph.Connect(arms, 0, layers, 1);
 			// The arms only: the legs and the body go on with whatever they were doing.
 			armsMask = new AvatarMask { name = "Character arms" };
@@ -377,6 +378,18 @@ namespace FishMMO.Shared
 			if (ArmsFree() && hasArmClip[CastArms])
 			{
 				StartArms(ArmsAction.Cast, CastArms);
+			}
+		}
+
+		/// <summary>
+		/// Parries: one quick sweep of the forearm across the body. It takes the arms even from a raised guard or a cast in
+		/// progress, because a deflect is the answer to something arriving now.
+		/// </summary>
+		public void Deflect()
+		{
+			if (ArmsFree() && hasArmClip[DeflectArms])
+			{
+				StartArms(ArmsAction.Deflect, DeflectArms);
 			}
 		}
 

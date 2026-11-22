@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Neither property held before. <c>AbilityForkHitAction</c> assigned <c>Transform.rotation</c>,
+	/// Neither property held before. <c>AbilityRicochetHitAction</c> assigned <c>Transform.rotation</c>,
 	/// but an ability object's position is a closed form over its spawn pose and integer tick count
 	/// (<see cref="AbilityMoveTransformAction"/>), so the next tick recomputed the position from the
 	/// ORIGINAL spawn line and discarded the turn — fork was a no-op that only span the mesh (and the

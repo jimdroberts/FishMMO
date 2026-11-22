@@ -50,6 +50,8 @@ namespace FishMMO.Shared
 		public AnimationClip Cast;
 		[Tooltip("The guard, held while blocking.")]
 		public AnimationClip Block;
+		[Tooltip("A parry: one quick sweep of the forearm across the body, played once.")]
+		public AnimationClip Deflect;
 
 		[Header("Whole body")]
 		public AnimationClip Roll;

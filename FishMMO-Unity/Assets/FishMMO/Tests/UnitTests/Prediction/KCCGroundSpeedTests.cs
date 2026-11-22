@@ -144,7 +144,7 @@ namespace FishMMO.UnitTests
 			Assert.That(run, Is.EqualTo(Constants.Character.RunSpeed * 0.50f).Within(0.0001f),
 				"A -50% debuff halves run speed.");
 			Assert.That(sprint, Is.EqualTo(Constants.Character.RunSpeed * StockSprintRatio * 0.50f).Within(0.0001f),
-				"Mock Slow Debuff has to slow a sprinting character. Before the fix a sprinting "
+				"A move speed debuff has to slow a sprinting character. Before the fix a sprinting "
 				+ "character was immune to it.");
 
 			Assert.That(sprint, Is.LessThan(Constants.Character.SprintSpeed),

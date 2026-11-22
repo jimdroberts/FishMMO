@@ -154,6 +154,10 @@ namespace FishMMO.Shared
 			if (ability.IsStagedCharge)
 				return true;
 
+			// A guard is up for as long as it is held (AbilityTemplate.Guard); a beam fires for as long (PulseSeconds).
+			if (ability.IsHeldGuard || ability.IsHeldPulse)
+				return true;
+
 			return false;
 		}
 
@@ -211,6 +215,7 @@ namespace FishMMO.Shared
 				remainingTicks = ComputeActivationTicks(newAbility, activationData.GetTick());
 				newAbility.ChargeStage = 0;
 				remainingTicks = ApplyChannelActivationFloor(newAbility, activationData.ActivationFlags, remainingTicks);
+				heldPulseStartTicks = remainingTicks;
 				if (activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
 					replicatedFlags.EnableBit(AbilityActivationFlags.IsHeld);
@@ -229,6 +234,10 @@ namespace FishMMO.Shared
 					aed.Add(new TickEventData(Character, activationData.GetPredictionTick(), state));
 					Trigger.InvokeAll(onAbilityActivateTriggers, aed);
 				}
+
+				/* Casting is acting: an invisibility ends as the cast starts (BaseBuffTemplate.BreaksOnAction). Casting
+				 * Invisibility itself is no exception: the new one is applied when the cast completes, after this. */
+				EndBuffsBrokenByAction(state);
 
 				/* Trigger animation for this ability type on the first authoritative tick.
 				 * Avoids replay flicker.
@@ -375,6 +384,15 @@ namespace FishMMO.Shared
 				return;
 			}
 			chargedHoldTicks = 0;
+
+			/* A guard held for its longest hold (ActivationTime) comes down as a release does: cooldown, no object, nothing
+			 * spent (each block paid as it landed). */
+			if (validatedAbility.IsHeldGuard || validatedAbility.IsHeldPulse)
+			{
+				AddCooldown(validatedAbility, activationData.GetPredictionTick());
+				Cancel(state);
+				return;
+			}
 
 			// A staged charge held to the end fires at its last stage, by itself.
 			validatedAbility.ChargeStage = validatedAbility.IsStagedCharge ? validatedAbility.Template.ChargeStages : (byte)0;
@@ -569,9 +587,17 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			// Handle held ability updates
-			if (replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld))
+			/* Handle held ability updates. A guard counts as held from its first tick whatever its start said: a tap that never
+			 * carried IsHeld raises it for that one tick and lowers it on the next, rather than holding it for the whole of its
+			 * longest hold like an ordinary cast. */
+			if (replicatedFlags.IsFlagged(AbilityActivationFlags.IsHeld) || validatedAbility.IsHeldGuard || validatedAbility.IsHeldPulse)
 			{
+				/* A beam fires BEFORE the release is read, so a tap still fires once (the press's own pulse), then ends. */
+				if (validatedAbility.IsHeldPulse && !PulseHeldAbility(validatedAbility, activationData, state))
+				{
+					return;
+				}
+
 				// The Held ability hotkey was released or the character can no longer activate the ability
 				if (!activationData.ActivationFlags.IsFlagged(AbilityActivationFlags.IsHeld))
 				{
@@ -1127,6 +1153,9 @@ namespace FishMMO.Shared
 					break;
 				case AbilityType.Roll:
 					animation.TriggerRoll();
+					break;
+				case AbilityType.Deflect:
+					animation.TriggerDeflect();
 					break;
 				default:
 					break;
@@ -1817,6 +1846,38 @@ namespace FishMMO.Shared
 		/// Spawns a channeled ability object during activation (e.g., beam effects, continuous damage).
 		/// Delegates to <see cref="ResolveTargetAndSpawn"/> which handles replay skipping and seed advance.
 		/// </summary>
+		/// <summary>The cast's length in ticks when it started: a held pulse counts its pulses from it.</summary>
+		private uint heldPulseStartTicks;
+
+		/// <summary>
+		/// One tick of a held, pulsed ability (a beam, <see cref="AbilityTemplate.PulseSeconds"/>): on a pulse tick it pays its
+		/// costs and fires. False when it could not pay: the beam has ended (cooldown, cancel) and the caller returns.
+		/// </summary>
+		/// <remarks>
+		/// The pulse ticks are counted from the countdown (<c>remainingTicks</c>, reconciled) against its value at the press,
+		/// so the press fires at once and the owner and the server pulse on the same ticks. Costs are paid on replay too, for
+		/// the reason <see cref="FinishAbility"/> gives; the spawn is skipped on replay inside ResolveTargetAndSpawn.
+		/// </remarks>
+		private bool PulseHeldAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
+		{
+			uint pulseTicks = (uint)Math.Max(1, (int)Math.Ceiling(validatedAbility.Template.PulseSeconds / (double)base.TimeManager.TickDelta));
+			uint elapsed = heldPulseStartTicks >= remainingTicks ? heldPulseStartTicks - remainingTicks : 0u;
+			if (elapsed % pulseTicks != 0u)
+			{
+				return true;
+			}
+			if (!validatedAbility.HasResource(Character, BloodResourceConversionTemplate))
+			{
+				// Out of mana (or stamina): the beam gutters out.
+				AddCooldown(validatedAbility, activationData.GetPredictionTick());
+				Cancel(state);
+				return false;
+			}
+			ResolveTargetAndSpawn(validatedAbility, activationData, state, isChannelTick: elapsed > 0u);
+			validatedAbility.ConsumeResources(Character, BloodResourceConversionTemplate);
+			return true;
+		}
+
 		private void SpawnChanneledAbility(Ability validatedAbility, AbilityActivationReplicateData activationData, ReplicateState state)
 		{
 			ResolveTargetAndSpawn(validatedAbility, activationData, state, isChannelTick: true);
@@ -2017,7 +2078,40 @@ namespace FishMMO.Shared
 			// Observers see a consumable being used exactly as they see an ability being cast.
 			BroadcastCastState(state, started: true, referenceID: consumable.ID, isConsumable: true);
 
+			// Using an item is acting: an invisibility (BaseBuffTemplate.BreaksOnAction) ends here.
+			EndBuffsBrokenByAction(state);
+
 			return true;
+		}
+
+		/// <summary>
+		/// Ends every buff on this character that ends when it acts (<see cref="BaseBuffTemplate.BreaksOnAction"/>, an
+		/// invisibility): called as a cast or an item use starts. Server only and never on a replay, so it happens once,
+		/// where the buffs are authoritative; the owner hears of it through the buff reconcile.
+		/// </summary>
+		private void EndBuffsBrokenByAction(ReplicateState state)
+		{
+			if (!base.IsServerStarted || state.ContainsReplayed() || Character == null ||
+				!Character.TryGet(out IBuffController buffs) || buffs.Buffs == null || buffs.Buffs.Count == 0)
+			{
+				return;
+			}
+			List<int> broken = null;
+			foreach (KeyValuePair<int, Buff> pair in buffs.Buffs)
+			{
+				if (pair.Value?.Template != null && pair.Value.Template.BreaksOnAction)
+				{
+					(broken ??= new List<int>(1)).Add(pair.Key);
+				}
+			}
+			if (broken == null)
+			{
+				return;
+			}
+			for (int i = 0; i < broken.Count; ++i)
+			{
+				buffs.Remove(broken[i]);
+			}
 		}
 
 		/// <summary>

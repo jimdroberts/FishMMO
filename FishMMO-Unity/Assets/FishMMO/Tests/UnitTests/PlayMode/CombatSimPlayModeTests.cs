@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests.PlayMode
 {
 	/// <summary>
 	/// Runs the zero-client combat simulation headlessly and asserts what a human watching the
-	/// CombatSim scene would verify by eye: real NPC fighters cast the whole mock roster through
+	/// CombatSim scene would verify by eye: real NPC fighters cast the whole shipped ability roster through
 	/// the production pipeline, damage/heals/buffs flow, and — with a 500 ms synthetic latency
 	/// claim on every caster — the REAL lag-compensation resolver produces rewind targets.
 	/// </summary>
@@ -38,7 +38,7 @@ namespace FishMMO.UnitTests.PlayMode
 		}
 
 		[UnityTest]
-		public IEnumerator ServerCombat_RunsTheMockRosterAndRewindsUnderTheLatencyCap()
+		public IEnumerator ServerCombat_RunsTheAbilityRosterAndRewindsUnderTheLatencyCap()
 		{
 			host = new GameObject("CombatSimUnderTest");
 			CombatSimBootstrap sim = host.AddComponent<CombatSimBootstrap>();
@@ -70,11 +70,11 @@ namespace FishMMO.UnitTests.PlayMode
 
 				Assert.Greater(sim.CastsStarted, 0, "the director never cast anything");
 				Assert.Greater(sim.DamageEvents, 0,
-					"no damage flowed — the offensive mocks are not resolving hits server-side");
+					"no damage flowed — the offensive abilities are not resolving hits server-side");
 				Assert.Greater(sim.HealEvents, 0,
-					"no heals flowed — the restorative mocks are not resolving server-side");
+					"no heals flowed — the restorative abilities are not resolving server-side");
 				Assert.Greater(sim.BuffAdds, 0,
-					"no buffs applied — the buff/debuff mocks are not resolving server-side");
+					"no buffs applied — the buff/debuff abilities are not resolving server-side");
 				Assert.Greater(sim.ClaimsConsulted, 0,
 					"the synthetic latency claim was never consulted — the rewind path is not engaging");
 				Assert.Greater(sim.RewindsResolved, 0,

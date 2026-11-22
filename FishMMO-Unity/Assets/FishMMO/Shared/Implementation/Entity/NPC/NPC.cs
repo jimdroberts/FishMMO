@@ -250,10 +250,17 @@ namespace FishMMO.Shared
 		public IWildlifeSpecies WildlifeSpecies => Wildlife as IWildlifeSpecies;
 
 		/// <summary>
-		/// The character this NPC fights for, when it is a companion (a pet: the Pets module overrides this); null for every
-		/// other NPC. The harm rule judges a companion as its owner.
+		/// The character this NPC fights for, when it is a companion (a pet: the Pets module overrides this; a charmed NPC:
+		/// <see cref="CharmedBy"/>); null for every other NPC. The harm rule judges a companion as its owner.
 		/// </summary>
-		public virtual ICharacter CompanionOwner => null;
+		public virtual ICharacter CompanionOwner => CharmedBy;
+
+		/// <summary>
+		/// Server: the character a charm (Mesmerize) has turned this NPC to, for as long as it lasts; null otherwise. Set by
+		/// the NPC's brain (<see cref="INPCCharm"/>), never by content. While set, the harm rule, kill credit and threat see
+		/// the NPC as its charmer's, as they do a pet.
+		/// </summary>
+		public ICharacter CharmedBy { get; set; }
 
 		[Header("Identity")]
 		[Tooltip("The NPC's race: its models, its generated name and, with the Factions module, the standings it starts with.")]
@@ -434,6 +441,9 @@ namespace FishMMO.Shared
 			StopCorpseDecay();
 
 			NotifyCorpseExpired();
+
+			// A pooled NPC is nobody's: a charm never outlives the life it was cast on.
+			CharmedBy = null;
 
 			isCorpse = false;
 			corpseDecayTimer = 0f;

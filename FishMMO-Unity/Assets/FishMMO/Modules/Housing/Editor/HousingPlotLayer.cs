@@ -35,6 +35,18 @@ namespace FishMMO.Shared
 			PlotFoundation foundation = post.AddComponent<PlotFoundation>();
 			foundation.EditorConfigure(plotKey, price, size, volumeHeight, volumeOffset);
 			foundation.InteractionRange = InteractionRange;
+			// The post keeps its own name: the required namer would otherwise try to give it a person's.
+			SceneObjectNamer namer = post.GetComponent<SceneObjectNamer>();
+			if (namer != null)
+			{
+				var namerSerialized = new SerializedObject(namer);
+				SerializedProperty mode = namerSerialized.FindProperty("settings.Mode");
+				if (mode != null)
+				{
+					mode.enumValueIndex = Array.IndexOf(Enum.GetValues(typeof(SceneObjectNamingMode)), SceneObjectNamingMode.Authored);
+					namerSerialized.ApplyModifiedPropertiesWithoutUndo();
+				}
+			}
 			Trigger trigger = EnsureTrigger();
 			if (trigger != null)
 			{

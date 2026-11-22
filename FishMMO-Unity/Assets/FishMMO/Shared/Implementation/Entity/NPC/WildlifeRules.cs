@@ -101,6 +101,12 @@ namespace FishMMO.Shared
 			{
 				return true;
 			}
+			// No habitat: a site's monster (WildlifeBuilder.Monster), placed only by a point of interest's spawner, asks
+			// nothing of the biome there. The wild never places it: it has no density either (WildlifePlanner).
+			if (species.Habitats == BiomeHabitat.None)
+			{
+				return true;
+			}
 			return (habitat & species.Habitats) != 0 && (habitat & (BiomeHabitat.Settlement | BiomeHabitat.Sea)) == 0;
 		}
 

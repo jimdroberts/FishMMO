@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8638d5b7b8a0cb7b09e2be9b5c116689, type: 3}
+  m_Name: Arcane Ward
+  m_EditorClassIdentifier: FishMMO.Buffs::FishMMO.Shared.DamageNegationBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 1a825eb243c932217a802c874e5f3d17
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Arcane Ward: absorbs 30 damage from any direction.'
+  icon:
+    m_AssetGUID: 5be3c8f02884c1a27409942910e22607
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 20
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 0
+  Mode: 0
+  Amount: 30
+  RequiresFacing: 0
+  FacingAngleDegrees: 120
+  Shield:
+    Shape: 0
+    LocalCenter: {x: 0, y: 1.1, z: 0.75}
+    Radius: 0.6
+    Size: {x: 1.2, y: 1.4, z: 0.2}
+    Height: 1.6
+  VolumeBlockCost: 0

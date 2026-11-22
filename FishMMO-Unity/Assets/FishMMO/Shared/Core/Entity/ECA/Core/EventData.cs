@@ -123,7 +123,7 @@ namespace FishMMO.Shared.Core
 		/// generator is threaded onto an ability object's OnSpawn/OnTick/OnHit/OnDestroy payloads
 		/// and is advanced by side effect, so a draw taken behind a peer gate advances it only on
 		/// the peers that pass — and an ungated action later in the same chain
-		/// (<c>AbilityForkHitAction</c>) then reads a different number. See <c>AbilityObject.RNG</c>
+		/// (<c>AbilityRicochetHitAction</c>) then reads a different number. See <c>AbilityObject.RNG</c>
 		/// for the rule and what it cost. An action can satisfy it by evaluating its providers
 		/// above the gate; a server-only SELECTOR cannot, because the gate is the selector, so it
 		/// takes a stream of its own instead.
