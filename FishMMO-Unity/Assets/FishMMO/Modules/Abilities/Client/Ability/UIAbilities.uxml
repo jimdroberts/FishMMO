@@ -25,7 +25,7 @@
 
         <ui:VisualElement name="ability-toolbar" class="ability-toolbar">
             <ui:Label text="Search" class="ability-search__label" />
-            <ui:TextField name="ability-search" class="fish-input ability-search" />
+            <ui:TextField name="ability-search" class="fish-input fish-input--compact ability-search" />
             <ui:VisualElement name="ability-filters" class="ability-filters">
                 <ui:Button name="ability-filter-all" text="All" class="fish-tab ability-filter" />
                 <ui:Button name="ability-filter-bases" text="Base Abilities" class="fish-tab ability-filter" />

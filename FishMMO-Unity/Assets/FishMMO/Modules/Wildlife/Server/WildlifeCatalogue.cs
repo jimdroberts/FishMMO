@@ -46,6 +46,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		[Range(0f, 1f)]
 		public float CaveDenChance = 0.35f;
 
+		[Tooltip("Chance a cave system holds colonies, for species that live deep in caves (giant bats).")]
+		[Range(0f, 1f)]
+		public float CaveColonyChance = 0.75f;
+
+		[Tooltip("Most colonies of one species in one cave system.")]
+		[Min(1)]
+		public int ColoniesPerCave = 2;
+
+		[Tooltip("Metres between two colonies in one cave system.")]
+		[Min(0f)]
+		public float ColonySpacing = 60f;
+
 		[Tooltip("Metres kept clear around a settlement point of interest beyond its own radius.")]
 		[Min(0f)]
 		public float SettlementClearance = 60f;

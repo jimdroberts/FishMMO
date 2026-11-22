@@ -54,6 +54,9 @@ namespace FishMMO.Shared
 		/// would hide the world from every client that connects between two scheduler passes.
 		/// </param>
 		/// <returns>True when the object is inside the budget.</returns>
+		/// <summary>This object's companion check; see <see cref="CompanionVisibility"/>.</summary>
+		private CompanionVisibility companion;
+
 		public override bool ConditionMet(NetworkConnection connection, bool currentlyAdded, out bool notProcessed)
 		{
 			notProcessed = false;
@@ -68,6 +71,12 @@ namespace FishMMO.Shared
 			if (!GameMasterInvisibility.IsEmpty && GameMasterInvisibility.HidesFrom(NetworkObject, connection))
 			{
 				return false;
+			}
+
+			/* A pet's owner always observes it, whatever the budget or the crowd (2026-11-21; see CompanionVisibility). */
+			if (companion.OwnerSees(NetworkObject, connection))
+			{
+				return true;
 			}
 
 			/* Characters register themselves from OnStartServer. Everything else that carries a

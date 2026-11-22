@@ -1,4 +1,5 @@
 using System;
+using FishMMO.Shared;
 using static FishMMO.Client.SoundSynth;
 
 namespace FishMMO.Client

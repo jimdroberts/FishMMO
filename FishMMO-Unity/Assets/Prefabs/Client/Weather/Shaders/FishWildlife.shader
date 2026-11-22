@@ -9,6 +9,7 @@ Shader "FishMMO/Wildlife"
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.15
         [HideInInspector] _WildGait("Gait (phase, swing, gallop, bob)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _WildPose("Pose (attack, death, wag, side)", Vector) = (0, 0, 0, 0.2)
+        [HideInInspector] _WildFlight("Flight (wing angle, height, -, -)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader

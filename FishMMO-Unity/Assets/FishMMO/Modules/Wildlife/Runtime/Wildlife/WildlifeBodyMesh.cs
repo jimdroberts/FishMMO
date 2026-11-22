@@ -27,6 +27,8 @@ namespace FishMMO.Shared
 			HindRight = 4,
 			Head = 5,
 			Tail = 6,
+			LeftWing = 7,
+			RightWing = 8,
 		}
 
 		private static readonly Color HornColour = new Color(0.78f, 0.72f, 0.6f);
@@ -63,11 +65,19 @@ namespace FishMMO.Shared
 				spec.Width * 0.5f * 0.92f, spec.Depth * 0.5f * 0.9f, spec.Width * 0.5f, spec.Depth * 0.5f,
 				spec.Back, spec.Belly, Part.Body, new Vector3(0f, bodyY, 0f));
 
-			// Legs: tapered, a dark hoof or paw at the foot.
+			// Legs: tapered, a dark hoof or paw at the foot. A winged animal's arms are its wings: hind legs only.
 			float legX = Mathf.Max(spec.Width * 0.5f - spec.LegThickness * 0.6f, spec.LegThickness);
 			float legZ = halfL - spec.LegThickness * 1.6f;
-			Leg(b, spec, new Vector3(-legX, 0f, legZ), legTop, Part.FrontLeft);
-			Leg(b, spec, new Vector3(legX, 0f, legZ), legTop, Part.FrontRight);
+			if (spec.WingSpan > 0f)
+			{
+				Wing(b, spec, bodyY, halfL, -1, Part.LeftWing);
+				Wing(b, spec, bodyY, halfL, 1, Part.RightWing);
+			}
+			else
+			{
+				Leg(b, spec, new Vector3(-legX, 0f, legZ), legTop, Part.FrontLeft);
+				Leg(b, spec, new Vector3(legX, 0f, legZ), legTop, Part.FrontRight);
+			}
 			Leg(b, spec, new Vector3(-legX, 0f, -legZ), legTop, Part.HindLeft);
 			Leg(b, spec, new Vector3(legX, 0f, -legZ), legTop, Part.HindRight);
 
@@ -119,6 +129,35 @@ namespace FishMMO.Shared
 			Vector3 pivot = new Vector3(foot.x, spec.LegLength + spec.Depth * 0.3f, foot.z);
 			b.Segment(hip, hoofTop, t * 0.85f, t * 1.15f, t * 0.42f, t * 0.5f, spec.Back, spec.Belly, part, pivot);
 			b.Segment(hoofTop, foot, t * 0.48f, t * 0.55f, t * 0.55f, t * 0.62f, spec.Accent, spec.Accent, part, pivot);
+		}
+
+		/// <summary>
+		/// One wing, from the shoulder out along <paramref name="side"/> (-1 left, +1 right): the arm and three finger bones in the
+		/// accent colour, and the membrane between them (both faces, the back colour over, the belly colour under), swinging as one
+		/// part about the shoulder.
+		/// </summary>
+		private static void Wing(Builder b, WildlifeBodySpec spec, float bodyY, float halfL, int side, Part part)
+		{
+			float span = spec.WingSpan * 0.5f - spec.Width * 0.5f;
+			float bone = Mathf.Max(spec.LegThickness * 0.6f, 0.015f);
+			Vector3 shoulder = new Vector3(side * spec.Width * 0.45f, bodyY + spec.Depth * 0.3f, halfL * 0.45f);
+			Vector3 wrist = shoulder + new Vector3(side * span * 0.45f, span * 0.08f, span * 0.12f);
+			Vector3 lead = shoulder + new Vector3(side * span, span * 0.02f, -span * 0.05f);
+			Vector3 middle = wrist + new Vector3(side * span * 0.42f, -span * 0.05f, -span * 0.38f);
+			Vector3 trail = wrist + new Vector3(side * span * 0.2f, -span * 0.08f, -span * 0.62f);
+			Vector3 hip = new Vector3(side * spec.Width * 0.4f, bodyY, -halfL * 0.75f);
+
+			b.Segment(shoulder, wrist, bone, bone, bone * 0.8f, bone * 0.8f, spec.Accent, spec.Accent, part, shoulder);
+			b.Segment(wrist, lead, bone * 0.7f, bone * 0.7f, bone * 0.3f, bone * 0.3f, spec.Accent, spec.Accent, part, shoulder);
+			b.Segment(wrist, middle, bone * 0.6f, bone * 0.6f, bone * 0.25f, bone * 0.25f, spec.Accent, spec.Accent, part, shoulder);
+			b.Segment(wrist, trail, bone * 0.6f, bone * 0.6f, bone * 0.25f, bone * 0.25f, spec.Accent, spec.Accent, part, shoulder);
+
+			// The membrane: shoulder to the leading finger, between the fingers, and from the last finger back to the hip.
+			b.Sheet(shoulder, wrist, lead, spec.Back, spec.Belly, part, shoulder);
+			b.Sheet(wrist, middle, lead, spec.Back, spec.Belly, part, shoulder);
+			b.Sheet(wrist, trail, middle, spec.Back, spec.Belly, part, shoulder);
+			b.Sheet(shoulder, hip, wrist, spec.Back, spec.Belly, part, shoulder);
+			b.Sheet(wrist, hip, trail, spec.Back, spec.Belly, part, shoulder);
 		}
 
 		private static void Horns(Builder b, WildlifeBodySpec spec, Vector3 headBack, Vector3 headFwd, Vector3 headEnd, Vector3 pivot)
@@ -206,6 +245,21 @@ namespace FishMMO.Shared
 					ring1[i] = bEnd + new Vector3(c * rxb, s * ryb, 0f);
 				}
 				Rings(ring0, ring1, top, under, part, pivot);
+			}
+
+			/// <summary>A flat triangle seen from both sides: <paramref name="over"/> on the face looking up, <paramref name="under"/> below.</summary>
+			public void Sheet(Vector3 a, Vector3 bPoint, Vector3 c, Color over, Color under, Part part, Vector3 pivot)
+			{
+				Vector3 n = Vector3.Cross(bPoint - a, c - a);
+				if (n.sqrMagnitude < 1e-12f)
+				{
+					return;
+				}
+				Vector3 up = n.y >= 0f ? n.normalized : -n.normalized;
+				Vector3 centre = (a + bPoint + c) / 3f;
+				// Each face wound away from a point just behind it, so each is seen from its own side.
+				Triangle(a, bPoint, c, centre - up * 0.01f, over, under, part, pivot);
+				Triangle(a, c, bPoint, centre + up * 0.01f, over, under, part, pivot);
 			}
 
 			private void Rings(Vector3[] r0, Vector3[] r1, Color top, Color under, Part part, Vector3 pivot)

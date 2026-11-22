@@ -14880,6 +14880,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f8c0e6d26a6c7b3ceb312689a50284e0
+    m_Address: a giant bat
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f8c46400dec30f5a68570ada9d5cdee5
     m_Address: DryadOak - Heartwood
     m_ReadOnly: 0

@@ -33,15 +33,20 @@ MonoBehaviour:
     HornSize: 0.14
     TailLength: 0.18
     TailRaise: 15
+    WingSpan: 0
+    HoverHeight: 0
     Back: {r: 0.3, g: 0.25, b: 0.21, a: 1}
     Belly: {r: 0.38, g: 0.32, b: 0.27, a: 1}
     Accent: {r: 0.15, g: 0.12, b: 0.11, a: 1}
   Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
   Habitats: 115
+  Shelter: 0
+  Surfaces: 15
   GroupsPerKm2: 0.45
   GroupMin: 2
   GroupMax: 4
   DenKinds: 
   DensInCaveMouths: 0
+  ColoniesInCaves: 0
   RespawnMinSeconds: 180
   RespawnMaxSeconds: 420

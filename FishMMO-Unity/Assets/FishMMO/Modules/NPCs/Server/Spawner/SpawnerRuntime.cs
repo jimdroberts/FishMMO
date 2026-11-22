@@ -1380,10 +1380,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			return Scene.IsValid() ? $"{Scene.name} (handle {Scene.handle})" : "no scene";
 		}
 
-		/// <summary>A random point of the area on the ground under it; false when the cast found no ground.</summary>
-		private bool TryCastToGround(SpawnableSettings settings, out Vector3 position)
+		/// <summary>A random point of the area on the ground under it, and what it struck; false when the cast found no ground.</summary>
+		private bool TryCastToGround(SpawnableSettings settings, out Vector3 position, out RaycastHit hit)
 		{
 			position = Definition.Position;
+			hit = default;
 			PhysicsScene physics = Scene.GetPhysicsScene();
 			if (!physics.IsValid())
 			{
@@ -1392,7 +1393,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			Vector3 extents = Definition.BoundingBoxExtents;
 			Vector3 origin = Definition.Position + new Vector3(DeterministicRNG.Shared.Range(-extents.x, extents.x), extents.y,
 				DeterministicRNG.Shared.Range(-extents.z, extents.z));
-			if (!physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, Definition.BoundingBoxSize.y,
+			if (!physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out hit, Definition.BoundingBoxSize.y,
 					Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
 			{
 				return false;
@@ -1410,6 +1411,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 		/// <summary>Random points tried for ground the species lives on before the spawn waits for the next check.</summary>
 		public const int HabitatTries = 8;
+
+		/// <summary>How far over a herd-mate the cast for a new member starts, metres (less under a roof).</summary>
+		public const float HerdCastRise = 20f;
 
 		/// <summary>The scene's biome map, looked up once; null when it has none (no habitat check then).</summary>
 
@@ -1444,21 +1448,28 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			/* Never inside a town (Definition.KeepOutCircles, from the cut): the area's box is placed clear of settlements, but
 			 * it is hundreds of metres wide and a point anywhere in it, or beside a herd at its edge, could be a village square.
 			 * A herd spot inside one falls through to the random tries, which refuse it too. */
-			if (TryFindHerdAnchor(settings, species, out Vector3 anchor))
+			if (TryFindHerdAnchor(settings, species, out Vector3 anchor) && physics.IsValid())
 			{
 				Vector2 offset = new Vector2(DeterministicRNG.Shared.Range(-1f, 1f), DeterministicRNG.Shared.Range(-1f, 1f)) * HerdSpread;
-				Vector3 origin = anchor + new Vector3(offset.x, 20f, offset.y);
-				Vector3 herdSpot = anchor;
-				if (physics.IsValid() &&
-					physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, 40f, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
+				/* From under the roof, where there is one: from 20 m up, a cast beside a herd in a cave started in the rock (or on
+				 * the hill over it) and came down through the roof, or onto the hill's own grass. */
+				float rise = HerdCastRise;
+				if (physics.Raycast(anchor + Vector3.up * 0.5f, Vector3.up, out RaycastHit roof, HerdCastRise, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore))
 				{
-					herdSpot = hit.point;
-					herdSpot.y += settings.YOffset;
+					rise = Mathf.Max(0.5f, roof.distance + 0.5f - Definition.SphereRadius - 0.1f);
 				}
-				if (!WildlifeRules.InsideKeepOut(Definition.KeepOutCircles, herdSpot))
+				Vector3 origin = anchor + new Vector3(offset.x, rise, offset.y);
+				// Only on ground it lives on (WildlifeRules.LivesOn): beside a deer at a cave's mouth is the cave's floor.
+				if (physics.SphereCast(origin, Definition.SphereRadius, Vector3.down, out RaycastHit hit, rise + 20f, Constants.Layers.Obstruction, QueryTriggerInteraction.Ignore) &&
+					GroundSuits(species, hit))
 				{
-					position = herdSpot;
-					return true;
+					Vector3 herdSpot = hit.point;
+					herdSpot.y += settings.YOffset;
+					if (!WildlifeRules.InsideKeepOut(Definition.KeepOutCircles, herdSpot))
+					{
+						position = herdSpot;
+						return true;
+					}
 				}
 			}
 
@@ -1468,7 +1479,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			 * waits for the next check. */
 			for (int attempt = 0; attempt < HabitatTries; ++attempt)
 			{
-				if (TryCastToGround(settings, out Vector3 candidate) && LivesAt(species, candidate) &&
+				if (TryCastToGround(settings, out Vector3 candidate, out RaycastHit struck) && LivesAt(species, candidate) && GroundSuits(species, struck) &&
 					!WildlifeRules.InsideKeepOut(Definition.KeepOutCircles, candidate))
 				{
 					position = candidate;
@@ -1517,6 +1528,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			}
 			position = npc.Transform.position;
 			return true;
+		}
+
+		/// <summary>
+		/// True when the ground a cast struck suits the species (<see cref="WildlifeRules.LivesOn"/>): under the sky or in a cave as
+		/// its shelter says (2026-11-21: deer and elk spawned in caves, the cast falling through a cave mouth's terrain hole onto
+		/// its floor), and on one of its grounds by the painted texture (<see cref="GroundQuery"/>).
+		/// </summary>
+		private bool GroundSuits(IWildlifeSpecies species, in RaycastHit hit)
+		{
+			return WildlifeRules.LivesOn(species, GroundQuery.Read(Scene, hit));
 		}
 
 		/// <summary>True when the ground at <paramref name="position"/> is one of the species' habitats (always, without a biome map).</summary>

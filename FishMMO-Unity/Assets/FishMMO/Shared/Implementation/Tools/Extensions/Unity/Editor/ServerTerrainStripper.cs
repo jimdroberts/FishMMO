@@ -95,9 +95,14 @@ namespace FishMMO.Shared
 		/// Points every terrain and terrain collider in a scene at a server copy of its data. Returns
 		/// how many distinct terrain data were copied. Never modifies the originals.
 		/// </summary>
+		/// <remarks>
+		/// Before a tile loses its splat maps, its ground is kept as a coarse grid of kinds on its object
+		/// (<see cref="TerrainGroundKinds"/>, 2026-11-21): the wildlife spawners read it to keep each species on its own ground.
+		/// </remarks>
 		public static int Strip(Scene scene)
 		{
 			var copies = new Dictionary<TerrainData, TerrainData>();
+			var grounds = new Dictionary<TerrainData, (int resolution, byte[] kinds)>();
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
 				foreach (Terrain terrain in root.GetComponentsInChildren<Terrain>(true))
@@ -107,6 +112,7 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
+					KeepGround(terrain.gameObject, original, grounds);
 					terrain.terrainData = CopyFor(original, copies);
 				}
 				// Every collider, including one on an object with no Terrain (a collider-only tile).
@@ -117,10 +123,32 @@ namespace FishMMO.Shared
 					{
 						continue;
 					}
+					KeepGround(collider.gameObject, original, grounds);
 					collider.terrainData = CopyFor(original, copies);
 				}
 			}
 			return copies.Count;
+		}
+
+		/// <summary>Puts the original's ground grid on the tile's object (baked once per terrain data); nothing for a tile with no splat maps.</summary>
+		private static void KeepGround(GameObject tile, TerrainData original, Dictionary<TerrainData, (int resolution, byte[] kinds)> grounds)
+		{
+			if (tile.TryGetComponent(out TerrainGroundKinds _))
+			{
+				return;
+			}
+			if (!grounds.TryGetValue(original, out (int resolution, byte[] kinds) ground))
+			{
+				ground = TerrainGroundKinds.TryBake(original, out int resolution, out byte[] kinds) ? (resolution, kinds) : (0, null);
+				grounds.Add(original, ground);
+			}
+			if (ground.kinds == null)
+			{
+				return;
+			}
+			TerrainGroundKinds map = tile.AddComponent<TerrainGroundKinds>();
+			map.Resolution = ground.resolution;
+			map.Kinds = ground.kinds;
 		}
 
 		private static TerrainData CopyFor(TerrainData original, Dictionary<TerrainData, TerrainData> copies)

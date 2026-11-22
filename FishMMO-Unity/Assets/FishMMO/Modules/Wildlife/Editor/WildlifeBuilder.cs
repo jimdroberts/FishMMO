@@ -50,10 +50,16 @@ namespace FishMMO.Shared
 			public int GroupMin, GroupMax;
 			public POIType[] Dens = Array.Empty<POIType>();
 			public bool CaveDens;
+			public bool CaveColonies;
+			public WildlifeShelter Shelter = WildlifeShelter.Open;
+			public SurfaceMask Surfaces = SurfaceMask.Any;
 			public float RespawnMin = 180f, RespawnMax = 420f;
 		}
 
 		private static readonly BiomeHabitat Woods = BiomeHabitat.Forest | BiomeHabitat.Woodland;
+
+		/// <summary>Grazers' ground: grass, forest floor, earth, mud and snow over them; never bare rock, scree, sand or ice.</summary>
+		private const SurfaceMask Grazing = SurfaceMask.Grass | SurfaceMask.Leaves | SurfaceMask.Dirt | SurfaceMask.Mud | SurfaceMask.Snow;
 
 		private static readonly Species[] Roster =
 		{
@@ -62,7 +68,7 @@ namespace FishMMO.Shared
 				Name = "Deer", PrefabName = "a deer", Race = "Great Elk", Role = WildlifeRole.Prey, Walk = 1.4f, Run = 10f, Safe = 45f, Leg = 16f,
 				Body = WildlifeBodySpec.Deer,
 				Habitats = Woods | BiomeHabitat.Grassland | BiomeHabitat.Farmland | BiomeHabitat.Scrub,
-				Density = 0.9f, GroupMin = 2, GroupMax = 5,
+				Density = 0.9f, GroupMin = 2, GroupMax = 5, Surfaces = Grazing,
 			},
 			new Species
 			{
@@ -75,7 +81,7 @@ namespace FishMMO.Shared
 					Back = new Color(0.42f, 0.3f, 0.2f), Belly = new Color(0.75f, 0.62f, 0.45f), Accent = new Color(0.12f, 0.1f, 0.09f),
 				},
 				Habitats = Woods | BiomeHabitat.Grassland | BiomeHabitat.Mountain | BiomeHabitat.Tundra,
-				Density = 0.5f, GroupMin = 3, GroupMax = 7,
+				Density = 0.5f, GroupMin = 3, GroupMax = 7, Surfaces = Grazing,
 			},
 			new Species
 			{
@@ -115,7 +121,8 @@ namespace FishMMO.Shared
 					Back = new Color(0.3f, 0.2f, 0.13f), Belly = new Color(0.38f, 0.27f, 0.18f), Accent = new Color(0.12f, 0.09f, 0.07f),
 				},
 				Habitats = Woods | BiomeHabitat.Mountain | BiomeHabitat.Tundra,
-				Density = 0.12f, GroupMin = 1, GroupMax = 1, CaveDens = true, RespawnMin = 420f, RespawnMax = 900f,
+				Density = 0.12f, GroupMin = 1, GroupMax = 1, CaveDens = true, Shelter = WildlifeShelter.Anywhere,
+				RespawnMin = 420f, RespawnMax = 900f,
 			},
 			new Species
 			{
@@ -129,6 +136,22 @@ namespace FishMMO.Shared
 				},
 				Habitats = Woods | BiomeHabitat.Scrub | BiomeHabitat.Wetland | BiomeHabitat.Farmland,
 				Density = 0.45f, GroupMin = 2, GroupMax = 4,
+				Surfaces = SurfaceMask.Grass | SurfaceMask.Leaves | SurfaceMask.Dirt | SurfaceMask.Mud,
+			},
+			// 2026-11-21 (Jim: "add giant bats for cave wildlife"): a predator colony deep in the caves, drawn flying over the floor.
+			new Species
+			{
+				Name = "Giant Bat", PrefabName = "a giant bat", Race = "Giant Bat", Role = WildlifeRole.Predator, Walk = 2.2f, Run = 8f,
+				Body = new WildlifeBodySpec
+				{
+					Length = 0.55f, Depth = 0.32f, Width = 0.3f, LegLength = 0.16f, LegThickness = 0.04f, NeckLength = 0.06f, NeckRaise = 20f,
+					HeadLength = 0.22f, HeadSize = 0.17f, EarSize = 0.2f, Horns = WildlifeHorns.None, HornSize = 0f,
+					TailLength = 0.08f, TailRaise = 10f, WingSpan = 2.6f, HoverHeight = 1.8f,
+					Back = new Color(0.22f, 0.18f, 0.17f), Belly = new Color(0.36f, 0.27f, 0.24f), Accent = new Color(0.1f, 0.08f, 0.08f),
+				},
+				// The biome is never asked of a cave dweller (WildlifeRules.Lives); placed only in colonies (WildlifePlanner).
+				Habitats = BiomeHabitat.None, Density = 0f, GroupMin = 3, GroupMax = 6,
+				Shelter = WildlifeShelter.Cave, CaveColonies = true, RespawnMin = 240f, RespawnMax = 480f,
 			},
 		};
 
@@ -362,6 +385,9 @@ namespace FishMMO.Shared
 			template.GroupMax = species.GroupMax;
 			template.DenKinds = new List<POIType>(species.Dens);
 			template.DensInCaveMouths = species.CaveDens;
+			template.ColoniesInCaves = species.CaveColonies;
+			template.Shelter = species.Shelter;
+			template.Surfaces = species.Surfaces;
 			template.RespawnMinSeconds = species.RespawnMin;
 			template.RespawnMaxSeconds = species.RespawnMax;
 			EditorUtility.SetDirty(template);
@@ -442,12 +468,16 @@ namespace FishMMO.Shared
 				CapsuleCollider capsule = root.GetComponent<CapsuleCollider>();
 				if (capsule != null)
 				{
-					float radius = Mathf.Clamp(Mathf.Max(body.Width, body.Length * 0.3f) * 0.5f, 0.15f, 0.55f);
+					// Wings widen it; a flyer's is where it is drawn, over the ground it stands on (WildlifeBodySpec.HoverHeight).
+					float across = body.WingSpan > 0f ? body.WingSpan * 0.4f : Mathf.Max(body.Width, body.Length * 0.3f);
+					float radius = Mathf.Clamp(across * 0.5f, 0.15f, 0.55f);
 					float height = Mathf.Max(body.ShoulderHeight + body.HeadSize, radius * 2f + 0.05f);
 					capsule.direction = 1;
 					capsule.radius = radius;
 					capsule.height = height;
-					capsule.center = new Vector3(0f, height * 0.5f, 0f);
+					capsule.center = body.HoverHeight > 0f
+						? new Vector3(0f, body.HoverHeight + body.LegLength + body.Depth * 0.5f, 0f)
+						: new Vector3(0f, height * 0.5f, 0f);
 				}
 
 				NetworkObserver observer = root.GetComponent<NetworkObserver>();

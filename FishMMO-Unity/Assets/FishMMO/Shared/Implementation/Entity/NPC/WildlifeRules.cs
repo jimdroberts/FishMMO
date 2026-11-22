@@ -18,6 +18,37 @@ namespace FishMMO.Shared
 		Territorial = 3,
 	}
 
+	/// <summary>Whether a species lives out in the open, in caves, or both (2026-11-21: deer were spawning in caves).</summary>
+	/// <remarks>Append only; the ordinal is stored on the species templates.</remarks>
+	public enum WildlifeShelter : byte
+	{
+		/// <summary>Out under the sky only: never in a cave or a mine (deer, elk, wolves).</summary>
+		Open = 0,
+		/// <summary>In caves and mines only (giant bats).</summary>
+		Cave = 1,
+		/// <summary>Either (a bear dens in a cave mouth and roams the woods).</summary>
+		Anywhere = 2,
+	}
+
+	/// <summary>The grounds a species lives on, one bit per <see cref="SurfaceKind"/>; none set means any ground.</summary>
+	[System.Flags]
+	public enum SurfaceMask
+	{
+		Any = 0,
+		Dirt = 1 << (int)SurfaceKind.Dirt,
+		Grass = 1 << (int)SurfaceKind.Grass,
+		Leaves = 1 << (int)SurfaceKind.Leaves,
+		Mud = 1 << (int)SurfaceKind.Mud,
+		Sand = 1 << (int)SurfaceKind.Sand,
+		Gravel = 1 << (int)SurfaceKind.Gravel,
+		Stone = 1 << (int)SurfaceKind.Stone,
+		Wood = 1 << (int)SurfaceKind.Wood,
+		Snow = 1 << (int)SurfaceKind.Snow,
+		Ice = 1 << (int)SurfaceKind.Ice,
+		Water = 1 << (int)SurfaceKind.Water,
+		Metal = 1 << (int)SurfaceKind.Metal,
+	}
+
 	/// <summary>
 	/// What the core reads of a wild animal's species (2026-11-20: the species template is the Wildlife module's): its role
 	/// toward others, how long its carcass lies, and where and in what numbers a spawner puts it.
@@ -36,6 +67,12 @@ namespace FishMMO.Shared
 		/// <summary>The ground it lives on.</summary>
 		BiomeHabitat Habitats { get; }
 
+		/// <summary>Out in the open, in caves, or both.</summary>
+		WildlifeShelter Shelter { get; }
+
+		/// <summary>The grounds (by their painted texture) it may appear on; <see cref="SurfaceMask.Any"/> for all.</summary>
+		SurfaceMask Surfaces { get; }
+
 		/// <summary>Metres per second at a walk.</summary>
 		float WalkSpeed { get; }
 
@@ -50,10 +87,53 @@ namespace FishMMO.Shared
 	public static class WildlifeRules
 	{
 		/// <summary>Whether the species lives on <paramref name="habitat"/>: one of its habitats, never a settlement or the sea.</summary>
+		/// <remarks>
+		/// A cave dweller asks nothing of the biome: the map's value at a cave is the land over it (a sea cave under the coast's
+		/// sea cell, a cave under a town's fields), not the cave.
+		/// </remarks>
 		public static bool Lives(IWildlifeSpecies species, BiomeHabitat habitat)
 		{
-			return species != null && (habitat & species.Habitats) != 0 && (habitat & (BiomeHabitat.Settlement | BiomeHabitat.Sea)) == 0;
+			if (species == null)
+			{
+				return false;
+			}
+			if (species.Shelter == WildlifeShelter.Cave)
+			{
+				return true;
+			}
+			return (habitat & species.Habitats) != 0 && (habitat & (BiomeHabitat.Settlement | BiomeHabitat.Sea)) == 0;
 		}
+
+		/// <summary>
+		/// Whether the species may appear on the ground a spawn's cast struck: in the open or underground as its shelter says, and on
+		/// one of its grounds (an unknown ground passes). Pure, so it is tested on its own.
+		/// </summary>
+		public static bool LivesOn(IWildlifeSpecies species, in GroundReading ground)
+		{
+			if (species == null)
+			{
+				return false;
+			}
+			switch (species.Shelter)
+			{
+				case WildlifeShelter.Open:
+					if (ground.Underground)
+					{
+						return false;
+					}
+					break;
+				case WildlifeShelter.Cave:
+					if (!ground.Underground)
+					{
+						return false;
+					}
+					break;
+			}
+			return species.Surfaces == SurfaceMask.Any || !ground.SurfaceKnown || (species.Surfaces & MaskOf(ground.Surface)) != 0;
+		}
+
+		/// <summary>The mask bit of one ground.</summary>
+		public static SurfaceMask MaskOf(SurfaceKind kind) => (SurfaceMask)(1 << (int)kind);
 
 		/// <summary>Whether <paramref name="point"/> is inside one of the keep-out circles, each (x, radius, z).</summary>
 		public static bool InsideKeepOut(IReadOnlyList<Vector3> circles, Vector3 point)

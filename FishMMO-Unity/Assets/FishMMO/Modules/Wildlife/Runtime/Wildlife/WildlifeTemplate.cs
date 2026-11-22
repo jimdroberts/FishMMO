@@ -28,6 +28,8 @@ namespace FishMMO.Shared
 		float IWildlifeSpecies.CorpseSeconds => CorpseSeconds;
 		int IWildlifeSpecies.GroupMax => GroupMax;
 		BiomeHabitat IWildlifeSpecies.Habitats => Habitats;
+		WildlifeShelter IWildlifeSpecies.Shelter => Shelter;
+		SurfaceMask IWildlifeSpecies.Surfaces => Surfaces;
 		float IWildlifeSpecies.WalkSpeed => WalkSpeed;
 		float IWildlifeSpecies.RunSpeed => RunSpeed;
 
@@ -65,6 +67,12 @@ namespace FishMMO.Shared
 		[Tooltip("Ground it lives on (the biome's habitat). Settlements, sea and keep-outs are never used.")]
 		public BiomeHabitat Habitats = BiomeHabitat.Forest | BiomeHabitat.Woodland | BiomeHabitat.Grassland;
 
+		[Tooltip("Out in the open, in caves and mines, or both. Every spawn's ground is checked (WildlifeRules.LivesOn).")]
+		public WildlifeShelter Shelter = WildlifeShelter.Open;
+
+		[Tooltip("The grounds (by their painted texture) it may appear on; nothing set for any ground.")]
+		public SurfaceMask Surfaces = SurfaceMask.Any;
+
 		[Tooltip("Groups per square kilometre of suitable ground.")]
 		[Min(0f)]
 		public float GroupsPerKm2 = 0.6f;
@@ -82,6 +90,9 @@ namespace FishMMO.Shared
 
 		[Tooltip("True to den one group in some cave mouths (bears).")]
 		public bool DensInCaveMouths;
+
+		[Tooltip("True to keep colonies deep inside caves and mines, on their dark floors with room to fly over them (giant bats).")]
+		public bool ColoniesInCaves;
 
 		[Tooltip("Seconds before a fallen member is replaced: the shortest.")]
 		[Min(0f)]
@@ -114,6 +125,8 @@ namespace FishMMO.Shared
 		[Tooltip("Horn or antler size.")] public float HornSize;
 		[Tooltip("Tail length.")] public float TailLength;
 		[Tooltip("Tail angle up from hanging, degrees (a fox's brush is near level).")] public float TailRaise;
+		[Tooltip("Wing span tip to tip, metres; 0 for none. Wings take the place of the front legs (a bat).")] public float WingSpan;
+		[Tooltip("How high it flies over the ground it stands on, metres; 0 walks. Drawn only: the server moves it on the ground.")] public float HoverHeight;
 		[Tooltip("Back and flanks (linear-ish sRGB, as authored).")] public Color Back;
 		[Tooltip("Belly, throat and legs' inner side.")] public Color Belly;
 		[Tooltip("Muzzle, hooves or paws, horns.")] public Color Accent;

@@ -2,7 +2,8 @@
 #define FISHMMO_WILDLIFE_INCLUDED
 
 // Vertex contract (WildlifeBodyMesh): colour rgb the albedo as authored (sRGB); UV1 xyz the pivot of the vertex's part in
-// object space, w the part: 0 body, 1 front left, 2 front right, 3 hind left, 4 hind right legs, 5 neck and head, 6 tail.
+// object space, w the part: 0 body, 1 front left, 2 front right, 3 hind left, 4 hind right legs, 5 neck and head, 6 tail,
+// 7 left wing, 8 right wing (a winged animal has no front legs).
 // The animal faces +Z and stands on y = 0.
 
 #if defined(FISH_WILDLIFE_PASS_FORWARD)
@@ -13,6 +14,7 @@ CBUFFER_START(UnityPerMaterial)
     half _Smoothness;
     float4 _WildGait;   // x step phase (radians), y leg swing (radians), z gallop 0..1, w body bob (metres)
     float4 _WildPose;   // x attack lunge 0..1, y fallen 0..1, z tail wag (radians), w half the body's width (the side it falls on)
+    float4 _WildFlight; // x wing angle up from level (radians), y height flown over the ground (metres), zw unused
 CBUFFER_END
 
 struct WildlifeAttributes
@@ -60,6 +62,13 @@ void WildlifePose(inout float3 position, inout float3 normal, float4 part)
         position = pivot + WildRotY(position - pivot, a);
         normal = WildRotY(normal, a);
     }
+    else if (id == 7 || id == 8)
+    {
+        // A wing beats about the shoulder, along the body's length: up is a turn toward its own side's up.
+        float a = (id == 7 ? -1.0 : 1.0) * _WildFlight.x;
+        position = pivot + WildRotZ(position - pivot, a);
+        normal = WildRotZ(normal, a);
+    }
 
     position.y += _WildGait.w * abs(sin(phase));
 
@@ -67,6 +76,9 @@ void WildlifePose(inout float3 position, inout float3 normal, float4 part)
     float3 side = float3(_WildPose.w, 0.0, 0.0);
     position = side + WildRotZ(position - side, fall);
     normal = WildRotZ(normal, fall);
+
+    // Flying: drawn this high over the ground the animal stands on (the server moves it on the ground).
+    position.y += _WildFlight.y;
 }
 
 #if defined(FISH_WILDLIFE_PASS_FORWARD) || defined(FISH_WILDLIFE_PASS_DEPTHNORMALS)

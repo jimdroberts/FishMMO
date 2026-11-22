@@ -99,6 +99,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 				}
 			}
 
+			if (caves != null)
+			{
+				AddCaveColonies(caves, species, limits, area, rng, max, result);
+			}
+
 			float size = Mathf.Max(64f, limits.AreaMetres);
 			float stride = Mathf.Max(32f, limits.AreaStrideMetres);
 			// Each point lies in about (size / stride)^2 areas: an area's share of the ground is one stride square.
@@ -190,6 +195,125 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			return result;
 		}
 
+		/// <summary>How dark a cave floor must be for a colony: past the mouth's light.</summary>
+		public const float ColonyDarkness = 0.5f;
+
+		/// <summary>Metres of air a colony's floor needs over it, to fly in.</summary>
+		public const float ColonyHeadroom = 4f;
+
+		/// <summary>Whether a cave of this form keeps colonies: not ice (nearly lifeless) and not a sea hall (its life swims).</summary>
+		public static bool ColoniesLiveIn(SceneCaveForm form)
+		{
+			return form != SceneCaveForm.IceCave && form != SceneCaveForm.SeaHall;
+		}
+
+		/// <summary>
+		/// Colonies deep inside the caves for species that live there (<see cref="WildlifeTemplate.ColoniesInCaves"/>): in some cave
+		/// systems (<see cref="WildlifeCatalogue.CaveColonyChance"/>), on the darkest floor patches with room to fly over them, up
+		/// to <see cref="WildlifeCatalogue.ColoniesPerCave"/> a system spaced apart. Each is a small box standing on the floor and
+		/// under the roof, so its cast comes down inside the cave.
+		/// </summary>
+		private static void AddCaveColonies(IReadOnlyList<SceneCaveLifeSpot> caves, IReadOnlyList<Species> species, WildlifeCatalogue limits,
+			Rect area, DeterministicRNG rng, int max, List<WildlifeArea> result)
+		{
+			// The floors fit for a colony, by cave system, in the order the systems first appear.
+			var sites = new List<int>();
+			var floors = new Dictionary<int, List<SceneCaveLifeSpot>>();
+			for (int c = 0; c < caves.Count; ++c)
+			{
+				SceneCaveLifeSpot spot = caves[c];
+				if (spot.Kind != SceneCaveLifeKind.Floor || spot.Dark < ColonyDarkness || spot.Extent.y < ColonyHeadroom ||
+					!ColoniesLiveIn(spot.Form) || !Inside(area, spot.Position))
+				{
+					continue;
+				}
+				if (!floors.TryGetValue(spot.SiteId, out List<SceneCaveLifeSpot> list))
+				{
+					floors[spot.SiteId] = list = new List<SceneCaveLifeSpot>();
+					sites.Add(spot.SiteId);
+				}
+				list.Add(spot);
+			}
+			int perCave = Mathf.Max(1, limits.ColoniesPerCave);
+			float spacingSqr = limits.ColonySpacing * limits.ColonySpacing;
+			for (int s = 0; s < species.Count && result.Count < max; ++s)
+			{
+				WildlifeTemplate t = species[s].Template;
+				if (t == null || !t.ColoniesInCaves)
+				{
+					continue;
+				}
+				foreach (int site in sites)
+				{
+					if (result.Count >= max)
+					{
+						break;
+					}
+					if (rng.NextFloat() >= limits.CaveColonyChance)
+					{
+						continue;
+					}
+					List<SceneCaveLifeSpot> list = floors[site];
+					// The darkest first, the roomiest breaking a tie; stable, so the same cave always gets the same colonies.
+					var order = new List<int>(list.Count);
+					for (int i = 0; i < list.Count; ++i)
+					{
+						order.Add(i);
+					}
+					order.Sort((a, b) =>
+					{
+						int dark = list[b].Dark.CompareTo(list[a].Dark);
+						if (dark != 0)
+						{
+							return dark;
+						}
+						int room = list[b].Extent.y.CompareTo(list[a].Extent.y);
+						return room != 0 ? room : a.CompareTo(b);
+					});
+					var placed = new List<Vector3>();
+					foreach (int i in order)
+					{
+						if (placed.Count >= perCave || result.Count >= max)
+						{
+							break;
+						}
+						SceneCaveLifeSpot floor = list[i];
+						bool clear = true;
+						foreach (Vector3 other in placed)
+						{
+							clear &= (other - floor.Position).sqrMagnitude >= spacingSqr;
+						}
+						if (!clear)
+						{
+							continue;
+						}
+						placed.Add(floor.Position);
+						result.Add(Colony(species[s], floor, rng.Next(Mathf.Max(1, t.GroupMin), Mathf.Max(t.GroupMin, t.GroupMax) + 1)));
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// A colony's spawner: a box on a cave floor patch (as wide as the patch is flat, 6 to 20 m), from a metre under the floor
+		/// to a little under the roof, so every cast starts in the cave's air and comes down on its floor.
+		/// </summary>
+		public static WildlifeArea Colony(Species species, SceneCaveLifeSpot floor, int count)
+		{
+			float headroom = Mathf.Min(floor.Extent.y - 0.5f, 3.5f);
+			float spread = Mathf.Clamp(floor.Extent.x * 2f, 6f, 20f);
+			string name = species.Template != null ? species.Template.name : "?";
+			return new WildlifeArea
+			{
+				Name = $"Wildlife {name} cave colony",
+				Center = floor.Position + Vector3.up * ((headroom - 1f) * 0.5f),
+				Size = new Vector3(spread, headroom + 1f, spread),
+				Species = new List<WildlifeWeight> { new WildlifeWeight(species, 1f) },
+				Count = Mathf.Max(1, count),
+				Den = true,
+			};
+		}
+
 		private static bool Inside(Rect area, Vector3 position)
 		{
 			return position.x >= area.xMin && position.x <= area.xMax && position.z >= area.yMin && position.z <= area.yMax;
@@ -279,6 +403,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 			List<Vector3> settlements, out float altitude)
 		{
 			altitude = 0f;
+			// A cave dweller has no open country: it is placed only in its caves (AddCaveColonies).
+			if (t == null || t.Shelter == WildlifeShelter.Cave)
+			{
+				return false;
+			}
 			if (!ground(x, z, out BiomeHabitat habitat, out altitude))
 			{
 				return false;

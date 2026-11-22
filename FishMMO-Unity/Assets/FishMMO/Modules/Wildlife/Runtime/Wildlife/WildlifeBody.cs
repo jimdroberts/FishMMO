@@ -12,6 +12,7 @@ namespace FishMMO.Shared
 	{
 		private static readonly int GaitId = Shader.PropertyToID("_WildGait");
 		private static readonly int PoseId = Shader.PropertyToID("_WildPose");
+		private static readonly int FlightId = Shader.PropertyToID("_WildFlight");
 
 		/// <summary>Seconds an attack's lunge takes, out and back.</summary>
 		public const float AttackSeconds = 0.45f;
@@ -27,6 +28,7 @@ namespace FishMMO.Shared
 		private bool hasLastPosition;
 		private float speed;
 		private float phase;
+		private float wingPhase;
 		private float attackTimer;
 		private float death;
 		private float deathTarget;
@@ -125,9 +127,16 @@ namespace FishMMO.Shared
 			phase = Mathf.Repeat(phase + gait.StepsPerSecond * Mathf.PI * 2f * dt, Mathf.PI * 2f);
 			float attack = attackTimer > 0f ? Mathf.Sin((1f - attackTimer / AttackSeconds) * Mathf.PI) : 0f;
 			float wag = Mathf.Sin(Time.time * (speed > 0.2f ? 9f : 4f)) * (speed > 0.2f ? 0.12f : 0.3f);
+			float fallen = Mathf.SmoothStep(0f, 1f, death);
 
-			block.SetVector(GaitId, new Vector4(phase, gait.LegSwing, gait.Gallop, gait.Bob));
-			block.SetVector(PoseId, new Vector4(attack, Mathf.SmoothStep(0f, 1f, death), wag, spec.Width * 0.5f));
+			WildlifeFlight flight = WildlifeFlight.Evaluate(spec, species.RunSpeed, speed, wingPhase, attack, fallen);
+			wingPhase = Mathf.Repeat(wingPhase + flight.BeatsPerSecond * Mathf.PI * 2f * dt, Mathf.PI * 2f);
+			float legSwing = spec.WingSpan > 0f ? gait.LegSwing * 0.15f : gait.LegSwing;
+			float bob = spec.HoverHeight > 0f ? 0f : gait.Bob;
+
+			block.SetVector(GaitId, new Vector4(phase, legSwing, gait.Gallop, bob));
+			block.SetVector(PoseId, new Vector4(attack, fallen, wag, spec.Width * 0.5f));
+			block.SetVector(FlightId, new Vector4(flight.WingAngle, flight.Height, 0f, 0f));
 			bodyRenderer.SetPropertyBlock(block);
 		}
 #endif
@@ -206,6 +215,57 @@ namespace FishMMO.Shared
 			float swing = Mathf.Lerp(0.35f, 0.75f, gallop) * Mathf.Clamp01(speed / (leg * 1.2f));
 			float bob = gallop * 0.05f * spec.ShoulderHeight;
 			return new WildlifeGait(steps, swing, gallop, bob);
+		}
+	}
+
+	/// <summary>
+	/// How a winged animal flies at a moment: its wingbeat, the wing's angle and how high it is drawn over the ground the server
+	/// moves it on (it swoops lower to bite and drops as it dies). Nothing for an animal without wings. Pure, so it is tested
+	/// on its own.
+	/// </summary>
+	public readonly struct WildlifeFlight
+	{
+		/// <summary>Wingbeats a second.</summary>
+		public readonly float BeatsPerSecond;
+
+		/// <summary>The wing's angle up from level, radians.</summary>
+		public readonly float WingAngle;
+
+		/// <summary>Metres over the ground.</summary>
+		public readonly float Height;
+
+		private WildlifeFlight(float beats, float angle, float height)
+		{
+			BeatsPerSecond = beats;
+			WingAngle = angle;
+			Height = height;
+		}
+
+		/// <summary>How far a wing sweeps either side of its middle, radians.</summary>
+		public const float BeatSweep = 0.85f;
+
+		/// <param name="spec">The body (its wing span and flying height).</param>
+		/// <param name="runSpeed">The species' run speed: beats quicken toward it.</param>
+		/// <param name="speed">Measured ground speed, m/s.</param>
+		/// <param name="wingPhase">Where in its beat the wing is, radians.</param>
+		/// <param name="attack">The bite's lunge, 0..1.</param>
+		/// <param name="fallen">0 alive .. 1 lying dead.</param>
+		public static WildlifeFlight Evaluate(WildlifeBodySpec spec, float runSpeed, float speed, float wingPhase, float attack, float fallen)
+		{
+			if (spec.WingSpan <= 0f)
+			{
+				return new WildlifeFlight(0f, 0f, 0f);
+			}
+			float alive = 1f - Mathf.Clamp01(fallen);
+			float haste = Mathf.Clamp01(speed / Mathf.Max(runSpeed, 0.1f));
+			float beats = alive > 0f ? Mathf.Lerp(2.6f, 4.4f, haste) : 0f;
+			// Dead, the wings lie flat on the ground with it.
+			float angle = alive * (0.15f + BeatSweep * Mathf.Sin(wingPhase));
+			// The body lifts on each downstroke; it swoops down to bite.
+			float height = spec.HoverHeight > 0f
+				? alive * (spec.HoverHeight * (1f - 0.6f * Mathf.Clamp01(attack)) + 0.12f * Mathf.Sin(wingPhase - 1.2f))
+				: 0f;
+			return new WildlifeFlight(beats, angle, Mathf.Max(0f, height));
 		}
 	}
 }

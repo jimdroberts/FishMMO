@@ -252,5 +252,169 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(run.StepsPerSecond > walk.StepsPerSecond && run.LegSwing > walk.LegSwing, "faster, wider steps");
 			LogAssert.AreEqual(0f, dead.StepsPerSecond, "the dead do not walk");
 		}
+		// ── Ground: caves and painted textures (2026-11-21: deer and elk spawned in caves) ──────────────
+
+		private static GroundReading Ground(bool underground, SurfaceKind? surface)
+		{
+			return new GroundReading { Underground = underground, SurfaceKnown = surface.HasValue, Surface = surface ?? SurfaceKind.Dirt };
+		}
+
+		[Test]
+		public void EachShelterKeepsItsSpeciesInOrOutOfCaves()
+		{
+			WildlifeTemplate deer = Species(WildlifeRole.Prey, BiomeHabitat.Forest, 1f);
+			WildlifeTemplate bat = Species(WildlifeRole.Predator, BiomeHabitat.None, 0f);
+			bat.Shelter = WildlifeShelter.Cave;
+			WildlifeTemplate bear = Species(WildlifeRole.Predator, BiomeHabitat.Forest, 1f);
+			bear.Shelter = WildlifeShelter.Anywhere;
+			LogAssert.IsTrue(WildlifeRules.LivesOn(deer, Ground(false, SurfaceKind.Grass)), "a deer in a field");
+			LogAssert.IsFalse(WildlifeRules.LivesOn(deer, Ground(true, SurfaceKind.Stone)), "never a deer in a cave");
+			LogAssert.IsTrue(WildlifeRules.LivesOn(bat, Ground(true, SurfaceKind.Stone)), "a bat in a cave");
+			LogAssert.IsFalse(WildlifeRules.LivesOn(bat, Ground(false, SurfaceKind.Grass)), "never a bat out in a field");
+			LogAssert.IsTrue(WildlifeRules.LivesOn(bear, Ground(true, SurfaceKind.Stone)) && WildlifeRules.LivesOn(bear, Ground(false, SurfaceKind.Leaves)), "a bear either");
+		}
+
+		[Test]
+		public void ASpeciesKeepsToItsGrounds()
+		{
+			WildlifeTemplate deer = Species(WildlifeRole.Prey, BiomeHabitat.Forest, 1f);
+			deer.Surfaces = SurfaceMask.Grass | SurfaceMask.Leaves;
+			LogAssert.IsTrue(WildlifeRules.LivesOn(deer, Ground(false, SurfaceKind.Leaves)), "forest floor");
+			LogAssert.IsFalse(WildlifeRules.LivesOn(deer, Ground(false, SurfaceKind.Stone)), "not bare rock");
+			LogAssert.IsFalse(WildlifeRules.LivesOn(deer, Ground(false, SurfaceKind.Sand)), "not a beach");
+			LogAssert.IsTrue(WildlifeRules.LivesOn(deer, Ground(false, null)), "an unknown ground passes (a tile with no map)");
+			deer.Surfaces = SurfaceMask.Any;
+			LogAssert.IsTrue(WildlifeRules.LivesOn(deer, Ground(false, SurfaceKind.Stone)), "no grounds set is any ground");
+			LogAssert.AreEqual((int)SurfaceMask.Snow, (int)WildlifeRules.MaskOf(SurfaceKind.Snow), "one bit per kind");
+		}
+
+		[Test]
+		public void ACaveDwellerAsksNothingOfTheBiome()
+		{
+			WildlifeTemplate bat = Species(WildlifeRole.Predator, BiomeHabitat.None, 0f);
+			bat.Shelter = WildlifeShelter.Cave;
+			LogAssert.IsTrue(WildlifePlanner.Lives(bat, BiomeHabitat.Sea), "a sea cave under the coast's sea cell");
+			LogAssert.IsTrue(WildlifePlanner.Lives(bat, BiomeHabitat.Forest), "a cave under a forest");
+		}
+
+		private static SceneCaveLifeSpot Floor(int site, Vector3 at, float dark, float headroom, SceneCaveForm form = SceneCaveForm.Cave)
+		{
+			return new SceneCaveLifeSpot
+			{
+				Kind = SceneCaveLifeKind.Floor, Form = form, Position = at, Normal = Vector3.up, Extent = new Vector3(5f, headroom, 0f),
+				Dark = dark, SiteId = site,
+			};
+		}
+
+		[Test]
+		public void ColoniesLiveDeepInTheCavesAndNowhereElse()
+		{
+			WildlifeTemplate bat = Species(WildlifeRole.Predator, BiomeHabitat.Forest, 50f);
+			bat.Shelter = WildlifeShelter.Cave;
+			bat.ColoniesInCaves = true;
+			WildlifeCatalogue limits = Limits();
+			limits.CaveColonyChance = 1f;
+			limits.ColoniesPerCave = 2;
+			limits.ColonySpacing = 60f;
+			var caves = new List<SceneCaveLifeSpot>
+			{
+				Floor(7, new Vector3(500f, -40f, 500f), 0.9f, 8f),
+				Floor(7, new Vector3(520f, -42f, 500f), 0.95f, 8f),  // the darkest, but within 60 m of the next
+				Floor(7, new Vector3(600f, -60f, 500f), 0.8f, 8f),
+				Floor(7, new Vector3(700f, -70f, 500f), 0.2f, 8f),   // in the mouth's light
+				Floor(7, new Vector3(800f, -70f, 500f), 0.9f, 2f),   // no room to fly
+				Floor(9, new Vector3(900f, -30f, 500f), 0.9f, 8f, SceneCaveForm.IceCave),
+			};
+			var species = new List<WildlifePlanner.Species> { new WildlifePlanner.Species(null, bat) };
+			List<WildlifeArea> plan = WildlifePlanner.Plan("Test", World, HalfForest, null, null, caves, species, limits);
+			LogAssert.AreEqual(2, plan.Count, "two colonies in the one cave, none out in the forest, none in the ice");
+			LogAssert.IsTrue(plan[0].Den && Mathf.Approximately(plan[0].Center.x, 520f), "the darkest floor first");
+			LogAssert.IsTrue(Mathf.Approximately(plan[1].Center.x, 600f), "the next one far enough from it");
+			foreach (WildlifeArea colony in plan)
+			{
+				float floorY = colony.Center.x > 550f ? -60f : -42f;
+				float top = colony.Center.y + colony.Size.y * 0.5f, bottom = colony.Center.y - colony.Size.y * 0.5f;
+				LogAssert.IsTrue(top > floorY && top < floorY + 8f, "its cast starts in the cave's air, under the roof");
+				LogAssert.IsTrue(bottom < floorY, "and reaches the floor");
+				LogAssert.IsTrue(colony.Count >= bat.GroupMin && colony.Count <= bat.GroupMax, "a colony is the species' group, not the catalogue's");
+			}
+		}
+
+		[Test]
+		public void OpenSpeciesAreNotColonies()
+		{
+			WildlifeTemplate deer = Species(WildlifeRole.Prey, BiomeHabitat.Forest, 1f);
+			WildlifeCatalogue limits = Limits();
+			limits.CaveColonyChance = 1f;
+			var caves = new List<SceneCaveLifeSpot> { Floor(3, new Vector3(500f, -40f, 500f), 0.9f, 8f) };
+			var species = new List<WildlifePlanner.Species> { new WildlifePlanner.Species(null, deer) };
+			List<WildlifeArea> plan = WildlifePlanner.Plan("Test", World, HalfForest, null, null, caves, species, limits);
+			LogAssert.IsFalse(plan.Exists(a => a.Den), "no colony of deer");
+			LogAssert.IsTrue(plan.Count > 0, "deer still roam the forest");
+		}
+
+		[Test]
+		public void TheGroundMapKeepsEachCellsStrongestKind()
+		{
+			// 4x4 splat texels, two layers (grass, rock): rock covers the right half, grass the left.
+			var maps = new float[4, 4, 2];
+			for (int y = 0; y < 4; y++)
+			{
+				for (int x = 0; x < 4; x++)
+				{
+					maps[y, x, 0] = x < 2 ? 0.8f : 0.1f;
+					maps[y, x, 1] = 1f - maps[y, x, 0];
+				}
+			}
+			byte[] grid = TerrainGroundKinds.Bake(maps, new[] { SurfaceKind.Grass, SurfaceKind.Stone }, 2);
+			LogAssert.AreEqual(4, grid.Length, "2x2 cells");
+			LogAssert.AreEqual((byte)SurfaceKind.Grass, grid[0], "left cell grass");
+			LogAssert.AreEqual((byte)SurfaceKind.Stone, grid[1], "right cell rock");
+			LogAssert.AreEqual((byte)SurfaceKind.Stone, grid[3], "the upper row the same");
+			LogAssert.AreEqual(SurfaceKind.Leaves, SurfaceNames.OfName("Ground_ForestFloor", SurfaceKind.Dirt), "layers named as footsteps read them");
+		}
+
+		[Test]
+		public void AWingedBodyHasWingsInPlaceOfForelegs()
+		{
+			WildlifeBodySpec bat = WildlifeBodySpec.Deer;
+			bat.WingSpan = 2.6f;
+			bat.HoverHeight = 1.8f;
+			Mesh mesh = WildlifeBodyMesh.Build(bat);
+			made.Add(mesh);
+			var parts = new List<Vector4>();
+			mesh.GetUVs(1, parts);
+			var seen = new HashSet<int>();
+			float widest = 0f;
+			var positions = new List<Vector3>();
+			mesh.GetVertices(positions);
+			for (int i = 0; i < parts.Count; ++i)
+			{
+				seen.Add(Mathf.RoundToInt(parts[i].w));
+				widest = Mathf.Max(widest, Mathf.Abs(positions[i].x));
+			}
+			LogAssert.IsTrue(seen.Contains((int)WildlifeBodyMesh.Part.LeftWing) && seen.Contains((int)WildlifeBodyMesh.Part.RightWing), "both wings");
+			LogAssert.IsFalse(seen.Contains((int)WildlifeBodyMesh.Part.FrontLeft) || seen.Contains((int)WildlifeBodyMesh.Part.FrontRight), "no forelegs");
+			LogAssert.IsTrue(seen.Contains((int)WildlifeBodyMesh.Part.HindLeft), "hind legs kept");
+			LogAssert.IsTrue(widest > 1.1f && widest <= 1.4f, $"the wings span it ({widest * 2f:0.00} m)");
+		}
+
+		[Test]
+		public void AFlyerHoversSwoopsToBiteAndFallsWhenDead()
+		{
+			WildlifeBodySpec bat = WildlifeBodySpec.Deer;
+			bat.WingSpan = 2.6f;
+			bat.HoverHeight = 1.8f;
+			WildlifeFlight idle = WildlifeFlight.Evaluate(bat, 8f, 0f, 1.2f, 0f, 0f);
+			WildlifeFlight biting = WildlifeFlight.Evaluate(bat, 8f, 0f, 1.2f, 1f, 0f);
+			WildlifeFlight fast = WildlifeFlight.Evaluate(bat, 8f, 8f, 1.2f, 0f, 0f);
+			WildlifeFlight dead = WildlifeFlight.Evaluate(bat, 8f, 0f, 1.2f, 0f, 1f);
+			WildlifeFlight deer = WildlifeFlight.Evaluate(WildlifeBodySpec.Deer, 10f, 5f, 1.2f, 0f, 0f);
+			LogAssert.IsTrue(Mathf.Abs(idle.Height - 1.8f) < 0.2f, "hovers at its height");
+			LogAssert.IsTrue(biting.Height < idle.Height - 0.8f, "swoops down to bite");
+			LogAssert.IsTrue(fast.BeatsPerSecond > idle.BeatsPerSecond && idle.BeatsPerSecond > 0f, "beats faster at speed");
+			LogAssert.IsTrue(dead.Height == 0f && dead.WingAngle == 0f && dead.BeatsPerSecond == 0f, "dead on the floor, wings flat");
+			LogAssert.IsTrue(deer.Height == 0f && deer.WingAngle == 0f, "nothing for a wingless animal");
+		}
 	}
 }

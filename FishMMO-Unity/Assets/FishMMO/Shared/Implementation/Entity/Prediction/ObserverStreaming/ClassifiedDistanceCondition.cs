@@ -1,4 +1,5 @@
 using FishNet.Component.Observing;
+using FishNet.Connection;
 using UnityEngine;
 
 namespace FishMMO.Shared
@@ -70,5 +71,21 @@ namespace FishMMO.Shared
 
 		/// <summary>The budget exactly as authored on this asset, ignoring any server override.</summary>
 		public int AuthoredVisibilityBudget => visibilityBudget;
+
+		/// <summary>This object's companion check (its owner always observes it); see <see cref="CompanionVisibility"/>.</summary>
+		private CompanionVisibility companion;
+
+		/// <summary>
+		/// The distance rule, except that a pet's owner observes it at any distance (2026-11-21: flying away despawned it).
+		/// </summary>
+		public override bool ConditionMet(NetworkConnection connection, bool currentlyAdded, out bool notProcessed)
+		{
+			if (companion.OwnerSees(NetworkObject, connection))
+			{
+				notProcessed = false;
+				return true;
+			}
+			return base.ConditionMet(connection, currentlyAdded, out notProcessed);
+		}
 	}
 }

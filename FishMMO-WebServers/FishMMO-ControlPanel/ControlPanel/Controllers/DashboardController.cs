@@ -60,15 +60,10 @@ namespace FishMMO.ControlPanel.Controllers
 				},
 				recentlySaved = recent.Data.Items.Select(SupportCharactersController.Summarise),
 				// Named so the page can say which parts of the panel are not yet built, rather
-				// than leaving an operator to guess why a panel is missing.
-				notWired = new[]
-				{
-					"Server population and per-server control",
-					"Scene instances",
-					"Host and daemon health",
-					"Account moderation",
-					"The audit log",
-				},
+				// than leaving an operator to guess why a panel is missing. Empty since every part
+				// it once named (server board, scene instances, hosts, moderation, audit log) has its
+				// own page; the card hides itself when nothing is listed.
+				notWired = Array.Empty<string>(),
 			});
 		}
 	}

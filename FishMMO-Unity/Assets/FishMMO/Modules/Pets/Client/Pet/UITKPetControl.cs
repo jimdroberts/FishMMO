@@ -459,6 +459,20 @@ namespace FishMMO.Client
 					RebindPets();
 					return;
 				}
+				/* The same object back from the pool (2026-11-21: the pet "lost" on the panel after interest management
+				 * dropped it). FishNet re-spawns a pooled object in place, so the pet stays listed and is the same
+				 * reference, but its state was reset and its health is a new attribute: the row was still bound to the old
+				 * one and heard nothing. Rebind the row whenever the pet's health is no longer the one it holds. */
+				if (bound.Pet.TryGet(out ICharacterAttributeController attributes) &&
+					attributes.TryGetHealthAttribute(out CharacterResourceAttribute liveHealth) &&
+					!ReferenceEquals(liveHealth, bound.Health))
+				{
+					// Dropped, then re-added (with its row) by RebindPets, as a pet that newly joined the list would be.
+					Unbind(bound);
+					boundPets.RemoveAt(i);
+					RebindPets();
+					return;
+				}
 				CharacterResourceAttribute health = bound.Health;
 				if (health == null)
 				{
