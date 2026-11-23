@@ -144,7 +144,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 		/// <remarks>
 		/// It was the collider's full height (a sphere's radius), right only for a pivot that far below the collider: every
 		/// base-pivot prefab on a random-position spawner hovered its own height over the ground — a herb 0.8 m up, an ore
-		/// vein 1.2 m, an ancient oak 27 m (2026-10-12: "Herb Grove has no herbs?").
+		/// vein 1.2 m, an ancient oak 27 m ("Herb Grove has no herbs?").
 		/// </remarks>
 		public static float PivotAboveBottom(Collider collider)
 		{

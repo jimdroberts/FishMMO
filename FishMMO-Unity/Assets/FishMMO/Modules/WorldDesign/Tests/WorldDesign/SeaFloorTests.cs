@@ -40,7 +40,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry.Bed.Family, Is.EqualTo(entry.Lakebed), $"{name}: the bed's rules ride on the lakebed layer");
 			}
 			// Sea life anywhere but the bed only ever grew on islands (the land gate keeps everything else above the tide), unless the
-			// biome paints its own grounds under the sea and the rule names the sea (decision 36, 2026-10-25: the sea-floor rounds).
+			// biome paints its own grounds under the sea and the rule names the sea (the sea-floor rounds).
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) in entry.Rules())
@@ -106,7 +106,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(TerrainScatter.DepthBand(new Vector2(0f, 20f), -0.1f), Is.EqualTo(1f), "an open shallow end");
 		}
 
-		/// <summary>The sea floor's kinds added by the vegetation expansion (2026-10-10), MusselBed … BacterialMat in <see cref="DetailKind"/>.</summary>
+		/// <summary>The sea floor's kinds added by the vegetation expansion, MusselBed … BacterialMat in <see cref="DetailKind"/>.</summary>
 		private static readonly DetailKind[] NewSeaKinds =
 		{
 			DetailKind.MusselBed, DetailKind.Barnacles, DetailKind.SeaLettuce, DetailKind.SandDollar, DetailKind.SeaCucumber, DetailKind.BrittleStar,

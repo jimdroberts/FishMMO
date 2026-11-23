@@ -275,7 +275,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCoarseGroundKeepsTheCoastlines()
 		{
-			// Measured 2026-10-02: 2.2% of seed 1's globe changes between land and sea, against 6.9% without the residual.
+			// Measured: 2.2% of seed 1's globe changes between land and sea, against 6.9% without the residual.
 			PlanetSurface.PlanetProfile profile = PlanetSurface.Profile(1u, 0.7f);
 			int disagree = 0;
 			const int Count = 20000;

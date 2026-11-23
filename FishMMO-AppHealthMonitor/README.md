@@ -439,7 +439,7 @@ dotnet run --project Tools/Configuration.Tests
 dotnet run --project Tools/Configuration.Tests -- --database
 ```
 
-On 2026-10-25, the rebuilt bundled configuration passed `--check-config`, and
+The rebuilt bundled configuration passed `--check-config`, and
 54 child-process/configuration checks passed, including successful PgBouncer
 6432 authentication and SELECT 1. No supervised application services were started
 by these checks. The production template was not changed.

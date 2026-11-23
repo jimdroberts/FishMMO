@@ -57,6 +57,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 01cdf73800719b054be3d87a27107db9
+    m_Address: Mark
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 020476d3ff5f7e184b993b76839937e6
     m_Address: Ossuary - Tomb (Medium-Large)
     m_ReadOnly: 0
@@ -1310,6 +1317,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 14a43eb57c23b6ce19705c76280f7755
+    m_Address: Cow
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 14e9a8176df5abf9f8e0107ffafab490
     m_Address: Barrow - Ringed (Small)
     m_ReadOnly: 0
@@ -1613,6 +1627,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 18849a752601da1c9ba1dea90396445d
     m_Address: CorruptedGrove - Altar (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 1893d4ea08444b36ebd7266cce2dc474
+    m_Address: a stablemaster
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -2283,6 +2304,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2279599e85c38d4729375ab9830611ce
+    m_Address: Recall Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2282d4f07d2a89e759252892014b9038
     m_Address: Iceland Spar Node
     m_ReadOnly: 0
@@ -2668,6 +2696,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 27627d61d9695fba499af4daf1e80b02
+    m_Address: Horse Saddle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 27675b5a5ff912e8281ed3f70faac24e
     m_Address: Rhubarb Root
     m_ReadOnly: 0
@@ -2957,6 +2992,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 2bdb4c64672dcbff8adbb555dcb47776
     m_Address: StepPyramid - Rune Steps (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2be55f6fa958fb9369f3a077918fe8ef
+    m_Address: Llama Saddle
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3552,6 +3594,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 35f9ca80a87e4e219d44e83d10e774c6
     m_Address: Frogfolk
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 35f9e8efab00abba9b6b31669e8a5cab
+    m_Address: Giant Frog
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4406,6 +4455,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 4558469513a2e19ba9894d28d5da44c9
     m_Address: Scroll of Flame Impact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 45604814998463da09bb73411e06fe05
+    m_Address: Stablemaster
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6378,6 +6434,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 653fc6bad131e9110b4aa66bdafb3b8b
+    m_Address: Frog Saddle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 655525e1cfee6581198b7323bbf52692
     m_Address: Freeze
     m_ReadOnly: 0
@@ -6485,6 +6548,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 67621de1032678246bd716aad2b43982
     m_Address: DragonLair - Bone Roost (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 67cb6706cb87be49998c599f07c77e8c
+    m_Address: Mount Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6784,6 +6854,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6dc4effdddc13000fbc95bc0743a0392
+    m_Address: Dismount
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6ddb3679b37e822f48181e6e0b5200a5
     m_Address: Premade Deflect
     m_ReadOnly: 0
@@ -6835,6 +6912,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 6e768dba5b1dc41779ca4c718e4d7227
     m_Address: Zenmai Fiddlehead Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6e7944b10e5580c63aa224d95a13b72d
+    m_Address: Dragon Saddle
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8050,6 +8134,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 835a3124d6faba3a38e49cf1b85310f2
+    m_Address: Gate Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 836447efb3c1f6952b02457949881923
     m_Address: Calabar Bean
     m_ReadOnly: 0
@@ -8094,6 +8185,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 846b447eec3b078e2b72b0cf7785a788
     m_Address: Forked Bolt
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 847e942c12fa0e121b12372c12078680
+    m_Address: Llama
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10037,6 +10135,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a2dc6ee920a6aaee5a224071a4270176
+    m_Address: Recall
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a311469f5d95699c5af052d8cfd76e6a
     m_Address: Iroko Timber
     m_ReadOnly: 0
@@ -10410,6 +10515,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: a93cdb7cc3ca21bac97bb17195ab7121
     m_Address: StiltVillage - Stilts
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: a946b40112848aa38b799cc7160b1d41
+    m_Address: Call to Arms
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11171,6 +11283,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b6de7ade1b29f034fbf44a945173a021
+    m_Address: Gate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b6e378fb5e81a9320b929fc96db42af6
     m_Address: Rihani
     m_ReadOnly: 0
@@ -11283,6 +11402,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b8141b6a248a6e334a1ec57a308250bd
+    m_Address: Mark Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b87875a136904711b8349ab3e07dc843
     m_Address: Bone Wyrm
     m_ReadOnly: 0
@@ -11360,6 +11486,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: ba5af9f0f153f8b9a950e8aed207bd1f
+    m_Address: Cow Saddle
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: ba66e72b420547018235e010aacbed7a
     m_Address: Lizardfolk
     m_ReadOnly: 0
@@ -11376,6 +11509,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ba6fc6ea5873d2f4dbf7c973fdafb667
     m_Address: Lords of the Deep
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ba91638b9cfb29834a46e441b0ec2340
+    m_Address: Portal to Bind
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -11607,6 +11747,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: bdd4dc2b9f2cde6918e4f1d2a977ad91
     m_Address: Castle - Highland
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: bdec0209793065b34b565f6fdf303571
+    m_Address: Call to Arms Event
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13663,6 +13810,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e16dcd933d4206946b03b279522cee69
+    m_Address: Portal to Bind Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e17f902ea8d1dc5f7945c7be3ddf2aed
     m_Address: Pyramid - Fallen King's Tomb (Large)
     m_ReadOnly: 0
@@ -13672,6 +13826,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e18d464c50b58daddbcf96d9c676dff9
     m_Address: Ironstone
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e1b7471b465b768b895b1d978658d182
+    m_Address: Mount
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -13805,6 +13966,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e31a159aae8e3948fb5e5d715ccbfcd0
     m_Address: Port - Timber
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e32253d09dd04b6a1991009d19f29f1d
+    m_Address: Horse
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14993,6 +15161,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: f4b3814c20e075e3cb180349be00e9aa
+    m_Address: Dragon
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: f4b73ba159d11fda0ab9c44e7390e0fc
     m_Address: MonsterDen - Lair (Small)
     m_ReadOnly: 0
@@ -15491,6 +15666,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: fb141ae0f927c400eaa8ef2a13318786
     m_Address: WreckersBeacon - Beacon Pyre (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fb3ab9dad2b474a3288ce930db0095a8
+    m_Address: Premade Mount
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

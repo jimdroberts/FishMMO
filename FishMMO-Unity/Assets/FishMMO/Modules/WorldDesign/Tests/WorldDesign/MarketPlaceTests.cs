@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A settlement's market place (2026-10-20: "Town centers (market area with well?) are generally too cramped and need to be spread
+	/// A settlement's market place ("Town centers (market area with well?) are generally too cramped and need to be spread
 	/// out a bit more"): the square is sized to the settlement, the well or cross stands in it with walking room all round, the stalls
 	/// stand in rows with aisles a cart passes, the other centrepieces apart, and the houses front the square's edge, never in it.
 	/// </summary>
@@ -498,7 +498,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(Mean(POIType.Village), Is.LessThan(Mean(POIType.Town)));
 			Assert.That(Mean(POIType.Town), Is.LessThan(Mean(POIType.City)));
 			Assert.That(Mean(POIType.City), Is.LessThan(Mean(POIType.Capital)));
-			// Every one at least (2026-10-20: a village's green had been 180 m2, a town's 240 to 650, a city's 500 to 1200).
+			// Every one at least (a village's green had been 180 m2, a town's 240 to 650, a city's 500 to 1200).
 			Assert.That(least[POIType.Village], Is.GreaterThanOrEqualTo(250f), "village green");
 			Assert.That(least[POIType.Town], Is.GreaterThanOrEqualTo(500f), "town market place");
 			Assert.That(least[POIType.City], Is.GreaterThanOrEqualTo(750f), "city square");

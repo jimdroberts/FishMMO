@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Matchmaking module (Phase 3, 2026-11-17): one MatchmakingSystem runs the group finder, the dungeon finder and
+	/// The Matchmaking module: one MatchmakingSystem runs the group finder, the dungeon finder and
 	/// arenas; the interactable system and the world's entrances and boards run without it.
 	/// </summary>
 	[TestFixture]

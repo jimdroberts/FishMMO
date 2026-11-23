@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Lays vines (2026-10-12: "vines and ivy in the world … Cave mouths, Ruins and old walls, Cliffs and outcrops,
+	/// Lays vines ("vines and ivy in the world … Cave mouths, Ruins and old walls, Cliffs and outcrops,
 	/// Trees") as baked props: over cave mouths (<see cref="DrapeCaveMouth(PointOfInterestSiteContext, Vector3, Vector3, Vector3, float, VineBiomes.Habitat, DeterministicRNG, Func{Vector3, bool})"/>,
 	/// called by the cave's own mouth builder), off crags (<see cref="HangFromCrags"/>, from CliffPlacer), on the walls beside
 	/// waterfalls (<see cref="DrapeFalls"/>, from FallLedges), up trees (<see cref="ClimbTrees"/>, from the tree bake) and over
@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <see cref="VineRules"/>; which biome grows what, its template's vines (<see cref="BiomeTemplateArt.Vines"/>).
 	/// </summary>
 	/// <remarks>
-	/// <b>Visual only</b> (2026-10-12: "Moss and vines should be visual only, no colliders"). A vine prefab has no
+	/// <b>Visual only</b> ("Moss and vines should be visual only, no colliders"). A vine prefab has no
 	/// collider, so the prop bake gives it no collision (ScenePropBaker.PrototypeCollision finds none) and the NavMesh,
 	/// built from the ground and the props' collision, never sees it: a curtain over a cave's mouth is walked through.
 	/// </remarks>
@@ -214,14 +214,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// half over the floor; <see cref="LintelHeight"/> is its underside between them), the way out and the opening's height
 		/// under its middle. With <paramref name="ground"/> (<see cref="CaveShaper.GroundAsCut"/>) it is set back from the brow
 		/// to where the meshed rock stands over the roof: the mesh rounds its lip back from the hillside, and a lintel at the
-		/// brow itself hung its curtains just short of it (2026-10-19). False when no roof stands over the mouth or the
+		/// brow itself hung its curtains just short of it. False when no roof stands over the mouth or the
 		/// hillside never closes over it.
 		/// </summary>
 		/// <remarks>
 		/// It used to walk OUT from the mouth's floor point for as long as the field still had a roof, which found the front of
-		/// the rock outcrop a mouth was set in. With the outcrop gone and the way in graded (2026-10-18), the roof out there is
+		/// the rock outcrop a mouth was set in. With the outcrop gone and the way in graded, the roof out there is
 		/// only the rounded end of the first passage standing in the open air, so the curtains hung from nothing, metres in
-		/// front of the hole (2026-10-19).
+		/// front of the hole.
 		/// </remarks>
 		public static bool CaveLintel(CaveSystem system, CaveMouth mouth, Func<float, float, float> groundAt, out Vector3 left, out Vector3 right, out Vector3 outward, out float openingHeight,
 			CaveGround ground = null)

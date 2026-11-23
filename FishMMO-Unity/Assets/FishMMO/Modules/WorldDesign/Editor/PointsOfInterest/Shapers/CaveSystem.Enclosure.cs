@@ -6,7 +6,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveSystem
 	{
-		// ── Where the air is (2026-10-21) ─────────────────
+		// ── Where the air is ─────────────────
 
 		/// <summary>How near the void a rock vertex lies to be on an inner face (one seen from inside), m.</summary>
 		private const float InnerFaceBand = 0.6f;

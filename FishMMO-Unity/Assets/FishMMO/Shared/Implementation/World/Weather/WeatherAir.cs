@@ -4,7 +4,7 @@ namespace FishMMO.Shared.Weather
 {
 	/// <summary>What the air is doing at a place and a moment: the synoptic state the weather driver computes.</summary>
 	/// <remarks>
-	/// Core vocabulary (Phase 4 of the core and modules plan, 2026-11-17): predicted exposure reads it, so it cannot belong
+	/// Core vocabulary: predicted exposure reads it, so it cannot belong
 	/// to the weather module. It was the nested <c>WeatherAir</c>.
 	/// </remarks>
 	public struct WeatherAir

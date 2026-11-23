@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How one source of a biome's cold glows moves (<see cref="BiomeTemplate.GlowModes"/>, 2026-10-25, I6i): its way glows
+	/// How one source of a biome's cold glows moves (<see cref="BiomeTemplate.GlowModes"/>): its way glows
 	/// (glowjars, rune stones) or its glowing crystals (cave crystals, a crystal post's crystal), each by a <see cref="SceneGlowMode"/>,
 	/// warm or cold. Read at runtime by the client from the template under each glow (the GPU's glow table, FishGlowModes.hlsl, and
 	/// the site lights), so a mode named on a template needs no re-cut. A source with no entry glows exactly as before.
@@ -68,7 +68,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The entry a source of a biome resolves to: the biome's own; else the world-level list (a cloud world's body, 2026-10-25,
+		/// The entry a source of a biome resolves to: the biome's own; else the world-level list (a cloud world's body,
 		/// <see cref="Celestial.CloudWorldStructures.GlowModes"/>); an Episode entry with no schedule takes the biome's fountain
 		/// episodes (<paramref name="fountains"/>), else the volcanic default. False: as before.
 		/// </summary>
@@ -88,10 +88,10 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A biome's lava-fountain episodes (2026-10-25, I6i; decision 93, the Volcanic round): its fissure fountains play in episodes, each
+	/// A biome's lava-fountain episodes: its fissure fountains play in episodes, each
 	/// fountain on one of up to three slot lengths (2000, 2500, 5000 s by default: all divide the motion clock's 10 000 s wrap), on for
 	/// a share of its slot with ramps either side, at a hashed moment of each slot. ONE slot function (<see cref="At"/>) shared by the
-	/// glows that follow it (Glow EPISODE) and the later fountain effect (I2r d), a pure function of the shared motion clock and the
+	/// glows that follow it (Glow EPISODE) and the later fountain effect (d), a pure function of the shared motion clock and the
 	/// fountain's (or glow's) seed, so every player sees the same fountain rise at the same instant. Empty (all zero) = no episodes:
 	/// every template's default.
 	/// </summary>

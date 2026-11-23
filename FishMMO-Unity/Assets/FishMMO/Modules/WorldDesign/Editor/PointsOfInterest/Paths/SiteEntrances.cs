@@ -12,7 +12,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>The road decides the street (2026-10-18).</b> A town's ways once came in only at its streets' ends, its heading and the
+	/// <b>The road decides the street.</b> A town's ways once came in only at its streets' ends, its heading and the
 	/// opposite (and across in a big one), because its streets were a cross along its heading. A town grows along the roads that
 	/// reach it, so now the road comes in on its own bearing toward the place it goes to, a second road within
 	/// <see cref="MergeDegrees"/> of one already in shares its entrance (two roads meeting outside a gate), and the layout runs a

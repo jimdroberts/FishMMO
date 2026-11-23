@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Commerce module (Phase 3, 2026-11-17): CommerceSystem runs merchants, mail and corpse looting, TradeSystem runs
+	/// The Commerce module: CommerceSystem runs merchants, mail and corpse looting, TradeSystem runs
 	/// player trade, and the interactable system, the inventory and the character menus run without them.
 	/// </summary>
 	[TestFixture]

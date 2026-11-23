@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The rocks each biome of the biome suite owns (2026-10-25, decision 34 of the biome suite): a biome's own bedrock, its
+	/// The rocks each biome of the biome suite owns: a biome's own bedrock, its
 	/// cliffs, boulders and stones (<see cref="Crust"/>), and the formation-only minerals, ices and deposits only it lays
 	/// (<see cref="FormationRocks"/>). <see cref="RockTypes"/> appends both lists to its own, so every rock here is named,
 	/// generated and placed exactly as the first sixteen are.

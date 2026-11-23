@@ -130,7 +130,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The boulder art for a geology rock name: the stone of that rock (2026-10-16: every rock of the crust, scoria and
+		/// The boulder art for a geology rock name: the stone of that rock (every rock of the crust, scoria and
 		/// breccia have stones of their own, ProceduralArtCatalogue.StoneRockMaterials), granite's for granite (its legacy
 		/// name, Grey), ice for snow and ice, and granite's for anything without one. Until then Andesite and Tuff fell to
 		/// Basalt, Conglomerate to Sandstone, Chalk and Marble to Limestone, and every other rock to Grey.

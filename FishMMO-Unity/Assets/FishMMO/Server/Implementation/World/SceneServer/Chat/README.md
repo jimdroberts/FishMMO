@@ -5,7 +5,7 @@ queued, sanitised and offered to the slash commands, and passes the stored mute 
 module routes it to a channel. System messages are sent from here too.
 
 Conversation (the channels, cross-server delivery and chat persistence) moved to the
-[Chat module](../../../../../Modules/Chat/README.md) on 2026-11-20; its
+[Chat module](../../../../../Modules/Chat/README.md); its
 [Server/README.md](../../../../../Modules/Chat/Server/README.md) documents the channels in detail.
 
 ## The pipeline

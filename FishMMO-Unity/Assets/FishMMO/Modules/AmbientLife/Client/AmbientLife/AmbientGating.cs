@@ -172,7 +172,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The country a biome offers, from its asset name: keywords, so a biome added later under an ordinary name
 		/// ("Birch Woodland", "Salt Marsh") is understood. None for a name no keyword matches (the caller falls back
-		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground. Since 2026-10-16 only the reading
+		/// on the climate, <see cref="HabitatOfClimate"/>); Barren for lifeless ground. Only the reading
 		/// the spec table's habitats were written to equal, and the fallback for a template never authored
 		/// (<see cref="HabitatOfTemplate"/>).
 		/// </summary>
@@ -237,7 +237,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The country a biome offers: its template's <see cref="BiomeTemplate.Habitat"/>, the one source since 2026-10-16 (the
+		/// The country a biome offers: its template's <see cref="BiomeTemplate.Habitat"/>, the one source (the
 		/// biome art authoring writes it from the spec table, which names for every biome what its name gave,
 		/// <see cref="HabitatOfBiome"/>), with Alien read live from the template's air (<see cref="BiomeTemplate.LiveHabitat"/>,
 		/// never stored). None for no biome, and for one authored as offering none on ground that is not alien (the caller falls
@@ -351,8 +351,8 @@ namespace FishMMO.Client
 		/// </remarks>
 		/// <summary>
 		/// The share of a nocturnal ground creature's night numbers about in full daylight: the odd rat disturbed from its
-		/// nest, no more. It was a third (2026-10-10, so a noon walk was not empty of them), which put rats, mice, toads and
-		/// frogs about all day; the day now has its own animals (2026-10-14).
+		/// nest, no more. It was a third (so a noon walk was not empty of them), which put rats, mice, toads and
+		/// frogs about all day; the day now has its own animals.
 		/// </summary>
 		public const float DaytimeNocturnalShare = 0.04f;
 

@@ -815,7 +815,7 @@ namespace FishMMO.Server.Implementation.LoginServer
 				return;
 			}
 
-			// The race's starting abilities are the Abilities module's templates (2026-11-20), read through IAbilityTemplateInfo.
+			// The race's starting abilities are the Abilities module's templates, read through IAbilityTemplateInfo.
 			foreach (CachedScriptableObject entry in startingAbilities)
 			{
 				if (!(entry is IAbilityTemplateInfo startingAbility) || AlreadyPrepared(abilities, startingAbility.ID))

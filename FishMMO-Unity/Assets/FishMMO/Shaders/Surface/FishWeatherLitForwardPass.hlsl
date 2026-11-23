@@ -38,10 +38,10 @@ float _FishFloraOn;
 #define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
 #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
 #if defined(FISH_INDIRECT_INSTANCED)
-// ── FishMMO edit: the coat a biome's weather lays over its buildings (2026-10-25, FishStructureCoat.hlsl, FloraPaletteMap's table; after the ground map,
+// ── FishMMO edit: the coat a biome's weather lays over its buildings (FishStructureCoat.hlsl, FloraPaletteMap's table; after the ground map,
 // which gives it the slope a piece stands on). ──
 #include "Assets/FishMMO/Shaders/Surface/FishStructureCoat.hlsl"
-// ── FishMMO edit: how a biome's cold glows move (2026-10-25, I6i; FishGlowModes.hlsl, GlowModeTable's table): off unless a biome here names a mode. ──
+// ── FishMMO edit: how a biome's cold glows move (FishGlowModes.hlsl, GlowModeTable's table): off unless a biome here names a mode. ──
 #include "Assets/FishMMO/Shaders/Surface/FishGlowModes.hlsl"
 #endif
 // ── FishMMO edit: moss on the surfaces whose material asks for it (_FishMoss; FishMoss.hlsl). Read with the base map's
@@ -87,7 +87,7 @@ struct Attributes
     half4 fishHabitat               : COLOR;
     float2 fishHabitat2             : TEXCOORD3;
 #elif defined(FISH_LOOK_TABLE)
-    // ── FishMMO edit (2026-10-28): the look this vertex wears in its family (x; TerrainLookMath.BakeLook, FishWeatherLitInput.hlsl). ──
+    // ── FishMMO edit: the look this vertex wears in its family (x; TerrainLookMath.BakeLook, FishWeatherLitInput.hlsl). ──
     float2 fishLook                 : TEXCOORD3;
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -140,7 +140,7 @@ struct Varyings
 #endif
 
 #if defined(FISH_LOOK_TABLE)
-    // ── FishMMO edit (2026-10-28): the look, for the fragment's table row (one per triangle: every vertex of a part carries it). ──
+    // ── FishMMO edit: the look, for the fragment's table row (one per triangle: every vertex of a part carries it). ──
     nointerpolation float fishLook  : TEXCOORD12;
 #endif
 
@@ -438,7 +438,7 @@ void LitPassFragment(
     }
     else if (_FishStructure < -0.5h)
     {
-        // A glowing crystal (2026-10-25: -1 flickering, -2 steady). A flickering one (stormglass, 2026-10-18) crackles with the light
+        // A glowing crystal (-1 flickering, -2 steady). A flickering one (stormglass) crackles with the light
         // beside it (FishGlowFlicker); a steady one shines as made; either moves by the mode its biome names (FishGlowModes.hlsl).
         half3 fishGlowMade = surfaceData.emission;
         bool fishFlickers = _FishStructure > -1.5h;
@@ -530,13 +530,13 @@ void LitPassFragment(
 
     // ── FishMMO edit: deep underground (a cave's walls) the sky does not reach: no ambient, no reflections, no sun (taken
     // off below), and the distance fog's sky colour not laid over them either. ──
-    // All of it (2026-10-21; it was 0.96): what the occlusion leaves includes the sky's reflection probe, a full-sky cubemap that
+    // All of it (it was 0.96): what the occlusion leaves includes the sky's reflection probe, a full-sky cubemap that
     // RenderSettings.reflectionIntensity does not dim, and four hundredths of it at a grazing Fresnel lit a cave's far floors
     // grey, fading as they were walked up to. The sky's ambient underground is the eye's (SkySystem), not the rock's.
     surfaceData.occlusion *= 1.0h - fishUnderground;
     // Indoors the sky comes in only at the windows and the door: most of its ambient and reflection gone.
     surfaceData.occlusion *= 1.0h - FISH_INDOOR_DIM * FishIndoor(inputData.positionWS);
-    // ── FishMMO edit (2026-10-25): under the sea the daylight dims with depth (FishSeaDaylight, 1 elsewhere): the sky's ambient and
+    // ── FishMMO edit: under the sea the daylight dims with depth (FishSeaDaylight, 1 elsewhere): the sky's ambient and
     // reflections here, the sun's taken back off below; the surface's own emission (a glowing crystal, a lure's bulb) untouched. ──
     half fishSeaDaylight = FishSeaDaylight(inputData.positionWS);
     surfaceData.occlusion *= fishSeaDaylight;
@@ -551,7 +551,7 @@ void LitPassFragment(
         BRDFData fishSunBrdf;
         InitializeBRDFData(fishSunSurface, fishSunBrdf);
         Light fishSun = GetMainLight(inputData.shadowCoord, inputData.positionWS, inputData.shadowMask);
-        // Not where the sun falls through an opening in the roof (2026-10-20, FishSkylights.hlsl): there its shadowed light is
+        // Not where the sun falls through an opening in the roof (FishSkylights.hlsl): there its shadowed light is
         // the beam, the terrain's holed shadow and the opening's rock drawing its edge.
         half fishSunTaken = fishUnderground * (half)(1.0 - FishSkylightSun(inputData.positionWS, fishSun.direction));
         // What the sea leaves of the rest (only under it: the expression is the cave's alone everywhere else).

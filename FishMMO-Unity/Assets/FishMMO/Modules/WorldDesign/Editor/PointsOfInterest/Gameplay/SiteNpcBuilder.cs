@@ -8,8 +8,8 @@ using FishMMO.Server.Implementation.World.SceneServer.AI;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Makes the settlement NPCs the points of interest's Guard and Townsfolk spawners were left empty without (2026-11-22,
-	/// Jim: "add some basic NPCs (guards, townsfolk, monster packs) for the empty spawners"), and adds the rows that use them
+	/// Makes the settlement NPCs the points of interest's Guard and Townsfolk spawners were left empty without
+	/// (guards, townsfolk, monster packs), and adds the rows that use them
 	/// and the generated monsters (WildlifeBuilder.Monster) to the point-of-interest NPC table.
 	/// </summary>
 	/// <remarks>

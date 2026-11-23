@@ -519,7 +519,7 @@ SwapContainerItems(from, to, fromIndex, toIndex)
 ### Directory Structure
 
 The Items module's server folder (`Assets/FishMMO/Modules/Items/Server`, assembly `FishMMO.Items.Server`; moved out of the
-core's `Server/Implementation/World/SceneServer/CharacterInventory` on 2026-11-20). The scene server adopts the system by its
+core's `Server/Implementation/World/SceneServer/CharacterInventory`). The scene server adopts the system by its
 `SceneServer_Systems` label; the core's character save and despawn reach it through `ICharacterInventorySystem` and work
 without it.
 

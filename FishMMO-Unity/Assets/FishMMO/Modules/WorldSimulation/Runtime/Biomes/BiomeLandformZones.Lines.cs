@@ -4,8 +4,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The headings the scatter's facing modes read off the stored landforms (2026-10-26, phase SCATTER-MODES, decision 34): the nearest
-	/// stored line of a biome (decision 90: aligned along a landform line) and the axis of the landform under a point (decision 85: a
+	/// The headings the scatter's facing modes read off the stored landforms: the nearest
+	/// stored line of a biome (aligned along a landform line) and the axis of the landform under a point (a
 	/// tessera weave's strike). Pure, thread-safe once built, like the masks.
 	/// </summary>
 	public sealed partial class BiomeLandformZones

@@ -5,7 +5,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>The World Simulation module asks the server for its biome templates at boot (Phase 4 follow-up, 2026-11-18).</summary>
+	/// <summary>The World Simulation module asks the server for its biome templates at boot.</summary>
 	public class WorldSimulationPreloadTests
 	{
 		[Test]

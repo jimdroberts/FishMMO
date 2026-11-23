@@ -19,7 +19,7 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 	/// Two things decide "addressable in this build": the group must be included (server builds drop
 	/// every group whose name contains "Client", client builds every "Server" one), and its packing mode
 	/// decides how many bundles the group becomes (PackSeparately: one per entry). Counting by group
-	/// misses both, which is how 46 GB of duplicated textures passed the old check on 2026-11-06.
+	/// misses both, which is how 46 GB of duplicated textures passed the old check.
 	/// </para>
 	/// <para>
 	/// A server build strips everything visual (<see cref="ServerContentPacking"/>: materials, GPU

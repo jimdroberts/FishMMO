@@ -45,7 +45,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Ice cobbles and pebbles as a small-rock material (boulders, <c>Detail_Rocks_Ice</c>, <c>Detail_Pebbles_Ice</c>):
 		/// Titan's rounded water-ice cobbles, cold-trap ice on a dead world, an ice cave's floor. Declared by the
-		/// vegetation expansion (2026-10-10) and joined into <see cref="AllRockMaterials"/>. It wears the WaterIce rock
+		/// vegetation expansion and joined into <see cref="AllRockMaterials"/>. It wears the WaterIce rock
 		/// type's surface (<see cref="RockArtNames.RockSurfaceTypeForLegacy"/>), so a cobble and an ice formation are the
 		/// same ice; its ground family stays <see cref="Ground.Ice"/> for anything that asks. Constants only, so a field
 		/// is safe here (see <see cref="Details"/> on the initialisation-order trap).
@@ -56,7 +56,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// The stones added for decision 6 of the biome suite (2026-10-16): every other rock of the crust, the formation
+		/// The stones added for the biome suite: every other rock of the crust, the formation
 		/// rocks volcanic and impact ground is strewn with (scoria, breccia), flint and river cobbles, so a biome can lay
 		/// its own rock's boulders, rocks and pebbles and a river its own bedrock's boulders (RiverBoulders.Material).
 		/// The rock types wear their type's own material (<see cref="RockMaterialSpec.WearsRockType"/>: a slate pebble is
@@ -85,10 +85,10 @@ namespace FishMMO.Shared.WorldDesign
 		});
 
 		/// <summary>
-		/// The stones above, then one for each biome's own crust rock (<see cref="RegionalRocks.Crust"/>, 2026-10-25), each
+		/// The stones above, then one for each biome's own crust rock (<see cref="RegionalRocks.Crust"/>), each
 		/// wearing its rock type's material and built from its own shapes (StoneStyles.Regional.cs), so a biome lays its own
 		/// rock's boulders, rocks and pebbles and a river on it its own boulders; then the named sets the drafts ask for
-		/// (2026-10-26, StoneStyles.Named.cs: maerl, coral rubble, furrow stones…), each with a material of its own over its
+		/// (StoneStyles.Named.cs: maerl, coral rubble, furrow stones…), each with a material of its own over its
 		/// rock's surface (RockArtNames.RockSurfaceTypeForLegacy), or its rock's own material when it is named for the rock.
 		/// They come last, so a river's boulders (RiverBoulders.Material) still find each rock's own stone first.
 		/// </summary>
@@ -112,7 +112,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The child of a stone detail prefab carrying its variant mesh <paramref name="variant"/> (1 on; a MeshFilter only: the GPU scatter alone reads it).</summary>
 		public static string DetailVariantChild(int variant) => DetailVariantChildPrefix + variant;
 
-		/// <summary>A stone's small-rock mesh of a variant: variant 0 is <see cref="SmallRocksMesh"/> itself (2026-10-26, <see cref="RockVariantCounts.StoneDetails"/>).</summary>
+		/// <summary>A stone's small-rock mesh of a variant: variant 0 is <see cref="SmallRocksMesh"/> itself (<see cref="RockVariantCounts.StoneDetails"/>).</summary>
 		public static string SmallRocksVariantMesh(string material, int variant) => variant <= 0 ? SmallRocksMesh(material) : $"{SmallRocksMesh(material)}_V{variant}";
 
 		/// <summary>A stone's pebble mesh of a variant: variant 0 is <see cref="PebblesMesh"/> itself.</summary>
@@ -133,7 +133,7 @@ namespace FishMMO.Shared.WorldDesign
 						yield return MeshPath(BoulderMesh(m.Name, shape.Name, lod));
 					}
 				}
-				// Its small rocks and pebbles, each in every variant it cycles (RockVariantCounts.StoneDetails; one before 2026-10-26).
+				// Its small rocks and pebbles, each in every variant it cycles (RockVariantCounts.StoneDetails; one formerly).
 				int variants = RockVariantCounts.StoneDetailsOf(m.Name);
 				for (int v = 0; v < variants; v++)
 				{
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
-			// The rock and ice surfaces as their look arrays (ProceduralArtLookArrays; no single map since 2026-10-28).
+			// The rock and ice surfaces as their look arrays (ProceduralArtLookArrays; no single map).
 			foreach (ProceduralArtLookArrays.Layout layout in ProceduralArtLookArrays.LayoutsOfSet(ProceduralArtLookArrays.RockSetName))
 			{
 				yield return layout.Path;

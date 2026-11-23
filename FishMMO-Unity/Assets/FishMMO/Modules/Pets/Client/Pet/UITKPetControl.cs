@@ -442,7 +442,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The rows follow health events, and the events are right; but a row bound to an object that is no longer the pet
 		/// hears nothing, and the panel sat at full health while the target frame, reading the live pet, showed 65%
-		/// (2026-11-18). So a row whose pet is no longer the listed, live object is rebound, and a row whose drawn numbers
+		///. So a row whose pet is no longer the listed, live object is rebound, and a row whose drawn numbers
 		/// differ from its health is redrawn: two integer comparisons per pet per frame until something moves.
 		/// </remarks>
 		protected override void OnTick()
@@ -459,7 +459,7 @@ namespace FishMMO.Client
 					RebindPets();
 					return;
 				}
-				/* The same object back from the pool (2026-11-21: the pet "lost" on the panel after interest management
+				/* The same object back from the pool (the pet "lost" on the panel after interest management
 				 * dropped it). FishNet re-spawns a pooled object in place, so the pet stays listed and is the same
 				 * reference, but its state was reset and its health is a new attribute: the row was still bound to the old
 				 * one and heard nothing. Rebind the row whenever the pet's health is no longer the one it holds. */

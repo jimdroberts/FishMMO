@@ -4,7 +4,7 @@ using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
-	/// <summary>The Pets module's AI states in the NPCs module's editor tools: the dashboard's AI States list and the asset organizer (2026-11-20).</summary>
+	/// <summary>The Pets module's AI states in the NPCs module's editor tools: the dashboard's AI States list and the asset organizer.</summary>
 	internal static class PetAIStates
 	{
 		[InitializeOnLoadMethod]

@@ -942,7 +942,7 @@ namespace FishMMO.Client
 		/// <para>A click goes through <c>PanelEventHandler.OnPointerDown</c>, which calls
 		/// <c>EventSystem.SetSelectedGameObject(panel's handler)</c> before the pointer event moves focus; a click on the
 		/// field works in the browser. The chat key called <c>Focus()</c> with nothing selected (aim mode deselects every
-		/// panel, see <c>PlayerInputController.MouseMode</c>), and the browser log (11-16, f17699) showed the field able to
+		/// panel, see <c>PlayerInputController.MouseMode</c>), and the browser log (f17699) showed the field able to
 		/// grab focus (canGrabFocus True, visible, enabled) yet focus on nothing and the EventSystem still selecting
 		/// nothing straight after: the FocusIn that selects the panel (<c>PanelEventHandler.OnElementFocus</c>) never ran.</para>
 		/// <para>The <c>Blur()</c> first clears a focus change left pending on the field: <c>FocusController.SwitchFocus</c>
@@ -981,7 +981,7 @@ namespace FishMMO.Client
 		/// focus ring's tab-index rule.
 		/// </summary>
 		/// <remarks>
-		/// THE root of "Enter frees the cursor and takes it straight back" (11-16, found from the browser log: canGrabFocus
+		/// THE root of "Enter frees the cursor and takes it straight back" (found from the browser log: canGrabFocus
 		/// True, panel selected, yet focus on nothing and never a FocusOut). <c>inputField.Focus()</c> delegates: a TextField
 		/// hands focus to its first child that can grab focus AND has <c>tabIndex &gt;= 0</c>
 		/// (<c>Focusable.GetFirstFocusableChild</c>). <see cref="ExcludeFromTabNavigation"/> sets every focusable element in

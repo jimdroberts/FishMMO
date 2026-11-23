@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>Split from CachedMainLightShadowsTests (Phase 4 of the core and modules plan, 2026-11-18): the Terrain module's half.</summary>
+	/// <summary>Split from CachedMainLightShadowsTests: the Terrain module's half.</summary>
 	public class TerrainShadowCacheTests
 	{
 		[Test]
@@ -59,7 +59,7 @@ namespace FishMMO.UnitTests
 				s => SourceScanPins.InOrder(s, "cmd.SetComputeBufferParam(compute, cullKernel, VisibleOutId, shadowCacheVisible);", "BindPackedOff(cmd);"),
 				SourceScanPins.Replace("BindPackedOff(cmd);", string.Empty),
 				"the cache's culling overwriting the batch group's packed visible list");
-			// Queued by the core world-passes feature, not the clouds (Phase 4, 2026-11-17).
+			// Queued by the core world-passes feature, not the clouds.
 			string feature = SourceScanPins.ReadCode("Assets/FishMMO/Client/Rendering/WorldPasses/FishWorldPassesFeature.cs");
 			StringAssert.Contains("renderer.EnqueuePass(CachedMainLightShadows.CachePass);", feature);
 			StringAssert.Contains("renderer.EnqueuePass(CachedMainLightShadows.MergePass);", feature);

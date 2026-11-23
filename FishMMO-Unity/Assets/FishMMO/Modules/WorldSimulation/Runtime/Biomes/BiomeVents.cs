@@ -6,23 +6,23 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// Where a biome's vents stand (<see cref="BiomeVents.Layout"/>, 2026-10-25, phase I2q-b; decisions 53, 90, 95). APPEND-ONLY:
+	/// Where a biome's vents stand (<see cref="BiomeVents.Layout"/>). APPEND-ONLY:
 	/// the value is stored in templates and in the scene's stored vent lines (<see cref="VentLine.Layout"/>).
 	/// </summary>
 	public enum BiomeVentLayout : byte
 	{
 		/// <summary>On the jittered grids (FishMMO.Shared.Weather.GeothermalVents' 80 m cells, VolcanicVents' kilometre): every biome's before.</summary>
 		Grid = 0,
-		/// <summary>Along the scene's stored fissure lines (decision 53: an ice moon's tiger stripes; a rift's cracks): a jet every 40–80 m.</summary>
+		/// <summary>Along the scene's stored fissure lines (an ice moon's tiger stripes; a rift's cracks): a jet every 40–80 m.</summary>
 		Fissures = 1,
-		/// <summary>In vent zones on a summit terrace (decision 95: Stromboli's three craters): clusters at a quarter, half and three quarters of each stored line, and on each stored pad.</summary>
+		/// <summary>In vent zones on a summit terrace (Stromboli's three craters): clusters at a quarter, half and three quarters of each stored line, and on each stored pad.</summary>
 		Terrace = 2,
-		/// <summary>Along the stored ridge lines, sparser (decision 90: a tidally flexed moon's double ridges puffing from their medial troughs).</summary>
+		/// <summary>Along the stored ridge lines, sparser (a tidally flexed moon's double ridges puffing from their medial troughs).</summary>
 		Ridges = 3,
 	}
 
 	/// <summary>
-	/// How a biome's vents' strength moves (<see cref="BiomeVents.Timing"/>, 2026-10-25, phase I2q-b; decisions 53, 66, 90, 93, 95):
+	/// How a biome's vents' strength moves (<see cref="BiomeVents.Timing"/>):
 	/// every mode a pure function of the shared clock (and of the sky's state, itself a pure function of the world clock),
 	/// presentation only (FishMMO.Shared.Weather.VentTiming). APPEND-ONLY: stored in templates.
 	/// </summary>
@@ -30,20 +30,20 @@ namespace FishMMO.Shared.Biomes
 	{
 		/// <summary>Steady: as every vent before (a geyser keeps its own eruptions whatever this says).</summary>
 		Steady = 0,
-		/// <summary>The plume tide (decision 53): strongest at the moon's apocentre (0.3–1.0), each jet flickering in slots of its own; the Great Plume never under 0.4.</summary>
+		/// <summary>The plume tide: strongest at the moon's apocentre (0.3–1.0), each jet flickering in slots of its own; the Great Plume never under 0.4.</summary>
 		PlumeTide = 1,
-		/// <summary>Follows the sun's height (decision 66: Triton's solar-driven geysers), each plume living some days and then dormant.</summary>
+		/// <summary>Follows the sun's height (Triton's solar-driven geysers), each plume living some days and then dormant.</summary>
 		Solar = 2,
-		/// <summary>Strombolian bursts (decision 95): each vent once in 625, 1000 or 1250 s, a hashed strength, one slot in seven skipped.</summary>
+		/// <summary>Strombolian bursts: each vent once in 625, 1000 or 1250 s, a hashed strength, one slot in seven skipped.</summary>
 		Strombolian = 3,
-		/// <summary>The biome's fountain episodes (decision 93: BiomeTemplate.FountainEpisodes, else the volcanic default).</summary>
+		/// <summary>The biome's fountain episodes (BiomeTemplate.FountainEpisodes, else the volcanic default).</summary>
 		Episode = 4,
-		/// <summary>The tidal kneading (decision 90): each vent's strength follows the stress across its crack, rotating through every orbit.</summary>
+		/// <summary>The tidal kneading: each vent's strength follows the stress across its crack, rotating through every orbit.</summary>
 		Kneading = 5,
 	}
 
 	/// <summary>
-	/// Where a biome's vents stand and how their strength moves (<see cref="BiomeTemplate.Vents"/>, 2026-10-25, phase I2q-b). Read by
+	/// Where a biome's vents stand and how their strength moves (<see cref="BiomeTemplate.Vents"/>). Read by
 	/// the server, every client and the cut alike (GeothermalVents, VolcanicVents). <see cref="Today"/> (the default: Grid, Steady, no
 	/// cap) is what every biome's vents did before, to the bit.
 	/// </summary>
@@ -77,7 +77,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// One stretch of a scene's stored vent lines (2026-10-25, phase I2q-b, decision 53): a segment of a landform's line (a tiger
+	/// One stretch of a scene's stored vent lines: a segment of a landform's line (a tiger
 	/// stripe's trough, a rift's crack, a double ridge's medial trough) or a landform's pad (a summit terrace's floor: A = B, no
 	/// length), of a biome whose vents do not stand on the grid. Stored with the scene's biome map by the cut
 	/// (<see cref="SceneBiomeMap.VentLines"/>), so the server, every client and the cut's carve and heat read the same lines.
@@ -123,21 +123,21 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A scene's stored vent lines (2026-10-25, phase I2q-b, decision 53: "IceStripes.Of(map)"): the tiger stripes of an ice moon and
+	/// A scene's stored vent lines ("IceStripes.Of(map)"): the tiger stripes of an ice moon and
 	/// every other stored line a vented biome's vents follow, made at the cut from its landforms (<see cref="FromLandforms"/>), stored
 	/// with the biome map and read by the vents (FishMMO.Shared.Weather.GeothermalVents, VolcanicVents) and the heat mask
 	/// (<see cref="Heat"/>). Pure, apart from <see cref="Of"/> reading a map.
 	/// </summary>
 	public static class IceStripes
 	{
-		/// <summary>The heat on a fissure's floor (decision 53: 1), and how far it reaches per metre of its half width, within these bounds, m.</summary>
+		/// <summary>The heat on a fissure's floor (1), and how far it reaches per metre of its half width, within these bounds, m.</summary>
 		public const float FloorHeat = 1f, ReachPerHalf = 12f, LeastReach = 20f, MostReach = 300f;
 		/// <summary>A pad's heat at its middle, and how far past its radius it reaches, m.</summary>
 		public const float PadHeat = 0.9f, PadReach = 20f;
 
 		private static readonly IReadOnlyList<VentLine> none = new VentLine[0];
 
-		/// <summary>The map's stored vent lines (none on a map cut before 2026-10-25, or with no biome laid out on lines).</summary>
+		/// <summary>The map's stored vent lines (none on a map cut by an older generator, or with no biome laid out on lines).</summary>
 		public static IReadOnlyList<VentLine> Of(SceneBiomeMap map)
 		{
 			return map != null && map.VentLines != null ? map.VentLines : none;
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The heat of the lines for the heat mask (decision 53, I2q's moreHeat): a segment warms its floor to <see cref="FloorHeat"/>
+		/// The heat of the lines for the heat mask (the moreHeat): a segment warms its floor to <see cref="FloorHeat"/>
 		/// falling to nothing <see cref="ReachPerHalf"/> half widths out (within 20–300 m); a pad <see cref="PadHeat"/> out past its radius.
 		/// </summary>
 		public static List<BiomeHeatSource> Heat(IReadOnlyList<VentLine> lines)

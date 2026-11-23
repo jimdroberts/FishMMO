@@ -102,7 +102,7 @@ namespace FishMMO.UnitTests
 				"Beyond the cap, far: still every 2nd tick. The 4- and 8-tick far bands this table used to carry " +
 				"are what rendered as far-field NPCs teleporting.");
 
-			/* The pre-2026-09-02 table, to show both that bands still ascend and that the ceiling
+			/* The old table, to show both that bands still ascend and that the ceiling
 			 * now applies to whatever is configured. */
 			ObserverStreamingPolicy.SetLodBands(new[]
 			{

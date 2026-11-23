@@ -127,7 +127,7 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// Where a scene object's generated name comes from (<see cref="SceneObjectNamer"/>): the Naming module's name generator,
-	/// installed into <see cref="SceneObjectNames.Source"/> (Phase 4 of the core and modules plan, 2026-11-18). The server
+	/// installed into <see cref="SceneObjectNames.Source"/>. The server
 	/// resolves the seed, the gender and the place; both peers then build the same name from them.
 	/// </summary>
 	public interface ISceneObjectNameSource

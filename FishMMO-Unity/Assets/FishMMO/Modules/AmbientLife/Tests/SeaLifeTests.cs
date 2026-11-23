@@ -210,7 +210,7 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		/// <summary>
-		/// The sea life weighed per biome (2026-10-16, I4b): every biome template's sea life (the weights the World Design module's
+		/// The sea life weighed per biome: every biome template's sea life (the weights the World Design module's
 		/// authoring writes from its spec) places exactly the groups the kinds' own lists of biome names and preferred weights placed before, for
 		/// every biome, every kind and three temperatures (the seeds are fixed, so the groups are compared one for one).
 		/// </summary>

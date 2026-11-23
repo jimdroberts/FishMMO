@@ -181,7 +181,7 @@ namespace FishMMO.Client
 			Active = composed.Enabled;
 			/* No fog is written as exponential fog at no density, never as fog switched off: switched off, URP draws every
 			 * lit shader without FOG_EXP, so each clear spell and each weather's start flipped every material to another
-			 * shader variant, which the editor compiled then and there in Play (2026-10-18). Density 0 fogs nothing. */
+			 * shader variant, which the editor compiled then and there in Play. Density 0 fogs nothing. */
 			if (!composed.Enabled)
 			{
 				composed.Enabled = true;

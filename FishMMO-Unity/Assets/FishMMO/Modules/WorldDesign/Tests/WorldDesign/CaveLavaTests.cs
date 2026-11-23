@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Molten lava in the lava tubes (<see cref="CaveLava"/>, CaveSystem.Lava.cs, 2026-10-20: "Lava caves/tunnels/tubes should
+	/// Molten lava in the lava tubes (<see cref="CaveLava"/>, CaveSystem.Lava.cs: "Lava caves/tunnels/tubes should
 	/// have more lava? lava pits? magma? etc?"): most tubes run molten and the rest stay as they were; the plan is the same
 	/// each time and after storage; rivers run downhill in their passages; every body lies in the bed the field cut for it,
 	/// under the floor beside it; every way through a molten tube is still walked, dry; and a cooled tube, or any other cave,

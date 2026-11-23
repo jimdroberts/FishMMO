@@ -169,7 +169,7 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// Air thinner than this share of our own is THIN (2026-10-25, I2q-b, decisions 53/66: Triton, Mars): a plume rises on its own
+		/// Air thinner than this share of our own is THIN (Triton, Mars): a plume rises on its own
 		/// heat and then lies over downwind, and a fumarole is a short jet rather than a hanging plume.
 		/// </summary>
 		public const float ThinAirRelative = 0.02f;
@@ -180,7 +180,7 @@ namespace FishMMO.Shared.Weather
 		public static bool IsThin(in PlanetAir planet) => planet.HasAir && planet.AirRelative < ThinAirRelative;
 
 		/// <summary>
-		/// Where a plume's top stands from its vent as DRAWN (2026-10-25, I2q-b, decision 53; presentation only, the fallout keeps
+		/// Where a plume's top stands from its vent as DRAWN (presentation only, the fallout keeps
 		/// <see cref="Plume.TopOffset"/>): in thin air it leans downwind by up to <see cref="ThinLean"/> × its height, the more the
 		/// thinner the air, never less than its own lean; in calm or thick air its own lean. Pure.
 		/// </summary>

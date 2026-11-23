@@ -14,7 +14,7 @@ namespace FishMMO.Client
 	/// one <see cref="Graphics.RenderMeshIndirect"/> call each. The draws then render through the SRP Batcher (the indirect
 	/// twins' DOTS_INSTANCING_ON variants), where a material change within one shader variant is a constant-buffer bind
 	/// (SRPBRender.ApplyShader) rather than a full material set-up (StdRender.ApplyShader, ~6-7 µs a draw: render-pass
-	/// attribution 2026-10-27). Off (<see cref="UseBrg"/>, probe variant `nobrg`) is today's path, unchanged.
+	/// attribution). Off (<see cref="UseBrg"/>, probe variant `nobrg`) is today's path, unchanged.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -28,7 +28,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Commands</b>: one per laid-out command (model, level, view, part) with its material (its own clone, or its look
 	/// family's with the family's pooled mesh, TerrainGpuRenderer.Looks.cs — the table row rides the pooled uv3 as on the
-	/// RenderMeshIndirect path; measured 2026-10-28, the SRP Batcher still pays a pipeline change a material, so the families
+	/// RenderMeshIndirect path;, the SRP Batcher still pays a pipeline change a material, so the families
 	/// matter here as much), its mesh, the args entry FishFinalize fills
 	/// (startInstance 0 on every API: DOTS adds the command's visibleOffset itself), visibleOffset = its slot's base. A
 	/// primed lit command also gets its depth prime. The camera's culling callback emits the camera view's wanted
@@ -53,11 +53,11 @@ namespace FishMMO.Client
 
 		/// <summary>Whether this platform can: compute, and a raw-buffer BatchRendererGroup (the GPU Resident Drawer's test).</summary>
 		/// <remarks>
-		/// WebGPU included since 2026-11-01: its DOTS variants drop the material and user metadata cbuffers there
+		/// WebGPU included: its DOTS variants drop the material and user metadata cbuffers there
 		/// (FishWeatherLitInput.hlsl, FishIndirectInstancing.hlsl), which brought the lit fragment from 13 uniform buffers to
 		/// within WebGPU's guaranteed 12 (WebGpuUniformBudgetTests). On WebGPU every RenderMeshIndirect submission re-applies
 		/// its whole pass, re-uploading every constant buffer through a linear scratch-page scan; the batch group's draws go
-		/// through the SRP Batcher instead (measured 2026-11-01).
+		/// through the SRP Batcher instead .
 		/// </remarks>
 		public static bool SupportsBrg(GraphicsDeviceType api, bool compute, BatchBufferTarget target)
 			=> compute && target == BatchBufferTarget.RawBuffer;

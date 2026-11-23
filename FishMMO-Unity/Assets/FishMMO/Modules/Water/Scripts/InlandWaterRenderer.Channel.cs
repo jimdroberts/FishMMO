@@ -4,7 +4,7 @@ using FishMMO.Shared.Biomes;
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// The inland water as what grows in it sees it (decision 35 (a)/(k), 2026-10-18): a small window round the camera of where a
+	/// The inland water as what grows in it sees it: a small window round the camera of where a
 	/// lake's or a river's surface stands and how its current runs, published for the aquatic plants (FishChannelFlow.hlsl), so a
 	/// weed rooted in a river streams down ITS current and stays under ITS surface rather than being kept under the sea's.
 	/// </summary>

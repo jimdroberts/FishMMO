@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decisions 10 and 13 of the biome suite (2026-10-15, 2026-10-16): the water and ice biomes, the rock a cave is cut in
+	/// Decisions 10 and 13 of the biome suite: the water and ice biomes, the rock a cave is cut in
 	/// and the paving of each biome's streets moved onto the biome template, a cave's formations are its shell's rock, and
 	/// the canyon walls stand in the rock their biome takes, at the cut and again on a repaint. Every value the template now
 	/// carries is what the code decided before (a water biome by its name, a cave's shell by its form), so authoring changes
@@ -82,7 +82,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				if (role == BiomeWaterRole.IceShelf)
 				{
-					// Opt-in (decision 68, I2s): no name stands in and no spec biome holds it until the owner chooses the scenes it may change.
+					// Opt-in: no name stands in and no spec biome holds it until the owner chooses the scenes it may change.
 					Assert.That(BiomeTemplateArt.LegacyWaterBiomeName(role), Is.Null);
 					Assert.That(holders, Is.Empty, role.ToString());
 					continue;
@@ -92,13 +92,13 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── Cave shells and their formations (decision 13, 2026-10-16) ──
+		// ── Cave shells and their formations ──
 
-		/// <summary>The rock CaveShaper.RockOf cut a cave in before 2026-10-16 (copied literally), the ground's being the biome's rule there.</summary>
+		/// <summary>The rock CaveShaper.RockOf cut a cave in formerly (copied literally), the ground's being the biome's rule there.</summary>
 		private static string OldShell(CaveForm form, Func<string> groundRock)
 			=> form == CaveForm.LavaTube ? "Basalt" : form == CaveForm.IceCave ? CliffRocks.Ice : groundRock();
 
-		/// <summary>The rock PointOfInterestCaveDressing.SetFor gave each cave form's formations before 2026-10-15 (copied literally).</summary>
+		/// <summary>The rock PointOfInterestCaveDressing.SetFor gave each cave form's formations formerly (copied literally).</summary>
 		private static string OldFormationRock(CaveForm form)
 		{
 			switch (form)
@@ -129,7 +129,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void SpecCaveShells_CutWhatTheShaperCut_ForEveryBiomeAndGeology()
 		{
-			// The every-form lists (a sea hall's, 2026-10-26 I2n-b, only where a file names one: BiomeCaveInteriorsTests' sea-hall fixture).
+			// The every-form lists (a sea hall's, only where a file names one: BiomeCaveInteriorsTests' sea-hall fixture).
 			var forms = Array.FindAll((CaveForm[])Enum.GetValues(typeof(CaveForm)), f => BiomeCaveInteriors.InEveryList((BiomeCaveForm)f));
 			Assert.That(forms.Length, Is.EqualTo(6));
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
@@ -190,7 +190,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A cave's formations are its shell's rock (2026-10-16), for every biome, geology and form: the rock the dressing
+		/// A cave's formations are its shell's rock, for every biome, geology and form: the rock the dressing
 		/// is handed is the shell's (glacier ice's formations being water ice's), and the fallen rock and spoil are drawn in
 		/// that very rock wherever it is a crust rock.
 		/// </summary>
@@ -242,7 +242,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				if (form == CaveForm.SeaHall)
 				{
-					// New on 2026-10-26 (I2n-b): its ice stands in as an ice cave's does (SeaHallTests).
+					// New: its ice stands in as an ice cave's does (SeaHallTests).
 					continue;
 				}
 				string old = OldFormationRock(form);
@@ -318,7 +318,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A per-layer slice map reaches the shader through the layer table's paths row (TerrainLayerTable.RowPaths): layer i
 		/// in column i, for every layer an index map can name, −1 past the map; no map at all (a scene cut before the cobbles
-		/// had one) is −1 everywhere. (Until 2026-10-16 four layers to a vector of an eight-vector uniform array: 32 layers.)
+		/// had one) is −1 everywhere. (Formerly four layers to a vector of an eight-vector uniform array: 32 layers.)
 		/// </summary>
 		[Test]
 		public void CobbleTable_PacksALayerToAColumn()
@@ -534,7 +534,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			RegexOptions.CultureInvariant);
 
 		/// <summary>
-		/// No cut-time code picks a biome for a part by its name (2026-10-15: the water role replaced the last of them): the
+		/// No cut-time code picks a biome for a part by its name (the water role replaced the last of them): the
 		/// scene generator, the terrain painters and placers, hydrology and every point-of-interest builder. Naming code may
 		/// read names; BiomeTemplateArt holds the one logged fallback (the old name of a role no template holds yet).
 		/// </summary>

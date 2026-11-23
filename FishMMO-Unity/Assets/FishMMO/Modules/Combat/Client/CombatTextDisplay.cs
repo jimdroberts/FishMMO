@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The Combat module's combat text (2026-11-20): floating damage and heal numbers (the server's reports and this client's
+	/// The Combat module's combat text: floating damage and heal numbers (the server's reports and this client's
 	/// own predictions), refusals ("Evade", "Immune"), and the death dialog closed on a resurrect. A client service
 	/// (<see cref="ClientServices"/>); it was the core's ClientCombatDisplay, whose milestone label stayed in the core as
 	/// <see cref="ClientMilestoneDisplay"/>.

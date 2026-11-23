@@ -69,7 +69,7 @@ float4 Frag(V i):SV_Target {
 					Pass(common + "float4 Frag(V i):SV_Target{return 1;}") +
 					Pass("#define _LIGHT_COOKIES 1\n" + common + sample) +
 					Pass("#include_with_pragmas \"" + Header + "\"\n" + common + sample) +
-					// The water's cloud light is the Water module's (Phase 4, 2026-11-18): checked when it is installed.
+					// The water's cloud light is the Water module's: checked when it is installed.
 					(water ? Pass("#include_with_pragmas \"" + Header + "\"\n" + common +
 						"#include \"Assets/FishMMO/Modules/Water/Shaders/FishWaterSun.hlsl\"\n" +
 						"float4 Frag(V i):SV_Target{return float4(FishWaterCloudLight(float3(0,0,0),.85),1);}") : string.Empty) + "}}";

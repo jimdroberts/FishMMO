@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// A character with no ability spawner assigned. "a lesser fire elemental" shipped that way and every cast threw in
-	/// AbilityObject.SimulatedSpawnerPose (1,438 times on the live scene server, 11-16); the controller now finds one.
+	/// AbilityObject.SimulatedSpawnerPose (1,438 times on the live scene server); the controller now finds one.
 	/// </summary>
 	[TestFixture]
 	public class AbilitySpawnerFallbackTests
@@ -62,7 +62,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void EveryCharacterPrefabHasASpawnPoint()
 		{
-			/* The ability controller is a part every character gets as it wakes (2026-11-21), so no prefab assigns its
+			/* The ability controller is a part every character gets as it wakes, so no prefab assigns its
 			 * spawner: the part finds the child named AbilitySpawnPoint (and falls back to the character itself). Every
 			 * character prefab carries that child, so a cast spawns where the prefab's author put it. */
 			int characters = 0;

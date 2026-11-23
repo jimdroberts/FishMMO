@@ -222,6 +222,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Character events
 			IPlayerCharacter.OnTeleport += IPlayerCharacter_OnTeleport;
+
+			// Shared code (travel spells) moves characters through this system.
+			InstallTransferHost();
 			ICharacterDamageController.OnResurrected += CharacterDamageController_OnResurrectedFromTheDeck;
 
 			ConfigureSceneLoadTimeouts();
@@ -238,7 +241,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.RegisterPeriodicCallback(30f, OnPeriodicRespawnResurrectSweep);
 				periodicSystem.RegisterPeriodicCallback(sessionLeaseRefreshRate, OnPeriodicSessionLeaseRefresh);
 				periodicSystem.RegisterPeriodicCallback(PendingFlushRetryIntervalSeconds, OnPeriodicPendingFlushRetry);
-				periodicSystem.RegisterPeriodicCallback(TransferDisconnectSweepIntervalSeconds, OnPeriodicTransferDisconnectSweep);
 				periodicSystem.RegisterPeriodicCallback(SceneLoadTimeoutSweepIntervalSeconds, OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.RegisterPeriodicCallback(CombatLingerSweepIntervalSeconds, OnPeriodicCombatLingerSweep);
 				periodicSystem.RegisterPeriodicCallback(CharacterResidencySweepIntervalSeconds, OnPeriodicCharacterResidencySweep);
@@ -294,6 +296,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Character events
 			IPlayerCharacter.OnTeleport -= IPlayerCharacter_OnTeleport;
+			UninstallTransferHost();
 			ICharacterDamageController.OnResurrected -= CharacterDamageController_OnResurrectedFromTheDeck;
 
 			// Static registry: a command left behind outlives this ScriptableObject and would
@@ -311,7 +314,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicRespawnResurrectSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSessionLeaseRefresh);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicPendingFlushRetry);
-				periodicSystem.UnregisterPeriodicCallback(OnPeriodicTransferDisconnectSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicSceneLoadTimeoutSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCombatLingerSweep);
 				periodicSystem.UnregisterPeriodicCallback(OnPeriodicCharacterResidencySweep);
@@ -329,8 +331,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			characterResidencyDeadlines.Clear();
 			sceneLoadDeadlines.Clear();
 			startScenesAckedClientIds.Clear();
-			pendingTransferDisconnects.Clear();
 			suppressCombatLingerClientIds.Clear();
+			pendingHandOffCharacterIDs.Clear();
 			authCallbackLastTimeByAccount.Clear();
 			sceneUnloadLastTimeByClientId.Clear();
 			validatedSceneLastTimeByClientId.Clear();

@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>River</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry River()
 		{
-			// The great working river of the Middle Rhine and Moselle (biome round, approved 2026-10-18, authored 2026-10-26): a strong
+			// The great working river of the Middle Rhine and Moselle: a strong
 			// grey-green current over multicoloured Rhine gravel armoured into riffles, dark scour-pools under the bends, fennel-weed and
 			// ribbon-weed combed downstream, olive-black torrent algae on the reef ribs, golden point-bar sand, whole uprooted trees stranded
 			// on the bars, and a wet margin of galingale, water pepper and the tall Stromtal flowers under crack-willows; dark greywacke
@@ -19,9 +19,9 @@ namespace FishMMO.Shared.WorldDesign
 			// keeps a hoard (Rhinegold glowing in the deepest pool), a siren on the high rock, the Old Wels under the weir, the soul ferry.
 			// Where it shows: the bed (riffle, run, pool and reef by depth and current, decisions 35 and h), the bars, the scoured wet margin
 			// and the mid-channel islets. The banks' trees and grasses are the shore biomes'.
-			// LATER (I9 T1): every ground and object texture as River's own variant of its recipe (decision 12); the wet margin's tracks
+			// LATER: every ground and object texture as River's own variant of its recipe; the wet margin's tracks
 			// motif (a granular stand-in today).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Rhinegold + Salmonrun.
+			// LATER (no spec column yet): rare looks Rhinegold + Salmonrun.
 			return E("River", L(Ground.MudFloodLoam,
 					// The islets and exposed margin: crack-willow pollards (LATER I9b P27: the pollard and leaning forms), the Stromtal
 					// flowers out of the cold band, dewberry, flood brash, Rhine pebbles, greywacke chips, beaver stumps.
@@ -39,13 +39,13 @@ namespace FishMMO.Shared.WorldDesign
 					// d2: the bank ledge — greywacke ribs on the steeper ground.
 					D(Ground.GreywackeBankLedge, 64f, 4f, 24f, 90f, Stones(SmallRocks("Greywacke"), 3f),
 						Outcrops("Greywacke ribs", 0.01f, 20f, F(RegionalRocks.Greywacke, "Ribs"), 60f)),
-					// d3: the cold river's scour banks — frost-shoved cobbles (temperature band, decision 29), the bar's gravel head.
+					// d3: the cold river's scour banks — frost-shoved cobbles (temperature band), the bar's gravel head.
 					D(Ground.GravelScourBank, 40f, 3f, 2f, 20f, Plants("FlowersFloodbank", 8f, 160, 25f), Plants("DebrisBrash", 10f, 128, 15f),
 						Stones(Pebbles("Rhine"), 10f), Stones(Pebbles("Imbricated"), 4f)).Temp(-1f, -0.25f)),
 				C(Ground.GreywackeNarrowsCliff, 42f), Ground.GravelArmourRiffle, Ground.GravelRhineRun)
 				// The run (0.6-2 m, the riverbed slot): fennel-weed and ribbon-weed combed downstream, starwort in the slack, Rhine pebbles, the
-				// waterlogged trunks, the midstream stacks and the bedrock reefs. Speeds are the river's own (decision 35 (k): flow sway).
-				// LATER (I9b/I7): the eel baskets near villages and the sunk millstone (a boulder piece).
+				// waterlogged trunks, the midstream stacks and the bedrock reefs. Speeds are the river's own (flow sway).
+				// LATER: the eel baskets near villages and the sunk millstone (a boulder piece).
 				.UnderRiver(Flowing(Sea("FennelWeed", 10f, 0.6f, 2f, 160, 25f), 0f, 1.2f), Sea("RibbonWeed", 8f, 0.3f, 1.5f, 160, 25f),
 					Flowing(Sea("Starwort", 6f, 0f, 0.8f, 128, 20f), 0f, 0.4f), SeaStones(Pebbles("Rhine"), 10f, 0f, 0f),
 					Sea("EelBaskets", 0.05f, 0.3f, 1.5f, 96, 20f),
@@ -69,7 +69,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("detail/1", "Reeds", "GrassSedge", "GrassRush", "FlowersWet")
 				.Ways(path: Ground.PathBarTrack, road: Ground.GreywackeFordPaving, cobbles: Ground.BasaltRhenishSetts)
 				.Bars(sand: Ground.SandPointBar, gravel: Ground.GravelBleachedBar)
-				// Own rock greywacke (ribs, reefs, midstream stacks; approved Q2), accepting the roofing slate, the reef-crest quartzite and
+				// Own rock greywacke (ribs, reefs, midstream stacks), accepting the roofing slate, the reef-crest quartzite and
 				// the Eifel basalt.
 				.Accepts(RockTypes.Slate, RockTypes.Quartzite, RockTypes.Basalt)
 				.CaveShell(CaveForm.Cave, "Greywacke").CaveShell(CaveForm.Grotto, "Basalt").CaveShell(CaveForm.Mine, "Slate")
@@ -80,7 +80,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Aquatic)
 				.Water(BiomeWaterRole.River)
 				// The bank biome brings the land animals; the river has fresh water only (the grassland habitat dropped).
-				// LATER (AMBIENT-LIFE / SEA-LIFE N11): salmon at the weirs and the autumn run, sturgeon, barbel shoals, beavers, otters,
+				// LATER: salmon at the weirs and the autumn run, sturgeon, barbel shoals, beavers, otters,
 				// sandpipers and plovers on the bars, herons, dippers on cold riffles; the siren, the Old Wels, the Mouse Tower rats, the soul ferry.
 				.Wildlife(BiomeHabitat.FreshWater)
 				.GrowsVines(0.3f, 0.4f, 0.2f, 0.3f, ("Dodder", 1f))
@@ -118,10 +118,10 @@ namespace FishMMO.Shared.WorldDesign
 					},
 					about: "Rhenish: the Middle Rhine and Moselle's river-folk (Bach-, Kaub-, Bing-, Bopp-, Wes-, Ander-; -ach, -furt, -stein, -fels, -lei, -heim)")
 				// The river-folk's sites: ship mills and lift-nets in the current, toll keeps and the Mouse Tower on rocks, river staples, the
-				// boatmen's pillars, stone bridges, the Old Wels's hole, sunk wine barges and Roman piers, the siren rock (approved Q3, Q8:
-				// all kept rare). The bank biomes build villages and towns; the stilt, drowned-village, mine, quarry and camp kinds zeroed.
-				// LATER (I20/I19): channel and bank-straddling placement for the ship mills, lift-nets, toll keeps and staples (Placed sites
-				// weigh 0 in River cells until then), rope ferries (FerryOver) and river traffic (I17). LATER (I7): the named pieces — ship mill,
+				// boatmen's pillars, stone bridges, the Old Wels's hole, sunk wine barges and Roman piers, the siren rock
+				// (all kept rare). The bank biomes build villages and towns; the stilt, drowned-village, mine, quarry and camp kinds zeroed.
+				// LATER: channel and bank-straddling placement for the ship mills, lift-nets, toll keeps and staples (Placed sites
+				// weigh 0 in River cells until then), rope ferries (FerryOver) and river traffic. LATER: the named pieces — ship mill,
 				// toll keep, Mouse Tower, treadwheel crane, lift-net platform, rope ferry, stone bridge with a pier chapel, paved ford, log
 				// raft, Oberlaender barge, Nicholas pillar, siren rock, hoard pool, Wels hole; the variants "Ship mill", "Lift-net", "Toll
 				// island", "Mouse tower", "River staple", "Stone arches", "Ferry", "Ford". The kit's variants stand in.
@@ -131,14 +131,14 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Watermill, 1.5f), (POIType.FishingCamp, 1.2f), (POIType.Keep, 0.4f), (POIType.Tower, 0.2f), (POIType.Port, 0.4f),
 					(POIType.Shrine, 0.5f), (POIType.Bridge, 1f), (POIType.MonsterDen, 0.2f), (POIType.SunkenShip, 0.4f), (POIType.SunkenRuins, 0.35f),
 					(POIType.Landmark, 0.08f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.Crannog, 1f), (POIType.LadyOfTheLake, 1f), (POIType.NymphPool, 0.8f), (POIType.LakeMonsterLair, 1f))
 				.Favours(BiomeStructureStyle.Timber, 1.6f)
 				.Favours(BiomeStructureStyle.Stone, 1f)
 				.Favours(BiomeStructureStyle.Earth, 0f)
 				// The palette: ochre limewash in black-oak frames, slate-hung gables under altdeutsch slate, white-harled greywacke rubble on
 				// tar-black footings, basalt setts, oak-blood trim, boat-green doors, tarred canvas, wheel-and-keys banners.
-				// LATER (NEW-SURFACES): SlateHung, the Altdeutsch slate cut, harled greywacke and Trachyte as surfaces of their own; plain
+				// LATER: SlateHung, the Altdeutsch slate cut, harled greywacke and Trachyte as surfaces of their own; plain
 				// slate, stone and tinted fieldstone stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, SeaHex("#d4b070"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Slate, SeaHex("#2e3238"))

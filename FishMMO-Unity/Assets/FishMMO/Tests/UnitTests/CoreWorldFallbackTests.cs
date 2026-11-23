@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>The core's fallbacks for a project without the world modules (Phase 4 follow-ups, 2026-11-18).</summary>
+	/// <summary>The core's fallbacks for a project without the world modules.</summary>
 	public class CoreWorldFallbackTests
 	{
 		[Test]

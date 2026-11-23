@@ -9,7 +9,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The Combat module's death notice on the client (2026-11-20): the server's <see cref="DeathBroadcast"/> opens the
+	/// The Combat module's death notice on the client: the server's <see cref="DeathBroadcast"/> opens the
 	/// death dialog, a player who arrives in the world dead gets it too, and if the dialog cannot be found within its grace
 	/// period the character is respawned at its bind point rather than left stranded. Moved out of the core's Client.
 	/// </summary>

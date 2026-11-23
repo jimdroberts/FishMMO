@@ -163,7 +163,7 @@ namespace FishMMO.Client
 		/// 0 to <see cref="Cartography.MaximumDetailTier"/>) decides whether the point is known at all; every
 		/// point-of-interest tier (0 to 3, <c>PointOfInterestKinds</c>) is inside that range, and with no
 		/// Cartography provider every tier is shown. The discovery rule hides a point until the fog has
-		/// revealed its chunk; every generated point requires discovery (2026-10-10).
+		/// revealed its chunk; every generated point requires discovery.
 		/// </para>
 		/// </remarks>
 		public static void AppendPointsOfInterest(List<MapMarkerSnapshot> results, WorldSceneDetails details,
@@ -267,6 +267,9 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>The tint a Gate Stone's marker is drawn in, so it reads apart from a fast-travel waypoint (issue #241).</summary>
+		public static readonly Color GateStoneTint = new Color(0.82f, 0.72f, 1.0f, 1.0f);
+
 		/// <summary>
 		/// Adds the waypoints the character has discovered in a scene to a snapshot list.
 		/// </summary>
@@ -304,7 +307,7 @@ namespace FishMMO.Client
 					Type = MapMarkerType.Waypoint,
 					Relationship = MapRelationship.NonPlayer,
 					Icon = waypoint.Icon,
-					Tint = Color.white,
+					Tint = waypoint.IsGateStone ? GateStoneTint : Color.white,
 					Label = forWorldMap ? waypoint.Name : null,
 					Tooltip = BuildWaypointTooltip(waypoint, forWorldMap),
 					Size = WaypointSize,
@@ -323,6 +326,11 @@ namespace FishMMO.Client
 			string text = string.IsNullOrEmpty(waypoint.Description)
 				? waypoint.Name
 				: waypoint.Name + "\n" + waypoint.Description;
+			if (waypoint.IsGateStone)
+			{
+				text = "Gate Stone: " + text;
+				return forWorldMap ? text + "\nClick to select (the Gate spell's destination)" : text;
+			}
 			return forWorldMap ? text + "\nClick to select for fast travel" : text;
 		}
 

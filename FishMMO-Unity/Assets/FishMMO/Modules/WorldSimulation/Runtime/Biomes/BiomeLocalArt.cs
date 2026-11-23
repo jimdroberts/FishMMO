@@ -39,7 +39,7 @@ namespace FishMMO.Shared.Biomes
 	/// so a scene's record of where a layer came from finds the same slot here.
 	/// </para>
 	/// <para>
-	/// <b>A ground layer's own ways (2026-10-16)</b> are keyed by the ground's slot and the way's: <c>main/road</c>,
+	/// <b>A ground layer's own ways</b> are keyed by the ground's slot and the way's: <c>main/road</c>,
 	/// <c>detail/2/path</c>, <c>detail/2/path/stone</c> (<see cref="WaySlot"/>; a main or detail layer's
 	/// <see cref="TerrainTextureLayer.ways"/>). They hold a terrain layer, not a texture layer, so
 	/// <see cref="CommittedLayer"/> has none for them and <see cref="SlotsOf"/> leaves them out; a sidecar entry under
@@ -86,10 +86,10 @@ namespace FishMMO.Shared.Biomes
 		public const string SlotBarGravel = "sediment/gravel";
 		/// <summary>
 		/// The prefix of a climate variant's ground override (<see cref="VariantSlot"/>: <c>variant/frozen/main</c>,
-		/// <c>variant/scorched/detail/1</c>), 2026-10-18.
+		/// <c>variant/scorched/detail/1</c>).
 		/// </summary>
 		public const string SlotVariant = "variant/";
-		/// <summary>The prefix of a biome's extra bed layers by depth (<see cref="BedSlot"/>: <c>bed/0</c> … <c>bed/2</c>), 2026-10-18.</summary>
+		/// <summary>The prefix of a biome's extra bed layers by depth (<see cref="BedSlot"/>: <c>bed/0</c> … <c>bed/2</c>).</summary>
 		public const string SlotBed = "bed/";
 
 		/// <summary>The slot key of a biome's extra bed layer <paramref name="index"/> (<see cref="BiomeTemplate.BedTextureLayers"/>).</summary>
@@ -489,7 +489,7 @@ namespace FishMMO.Shared.Biomes
 			keys.Add(SlotCobbles);
 			keys.Add(SlotBarSand);
 			keys.Add(SlotBarGravel);
-			// Each climate variant's ground overrides that are listed (2026-10-18): texture layers of the biome like any other.
+			// Each climate variant's ground overrides that are listed: texture layers of the biome like any other.
 			if (biome.ClimateVariants != null)
 			{
 				for (int v = 0; v < biome.ClimateVariants.Count; v++)
@@ -505,7 +505,7 @@ namespace FishMMO.Shared.Biomes
 					}
 				}
 			}
-			// The extra bed layers by depth (2026-10-18), none until a round adds them.
+			// The extra bed layers by depth, none until a round adds them.
 			int beds = biome.BedTextureLayers != null ? biome.BedTextureLayers.Count : 0;
 			for (int i = 0; i < beds; i++)
 			{

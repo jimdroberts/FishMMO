@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The open sea of a scene (2026-10-20: "Docks, shipyards, etc … land on lakes and inlets instead of open ocean. Ships are
+	/// The open sea of a scene ("Docks, shipyards, etc … land on lakes and inlets instead of open ocean. Ships are
 	/// only on seas and the FFT ocean."): the ground under sea level that the ocean past the scene's edge reaches through water
 	/// a ship could pass, as against a basin under sea level shut in by land or shallows (a lagoon in the drawn ocean, calm as a
 	/// lake) or an inlet's narrows.

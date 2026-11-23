@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests.Celestial
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Built to the shape of the Soluris system, where the problem was found (2026-09-26): Arthis is a
+	/// Built to the shape of the Soluris system, where the problem was found: Arthis is a
 	/// small world with a six-hour day, and its moon Helis orbits under fourteen of its radii out. The
 	/// equilibrium tide that raises is ninety metres. The water clamped that to ±2.5 m, so the sea sat
 	/// at one limit for hours and fell five metres almost at once — the whole sea visibly jumping with

@@ -1057,7 +1057,7 @@ namespace FishMMO.Shared
 			/* The viewer's own pets, inside the ceiling. The owner commands them and reads their health on the pet panel;
 			 * evicted by a crowd, a pet was despawned on its owner's client and spawned again as a new object, and the
 			 * panel stayed on the old one: frozen at full health while the pinned target frame, reading the new one, showed
-			 * it at 65% (2026-11-18). */
+			 * it at 65%. */
 			bool ownPet = viewer.Character != null &&
 				observed.Character is NPC companion &&
 				companion.CompanionOwner != null &&

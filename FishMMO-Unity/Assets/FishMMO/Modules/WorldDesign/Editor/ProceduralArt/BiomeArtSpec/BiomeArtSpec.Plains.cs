@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Plains</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Plains()
 		{
-			// The High Plains mixed-grass prairie in its medieval centuries (biome round, approved 2026-10-18, authored 2026-10-26): an
+			// The High Plains mixed-grass prairie in its medieval centuries: an
 			// endless rolling sea of blue-grey wheatgrass and copper little bluestem, curly buffalograss and eyelash-headed grama on the
 			// uplands, wine-purple big bluestem in the moist draws, coneflower, blazing star and wild sunflowers, soapweed yucca on the
 			// pale sandhills, buffalo wallows and rain-filled playas in the hollows, prairie-dog towns, and in the south the brick-red
@@ -21,8 +21,8 @@ namespace FishMMO.Shared.WorldDesign
 			// sunspoke crystals in the red caves. Reaches by climate band: north (t < 0.2) wheatgrass, bur oak and prairie smoke; south
 			// grama, red beds, Osage orange and shinnery oak; east (h ≥ −0.05) the tallgrass draws widen; west (h ≤ −0.15) shortgrass,
 			// yucca and prickly pear. Grassland keeps the loess and soda pans, Steppe the feather grass and yurts.
-			// LATER (I9): every ground and object texture as the Plains' own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Ghostgrass V(0.11, 0.14, 0.94) and Sunwheel V(0.09, 0.95, 0.98).
+			// LATER: every ground and object texture as the Plains' own variant of its recipe.
+			// LATER (no spec column yet): rare looks Ghostgrass V(0.11, 0.14, 0.94) and Sunwheel V(0.09, 0.95, 0.98).
 			return E("Plains", L(Ground.GrassDryMixedPrairie,
 					// The mixed-grass sward: wheatgrass in the north, little bluestem everywhere, grama and buffalograss between.
 					Band(Grass("GrassWheatgrass", 26f), -1f, 0.3f), Grass("GrassLittleBluestem", 12f), Grass("GrassGrama", 8f),
@@ -37,16 +37,16 @@ namespace FishMMO.Shared.WorldDesign
 					Bush("Leadplant", 0.3f),
 					// The lone giant cottonwoods (landmarks, eagle nests) and the thunder-stones the lightning finds.
 					Trees(0.0008f, 150f, 15f, "PlainsCottonwood"),
-					// LATER (I7): the thunder-stone (a glassed red boulder in a fulgurite ring); the round red-bed boulder stands in.
+					// LATER: the thunder-stone (a glassed red boulder in a fulgurite ring); the round red-bed boulder stands in.
 					Boulders(0.0003f, 300f, Boulder("Redbed", "Round"))),
 				Ds(
-					// d0: shortgrass sod (≤ 12°) of buffalograss and grama, prairie-dog towns, prairie turnip. LATER (GROUND-BANDS): the
+					// d0: shortgrass sod (≤ 12°) of buffalograss and grama, prairie-dog towns, prairie turnip. LATER: the
 					// draft's either-or band (west h ≤ −0.1 OR south t ≥ 0.2) and its upland height; the dry band stands in.
 					D(Ground.GrassShortgrassSod, 120f, 2.5f, 0f, 12f, Band(Grass("GrassBuffalo", 40f), 0.1f, 1f), Grass("GrassGrama", 30f), Plants("FlowersPrairieSmoke", 5f, 180),
 						Plants("HerbPrairieTurnip", 0.8f), Plants("DebrisBison", 2f, 128), Band(Plants("PricklyPearPlains", 1f), -1f, 1f, -1f, -0.1f), Bush("Leadplant", 0.3f),
 						Moded(Plants("DebrisDogtownMound", 0.5f, 128), BiomeScatterMode.ClusteredFields(80f, 0.45f))).Humid(-1f, -0.1f),
 					// d1: the tallgrass draws (≤ 8°, the low ground, east of h −0.12): big bluestem and switchgrass, the cottonwood galleries
-					// and bur-oak openings, chokecherry, sumac and sand plum. LATER (SCATTER-MODES): the galleries within 40 m of a river and
+					// and bur-oak openings, chokecherry, sumac and sand plum. LATER: the galleries within 40 m of a river and
 					// the driftwood on its bars (a near-water anchor); the draws stand in.
 					With(D(Ground.GrassMeadowTallgrass, 64f, 2f, 0f, 8f, Band(Grass("GrassBigBluestem", 26f), -1f, 1f, -0.15f, 1f), Grass("GrassSwitchgrass", 10f),
 						Band(Grass("GrassWheatgrass", 6f), -1f, 0.3f), Plants("FlowersConeflower", 4f, 180), Plants("FlowersSunflower", 4f, 180),
@@ -68,7 +68,7 @@ namespace FishMMO.Shared.WorldDesign
 					// d4: the playa floors (≤ 2°, low ground; the Playa landform paints them): smartweed, coreopsis and water-clover at the rims.
 					With(D(Ground.ClayPlayaFloor, 140f, 4f, 0f, 2f, Plants("FlowersPlaya", 12f, 180)), l => l.Height = new Vector2(0f, 0.47f)),
 					// d5: the Gyp Hills' red slopes (18–38°, the south only): little bluestem, prickly pear, yucca, sumac, red cedar; buttes
-					// and slumps, the red beds' own chips; a red trail over them. LATER (NEW-ROCK-TYPES): the barite rose-rock pebbles; the red
+					// and slumps, the red beds' own chips; a red trail over them. LATER: the barite rose-rock pebbles; the red
 					// beds' pebbles stand in.
 					D(Ground.RedbedGypSlope, 64f, 3f, 18f, 38f, Grass("GrassLittleBluestem", 10f), Plants("FlowersConeflower", 3f, 180), Plants("PricklyPearPlains", 2f),
 						Plants("YuccaSoapweed", 1.5f), Bush("SmoothSumac", 0.4f), Trees(0.003f, 40f, 38f, "RedCedar"),
@@ -99,14 +99,14 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveShell(CaveForm.Grotto, "Redbed")
 				.CaveShell(CaveForm.Mine, "Redbed")
 				.Crystals((BiomeCaveCrystalKind.BariteRose, 0.4f), (BiomeCaveCrystalKind.SatinSpar, 0.35f), (BiomeCaveCrystalKind.Sunspoke, 0.25f))
-				// The sunspoke's warm gold pulse; the pecked sun-sign rune stones at the shrines warm gold too. LATER (I6i-b G6): the
+				// The sunspoke's warm gold pulse; the pecked sun-sign rune stones at the shrines warm gold too. LATER: the
 				// thunder-stone's violet flicker after rain (a second way mode); the warm pulse stands in.
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse, warm: true)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Pulse, warm: true)
 				.Look(BiomeLookClass.Arid)
 				// Approved: rivers, oxbows and playas bring the cranes, ducks, frogs and turtles.
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): bison herds wallowing and rubbing, pronghorn, prairie dogs at their mounds, burrowing owls, booming
+				// LATER: bison herds wallowing and rubbing, pronghorn, prairie dogs at their mounds, burrowing owls, booming
 				// prairie-chicken leks, sandhill-crane flocks, meadowlarks, swift fox, coyote, wolves trailing the herds, ferruginous hawk,
 				// golden eagle, horned lizard, grasshopper clouds, fireflies in the draws; the spirit herd and the horned serpent.
 				// Approved: dry moats (the bastioned villages' ditch); the Platte's tawny water, sandbars showing.
@@ -172,7 +172,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.DungeonEntrance, 0.2f), (POIType.BossLair, 0.2f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.RiverMouth, 1f),
 					(POIType.Delta, 1f), (POIType.Peak, 1f), (POIType.Pass, 1f), (POIType.Gorge, 1f), (POIType.Mesa, 1f), (POIType.Butte, 1f),
 					(POIType.Island, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.4f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HauntedManor, 1f), (POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f),
 					(POIType.WreckedCaravan, 0.6f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 0.8f),
@@ -222,11 +222,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Waystation, "Inn", 1f)
 				.Prefers(POIType.Waystation, "Stone Inn", 0f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): the Plains' signature pieces — the domed earth lodge on four posts with its covered entry (round plan,
-				// decisions 31, I28), the bastioned village, the tipi ring, the mound town with its platform-mound temple, plaza and chunkey
+				// (the fantasy set's variants end here)
+				// LATER: the Plains' signature pieces — the domed earth lodge on four posts with its covered entry (round plan),
+				// the bastioned village, the tipi ring, the mound town with its platform-mound temple, plaza and chunkey
 				// yard, the cedar-post circle, the sun wheel (dawn glow), the buffalo jump with its cairn drive lanes, old tipi rings, burial
 				// scaffolds, stone effigies, the bull-boat landing, corn stages and cache pits, the sweat lodge, the fair ground, the sod
 				// watch knoll, the thunder-stone, the serpent pool, the spirit-herd trail (approved); until then the kit's variants below

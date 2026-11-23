@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// In a player, <see cref="Shader.Find"/> only knows the shaders built into the player (scenes in the build list,
 	/// Resources, Always Included). The client's world content (terrain arrays, the weather profile, scenes) arrives
 	/// in Addressable bundles, and its shaders were not found by name there even once loaded: on the web build
-	/// (2026-11-08) the stored terrain index maps were not uploaded because a lookup by name returned null for the
+	/// the stored terrain index maps were not uploaded because a lookup by name returned null for the
 	/// shader the loaded terrain set carried, and passing the set's reference fixed it. The editor and the benchmark
 	/// players never showed it: there every shader is reachable by name.
 	/// </para>

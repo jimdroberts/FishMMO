@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// One linked cave as the glow modes read it (2026-10-26, phase I2n-c, decision 86 (h)): the box of its air (the union of its
+	/// One linked cave as the glow modes read it: the box of its air (the union of its
 	/// cave-life spots, padded) and the glow table's row of the interior biome dressing its inside, so a crystal or a glow-worm colony
 	/// in it moves by the INTERIOR's glow mode (an EYELID, …) and not by the host land's over it.
 	/// </summary>

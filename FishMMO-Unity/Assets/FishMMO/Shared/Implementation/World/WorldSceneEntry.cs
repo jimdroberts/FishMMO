@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// What the core asks of a world scene's entry in the world's design (the world atlas): only what the game itself runs on.
 	/// </summary>
 	/// <remarks>
-	/// Core (Phase 4 of the core and modules plan, 2026-11-17). Where a scene lies on its planet, its climate, its biomes and
+	/// Core. Where a scene lies on its planet, its climate, its biomes and
 	/// its weather belong to the world modules, which read their own entry; the core needs a scene's capacity and which way
 	/// north lies on its map. Without a world module installed no scene has an entry, and every scene keeps its own cap
 	/// and +Z as north.

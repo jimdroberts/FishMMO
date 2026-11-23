@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// What the core does with a character's buffs (2026-11-20: buffs are the Buffs module's, whose controller implements
+	/// What the core does with a character's buffs (buffs are the Buffs module's, whose controller implements
 	/// this): weather exposure applies and removes its buffs, the target frame reads the visible strip, and the server
 	/// honours a player's dismiss.
 	/// </summary>
@@ -69,7 +69,7 @@ namespace FishMMO.Shared.Core
 	}
 
 	/// <summary>
-	/// The character's buffs in the save (2026-11-20). The core writes and reads the rows with the character's own under
+	/// The character's buffs in the save. The core writes and reads the rows with the character's own under
 	/// its claims and version; the module's controller converts between them and live buffs.
 	/// </summary>
 	public interface IBuffPersistence : ICharacterBehaviour

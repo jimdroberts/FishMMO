@@ -22,7 +22,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The shapes added for the drafts written after the first landform phase (2026-10-25, phase I2g-b, decisions 55 and 61–65):
+		/// The shapes added for the drafts written after the first landform phase:
 		/// the sheer tower and the stepped pyramid (Mound), the multi-ring basin and the summit caldera (Crater), the embanked tank
 		/// (Depression), the pit chain and the spiral troughs (Channels), the cockpit cone field and the labyrinth (Waves), and the
 		/// small tuners the drafts asked of the old ones: a flat-floored hollow, a table's axial cleft, a moat scooped by the wind.
@@ -220,7 +220,7 @@ namespace FishMMO.Shared.Biomes
 				}
 				if (f.Form == BiomeLandformForm.Rille && f.Crown > 0f)
 				{
-					// A beaded rille's necks (decision 76): the width drawn in to the neck's share every three widths.
+					// A beaded rille's necks: the width drawn in to the neck's share every three widths.
 					float neck = Mathf.Clamp(f.Crown, 0.2f, 1f);
 					float bead = 0.5f + 0.5f * MathF.Cos(TwoPi * hit.Along / (6f * half));
 					return hit.Distance / (half * (neck + (1f - neck) * bead));
@@ -229,7 +229,7 @@ namespace FishMMO.Shared.Biomes
 			}
 
 			/// <summary>
-			/// A rille's vent hollow at its line's head (decision 76): a bowl 1.1 widths across, <see cref="BiomeLandform.CrownDepth"/>
+			/// A rille's vent hollow at its line's head: a bowl 1.1 widths across, <see cref="BiomeLandform.CrownDepth"/>
 			/// times the trench's depth there; the cut in metres, <paramref name="share"/> its mask. None when CrownDepth is 0.
 			/// </summary>
 			private float RilleHead(float x, float z, out float share)
@@ -405,7 +405,7 @@ namespace FishMMO.Shared.Biomes
 				}
 				float top = Mathf.Clamp(f.Top, 0.05f, 0.9f);
 				float wall = 1f - S01((r - top) / (1f - top));
-				// Step-fault benches down its walls (2026-10-25, phase I2g-d: a shield caldera's).
+				// Step-fault benches down its walls (a shield caldera's).
 				float delta = r < 1f ? -Site.Height * (f.Steps > 0 ? Stepped(wall, f.Steps + 1) : wall) : 0f;
 				float rimHeight = Mathf.Max(0f, f.Rim) * 2f * radius;
 				if (rimHeight > 0f)
@@ -421,7 +421,7 @@ namespace FishMMO.Shared.Biomes
 				return delta;
 			}
 
-			// ── Crater: the multi-ring basin (decision 55) ───────────
+			// ── Crater: the multi-ring basin ───────────
 
 			/// <summary>Wrinkle-ridge arcs: x radius share, y start heading, z span, w the sinuous phase.</summary>
 			private Vector4[] basinArcs;
@@ -678,7 +678,7 @@ namespace FishMMO.Shared.Biomes
 				}
 			}
 
-			// ── Mesa: the wave-cut bench and the brough's neck (decision 74) ─
+			// ── Mesa: the wave-cut bench and the brough's neck ─
 
 			/// <summary>How much of the bench's cut stands at a height: the ground within 1.5 m of the sea fully, none past 3 m.</summary>
 			private float BenchReach(float height)
@@ -736,7 +736,7 @@ namespace FishMMO.Shared.Biomes
 				return raised;
 			}
 
-			// ── Crater: ageing classes and the rampart crater (decision 72) ─
+			// ── Crater: ageing classes and the rampart crater ─
 
 			/// <summary>A crater's floor share: an old ageing crater's lies flat across six tenths of it (its lag floor).</summary>
 			private float CraterTop()
@@ -781,7 +781,7 @@ namespace FishMMO.Shared.Biomes
 				}
 			}
 
-			// ── Crater: the ice ring basin (decision 71) ─────────────
+			// ── Crater: the ice ring basin ─────────────
 
 			/// <summary>Each graben ring: x its radius, metres; y its half width; z its depth; w the share of its arc broken away.</summary>
 			private Vector4[] graben;

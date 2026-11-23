@@ -22,7 +22,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Where the client's lines go: the chat window when the Chat module installs one, and otherwise system lines as
 	/// notices (toasts), so a game without chat still tells the player what the server and the UI have to say. Split from
-	/// direct <c>UITKChat</c> calls with the Chat module (2026-11-20).
+	/// direct <c>UITKChat</c> calls with the Chat module.
 	/// </summary>
 	public static class ChatWindow
 	{

@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// every rule for a cave's own water holds for its lava as well: no floating plants (FloatingPlants.IsGrottoPool), dropped by
 	/// a plan made again (MoatShaper.ClearWater), left alone by the water's settling (WaterSettle). A grotto's pool takes only
 	/// the site's low 24 bits over the base; the lava sets bit 28 besides, the body's index in bits 20..27 and the site's low 20
-	/// bits under it (2026-10-21: four bits held only 16 bodies), for lakes and rivers alike (they are separate lists, so a lake
+	/// bits under it (four bits held only 16 bodies), for lakes and rivers alike (they are separate lists, so a lake
 	/// and a river may share an id). An id written before (site's low 24 bits, body in 24..27) is still the site's lava.
 	/// </para>
 	/// <para>
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Runs each of <paramref name="rivers"/> that would sink where another of them carries its water (or lava) on into that
-		/// other (2026-10-21: "Cave waterfalls and lava flows don't always flow properly into the little underground river
+		/// other ("Cave waterfalls and lava flows don't always flow properly into the little underground river
 		/// areas"): its end on the other's line, within its half-width, at its surface (within <see cref="JoinLevel"/>) — a vent's
 		/// or a shower's fall landing in a channel, a river pouring over a chasm's lip into its fall, a run going on under the rock
 		/// into the run past it. Its finish becomes a confluence with that river (the inland water draws its mouth run on into

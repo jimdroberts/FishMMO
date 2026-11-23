@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The "Plot for sale" map markers (2026-11-22, Jim: "We would like a Plot for sale map marker").
+	/// The "Plot for sale" map markers.
 	/// </summary>
 	/// <remarks>
 	/// <para>

@@ -25,41 +25,41 @@ namespace FishMMO.Shared.WorldDesign
 		OreVein,
 		/// <summary>A seam of a glowing fantasy ore (starmetal, emberstone) in quartz.</summary>
 		GlowOreVein,
-		/// <summary>A towering glowcap, a mushroom tree of the deep, 5–15 m as the dressing scales it (2026-10-20).</summary>
+		/// <summary>A towering glowcap, a mushroom tree of the deep, 5–15 m as the dressing scales it.</summary>
 		TowerFungus,
-		/// <summary>A glowcap of the middle size, 3–5 m (2026-10-20).</summary>
+		/// <summary>A glowcap of the middle size, 3–5 m.</summary>
 		MidFungus,
-		/// <summary>A cluster of glowing puffballs or morels on a floor, 0.3–1 m (2026-10-20).</summary>
+		/// <summary>A cluster of glowing puffballs or morels on a floor, 0.3–1 m.</summary>
 		Puffballs,
-		/// <summary>Tall tiers of great bracket fungi on a wall, 1.6–2.8 m (2026-10-20).</summary>
+		/// <summary>Tall tiers of great bracket fungi on a wall, 1.6–2.8 m.</summary>
 		ShelfTiers,
-		/// <summary>A curtain of glowing roots hung from a roof (fantasy, 2026-10-20).</summary>
+		/// <summary>A curtain of glowing roots hung from a roof (fantasy).</summary>
 		GlowRoots,
-		/// <summary>Tree roots hanging through a thin roof near a mouth (2026-10-20); they do not glow.</summary>
+		/// <summary>Tree roots hanging through a thin roof near a mouth; they do not glow.</summary>
 		HangingRoots,
-		/// <summary>A glowing creeper on a wet wall (fantasy, 2026-10-20).</summary>
+		/// <summary>A glowing creeper on a wet wall (fantasy).</summary>
 		GlowVine,
-		/// <summary>A fissure in a crust of cooling lava, glowing molten in its depths (2026-10-20, cave lava): on a floor, or on a wall turned out of it.</summary>
+		/// <summary>A fissure in a crust of cooling lava, glowing molten in its depths (cave lava): on a floor, or on a wall turned out of it.</summary>
 		MagmaCrack,
-		/// <summary>Magma seeping out of a wall in glowing runnels down to its foot (2026-10-20, cave lava).</summary>
+		/// <summary>Magma seeping out of a wall in glowing runnels down to its foot (cave lava).</summary>
 		MagmaSeep,
-		/// <summary>Lava stalactites (lavacicles) hung from a roof over molten lava, their dripping tips still glowing (2026-10-20, cave lava).</summary>
+		/// <summary>Lava stalactites (lavacicles) hung from a roof over molten lava, their dripping tips still glowing (cave lava).</summary>
 		Lavacicle,
-		/// <summary>A low skin of ropy pahoehoe crust cooled black at molten lava's edge, its toes still glowing (2026-10-20, cave lava).</summary>
+		/// <summary>A low skin of ropy pahoehoe crust cooled black at molten lava's edge, its toes still glowing (cave lava).</summary>
 		LavaCrust,
-		/// <summary>Glow-worm silk hung along a damp roof joint, long beaded threads lit by their larvae (2026-10-20, caves livened).</summary>
+		/// <summary>Glow-worm silk hung along a damp roof joint, long beaded threads lit by their larvae (caves livened).</summary>
 		GlowSilk,
-		/// <summary>Tree roots come down through a thin roof all the way to the floor and spreading over it (2026-10-20, caves livened); they do not glow.</summary>
+		/// <summary>Tree roots come down through a thin roof all the way to the floor and spreading over it (caves livened); they do not glow.</summary>
 		TapRoots,
-		/// <summary>A heap of bat guano on a floor under a roost (2026-10-20, caves livened); it does not glow.</summary>
+		/// <summary>A heap of bat guano on a floor under a roost (caves livened); it does not glow.</summary>
 		GuanoHeap,
-		/// <summary>A frozen waterfall down a wall or a drop: fused, bulging columns of ice and a cone at the foot (2026-10-20, caves livened: ice).</summary>
+		/// <summary>A frozen waterfall down a wall or a drop: fused, bulging columns of ice and a cone at the foot (caves livened: ice).</summary>
 		IceFall,
-		/// <summary>A fringe of rippled icicles along a roof's edge (2026-10-20, caves livened: ice).</summary>
+		/// <summary>A fringe of rippled icicles along a roof's edge (caves livened: ice).</summary>
 		IcicleCurtain,
-		/// <summary>A frozen pool: a dead-level sheet of glassy ice on a floor, walked on (2026-10-20, caves livened: ice).</summary>
+		/// <summary>A frozen pool: a dead-level sheet of glassy ice on a floor, walked on (caves livened: ice).</summary>
 		FrozenPool,
-		/// <summary>Hoarfrost: feathery hoar crystals on a wall near the ice (2026-10-20, caves livened: ice).</summary>
+		/// <summary>Hoarfrost: feathery hoar crystals on a wall near the ice (caves livened: ice).</summary>
 		Hoarfrost,
 	}
 
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// How a cave crystal grows (<see cref="CaveMineral"/>, 2026-10-16, I6c): the shape its meshes are built in. Append-only:
+	/// How a cave crystal grows (<see cref="CaveMineral"/>): the shape its meshes are built in. Append-only:
 	/// names are in generated mesh paths.
 	/// </summary>
 	public enum CaveMineralHabit
@@ -94,7 +94,7 @@ namespace FishMMO.Shared.WorldDesign
 		Nodules,
 		/// <summary>Broad tabular blades with chisel tips bursting from a lump of scoria (sunstone).</summary>
 		Blades,
-		// 2026-10-26 (NEW-CRYSTALS, decision 34): the habits the biome drafts name, each its own builder in CaveGlowMeshes.Habits.cs.
+		// The habits the biome drafts name, each its own builder in CaveGlowMeshes.Habits.cs.
 		/// <summary>Grape clusters: bunches of overlapping domes crusting a lump of rock (malachite, smithsonite, hyalite).</summary>
 		Botryoidal,
 		/// <summary>Twins: pairs of flattened prisms joined in a V (Japan-law quartz), and v3 crossed through each other (staurolite).</summary>
@@ -148,7 +148,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// One crystal of the cave-crystal catalogue (<see cref="BiomeCaveCrystalKind"/>, 2026-10-16, I6c): the rock formation it
+	/// One crystal of the cave-crystal catalogue (<see cref="BiomeCaveCrystalKind"/>): the rock formation it
 	/// already is, or the habit and material it is built in; whether and how it lights the cave.
 	/// </summary>
 	public struct CaveMineral
@@ -172,7 +172,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The hue bits of its light (<see cref="CaveArt.EmitterSeed"/>: 0 violet, 1 blue, 2 green, 3 amber), or −1 for one by chance.</summary>
 		public int LightHue;
 		/// <summary>
-		/// Whether its glow FLICKERS instead of breathing (2026-10-18, decision 33: stormglass's threads of lightning): its light
+		/// Whether its glow FLICKERS instead of breathing (stormglass's threads of lightning): its light
 		/// a cold glow with the flicker (SceneEmitterKind.Glow, SceneGlow.FlickerBit) wherever it lights a cave or stands in a
 		/// crystal post, its material's emission crackling with it (_FishStructure −1). No kind flickers before its biome's round.
 		/// </summary>
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A biome's own look of a cave crystal kind other biomes grow too (2026-10-26, NEW-CRYSTALS; decisions 12, 97): one kind,
+	/// A biome's own look of a cave crystal kind other biomes grow too: one kind,
 	/// each biome its own habit and colour, chosen by <see cref="BiomeCaveCrystal.Look"/> — not a second kind. Its light, glow
 	/// and flicker are the kind's; it is always built in its own habit (a formation kind's look too), its own material and prefabs.
 	/// </summary>
@@ -244,7 +244,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The cave kit's glow art (2026-10-13: "Crystals, Luminous fungi, Glow-worm ceilings, Ore veins in mines"): its kinds,
+	/// The cave kit's glow art ("Crystals, Luminous fungi, Glow-worm ceilings, Ore veins in mines"): its kinds,
 	/// hues and shapes, names and paths. Built in the structure kit's steps (BiomeArtGenerator.CaveGlow.cs), so a
 	/// structures-only generation makes it too and the Structures family's fingerprint covers it.
 	/// </summary>
@@ -299,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// Glow-worm light: the larvae's blue-green (Arachnocampa, about 487 nm); and (2026-10-26, I2n-c, decision 86 (e)) Rootlight, the
+		/// Glow-worm light: the larvae's blue-green (Arachnocampa, about 487 nm); and Rootlight, the
 		/// deeper electric blue of the dismal-swamp fungus-gnat larvae (Orfelia) threading the roots of drowned galleries. Appended
 		/// only: a hue's index is what the dressing draws.
 		/// </summary>
@@ -329,8 +329,8 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// Tree roots as they hang through a cave's thin roof (2026-10-20): the dark earth-brown of living roots and the pale
-		/// buff of roots that have hung long in still air; and (2026-10-26, I2n-c, decision 86 (d)) WaterRoots, the wet dark red-brown
+		/// Tree roots as they hang through a cave's thin roof: the dark earth-brown of living roots and the pale
+		/// buff of roots that have hung long in still air; and WaterRoots, the wet dark red-brown
 		/// of alder and willow roots that hang into a drowned gallery's water (#3a2a1e, reddened by their root-hair tassels). They do
 		/// not glow. Appended only: a hue's index is what the dressing draws.
 		/// </summary>
@@ -342,7 +342,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// Molten rock as cave lava shows it (2026-10-20): a glassy black basalt crust over a glow that is its own blackbody light —
+		/// Molten rock as cave lava shows it: a glassy black basalt crust over a glow that is its own blackbody light —
 		/// Molten a fresh yellow-orange (~1150 °C, its brightest clipped to yellow as hot lava looks), Banked a deep red-orange
 		/// (~1000 °C, cooling). Their light is amber (hue 3), as the placer's lava lights are (SceneMagma).
 		/// </summary>
@@ -353,7 +353,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// Bat guano as it piles under a roost (2026-10-20, caves livened): the dark moist brown of a heap still fed, and the pale
+		/// Bat guano as it piles under a roost (caves livened): the dark moist brown of a heap still fed, and the pale
 		/// buff crust of one long dry. It does not glow.
 		/// </summary>
 		public static readonly CaveGlowHue[] GuanoHues =
@@ -392,7 +392,7 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowFamily { Kind = CaveGlowKind.GlowOreVein, Mount = CaveMount.Wall, Shape = CaveGlowKind.OreVein, Variants = 4, Hues = GlowOreHues, MaterialSet = "GlowOre",
 				Collides = false, CastsShadows = false, Reach = 4f,
 				Description = "A seam of glowing ore in quartz, the ore veins' shapes: v0 1.5 m, v1 2.5 m, v2 4 m, v3 3 m with a branch." },
-			// 2026-10-20 (cave realism: "Largest mushrooms should get up to 15m tall", "More glow is good inside the caves", "More
+			// (cave realism: "Largest mushrooms should get up to 15m tall", "More glow is good inside the caves", "More
 			// vines and stuff inside caves"). Appended, so no older kind's variants or hues move.
 			new CaveGlowFamily { Kind = CaveGlowKind.TowerFungus, Mount = CaveMount.Floor, Shape = CaveGlowKind.TowerFungus, Variants = 4, Hues = FungusHues, MaterialSet = "Fungus",
 				Collides = true, CastsShadows = true, Reach = 14f,
@@ -415,7 +415,7 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowFamily { Kind = CaveGlowKind.GlowVine, Mount = CaveMount.Wall, Shape = CaveGlowKind.GlowVine, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
 				Collides = false, CastsShadows = false, Reach = 4f,
 				Description = "A glowing creeper (fantasy) on a wet wall: v0 a patch 1.5 m, v1 a sheet 2.5 by 2 m, v2 a cascade hanging 2.4 m from its top." },
-			// 2026-10-20 (cave lava: "glowing floor/wall cracks, magma seeping from walls, glowing lavacicles"). Appended, so no older
+			// (cave lava: "glowing floor/wall cracks, magma seeping from walls, glowing lavacicles"). Appended, so no older
 			// kind's variants or hues move. Lit by the placer's lava lights (SceneEmitterKind.Magma), not by a light of their own.
 			new CaveGlowFamily { Kind = CaveGlowKind.MagmaCrack, Mount = CaveMount.Floor, Shape = CaveGlowKind.MagmaCrack, Variants = 4, Hues = MagmaHues, MaterialSet = "Magma",
 				Collides = false, CastsShadows = false, Reach = 4f,
@@ -429,7 +429,7 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowFamily { Kind = CaveGlowKind.LavaCrust, Mount = CaveMount.Floor, Shape = CaveGlowKind.LavaCrust, Variants = 3, Hues = MagmaHues, MaterialSet = "Magma",
 				Collides = false, CastsShadows = false, Reach = 4f,
 				Description = "A low lobe of ropy pahoehoe crust, its rope folds arcing toward its front, its toes still glowing in their creases (≤ 12 cm tall): v0 1.6 by 1 m, v1 a broad sheet 2.4 by 1.6 m, v2 a long tongue 3 by 0.9 m. Flowing along +x." },
-			// 2026-10-20 (caves livened: what hangs from the roof). Appended, so no older kind's variants or hues move. Silk in the
+			// (caves livened: what hangs from the roof). Appended, so no older kind's variants or hues move. Silk in the
 			// fungi's hues, so it glows as the cave's cover threads do (CaveGlowPalette); the roots wear the hanging roots' material.
 			new CaveGlowFamily { Kind = CaveGlowKind.GlowSilk, Mount = CaveMount.Roof, Shape = CaveGlowKind.GlowSilk, Variants = 3, Hues = FungusHues, MaterialSet = "Fungus",
 				Collides = false, CastsShadows = false, Reach = 0f,
@@ -440,7 +440,7 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveGlowFamily { Kind = CaveGlowKind.GuanoHeap, Mount = CaveMount.Floor, Shape = CaveGlowKind.GuanoHeap, Variants = 3, Hues = GuanoHues, MaterialSet = "Guano",
 				Collides = false, CastsShadows = false, Reach = 0f,
 				Description = "Bat guano under a roost, dark on top and pale crust at its foot: v0 a peaked heap 0.7 m round, 0.3 m high; v1 a low spread 1.3 m round with four cones; v2 an old terraced heap 1 m round, 0.4 m high. Not lit." },
-			// 2026-10-20 (caves livened: an ice cave's ice, CaveGlowMeshes.Ice.cs). Appended, so no older kind's variants or hues move.
+			// (caves livened: an ice cave's ice, CaveGlowMeshes.Ice.cs). Appended, so no older kind's variants or hues move.
 			// The "Ice" set's glassy, faintly glowing materials; a blue light only where the placer gives a tall fall one.
 			new CaveGlowFamily { Kind = CaveGlowKind.IceFall, Mount = CaveMount.Wall, Shape = CaveGlowKind.IceFall, Variants = 3, Hues = IceHues, MaterialSet = "Ice",
 				Collides = true, CastsShadows = true, Reach = 9f,
@@ -459,7 +459,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The family of a kind.</summary>
 		public static CaveGlowFamily CaveGlow(CaveGlowKind kind) => CaveGlowFamilies[(int)kind];
 
-		// ── Cave crystals (2026-10-16, I6c) ───────────────────────────
+		// ── Cave crystals ───────────────────────────
 
 		/// <summary>
 		/// Distinct shapes of every cave crystal built in its own habit: as many as a rock formation has
@@ -480,7 +480,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly CaveMineral[] CaveMinerals =
 		{
 			new CaveMineral { Kind = BiomeCaveCrystalKind.Selenite, Formation = true, FormationRock = RockTypes.Gypsum.Name, FormationShape = "Crystal", Lit = true, LightHue = -1,
-				Description = "Selenite: milky gypsum blades with chisel tips (the gypsum Crystal formation), a cave light of a hue by chance beside it: every cave's crystal before 2026-10-16." },
+				Description = "Selenite: milky gypsum blades with chisel tips (the gypsum Crystal formation), a cave light of a hue by chance beside it: every cave's crystal formerly." },
 			new CaveMineral { Kind = BiomeCaveCrystalKind.Amethyst, Habit = CaveMineralHabit.Geode, LightHue = -1,
 				Hue = new CaveGlowHue { Name = "Amethyst", Albedo = new Color(0.56f, 0.36f, 0.8f), Smoothness = 0.86f, EmitterHue = -1 },
 				Description = "Amethyst: a geode broken open, its grey rind round a hollow lined with violet points." },
@@ -507,8 +507,8 @@ namespace FishMMO.Shared.WorldDesign
 			new CaveMineral { Kind = BiomeCaveCrystalKind.Sunstone, Habit = CaveMineralHabit.Blades, Lit = true, LightHue = 3,
 				Hue = new CaveGlowHue { Name = "Sunstone", Albedo = new Color(0.95f, 0.56f, 0.24f), Emission = new Color(1.6f, 0.62f, 0.16f), Smoothness = 0.78f, Light = new Color(1f, 0.6f, 0.28f), EmitterHue = 3 },
 				Description = "Sunstone (fantasy, volcanic): broad tabular blades of orange-gold crystal alight like embers, bursting from scoria." },
-			// 2026-10-26 (NEW-CRYSTALS, decision 34): every kind the biome drafts name, colours from the drafts, in kind order. The
-			// fantasy kinds glow (a cold glow but where a draft says warm; the warm tint itself is the biome's glow mode, I6i);
+			// Every kind the biome drafts name, colours from the drafts, in kind order. The
+			// fantasy kinds glow (a cold glow but where a draft says warm; the warm tint itself is the biome's glow mode);
 			// Flickers where the draft says flicker, twinkle, sparkle or dart. Sulphur needles are the sulphur Crystals formation.
 			new CaveMineral { Kind = BiomeCaveCrystalKind.Phillipsite, Habit = CaveMineralHabit.Radiating, LightHue = -1,
 				Hue = new CaveGlowHue { Name = "Phillipsite", Albedo = new Color(0.941f, 0.925f, 0.894f), Smoothness = 0.86f, EmitterHue = -1 },
@@ -1067,7 +1067,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string CaveMineralMaterial(BiomeCaveCrystalKind kind) => $"{CavePrefix}Mineral_{kind}";
 
 		/// <summary>
-		/// The biomes' own looks of the kinds several drafts share (2026-10-26, NEW-CRYSTALS; decisions 12, 97), numbered within their
+		/// The biomes' own looks of the kinds several drafts share, numbered within their
 		/// kind in append order. Twenty looks over twelve kinds: kept to the drafts that name one, as each costs a material and
 		/// <see cref="CaveMineralVariants"/> prefabs (meshes are the habit's, shared).
 		/// </summary>

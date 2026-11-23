@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The sea floats' one mesh (2026-10-25, phase I2p): a submesh per <see cref="BiomeSeaFloatKind"/>, in the enum's order, built
+	/// The sea floats' one mesh: a submesh per <see cref="BiomeSeaFloatKind"/>, in the enum's order, built
 	/// once from fixed seeds (the same on every machine). Each kind is in metres of a one-metre unit (the instance's scale makes it
 	/// its size), y up from the waterline: what floats low lies mostly under it. Vertex colour = albedo (sRGB), alpha 1.
 	/// </summary>
@@ -279,7 +279,7 @@ namespace FishMMO.Client
 				b.Box(new Vector3(Mathf.Cos(a) * r, size * 0.5f * 0.2f - size * 0.35f, Mathf.Sin(a) * r), new Vector3(size, size * 0.6f, size * b.Range(0.6f, 1f)), b.Range(0f, 90f), Hex(i % 2 == 0 ? 0xdcecf2 : 0xc8e0ea));
 			}
 
-			// A kelp raft (2026-10-25, I2i-b; built last, so every kind above keeps its seeds): a matted tangle of bull-kelp, whip
+			// A kelp raft (built last, so every kind above keeps its seeds): a matted tangle of bull-kelp, whip
 			// stipes trailing out of it, their round bulbs riding high, blades streaming from the bulbs.
 			b.Sub = (int)BiomeSeaFloatKind.KelpRaft;
 			b.Disc(Vector3.zero, 0.3f, 0.7f, 0.02f, -0.05f, 10, Hex(0x5a4a1e), Hex(0x4a3c18));

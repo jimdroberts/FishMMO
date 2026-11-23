@@ -39,14 +39,14 @@ namespace FishMMO.Shared.WorldDesign
 		Pier,
 		/// <summary>
 		/// In the band just inside the site's boundary (from 65 % of its inner reach out to it), the long side along the boundary
-		/// where there is room, else anywhere free (2026-10-19): what wants room or is best kept downwind of the houses (an archery
+		/// where there is room, else anywhere free: what wants room or is best kept downwind of the houses (an archery
 		/// range, a training yard, a dye works, a kiln, a barn within a site).
 		/// </summary>
 		Edge,
 	}
 
 	/// <summary>
-	/// Whether a street slot's houses may keep a fenced yard (2026-10-19, PointOfInterestLayouts' yards): none, a front garden with a
+	/// Whether a street slot's houses may keep a fenced yard (PointOfInterestLayouts' yards): none, a front garden with a
 	/// gate to the street and the plot behind fenced, or the plot behind fenced only (a shop whose front stays on the street).
 	/// </summary>
 	/// <remarks>Append only: may be stored by ordinal.</remarks>
@@ -73,7 +73,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Width (along the piece's x) and depth (z) it was laid with, metres.</summary>
 		public Vector2 Footprint;
 		/// <summary>
-		/// A perimeter module's joints (2026-10-19): the ends of its chord on the wall's line at its −x (<see cref="From"/>) and +x
+		/// A perimeter module's joints: the ends of its chord on the wall's line at its −x (<see cref="From"/>) and +x
 		/// (<see cref="To"/>) ends, site frame, before the run past a corner that closes its face. Both modules meeting at a joint, and
 		/// a gate or tower the run ends on, share it, so they are seated at one height there. Zero for any other piece.
 		/// </summary>
@@ -81,7 +81,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A stair up the inside of a walled curtain to its walk (2026-10-19), as the layout keeps room for it: the WallStair piece's
+	/// A stair up the inside of a walled curtain to its walk, as the layout keeps room for it: the WallStair piece's
 	/// centre (site frame) and yaw (the curtain's: its back to the wall's inner face, climbing along its +x to the landing), and the
 	/// perimeter modules (indices into the laid pieces) its foot and its landing stand against.
 	/// </summary>
@@ -106,7 +106,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A well: laid no nearer than <see cref="PointOfInterestLayouts.WellSpacing"/> to any other well, else dropped.</summary>
 		public bool Well;
 		/// <summary>
-		/// A market stall (2026-10-20): laid in rows across the market place with aisles between them, not packed round its
+		/// A market stall: laid in rows across the market place with aisles between them, not packed round its
 		/// centrepiece (<see cref="PointOfInterestLayouts.AisleMetres"/>).
 		/// </summary>
 		public bool Stall;
@@ -237,7 +237,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float Inset = 0.9f;
 
 		/// <summary>
-		/// The least distance between two wells, metres (2026-10-19: "only one well within a 50m radius"): a town's second well
+		/// The least distance between two wells, metres ("only one well within a 50m radius"): a town's second well
 		/// stands out in another quarter of it, else is not laid. A farmstead near one keeps a water butt instead (PointOfInterestFarmsteads).
 		/// </summary>
 		public const float WellSpacing = 50f;
@@ -491,7 +491,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				id = Math.Max(id, existing != null ? existing.Id : 0);
 			}
-			// Walked on raised plank decks between the houses where the site's biome raises its streets (2026-10-18, I2i).
+			// Walked on raised plank decks between the houses where the site's biome raises its streets.
 			bool boardwalks = BiomeBoardwalkRules.Raises(BiomeTemplateArt.Boardwalks(context.BiomeAt?.Invoke(record.Position.x, record.Position.z)), ScenePathClass.Street);
 			var streetPaths = boardwalks ? new List<ScenePath>() : null;
 			foreach (PointOfInterestLayoutStreet street in request.Streets)
@@ -561,7 +561,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The plank decks of a boardwalk settlement's streets (2026-10-18, I2i; PathBoardwalks.Lay): each street's whole length, ramped
+		/// The plank decks of a boardwalk settlement's streets (PathBoardwalks.Lay): each street's whole length, ramped
 		/// down to the ground at an end that stops on its own and held at deck height into an end that meets another street.
 		/// </summary>
 		private static void LayStreetBoardwalks(PointOfInterestSiteContext context, List<ScenePath> streets)
@@ -786,13 +786,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What gathers round lived-in buildings (2026-10-11: sites looked dated): by each front door a water butt, a
+		/// What gathers round lived-in buildings (sites looked dated): by each front door a water butt, a
 		/// bench or a low lantern; a woodpile against a side wall; a cart, hay or a washing line in the back yard; lantern
 		/// posts along a town's streets. Round a camp's tents, drying and weapon racks, water and a log heap. Each is kept
 		/// clear of the buildings, the streets and one another; a ruin gets none.
 		/// </summary>
 		/// <summary>
-		/// Stairs up the inside of a stone curtain to its walk (2026-10-11: walkable castle walls): against the module two
+		/// Stairs up the inside of a stone curtain to its walk (walkable castle walls): against the module two
 		/// along from each gate, and one across the bailey from the first, where nothing already stands.
 		/// </summary>
 		/// <summary>
@@ -811,7 +811,7 @@ namespace FishMMO.Shared.WorldDesign
 			bool shaped = MoatShaper.TryMoat(context.Points.Shapes, context.Record.Id, out PointOfInterestShape moat);
 			foreach ((Vector3 gate, Vector3 front) in gateways)
 			{
-				// Out along the gate's own passage (square to the wall's line there, 2026-10-19), not the bearing from the middle.
+				// Out along the gate's own passage (square to the wall's line there), not the bearing from the middle.
 				var outward = new Vector3(front.x, 0f, front.z);
 				if (outward.sqrMagnitude < 1e-4f)
 				{
@@ -944,7 +944,7 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		// ── A walked curtain's seat (2026-10-19) ───────────────────────
+		// ── A walked curtain's seat ───────────────────────
 
 		/// <summary>The most a walked curtain's module may stand over a dip in the ground under it before its joints sink: its plinth's reach, less a hand.</summary>
 		private const float CurtainDipAllowance = 0.4f;
@@ -965,7 +965,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Seats a walked curtain (2026-10-19: "the stairs don't fit", the walk stepping at every joint on a slope): every gate and tower
+		/// Seats a walked curtain ("the stairs don't fit", the walk stepping at every joint on a slope): every gate and tower
 		/// on its footprint's ground as any building; every joint its modules share at one height, the ground's there, or the base of
 		/// the gate or tower the run ends on, so the walk meets their doors; a joint sunk where a module would stand over a dip deeper
 		/// than its plinth reaches, and the joint a wall stair stands on sunk until the walk is no higher over the stair's foot than
@@ -1162,7 +1162,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>A site's seed for one gate or tower slot: the ring's one design of it (2026-10-19).</summary>
+		/// <summary>A site's seed for one gate or tower slot: the ring's one design of it.</summary>
 		private static int StationSeed(PointOfInterestRecord record, int slot) => (int)(PointOfInterestPlanner.Hash(record.SiteSeed, slot, 0x57A7, 0) & 0x7FFFFFFFu);
 
 		/// <summary>The walk on a perimeter slot's curtain, metres over its base (the ring's modules are its walked variant: <see cref="CurtainVariant"/>); 0 for none.</summary>
@@ -1326,7 +1326,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						Put("=Gravestone", at + right * sideways * (width * 0.5f + 2f) + front * ((g - 1) * 2.4f), yaw + (float)(random.NextDouble() - 0.5) * 8f);
 					}
-					// Its yard walled, a lychgate to the street and a mausoleum or two at its back (2026-10-19), on draws of its own.
+					// Its yard walled, a lychgate to the street and a mausoleum or two at its back, on draws of its own.
 					placed += PointOfInterestChurchyards.Lay(context, at, turn, size, sideways, rows, stature, taken, OnStreet);
 					continue;
 				}
@@ -1363,8 +1363,8 @@ namespace FishMMO.Shared.WorldDesign
 					Put(hostile ? Pick("=WeaponRack", "=DryingRack", "=WaterButt", "=Woodpile") : Pick("=DryingRack", "=WaterButt", "=Woodpile"), at + offset, a * Mathf.Rad2Deg + 90f);
 				}
 			}
-			// Lights along the streets, either side in turn (2026-10-12: "We need torches, light posts, braziers"): the light and
-			// spacing the site biome's template gives the kind (its Way Lights, 2026-10-16), authored from the old rule by kind,
+			// Lights along the streets, either side in turn ("We need torches, light posts, braziers"): the light and
+			// spacing the site biome's template gives the kind (its Way Lights), authored from the old rule by kind,
 			// a town's iron lanterns every dozen paces or so and a village's torches on poles every twenty.
 			// A street light stands on the ground: a wall light named for a kind (a hanging bracket) leaves its streets unlit.
 			if (town && BiomeTemplateArt.WayLight(siteBiome, record.Kind, out BiomeWayLight light) && BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Ground)
@@ -1395,7 +1395,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			// A wall light named for the kind (2026-10-18, I6g: a torch in a sconce, a lantern on a bracket): hung on the street-facing
+			// A wall light named for the kind (a torch in a sconce, a lantern on a bracket): hung on the street-facing
 			// walls of the buildings laid along the streets at the light's spacing, a post of its kind where no wall is near
 			// (PointOfInterestWallLights). After the buildings and the clutter; each street's variant of the light (and of its post)
 			// drawn from a stream of the pass's own (PointOfInterestWallLights.StreetSeeds), so the site's stream is never drawn on.
@@ -1454,7 +1454,7 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestRecord record = context.Record;
 			bool allowLocal = context.Scene.IsValid() && LocalArtScope.IsLocalScenePath(context.Scene.path);
 			/* The site's biome decides how the weather finishes its pieces and what its buildings are made of: its template's
-			 * weathering and structure palette (2026-10-16), no longer keywords in its name. */
+			 * weathering and structure palette, no longer keywords in its name. */
 			BiomeTemplate siteBiome = context.BiomeAt?.Invoke(record.Position.x, record.Position.z);
 			BiomeWeathering weathering = BiomeTemplateArt.Weathering(siteBiome);
 			BiomeStructurePalette palette = BiomeTemplateArt.StructurePalette(siteBiome);
@@ -1487,7 +1487,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The houses may keep fenced yards where the site is lived in (PointOfInterestYards; never a ruin's or the dead's).
 			PointOfInterestGroup siteGroup = PointOfInterestKinds.Info(record.Kind).Group;
 			bool yards = siteGroup != PointOfInterestGroup.Ruins && siteGroup != PointOfInterestGroup.Dead;
-			// One or two of a type of building to a settlement, one of a landmark (2026-10-20, PointOfInterestStructureCaps): a slot's
+			// One or two of a type of building to a settlement, one of a landmark (PointOfInterestStructureCaps): a slot's
 			// count is cut to what its type has room for, slots of one type (a chapel and a parish church) sharing it in slot order.
 			PointOfInterestStructureCaps.Tally caps = PointOfInterestStructureCaps.Tally.Of(context);
 			for (int s = 0; s < slots; s++)
@@ -1510,7 +1510,7 @@ namespace FishMMO.Shared.WorldDesign
 					count = caps.Take(PointOfInterestStructureCaps.TypeOfQuery(slot.Tag), count);
 				}
 				// A wall's gates and towers are one design round the ring (their seed the site's own), so the layout knows where the
-				// curtain meets them (2026-10-19).
+				// curtain meets them.
 				bool station = role == PointOfInterestSlotRole.Gate || role == PointOfInterestSlotRole.WallTower;
 				if (station)
 				{
@@ -1526,7 +1526,7 @@ namespace FishMMO.Shared.WorldDesign
 					Count = count,
 					Walk = role == PointOfInterestSlotRole.Perimeter ? PerimeterWalk(slot.Tag, styles[s]) : 0f,
 					Join = station ? StationJoin(slot.Tag, styles[s], stationSeeds[s]) : 0f,
-					// The market hall and the library front the square as the church does (2026-10-19); the cathedral too, and a castle's
+					// The market hall and the library front the square as the church does; the cathedral too, and a castle's
 					// barracks and stable take the ward's room first (PointOfInterestTemplateSpecs.IsLandmark).
 					Landmark = PointOfInterestTemplateSpecs.IsLandmark(slot.Tag, record.Kind),
 					Well = slot.Tag == PointOfInterestTemplateSpecs.Well,
@@ -1550,7 +1550,7 @@ namespace FishMMO.Shared.WorldDesign
 					Vector2 itemFootprint = Vector2.Max(metrics.Footprint, metrics.Sweep) * d.Scale;
 					if (slot.Tag == PointOfInterestTemplateSpecs.Palace)
 					{
-						// A capital's palace keeps its whole compound's ground (2026-10-19): the layout lays it as the citadel, laid below.
+						// A capital's palace keeps its whole compound's ground: the layout lays it as the citadel, laid below.
 						itemFootprint = PointOfInterestPalace.Reserve(record.Radius, d.Scale);
 					}
 					request.Items.Add(new PointOfInterestLayoutItem { Slot = s, Footprint = itemFootprint });
@@ -1650,7 +1650,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					/* One piece and variant for the whole ring: each module drew its own, so a stone curtain changed part way round
 					 * from the wall-walk to a coped field wall with no walk, and a palisade from straight logs to ragged ones that
-					 * did not meet (2026-10-18). Its decay and finish stay each module's own. */
+					 * did not meet. Its decay and finish stay each module's own. */
 					if (ringSeeds.TryGetValue(piece.Slot, out int ringSeed))
 					{
 						d.Seed = ringSeed;
@@ -1672,7 +1672,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Vector3 at = context.OnGround(piece.Offset);
 				bool deck = piece.Role == PointOfInterestSlotRole.Span || piece.Role == PointOfInterestSlotRole.Pier;
-				// A piece built at deck level on its own piles (a crannog's round house: 2026-10-27) stands in the shallows as a pier does.
+				// A piece built at deck level on its own piles (a crannog's round house) stands in the shallows as a pier does.
 				bool onPiles = !deck && DeckPinned(slot.Tag);
 				float waterHere = WaterLevelAt(context, at.x, at.z, sea);
 				if (dryOnly && !deck && !onPiles && !StandsInWater(slot.Tag) && waterHere > at.y + 0.25f)
@@ -1694,7 +1694,7 @@ namespace FishMMO.Shared.WorldDesign
 				StructureFinish finish = FinishFor(Finish, FinishChance, record.Kind, weathering, d.Decay, d.FinishRoll);
 				if (slot.Tag == PointOfInterestTemplateSpecs.Palace && piece.Item >= 0)
 				{
-					// The palace compound in the ground the layout kept for it (2026-10-19, PointOfInterestPalace): its pieces, their
+					// The palace compound in the ground the layout kept for it (PointOfInterestPalace): its pieces, their
 					// grounds for the yards and the clutter, and the court's worn walks.
 					laid += PointOfInterestPalace.Lay(context, piece.Offset, piece.Yaw, d.Scale, record.Radius, finish, palette, allowLocal, grounds, out int palaceMissing);
 					missing += palaceMissing;
@@ -1751,7 +1751,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (piece.Role == PointOfInterestSlotRole.Perimeter && metrics.Module > 0f && seat != null
 					&& seat.Modules.TryGetValue(pieceIndex, out (Vector3 from, Vector3 to) joints))
 				{
-					/* A walked curtain's module from joint to joint (2026-10-19): pitched to its chord about its own z (its faces stay
+					/* A walked curtain's module from joint to joint: pitched to its chord about its own z (its faces stay
 					 * upright planes), stretched along it so its ends land on the joints its neighbours share, so the walk runs on
 					 * without a step and meets the towers' and gates' doors. Its run on past a corner keeps its length. */
 					(Vector3 position, Quaternion turn, float stretch) = CurtainFrame(joints.from, joints.to, piece, metrics.Module, record.Yaw);
@@ -1822,7 +1822,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// One laid house's yard for PointOfInterestYards (2026-10-19): its fence's runs and gate in the world, and the house's front door
+		/// One laid house's yard for PointOfInterestYards: its fence's runs and gate in the world, and the house's front door
 		/// (of the doors its laying added, the one facing most out of its front) for the gate to line up with. Nothing for a piece that is
 		/// no yard's house after all (a ruin or a stilt house the query drew).
 		/// </summary>
@@ -2033,7 +2033,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A curtain's module as the variant with the wall-walk: a ring of a walled site keeps its walk all the way round, the
 		/// towers' upper doors and the wall stairs meeting it, rather than whatever variant the ring's seed drew (the coped
 		/// field wall has none); where a wall stair lands (<paramref name="landing"/>), the walk with its rail open for the landing
-		/// (2026-10-19). Any other piece, or art not generated yet, is returned as it is.
+		///. Any other piece, or art not generated yet, is returned as it is.
 		/// </summary>
 		private static GameObject CurtainVariant(GameObject prefab, in PointOfInterestPieceRequest request, bool landing = false)
 		{
@@ -2051,7 +2051,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Pieces built to stand in water: stilts, piers, bridges.</summary>
-		/// <summary>Over the water a piece on its own piles stands its deck, metres (2026-10-27): a pier's dry freeboard.</summary>
+		/// <summary>Over the water a piece on its own piles stands its deck, metres: a pier's dry freeboard.</summary>
 		private const float PileFreeboard = 0.7f;
 		/// <summary>Over dry ground a piece on its own piles stands its deck, metres: its piles show under it.</summary>
 		private const float PileLift = 0.4f;
@@ -2060,7 +2060,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Whether a slot pins a piece built at deck level (<see cref="StructureAnchor.Deck"/>) that is not a span or a pier of the site's
-		/// crossing (2026-10-27, the fantasy wave: a crannog's =PileRoundHouse): laid with its deck over the water, never seated on the
+		/// crossing (a crannog's =PileRoundHouse): laid with its deck over the water, never seated on the
 		/// lake's bed nor turned away as wet.
 		/// </summary>
 		private static bool DeckPinned(string tag)
@@ -2101,7 +2101,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A piece's finish. Auto: algae on everything under water and char on half a battlefield, whatever the biome; else the
-		/// biome's weathering (BiomeTemplate.Weathering, 2026-10-16: until then keywords in the biome's name): its finish on
+		/// biome's weathering (BiomeTemplate.Weathering: until then keywords in the biome's name): its finish on
 		/// <see cref="BiomeWeathering.ChanceAt"/> of the pieces by their decay, and where that is moss, a long-abandoned site's
 		/// (ruins, the dead) on at least 0.55 + 0.4 × decay. A forced finish is laid on <paramref name="chance"/> of the pieces.
 		/// Pure.
@@ -2140,7 +2140,7 @@ namespace FishMMO.Shared.WorldDesign
 			PointOfInterestGroup group = PointOfInterestKinds.Info(kind).Group;
 			if (group == PointOfInterestGroup.Ruins || group == PointOfInterestGroup.Dead)
 			{
-				// Long abandoned: the moss has had the stones for years (2026-10-11: ruins looked freshly built).
+				// Long abandoned: the moss has had the stones for years (ruins looked freshly built).
 				moss = Mathf.Max(moss, 0.55f + 0.4f * decay);
 			}
 			return roll < moss ? StructureFinish.Mossy : StructureFinish.None;
@@ -2153,7 +2153,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="landward">
 		/// The piece's front stands in a river (<see cref="PointOfInterestPieceMetrics.WaterFront"/>): only its back corners
 		/// count. Its front corners are in the channel, and lowering toward them sank a watermill a metre into the bank behind
-		/// it, its race walls' depth letting it drop that far (2026-10-15: "Watermills seem to sink into the ground").
+		/// it, its race walls' depth letting it drop that far ("Watermills seem to sink into the ground").
 		/// </param>
 		public static float SeatHeight(PointOfInterestSiteContext context, Vector2 offset, float yaw, Vector2 footprint, float depth, bool landward = false)
 		{
@@ -2176,8 +2176,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A bridge's deck along its heading: where it starts and ends, and its height everywhere between. Level at the
 		/// water's clearance over the water, ramping down each side onto that bank's ground at the end, never under the
-		/// straight line from end to end. Each span module is pitched to its own stretch of it (rotation, not steps,
-		/// 2026-10-11), so both ends sit on their banks whatever their heights and the middle clears the water.
+		/// straight line from end to end. Each span module is pitched to its own stretch of it (rotation, not steps),
+		/// so both ends sit on their banks whatever their heights and the middle clears the water.
 		/// </summary>
 		public struct Crossing
 		{
@@ -2252,13 +2252,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// <para>
 		/// History. It first stopped at the first dry ground and laid one flat deck at the site's own height: one end buried,
-		/// one in the air. Then it ran each end out to the bank's top (2026-10-10), which on a lowland river's long, gentle
-		/// banks ran the deck far over the grass (2026-10-11). Then one straight deck from end to end, which over a low bank
-		/// had to stand that end up in the air to clear the water ("aligns on one side and stands on the other",
-		/// 2026-10-11): the deck is a profile now, and each module takes its own pitch.
+		/// one in the air. Then it ran each end out to the bank's top, which on a lowland river's long, gentle
+		/// banks ran the deck far over the grass. Then one straight deck from end to end, which over a low bank
+		/// had to stand that end up in the air to clear the water ("aligns on one side and stands on the other"):
+		/// the deck is a profile now, and each module takes its own pitch.
 		/// </para>
 		/// <para>
-		/// Then "still floating on one end" (2026-10-12): the water was taken as any ground under the site's water
+		/// Then "still floating on one end": the water was taken as any ground under the site's water
 		/// level, so where the ground fell away past a bank (a fall's lip, a river crossed aslant down a hillside, a gorge
 		/// beyond it) the "water" ran on to the edge of the reach, the deck held its level over all of it, and the layout,
 		/// which lays no further than the reach, cut it off with its ramp: Flo Monolith's bridges ended 3, 6, 18 and 64 m
@@ -2863,7 +2863,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Whether a pier module stands over the water or runs out to it: water (at its highest) under it, or within its own length
 		/// ahead along its run (+z, out from the bank). The layout measures one profile down the site's heading, so a second
-		/// pier beside it on a curving shore ran on over dry ground (2026-10-20: "they kind of just float on land").
+		/// pier beside it on a curving shore ran on over dry ground ("they kind of just float on land").
 		/// </summary>
 		private static bool PierReachesWater(PointOfInterestSiteContext context, Vector3 at, float yaw, float module)
 		{
@@ -2903,7 +2903,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <para>
 		/// <b>Over high water.</b> On the sea the deck stands <see cref="PierFreeboard"/> over the highest the tide comes (the
 		/// scene's <c>WaterEnvironment.MaximumTideMetres</c>), not over mean sea level: a deck a metre over the mean was awash
-		/// for hours of every high tide (2026-10-12: "high tide should be the measurement"). A lake or river has no tide
+		/// for hours of every high tide ("high tide should be the measurement"). A lake or river has no tide
 		/// and its deck stands a metre over its level.
 		/// </para>
 		/// <para>

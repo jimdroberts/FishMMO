@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Why.</b> The painter turns ground to rock by slope alone, ramping from a biome's cliff angle (about 42°) to 90°, so
 	/// a fall's 50–74° walls (<see cref="RiverSettings.FallWallDegrees"/>) came out two thirds grass, and the rounded
 	/// brink (<see cref="FallBasin.UnderBrink"/>) grass outright: grass painted down the drop beside the curtain and over
-	/// the lip it pours from (2026-10-13). The ground's grass grows from the grass layer's weight, so rock here takes the
+	/// the lip it pours from. The ground's grass grows from the grass layer's weight, so rock here takes the
 	/// grass with it.
 	/// </para>
 	/// <para>Pure arithmetic: no Unity object is touched, so the painter's worker threads may ask it.</para>

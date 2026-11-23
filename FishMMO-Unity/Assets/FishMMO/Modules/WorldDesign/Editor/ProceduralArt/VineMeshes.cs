@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Vines and ivy (2026-10-12: "Cave mouths, Ruins and old walls, Cliffs and outcrops, Trees, any other relevant
+	/// Vines and ivy ("Cave mouths, Ruins and old walls, Cliffs and outcrops, Trees, any other relevant
 	/// places"): hanging curtains, wall mats, ground spill and trunk climbers, each as one sub-mesh for one vegetation
 	/// material, at three levels of detail grown from one set of strands and leaves.
 	/// </summary>

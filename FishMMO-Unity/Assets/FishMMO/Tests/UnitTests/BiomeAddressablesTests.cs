@@ -13,7 +13,7 @@ namespace FishMMO.UnitTests
 	/// that loader finds them through Addressables. A biome with no entry exists in the editor —
 	/// where the naming loader registers every asset in the folder — and silently does not exist
 	/// in a build: the resolver never offers it and a baked biome map naming it resolves to
-	/// nothing. Twenty-three biomes added on 2026-09-23, every alien one among them, went nine
+	/// nothing. Twenty-three biomes, every alien one among them, went nine
 	/// days like that before anyone looked. Read from the files, not the API, so it needs no
 	/// Addressables settings loaded and runs in any editor.
 	/// </remarks>

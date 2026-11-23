@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 			"Assets/FishMMO/Modules/WorldSimulation/Templates/World/Atlas",
 			"Assets/FishMMO/Modules/WorldSimulation/Templates/World/Systems",
 			"Assets/Resources/Prefabs/Shared/WorldSceneDetails",
-			// The biome art World Design generates (gitignored, regenerated per machine; Phase 4, 2026-11-18).
+			// The biome art World Design generates (gitignored, regenerated per machine).
 			"Assets/Prefabs/Shared/Biomes/Generated",
 		};
 

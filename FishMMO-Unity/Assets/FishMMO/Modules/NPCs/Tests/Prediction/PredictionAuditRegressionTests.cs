@@ -19,7 +19,7 @@ using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Regression guards for the defects found by the 2026-08-28 prediction-pipeline audit. Each
+	/// Regression guards for the defects found by the prediction-pipeline audit. Each
 	/// test names the defect it pins and failed against the code as it was before the fix.
 	/// </summary>
 	[TestFixture]
@@ -1588,7 +1588,7 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// Rewritten 2026-09-09. This used to assert, at source level, that the engagement exemption
+		/// Rewritten. This used to assert, at source level, that the engagement exemption
 		/// was checked BEFORE any cap interval was read — i.e. that it was a blanket override of every
 		/// cap interval. It was, and that was the defect: the engaged full-rate budget's own overflow
 		/// interval is a cap interval, so the exemption cancelled the budget that bounds it, and
@@ -2206,7 +2206,7 @@ namespace FishMMO.UnitTests
 		}
 
 		// ══════════════════════════════════════════════════════════════════════════
-		// 2026-08-29 audit round: area-query determinism, buffer growth, scope safety
+		// audit round: area-query determinism, buffer growth, scope safety
 		// ══════════════════════════════════════════════════════════════════════════
 
 		/// <summary>

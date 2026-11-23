@@ -1108,7 +1108,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The player camera is ClientPreboot's alone; <c>KCCPlayer</c> adopts it through <c>Camera.main</c> when the local
 		/// character spawns. A world scene's own "Main Camera" (an editor convenience a re-cut keeps, and which Moron 3 has
-		/// switched off) competes for <c>Camera.main</c>: on 11-16 the re-cut Moron 1 and 2 shipped with theirs active, the
+		/// switched off) competes for <c>Camera.main</c>: once the re-cut Moron 1 and 2 shipped with theirs active, the
 		/// character adopted a camera with no KCCCamera, and the view never followed the player, while the stray camera
 		/// rendered the whole world a second time every frame.
 		/// </remarks>
@@ -2294,7 +2294,7 @@ namespace FishMMO.Client
 		/// <b>Not the display's refresh rate any more.</b> It was: frames faster than the panel presents are never
 		/// seen, so the cap was clamped to the fastest mode <see cref="Screen.resolutions"/> reported. But that report
 		/// is not to be trusted. Under KDE on Wayland the editor logs "Desktop is 2560 x 1440 @ 60 Hz" for a panel
-		/// running at 480 Hz (2026-10-06), every cap the player chose became 60, and the frame-rate menu offered nothing
+		/// running at 480 Hz, every cap the player chose became 60, and the frame-rate menu offered nothing
 		/// higher. Matching the panel is what VSync is for. The player's cap is now theirs, up to the
 		/// <see cref="MaximumTargetFrameRate"/> ceiling (FishNet's own limit).
 		/// </para>

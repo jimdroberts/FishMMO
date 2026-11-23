@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"): the wizard's tower and the
+	/// The town's other buildings ("more structure types for towns, villages, and cities"): the wizard's tower and the
 	/// library, and their furniture (the bookcase, the writing desk, the alchemist's bench, the scrying focus).
 	/// </summary>
 	public static partial class StructurePieces
@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float WizardWingTowerX = -3.85f;
 
 		/// <summary>
-		/// A wizard's tower (2026-10-19: "Wizard tower (with optional library?)"): a stone tower four floors high, every floor a
+		/// A wizard's tower ("Wizard tower (with optional library?)"): a stone tower four floors high, every floor a
 		/// room a player reaches, by a stair that winds up inside the wall, flight over flight, through a well in each floor; the top
 		/// room opens onto a corbelled gallery under a steep cone roof, a light on the spire (a glowing crystal, or an armillary
 		/// round a glowing orb). Runes glow over the door. v0 round; v1 octagonal, with a library wing built on against its east
@@ -84,7 +84,7 @@ namespace FishMMO.Shared.WorldDesign
 			int risers = Mathf.CeilToInt(WizardStorey / StepRise - 1e-3f);
 			float rise = WizardStorey / risers;
 			// A flight, its arrival tread and a landing, then the next flight on round. The landing is WizardLanding treads long
-			// (2026-10-19, round 3: "stairs are missing platforms at the top"): with only the arrival tread between the well's
+			// (round 3: "stairs are missing platforms at the top"): with only the arrival tread between the well's
 			// parapet and the next flight's first riser, the way off the stair into the room was 0.45 m wide, too narrow for a
 			// body, and every floor over the ground floor was reached only on its landing.
 			float flight = (risers + 1 + WizardLanding) * dA;
@@ -166,7 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				// An iron handrail on stanchions along the flight's open inner edge, from its foot to where the floor over closes in
-				// over a climber's head (2026-10-19, round 3: "you just fall off"): a climber could step off its inner side 1.2 m
+				// over a climber's head (round 3: "you just fall off"): a climber could step off its inner side 1.2 m
 				// over the floor. At every level, for the collider.
 				{
 					const int railTo = 8;
@@ -745,7 +745,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Library ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// A town's library (2026-10-19): v0 a stone reading hall, gable end to the street with its double door, lancets down both
+		/// A town's library: v0 a stone reading hall, gable end to the street with its double door, lancets down both
 		/// sides between buttresses and a great window at the far end, a louvred lantern on the ridge; v1 a scriptorium, a jettied
 		/// timber-framed storey on a stone ground floor (the house kit), its stair up the side wall.
 		/// </summary>

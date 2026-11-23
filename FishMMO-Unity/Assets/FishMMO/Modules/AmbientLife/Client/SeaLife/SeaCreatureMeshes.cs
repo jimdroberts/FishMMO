@@ -88,7 +88,7 @@ namespace FishMMO.Client
 			return mesh;
 		}
 
-		// ── The open sea's shapes (2026-10-25, I2p) ───────────────────
+		// ── The open sea's shapes ───────────────────
 
 		/// <summary>A hammerhead's cephalofoil: a wide flat blade across the nose, its eyes at the tips.</summary>
 		private static void HammerHead(Builder b, Color back)
@@ -163,7 +163,7 @@ namespace FishMMO.Client
 		// ── Eels ──────────────────────────────────────────────────────
 
 		/// <summary>
-		/// An eel (2026-10-25): a long round body lofted from rings, blunt-headed, tapering to a pointed tail, with one ribbon fin
+		/// An eel: a long round body lofted from rings, blunt-headed, tapering to a pointed tail, with one ribbon fin
 		/// running from behind the head over the back, round the tail and forward under the belly; dark eyes on the head. Every
 		/// part rides the body wave (FishSeaLife.hlsl mode 6 ripples the whole length).
 		/// </summary>

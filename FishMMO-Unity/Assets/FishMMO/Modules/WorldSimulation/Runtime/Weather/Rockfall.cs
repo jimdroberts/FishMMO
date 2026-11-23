@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// FALLING STONE (2026-10-25, phase I2u; decisions 79, 95, 97): stones falling down the scene's stored chutes, every fall a pure
+	/// FALLING STONE: stones falling down the scene's stored chutes, every fall a pure
 	/// function of the shared clock. Each chute's clock is cut into <see cref="SlotSeconds"/> slots; a slot holds a fall when its hash
 	/// draws under the chute's chance (one fall per 20–60 min, its own, times the weather's <see cref="Multiplier"/>: ×3 in the two
 	/// hours after the air at the scene crosses 0 °C upward, ×2 in rain and the hour after it, ×2 near a walking rock), at a hashed
@@ -23,10 +23,10 @@ namespace FishMMO.Shared.Weather
 		/// <summary>A slot of a chute's clock, seconds (divides the 10 000 s wrap).</summary>
 		public const double SlotSeconds = 125.0;
 
-		/// <summary>A chute's own mean time between falls in calm, dry weather, seconds: hashed between these (decision 79: 20–60 min).</summary>
+		/// <summary>A chute's own mean time between falls in calm, dry weather, seconds: hashed between these (20–60 min).</summary>
 		public const float LeastPeriod = 1200f, MostPeriod = 3600f;
 
-		/// <summary>The weather's boosts (decision 79): freeze-thaw, rain.</summary>
+		/// <summary>The weather's boosts: freeze-thaw, rain.</summary>
 		public const float ThawBoost = 3f, RainBoost = 2f;
 
 		/// <summary>The weather's knots, seconds; how long a thaw boosts after its knot; how much rain (precipitation × its rain share) counts.</summary>
@@ -329,7 +329,7 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// Strombolian BOMBS (2026-10-25, phase I2u; decision 95): each burst of a Strombolian vent (VentBursts, the very burst
+	/// Strombolian BOMBS: each burst of a Strombolian vent (VentBursts, the very burst
 	/// <c>_FishVentBurst</c> follows) throws 20–80 glowing bombs (times its strength) on ballistic arcs 50–200 m long; they land, those on
 	/// the sciara rolling on down its stored chute on <see cref="Rockfall"/>'s run, and cool over a minute. Pure in the wrapped motion
 	/// clock and the ground (landing found once a burst on the CPU; flight and roll on the GPU).
@@ -468,7 +468,7 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// BREATHING TALUS (2026-10-25, phase I2u; decision 79 (b)): a talus cone's air runs with the season, from the shared clock. In the
+	/// BREATHING TALUS: a talus cone's air runs with the season, from the shared clock. In the
 	/// warm half of its thermal year cold air drains out of its toe (ice in the block gaps, rime on the stones, a cold sinking mist) —
 	/// but only where its winter freezes; in the cold half warm air rises out of its head (faint steam) where the air is cold enough to
 	/// show it. Pure.

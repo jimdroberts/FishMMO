@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The sea floor added by the vegetation expansion (2026-10-10): its detail plants and animals (built by
+	/// The sea floor added by the vegetation expansion: its detail plants and animals (built by
 	/// <see cref="SeaFloorMeshes"/>), the traits of the detail kinds it owns, and its small-rock materials.
 	/// </summary>
 	/// <remarks>
@@ -29,7 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The sea floor's newer details: mussel, oyster and vent-clam beds, barnacled stones, sea lettuce, sand dollars,
 		/// sea cucumbers, brittle stars, sea pens, crinoids, glass sponges (on rock and stalked in mud), cold-water and soft
 		/// corals, giant clams, xenophyophores and bacterial mats, and the mats' land cousin, a cave's slime mould. No
-		/// seagrass (removed 2026-10-05: it read as land grass).
+		/// seagrass (it read as land grass).
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -113,8 +113,8 @@ namespace FishMMO.Shared.WorldDesign
 					accents: new[] { H("#e8b030"), H("#d88a20"), H("#c86a1a") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 4f, groupSize: 6f, sink: new Vector2(0.001f, 0.003f)),
 
-				// ── Coastal Water (biome round, 2026-10-26): the Celtic Atlantic shelf. Each is an existing kind in the draft's colours
-				// and sizes under a name of its own (decision 12). LATER (I9b P30/P31): Rainbow wrack's iridescent sheen, the
+				// ── Coastal Water: the Celtic Atlantic shelf. Each is an existing kind in the draft's colours
+				// and sizes under a name of its own. LATER: Rainbow wrack's iridescent sheen, the
 				// Sabellaria hummock as a kind of its own (a brain-coral mound stands in), the kelps' and anemones' own forms.
 				// The kelp forest: stiff-stemmed cuvie with red-weed sleeves, the warty furbelows, cold sugar kelp, warm golden kelp.
 				D("KelpCuvie", DetailKind.Kelp, 3, 2.4f, 0.12f, 0.35f, "#5a4a1a", "#8a7228", lean: 0.15f, segments: 8,
@@ -194,7 +194,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("KelpDrift", DetailKind.Seaweed, 5, 1.2f, 0.08f, 0.5f, "#4a3e14", "#6a5a1e", lean: 0.95f, segments: 6,
 					snowBury: 0f, healthy: SeaTint, dry: SeaTint, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0f, 0.02f)),
 
-				// ── Ocean (biome round, 2026-10-26): the shelf edge and the continental slope. LATER (I9b P31): the Nephrops burrow as
+				// ── Ocean: the shelf edge and the continental slope. LATER: the Nephrops burrow as
 				// a crater set (a xenophyophore mound in the mud's colours stands in).
 				// Lophelia thickets (white and salmon live tips over a grey dead framework) and Madrepora's brittle zig-zag fans.
 				D("Lophelia", DetailKind.ColdCoral, 5, 1f, 0.009f, 0.4f, "#f0ece4", "#e89070",
@@ -209,7 +209,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("FeatherStar", DetailKind.Crinoid, 3, 0.2f, 0.005f, 0.12f, "#c84a2a", "#e07a4a",
 					accents: new[] { H("#c84a2a"), H("#e07a4a") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.005f, 0.015f)),
-				// The phosphorescent sea pen: crimson feathers that glow faintly green in the dark slope (decision 36 (d)).
+				// The phosphorescent sea pen: crimson feathers that glow faintly green in the dark slope.
 				Glowing(D("PhosphorPen", DetailKind.SeaPen, 3, 0.3f, 0.008f, 0.18f, "#8a1a24", "#f0ece4",
 					accents: new[] { H("#8a1a24"), H("#f0ece4"), H("#a02a34") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 8f, groupSize: 8f, sink: new Vector2(0.03f, 0.06f)), new Color(0.06f, 0.3f, 0.14f)),
@@ -226,8 +226,8 @@ namespace FishMMO.Shared.WorldDesign
 				D("NephropsBurrow", DetailKind.Xenophyophore, 3, 0.12f, 0f, 0.5f, "#6e6252", "#24201a",
 					accents: new[] { H("#6e6252"), H("#5e5446"), H("#24201a") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 8f, groupSize: 6f, sink: new Vector2(0.02f, 0.05f)),
-				// ── Coral Reef (biome round, 2026-10-26): the Maldivian atoll shelf. Each is an existing kind in the draft's colours and
-				// sizes under a name of its own (decision 12). LATER (I9b P30): the kinds' own forms (Pocillopora cauliflowers, Porites
+				// ── Coral Reef: the Maldivian atoll shelf. Each is an existing kind in the draft's colours and
+				// sizes under a name of its own. LATER: the kinds' own forms (Pocillopora cauliflowers, Porites
 				// microatoll tops with worm dots, Turbinaria scrolls, Fungia septa, Antipathes bushes, Dendronephthya trees, Sarcophyton
 				// caps, Heteractis skirts, Diadema needles, Tridacna mantles, the garden eels' arched bodies, the ghost-shrimp craters).
 				// Acropora antler thickets (tan, pale blue-cream tips) and the bleached white state of the hot band.
@@ -309,7 +309,7 @@ namespace FishMMO.Shared.WorldDesign
 					accents: new[] { H("#c8c4b0"), H("#b8b4a0"), H("#6a6656") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 6f, groupSize: 8f, sink: new Vector2(0.01f, 0.02f)),
 
-				// ── Beach (biome round, 2026-10-26): the surf and the swash. ──
+				// ── Beach: the surf and the swash. ──
 				// Baltic cockle and pink tellin; the warm band's olive shells, augers and coquina fans; the sand-grey sand dollar.
 				D("ShellsCockle", DetailKind.Shells, 4, 0.03f, 0f, 0.35f, "#e8e0d0", "#e8b8b0",
 					accents: new[] { H("#e8e0d0"), H("#e8b8b0"), H("#d8c8b0") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
@@ -323,9 +323,9 @@ namespace FishMMO.Shared.WorldDesign
 				D("EelgrassDrift", DetailKind.Seaweed, 5, 0.8f, 0.03f, 0.3f, "#2a2a1e", "#3a3a24", lean: 0.9f, segments: 6,
 					snowBury: 0f, healthy: SeaTint, dry: SeaTint, groupMetres: 5f, groupSize: 8f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Abyss (biome round, 2026-10-26): the hadal trench and its cold seeps. The sun never reaches it; the sea details are the
+				// ── Abyss: the hadal trench and its cold seeps. The sun never reaches it; the sea details are the
 				// animals' and mats' own colours, and three glow (the lure polyps, the umbellula's ring, the stalked beacons).
-				// LATER (I9b P31 / SEA-LIFE): the sea pig's five leg-pairs, the tripod fish standing on fin-ray stilts, the harp sponge's vanes,
+				// LATER: the sea pig's five leg-pairs, the tripod fish standing on fin-ray stilts, the harp sponge's vanes,
 				// the methane bubble streams; the kit's stalks and cushions stand in.
 				D("SeaPig", DetailKind.SeaCucumber, 2, 0.05f, 0.05f, 0.09f, "#e8b0b0", "#f4d0c8",
 					accents: new[] { H("#e8b0b0"), H("#f4d0c8"), H("#d8a0a8") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
@@ -359,7 +359,7 @@ namespace FishMMO.Shared.WorldDesign
 					accents: new[] { H("#5a5446"), H("#6e6858"), H("#4a4438") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 8f, groupSize: 3f, sink: new Vector2(0.01f, 0.02f)),
 
-				// ── Estuary (biome round, 2026-10-26): the Wadden's mussel banks and the flats' green gutweed ──
+				// ── Estuary: the Wadden's mussel banks and the flats' green gutweed ──
 				// Blue-black Mytilus banks, hummocky, fringed with bladderwrack and barnacles.
 				D("MusselBank", DetailKind.MusselBed, 12, 0.09f, 0f, 0.2f, "#1e2228", "#3a4a5a",
 					accents: new[] { H("#1e2228"), H("#3a4a5a"), H("#6a5a2a"), H("#a89e88") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
@@ -368,19 +368,19 @@ namespace FishMMO.Shared.WorldDesign
 				D("Gutweed", DetailKind.SeaLettuce, 8, 0.1f, 0.15f, 0.12f, "#5aaa3a", "#8ad04a", snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.01f, 0.02f)),
 
-				// ── Mangrove (biome round, 2026-10-26): rock oysters on the roots, the lagoon's upside-down jellies and sandfish ──
+				// ── Mangrove: rock oysters on the roots, the lagoon's upside-down jellies and sandfish ──
 				// Saccostrea rock-oyster clumps and barnacles on root feet and stones.
 				D("RootOysters", DetailKind.MusselBed, 10, 0.09f, 0f, 0.3f, "#a89e88", "#6e685c",
 					accents: new[] { H("#a89e88"), H("#6e685c"), H("#8a8270"), H("#c8c0a8") }, snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					variant: 1, groupMetres: 4f, groupSize: 12f, sink: new Vector2(0.006f, 0.015f)),
-				// Cassiopea: pale discs lying bell-down on lagoon mud. LATER (SEA-LIFE): the slow pulse on the shared clock.
+				// Cassiopea: pale discs lying bell-down on lagoon mud. LATER: the slow pulse on the shared clock.
 				D("UpsideDownJelly", DetailKind.Starfish, 2, 0.02f, 0f, 0.3f, "#c8d0c0", "#a8b8a0", snowBury: 0f, healthy: SeaTint, dry: SeaTint,
 					groupMetres: 10f, groupSize: 4f, sink: new Vector2(0f, 0.006f)),
 				// Holothuria scabra: grey-banded sea cucumbers half-buried in the lagoon.
 				D("Sandfish", DetailKind.SeaCucumber, 1, 0.08f, 0.05f, 0.2f, "#6a6458", "#3a3430",
 					snowBury: 0f, healthy: SeaTint, dry: SeaTint, groupMetres: 6f, groupSize: 3f, sink: new Vector2(0.01f, 0.025f)),
-				// ── Lake and River (biome round, 2026-10-26): the clear lake's shelf and the river's channel, on the existing aquatic kinds. LATER
-				// (I9b): the lobelia's bells above the surface, quillwort's own rosette, the pondweed forest and the ball's velvet as kinds of their own. ──
+				// ── Lake and River: the clear lake's shelf and the river's channel, on the existing aquatic kinds. LATER:
+				// the lobelia's bells above the surface, quillwort's own rosette, the pondweed forest and the ball's velvet as kinds of their own. ──
 				D("WaterLobelia", DetailKind.Seaweed, 5, 0.5f, 0.02f, 0.2f, "#2e5a3a", "#4a7a4a", lean: 0.1f, segments: 4,
 					snowBury: 0f, healthy: SeaTint, dry: SeaTint, groupMetres: 5f, groupSize: 6f, sink: new Vector2(0.01f, 0.03f)),
 				D("Quillwort", DetailKind.Seaweed, 10, 0.15f, 0.008f, 0.3f, "#1e3a2a", "#3a5a3a", lean: 0.05f, segments: 3,

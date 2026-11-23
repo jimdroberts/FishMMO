@@ -8,7 +8,7 @@ namespace FishMMO.Shared
 	/// (a test bed). Sits beside the scene's <see cref="WorldSceneSettings"/>; the atlas entry still takes precedence.
 	/// </summary>
 	/// <remarks>
-	/// The climate's extension block of the core's scene settings (Phase 4 of the core and modules plan, 2026-11-17). These
+	/// The climate's extension block of the core's scene settings. These
 	/// were fields of <see cref="WorldSceneSettings"/>, empty in every world scene; a scene without this component reads
 	/// its climate from its atlas entry and its body, exactly as before. Read through <see cref="WorldSceneClimates"/>.
 	/// </remarks>

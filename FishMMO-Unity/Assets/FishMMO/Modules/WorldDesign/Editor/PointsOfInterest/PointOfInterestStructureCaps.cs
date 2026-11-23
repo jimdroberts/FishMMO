@@ -6,7 +6,7 @@ using FishMMO.Shared.NameGeneration;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// How many of one type of structure a settlement keeps (2026-10-20: "There should only be one or two of the same type of structure
+	/// How many of one type of structure a settlement keeps ("There should only be one or two of the same type of structure
 	/// in a town, city, village, capital, etc."): one of a landmark (its cathedral, its palace or keep, its market hall, library,
 	/// observatory, counting house, temple, wizard's tower), at most two of any other building it is known by (its taverns, smithies,
 	/// bakehouses, barns, wells, fountains, mausoleums…), and at most two shops let to any one trade.

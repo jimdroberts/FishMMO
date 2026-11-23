@@ -10,7 +10,7 @@ using FishMMO.Server.Implementation.World.SceneServer.AI;
 
 namespace FishMMO.Shared
 {
-	/// <summary>The dashboard sidebar's NPCs group (the NPCs module's since 2026-11-20).</summary>
+	/// <summary>The dashboard sidebar's NPCs group (the NPCs module's).</summary>
 	internal sealed class NpcDashboardCategories : IDashboardCategoryProvider
 	{
 		/// <inheritdoc />

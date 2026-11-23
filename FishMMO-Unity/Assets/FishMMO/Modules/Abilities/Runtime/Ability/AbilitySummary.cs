@@ -491,6 +491,11 @@ namespace FishMMO.Shared
 				content.AddStat("Hits", Stats.HitCount.ToString(), TooltipPriority.Stats + 5);
 			}
 
+			if (Template.InterruptedByDamage && Stats.ActivationTime > 0)
+			{
+				content.AddBody("Taking damage interrupts the cast.", TooltipPriority.Stats + 6, TooltipTone.Muted);
+			}
+
 			if (ResourceCosts.Count > 0)
 			{
 				content.AddHeader("Resource Cost", TooltipPriority.ResourceCost);

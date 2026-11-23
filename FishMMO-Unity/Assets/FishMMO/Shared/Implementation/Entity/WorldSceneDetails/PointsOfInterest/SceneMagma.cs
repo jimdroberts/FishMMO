@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// The molten lava of a lava tube that still runs (2026-10-20; <see cref="SceneEmitterKind.Magma"/> and
+	/// The molten lava of a lava tube that still runs (<see cref="SceneEmitterKind.Magma"/> and
 	/// <see cref="SceneEmitterKind.Fumes"/>): its light's colour and slow churn, how its seed carries the body under it, how
 	/// much it sparks, the hot air over it and the haze under the roof. One definition read by the client's site lights
 	/// (SiteLightPool), its embers and fumes (SiteEmbers), its heat haze (the heat shimmer) and the cave walk render.
@@ -44,7 +44,7 @@ namespace FishMMO.Shared
 		/// and its reach when its emitter names none, metres.
 		/// </summary>
 		/// <remarks>
-		/// 2026-10-20 (first render: "the lava barely lights its surroundings"): molten rock at ~1100 °C floods a tube with light,
+		/// first render: "the lava barely lights its surroundings": molten rock at ~1100 °C floods a tube with light,
 		/// far more than a campfire (Fire 3.2): a river's light starts at 6 and grows with its width, a lake's and a fall's further.
 		/// </remarks>
 		public const float Intensity = 6f, Range = 16f;

@@ -166,7 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Towers and walls ──────────────────────────────────────────
 
-		// The curtain's frame (2026-10-19, the fortification contract): a walled curtain module (WallSegment v0) runs along x, its
+		// The curtain's frame (the fortification contract): a walled curtain module (WallSegment v0) runs along x, its
 		// centre line at z = 0, its outer face on −z, its walk its top at WallWalkHeight from the parapet's back to its inner face.
 		// A wall tower or a gatehouse stands with its origin on the curtain's centre line and opens its ±x walk doors on the walk's
 		// centre line, so the walk runs straight in; the packer ends the curtain at the piece's "curtain" marks.
@@ -241,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A walked curtain's timber rail along its walk's inner edge over the bailey (2026-10-19: "you just fall off"): posts and two
+		/// A walked curtain's timber rail along its walk's inner edge over the bailey ("you just fall off"): posts and two
 		/// rails a metre high, 1.5 m clear behind the parapet; posts in from the module's ends so a run of modules spaces them evenly.
 		/// With <paramref name="landing"/>, open over <see cref="CurtainLandingGap"/> ± <see cref="CurtainLandingGapHalf"/> for a wall
 		/// stair's landing, a post at each side of the opening.
@@ -316,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static void WallStair(StructureDraft d)
 		{
 			/* From the ground at x = −length/2 up along +x to a landing level with the walk (WallWalkHeight) at the +x end, 1.5 m wide
-			 * (two abreast), its back (−z) flat against the curtain's inner face (2026-10-19: "stairs are missing platforms at the top,
+			 * (two abreast), its back (−z) flat against the curtain's inner face ("stairs are missing platforms at the top,
 			 * you just fall off"): risers of StepRise, the last one up onto the landing, the landing as deep as the flight is wide and
 			 * railed on its open front and end, so a climber steps from it straight back onto the walk at the same height. Its stone
 			 * reaches WallStairFooting under its foot, so it stands on a wall's slope without a gap under it. */
@@ -414,7 +414,7 @@ namespace FishMMO.Shared.WorldDesign
 			// A timber stair up to the deck (a ladder is a wall to a character's controller, which climbs 0.25 m at most).
 			float front = -size.y * 0.5f;
 			Steps(d, new Vector3(stairX, 0f, front), Vector3.back, StairWidth, deck, StructureMaterial.Timber, key + 60);
-			// Its handrails, and a railing round the deck's edge open only where the stair comes up (2026-10-19, round 3: the deck
+			// Its handrails, and a railing round the deck's edge open only where the stair comes up (round 3: the deck
 			// stood 2 m up with nothing at its edge, and the stair's sides were open). At every level: the last is the collider.
 			StepRails(d, new Vector3(stairX, 0f, front), Vector3.back, StairWidth, deck, StructureMaterial.Timber, key + 61);
 			float hx = size.x * 0.5f - 0.05f, hz = size.y * 0.5f - 0.05f, gap = StairWidth * 0.5f - 0.05f, rail = deck + 0.95f;
@@ -467,7 +467,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			HangDoor(d, new Vector3(0f, deck, -Mathf.Sqrt(inner * inner - door * door * 0.25f) + 0.05f), Vector3.right, Vector3.forward, door, 2.25f, StructureDoorKind.Planks);
 			d.RoundRoom(new Vector3(0f, deck, 0f), inner, 2.7f, StructureRoomKind.Dwelling);
-			// The cone at its palette's pitch (StructureRoofs, I6h); flat, a round deck over the wall.
+			// The cone at its palette's pitch (StructureRoofs); flat, a round deck over the wall.
 			const float roofRise = 3.05f;
 			OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Thatch, roofRise, inner + 0.82f);
 			using (d.Builds(RoofRoles))
@@ -516,7 +516,7 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0.12f, 0.8f), new Vector2(0.15f, 1.1f), new Vector2(0f, 1.1f) }, d.Seg(8, 5), StructureMaterial.Timber, 8, true, 0f, false, true, StructureRole.Detail));
 			if (d.Variant == 0)
 			{
-				// Its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+				// Its palette's pitch, or a flat canopy (StructureRoofs).
 				OwnGable(d, 2f, 1.4f, 2.1f, 0.6f, 0.15f, 0.07f, StructureMaterial.Timber, 10, Matrix4x4.Rotate(Quaternion.Euler(0f, 90f, 0f)));
 				d.Add(StructureShapes.Beam(new Vector3(-0.95f, 2.15f, 0f), new Vector3(0.95f, 2.15f, 0f), 0.14f, 0.14f, StructureMaterial.Timber, 12));
 				return;

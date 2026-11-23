@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para><b>No combat gate, on purpose.</b> A same-scene teleporter is a legitimate way to
-	/// leave a fight (decided 2026-09-08); fast travel and cross-scene transfers are not, and
+	/// leave a fight ; fast travel and cross-scene transfers are not, and
 	/// they gate combat themselves.</para>
 	/// <para>Every refusal here answers the owner with a toast. The interaction handler in front
 	/// of this action already refuses dead, teleporting and unloaded characters silently at

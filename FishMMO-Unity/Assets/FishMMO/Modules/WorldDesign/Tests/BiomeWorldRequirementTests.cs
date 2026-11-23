@@ -209,7 +209,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── Molten rock: a magma ocean OR lava lakes (2026-10-02) ──────
+		// ── Molten rock: a magma ocean OR lava lakes ──────
 
 		/// <summary>Helis as the project has it: airless, 243 K, dry, kneaded to the full by its parent.</summary>
 		private static BiomeWorldConditions Helis => new BiomeWorldConditions

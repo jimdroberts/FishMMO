@@ -60,7 +60,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A tree instance's matrix with its prototype's scatter-mode lean (SCATTER-MODES; the two words of
+		/// A tree instance's matrix with its prototype's scatter-mode lean (the two words of
 		/// <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord"/>, the lean part only): turned as Unity turns it, then tilted to
 		/// <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord.LeanUp"/> from the ground's <paramref name="normal"/> and the instance's own
 		/// share (<see cref="FishMMO.Shared.Biomes.BiomeScatterModes.PositionUnit"/> of its world x, z). Visual only: the terrain's tree

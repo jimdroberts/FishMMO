@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The working farmland round a settlement (2026-10-19: "barns and farmland (we have fenced areas but they aren't really farm
+	/// The working farmland round a settlement ("barns and farmland (we have fenced areas but they aren't really farm
 	/// land areas)"): its farmsteads beside its fields, and the fields themselves dressed as worked, laid by PointOfInterestFields
 	/// after every field, fence and old terrace of the site.
 	/// </summary>
@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// the back looking out to the gate, the ricks and the stock on the other side; the yard fenced or walled in its biome's own
 	/// field-edge style (PointOfInterestLinearFeatures, else the kit's field fence), its gate toward the nearest way. Laid beside
 	/// the site's fields on gentle, dry ground outside every site, clear of the ways, the water and every field: a village one or
-	/// two, a town, a city or the capital two (2026-10-20: one or two barns to a settlement, PointOfInterestStructureCaps; its other
+	/// two, a town, a city or the capital two (one or two barns to a settlement, PointOfInterestStructureCaps; its other
 	/// fields are worked from those, and a farmstead past its settlement's two sties and two hen houses keeps neither, past its two
 	/// wells a water butt), a windmill's miller at most one, a monastery its grange (the stone tithe barn). An abandoned farm
 	/// keeps the charred shell of its barn.
@@ -66,7 +66,7 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Reaped;
 			/// <summary>Its index in its site's draw (its own draws are keyed by it).</summary>
 			public int Index;
-			/// <summary>An orchard's rows of trees stand in it (2026-10-19: its keeper's bothy is beside it, PointOfInterestOutskirts).</summary>
+			/// <summary>An orchard's rows of trees stand in it (its keeper's bothy is beside it, PointOfInterestOutskirts).</summary>
 			public bool Orchard;
 		}
 
@@ -286,7 +286,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				wanted = Mathf.Max(1, Mathf.RoundToInt(wanted / (stature * stature)));
 			}
-			// A barn to a farmstead, and one or two barns to a settlement (2026-10-20, PointOfInterestStructureCaps): its other fields
+			// A barn to a farmstead, and one or two barns to a settlement (PointOfInterestStructureCaps): its other fields
 			// are worked from those, however many it has.
 			PointOfInterestStructureCaps.Tally caps = PointOfInterestStructureCaps.Tally.Of(context);
 			wanted = Mathf.Min(wanted, caps.Room(BarnType));
@@ -817,7 +817,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The kit's field fence round a farmstead and a timber field gate in the middle of its front, where its biome lines none:
 			/// each module between its two ends on the ground, round the yard the same way so every corner takes one post, a closing
-			/// post wherever a run stops with none (PointOfInterestLinearFeatures.Joins, 2026-10-19).
+			/// post wherever a run stops with none (PointOfInterestLinearFeatures.Joins).
 			/// </summary>
 			private void KitFence(Vector2 centre, float yaw, Vector2 size, int seed)
 			{
@@ -924,7 +924,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				placed.Add((centre, yaw, size));
 				context.FieldClaims?.Add(ClaimSite(record.Id), centre, yaw, size);
-				// Its yard kept as a yard (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
+				// Its yard kept as a yard (PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
 				context.FieldClaims?.Enclose(centre, yaw, size, turf: true);
 			}
 		}
@@ -932,7 +932,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The fields dressed ────────────────────────────────────────
 
 		/// <summary>
-		/// Dresses a site's laid fields as worked (2026-10-19): a reaped field's stubble stood in rows of stooks and a rick in a
+		/// Dresses a site's laid fields as worked: a reaped field's stubble stood in rows of stooks and a rick in a
 		/// corner; a scarecrow over some growing corn; a pasture's trough by its fence and perhaps a rick. Seeded by the site and
 		/// each field's index (never the site's sequence). Returns the pieces laid.
 		/// </summary>

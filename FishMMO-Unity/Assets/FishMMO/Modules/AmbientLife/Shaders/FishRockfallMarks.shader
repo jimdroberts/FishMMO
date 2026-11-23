@@ -1,4 +1,4 @@
-// FALLING STONE's marks and breath (2026-10-25, phase I2u; decisions 79, 95, 97): drawn by RockfallField with two materials of this
+// FALLING STONE's marks and breath: drawn by RockfallField with two materials of this
 // shader (_Mode 0 and 1), both from the per-frame globals FishRockfall.hlsl declares.
 //
 // _Mode 0, the MARKS: boxes projected onto the ground from the depth texture. A scree chute's fresh SCAR (pale unlichened chips down

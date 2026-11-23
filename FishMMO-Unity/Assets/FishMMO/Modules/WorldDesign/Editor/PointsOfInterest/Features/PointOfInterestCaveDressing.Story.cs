@@ -15,7 +15,7 @@ namespace FishMMO.Shared.WorldDesign
 			public int StoryRemains, StoryCarvings, StoryFalls, StoryTrack, StoryCarts, StoryCaches, StoryChests;
 
 			/// <summary>
-			/// What others left (2026-10-20, caves livened: "story props"): the remains of the lost, carvings on smooth walls, the
+			/// What others left (caves livened: "story props"): the remains of the lost, carvings on smooth walls, the
 			/// dead ends that fell in, a mine's track down its level drifts and its abandoned tubs, and a cache hidden in a nook
 			/// (<see cref="CaveStory"/> plans where; each spot is laid on a stream of its own, after every earlier pass, so nothing
 			/// laid before it moves).
@@ -814,7 +814,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Where a cave system's story goes (2026-10-20, caves livened: "bones/skeletons of lost adventurers, ancient carvings,
+	/// Where a cave system's story goes (caves livened: "bones/skeletons of lost adventurers, ancient carvings,
 	/// cave-ins, mine carts and rails, hidden caches"): sparse and believable, from the system alone.
 	/// </summary>
 	/// <remarks>

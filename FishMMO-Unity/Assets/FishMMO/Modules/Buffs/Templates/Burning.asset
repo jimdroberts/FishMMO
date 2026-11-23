@@ -18,15 +18,15 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: 'Burning: 2 fire damage a second.'
+  Description: 'Burning: 2 fire damage every 5 seconds.'
   icon:
     m_AssetGUID: c03e5f43dc37fef62c94e1a35538ae9a
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Duration: 6
-  TickRate: 1
+  Duration: 30
+  TickRate: 5
   OnTickEvents: []
   MaxStacks: 3
   IsPermanent: 0

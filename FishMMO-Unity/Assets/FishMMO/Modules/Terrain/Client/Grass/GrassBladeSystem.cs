@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// (<see cref="GrassBladeSettings.PrototypePrefixes"/>: grasses, reeds, flowers; <see cref="TerrainDetailRouting"/>) of every
 	/// terrain the detail driver (<see cref="TerrainDetailInstancing"/>) takes, and draws them as thin, individually shaped
 	/// blades regenerated on the GPU every frame around each camera (<see cref="GrassBladeRenderer"/>, FishGrassBlades.compute,
-	/// FishMMO/Grass Blades). The only renderer of those kinds (2026-10-27: the CPU chunk renderer and its clump meshes are
+	/// FishMMO/Grass Blades). The only renderer of those kinds (the CPU chunk renderer and its clump meshes are
 	/// gone): a look past a cap is merged into its prefab's look or, with none, an error.
 	/// </summary>
 	/// <remarks>
@@ -488,7 +488,7 @@ namespace FishMMO.Client
 				GrassBladeRenderer.StatsEnabled = statsWereOn;
 			}
 			ResolveArrays();
-			// The world's air sways the blades (decision 41): none airless, a third under a thin sky, all of it under Earth-like air.
+			// The world's air sways the blades: none airless, a third under a thin sky, all of it under Earth-like air.
 			renderer.AirSway = AirSway();
 			renderer.Publish(settings, types, grassDistance);
 			// The ground under the blades takes their roots' shade (it glowed between them, lit as open ground).
@@ -509,7 +509,7 @@ namespace FishMMO.Client
 		private const int AirCheckInterval = 600;
 
 		/// <summary>
-		/// How hard the world's air moves the blades (BiomeAir.Sway of the scene's world, decision 41, 2026-10-18): the scene of the
+		/// How hard the world's air moves the blades (BiomeAir.Sway of the scene's world): the scene of the
 		/// first taken terrain, its WorldSceneSettings' world conditions; 1 (Earth-like) for a scene without them. Read when the
 		/// scene changes and every <see cref="AirCheckInterval"/> frames, not every frame (working the world out walks its orbit).
 		/// One value for every player in the scene, so the blades of every client sway alike.
@@ -670,7 +670,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// A terrain's PAINTED blade prototypes (<see cref="TerrainDetailRouting.Painted"/>: 2026-10-27, a tile lists the whole
+		/// A terrain's PAINTED blade prototypes (<see cref="TerrainDetailRouting.Painted"/>: a tile lists the whole
 		/// scene's prototypes) and each one's type, new types made and added to <paramref name="types"/> (the scene's table,
 		/// <paramref name="keys"/> parallel to it; up to the renderer's <see cref="GrassBladeRenderer.MaxTypes"/>). The play's
 		/// choice and the editor's bake (TerrainDetailBaker) are this one, so a bake made from the same templates is taken. A
@@ -681,9 +681,9 @@ namespace FishMMO.Client
 		/// A prototype's type is its prefab with the look of the biome whose rule made it (<see cref="TerrainDetailBiomes"/>,
 		/// <see cref="BiomeTemplate.GrassTypeFor(GameObject)"/>) and that rule's healthy and dry tints. Several prototypes share a
 		/// type wherever their prefab and look are equal (a prototype per biome rule, summed by the build into a channel per
-		/// type). A prototype with no recorded biome (a scene cut before 2026-10-15) or whose biome has no look for its prefab
+		/// type). A prototype with no recorded biome (a scene cut by an older generator) or whose biome has no look for its prefab
 		/// draws the old look (<see cref="BiomeGrassDefaults"/>) with its material's tints, as every blade did before, and says
-		/// so once. A point of interest's own prototype (recorded since 2026-10-16 for the biome the site stands in,
+		/// so once. A point of interest's own prototype (recorded for the biome the site stands in,
 		/// <see cref="TerrainDetailBiomes.Entry.Site"/>) takes that biome's look of the prefab where it has one, else the old
 		/// look silently, and always its material's tints.
 		/// </remarks>
@@ -773,7 +773,7 @@ namespace FishMMO.Client
 				source = "no biome";
 				if (terrain.GetComponent<TerrainDetailBiomes>() == null && warned.Add("record"))
 				{
-					Debug.LogWarning($"[Grass] Terrain '{terrain.name}' (and perhaps the scene's others) has no record of which biome made its detail prototypes (cut before 2026-10-15): its blades draw the old look of each prefab. Repaint or re-cut the scene to give each biome's its own.");
+					Debug.LogWarning($"[Grass] Terrain '{terrain.name}' (and perhaps the scene's others) has no record of which biome made its detail prototypes (cut by an older generator): its blades draw the old look of each prefab. Repaint or re-cut the scene to give each biome's its own.");
 				}
 			}
 			else if (biome == null)

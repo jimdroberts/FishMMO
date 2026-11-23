@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests
 	/// unanswered is not recorded as answered, and after the refusal, which is recorded as a refusal.
 	/// </para>
 	/// <para>
-	/// <b>Automatic refreshes are not recorded (2026-09-14).</b> The owner's decision: the first load
+	/// <b>Automatic refreshes are not recorded.</b> The owner's decision: the first load
 	/// and every read somebody asked for are recorded; the console's refresh timer marks its roster
 	/// request with <see cref="StaffRosterRequestBroadcast.AutoRefresh"/>, and an allowed request so
 	/// marked is answered without a row. The mark never reaches the refusal, which is recorded

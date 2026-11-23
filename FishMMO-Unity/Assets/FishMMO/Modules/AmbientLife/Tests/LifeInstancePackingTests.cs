@@ -8,7 +8,7 @@ using FishMMO.Client;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The ambient and sea life instance buffers (2026-10-27): every drawn animal packed into one buffer per camera and drawn by
+	/// The ambient and sea life instance buffers: every drawn animal packed into one buffer per camera and drawn by
 	/// one procedural draw per kind, with no property block. Pins the packing against the matrix product it replaced, the
 	/// record's layout against the shaders' structs, and that no instancing path is left behind.
 	/// </summary>

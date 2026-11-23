@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The hot air over a lava tube's molten lava round the camera (2026-10-20): each of the nearest
+	/// The hot air over a lava tube's molten lava round the camera: each of the nearest
 	/// <see cref="MaxSpots"/> lava lights (<see cref="SceneEmitterKind.Magma"/>, baked by the cut) as a ball of boiling air
 	/// over its body (<see cref="SceneMagma.HeatBall"/>), for the heat shimmer to bend the frame through
 	/// (FishHeatShimmerFeature, FishHeatShimmer.shader's heat spots).

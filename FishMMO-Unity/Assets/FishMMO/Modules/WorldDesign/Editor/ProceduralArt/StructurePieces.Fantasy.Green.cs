@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class StructurePieces
 	{
 		/// <summary>
-		/// The fantasy wave's Green pack: its new pieces (2026-10-27, poi-fantasy-wave/WAVE.md). Every one is laid by id (=Talan …):
+		/// The fantasy set's Green pack: its new pieces. Every one is laid by id (=Talan …):
 		/// none carries a tag, so no older query's candidates move.
 		/// </summary>
 		private static void AddFantasyGreen(List<StructurePiece> list)

@@ -135,19 +135,19 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>From the temperature, not the axial tilt (2026-10-15).</b> The strength was |latitude| ÷ 23.5° — Earth's tilt —
+		/// <b>From the temperature, not the axial tilt.</b> The strength was |latitude| ÷ 23.5° — Earth's tilt —
 		/// on every body, so a scene at 47° on a 9° world dropped its leaves like Moscow while its winter barely froze, and a
 		/// mild coast went as bare as a continent's heart. Plants go dormant below about 5 °C and deciduous trees exist where
 		/// winters are cold enough to need to; both are read straight off the climate table here.
 		/// </para>
 		/// <para>The phase follows the temperature, a month or two behind the sun, as the leaves do.</para>
 		/// <para>
-		/// <b>Dormancy is steeper than growth (2026-10-16).</b> One ramp of 10 K either side of 5 °C left a +3 °C winter at
+		/// <b>Dormancy is steeper than growth.</b> One ramp of 10 K either side of 5 °C left a +3 °C winter at
 		/// −0.2, a seventh of the way to its dry colour: a mild maritime tundra stayed summer-green all year. Grass stops
 		/// growing and cures over a few degrees above freezing, so the ramp below 5 °C runs to fully dormant at 1 °C.
 		/// </para>
 		/// <para>
-		/// <b>Any real winter strips a deciduous tree (2026-10-16).</b> The winter was (5 °C − the coldest month) ÷ 10, so a
+		/// <b>Any real winter strips a deciduous tree.</b> The winter was (5 °C − the coldest month) ÷ 10, so a
 		/// +3 °C winter stripped a fifth of an oak's leaves; but oak, birch and willow go bare in Ireland's +6 °C winters too.
 		/// It is now whole where the coldest month is 5 °C or colder, easing off to none at 12 °C, where broadleaves keep
 		/// their leaves through the year.

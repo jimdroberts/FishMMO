@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// How deep caves go (2026-10-21: "We want multiple levels and extremely deep caves but also randomness so there are also
+	/// How deep caves go ("We want multiple levels and extremely deep caves but also randomness so there are also
 	/// shallow caves"; "randomness in depth up to 500m but also really small caves"; "Stacked tubes + big lakes"; "Cold traps
 	/// freeze deep"): a heavy-tailed depth from each cave's seed, levels that follow it all reached from the mouth, the deepest
 	/// great chamber of a molten tube holding a broad lake, no lava over a lower level, more lava bodies than four bits held, and
@@ -94,7 +94,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ASceneRangeHoldsEveryDepth_AndTheFullRangeChangesNothing()
 		{
-			// 2026-10-21: "options during the cut window to decide minimum and maximum cave depths" (the pre-cut prompt's range).
+			// "options during the cut window to decide minimum and maximum cave depths" (the pre-cut prompt's range).
 			foreach (CaveForm form in new[] { CaveForm.Cave, CaveForm.IceCave, CaveForm.LavaTube })
 			{
 				foreach (int size in new[] { 0, 1, 2 })

@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The wet margin along a scene's water channels (2026-10-18, phase I2j-b, decision 38): each biome's own detail ground layer
+	/// The wet margin along a scene's water channels: each biome's own detail ground layer
 	/// (<see cref="BiomeTemplate.ChannelMargin"/>, a roggia's gley silt and cress) painted in a strip either side of every channel.
 	/// </summary>
 	/// <remarks>

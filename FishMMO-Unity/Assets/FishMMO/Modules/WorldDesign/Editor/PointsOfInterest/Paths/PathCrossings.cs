@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
 {
-	/// <summary>How a way crosses a river (decision 35 (i), 2026-10-18).</summary>
+	/// <summary>How a way crosses a river.</summary>
 	public enum PathCrossingKind : byte
 	{
 		/// <summary>Waded where the river is no deeper than the way's class fords (<see cref="PathNetworkPlanner.Wades"/>).</summary>
@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The pure choices of a way's river crossing (decision 35 (i), 2026-10-18): ford, bridge or rope ferry for each way by its class
+	/// The pure choices of a way's river crossing: ford, bridge or rope ferry for each way by its class
 	/// and the river's width there, and whose biome a bridge belongs to — its ENDS, the banks it joins, not the water under its middle.
 	/// </summary>
 	/// <remarks>
@@ -46,12 +46,12 @@ namespace FishMMO.Shared.WorldDesign
 	/// would take a rope ferry (a footpath over a broad river, any way over one wider than seven 32 m arches), and the planner flags
 	/// such a crossing <see cref="ScenePathPointFlags.Ferry"/> and records a <see cref="PathFerrySite"/> when its input asks
 	/// (<see cref="PathPlanInput.FerryOver"/>). The stage leaves it unset — every crossing is a ford or a bridge as before — until
-	/// the ferry flat, its rope posts, bell-post and landings are generated (the River round's signature pieces, I7).
+	/// the ferry flat, its rope posts, bell-post and landings are generated (the River biome's signature pieces).
 	/// </para>
 	/// </remarks>
 	public static class PathCrossings
 	{
-		/// <summary>The longest crossing a road or a highway bridges: seven arches of 32 m (the River round's "stone arches").</summary>
+		/// <summary>The longest crossing a road or a highway bridges: seven arches of 32 m ("stone arches").</summary>
 		public const float MaxBridgeSpanMetres = 224f;
 
 		/// <summary>How far along each approach a bridge's biome is read, metres apart, from its abutment out (<see cref="BridgeBiome"/>).</summary>
@@ -152,7 +152,7 @@ namespace FishMMO.Shared.WorldDesign
 			return role == BiomeWaterRole.Lake || role == BiomeWaterRole.MethaneLake || role == BiomeWaterRole.River || role == BiomeWaterRole.Estuary;
 		}
 
-		// ── Crossing styles (2026-10-26, phase I2l-b) ───────────────
+		// ── Crossing styles ───────────────
 
 		/// <summary>
 		/// The water widths a crossing style bridges (metres, min, max): the liana bridge a jungle river a vine cable reaches over, the

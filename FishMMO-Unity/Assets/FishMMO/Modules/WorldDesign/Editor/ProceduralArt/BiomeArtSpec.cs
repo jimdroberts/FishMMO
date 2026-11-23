@@ -92,7 +92,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The grounds a footpath, a road and a way's cobbled stretches wear to where this layer is the strongest ground
-			/// (TerrainTextureLayer.ways, 2026-10-16): null is the biome's own (<see cref="Entry.PathGround"/>,
+			/// (TerrainTextureLayer.ways): null is the biome's own (<see cref="Entry.PathGround"/>,
 			/// <see cref="Entry.RoadGround"/>, <see cref="Entry.CobbleGround"/>), as every layer was before. Main and detail
 			/// layers only; set with <see cref="Ways"/>.
 			/// </summary>
@@ -123,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Climate band (TerrainTextureLayer.useClimateBand, decision 29, 2026-10-18): the mean annual temperature this ground
+			/// Climate band (TerrainTextureLayer.useClimateBand): the mean annual temperature this ground
 			/// is painted between, x the coldest and y the warmest, on the climate's scale (0 = 0 °C, 1 = 33.1 °C); an end at or
 			/// past ±1 is open. Null for no temperature band, as every layer was before. Set through <see cref="Temp"/>.
 			/// </summary>
@@ -161,7 +161,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Air band (TerrainTextureLayer.airBand, decision 44, 2026-10-18): the worlds' airs this ground is painted under; None (the
+			/// Air band (TerrainTextureLayer.airBand): the worlds' airs this ground is painted under; None (the
 			/// default) every air. Set through <see cref="Air"/>.
 			/// </summary>
 			public BiomeAtmosphereRequirement AirBand;
@@ -177,7 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>World band (TerrainTextureLayer.worldBand, decision 68): off (the default) for every layer. Set through <see cref="World"/>.</summary>
+			/// <summary>World band (TerrainTextureLayer.worldBand): off (the default) for every layer. Set through <see cref="World"/>.</summary>
 			public BiomeWorldBand WorldBand;
 
 			/// <summary>Paints this ground only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/> (a reed bed: <c>D(...).World(BiomeWorldRequirement.LiquidWater)</c>; a salt crust: <c>.World(0, BiomeWorldRequirement.LiquidWater)</c>). A main layer so banded gives its place to the first banded detail the world admits.</summary>
@@ -188,7 +188,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Underground band (TerrainTextureLayer.underground, 2026-10-25, phase I2n, decision 57): whether this ground is laid on
+			/// Underground band (TerrainTextureLayer.underground): whether this ground is laid on
 			/// the open land, inside the caves the biome dresses, or both (the default). Set through <see cref="Underground"/>.
 			/// </summary>
 			public BiomeUnderground UndergroundBand;
@@ -201,7 +201,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Heat band (TerrainTextureLayer.useHeatBand, 2026-10-18, phase I2q): the ground's heat this DETAIL ground is painted
+			/// Heat band (TerrainTextureLayer.useHeatBand): the ground's heat this DETAIL ground is painted
 			/// between, 0 cold … 1 a spring's throat (an end at or past 0 or 1 open); null for none, as every layer was before. Set
 			/// through <see cref="Heat"/>.
 			/// </summary>
@@ -222,7 +222,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Landform zone band (TerrainTextureLayer.landformBand, 2026-10-25, phase I2g-b, decision 55): off (the default) for every
+			/// Landform zone band (TerrainTextureLayer.landformBand): off (the default) for every
 			/// layer, as before. Set through <see cref="Zone"/>.
 			/// </summary>
 			public BiomeLandformBand ZoneBand;
@@ -239,7 +239,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Sea depth band (TerrainTextureLayer.useSeaDepthBand, 2026-10-25, phase I2m, decisions 38 and 45): the signed depth below
+			/// Sea depth band (TerrainTextureLayer.useSeaDepthBand): the signed depth below
 			/// mean sea level this ground is painted between (negative above it), x the shallowest and y the deepest, in metres or
 			/// (<see cref="SeaDepthInTides"/>) in the scene's tides; an end at or past ±BiomeSeaFloors.OpenDepth open. Null for none, as
 			/// every layer was before. Set through <see cref="Depth"/> or <see cref="Tide"/>.
@@ -267,7 +267,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Paints this ground only between two HEIGHTS in tides (decision 45: 0 mean sea level, 1 mean high water, −1 mean low
+			/// Paints this ground only between two HEIGHTS in tides (0 mean sea level, 1 mean high water, −1 mean low
 			/// water; the scene sea's tide after its coast's strength): a salt marsh's pioneer zone <c>.Tide(-0.6f, 0.3f)</c>, its high
 			/// marsh <c>.Tide(0.6f, 1.5f)</c>. An end at or past ±BiomeSeaFloors.OpenDepth is open.
 			/// </summary>
@@ -281,7 +281,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Lava band (TerrainTextureLayer.useLavaBand, 2026-10-25, phase I2r, decision 65 (b)): the height above the scene's lava surface
+			/// Lava band (TerrainTextureLayer.useLavaBand): the height above the scene's lava surface
 			/// this ground is painted between (negative below it), x the lowest and y the highest, m; an end at or past
 			/// ±BiomeSeaFloors.OpenDepth open. Null for none, as every layer was before. Set through <see cref="Lava"/>.
 			/// </summary>
@@ -304,7 +304,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How this ground glows (TerrainTextureLayer.glow, 2026-10-25, phase I2r, decision 65 (a)): none (the default, as every layer was),
+			/// How this ground glows (TerrainTextureLayer.glow): none (the default, as every layer was),
 			/// or a <see cref="BiomeGroundGlow"/>. Set through <see cref="Glows"/>.
 			/// </summary>
 			public BiomeGroundGlow Glow;
@@ -320,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Facing band (TerrainTextureLayer.facingBand, 2026-10-26, phase GROUND-BANDS, decision 71): off (the default) for every layer,
+			/// Facing band (TerrainTextureLayer.facingBand): off (the default) for every layer,
 			/// as before. Set through <see cref="Facing"/>.
 			/// </summary>
 			public BiomeFacingBand FacingBand;
@@ -337,7 +337,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Fall-line stretch (TerrainTextureLayer.fallLineStretch, 2026-10-26, phase GROUND-BANDS): 0 (the default) for round patches,
+			/// Fall-line stretch (TerrainTextureLayer.fallLineStretch): 0 (the default) for round patches,
 			/// as before. Set through <see cref="FallLine"/>.
 			/// </summary>
 			public float FallLineStretch;
@@ -353,7 +353,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Site band (TerrainTextureLayer.siteBand, 2026-10-26, phase GROUND-BANDS): off (the default) for every layer, as before. Set
+			/// Site band (TerrainTextureLayer.siteBand): off (the default) for every layer, as before. Set
 			/// through <see cref="NearSites"/>.
 			/// </summary>
 			public BiomeSiteBand SiteBand;
@@ -370,7 +370,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Shared-clock window (TerrainTextureLayer.clock, 2026-10-26, phase GROUND-BANDS): none (the default) for every layer, as before.
+			/// Shared-clock window (TerrainTextureLayer.clock): none (the default) for every layer, as before.
 			/// Set through <see cref="Clock"/>.
 			/// </summary>
 			public BiomeGroundClock GroundClock;
@@ -386,7 +386,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>True when the layer names any of the 2026-10-26 ground bands (facing, fall line, sites, clock).</summary>
+			/// <summary>True when the layer names any of the ground bands (facing, fall line, sites, clock).</summary>
 			public bool HasGroundBands => FacingBand.On || FallLineStretch > 1f || SiteBand.On || !GroundClock.IsNone;
 		}
 
@@ -396,7 +396,7 @@ namespace FishMMO.Shared.WorldDesign
 			public string Family;
 			public float MinAngle = 42f;
 			public float MaxAngle = 90f;
-			/// <summary>The worlds' airs this rock face is painted under (TerrainTextureLayer.airBand, decision 44); None every air.</summary>
+			/// <summary>The worlds' airs this rock face is painted under (TerrainTextureLayer.airBand); None every air.</summary>
 			public BiomeAtmosphereRequirement AirBand;
 
 			/// <summary>Paints this cliff only on worlds with one of these airs (one biome's grey and rust scarps: <see cref="Entry.AddCliff"/>).</summary>
@@ -406,7 +406,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>Where this rock face is laid (TerrainTextureLayer.underground, 2026-10-25): Interior for a cave interior's inner wall (an ice shell's scalloped ice), not painted on the terrain.</summary>
+			/// <summary>Where this rock face is laid (TerrainTextureLayer.underground): Interior for a cave interior's inner wall (an ice shell's scalloped ice), not painted on the terrain.</summary>
 			public BiomeUnderground UndergroundBand;
 
 			/// <summary>Lays this rock face only on the open land (Surface) or only inside the biome's caves (Interior).</summary>
@@ -416,7 +416,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>World band (TerrainTextureLayer.worldBand, decision 68): off (the default). Set through <see cref="World"/>.</summary>
+			/// <summary>World band (TerrainTextureLayer.worldBand): off (the default). Set through <see cref="World"/>.</summary>
 			public BiomeWorldBand WorldBand;
 
 			/// <summary>Paints this rock face only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/>.</summary>
@@ -492,7 +492,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public Vector2 Depth;
 			/// <summary>
-			/// Bed rules: the waters the rule grows under (<see cref="PrefabSpawnRule.waters"/>, decision 35, 2026-10-18); Default keeps
+			/// Bed rules: the waters the rule grows under (<see cref="PrefabSpawnRule.waters"/>); Default keeps
 			/// its slot's (the lakebed's the sea, the riverbed's a river, a bed layer's its own). Under a lake or a river its
 			/// <see cref="Depth"/> is read below that water's own surface. Set through <see cref="In"/>.
 			/// </summary>
@@ -516,34 +516,34 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary><see cref="PrefabSpawnRule.humidityFalloff"/>.</summary>
 			public float HumidityFalloff = 0.1f;
 			/// <summary>
-			/// The worlds the rule grows on (<see cref="PrefabSpawnRule.worldGate"/>, decision 41, 2026-10-18): open (the default) every
+			/// The worlds the rule grows on (<see cref="PrefabSpawnRule.worldGate"/>): open (the default) every
 			/// world. Set through <see cref="OnWorlds"/>.
 			/// </summary>
 			public BiomeWorldGate World;
 			/// <summary>
-			/// Heat band (<see cref="PrefabSpawnRule.useHeatBand"/>, 2026-10-18, phase I2q): the ground's heat the rule grows between,
+			/// Heat band (<see cref="PrefabSpawnRule.useHeatBand"/>): the ground's heat the rule grows between,
 			/// 0 … 1; null for none. Set through <see cref="Hot"/>.
 			/// </summary>
 			public Vector2? Heat;
 			/// <summary><see cref="PrefabSpawnRule.heatFalloff"/>.</summary>
 			public float HeatFalloff = BiomeHeatBand.DefaultFalloff;
 			/// <summary>
-			/// Landform zone band (<see cref="PrefabSpawnRule.landformBand"/>, 2026-10-25, phase I2g-b, decision 55): off for none. Set
+			/// Landform zone band (<see cref="PrefabSpawnRule.landformBand"/>): off for none. Set
 			/// through <see cref="OnLandform"/>.
 			/// </summary>
 			public BiomeLandformBand Zone;
 			/// <summary>
-			/// Talus size grading (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, phase I2u, decision 79 (d)): off for none. Set
+			/// Talus size grading (<see cref="PrefabSpawnRule.talusGrading"/>): off for none. Set
 			/// through <see cref="TalusGraded"/>.
 			/// </summary>
 			public bool Graded;
 			/// <summary>
-			/// Scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, phase SCATTER-MODES, decision 34): all off for none. Set
+			/// Scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>): all off for none. Set
 			/// through <see cref="Moded"/> (or the drafts' named modes, BiomeScatterMode.LeeDrift, .EvenSpacing, …).
 			/// </summary>
 			public BiomeScatterMode Mode;
 			/// <summary>
-			/// Facing band (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, phase GROUND-BANDS, decision 71): off for none. Set through
+			/// Facing band (<see cref="PrefabSpawnRule.facingBand"/>): off for none. Set through
 			/// <see cref="Faced"/>.
 			/// </summary>
 			public BiomeFacingBand Facing;
@@ -612,7 +612,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			/// <remarks>
 			/// Geology alone walled whole scenes in one province's rock whatever grew on them: Flo Monolith's bog and taiga
-			/// stood in sandstone cliffs and boulders, Baoakraal's karst and grassland in conglomerate (2026-10-08, who
+			/// stood in sandstone cliffs and boulders, Baoakraal's karst and grassland in conglomerate (who
 			/// chose this list over either alone). So sandstone and conglomerate are accepted only by the dry biomes.
 			/// </remarks>
 			public string[] Rocks = Array.Empty<string>();
@@ -632,9 +632,9 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			// ── Beds under rivers and lakes (decision 35, 2026-10-18) ─────
+			// ── Beds under rivers and lakes ─────
 			//
-			// The riverbed is painted under rivers since 2026-10-18 (the lakebed took every river before) and the lakebed under lakes and
+			// The riverbed is painted under rivers (the lakebed took every river before) and the lakebed under lakes and
 			// the sea; a biome's file may add rules to its riverbed (UnderRiver) and up to three more beds by depth below the water's own
 			// surface, and in a river by its current (BedLayer): a lake's shelf, slope and deeps, a river's riffles, pools and reefs.
 			// Bed rules grow under the waters they name (In), the lakebed's under the sea only by default, so nothing changes until a
@@ -662,7 +662,7 @@ namespace FishMMO.Shared.WorldDesign
 				/// <summary>The current band, m/s, x slowest, y quickest, 0 open; null for none.</summary>
 				public Vector2? Current;
 				public float CurrentFalloff = BiomeBedBands.DefaultCurrentFalloff;
-				/// <summary>The landform zone band (2026-10-26, phase GROUND-BANDS, decision 87): off for none. Set through <see cref="BedZone"/>.</summary>
+				/// <summary>The landform zone band: off for none. Set through <see cref="BedZone"/>.</summary>
 				public BiomeLandformBand Zone;
 			}
 
@@ -694,7 +694,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Keeps the extra bed added last to one part of its biome's sculpted landforms (or, <paramref name="outside"/>, off it), as a
-			/// detail layer's zone band (2026-10-26, phase GROUND-BANDS, decision 87): a sinking quarter's drowned paving only on its floor,
+			/// detail layer's zone band: a sinking quarter's drowned paving only on its floor,
 			/// <c>.BedLayer(Ground.Flagstone, BiomeBedWaters.Lake, 0.2f, 1.5f).BedZone(BiomeLandformPart.Floor, "SinkingQuarter")</c>.
 			/// </summary>
 			public Entry BedZone(BiomeLandformPart part, string kind = null, bool outside = false)
@@ -719,7 +719,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Ways, river bars and point-of-interest growth ─────────
 			//
 			// Columns the authoring tool writes onto the template (BiomeArtAuthoring), which the scene cut then reads alone.
-			// Unset, each is what the cut decided in code before the template carried it (2026-10-15), so authoring them
+			// Unset, each is what the cut decided in code before the template carried it, so authoring them
 			// changed no scene: a biome's file sets one (Ways, Bars) to give the biome its own.
 
 			private string path, road, cobbles, barSand, barGravel;
@@ -786,10 +786,10 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			// ── Climate variants' grounds (decision 29, 2026-10-18) ─────
+			// ── Climate variants' grounds ─────
 			//
 			// A ground layer banded by the climate (Layer.Temp / Humid) changes WHERE a ground is painted; a climate variant's
-			// ground override (BiomeClimateVariant.TextureLayerOverrides, painted since 2026-10-18) changes WHAT a slot is painted
+			// ground override (BiomeClimateVariant.TextureLayerOverrides, painted) changes WHAT a slot is painted
 			// with under that climate: the Plains' main grass becomes a snow-crust sward where the year is Frozen. The variants
 			// themselves are the template's (they carry its climate names too); a file may declare one the template lacks
 			// (ClimateVariant), which the authoring adds, and gives any variant its grounds (ClimateGround).
@@ -852,7 +852,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			// ── Description and naming (decision 23, 2026-10-16/18) ─────
+			// ── Description and naming ─────
 			//
 			// A round rewrites the template's description and its naming block (the phonology names are built from, its
 			// suffixes, prefixes and point-of-interest words) here instead of by hand in the asset. Each part set is written as
@@ -896,13 +896,13 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			// ── Water role and cave shell (2026-10-15, 2026-10-16) ────
+			// ── Water role and cave shell ────
 			//
 			// Two more decisions the cut made in code, written onto the template by the authoring: which biomes the scene's
 			// water and ice take (found by name before: Lake, Methane Lake, River, Estuary, Salt Flat, Ice Sheet, whose files
 			// name their role with Water), and the rock a cave is cut in (by the cave's form alone before, the same for every
 			// biome: DefaultCaveShell; a biome's file gives one form its own with CaveShell). A cave's formations are its
-			// shell's rock (2026-10-16), so the shell is the one value.
+			// shell's rock, so the shell is the one value.
 
 			/// <summary>The part the biome plays for the scene's water and ice (<see cref="BiomeTemplate.WaterRole"/>); None unless its file names one.</summary>
 			public BiomeWaterRole WaterRole = BiomeWaterRole.None;
@@ -926,7 +926,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>, 2026-10-16, I2e): the
+			/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>): the
 			/// file's own (<see cref="WaterTint"/>), else the inland water's look every lake and river took before
 			/// (<see cref="BiomeWaterLooks.Today"/>).
 			/// </summary>
@@ -941,7 +941,7 @@ namespace FishMMO.Shared.WorldDesign
 			private bool hotWater;
 
 			/// <summary>
-			/// Makes the biome's fresh water HOT (<see cref="BiomeWaterLook.Hot"/>, 2026-10-18, phase I2q, decision 47): its lakes, pools,
+			/// Makes the biome's fresh water HOT (<see cref="BiomeWaterLook.Hot"/>): its lakes, pools,
 			/// streams and moats never ice and always steam. Its colours stay the file's (<see cref="WaterTint"/>) or the inland water's.
 			/// </summary>
 			public Entry HotWater()
@@ -952,7 +952,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// How the biome's hot ground divides among geysers, hot springs, fumaroles and mud pots, when the file says
-			/// (<see cref="BiomeTemplate.Geothermal"/>, 2026-10-18, phase I2q); null leaves the template's (today's split).
+			/// (<see cref="BiomeTemplate.Geothermal"/>); null leaves the template's (today's split).
 			/// </summary>
 			public BiomeGeothermalShares? GeothermalShares;
 
@@ -964,7 +964,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Sets the split with jets and sulphur pools (2026-10-25, phase I2q-b, decisions 53/84), and the biome's own site rate (decision
+			/// Sets the split with jets and sulphur pools, and the biome's own site rate (decision
 			/// 84: above 0, its ground has every kind of the split at that rate whatever it emits) and the colour its vents fume (alpha 0: none).
 			/// </summary>
 			public Entry Geothermal(float geyser, float hotSpring, float fumarole, float mudPot, float jet, float sulphurPool, float rate = 0f, Color fumeTint = default)
@@ -977,7 +977,7 @@ namespace FishMMO.Shared.WorldDesign
 			private bool meltWater;
 
 			/// <summary>
-			/// Makes the biome's fresh water a MELT (<see cref="BiomeWaterLook.Melt"/>, 2026-10-25, phase I2q-b, decision 84: molten sulphur
+			/// Makes the biome's fresh water a MELT (<see cref="BiomeWaterLook.Melt"/>: molten sulphur
 			/// in its pools): opaque and viscous, slow small ripples, its colour drifting on the shared clock. Its colours stay the file's.
 			/// </summary>
 			public Entry MeltWater()
@@ -987,8 +987,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Where the biome's vents stand and how their strength moves, when the file says (<see cref="BiomeTemplate.Vents"/>, 2026-10-25,
-			/// phase I2q-b); null leaves the template's (the grid, steady).
+			/// Where the biome's vents stand and how their strength moves, when the file says (<see cref="BiomeTemplate.Vents"/>);
+			/// null leaves the template's (the grid, steady).
 			/// </summary>
 			public BiomeVents? VentPlan;
 
@@ -1000,8 +1000,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How the biome's ground burns on the shared clock, when the file says (<see cref="BiomeTemplate.BurnRegime"/>, 2026-10-25,
-			/// phase I2t, decisions 75/82/84); null leaves the template's (none).
+			/// How the biome's ground burns on the shared clock, when the file says (<see cref="BiomeTemplate.BurnRegime"/>);
+			/// null leaves the template's (none).
 			/// </summary>
 			public BiomeBurnRegime? BurnRegime;
 
@@ -1015,13 +1015,13 @@ namespace FishMMO.Shared.WorldDesign
 			private BiomeSeaLook? seaTint;
 
 			/// <summary>
-			/// What the biome paints and grows under the sea (<see cref="BiomeTemplate.SeaFloor"/>, 2026-10-25, phase I2m): Shore
+			/// What the biome paints and grows under the sea (<see cref="BiomeTemplate.SeaFloor"/>): Shore
 			/// (the default, every biome's before) unless its file says otherwise through <see cref="UnderTheSea"/>.
 			/// </summary>
 			public BiomeSeaFloor SeaFloorKind = BiomeSeaFloor.Shore;
 
 			/// <summary>
-			/// Paints the biome's own main and detail grounds under the sea (decision 36 (a)): <see cref="BiomeSeaFloor.Ground"/> for a
+			/// Paints the biome's own main and detail grounds under the sea: <see cref="BiomeSeaFloor.Ground"/> for a
 			/// sea-floor biome, deep or on the shelf; <see cref="BiomeSeaFloor.ToLowWater"/> for an estuary. Its rules on those layers
 			/// that name the sea (<c>In(BiomeBedWaters.Sea, Sea(...))</c>) grow there.
 			/// </summary>
@@ -1031,7 +1031,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>How strongly the biome's coast tides (<see cref="BiomeTemplate.TideStrength"/>, decision 45): 1 (as before) unless set through <see cref="Tides"/>.</summary>
+			/// <summary>How strongly the biome's coast tides (<see cref="BiomeTemplate.TideStrength"/>): 1 (as before) unless set through <see cref="Tides"/>.</summary>
 			public float TideStrength = 1f;
 
 			/// <summary>Multiplies the scene sea's tide where the biome holds the coast (an estuary ×4; the tide never past 4 m).</summary>
@@ -1042,7 +1042,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How deep the biome's underwater sites stand (<see cref="BiomeTemplate.UnderwaterSiteDepth"/>, decision 36 (b)): (0, 0),
+			/// How deep the biome's underwater sites stand (<see cref="BiomeTemplate.UnderwaterSiteDepth"/>): (0, 0),
 			/// each kind's own band, unless set through <see cref="SitesBetween"/>.
 			/// </summary>
 			public Vector2 UnderwaterSiteDepth;
@@ -1062,7 +1062,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The sea as a diver sees it off the biome's coast (<see cref="BiomeTemplate.SeaLook"/>, 2026-10-18, I2h): the file's
+			/// The sea as a diver sees it off the biome's coast (<see cref="BiomeTemplate.SeaLook"/>): the file's
 			/// own (<see cref="SeaTint"/>), else the underwater look every sea had before (<see cref="BiomeSeaLooks.Today"/>), which
 			/// leaves the sea its scene's own.
 			/// </summary>
@@ -1101,7 +1101,7 @@ namespace FishMMO.Shared.WorldDesign
 				var shells = new List<BiomeCaveShell>();
 				foreach (CaveForm form in (CaveForm[])Enum.GetValues(typeof(CaveForm)))
 				{
-					// A sea hall's shell only where the file names one (2026-10-26, I2n-b): the 83 templates' lists stay as they were.
+					// A sea hall's shell only where the file names one: the 83 templates' lists stay as they were.
 					if (BiomeCaveInteriors.InEveryList((BiomeCaveForm)form) || caveShells.Exists(c => c.Form == form))
 					{
 						shells.Add(new BiomeCaveShell((BiomeCaveForm)form, CaveShellFor(form)));
@@ -1110,7 +1110,7 @@ namespace FishMMO.Shared.WorldDesign
 				return shells;
 			}
 
-			// ── Cave crystals (2026-10-16, I6c) ──
+			// ── Cave crystals ──
 			//
 			// The crystals the biome's caves grow (BiomeTemplate.CaveCrystals): selenite in every biome before, which stays every
 			// biome's default; a biome's own file names its own with Crystals.
@@ -1127,7 +1127,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>): the file's own, else selenite. A fresh
 			/// list. A kind the file names grows in the biome's own look of it where the catalogue has one for the biome
-			/// (ProceduralArtCatalogue.CaveMineralLooks, 2026-10-26); the default selenite always in its own.
+			/// (ProceduralArtCatalogue.CaveMineralLooks); the default selenite always in its own.
 			/// </summary>
 			public List<BiomeCaveCrystal> CaveCrystals()
 			{
@@ -1143,7 +1143,7 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			// ── Cave interiors (2026-10-25, phase I2n, decisions 37, 46, 51, 57) ──
+			// ── Cave interiors ──
 			//
 			// Which cave biome dresses the inside of the biome's caves by form (BiomeTemplate.CaveInteriors; every surface biome
 			// links the Cave, Ice Cave and Lava Tube by default, BiomeCaveInteriors.DefaultLinks), the shells the biome is itself the
@@ -1229,7 +1229,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Gives the biome's caves of a form their own glow: the crystals' hue name (empty: by chance), the fungus's share and the
-			/// glow-worms' chance (1 the dressing's own), and (2026-10-25, I2n-c, decision 86 (e)) the glow-worms' hue name in the cave
+			/// glow-worms' chance (1 the dressing's own), and the glow-worms' hue name in the cave
 			/// glow art (null: its first) and where they hang.
 			/// </summary>
 			public Entry CaveGlow(CaveForm form, string crystal, float fungus = 1f, float worms = 1f, string wormHue = null,
@@ -1242,7 +1242,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			// ── Drowned galleries (2026-10-25, phase I2n-c, decision 86) ──
+			// ── Drowned galleries ──
 			//
 			// How the biome's caves stand in the water table (CaveFloods: none by default, every cave as before), what hangs from their
 			// roofs (CaveHangings: the cave dressing's own per-form choice by default, so nothing moves) and the tea ring their water
@@ -1254,7 +1254,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Drowns the biome's caves of a form (a natural cave on wet ground, in <paramref name="share"/> of systems) or deepens a
-			/// grotto's pool: floors up to <paramref name="depth"/> metres under the water (decision 86 (a): Cave 1.2, Grotto 1.5), with
+			/// grotto's pool: floors up to <paramref name="depth"/> metres under the water (Cave 1.2, Grotto 1.5), with
 			/// marsh-gas beads at <paramref name="bubbles"/> and leeches swimming toward waders at <paramref name="leeches"/> (0 none).
 			/// </summary>
 			public Entry CaveFlood(CaveForm form, float depth, float share, float bubbles = 0f, float leeches = 0f)
@@ -1270,8 +1270,8 @@ namespace FishMMO.Shared.WorldDesign
 			public List<BiomeCaveFlood> CaveFloods() => caveFloods != null ? new List<BiomeCaveFlood>(caveFloods) : new List<BiomeCaveFlood>();
 
 			/// <summary>
-			/// What hangs from the biome's caves' roofs of a form (decision 86 (d)): silk, roots in the dark and near a mouth, guano (1 a
-			/// limestone cave's), the roots' art and the most root windows a system opens (decision 86 (f), 0 none).
+			/// What hangs from the biome's caves' roofs of a form: silk, roots in the dark and near a mouth, guano (1 a
+			/// limestone cave's), the roots' art and the most root windows a system opens (0 none).
 			/// </summary>
 			public Entry CaveHanging(CaveForm form, float silk, float deepRoots, float rootsNearMouth, float guano,
 				BiomeCaveRootArt roots = BiomeCaveRootArt.Hanging, int rootWindows = 0)
@@ -1288,7 +1288,7 @@ namespace FishMMO.Shared.WorldDesign
 			public List<BiomeCaveHanging> CaveHangings() => caveHangings != null ? new List<BiomeCaveHanging>(caveHangings) : DefaultCaveHangings();
 
 			/// <summary>
-			/// What hung from every form's roofs until 2026-10-25 (CaveHanging.For: silk, deep roots and the habitat's guano by form;
+			/// What hung from every form's roofs formerly (CaveHanging.For: silk, deep roots and the habitat's guano by form;
 			/// CaveFungi's plan by form for the roots near a mouth, before the land over it is weighed): what every template is
 			/// authored with, in the forms' order.
 			/// </summary>
@@ -1307,7 +1307,7 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			/// <summary>Gives the biome's cave water of a form a tea ring on the walls (decision 86 (g)): its colour and strength (alpha), the highest flood over the water, the top edge's fade, metres.</summary>
+			/// <summary>Gives the biome's cave water of a form a tea ring on the walls: its colour and strength (alpha), the highest flood over the water, the top edge's fade, metres.</summary>
 			public Entry CaveStain(CaveForm form, Color colour, float rise, float edge = 0.05f)
 			{
 				caveStains ??= new List<BiomeCaveStain>();
@@ -1323,7 +1323,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>What lights the biome's caves by itself (<see cref="BiomeTemplate.CaveGlows"/>): the dressing's own by form, with the file's own. A fresh list.</summary>
 			public List<BiomeCaveGlow> CaveGlows() => caveGlows != null ? new List<BiomeCaveGlow>(caveGlows) : BiomeCaveInteriors.DefaultGlows();
 
-			// ── Floating plants (2026-10-18, I2i) ──
+			// ── Floating plants ──
 			//
 			// What the biome's still fresh water carries on its surface (BiomeTemplate.FloatingPlants): nothing in every biome
 			// before, which stays every biome's default; a biome's own file names its own with Floats.
@@ -1352,7 +1352,7 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			// ── Sea floats (2026-10-25, I2p) ──
+			// ── Sea floats ──
 			//
 			// What drifts on the biome's open sea (BiomeTemplate.SeaFloats): nothing in every biome before, which stays every
 			// biome's default; a biome's own file names its own with FloatsAtSea.
@@ -1381,11 +1381,11 @@ namespace FishMMO.Shared.WorldDesign
 				return list;
 			}
 
-			// ── Glow modes + fountain episodes (2026-10-25, I6i) ──
+			// ── Glow modes + fountain episodes ──
 			//
 			// How the biome's cold glows move (BiomeTemplate.GlowModes): no entry in every biome before, which stays every biome's
 			// default (way glows pulse, stormglass flickers, crystals shine steady); a biome's own file names its own with GlowMode.
-			// Its lava-fountain episodes (BiomeTemplate.FountainEpisodes, decision 93): none unless its file names them.
+			// Its lava-fountain episodes (BiomeTemplate.FountainEpisodes): none unless its file names them.
 
 			private List<BiomeGlowMode> glowModes;
 			private BiomeFountainEpisodes? fountainEpisodes;
@@ -1402,7 +1402,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>How the biome's cold glows move (<see cref="BiomeTemplate.GlowModes"/>): the file's own, else none. A fresh list.</summary>
 			public List<BiomeGlowMode> GlowModes() => glowModes != null ? new List<BiomeGlowMode>(glowModes) : BiomeGlowModes.None();
 
-			/// <summary>Gives the biome lava-fountain episodes (decision 93): slot lengths dividing 10 000 s, the share of a slot a fountain plays, its ramps, its jets' heights.</summary>
+			/// <summary>Gives the biome lava-fountain episodes: slot lengths dividing 10 000 s, the share of a slot a fountain plays, its ramps, its jets' heights.</summary>
 			public Entry Fountains(BiomeFountainEpisodes episodes)
 			{
 				fountainEpisodes = episodes;
@@ -1412,7 +1412,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The biome's lava-fountain episodes (<see cref="BiomeTemplate.FountainEpisodes"/>): the file's own, else none.</summary>
 			public BiomeFountainEpisodes FountainEpisodes() => fountainEpisodes ?? default;
 
-			// ── Sculpted landforms (2026-10-18, I2g) ──
+			// ── Sculpted landforms ──
 			//
 			// What the cut carves into the biome's ground (BiomeTemplate.Landforms): nothing in every biome before, which stays every
 			// biome's default; a biome's own file names its own by preset (BiomeLandformPresets) with Landforms.
@@ -1440,7 +1440,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The landforms the biome's ground is carved with (<see cref="BiomeTemplate.Landforms"/>): the file's own, else none. A fresh list.</summary>
 			public List<BiomeLandform> LandformList() => landforms != null ? new List<BiomeLandform>(landforms) : BiomeLandforms.None();
 
-			// ── Linear features (2026-10-18, I2f) ──
+			// ── Linear features ──
 			//
 			// The biome's hedges, walls, fences, tree rows, channels and clearance rows (BiomeTemplate.LinearFeatures): none in every
 			// biome before, which stays every biome's default; a biome's own file names its own with Lines.
@@ -1465,7 +1465,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 
 				/// <summary>
-				/// A named style (BiomeLinearStyles, 2026-10-26, I2f-b: "Kershef", "SergeLine", "Gallery") at its own place, grown of
+				/// A named style (BiomeLinearStyles, "Kershef", "SergeLine", "Gallery") at its own place, grown of
 				/// <paramref name="species"/> (none: the style's own). A name the table lacks lays nothing (<see cref="Unknown"/>).
 				/// </summary>
 				public Line(string named, params string[] species) : this(named, null, species)
@@ -1645,7 +1645,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (Bed != null) foreach (Scatter s in Bed.Scatter) yield return (Bed, s);
 			}
 
-			// ── Living looks and blade grass (2026-10-15) ─────────────
+			// ── Living looks and blade grass ─────────────
 			//
 			// Columns the authoring writes onto the template (BiomeTemplate.LookClass, BiomeTemplate.GrassTypes), which the
 			// client then reads alone. Every biome's file names its look class: the class BiomeLooks.ClassOf read from its
@@ -1723,19 +1723,19 @@ namespace FishMMO.Shared.WorldDesign
 				return look;
 			}
 
-			// ── Wildlife, vines and harvest (2026-10-16) ──────────────
+			// ── Wildlife, vines and harvest ──────────────
 			//
 			// Columns the authoring writes onto the template (BiomeTemplate.Habitat, SeaLife, Vines, GatheringResources,
 			// HerbGroveHerbs), which the client and the cut then read alone. Each is what was decided by the biome's name
 			// before, so authoring them changed nothing (BiomeTemplateLivingTests pins every biome against the old rules):
 			// the creatures' country every biome's file names with Wildlife (the client's keyword reading of the name; alien
-			// ground is not named here, since 2026-10-16 the client reads it live from the template's air, BiomeHabitats.Live);
+			// ground is not named here, since the client reads it live from the template's air, BiomeHabitats.Live);
 			// the sea creatures a sea biome's file names with HomeTo, each with its weight (the kinds that named it as a
 			// favourite, at the weight they gave every favourite: SeaKindPreferWeight); the vines its file names with GrowsVines
 			// (none without); the gathering resources its file names with Gathers (none without); and a herb grove's herbs from
-			// those resources unless the file sets its own with Herbs. Until 2026-10-26 the vines and the resources defaulted to
-			// the code tables' rows by the biome's name (VineBiomes, GatheringResourceCatalogue's biome lists); phase CODE-TABLE
-			// CLEARANCE wrote each row into its biome's file (decision 1: the template is the single source, and the file is
+			// those resources unless the file sets its own with Herbs. Formerly the vines and the resources defaulted to
+			// the code tables' rows by the biome's name (VineBiomes, GatheringResourceCatalogue's biome lists)
+			// CLEARANCE wrote each row into its biome's file (the template is the single source, and the file is
 			// what authors it), so the tables are only the cut's fallback for a template never authored (BiomeTemplateArt).
 
 			/// <summary>
@@ -1817,8 +1817,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The biome's vines (<see cref="BiomeTemplate.Vines"/>): its file's own (<see cref="GrowsVines"/>), else none. A fresh
-			/// copy each call. The vine table (<see cref="VineBiomes"/>) is not read: its rows were written into the files
-			/// (2026-10-26, phase CODE-TABLE CLEARANCE), and it is only the cut's fallback for a template never authored.
+			/// copy each call. The vine table (<see cref="VineBiomes"/>) is not read: its rows were written into the files,
+			/// and it is only the cut's fallback for a template never authored.
 			/// </summary>
 			public BiomeVines VineGrowth() => vines != null ? vines.Clone() : new BiomeVines();
 
@@ -1832,7 +1832,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The gathering resources the biome's sites draw from (<see cref="BiomeTemplate.GatheringResources"/>): its file's
 			/// own (<see cref="Gathers"/>), else none. The catalogue's biome lists (<see cref="GatheringResourceCatalogue.GrowsIn"/>)
-			/// are not read: each file names what they gave it (2026-10-26, phase CODE-TABLE CLEARANCE, in the catalogue's order),
+			/// are not read: each file names what they gave it (in the catalogue's order),
 			/// and they are only the cut's fallback for a template never authored.
 			/// </summary>
 			public List<string> GatheringResources() => new List<string>(gathers ?? Array.Empty<string>());
@@ -1850,14 +1850,14 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public List<string> GroveHerbs() => herbs != null ? new List<string>(herbs) : HerbsOf(GatheringResources());
 
-			// ── Points of interest and structures (2026-10-16, phase I5) ──
+			// ── Points of interest and structures ──
 			//
 			// What the biome's points of interest are and how they are built, as the authoring writes them onto its template:
 			// the kinds it hosts, its template variants' and styles' weights, its weathering, its crops and its structure
 			// palette. The kinds, the variants' weights and the weathering are the file's own (Sites and Hosts, Prefers,
-			// Weathers): until 2026-10-26 they defaulted to what the cut decided by the biome's name (the point-of-interest
+			// Weathers): formerly they defaulted to what the cut decided by the biome's name (the point-of-interest
 			// catalogue's rows, the templates' biome lists, the props' wet/dry/damp keywords), and phase CODE-TABLE CLEARANCE
-			// wrote that answer into every file (decision 1), so the name tables are only the cut's fallback for a template
+			// wrote that answer into every file, so the name tables are only the cut's fallback for a template
 			// never authored. The crops default to wheat in every field and the palette to the kit's materials; a biome's own
 			// file sets its own with Favours, Crops and Builds.
 
@@ -1871,7 +1871,7 @@ namespace FishMMO.Shared.WorldDesign
 			private List<(POIType Kind, BiomeWayLightKind? Light, float Spacing)> lights;
 
 			/// <summary>
-			/// What stands in a stronghold's moat in this biome (<see cref="BiomeTemplate.MoatWater"/>, 2026-10-16, I5b): Wet unless
+			/// What stands in a stronghold's moat in this biome (<see cref="BiomeTemplate.MoatWater"/>): Wet unless
 			/// the biome's file says otherwise (<see cref="Moat"/>). Every file names it: the value the moat shaper gave the biome
 			/// from its template's climate envelope before (<see cref="BiomeMoatWaters.FromClimate"/>, held equal by a test).
 			/// </summary>
@@ -1885,7 +1885,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Which of the biome's ways are raised boardwalks (<see cref="BiomeTemplate.Boardwalks"/>, 2026-10-18, I2i): none unless
+			/// Which of the biome's ways are raised boardwalks (<see cref="BiomeTemplate.Boardwalks"/>): none unless
 			/// the biome's file says otherwise (<see cref="RaisesBoardwalks"/>), as no way was a boardwalk before.
 			/// </summary>
 			public BiomeBoardwalks Boardwalks = BiomeBoardwalks.None;
@@ -1898,7 +1898,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How the biome's raised routed ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>, 2026-10-25, I2i-b): planked
+			/// How the biome's raised routed ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>): planked
 			/// unless the biome's file names a style (<see cref="RaisesBoardwalks(BiomeBoardwalks, BiomeBoardwalkStyle)"/>).
 			/// </summary>
 			public BiomeBoardwalkStyle BoardwalkStyle = BiomeBoardwalkStyle.Planked;
@@ -1912,7 +1912,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How the biome's ways bridge its rivers (<see cref="BiomeTemplate.CrossingStyle"/>, 2026-10-26, I2l-b): the kit's timber spans
+			/// How the biome's ways bridge its rivers (<see cref="BiomeTemplate.CrossingStyle"/>): the kit's timber spans
 			/// unless the biome's file names a style (<see cref="Crosses"/>).
 			/// </summary>
 			public BiomeCrossingStyle CrossingStyle = BiomeCrossingStyle.Default;
@@ -1925,7 +1925,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The biome's straight roads (<see cref="BiomeTemplate.StraightRoads"/>, 2026-10-26, I2l-b, decisions 50/56/87/89): none unless
+			/// The biome's straight roads (<see cref="BiomeTemplate.StraightRoads"/>): none unless
 			/// the biome's file lays them (<see cref="LaysStraightRoads"/>).
 			/// </summary>
 			public BiomeStraightRoads StraightRoads = BiomeStraightRoads.None;
@@ -1941,7 +1941,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Names every point-of-interest kind sited on the biome's ground, each with its weight: the whole list, in place of any
-			/// before (2026-10-26, phase CODE-TABLE CLEARANCE: each file was given the weights the catalogue's rows gave its biome
+			/// before (each file was given the weights the catalogue's rows gave its biome
 			/// by its name). A kind left out is never sited here; <see cref="Hosts"/> after it changes one kind.
 			/// </summary>
 			public Entry Sites(params (POIType Kind, float Weight)[] kinds)
@@ -1960,7 +1960,7 @@ namespace FishMMO.Shared.WorldDesign
 			private Dictionary<POIType, bool> breathes;
 
 			/// <summary>
-			/// Says whether a kind needs breathable air here (<see cref="BiomeSiteKind.NeedsBreathableAir"/>, decision 39, 2026-10-18)
+			/// Says whether a kind needs breathable air here (<see cref="BiomeSiteKind.NeedsBreathableAir"/>)
 			/// in place of BiomeSiteAir's default: <c>.Air(POIType.Hermitage, false)</c> for a dead hermit's hearth that stands on an
 			/// airless moon, <c>.Air(POIType.Ruins, true)</c> for ruins that are somebody's home.
 			/// </summary>
@@ -1976,9 +1976,9 @@ namespace FishMMO.Shared.WorldDesign
 			private Dictionary<POIType, bool> wets;
 
 			/// <summary>
-			/// Says whether a kind needs liquid water on the world's surface here (<see cref="BiomeSiteKind.NeedsLiquidWater"/>, decision 68,
-			/// 2026-10-25) in place of BiomeSiteAir's default: <c>.Water(POIType.FishingCamp)</c> for a camp at a lead in shelf ice, never
-			/// on an ice world's frozen sea. No kind older than the biome rounds' own (phase NEW-POI-KINDS) needs it by default.
+			/// Says whether a kind needs liquid water on the world's surface here (<see cref="BiomeSiteKind.NeedsLiquidWater"/>)
+			/// in place of BiomeSiteAir's default: <c>.Water(POIType.FishingCamp)</c> for a camp at a lead in shelf ice, never
+			/// on an ice world's frozen sea. No kind older than the biomes' own needs it by default.
 			/// </summary>
 			public Entry Water(POIType kind, bool needsLiquidWater = true)
 			{
@@ -2019,8 +2019,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The loose ground the wind lifts here, when the file says (<see cref="BiomeTemplate.LooseGround"/>): a substance's asset
-			/// name, or "" for none. Unset (the default) leaves the template's. Set through <see cref="Loose"/>. Until 2026-10-26 only
-			/// the weather content generator's table by the biome's name said it; phase CODE-TABLE CLEARANCE moved each row into
+			/// name, or "" for none. Unset (the default) leaves the template's. Set through <see cref="Loose"/>. Formerly only
+			/// the weather content generator's table by the biome's name said it; a later pass moved each row into
 			/// its biome's file, and the generator now seeds a template's ground from the file (<see cref="Emission"/> with it).
 			/// </summary>
 			public string LooseGround;
@@ -2035,8 +2035,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The terrain process profile the biome's ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>: how it erodes,
 			/// drains and breaks into benches), by the profile's name (<see cref="TerrainProcessTable.Profiles"/>), or null when the
-			/// file names none (the template's kept). Set through <see cref="ErodesAs"/>. Until 2026-10-26 the terrain process
-			/// table's assignments by the biome's name said it; phase CODE-TABLE CLEARANCE moved each into its biome's file.
+			/// file names none (the template's kept). Set through <see cref="ErodesAs"/>. Formerly the terrain process
+			/// table's assignments by the biome's name said it; a later pass moved each into its biome's file.
 			/// </summary>
 			public string TerrainProcessName;
 
@@ -2051,7 +2051,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// The point-of-interest kinds sited on the biome's ground and how gladly (<see cref="BiomeTemplate.SiteKinds"/>): the
 			/// file's <see cref="Sites"/> with its <see cref="Hosts"/> laid over them; only kinds weighing more than 0, in kind
 			/// order. The catalogue's rows are not read by the biome's name (<see cref="PointOfInterestRules.KindWeightsFor"/>, the
-			/// cut's fallback for a template never authored): their answer is in every file since 2026-10-26.
+			/// cut's fallback for a template never authored): their answer is in every file.
 			/// </summary>
 			public List<BiomeSiteKind> SiteKinds()
 			{
@@ -2075,8 +2075,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					if (pair.Value > 0f)
 					{
-						// Lived-in kinds need breathable air (decision 39): the file's word, else BiomeSiteAir's default. Liquid water
-						// only where the file says (decision 68).
+						// Lived-in kinds need breathable air: the file's word, else BiomeSiteAir's default. Liquid water
+						// only where the file says.
 						list.Add(new BiomeSiteKind((POIType)pair.Key, pair.Value, NeedsAir((POIType)pair.Key), NeedsWater((POIType)pair.Key)));
 					}
 				}
@@ -2093,13 +2093,13 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The weight each template variant takes here (<see cref="BiomeTemplate.SiteVariants"/>): the file's own
 			/// <see cref="Prefers"/>, in its order; then, for each of the project's other templates (<paramref name="handMade"/>:
-			/// made by hand, or left over from an older catalogue; 2026-10-16, I5b) whose own biome list gives this biome another
+			/// made by hand, or left over from an older catalogue) whose own biome list gives this biome another
 			/// weight than its weight elsewhere, that weight, so a hand-made variant that names this biome is not stranded (the
 			/// file's word for that variant stands). A variant not listed keeps its weight elsewhere.
 			/// </summary>
 			/// <remarks>
-			/// Until 2026-10-26 the catalogue's templates' biome lists (<see cref="PointOfInterestTemplateSpecs.All"/>,
-			/// <see cref="PointOfInterestTemplateSpec.BiomeWeightByName"/>) came first, by the biome's name; phase CODE-TABLE
+			/// Formerly the catalogue's templates' biome lists (<see cref="PointOfInterestTemplateSpecs.All"/>,
+			/// <see cref="PointOfInterestTemplateSpec.BiomeWeightByName"/>) came first, by the biome's name
 			/// CLEARANCE wrote their answer into every file as Prefers in the templates' order, so the list and its mark are as
 			/// before. The templates' lists stay what the template authoring writes onto their assets: the cut's fallback.
 			/// </remarks>
@@ -2174,7 +2174,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Lays a coat over the biome's buildings on the GPU (<see cref="BiomeStructureCoat"/>, 2026-10-25: a draft's new finish), on
+			/// Lays a coat over the biome's buildings on the GPU (<see cref="BiomeStructureCoat"/>: a draft's new finish), on
 			/// <paramref name="cover"/> of the pieces at <paramref name="strength"/>, its main colour pulled to <paramref name="tint"/> by the
 			/// tint's alpha (0: the recipe's). Keeps the finish (<see cref="Weathers"/>, else the name's); a draft whose finish "falls back"
 			/// to Mossy until built sets Weathers(None, 0, 0) beside it when the coat replaces it. Use either order.
@@ -2187,8 +2187,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// How the weather finishes the biome's buildings and stones (<see cref="BiomeTemplate.Weathering"/>): the file's own
-			/// (<see cref="Weathers"/>), else <see cref="DefaultWeathering"/>. Until 2026-10-26 the default was what the biome's
-			/// name gave (<see cref="WeatheringByName"/>); phase CODE-TABLE CLEARANCE wrote that into every file, and the keyword
+			/// (<see cref="Weathers"/>), else <see cref="DefaultWeathering"/>. Formerly the default was what the biome's
+			/// name gave (<see cref="WeatheringByName"/>); a later pass wrote that into every file, and the keyword
 			/// reading is only the cut's fallback for a template never authored.
 			/// </summary>
 			public BiomeWeathering Weathering() => weathers ?? DefaultWeathering;
@@ -2200,7 +2200,7 @@ namespace FishMMO.Shared.WorldDesign
 				return this;
 			}
 
-			/// <summary>Sows nothing (decision 25, 2026-10-25): the biome's Field Crops authored empty, so with no orchard its settlements lay no fields.</summary>
+			/// <summary>Sows nothing: the biome's Field Crops authored empty, so with no orchard its settlements lay no fields.</summary>
 			public Entry NoCrops() => Crops();
 
 			/// <summary>The crops the biome's fields grow, by detail prefab name (<see cref="BiomeTemplate.FieldCrops"/>): the file's own (<see cref="Crops"/>), else wheat.</summary>
@@ -2209,7 +2209,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Lays the biome's fields of one crop (a detail prefab name, as <see cref="Crops"/> names it) on their own surface
-			/// (<see cref="BiomeFieldCrop.Surface"/>, 2026-10-16, I2e): lazy beds, ridge and furrow. Every crop is Flat otherwise.
+			/// (<see cref="BiomeFieldCrop.Surface"/>): lazy beds, ridge and furrow. Every crop is Flat otherwise.
 			/// </summary>
 			public Entry CropSurface(string prefab, BiomeFieldSurface surface)
 			{
@@ -2221,7 +2221,7 @@ namespace FishMMO.Shared.WorldDesign
 			public BiomeFieldSurface FieldSurface(string prefab)
 				=> cropSurfaces != null && prefab != null && cropSurfaces.TryGetValue(prefab, out BiomeFieldSurface surface) ? surface : BiomeFieldSurface.Flat;
 
-			// ── Terraces, rows, orchards and the fields' layout (2026-10-18, I2j-b) ──
+			// ── Terraces, rows, orchards and the fields' layout ──
 
 			private Dictionary<string, BiomeTerraceRiser> cropRisers;
 			private Dictionary<string, float> cropRows;
@@ -2379,7 +2379,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How the biome's settlements light their streets (<see cref="BiomeTemplate.WayLights"/>, 2026-10-16, I5b): what every
+			/// How the biome's settlements light their streets (<see cref="BiomeTemplate.WayLights"/>): what every
 			/// biome lit them with before (<see cref="BiomeWayLights.Default"/>: lanterns in towns, cities, capitals and ports,
 			/// torches in villages) with the file's own <see cref="Lights"/> and <see cref="Unlit"/> laid over it. A fresh list.
 			/// </summary>
@@ -2387,8 +2387,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// <see cref="WayLights()"/> for a biome no world of breathable air carries (<paramref name="glowOnly"/>, BiomeAir.NeverBreathable:
-			/// only thin air or none, decision 41, 2026-10-18, or Requires a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or
-			/// molten-rock world, decisions 62 and 65(h), 2026-10-25): the same places and spacing with the cold Glow lights in place of every
+			/// only thin air or none, or Requires a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or
+			/// molten-rock world): the same places and spacing with the cold Glow lights in place of every
 			/// flame (BiomeGlowLights.WayLights), the file's own lights laid over them. False: exactly <see cref="WayLights()"/>.
 			/// </summary>
 			public List<BiomeWayLight> WayLights(bool glowOnly)
@@ -2436,14 +2436,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How the biome's caves and mines are lit (<see cref="BiomeTemplate.CaveLights"/>, 2026-10-16, I6c): what the cave
+			/// How the biome's caves and mines are lit (<see cref="BiomeTemplate.CaveLights"/>): what the cave
 			/// dressing laid in every biome before (<see cref="BiomeCaveLights.Default"/>) with the file's own
 			/// <see cref="CaveLight"/> and <see cref="Unlit(BiomeCaveLightPlace)"/> laid over it. A fresh list.
 			/// </summary>
 			public List<BiomeCaveLight> CaveLights() => CaveLights(false);
 
 			/// <summary>
-			/// <see cref="CaveLights()"/> for a biome found only under thin air or none (<paramref name="glowOnly"/>, decision 41): crystal
+			/// <see cref="CaveLights()"/> for a biome found only under thin air or none (<paramref name="glowOnly"/>): crystal
 			/// posts and glowjars in place of the lanterns and torches (BiomeGlowLights.CaveLights), the file's own laid over them.
 			/// </summary>
 			public List<BiomeCaveLight> CaveLights(bool glowOnly)
@@ -2476,7 +2476,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Gives one part of one style's buildings its own material here (tint: the kit's for the material unless given); for a
-			/// roof role, the pitch its roofs are built at too (2026-10-18, I6h; default the material's own, StructureRoofs).
+			/// roof role, the pitch its roofs are built at too (default the material's own, StructureRoofs).
 			/// </summary>
 			public Entry Builds(BiomeStructureStyle style, BiomeStructureRole role, BiomeStructureMaterial material, Color? tint = null, string surface = null,
 				BiomeRoofPitch pitch = BiomeRoofPitch.Material)
@@ -2498,8 +2498,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// What the biome's buildings are made of (<see cref="BiomeTemplate.StructurePalette"/>): the structure kit's own
-			/// materials for every style and part (<see cref="BiomeStructurePalette.Kit"/>, what every biome built with until
-			/// 2026-10-16), with the file's own <see cref="Builds"/> laid over them. A fresh object each call.
+			/// materials for every style and part (<see cref="BiomeStructurePalette.Kit"/>, what every biome once built with),
+			/// with the file's own <see cref="Builds"/> laid over them. A fresh object each call.
 			/// </summary>
 			public BiomeStructurePalette StructurePalette()
 			{
@@ -2523,7 +2523,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>The crop every field grew until 2026-10-16, and every biome's default (<see cref="Entry.FieldCrops"/>).</summary>
+		/// <summary>The crop every field grew formerly, and every biome's default (<see cref="Entry.FieldCrops"/>).</summary>
 		public const string WheatCrop = "Detail_GrassWheat";
 
 		/// <summary>
@@ -2533,13 +2533,13 @@ namespace FishMMO.Shared.WorldDesign
 		public static BiomeWeathering DefaultWeathering => new BiomeWeathering(BiomeStructureFinish.Mossy, 0f, 0.5f);
 
 		/// <summary>
-		/// The weathering a biome's name gave its points of interest until 2026-10-16 (PropsFeature.FinishFor read the name's
+		/// The weathering a biome's name gave its points of interest formerly (PropsFeature.FinishFor read the name's
 		/// keywords): a dark algal film in wet country, 0.3 + 0.6 × decay of the pieces (swamp, mangrove, bog, wetland, marsh,
 		/// estuary); nothing in dry country (desert, badlands, salt, arid, dust, wasteland, savanna, scrub, volcanic, molten,
 		/// sulphur, oasis); else moss on 1 × decay of the pieces in damp country (forest, woodland, jungle, rainforest, taiga,
 		/// bamboo, valley, karst, temperate, lake, river) and 0.5 × decay elsewhere (and with no biome at all). In that order: a
-		/// name that is both wet and dry is wet. Every biome's default (<see cref="Entry.Weathering"/>) until 2026-10-26; since
-		/// phase CODE-TABLE CLEARANCE only the cut's fallback for a template never authored (BiomeTemplateArt.Weathering), every
+		/// name that is both wet and dry is wet. Every biome's default (<see cref="Entry.Weathering"/>) formerly; since
+		/// only the cut's fallback for a template never authored (BiomeTemplateArt.Weathering), every
 		/// file naming its own.
 		/// </summary>
 		public static BiomeWeathering WeatheringByName(string biomeName)
@@ -2576,7 +2576,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A herb grove's herbs where these gathering resources (node names) are offered: the detail prefabs the catalogue's
 		/// herbs and fungi among them show as, in the catalogue's order, else <see cref="CommonHerbs"/>. What the grove grew
-		/// from the biome's name until 2026-10-16 (PointOfInterestHerbGrove.HerbsFor), from the biome's resources now.
+		/// from the biome's name formerly (PointOfInterestHerbGrove.HerbsFor), from the biome's resources now.
 		/// </summary>
 		public static List<string> HerbsOf(IReadOnlyCollection<string> offered)
 		{
@@ -2622,7 +2622,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string[] WoodlandBushes => new[] { ProceduralArtCatalogue.BushPrefix + "Hazel", ProceduralArtCatalogue.BushPrefix + "Bramble" };
 
 		/// <summary>
-		/// The rock a cave of a form is cut in, whatever the biome: the rule the cave shaper kept by form until 2026-10-16
+		/// The rock a cave of a form is cut in, whatever the biome: the rule the cave shaper kept by form formerly
 		/// (CaveShaper.RockOf: basalt for a lava tube, glacier ice for an ice cave, the ground's own rock by the biome's rock
 		/// rule for a cave, grotto, sea cave or mine). Every biome's default (<see cref="Entry.CaveShellFor"/>).
 		/// </summary>
@@ -2634,7 +2634,7 @@ namespace FishMMO.Shared.WorldDesign
 					return "Basalt";
 				case CaveForm.IceCave:
 				case CaveForm.SeaHall:
-					// A sea hall is cut in the ice shell over its sea (decision 83; its round names the marine ice).
+					// A sea hall is cut in the ice shell over its sea (its round names the marine ice).
 					return CliffRocks.Ice;
 				default:
 					return BiomeCaveShell.Ground;
@@ -2642,7 +2642,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The weight a sea life kind gave every biome it named a favourite until 2026-10-16 (the client's
+		/// The weight a sea life kind gave every biome it named a favourite formerly (the client's
 		/// SeaCreatureKind.PreferWeight in SeaLifeSettings.Defaults and on the weather profile, never below 1 there): the
 		/// weight <see cref="Entry.HomeTo(string[])"/> gives a kind named without one. The editor's art tables cannot see the
 		/// client's settings, so the numbers are copied here and a test keeps them equal for every kind (BiomeTemplateLivingTests):
@@ -2744,7 +2744,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A detail of the vegetation expansion (2026-10-10), which carries its own group and sink
+		/// A detail of the vegetation expansion, which carries its own group and sink
 		/// (<see cref="DetailSpec.GroupMetres"/>, <see cref="DetailSpec.GroupSize"/>, <see cref="DetailSpec.Sink"/>). The
 		/// legacy details never set them, so their name-keyed values below stay exactly what they were.
 		/// </summary>
@@ -2857,7 +2857,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// shells, urchins) lie with its slope; anything that grows stands up.
 		/// </summary>
 		/// <remarks>
-		/// <paramref name="slopeMin"/> (2026-10-25, decision 38): above 0, the rule grows only on ground at least that steep, a reef's
+		/// <paramref name="slopeMin"/>: above 0, the rule grows only on ground at least that steep, a reef's
 		/// drop-off walls and a kelp reef's faces (with <paramref name="slopeMax"/> raised to 90 for a sheer wall). Not in any rule's
 		/// earlier versions: a rule that leaves it 0 writes exactly what it did.
 		/// </remarks>
@@ -2881,7 +2881,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A bed rule grown under other waters than its slot's (decision 35, 2026-10-18): <c>In(BiomeBedWaters.Lake, Sea("Quillwort",
+		/// A bed rule grown under other waters than its slot's: <c>In(BiomeBedWaters.Lake, Sea("Quillwort",
 		/// 4f, 1f, 6f))</c> on a lakebed grows quillwort under lakes (by depth below the lake's level), not under the sea.
 		/// </summary>
 		private static Scatter In(BiomeBedWaters waters, Scatter s)
@@ -2932,7 +2932,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What <see cref="Trees"/> wrote until 2026-10-04, verbatim (the earlier versions it remembers
+		/// What <see cref="Trees"/> wrote formerly, verbatim (the earlier versions it remembers
 		/// included): kept so a rule an older run wrote, and nobody has touched, is still recognised.
 		/// Never planted from directly.
 		/// </summary>
@@ -3364,7 +3364,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Keeps a rule to some worlds (<see cref="PrefabSpawnRule.worldGate"/>, decision 41, 2026-10-18): their air
+		/// Keeps a rule to some worlds (<see cref="PrefabSpawnRule.worldGate"/>): their air
 		/// (<paramref name="air"/>, None any), their MEAN surface temperature on the climate's unclamped scale
 		/// (<paramref name="minTemperature"/> … <paramref name="maxTemperature"/>, infinite open) and what they are
 		/// (<paramref name="requires"/>, None any). One answer for a whole scene: <c>OnWorlds(Plants("Starwort", 1.5f), BiomeAtmosphereRequirement.Thin)</c>
@@ -3381,7 +3381,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Keeps a rule to a band of the ground's heat (<see cref="PrefabSpawnRule.useHeatBand"/>, 2026-10-18, phase I2q): the scene's
+		/// Keeps a rule to a band of the ground's heat (<see cref="PrefabSpawnRule.useHeatBand"/>): the scene's
 		/// heat mask from its geothermal sites, 0 cold … 1 a spring's throat, ends at or past 0 and 1 open. <c>Hot(Plants("Thermal moss", 3f), 0.1f, 0.4f)</c>
 		/// grows the moss in a hot spring's green halo only. Both ends open writes the rule exactly as without this call.
 		/// </summary>
@@ -3397,8 +3397,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Keeps a rule to one part of its biome's sculpted landforms (<see cref="PrefabSpawnRule.landformBand"/>, 2026-10-25, phase
-		/// I2g-b, decision 55), or with <paramref name="outside"/> off it: <c>OnLandform(Rocks(...), BiomeLandformPart.Rim, "DegradedCrater")</c>
+		/// Keeps a rule to one part of its biome's sculpted landforms (<see cref="PrefabSpawnRule.landformBand"/>, phase
+		/// I2g-b), or with <paramref name="outside"/> off it: <c>OnLandform(Rocks(...), BiomeLandformPart.Rim, "DegradedCrater")</c>
 		/// sets soft rims on worn craters' rims only. A rule without this call is written exactly as before.
 		/// </summary>
 		private static Scatter OnLandform(Scatter rule, BiomeLandformPart part, string kind = null, bool outside = false)
@@ -3409,8 +3409,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Grades a tree-channel rule's sizes on its biome's talus cones (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, phase I2u,
-		/// decision 79 (d)): ×0.6 at a cone's apex to ×1.8 at its toe. A rule without this call is written exactly as before.
+		/// Grades a tree-channel rule's sizes on its biome's talus cones (<see cref="PrefabSpawnRule.talusGrading"/>):
+		/// ×0.6 at a cone's apex to ×1.8 at its toe. A rule without this call is written exactly as before.
 		/// </summary>
 		private static Scatter TalusGraded(Scatter rule)
 		{
@@ -3419,7 +3419,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Gives a rule scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, phase SCATTER-MODES, decision 34):
+		/// Gives a rule scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>):
 		/// <c>Moded(Rocks(...), BiomeScatterMode.LeeDrift(8f))</c>. A rule without this call is written exactly as before.
 		/// </summary>
 		private static Scatter Moded(Scatter rule, BiomeScatterMode mode)
@@ -3429,7 +3429,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Keeps a rule to slopes facing one way (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, phase GROUND-BANDS, decision 71):
+		/// Keeps a rule to slopes facing one way (<see cref="PrefabSpawnRule.facingBand"/>):
 		/// <c>Faced(Detail(...), BiomeFacing.Poleward)</c> for a cold trap's rime clods on the shaded faces. A rule without this call is
 		/// written exactly as before.
 		/// </summary>
@@ -3479,7 +3479,7 @@ namespace FishMMO.Shared.WorldDesign
 		//
 		// Each biome's entry is written in its own file, BiomeArtSpec/BiomeArtSpec.<Biome>.cs (the asset's name without
 		// its spaces), as one method of this partial class named the same: everything the spec says about one biome in
-		// one place, so a biome is read, reviewed and changed without touching any other (2026-10-15). The helpers
+		// one place, so a biome is read, reviewed and changed without touching any other. The helpers
 		// above and the geology sets below stay here, shared by every biome.
 		//
 		// Build lists those methods explicitly, in the table's order, never by reflection: the entries' order is the
@@ -3610,7 +3610,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Size: the odd giant ─────────────────────────────────────────
 		//
-		// 2026-10-20: "All detail objects (crystals, rocks, etc) besides the standard stuff like firepits, camp sites, etc, need
+		// "All detail objects (crystals, rocks, etc) besides the standard stuff like firepits, camp sites, etc, need
 		// significantly larger variance (we want massive crystals)." Applied over every finished entry, after each biome's own
 		// tuning (an ice palace's crystals start larger than a frost field's), to the scatter that is the ground's own rock and
 		// crystal: formations, boulders, ice blocks, seracs and the small stones. Plants, trees, deadwood and the sea's life keep

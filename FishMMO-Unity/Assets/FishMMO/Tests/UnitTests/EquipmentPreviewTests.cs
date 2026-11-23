@@ -254,7 +254,7 @@ namespace FishMMO.UnitTests
 				EquipmentPreviewRenderer renderer = new EquipmentPreviewRenderer();
 				renderer.Configure(host.AddComponent<Camera>());
 				// Clouds, fog, shimmer and the world passes are full-screen features that run for every Game camera,
-				// whatever it culls (2026-11-22: the portrait showed the sky and clouds behind the character).
+				// whatever it culls (the portrait showed the sky and clouds behind the character).
 				LogAssert.AreEqual(CameraType.Preview, renderer.Camera.cameraType,
 					"the renderer features skip any camera that is not Game or SceneView");
 				renderer.Dispose();

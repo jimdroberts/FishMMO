@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The habitat of the ground at a point (Phase 4 of the core and modules plan, 2026-11-18): what the spawners ask before
+	/// The habitat of the ground at a point: what the spawners ask before
 	/// they place a creature. The World Simulation module installs <see cref="Source"/> from the scene's biome map; with none
 	/// installed, or no map in the scene, every point answers <see cref="BiomeHabitat.None"/> and <see cref="HasMap"/> is
 	/// false, so a spawner places its creatures anywhere, as it does in a scene with no biome map.

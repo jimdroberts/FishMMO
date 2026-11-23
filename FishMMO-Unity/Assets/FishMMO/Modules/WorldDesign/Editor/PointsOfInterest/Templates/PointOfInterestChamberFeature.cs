@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// Builds its own features in a carved cave's chamber instead of at the site's anchor (the cave's mouth): a camp or a
-	/// den on the chamber floor, a large cave's dungeon entrance at its back (2026-10-10: a large cave ends in a
+	/// den on the chamber floor, a large cave's dungeon entrance at its back (a large cave ends in a
 	/// dungeon entrance; a small one is a walk-in grotto).
 	/// </summary>
 	/// <remarks>

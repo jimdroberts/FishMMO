@@ -29,7 +29,7 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Where it was.</b> Until 2026-10-15 every biome's blades of a prefab looked the same: one global list on the Weather
+	/// <b>Where it was.</b> Formerly every biome's blades of a prefab looked the same: one global list on the Weather
 	/// Render Profile, matched by prefab-name prefix, and one global ground tint (0.85) for every type. Those values are now
 	/// <see cref="BiomeGrassDefaults"/>, which the biome art authoring writes onto every template for every blade prefab its
 	/// rules grow, so the first authoring changes no scene; the per-biome rounds then tune each biome's own.
@@ -43,8 +43,8 @@ namespace FishMMO.Shared.Biomes
 	/// </para>
 	/// <para>
 	/// <b>Ground tint</b> (<see cref="GroundTint"/>): how much of the terrain texture's colour under its root a blade takes
-	/// (1: the ground's colour, shaded root to tip by the type; 0: the type's own colours). 0.85 for every type before
-	/// 2026-10-15 (what the authoring writes, so nothing changed); an entry made by hand starts at
+	/// (1: the ground's colour, shaded root to tip by the type; 0: the type's own colours). 0.85 for every type formerly
+	/// (what the authoring writes, so nothing changed); an entry made by hand starts at
 	/// <see cref="DefaultGroundTint"/>, where a type's own colour reads through.
 	/// </para>
 	/// </remarks>
@@ -54,7 +54,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The ground tint a hand-made entry starts with: the type's own colour reads through the ground's.</summary>
 		public const float DefaultGroundTint = 0.4f;
 
-		/// <summary>The one global ground tint every type took before 2026-10-15 (the profile's TerrainTextureTint).</summary>
+		/// <summary>The one global ground tint every type took formerly (the profile's TerrainTextureTint).</summary>
 		public const float LegacyGroundTint = 0.85f;
 
 		/// <summary>Head colours one type can have (the blade renderer's table holds four).</summary>
@@ -96,13 +96,13 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("A strap that keeps its width to a rounded end (a reed's leaf) instead of tapering to a point.")]
 		public bool BluntTip;
 		/// <remarks>
-		/// Decision 41 (2026-10-18, the Cryovolcanic Plain round): mineral blades (hoar-frost needles, salt quills) stand as they grew
+		/// Mineral blades (hoar-frost needles, salt quills) stand as they grew
 		/// and never sway, whatever the wind and the world's air (the blade shader reads it per type, GrassBladeRenderer's MORE row).
 		/// </remarks>
 		[Tooltip("Never sways: a mineral blade (ice needles, salt quills) stands as it grew whatever the wind. Off: sways with the wind and the world's air, as every blade did.")]
 		public bool Rigid;
 		/// <remarks>
-		/// Decision 75 (2026-10-25, phase I2t, the Savanna round): an after-burn flower (fire lilies) grows ONLY on ground the burn mosaic
+		/// An after-burn flower (fire lilies) grows ONLY on ground the burn mosaic
 		/// burnt one to four weeks before (BurnMosaic.BurnStage.Lily; GrassBladeRenderer's MORE row w), and nowhere else.
 		/// </remarks>
 		[Tooltip("Grows only where the burn mosaic burnt the ground one to four weeks before (fire lilies after a veld fire). Off: grows wherever it is painted, as every type did.")]
@@ -121,7 +121,7 @@ namespace FishMMO.Shared.Biomes
 		public bool HeadColoursOverMesh;
 
 		[Header("Ground")]
-		[Tooltip("How much of the terrain texture's colour under its root the blade takes: 1 the ground's colour (shaded root to tip by the type), 0 the type's own colours. Every type took 0.85 before 2026-10-15.")]
+		[Tooltip("How much of the terrain texture's colour under its root the blade takes: 1 the ground's colour (shaded root to tip by the type), 0 the type's own colours. Every type took 0.85 formerly.")]
 		[Range(0f, 1f)] public float GroundTint = DefaultGroundTint;
 
 		public BiomeGrassType() { }
@@ -245,12 +245,12 @@ namespace FishMMO.Shared.Biomes
 				}
 			}
 			text.Append(HeadColoursOverMesh ? 'M' : 'm').Append("|g").Append(Q(GroundTint));
-			// Only a rigid look says so (2026-10-18), so every signature and mark made before reads the same.
+			// Only a rigid look says so, so every signature and mark made before reads the same.
 			if (Rigid)
 			{
 				text.Append("|R");
 			}
-			// Likewise only an after-burn look (2026-10-25, I2t).
+			// Likewise only an after-burn look.
 			if (AfterBurn)
 			{
 				text.Append("|F");
@@ -275,7 +275,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// Every blade prefab's look as it was before looks were per biome (2026-10-15), by prefab-name prefix, the longest
+	/// Every blade prefab's look as it was before looks were per biome, by prefab-name prefix, the longest
 	/// matching prefix winning: the Weather Render Profile's seven (the generic <c>Detail_Grass</c>, the four legacy grasses,
 	/// reeds and meadow flowers) and the vegetation expansion's thirteen (sedge, cotton, dune, feather, savanna, Phragmites,
 	/// rush, wheat, five flower sets), every one at the old global ground tint of 0.85.
@@ -298,7 +298,7 @@ namespace FishMMO.Shared.Biomes
 
 		private static readonly (string Prefix, BiomeGrassType Look)[] Table =
 		{
-			// The profile's own, as its asset held them (= GrassBladeSettings' initialiser before 2026-10-15).
+			// The profile's own, as its asset held them (= GrassBladeSettings' initialiser formerly).
 			("Detail_Grass", new BiomeGrassType(1f, 1f, 1f, 0.12f, 0.4f)),
 			("Detail_GrassLush", new BiomeGrassType(1f, 0.9f, 1f, 0.1f, 0.45f)),
 			("Detail_GrassDry", new BiomeGrassType(0.8f, 1.3f, 0.85f, 0.15f, 0.25f)),
@@ -309,7 +309,7 @@ namespace FishMMO.Shared.Biomes
 			// Thin straight stems, a flower each, sprinkled through the meadow grass.
 			("Detail_Flowers", new BiomeGrassType(1f, 1.3f, 0.8f, 0.1f, 0.12f).Sprinkled(14f, GrassBladeHead.Flower, 0.032f)),
 
-			// The vegetation expansion's (2026-10-10, design §2c/§2d; GrassTypeDefaults before 2026-10-15).
+			// The vegetation expansion's (design §2c/§2d; GrassTypeDefaults formerly).
 			// Carex: tussocks of arching, keeled blue-green blades (GrassTuft, less stiff and more bent, pulled into tussocks).
 			("Detail_GrassSedge", new BiomeGrassType(0.85f, 1.3f, 1.1f, 0.45f, 0.6f).Colours("#5e7a4a", "#8a9a62").Wading(0.1f)),
 			// Cottongrass: thin stems sprinkled through the bog, each with a white cotton tuft (a large white flower head).

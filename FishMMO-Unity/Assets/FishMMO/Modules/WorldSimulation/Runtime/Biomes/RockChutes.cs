@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// What kind of stored chute a line is (2026-10-25, phase I2u "falling stone", decisions 79 and 95). APPEND-ONLY: stored in the
+	/// What kind of stored chute a line is ("falling stone"). APPEND-ONLY: stored in the
 	/// scene's biome map (<see cref="RockChute.Kind"/>).
 	/// </summary>
 	public enum RockChuteKind : byte
@@ -17,7 +17,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// One stored chute (I2u): a line stones fall down, head first, its points in the map's <see cref="SceneBiomeMap.ChutePoints"/>
+	/// One stored chute: a line stones fall down, head first, its points in the map's <see cref="SceneBiomeMap.ChutePoints"/>
 	/// (<see cref="First"/>, <see cref="Count"/>), written by the cut and every repaint (<see cref="RockChutes.FromLandforms"/>).
 	/// </summary>
 	[Serializable]
@@ -35,12 +35,12 @@ namespace FishMMO.Shared.Biomes
 		public float Length;
 		/// <summary>Half its width across, metres: how far to either side of the line its stones fall.</summary>
 		public float Half;
-		/// <summary>Its fall rate's own factor: 1, or <see cref="RockChutes.WalkingRockBoost"/> near a walking rock (decision 79).</summary>
+		/// <summary>Its fall rate's own factor: 1, or <see cref="RockChutes.WalkingRockBoost"/> near a walking rock.</summary>
 		public float Boost;
 	}
 
 	/// <summary>
-	/// One stored talus cone (I2u): where a breathing talus breathes (cold air out of its toe in summer, warm air out of its head in
+	/// One stored talus cone: where a breathing talus breathes (cold air out of its toe in summer, warm air out of its head in
 	/// winter) and where its stones grade from fine to coarse.
 	/// </summary>
 	[Serializable]
@@ -56,7 +56,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The scene's stored chutes and talus cones (2026-10-25, phase I2u, decisions 79 and 95), made at the cut from its landforms: every
+	/// The scene's stored chutes and talus cones, made at the cut from its landforms: every
 	/// run of a chute landform's line oriented downhill (the cut's carved ground), a scree chute's run carried on down the steepest
 	/// descent over its cone, resampled to points with their ground; and every talus cone's apex and toe. Pure, given the ground.
 	/// </summary>
@@ -82,7 +82,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The most chutes and cones a scene stores (the rest are dropped, last first).</summary>
 		public const int MostChutes = 512, MostCones = 256;
 
-		/// <summary>Talus size grading (decision 79 (d)): a stone's scale at a cone's apex and at its toe.</summary>
+		/// <summary>Talus size grading: a stone's scale at a cone's apex and at its toe.</summary>
 		public const float ApexScale = 0.6f, ToeScale = 1.8f;
 
 		/// <summary>True when a landform of this name is a chute, with the chute kind it makes.</summary>

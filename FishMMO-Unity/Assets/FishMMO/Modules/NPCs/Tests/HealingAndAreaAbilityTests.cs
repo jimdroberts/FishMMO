@@ -271,7 +271,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void ExcludeOthersPets_OnlyTheOwnerMaintainsAPet()
 		{
-			// Jim, 2026-11-21: players who summon pets handle their own pet maintenance — at every standing, allies' pets too.
+			// Players who summon pets handle their own pet maintenance — at every standing, allies' pets too.
 			TargetAllianceCondition heal = new TargetAllianceCondition { ExcludeOthersPets = true };
 			Assert.That(heal.PassesPetRule(defenderIsOthersPet: true), Is.False, "someone else's pet, even a party member's");
 			Assert.That(heal.PassesPetRule(defenderIsOthersPet: false), Is.True, "your own pet, or anyone who is not a pet");
@@ -281,7 +281,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void NeutralExcludesWildlifeAndPets_LetsPlayersAndNpcsThrough_NotWildlifeOrPets()
 		{
-			// Heals since 2026-11-21: neutral NPCs (townsfolk, guards) too, never wildlife or a stranger's pet.
+			// Heals: neutral NPCs (townsfolk, guards) too, never wildlife or a stranger's pet.
 			TargetAllianceCondition healable = new TargetAllianceCondition
 			{
 				ApplyToSelf = true, ApplyToEnemy = false, ApplyToNeutral = true, NeutralExcludesWildlifeAndPets = true, ApplyToAllies = true,

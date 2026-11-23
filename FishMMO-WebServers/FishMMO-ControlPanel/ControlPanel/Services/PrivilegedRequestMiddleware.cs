@@ -26,7 +26,7 @@ namespace FishMMO.ControlPanel.Services
 	/// already what the in-game command gate records.
 	/// </para>
 	/// <para>
-	/// Reads as well as writes, since 2026-09-14: every Game Master and Admin action is tracked, and
+	/// Reads as well as writes,: every Game Master and Admin action is tracked, and
 	/// a refused look at something above one's level is as much a probe as a refused write.
 	/// </para>
 	/// <para>

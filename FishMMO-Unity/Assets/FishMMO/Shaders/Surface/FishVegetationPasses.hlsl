@@ -45,7 +45,7 @@
 #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
 // The sea's surface and surge, for plants with _Aquatic set (kelp, corals, sea fans).
 #include "Assets/FishMMO/Shaders/Surface/FishSea.hlsl"
-// A lake's or a river's surface and current round the camera, for the aquatic plants rooted in them (2026-10-18).
+// A lake's or a river's surface and current round the camera, for the aquatic plants rooted in them.
 #include "Assets/FishMMO/Shaders/Surface/FishChannelFlow.hlsl"
 // The instanced tree channels' per-instance LOD cross-fade (_FishLodFade; contract in the file).
 #include "Assets/FishMMO/Shaders/FishLodFade.hlsl"
@@ -582,7 +582,7 @@ bool VegVary(inout float3 positionOS, inout float3 normalOS, float4 partPivot, f
     if (_FacingCamera > 0.5)
     {
         // A billboard is a picture of the tree already: its colour is the plant's own, and so are its height and its crown's
-        // width, which the meshes take below, or a tree changed size where it changed to its billboard (2026-11-06). The
+        // width, which the meshes take below, or a tree changed size where it changed to its billboard. The
         // crown's widening fades in over the first 3 m there; on the quad it is uniform across (the trunk is a pixel or two
         // wide at a billboard's range). No twist or lean: one picture turned to the camera has neither.
         positionOS.y *= 1.0 + rTall * _VaryHeight;
@@ -780,7 +780,7 @@ void VegDeform(VegAttributes input, out float3 positionWS, out half3 normalWS, o
 
     if (_Aquatic > 0.5)
     {
-        /* Under a lake or a river (decision 35 (a)/(k), 2026-10-18): the plant streams with the current where it is rooted and is
+        /* Under a lake or a river: the plant streams with the current where it is rooted and is
          * kept under THAT water's surface. Off the inland window, a plant rooted well above the sea's reach is taken to be in a
          * lake or a river too and only drifts, never pulled down to the sea's ceiling (which would bury a lake's weeds); near the
          * sea, or on a world with none, the sea's own surge and ceiling exactly as before. */
@@ -996,7 +996,7 @@ half3 VegNormal(VegVaryings input, half facing)
 // URP's UniversalFragmentPBR (Lighting.hlsl, this package's), step for step, but handing back the main light it
 // lit with — before the screen-space occlusion, as GetMainLight(shadowCoord, ...) gives it — so the light through
 // the leaves need not sample the main light's soft shadow a second time. That second sample was 0.3 ms of the trees'
-// 2.4 ms forward pass in an overcast meadow at 2560x1440 (ScenePerfProbe `vegnoback`, 2026-10-07).
+// 2.4 ms forward pass in an overcast meadow at 2560x1440 (ScenePerfProbe `vegnoback`).
 half4 VegFragmentPBR(InputData inputData, SurfaceData surfaceData, out Light mainLightUnoccluded)
 {
     #if defined(_SPECULARHIGHLIGHTS_OFF)
@@ -1019,7 +1019,7 @@ half4 VegFragmentPBR(InputData inputData, SurfaceData surfaceData, out Light mai
     AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
     uint meshRenderingLayers = GetMeshRenderingLayer();
     mainLightUnoccluded = GetMainLight(inputData.shadowCoord, inputData.positionWS, shadowMask);
-    // Under the sea the daylight dims with depth (2026-10-25, FishSeaDaylight; 1 elsewhere): the light through the leaves with it.
+    // Under the sea the daylight dims with depth (FishSeaDaylight; 1 elsewhere): the light through the leaves with it.
     half seaDaylight = FishSeaDaylight(inputData.positionWS);
     mainLightUnoccluded.color *= seaDaylight;
     Light mainLight = mainLightUnoccluded;
@@ -1104,7 +1104,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
          * neighbouring pixels read unrelated alphas: fwidth(a) ran toward 1, every leaf pixel came out near half
          * coverage, and half coverage is the same two samples of four on every layer, so a crown of many layers
          * never added up past half. Distant pines turned to see-through haze round an opaque trunk
-         * (2026-10-07). Capped, a far pixel is cut by its own alpha again (the mips keep the needles' coverage:
+         *. Capped, a far pixel is cut by its own alpha again (the mips keep the needles' coverage:
          * the importer's Preserve Coverage at the same cutoff), and near edges keep their soft ramp. */
         coverage = saturate((a - cutoff) / clamp(fwidth(a), 1e-4, 0.25) + 0.5);
         clip(coverage - 0.01);
@@ -1405,7 +1405,7 @@ half4 VegDepthFragment(VegDepthVaryings input) : SV_Target
 // (VegForwardFragment) and the same dissolves — written as depth alone, into the camera's own (multisampled) target,
 // ahead of the lit draws. The lit pass, drawn with ZWrite off over it, then shades only the leaf in front at each pixel:
 // a discarding shader gets no early depth rejection of its own, so a crown's every layer of cards ran the whole lit
-// shader before (ScenePerfProbe 2026-10-08: ~2 ms of the trees' 2.9 ms lit pass was pixels).
+// shader before (ScenePerfProbe: ~2 ms of the trees' 2.9 ms lit pass was pixels).
 half4 VegPrimeFragment(VegDepthVaryings input) : SV_Target
 {
     UNITY_SETUP_INSTANCE_ID(input);

@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests.Weather
 		private static readonly string[] CaveKinds =
 		{
 			"Cave bats", "Cave crickets", "Cave spiders", "Cave salamander", "Olm", "Cave moths", "Fungus gnats", "Cave geckos",
-			// 2026-10-20: the light-makers (AmbientGlowLifeTests).
+			// the light-makers (AmbientGlowLifeTests).
 			"Lantern beetles", "Glow millipedes", "Glowing snails", "Spore motes", "Cave lanternfish", "Lantern jellies", "Wisp moths",
 			"Lantern newts", "Ember mites", "Ice worms",
 		};
@@ -228,7 +228,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheDeepDarkIsNotBare()
 		{
-			// 2026-10-19: almost every baked spot is past the twilight (Dark 1), and caves read empty when only the crickets
+			// almost every baked spot is past the twilight (Dark 1), and caves read empty when only the crickets
 			// lived there at under a group a spot. A dry deep floor in a mild cave holds a few animals of more than one kind.
 			var world = new CaveWorld { Temperature = C(12f) };
 			var groups = new List<AmbientGroup>();
@@ -255,7 +255,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void ACaveUnderColdMountainsIsTheGroundsWarmthNotTheAirs()
 		{
-			// 2026-10-20: every cave round a cold scene's spawn read −2..−4 °C (the open air's year mean at the cave), under every
+			// every cave round a cold scene's spawn read −2..−4 °C (the open air's year mean at the cave), under every
 			// cave kind's band, and stood empty. The rock is the ground's year mean, and snow keeps the winter's frost off it.
 			Assert.That(AmbientCaveLife.GroundYearMean(C(12f), C(20f), 0.35f), Is.EqualTo(C(12f)).Within(1e-6f), "no frost, no change");
 			Assert.That(AmbientCaveLife.GroundYearMean(C(-3f), C(10f), 1f), Is.EqualTo(C(-3f)).Within(1e-6f), "bare ground feels all the frost");

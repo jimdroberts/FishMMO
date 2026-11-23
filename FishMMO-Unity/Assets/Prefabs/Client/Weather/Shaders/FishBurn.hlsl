@@ -1,7 +1,7 @@
 #ifndef FISHMMO_BURN_INCLUDED
 #define FISHMMO_BURN_INCLUDED
 
-// The burn mosaic (2026-10-25, phase I2t, decisions 75, 82, 84): a biome's veld fires and brimstone flames, a pure function
+// The burn mosaic: a biome's veld fires and brimstone flames, a pure function
 // of the shared clock, the world's season and the scene (FishMMO.Shared.Weather.BurnMosaic is the C# twin, constant for
 // constant; BurnMosaicTable publishes the globals, client only). Presentation only: no damage, nothing on the wire.
 //

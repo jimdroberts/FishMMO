@@ -14,7 +14,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The burn mosaic (2026-10-25, phase I2t; decisions 75, 82, 84): every fire a pure function of the shared clock and the scene's
+	/// The burn mosaic: every fire a pure function of the shared clock and the scene's
 	/// thermal year, continuous across the year's turn; deterministic cells; the stages; the GPU's year skipping drawing exactly the
 	/// full answer; the blue fire only at night and only on breathable worlds; FishBurn.hlsl constant for constant; the template,
 	/// spec, authoring, grass and terrain plumbing; and every template burning nothing until a round says so.

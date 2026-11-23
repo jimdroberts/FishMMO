@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Reported 2026-11-14: "Stamina is still stuck at 99/100 with regen." A sprint, then standing still: both the server and
+	/// Reported: "Stamina is still stuck at 99/100 with regen." A sprint, then standing still: both the server and
 	/// the owner must come back to exactly full, with the owner reconciled the way it is live (every second tick, a few ticks
 	/// behind) and the server running ticks with no input in them (an empty queue).
 	/// </summary>

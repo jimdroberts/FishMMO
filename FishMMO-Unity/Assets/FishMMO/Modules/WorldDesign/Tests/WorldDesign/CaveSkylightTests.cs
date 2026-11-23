@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Openings in great chambers' roofs up to the sky (CaveSystem.Skylights.cs, 2026-10-20, caves livened): planned only where
+	/// Openings in great chambers' roofs up to the sky (CaveSystem.Skylights.cs, caves livened): planned only where
 	/// the rock over a vault is thin, open from the floor to the sky, holed in the terrain over the opening and nowhere else,
 	/// ringed by a lip that stands proud of the ground, never a way in (no landing, no own mouth for the ways and the map, no
 	/// graded approach), stored and read back exactly, the same each time, and leaving the rest of the cave as it was. The light's

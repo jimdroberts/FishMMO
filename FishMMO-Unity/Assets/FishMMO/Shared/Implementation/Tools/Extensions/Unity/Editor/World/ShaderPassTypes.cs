@@ -4,7 +4,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// The pass type Unity gives a shader pass with a LightMode tag, as a shader variant collection keys it (see
-	/// ProceduralArtVariants' remarks for where the mapping comes from). Core editor (Phase 4, 2026-11-18): the shader prewarm
+	/// ProceduralArtVariants' remarks for where the mapping comes from). Core editor: the shader prewarm
 	/// reads it too.
 	/// </summary>
 	public static class ShaderPassTypes

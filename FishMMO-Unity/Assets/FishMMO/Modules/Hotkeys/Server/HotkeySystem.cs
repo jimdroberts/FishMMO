@@ -645,7 +645,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Sends the owner its whole bar, after the prune above. Moved from <c>CharacterSystem</c>'s login data with the
-		/// module (2026-11-20); sent here so the pruned bar is the one the client first sees.
+		/// module; sent here so the pruned bar is the one the client first sees.
 		/// </summary>
 		private void SendBar(IPlayerCharacter character)
 		{

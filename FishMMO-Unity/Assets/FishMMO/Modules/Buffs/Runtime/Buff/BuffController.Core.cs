@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using FishMMO.Shared.Core;
+using FishNet.Managing.Timing;
 
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The controller's side of the core seams (2026-11-20, when buffs became the Buffs module's): what weather exposure,
+	/// The controller's side of the core seams (when buffs became the Buffs module's): what weather exposure,
 	/// the target frame and the server's dismiss handler do with buffs (<see cref="ICharacterBuffs"/>), and the buffs in the
 	/// character save (<see cref="IBuffPersistence"/>).
 	/// </summary>
@@ -110,7 +111,10 @@ namespace FishMMO.Shared
 			{
 				return false;
 			}
-			uint expiryTick = localTick + (uint)Math.Max(1.0, Math.Ceiling(remainingSeconds / tickDelta));
+			// A buff that lasts until removed (a mount) comes back without an end: its saved remaining time is meaningless.
+			uint expiryTick = template != null && template.LastsUntilRemoved
+				? TimeManager.UNSET_TICK
+				: localTick + (uint)Math.Max(1.0, Math.Ceiling(remainingSeconds / tickDelta));
 			uint nextTickTick = localTick + (uint)Math.Max(1.0, Math.Ceiling(tickSeconds / tickDelta));
 			Apply(new Buff(templateID, expiryTick, nextTickTick, tickDelta, stacks, tickCount));
 			return true;

@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Hills</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Hills()
 		{
-			// Terraced schist hill country (biome round, approved 2026-10-18, authored 2026-10-26): steep silver-grey hills stepped from foot
+			// Terraced schist hill country: steep silver-grey hills stepped from foot
 			// to shoulder by drystone terraces carrying goblet vines, ancient split-boled olives and almond blossom; above them sheep-bitten
 			// tawny pasture starred with white asphodel, cork-oak and downy-oak montado on the gentler shoulders, tree-heath and broom on
 			// abandoned terraces, white quartz reefs along the crests and great clearance cairns of flaggy stone. In the cold reach the same
@@ -21,8 +21,8 @@ namespace FishMMO.Shared.WorldDesign
 			// dolmen, a far candle procession on a night ridge, heart-red garnets in the old gold galleries. Three climate reaches (approved):
 			// warm terraces (t ≥ 0.25), the temperate downy-oak and heath, the cold mat-grass fells. Scrubland, Karst and Woodland keep the
 			// maquis, the holm oak and the chalk.
-			// LATER (I9): every ground and object texture as the Hills' own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Asphodel V(0.96, 0.16, 0.92) and Olivine V(0.24, 0.22, 0.74).
+			// LATER: every ground and object texture as the Hills' own variant of its recipe.
+			// LATER (no spec column yet): rare looks Asphodel V(0.96, 0.16, 0.92) and Olivine V(0.24, 0.22, 0.74).
 			return E("Hills", L(Ground.GrassHillPasture,
 					// Sheep's fescue turf; mat-grass in the cold reach, silverbeard in the warm; asphodel, the spring bulbs and fell flowers.
 					Grass("GrassSheepFescue", 26f), Band(Grass("GrassMatgrass", 20f), -1f, -0.15f), Band(Grass("GrassSilverbeard", 4f), 0.25f, 1f),
@@ -30,11 +30,11 @@ namespace FishMMO.Shared.WorldDesign
 					Plants("DebrisHill", 4f, 128), Stones(SmallRocks("Schist"), 2f), Stones(SmallRocks("Quartzite"), 0.5f),
 					// Cushion broom on the cold fells, prickly juniper in the warm and temperate reach, stone pines on the crests.
 					Band(Bush("CushionBroom", 1.5f), -1f, 0.2f), Band(Bush("PricklyJuniper", 0.3f), -0.2f, 1f), Band(Trees(0.002f, 90f, 25f, "StonePine"), 0.3f, 1f),
-					// Schist ridges; the foliation upended into knife-edge fins along the strike on the 12–35° slopes. LATER (NEW-ROCK-TYPES):
+					// Schist ridges; the foliation upended into knife-edge fins along the strike on the 12–35° slopes. LATER:
 					// Schist Fins; the slate's cleavage fins stand in.
 					Blocks("Schist ridges", 0.004f, 40f, F(RockTypes.Schist, "Ridge")),
 					With(Blocks("Schist fins", 0.01f, 30f, F(RockTypes.Slate, "CleavageFin")), s => s.Slope = new Vector2(12f, 35f)),
-					// LATER (NEW-ROCK-TYPES): the clapas clearance cairn (a heap formation of the own rock); schist flag stacks stand in.
+					// LATER: the clapas clearance cairn (a heap formation of the own rock); schist flag stacks stand in.
 					With(Blocks("Clapas", 0.003f, 50f, F(RockTypes.Schist, "Flags")), s => s.Slope = new Vector2(0f, 15f)),
 					Boulders(0.02f, 10f, Boulder("Schist", "Round"), Boulder("Schist", "Slab"), Boulder("Schist", "Spire"))),
 				Ds(
@@ -64,7 +64,7 @@ namespace FishMMO.Shared.WorldDesign
 						Boulders(0.08f, 10f, Boulder("Schist", "Round"), Boulder("Schist", "Slab"), Boulder("Schist", "Spire")),
 						Stones(SmallRocks("Schist"), 6f), Stones(Pebbles("Schist"), 2f)),
 					// d4: crest grus and quartz float on the windswept summits (≤ 20°, the high ground): the fell flowers, lichen, the white
-					// quartz reefs. LATER (NEW-ROCK-TYPES): a Quartzite Reef shape (a milky vein wall along the crest); quartzite blocks stand in.
+					// quartz reefs. LATER: a Quartzite Reef shape (a milky vein wall along the crest); quartzite blocks stand in.
 					With(D(Ground.GravelCrestQuartz, 64f, 3f, 0f, 20f, Stones(SmallRocks("Quartzite"), 3f), Plants("FlowersFell", 6f, 180), Plants("FlowersSchist", 4f, 180),
 						Plants("LichenSchist", 2f), Blocks("Quartz reefs", 0.002f, 80f, F(RockTypes.Quartzite, "Block")), Band(Bush("JuniperMat", 1f), -1f, -0.1f),
 						Band(Trees(0.002f, 90f, 20f, "StonePine"), 0.3f, 1f)), l => l.Height = new Vector2(0.71f, 1f)),
@@ -86,7 +86,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Own rock schist (approved; its formations); accepts the lauze slate, the crest quartzite, the causse limestone, the castro
 				// knolls' granite. Gneiss dropped, the granite tors gone.
 				.Accepts(RockTypes.Schist, RockTypes.Slate, RockTypes.Quartzite, RockTypes.Limestone, RockTypes.Granite)
-				// Schist caves and the old gold galleries. LATER (NEW-ROCK-TYPES R56): the sluiced "ruined mountain" red-earth pinnacles.
+				// Schist caves and the old gold galleries. LATER: the sluiced "ruined mountain" red-earth pinnacles.
 				.CaveShell(CaveForm.Cave, "Schist")
 				.CaveShell(CaveForm.Grotto, "Schist")
 				.CaveShell(CaveForm.Mine, "Schist")
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Arid)
 				// Approved: scrub, grassland and the crags' eagles and ibex (no woodland).
 				.Wildlife(BiomeHabitat.Scrub | BiomeHabitat.Grassland | BiomeHabitat.Mountain)
-				// LATER (AMBIENT-LIFE): red-legged partridge coveys off the terraces, Bonelli's eagles, the blue rock thrush on the walls,
+				// LATER: red-legged partridge coveys off the terraces, Bonelli's eagles, the blue rock thrush on the walls,
 				// ocellated lizards basking, ibex on the crags, wild boar rooting the terraces at dusk, wolves in the cold reach; the Serpe.
 				// Approved: dry rock-cut moats; gin-clear jade schist water.
 				.Moat(BiomeMoatWater.Dry)
@@ -153,7 +153,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Obelisk, 0.2f), (POIType.Monument, 0.5f), (POIType.Lighthouse, 0.3f), (POIType.SmugglersCove, 0.3f), (POIType.PirateCove, 0.2f),
 					(POIType.SunkenShip, 0.5f), (POIType.SunkenRuins, 0.5f), (POIType.Dockyard, 0.2f), (POIType.BossLair, 0.8f), (POIType.OreVein, 1f),
 					(POIType.CrystalFormation, 0.6f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 1f), (POIType.GoblinWarren, 1.4f),
 					(POIType.HauntedManor, 1f), (POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f),
 					(POIType.WreckedCaravan, 0.6f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 0.8f),
@@ -217,7 +217,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Mine, "Delving", 0.3f)
 				.Prefers(POIType.Quarry, "Cut Stone", 1f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Dwarven Hold", 1f)
 				.Prefers(POIType.Tower, "Dwarven Tower", 1f)
@@ -237,19 +237,19 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.MountainKingsHall, "Delving Hall", 1.2f)
 				.Prefers(POIType.SilverMineTown, "Timber Camp", 1.3f)
 				.Prefers(POIType.DwarvenGate, "Rune Door", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): the Hills' signature pieces — the terrace flight's through-stone stairs, the two-storey schist hamlet house with
+				// (the fantasy set's variants end here)
+				// LATER: the Hills' signature pieces — the terrace flight's through-stone stairs, the two-storey schist hamlet house with
 				// its outside stair and balcony, the granite granary on staddles round a threshing floor, the wine-treading tank and beam
 				// press, the corbelled shepherds' hut and the drystone fold, the Iron-Age hill-fort with its round houses, the passage dolmen
 				// under its cairn, the snow-well, the crest watch-tower, the triangular-sailed tower mill, the horizontal-wheel stream mill,
 				// the sluiced gold diggings, the moura's spring, the petroglyph rock, the candle procession on a far ridge (approved); until
 				// then the kit's variants below stand in, the palette giving them dark schist, lauze slabs and ox-blood doors.
-				// LATER (I7): the corbelled shepherds' huts ("Bories"); crude huts stand in.
-				// LATER (I7): the passage dolmen ("Anta") and the hill-fort ("Castro"); the ringed barrow and the stone ruins stand in.
-				// LATER (I7): the sluiced gold diggings ("Sluiced").
-				// LATER (I7): the tower mill's triangular sails ("Tower") and the horizontal-wheel stream mill ("Rodízio"); the post mill
+				// LATER: the corbelled shepherds' huts ("Bories"); crude huts stand in.
+				// LATER: the passage dolmen ("Anta") and the hill-fort ("Castro"); the ringed barrow and the stone ruins stand in.
+				// LATER: the sluiced gold diggings ("Sluiced").
+				// LATER: the tower mill's triangular sails ("Tower") and the horizontal-wheel stream mill ("Rodízio"); the post mill
 				// and the wheel stand in.
-				// LATER (I7): the petroglyph rock ("Petroglyph"); the standing stones stand in.
+				// LATER: the petroglyph rock ("Petroglyph"); the standing stones stand in.
 				.Favours(BiomeStructureStyle.Stone, 1.8f)
 				.Favours(BiomeStructureStyle.Hide, 0.4f)
 				.Favours(BiomeStructureStyle.Earth, 0.4f)
@@ -257,7 +257,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0.1f)
 				// The palette: dark schist drystone in thin flat-bedded plates under heavy lauze slabs (yellow-lichened), granite plinths,
 				// quoins and carving, ox-blood doors, dark oak trim, wooden balconies, undyed wool; the warm towns' rammed earth under curved
-				// terracotta tiles; the shepherds' conical straw roofs. LATER (NEW-SURFACES U1 / I9): the Lauze (schist-slab) and CanalTile
+				// terracotta tiles; the shepherds' conical straw roofs. LATER: the Lauze (schist-slab) and CanalTile
 				// surfaces; the kit's slate and a terracotta-tinted shingle stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Fieldstone, OpenHex("#4e4a40"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Fieldstone, OpenHex("#4e4a40"))

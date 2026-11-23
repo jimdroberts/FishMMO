@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 	///
 	/// <para><b>Composition:</b> the <see cref="RequireComponent"/> attributes below are the predicted core
 	/// (attributes, targeting, cooldowns, abilities, buffs, damage, prediction) and its visuals, which stay
-	/// in the core until prediction goes through Core components (Phase 6 of the core and modules plan). Module
+	/// in the core until prediction goes through Core components. Module
 	/// features are not listed here: friends, party, guild, factions, waypoints, quests, archetypes, achievements and the
 	/// item containers (inventory, bank and the predicted equipment; the Items module) are
 	/// character parts their modules add at wake (<c>[assembly: CharacterPart]</c>), so a removed module leaves

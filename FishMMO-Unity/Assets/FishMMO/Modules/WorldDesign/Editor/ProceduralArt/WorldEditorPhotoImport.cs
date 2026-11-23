@@ -55,7 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>The table, and where it came from.</b> Read from WorldEditor's biome assets
 	/// (<c>Assets/Prefabs/Heightmap/Biomes/BiomeTemplate_*.asset</c>, BiomeTemplate script GUID
-	/// e4734f4d38d798545b1bb25062eb1aa0) on 2026-10-02 by resolving each slot's albedo GUID against
+	/// e4734f4d38d798545b1bb25062eb1aa0) by resolving each slot's albedo GUID against
 	/// the .meta files of <c>Assets/Prefabs/*.jpg</c>; the slot index is the item's position in its
 	/// <c>detailTextureLayers</c> list. Every other WorldEditor slot holds a flat
 	/// <c>BiomeTexture_*</c> swatch. Dirt and Riverbed appear in no biome (only WorldEditor's sample

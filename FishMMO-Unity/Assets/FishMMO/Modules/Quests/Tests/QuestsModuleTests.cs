@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>The Quests module (Phase 3, 2026-11-17): the quest log is a part, loaded and sent by the module.</summary>
+	/// <summary>The Quests module: the quest log is a part, loaded and sent by the module.</summary>
 	[TestFixture]
 	public class QuestsModuleTests
 	{

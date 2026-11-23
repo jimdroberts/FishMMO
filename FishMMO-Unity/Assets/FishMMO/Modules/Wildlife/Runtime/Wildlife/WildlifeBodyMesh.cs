@@ -177,6 +177,19 @@ namespace FishMMO.Shared
 				}
 				return;
 			}
+			if (spec.Horns == WildlifeHorns.Horns)
+			{
+				// Two short horns curving out, up and forward off the crown (a cow, a dragon, the mounts).
+				for (int side = -1; side <= 1; side += 2)
+				{
+					Vector3 root = headBack + Vector3.up * spec.HeadSize * 0.45f + Vector3.right * side * spec.HeadSize * 0.32f;
+					Vector3 mid = root + new Vector3(side * 0.85f, 0.45f, -0.25f).normalized * size * 0.55f;
+					Vector3 tip = mid + new Vector3(side * 0.2f, 0.75f, 0.6f).normalized * size * 0.5f;
+					b.Segment(root, mid, size * 0.18f, size * 0.18f, size * 0.12f, size * 0.12f, HornColour, HornColour, Part.Head, pivot);
+					b.Segment(mid, tip, size * 0.12f, size * 0.12f, size * 0.02f, size * 0.02f, HornColour, HornColour, Part.Head, pivot);
+				}
+				return;
+			}
 			float t = size * (spec.Horns == WildlifeHorns.BroadAntlers ? 0.07f : 0.05f);
 			for (int side = -1; side <= 1; side += 2)
 			{

@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Renamed from <c>AbilityForkHitAction</c> (2026-11-22): it turns the same object, it does not split it. A real fork,
+	/// Renamed from <c>AbilityForkHitAction</c>: it turns the same object, it does not split it. A real fork,
 	/// which splits the object into new ones, is <see cref="AbilityForkSplitAction"/>. Give the ability a HitCount above
 	/// one, or the object ends on the hit that turned it.
 	/// </para>

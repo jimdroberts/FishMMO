@@ -9,7 +9,7 @@ namespace FishMMO.RenderScratch
 	/// <summary>
 	/// The play-mode leak probe's minimap and marker modes (<c>minimap</c>, <c>minimap-render</c>, <c>minimap-refresh</c>,
 	/// <c>minimap-standard</c>, <c>markers</c>, <c>markers-still</c>): the real minimap renderer and map view in the probe's
-	/// document. Moved out of <see cref="PlayLeakProbe"/> with the Map module, 2026-11-20; registered by
+	/// document. Moved out of <see cref="PlayLeakProbe"/> with the Map module; registered by
 	/// <see cref="MapRenderScratch"/>.
 	/// </summary>
 	public sealed class MinimapLeakModes : PlayLeakProbe.ILeakProbeMode

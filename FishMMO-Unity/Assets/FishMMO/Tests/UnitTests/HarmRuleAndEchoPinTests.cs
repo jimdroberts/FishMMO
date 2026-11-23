@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins three combat and client fixes of 2026-11-14 to their source, where a regression would be silent in play.
+	/// Pins three combat and client fixes to their source, where a regression would be silent in play.
 	/// </summary>
 	public class HarmRuleAndEchoPinTests
 	{

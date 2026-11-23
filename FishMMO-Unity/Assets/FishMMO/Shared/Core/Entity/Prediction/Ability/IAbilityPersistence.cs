@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// What the core character load and save read and write of a character's abilities (2026-11-20: abilities are the
+	/// What the core character load and save read and write of a character's abilities (abilities are the
 	/// Abilities module's). The save pipeline stays in the core with the character's other rows, under the same claims and
 	/// versions; the module's controller implements this.
 	/// </summary>

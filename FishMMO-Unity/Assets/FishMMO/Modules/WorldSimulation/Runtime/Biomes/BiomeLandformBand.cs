@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// A landform ZONE band on a ground layer or a spawn rule (2026-10-25, phase I2g-b, decision 55: "LANDFORM ZONE MASK as a general
+	/// A landform ZONE band on a ground layer or a spawn rule ("LANDFORM ZONE MASK as a general
 	/// ground/spawn BAND, shared by Crater rays, Dust Sea dust-fill, Cryovolcanic streaks"): the layer is painted, or the rule grows,
 	/// only on one part of its biome's sculpted landforms (a crater's rays or rim, a basin's mare or wrinkle ridges, a cell field's
 	/// troughs, a dune's lee) — or, turned round, only off it — beside its height, slope, climate, air and heat bands.
@@ -58,7 +58,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The landform zones of a scene (decision 55): its stored sites made shapes and bucketed by their boxes, so a ground layer's or a
+	/// The landform zones of a scene: its stored sites made shapes and bucketed by their boxes, so a ground layer's or a
 	/// spawn rule's <see cref="BiomeLandformBand"/> asks a part's mask at a point cheaply (pure; thread-safe once built).
 	/// </summary>
 	public sealed partial class BiomeLandformZones
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.Biomes
 			=> band.On ? (zones ?? None).Weight(band, biomeID, x, z, ground, slope) : 1f;
 
 		/// <summary>
-		/// Talus SIZE GRADING (2026-10-25, phase I2u, decision 79 (d)): the scale a graded rule's instance takes at (x, z) on its biome's talus
+		/// Talus SIZE GRADING: the scale a graded rule's instance takes at (x, z) on its biome's talus
 		/// cones (RockChutes.ConeKinds): <see cref="RockChutes.ApexScale"/> at a cone's apex to <see cref="RockChutes.ToeScale"/> at its toe,
 		/// eased to 1 over the cone's edge; 1 off every cone (and with no zones). The cone holding the point most fully decides.
 		/// </summary>

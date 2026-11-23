@@ -1212,7 +1212,7 @@ namespace FishMMO.Client
 			}
 			tooltip.Open(content, icon.Root);
 
-			/* Time Left counts down while the pointer rests on the icon (2026-11-21), from the same locally counted-down
+			/* Time Left counts down while the pointer rests on the icon, from the same locally counted-down
 			 * observed entries the fills use; four times a second, only while this icon still owns the tooltip. */
 			iconHoverRefresh?.Pause();
 			iconHoverRefresh = icon.Root.schedule.Execute(() =>

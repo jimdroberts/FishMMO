@@ -1,4 +1,5 @@
 using UnityEngine;
+using FishMMO.Shared;
 
 namespace FishMMO.Client
 {
@@ -64,6 +65,12 @@ namespace FishMMO.Client
 		/// </remarks>
 		public Rect GridRect { get; }
 
+		/// <summary>The world-anchored chunk index of this grid's first column (see <see cref="FogChunkSet"/>).</summary>
+		public int OriginChunkX { get; }
+
+		/// <summary>The world-anchored chunk index of this grid's first row.</summary>
+		public int OriginChunkZ { get; }
+
 		/// <summary>
 		/// The chunk grid, row-major from the rectangle's minimum corner.
 		/// </summary>
@@ -110,57 +117,19 @@ namespace FishMMO.Client
 			 * must be covered by the grid rather than cropped by it, or the last few metres of a
 			 * zone can never be explored and the map keeps a permanent unexplored stripe down one
 			 * edge that no amount of walking removes. */
-			ChunksX = Mathf.Max(1, Mathf.CeilToInt(worldRect.width / ChunkSize));
-			ChunksZ = Mathf.Max(1, Mathf.CeilToInt(worldRect.height / ChunkSize));
+			/* The grid starts on a whole chunk line at or before the scene's corner: chunk (x, z) of the
+			 * world-anchored grid the server keeps (FogChunkSet) is then exactly chunk (x - OriginChunkX, z - OriginChunkZ)
+			 * here, whatever the map's rectangle, so a stored map lines up with a re-baked or re-cut one. */
+			OriginChunkX = FogChunkSet.ChunkOf(worldRect.xMin, ChunkSize);
+			OriginChunkZ = FogChunkSet.ChunkOf(worldRect.yMin, ChunkSize);
+			float originX = OriginChunkX * ChunkSize, originZ = OriginChunkZ * ChunkSize;
+			ChunksX = Mathf.Max(1, Mathf.CeilToInt((worldRect.xMax - originX) / ChunkSize));
+			ChunksZ = Mathf.Max(1, Mathf.CeilToInt((worldRect.yMax - originZ) / ChunkSize));
 
-			GridRect = new Rect(worldRect.xMin, worldRect.yMin, ChunksX * ChunkSize, ChunksZ * ChunkSize);
+			GridRect = new Rect(originX, originZ, ChunksX * ChunkSize, ChunksZ * ChunkSize);
 
 			// Unexplored is zero, which is what a new array already holds.
 			Chunks = new byte[ChunksX * ChunksZ];
-		}
-
-		/// <summary>
-		/// Rebuilds a map from chunks loaded off disk.
-		/// </summary>
-		/// <param name="worldRect">The world rectangle the chunks cover.</param>
-		/// <param name="chunkSize">Length of one chunk's side in world metres.</param>
-		/// <param name="chunks">The chunk data. Must be exactly the grid's size.</param>
-		/// <returns>The loaded map, or null when the data does not match the grid.</returns>
-		/// <remarks>
-		/// <para>
-		/// Returns null rather than resizing. A chunk array of the wrong length means the scene's
-		/// bounds or chunk size changed since the file was written, and stretching old data across
-		/// new bounds would put the player's explored ground in the wrong place — worse than
-		/// starting again, because it looks plausible.
-		/// </para>
-		/// <para>
-		/// Every byte is normalised to one of the two states rather than trusted. The file is
-		/// signed, so this is not defending against tampering; it is making sure a future writer
-		/// that stores something else in this array cannot leave a chunk that is neither explored
-		/// nor unexplored, which nothing downstream has a meaning for.
-		/// </para>
-		/// </remarks>
-		public static FogOfWarMap FromChunks(Rect worldRect, float chunkSize, byte[] chunks)
-		{
-			FogOfWarMap map = new FogOfWarMap(worldRect, chunkSize);
-			if (chunks == null || chunks.Length != map.Chunks.Length)
-			{
-				return null;
-			}
-
-			int explored = 0;
-			for (int i = 0; i < chunks.Length; ++i)
-			{
-				bool isExplored = chunks[i] != Unexplored;
-				map.Chunks[i] = isExplored ? Explored : Unexplored;
-				if (isExplored)
-				{
-					++explored;
-				}
-			}
-
-			map.ExploredChunkCount = explored;
-			return map;
 		}
 
 		/// <summary>
@@ -241,10 +210,10 @@ namespace FishMMO.Client
 		/// </remarks>
 		public int RevealArea(Rect worldArea)
 		{
-			int minX = Mathf.FloorToInt((worldArea.xMin - WorldRect.xMin) / ChunkSize);
-			int maxX = Mathf.FloorToInt((worldArea.xMax - WorldRect.xMin) / ChunkSize);
-			int minZ = Mathf.FloorToInt((worldArea.yMin - WorldRect.yMin) / ChunkSize);
-			int maxZ = Mathf.FloorToInt((worldArea.yMax - WorldRect.yMin) / ChunkSize);
+			int minX = Mathf.FloorToInt((worldArea.xMin - GridRect.xMin) / ChunkSize);
+			int maxX = Mathf.FloorToInt((worldArea.xMax - GridRect.xMin) / ChunkSize);
+			int minZ = Mathf.FloorToInt((worldArea.yMin - GridRect.yMin) / ChunkSize);
+			int maxZ = Mathf.FloorToInt((worldArea.yMax - GridRect.yMin) / ChunkSize);
 
 			minX = Mathf.Max(0, minX);
 			minZ = Mathf.Max(0, minZ);
@@ -286,24 +255,24 @@ namespace FishMMO.Client
 
 			Rect bounds = new Rect(worldCenter.x - radius, worldCenter.z - radius, radius * 2.0f, radius * 2.0f);
 
-			int minX = Mathf.Max(0, Mathf.FloorToInt((bounds.xMin - WorldRect.xMin) / ChunkSize));
-			int maxX = Mathf.Min(ChunksX - 1, Mathf.FloorToInt((bounds.xMax - WorldRect.xMin) / ChunkSize));
-			int minZ = Mathf.Max(0, Mathf.FloorToInt((bounds.yMin - WorldRect.yMin) / ChunkSize));
-			int maxZ = Mathf.Min(ChunksZ - 1, Mathf.FloorToInt((bounds.yMax - WorldRect.yMin) / ChunkSize));
+			int minX = Mathf.Max(0, Mathf.FloorToInt((bounds.xMin - GridRect.xMin) / ChunkSize));
+			int maxX = Mathf.Min(ChunksX - 1, Mathf.FloorToInt((bounds.xMax - GridRect.xMin) / ChunkSize));
+			int minZ = Mathf.Max(0, Mathf.FloorToInt((bounds.yMin - GridRect.yMin) / ChunkSize));
+			int maxZ = Mathf.Min(ChunksZ - 1, Mathf.FloorToInt((bounds.yMax - GridRect.yMin) / ChunkSize));
 
 			float radiusSquared = radius * radius;
 			int revealed = 0;
 
 			for (int z = minZ; z <= maxZ; ++z)
 			{
-				float chunkMinZ = WorldRect.yMin + (z * ChunkSize);
+				float chunkMinZ = GridRect.yMin + (z * ChunkSize);
 				// Nearest point of this chunk to the centre, on each axis independently.
 				float nearestZ = Mathf.Clamp(worldCenter.z, chunkMinZ, chunkMinZ + ChunkSize);
 				float dz = nearestZ - worldCenter.z;
 
 				for (int x = minX; x <= maxX; ++x)
 				{
-					float chunkMinX = WorldRect.xMin + (x * ChunkSize);
+					float chunkMinX = GridRect.xMin + (x * ChunkSize);
 					float nearestX = Mathf.Clamp(worldCenter.x, chunkMinX, chunkMinX + ChunkSize);
 					float dx = nearestX - worldCenter.x;
 
@@ -319,6 +288,36 @@ namespace FishMMO.Client
 				}
 			}
 
+			return revealed;
+		}
+
+		/// <summary>
+		/// Explores every chunk the server says the account has explored. Chunks outside this grid are ignored.
+		/// </summary>
+		/// <param name="set">The account's explored chunks for this scene.</param>
+		/// <returns>How many chunks were newly explored here.</returns>
+		/// <remarks>
+		/// Same chunk size: an exact index mapping. A different one (a scene whose definition chunk size the server could not
+		/// see): each stored chunk explores the chunk under its centre.
+		/// </remarks>
+		public int ApplyChunkSet(FogChunkSet set)
+		{
+			if (set == null || set.IsEmpty)
+			{
+				return 0;
+			}
+			int revealed = 0;
+			bool sameGrid = Mathf.Approximately(set.ChunkSize, ChunkSize);
+			set.ForEach((x, z) =>
+			{
+				bool isNew = sameGrid
+					? RevealChunk(x - OriginChunkX, z - OriginChunkZ)
+					: Reveal(new Vector3((x + 0.5f) * set.ChunkSize, 0.0f, (z + 0.5f) * set.ChunkSize));
+				if (isNew)
+				{
+					++revealed;
+				}
+			});
 			return revealed;
 		}
 
@@ -380,8 +379,8 @@ namespace FishMMO.Client
 		/// <returns>True when the position is inside the grid.</returns>
 		public bool TryGetChunk(Vector3 worldPosition, out int x, out int z)
 		{
-			x = Mathf.FloorToInt((worldPosition.x - WorldRect.xMin) / ChunkSize);
-			z = Mathf.FloorToInt((worldPosition.z - WorldRect.yMin) / ChunkSize);
+			x = Mathf.FloorToInt((worldPosition.x - GridRect.xMin) / ChunkSize);
+			z = Mathf.FloorToInt((worldPosition.z - GridRect.yMin) / ChunkSize);
 			return x >= 0 && x < ChunksX && z >= 0 && z < ChunksZ;
 		}
 

@@ -7,10 +7,10 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Dresses a carved cave system (2026-10-11: "much more realistic features"): dripstone on its floors and roofs
+	/// Dresses a carved cave system ("much more realistic features"): dripstone on its floors and roofs
 	/// where water has stood and dripped — stalagmites, stalactites hung over them, columns where the two have met,
 	/// flowstone down the walls and gour pools on cavern floors — breakdown blocks fallen from the roof, glowing crystals
-	/// in some chambers, and in a mine its timbering, track, an ore tub and lamps. Then (2026-10-13: "enormous caves with
+	/// in some chambers, and in a mine its timbering, track, an ore tub and lamps. Then ("enormous caves with
 	/// lots of glowy rocks lining the walkable pathways") what the layout's features need and what lights the way: the
 	/// climbs' ladders and ropes and their scene climbables, the crossings' rope walks and trestles
 	/// (PointOfInterestCaveDressing.Ways.cs), glowing crystal, fungus and glow-worms lining the ways across halls, bridges,
@@ -24,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// (lava stalactites hang from its roof); a mine none of these, only the timbering and the spoil of the ore.
 	/// </para>
 	/// <para>
-	/// <b>The shell's rock (2026-10-16).</b> The formations are the rock the cave is cut in (<see cref="CaveShaper.ShellOf"/>,
+	/// <b>The shell's rock.</b> The formations are the rock the cave is cut in (<see cref="CaveShaper.ShellOf"/>,
 	/// its biome template's Cave Shells: the ground's rock for a cave, grotto, sea cave or mine, basalt for a lava tube, ice
 	/// for an ice cave), so a cave in sandstone country has sandstone blocks fallen from its sandstone roof. Before, the
 	/// form alone chose them (limestone, basalt, quartzite, water ice) whatever the walls were. Where the shell's rock has no
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 			public float Density = 1f, CrystalChance, BreakdownShare = 0.25f;
 			/// <summary>
 			/// The crystals the chambers grow when they are a deposit, not the cave's own stone (<see cref="CrystalRock"/> set): the
-			/// cave's biome's (its template's Cave Crystals, 2026-10-16), a kind drawn by weight for each cluster.
+			/// cave's biome's (its template's Cave Crystals), a kind drawn by weight for each cluster.
 			/// </summary>
 			public IReadOnlyList<BiomeCaveCrystal> Crystals;
 			/// <summary>The crystals' light's hue (SceneEmitterKind.Crystal), or −1 for one by chance.</summary>
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The formations a cave of a form takes (their rock is the cave's shell's, set by <see cref="Build"/>; until 2026-10-16
+		/// The formations a cave of a form takes (their rock is the cave's shell's, set by <see cref="Build"/>; formerly
 		/// it was the form's alone, as <see cref="StandInRock"/> still states).
 		/// </summary>
 		private static Set SetFor(CaveForm form)
@@ -100,7 +100,7 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveForm.Mine:
 					return new Set { Breakdown = "Scree", Density = 0.3f, BreakdownShare = 1f };
 				case CaveForm.SeaHall:
-					// A sea hall's own ice (2026-10-26, I2n-b): icicles from the roof and fallen ice, nothing stood on a floor that is the
+					// A sea hall's own ice: icicles from the roof and fallen ice, nothing stood on a floor that is the
 					// sea's (its chimneys are its smokers', PointOfInterestCaveDressing.SeaHall.cs).
 					return new Set { Hanging = "Stalagmite", Breakdown = "Lobe", FloorHeight = 2.2f, Density = 0.3f, BreakdownShare = 0.3f };
 				default:
@@ -110,7 +110,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The cave biome's own formations (its Cave Formations, 2026-10-25, I2n) over a form's set: where the list names the form, each
+		/// The cave biome's own formations (its Cave Formations) over a form's set: where the list names the form, each
 		/// place takes its shape by weight among those whose world gate admits the world (a place it leaves out, or whose every shape
 		/// is gated off, unformed), one shape a place a system, drawn on a stream of its own only when a place has several; a list not
 		/// naming the form leaves the set as it was. The defaults (one shape a place, as the set's) change nothing.
@@ -145,7 +145,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The formations' rock ──────────────────────────────────────
 
 		/// <summary>
-		/// The rock a cave's formations are made of, from the rock its shell is cut in (2026-10-16: the formations follow the
+		/// The rock a cave's formations are made of, from the rock its shell is cut in (the formations follow the
 		/// shell): the shell's own, glacier ice's formations being water ice's (the shell's Ice is the cliff rock's name for it).
 		/// </summary>
 		public static string FormationRock(string shell) => shell == CliffRocks.Ice ? RockTypes.WaterIce.Name : shell;
@@ -263,10 +263,10 @@ namespace FishMMO.Shared.WorldDesign
 			Set set = SetFor(system.Form);
 			// The formations are the shell's rock: the very rock the shaper built the cave's walls in (its host site's biome's).
 			set.Rock = FormationRock(CaveShaper.ShellOf(context.Request, context.Record, system));
-			// The cave's biomes (2026-10-25, phase I2n): its host site's, whose are its mouth, its shell and a mine, and the cave biome
+			// The cave's biomes: its host site's, whose are its mouth, its shell and a mine, and the cave biome
 			// the host links its form to where the shell is one that biome forms in, whose template dresses the inside (its
 			// formations, crystals, glow, lights, animals). Its crystals are the chambers' deposits where the form grows them (a
-			// cave's, a grotto's: selenite in every biome before 2026-10-16), the interior's with the host's glowing ones as
+			// cave's, a grotto's: selenite in every biome formerly), the interior's with the host's glowing ones as
 			// accents; an ice cave's crystals stay its own ice.
 			CaveBiome caves = CaveInteriorArt.Of(context.Request, context.Record, system);
 			BiomeWorldConditions world = CaveInteriorArt.World(context.Request);
@@ -309,7 +309,7 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly Set set;
 			private readonly DeterministicRNG rng;
 			/// <summary>
-			/// The biome dressing the cave's inside (2026-10-25: its interior where its host links one, else its host's), or null: what
+			/// The biome dressing the cave's inside (its interior where its host links one, else its host's), or null: what
 			/// lights it (its template's Cave Lights), its crystals and glow.
 			/// </summary>
 			private readonly BiomeTemplate biome;
@@ -401,23 +401,23 @@ namespace FishMMO.Shared.WorldDesign
 				if (system.Form == CaveForm.Mine)
 				{
 					Workings();
-					// 2026-10-20 (cave realism): the working's clutter (PointOfInterestCaveDressing.Clutter.cs).
+					// cave realism: the working's clutter (PointOfInterestCaveDressing.Clutter.cs).
 					MineClutter();
 				}
 				else
 				{
 					GlowAll();
 					Encampments();
-					// 2026-10-20 (cave realism): mushroom trees, groves, rings, clumps and rubble (PointOfInterestCaveDressing.Fungi.cs).
+					// cave realism: mushroom trees, groves, rings, clumps and rubble (PointOfInterestCaveDressing.Fungi.cs).
 					Fungi();
 				}
 				// Roots, daylight ivy and the deep dark's glowroots (PointOfInterestCaveDressing.Vines.cs).
 				CaveVines();
 				// Where its animals live: measured, not placed, on a stream of its own (PointOfInterestCaveDressing.Life.cs).
 				Life();
-				// 2026-10-20 (cave lava): a lava tube that still runs, dressed round its lava last of all (PointOfInterestCaveDressing.Lava.cs).
+				// cave lava: a lava tube that still runs, dressed round its lava last of all (PointOfInterestCaveDressing.Lava.cs).
 				Lava();
-				// 2026-10-20 (caves livened): each its own pass on its own stream, after every earlier one, so none of theirs moves.
+				// caves livened: each its own pass on its own stream, after every earlier one, so none of theirs moves.
 				// Its streams and pools' banks and spray (PointOfInterestCaveDressing.Streams.cs).
 				Streams();
 				// Daylight through the roof: the rim's plants and the lit floor below (PointOfInterestCaveDressing.Skylights.cs).
@@ -430,7 +430,7 @@ namespace FishMMO.Shared.WorldDesign
 				Hanging();
 				// An ice cave's frozen falls, icicle curtains and frozen pools (PointOfInterestCaveDressing.Ice.cs).
 				Ice();
-				// 2026-10-26 (I2n-b, decision 83): a sea hall's chimneys, the sea's growth on its flooded floor and the spots its plumes,
+				// A sea hall's chimneys, the sea's growth on its flooded floor and the spots its plumes,
 				// brinicles, brine mirrors and sea life are drawn from (PointOfInterestCaveDressing.SeaHall.cs); nothing in any other cave.
 				SeaHall();
 			}
@@ -777,7 +777,7 @@ namespace FishMMO.Shared.WorldDesign
 					float s = mouth.Radius / 2.1f;
 					Place(StructureKit.Prefab("MinePortal", portal), mouth.Floor + Dir(mouth.Yaw) * 0.4f, Quaternion.Euler(0f, mouth.Yaw + 180f, 0f), new Vector3(s, Mathf.Max(1f, s), 1f));
 				}
-				// The drifts' lights and the stopes' (the biome's Cave Lights, 2026-10-16: torches in sconces every 14–20 m and a
+				// The drifts' lights and the stopes' (the biome's Cave Lights: torches in sconces every 14–20 m and a
 				// torch on a pole in each stope in every biome before).
 				bool driftLit = CaveLight(BiomeCaveLightPlace.MineDrift, out BiomeCaveLight drift);
 				BiomeCaveLights.DriftGap(drift.Spacing, out float gapMin, out float gapMax);
@@ -1118,7 +1118,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A crystal's cave light: its hue in bits 8–9 (<paramref name="hue"/> −1: one by the seed); a crystal that flickers
-			/// (stormglass, 2026-10-18) gives a cold glow with the flicker in the same hue instead (SceneGlow).
+			/// (stormglass) gives a cold glow with the flicker in the same hue instead (SceneGlow).
 			/// </summary>
 			private void Glow(Vector3 local, float reach, int hue, bool flickers = false)
 			{
@@ -1273,7 +1273,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				// A terrace's walk along its top, a little in from its lip (CaveSystem.TerraceWalk), and the pits that drop out of
-				// a floor with a way down them (2026-10-20, the layout's variety): nothing on the walk, nothing in the shaft.
+				// a floor with a way down them (the layout's variety): nothing on the walk, nothing in the shaft.
 				foreach (CaveTerrace terrace in system.Terraces)
 				{
 					if (terrace.Solid < 0 || terrace.Solid >= system.Solids.Count)
@@ -1365,8 +1365,8 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A cave crystal's prefab (CaveArt.MineralPrefab): its variant drawn first as a formation's is, so selenite (gypsum's
-			/// Crystal formation) is laid from the very same draws as before 2026-10-16; in the biome's own look of the kind where it
-			/// grows one (2026-10-26).
+			/// Crystal formation) is laid from the very same draws as formerly; in the biome's own look of the kind where it
+			/// grows one.
 			/// </summary>
 			private GameObject Mineral(BiomeCaveCrystalKind kind, byte look = 0)
 			{
@@ -1386,13 +1386,13 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
-				// Nothing stands in molten lava, and a molten tube's glowing crystals give way to it (2026-10-20): refused after every
+				// Nothing stands in molten lava, and a molten tube's glowing crystals give way to it: refused after every
 				// draw for it, so no stream moves (never in a cooled cave).
 				if (InLava(local) || LavaOutshines(prefab, local))
 				{
 					return false;
 				}
-				// Nor in a wet cave's water but its rock (2026-10-20, caves livened, PointOfInterestCaveDressing.Streams.cs), likewise.
+				// Nor in a wet cave's water but its rock (caves livened, PointOfInterestCaveDressing.Streams.cs), likewise.
 				if (InStream(prefab, local))
 				{
 					return false;

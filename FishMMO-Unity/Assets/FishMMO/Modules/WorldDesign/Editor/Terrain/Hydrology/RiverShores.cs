@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Why.</b> A river is drawn and asked about from its line and one width per point, laid evenly either side. A plunge
 	/// pool's bowl is scoured wider than that, and not evenly: below the 70 m fall on Flo Monolith the ground on one side
 	/// stood 1.4–2 m under the pool out to 11–13 m from the line, where the water was drawn to 10.4 m, so the pool's surface
-	/// ended in a straight edge over sunken ground (2026-10-13). The carve cannot raise that ground without a shelf round the
+	/// ended in a straight edge over sunken ground. The carve cannot raise that ground without a shelf round the
 	/// pool, and the bowl is the pool: the water reaches to its rim.
 	/// </para>
 	/// <para>
@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// out from its channel over the ground, each cell taking the level of the channel nearest it, into every cell under that
 	/// level, as far as <see cref="MaxMetres"/>; each flooded cell then widens the side of the point it lies beside. Walked
 	/// straight out from each point instead, a bowl's lobe lying off a pool's end, beside no point square on, was never seen
-	/// and its water never drawn (2026-10-13 coverage map, RiverCoverageProbe).
+	/// and its water never drawn (coverage map, RiverCoverageProbe).
 	/// </para>
 	/// <para>
 	/// Only a bowl that closes: water still spreading at <see cref="MaxMetres"/> is open country (a lake's flat, a breached
@@ -200,7 +200,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/* Open country, as a whole: every flooded cell joined to one the flood was still spreading from at its furthest. Taken
 			 * point by point instead, the points beside an open hollow whose own water fell short of the furthest still widened,
-			 * and drew part of the hollow as a pane of water standing on the hillside (2026-10-13). */
+			 * and drew part of the hollow as a pane of water standing on the hillside. */
 			var open = new bool[w * d];
 			var stack = new Stack<int>();
 			foreach (int c in flooded)

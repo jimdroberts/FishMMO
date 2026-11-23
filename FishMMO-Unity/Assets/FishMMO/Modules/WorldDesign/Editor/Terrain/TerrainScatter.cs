@@ -188,7 +188,7 @@ namespace FishMMO.Shared.WorldDesign
 			var attributionEntries = new List<SceneTerrainPalette.Entry>();
 			// Only a scene cut from its globe has a climate at every point; see ScenePlacementClimate.SampleAt.
 			ScenePlacementClimate placement = climate != null && climate.Generated ? climate : null;
-			/* The world the scene stands on, for the rules' world gates (decision 41, 2026-10-18): its body's conditions, placed or
+			/* The world the scene stands on, for the rules' world gates: its body's conditions, placed or
 			 * cut, else the home world's (what a scene with no body has always been). */
 			BiomeWorldConditions world = climate != null ? climate.Conditions : BiomeWorldConditions.Earthlike;
 			List<ScatterRule> rules = GatherRules(palette, field, seed, options, placement, world, attributionEntries, report);
@@ -231,7 +231,7 @@ namespace FishMMO.Shared.WorldDesign
 			DetailPrototype[] detailArray = detailPrototypes.ToArray();
 			TreePrototype[] treeArray = treePrototypes.ToArray();
 			List<TerrainDetailBiomes.Entry> prototypeBiomes = PrototypeBiomes(rules, detailArray);
-			// The scatter modes the client draws (SCATTER-MODES, 2026-10-26): no record at all unless a rule names one.
+			// The scatter modes the client draws: no record at all unless a rule names one.
 			var modeDetails = new List<TerrainScatterModes.Detail>();
 			var modeTrees = new List<TerrainScatterModes.Tree>();
 			ModeRecord(rules, detailArray, treeArray, options, report, modeDetails, modeTrees);
@@ -308,7 +308,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public Vector2 Depth;
 			/// <summary>
-			/// A bed rule's own reading of the water over it (decision 35 (a), 2026-10-18): the waters it grows under (its own, else its
+			/// A bed rule's own reading of the water over it: the waters it grows under (its own, else its
 			/// slot's, <see cref="BiomeBedBands.RuleWaters"/>), its current band, and where an inland water's surface is
 			/// (<see cref="BedInland"/>, null with none) so its depth band is read below THAT surface; the sea's case keeps the sea-level
 			/// arithmetic it always had.
@@ -329,20 +329,20 @@ namespace FishMMO.Shared.WorldDesign
 			/// scene a climate to read it against; false skips the band entirely, never sampling the climate.
 			/// </summary>
 			public bool Climate;
-			/// <summary>The ground's heat (<see cref="TerrainScatterOptions.HeatAt"/>) when the rule has a heat band and the scene a heat to read; null skips the band (2026-10-18, I2q).</summary>
+			/// <summary>The ground's heat (<see cref="TerrainScatterOptions.HeatAt"/>) when the rule has a heat band and the scene a heat to read; null skips the band.</summary>
 			public Func<float, float, float> Heat;
 			/// <summary>
-			/// True when the rule has a landform band (<see cref="PrefabSpawnRule.landformBand"/>, decision 55); <see cref="Zones"/> the
-			/// scene's (null: none stored, the band's "nowhere"). False skips the band, never asking a mask (2026-10-25, I2g-b).
+			/// True when the rule has a landform band (<see cref="PrefabSpawnRule.landformBand"/>); <see cref="Zones"/> the
+			/// scene's (null: none stored, the band's "nowhere"). False skips the band, never asking a mask.
 			/// </summary>
 			public bool Zoned;
 			public BiomeLandformZones Zones;
 			public int ZoneBiome;
-			/// <summary>The scene's landform zones when the rule grades its sizes on talus cones (<see cref="PrefabSpawnRule.talusGrading"/>, 2026-10-25, I2u); null: no grading.</summary>
+			/// <summary>The scene's landform zones when the rule grades its sizes on talus cones (<see cref="PrefabSpawnRule.talusGrading"/>); null: no grading.</summary>
 			public BiomeLandformZones GradeZones;
-			/// <summary>The rule's scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>, 2026-10-26, SCATTER-MODES); null when all are off: no mode path is taken.</summary>
+			/// <summary>The rule's scatter modes (<see cref="PrefabSpawnRule.scatterMode"/>); null when all are off: no mode path is taken.</summary>
 			public ScatterModeRun Modes;
-			/// <summary>True when the rule has a facing band (<see cref="PrefabSpawnRule.facingBand"/>, 2026-10-26, GROUND-BANDS); <see cref="FaceCompass"/> the scene's. False skips the band.</summary>
+			/// <summary>True when the rule has a facing band (<see cref="PrefabSpawnRule.facingBand"/>); <see cref="FaceCompass"/> the scene's. False skips the band.</summary>
 			public bool Faced;
 			public BiomeScatterCompass FaceCompass;
 			public TerrainScatterReport.RuleOutcome Outcome;
@@ -464,7 +464,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (options != null && options.HasLiquidWater)
 					{
 						/* A rule on a biome's submerged layer is aquatic; so is a rule on a sea-floor biome's main or detail layer that names
-						 * the sea in its waters (2026-10-25, phase I2m, decision 36 (a): its own grounds paint under the sea, and its reef
+						 * the sea in its waters (its own grounds paint under the sea, and its reef
 						 * coral grows on them). Anything else, trees included, grows on land. */
 						bool aquatic = entry.Role == PaletteRole.Submerged
 							|| (entry.Role == PaletteRole.Main || entry.Role == PaletteRole.Detail) && BiomeSeaFloors.GrowsUnderSea(entry.Biome.SeaFloor, rule.waters);
@@ -476,7 +476,7 @@ namespace FishMMO.Shared.WorldDesign
 						if (aquatic)
 						{
 							/* Under a lake or a river its depth is below that water's own surface, and it grows only under the waters it
-							 * names (decision 35 (a), 2026-10-18): a lakebed's rules the sea alone unless they say otherwise, so a coast's
+							 * names: a lakebed's rules the sea alone unless they say otherwise, so a coast's
 							 * kelp never comes up in its ponds and the sea floor grows exactly as it did. */
 							scatterRule.Aquatic = true;
 							scatterRule.Waters = BiomeBedBands.RuleWaters(rule.waters, SlotWaters(entry));
@@ -499,18 +499,18 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (rule.talusGrading && options?.LandformZones != null)
 					{
-						// Fine at a talus cone's apex, coarse at its toe (2026-10-25, I2u, decision 79 (d)).
+						// Fine at a talus cone's apex, coarse at its toe.
 						scatterRule.GradeZones = options.LandformZones;
 						scatterRule.ZoneBiome = entry.Biome != null ? entry.Biome.ID : 0;
 					}
 					if (!rule.scatterMode.IsOff)
 					{
-						// Turned, tilted, sized, anchored or laid out (2026-10-26, SCATTER-MODES, decision 34); off: no run, nothing changes.
+						// Turned, tilted, sized, anchored or laid out; off: no run, nothing changes.
 						scatterRule.Modes = ModesFor(rule, entry, options, seed, scatterRule.Seed, report);
 					}
 					if (rule.facingBand.On)
 					{
-						// Only on slopes facing one way (2026-10-26, GROUND-BANDS, decision 71); the scene's compass, plain axes without one.
+						// Only on slopes facing one way; the scene's compass, plain axes without one.
 						scatterRule.Faced = true;
 						scatterRule.FaceCompass = options != null ? options.Compass : default;
 					}
@@ -577,7 +577,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// True when a rule grows on a world (its <see cref="PrefabSpawnRule.worldGate"/>, decision 41): always for an open gate, so
+		/// True when a rule grows on a world (its <see cref="PrefabSpawnRule.worldGate"/>): always for an open gate, so
 		/// every rule without one is gathered exactly as before.
 		/// </summary>
 		public static bool GrowsOn(PrefabSpawnRule rule, in BiomeWorldConditions world)
@@ -811,7 +811,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// True for a counted detail's reduced level: a bare MeshFilter (no renderer, so nothing draws it by accident) on a
 		/// direct child named <c>LOD1</c>, <c>LOD2</c>…, which only the client's GPU detail scatter reads
 		/// (BiomeArtGenerator.WriteBush). Unity's own detail drawing ignores it and draws the root's mesh, as it should.
-		/// Also any detail's variant mesh (2026-10-26, I6f): a bare MeshFilter on a direct child named <c>Variant1</c>,
+		/// Also any detail's variant mesh: a bare MeshFilter on a direct child named <c>Variant1</c>,
 		/// <c>Variant2</c>… (ProceduralArtCatalogue.DetailVariantChild), which the GPU detail scatter cycles per instance.
 		/// </summary>
 		private static bool IsDetailLevel(GameObject prefab, MeshFilter filter)
@@ -1722,7 +1722,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// each one's vertex budget checked, the first tile that carries it; and how many the fullest tile held.
 		/// </summary>
 		/// <remarks>
-		/// Until 2026-10-27 every tile was given the whole scene's list (578 on Moron 2) and each rule wrote its scene index.
+		/// Formerly every tile was given the whole scene's list (578 on Moron 2) and each rule wrote its scene index.
 		/// Unity keeps a detail layer's index in a byte, so every prototype past the 256th was written into another plant's layer
 		/// (Woodland's pasture grass into the Forest's holly, a carpet of bushes) and its own stayed empty.
 		/// </remarks>
@@ -2133,7 +2133,7 @@ namespace FishMMO.Shared.WorldDesign
 					u = (i + 0.5f) / cellsX;
 					v = (j + 0.5f) / cellsZ;
 				}
-				// Scatter modes (2026-10-26, SCATTER-MODES): null for a rule with none, which takes no mode path below.
+				// Scatter modes: null for a rule with none, which takes no mode path below.
 				ScatterModeRun modes = scatterRule.Modes;
 				bool even = modes != null && modes.Even;
 				if (even && !EvenCell(modes, rule, frame, i, j, cellsX, cellsZ, tree, ref u, ref v))
@@ -2279,7 +2279,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (scatterRule.Heat != null)
 				{
-					// The ground's heat (2026-10-18, I2q), counted with the height rejections like the climate's.
+					// The ground's heat, counted with the height rejections like the climate's.
 					float band = rule.HeatWeight(scatterRule.Heat(worldX, worldZ));
 					if (band <= 0f)
 					{
@@ -2290,7 +2290,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (scatterRule.Zoned)
 				{
-					// On (or off) a part of the biome's sculpted landforms (2026-10-25, I2g-b, decision 55), counted with the height rejections.
+					// On (or off) a part of the biome's sculpted landforms, counted with the height rejections.
 					float band = BiomeLandformZones.WeightOf(scatterRule.Zones, rule.landformBand, scatterRule.ZoneBiome, worldX, worldZ, worldY,
 						Bilinear(slopes, heightRes, u, v));
 					if (band <= 0f)
@@ -2302,7 +2302,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (scatterRule.Faced)
 				{
-					// On a face looking one way (2026-10-26, GROUND-BANDS, decision 71), counted with the slope rejections.
+					// On a face looking one way, counted with the slope rejections.
 					float band = rule.facingBand.Weight(Downhill(frame, heights, heightRes, u, v), Bilinear(slopes, heightRes, u, v), in scatterRule.FaceCompass);
 					if (band <= 0f)
 					{
@@ -2313,7 +2313,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (modes != null && modes.Weighs)
 				{
-					// Anchored (a lee, a nurse, a cliff's foot, a seep line…) or gathered (fields, rain cells, rings), SCATTER-MODES.
+					// Anchored (a lee, a nurse, a cliff's foot, a seep line…) or gathered (fields, rain cells, rings).
 					float band = ModeWeight(modes, frame, heights, slopes, heightRes, u, v, worldX, worldY, worldZ);
 					if (band <= 0f)
 					{
@@ -2357,7 +2357,7 @@ namespace FishMMO.Shared.WorldDesign
 					TreeInstance instance = TreeInstanceAt(rule, prototypes[variant], u, height01, v, h, groupShift + standShift, groupShift - 0.5f * standShift);
 					if (modes != null && (modes.Faces || modes.Sizes))
 					{
-						// Its facing and power-law size (SCATTER-MODES), before any talus grading scales it.
+						// Its facing and power-law size, before any talus grading scales it.
 						OrientTree(modes, rule, ref instance, h, frame, heights, heightRes, u, v, worldX, worldZ);
 					}
 					if (scatterRule.GradeZones != null)
@@ -2861,7 +2861,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (scatterRule.Modes != null && scatterRule.Modes.Weighs)
 				{
-					// Anchored or gathered (SCATTER-MODES, 2026-10-26): grass under the shrubs, a lee's drift, a fairy ring.
+					// Anchored or gathered: grass under the shrubs, a lee's drift, a fairy ring.
 					float band = ModeWeight(scatterRule.Modes, frame, heights, slopes, heightRes, u, v, worldX,
 						frame.Origin.y + Bilinear(heights, heightRes, u, v) * frame.Size.y, worldZ);
 					if (band <= 0f)
@@ -3502,14 +3502,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// The scene's climate over one tile for climate-banded rules (<see cref="TerrainClimateGrid"/>: nodes 16 m apart at the
 		/// ground's own height and 25 m above it, read back at a candidate's true height), the grid the splat painter's banded ground
 		/// layers read too, so a layer and its plants authored with one band change over at one place. The scatter had a private copy
-		/// of the same construction until 2026-10-18 (decision 35 rides along: one grid, not two); the arithmetic is the same to the bit.
+		/// of the same construction formerly (decision 35 rides along: one grid, not two); the arithmetic is the same to the bit.
 		/// </summary>
 		/// <remarks>
 		/// <para>
 		/// <b>Why a grid.</b> A carpet visits every detail cell of its ground, twice, and a climate sample is a direction off the globe,
 		/// a few noise octaves and a latitude table; horizontally the climate barely moves inside a tile, what moves within metres is
 		/// the altitude, which the grid follows to first order (measured against <see cref="ScenePlacementClimate.SampleAt"/> on a 1 km
-		/// tile of rolling relief, 2026-10-10: temperature to 10⁻⁵ anywhere, humidity to 0.006 at the ground, so it is only ever read
+		/// tile of rolling relief: temperature to 10⁻⁵ anywhere, humidity to 0.006 at the ground, so it is only ever read
 		/// at the ground a candidate stands on).
 		/// </para>
 		/// <para>
@@ -3534,7 +3534,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How fully a water-gated rule grows at a point against the water line: a land rule above the sea's tides, a bed rule under
-		/// the waters it names (decision 35 (a), 2026-10-18) — under the sea by its depth below mean sea level exactly as always, under
+		/// the waters it names — under the sea by its depth below mean sea level exactly as always, under
 		/// a lake or a river by its depth below that water's own surface (<see cref="BiomeBedBands.InlandRule"/>).
 		/// </summary>
 		private static float ShoreBand(ScatterRule rule, float worldX, float worldY, float worldZ)

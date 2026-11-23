@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A lava tube that still runs (2026-10-20, cave lava): its dressing (<see cref="CaveLavaDressing"/>) lays nothing for a cooled
+	/// A lava tube that still runs (cave lava): its dressing (<see cref="CaveLavaDressing"/>) lays nothing for a cooled
 	/// plan and the same every time for a molten one, its lava lights within the budget and spaced off each other and the glow's,
 	/// nothing on the floor in the lava; its emitter kinds appended after every old one; the lava light's churn and seed
 	/// (<see cref="SceneMagma"/>); the new glow art as large as the placer is told; the client reads the new kinds.

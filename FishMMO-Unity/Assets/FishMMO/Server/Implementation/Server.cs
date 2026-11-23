@@ -359,6 +359,7 @@ namespace FishMMO.Server.Implementation
 
 			// Module systems join the scene's own list before anything scans it.
 			AdoptModuleSystems();
+			AdoptDeclaredModuleSystems();
 
 			// Initialize all registered runtime data containers
 			DataContainerRegistry = new RuntimeDataContainerRegistry();
@@ -941,6 +942,55 @@ namespace FishMMO.Server.Implementation
 				if (locations.IsValid())
 				{
 					UnityEngine.AddressableAssets.Addressables.Release(locations);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Appends the module systems declared in code for this server's scene (<see cref="ModuleServerSystemAttribute"/>):
+		/// a fresh instance of each, unless a behaviour of that type is already in the list (an asset wins, so a system can
+		/// still be given tuned values by authoring one).
+		/// </summary>
+		/// <remarks>
+		/// For a module system with nothing to author: no asset, no Addressables entry, nothing for the editor to keep in
+		/// step. Its serialized fields keep their defaults.
+		/// </remarks>
+		private void AdoptDeclaredModuleSystems()
+		{
+			string serverScene = gameObject.scene.name;
+			foreach (System.Reflection.Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				object[] declarations;
+				try
+				{
+					declarations = assembly.GetCustomAttributes(typeof(ModuleServerSystemAttribute), false);
+				}
+				catch (Exception)
+				{
+					continue;
+				}
+				foreach (ModuleServerSystemAttribute declaration in declarations)
+				{
+					if (declaration.SystemType == null ||
+						!string.Equals(declaration.ServerScene, serverScene, StringComparison.Ordinal) ||
+						!typeof(ServerBehaviour).IsAssignableFrom(declaration.SystemType) ||
+						declaration.SystemType.IsAbstract)
+					{
+						continue;
+					}
+					bool present = false;
+					for (int i = 0; i < serverBehaviors.Count; i++)
+					{
+						present |= serverBehaviors[i] != null && serverBehaviors[i].GetType() == declaration.SystemType;
+					}
+					if (present)
+					{
+						continue;
+					}
+					ServerBehaviour behaviour = (ServerBehaviour)ScriptableObject.CreateInstance(declaration.SystemType);
+					behaviour.name = declaration.SystemType.Name;
+					serverBehaviors.Add(behaviour);
+					Log.Debug("Server", $"Module system {declaration.SystemType.Name} adopted from its assembly declaration.");
 				}
 			}
 		}

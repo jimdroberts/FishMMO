@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Thinning the net where the rock is plain (2026-10-18: "Caves need even bigger hallows"): a surface net lays two
+	/// Thinning the net where the rock is plain ("Caves need even bigger hallows"): a surface net lays two
 	/// triangles a cell over every square metre of rock, and a hall 250 m across with its lobes is several hundred thousand of
 	/// them, most on its vault, where no one walks, and on its floor, which is flat. Here edges are collapsed, cheapest first,
 	/// while the rock stays within a tolerance of where the net put it: a little over a decimetre on anything walked on or
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Returns how many triangles went.
 		/// </summary>
 		/// <remarks>
-		/// With the habitat (2026-10-20: <paramref name="colours"/> and <paramref name="extra"/>, per vertex) no edge is collapsed
+		/// With the habitat (<paramref name="colours"/> and <paramref name="extra"/>, per vertex) no edge is collapsed
 		/// whose ends differ by more than <see cref="HabitatStep"/> in any channel: a vertex merely takes its neighbour's place, so
 		/// the sample at the survivor stands for both, and across a lane's edge or a glow patch's that would smear it metres wide.
 		/// </remarks>

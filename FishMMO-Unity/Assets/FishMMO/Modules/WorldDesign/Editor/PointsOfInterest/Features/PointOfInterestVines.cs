@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Ivy on the walls a site laid (2026-10-12: "Ruins and old walls"): after the template's features, every upright
+	/// Ivy on the walls a site laid ("Ruins and old walls"): after the template's features, every upright
 	/// face of masonry (and, less, of plaster and timber) on the site's structure pieces that reaches the ground may carry a
 	/// mat of the biome's vine climbing it from the ground, cut to the face's clear stretch (below its windows, never across
 	/// a doorway), and a little spill at its foot.

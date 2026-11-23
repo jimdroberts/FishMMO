@@ -473,7 +473,7 @@ namespace FishMMO.Shared
 			{
 				return currentTick;
 			}
-			if (template.IsPermanent)
+			if (template.IsPermanent || template.LastsUntilRemoved)
 			{
 				return TimeManager.UNSET_TICK;
 			}

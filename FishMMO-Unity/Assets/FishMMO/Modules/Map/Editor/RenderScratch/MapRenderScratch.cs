@@ -6,7 +6,7 @@ namespace FishMMO.RenderScratch
 	/// <summary>
 	/// The Map module's part of the panel render rig: the minimap in the interface scaling render and the HUD overlap
 	/// probe, where it always stood (after the cast bar), and the minimap modes of the play-mode leak probe
-	/// (<see cref="MinimapLeakModes"/>). Moved with the module, 2026-11-20.
+	/// (<see cref="MinimapLeakModes"/>). Moved with the module.
 	/// </summary>
 	public static class MapRenderScratch
 	{

@@ -8,7 +8,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.RenderScratch
 {
 	/// <summary>
-	/// The Pets module's part of the render rig (2026-11-20): a fake pet roster on the rig's characters, and the pet panel
+	/// The Pets module's part of the render rig: a fake pet roster on the rig's characters, and the pet panel
 	/// in the HUD overlap probe. Moved out of the core rig with the module.
 	/// </summary>
 	public static class PetsRenderScratch

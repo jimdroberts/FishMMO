@@ -1,6 +1,6 @@
 # Map system
 
-> Since 2026-11-20 the client half below is the [Map module](../README.md) (`Assets/FishMMO/Modules/Map/Client`); the
+> The client half below is the [Map module](../README.md) (`Assets/FishMMO/Modules/Map/Client`); the
 > data, the bake and true north stay in the core.
 
 Two panels, one subsystem. `UITKMinimap` (HUD) shows a live overhead render centred on the
@@ -22,7 +22,7 @@ revealed or filtered on one appears identically on the other.
 | Visibility rules and throttling | `MapMarkerFilter`, `MapRelationshipTracker` | Map module (`FishMMO.Map.Client`) |
 | Landmarks, notes and waypoints as markers | `MapContent` | Map module (`FishMMO.Map.Client`) |
 | Which categories the player wants drawn | `MapFilters`, `MapFilterCategory` | Map module (`FishMMO.Map.Client`) |
-| Explored territory | `FogOfWarMap`, `FogOfWarStore` | Map module (`FishMMO.Map.Client`) |
+| Explored territory | `FogOfWarMap` (client grid), `FogChunkSet`/`FogCodec` (shared), `MapFogSystem` (server) | Map module (`FishMMO.Map.Client`, `FishMMO.Map`, `FishMMO.Map.Server`) |
 | Player annotations | `MapNote`, `MapNoteStore` | Map module (`FishMMO.Map.Client`) |
 | Skill scaling seam | `Cartography`, `ICartographyProvider` | Map module (`FishMMO.Map.Client`) |
 | Drawing | `UITKMapView`, `MapViewTransform` | Map module (`FishMMO.Map.Client`) |
@@ -141,8 +141,8 @@ has walked. Clicking one selects it into the side bar's WAYPOINT section; the bu
 `WaypointTravelRequestBroadcast` and disables until the server answers (or five seconds pass). A
 refusal re-enables it with the reason; an arrival closes the map. The panel has four clip slots
 (click, arrive, refused, discovered) played through `ClientUIAudio` on the Interface channel, and
-`UITKMap.OnFastTravelClicked` for anything else that wants the click. Only the current scene's
-waypoints are shown or travelable; other scenes wait for the world-map system.
+`UITKMap.OnFastTravelClicked` for anything else that wants the click. The dropdown shows another
+scene's discovered waypoints, but fast travel works only within the scene the character stands in.
 
 When the server's `WaypointTravelPolicy` requires it (the default, issue #253), the button is also
 disabled unless the character stands within the policy's range of a waypoint it has discovered, and
@@ -150,6 +150,16 @@ the hint says so. The map still opens anywhere for looking. The policy reaches t
 `WaypointController` owner payload (`IWaypointController.TravelPolicy`); the check runs against the
 baked `WorldSceneDetails.Waypoints` positions on the refresh tick, so walking up to a waypoint with
 the map open enables the button. It is a hint only — the server refuses with `NotNearWaypoint`.
+
+### Gate Stones and gate mode (issue #241)
+
+A Gate Stone is a waypoint of kind `GateStone` (`SceneWaypointDetails.IsGateStone`): drawn like a waypoint in its own
+tint (`MapContent.GateStoneTint`), discovered the same way, and never a fast-travel point (the button reads GATE STONE
+and stays off). When the Gate spell's cast ends, the Travel module calls `GateStoneChoice.Begin`; the map opens on the
+current scene in **gate mode**: selecting a discovered Gate Stone, in this scene or any other the dropdown lists, enables
+OPEN GATE, which sends the choice (`GateStoneChoice.Choose`). The hint counts the seconds left. The server answers by
+ending the wait (the map closes) or with a toast (the wait goes on). Closing the map gives the Gate up
+(`GateStoneChoice.Cancel`).
 
 ## Points of interest
 
@@ -160,7 +170,7 @@ is baked. `MapContent.AppendPointsOfInterest(results, details, definition, fog, 
 reads the details first and the definition's list for back-compat, drawing a landmark that is in both
 (same name, same place to the metre) once.
 
-- **Discovery.** Every generated point requires discovery (2026-10-10): it appears once the fog has
+- **Discovery.** Every generated point requires discovery: it appears once the fog has
   explored its chunk, never before.
 - **Tiers.** A kind's detail tier is 0 to 3 (`PointOfInterestKinds`). It is gated twice: against
   `Cartography.VisibleContentTier` (0 to `Cartography.MaximumDetailTier`, 4; with no provider every tier
@@ -198,7 +208,9 @@ map subsystem was protecting, because the map never held anything better.
 
 ## Exploration and Cartography
 
-Exploration works in **chunks**. A scene's bounds are divided into squares of `FogChunkSize` metres
+Exploration works in **chunks** on a **world-anchored grid**: chunk (x, z) covers
+`[x·size, (x+1)·size)` in world metres (`FogChunkSet`), and the client's grid starts on the chunk line at or before
+the scene's corner, so its chunk *i* is world chunk `OriginChunkX + i`. A scene's bounds are divided into squares of `FogChunkSize` metres
 (the map definition's field, defaulting to `FogOfWarDefaults.ChunkSize`, 40 m — twenty-eight chunks
 across a shipped thousand-metre scene), and walking into a chunk explores all of it. A chunk is
 explored or it is not; there is no coverage value and no radius. `ExploredFraction` is therefore
@@ -227,24 +239,47 @@ rewards:
 | `ExploreChunk(x, z)` | One chunk by grid coordinates. Off-grid coordinates are inert. |
 | `ExploreEverything()` | The whole current scene. |
 
-All of them apply to the scene the character is in, explore nothing twice, and schedule the same
-debounced save that walking does. Reading the chunk grid directly — `Fog.Chunks`, `ChunksX`,
-`TryGetChunk` — is available for content that needs to reason about it.
+All of them apply to the scene the character is in and explore nothing twice. They change only what this client
+draws: reading the chunk grid directly — `Fog.Chunks`, `ChunksX`, `TryGetChunk` — is available for content that needs
+to reason about it.
 
 For asset-authored content there is `ExploreMapAction`, an ECA action that goes on an item's use
-event, a region's enter event or a quest completion. It follows `ChangeFogAction`: shared assembly,
-owner-client only, suppressed during reconcile, raising an event that `UITKMinimap` applies. Note
-what that means — **exploration is client-side data**, so the action is the whole delivery mechanism
-and the server neither stores nor validates it. Fine for revealing a map, wrong for anything a
-player could gain by lying about.
+event, a region's enter event or a quest completion. On the server it raises `OnServerExploreMap`, which the server
+fog system records; on the owning client (suppressed during reconcile) it raises `OnExploreMap`, which `UITKMinimap`
+draws.
 
-`FogOfWarStore` writes one signed file per character per scene under
-`<install>/Cartography/<characterID>/`. It never crosses the network. One byte per chunk means a
-whole scene is smaller than the header describing it, so the payload is written raw. The signature
-makes tampering detectable, not impossible — the key ships in the client.
+### Kept by the server, account-wide (issue #241)
 
-**Cartography experience must therefore be awarded by the server**, from the positions it already
-receives, and never from anything read out of that file. Implement `ICartographyProvider` and
+Explored maps are **account-wide** and **kept by the server** (`MapFogSystem`, Map.Server, adopted by its assembly
+declaration): every character on an account shares one explored map per scene, stored in `account_map_fog`
+(account, scene, encoded chunks, explored count). Nothing is written on the player's machine any more; the old
+per-character `.fow` files are ignored.
+
+- **Derived, never uploaded.** The server reveals the chunk under each character every 0.25 s — the line between two
+  samples, so a mount or a flight skips nothing; a sample over 120 m away is a jump and explores only the arrival —
+  plus what `ExploreMapAction` and `/gm reveal map` grant. The client reveals with the same rule so the map moves at
+  once, but nothing it says is stored, so neither the fog nor the scene list can be forged.
+- **Encoding.** `FogCodec`: the tight bounding box of the explored chunks as alternating run lengths (varints), plain
+  managed code so a browser build reads it like every other platform. A solid patch is a few bytes.
+- **Saving.** Every 30 s while new chunks wait, and as the character leaves the server. A save merges into the stored
+  row under a row lock (`IAccountMapFogService.MergeAsync`; the merge is `MapFogSystem.Merge`, a union), and an account's
+  reads and merges share one async lane, so two writers converge on the union.
+- **Sending.** At spawn the owner gets `FogOfWarSceneBroadcast` for its scene and `FogOfWarScenesBroadcast` — every
+  scene the account has a row for, which is what "entered at least once" means. `ClientMapSystem.ApplyServerFog` folds
+  a scene's fog into whichever grid shows it. A map showing another scene asks with `FogOfWarRequestBroadcast`
+  (rate-limited); the minimap owns the connection and installs `ClientMapSystem.RequestFog`.
+
+### The scene dropdown
+
+The world map's header dropdown lists every scene the account has entered (the character's own first, marked
+"(you are here)"; scenes this build no longer has are left out; labels are made unique — `MapSceneChoices`). Picking
+one calls `ClientMapSystem.ViewScene`: the map draws `ClientMapSystem.Viewed` — that scene's baked map, the
+account's fog for it and this character's notes for it — read-only. Live markers (the character, the party, NPCs),
+pinning notes and fast travel belong to the scene the character stands in and are off while another is shown. The map
+opens on the character's scene every time.
+
+**Cartography experience must be awarded by the server**, from the positions it already
+receives. Implement `ICartographyProvider` and
 register it with `Cartography.SetProvider` when the profession lands; every map feature that scales
 with skill — world-map zoom range, label detail tier, note capacity, minimap resolution,
 coordinates, grid — already reads it from there. Chunk size is deliberately not one of them: it

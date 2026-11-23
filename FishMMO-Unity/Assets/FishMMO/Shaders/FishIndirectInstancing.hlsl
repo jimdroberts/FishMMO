@@ -159,9 +159,9 @@ struct FishVisible
     // _FishFloraOn under FISH_FLORA_ON_DECLARED).
     #define FISH_FLORA_ON_DECLARED
     #if defined(SHADER_API_WEBGPU)
-        // FishMMO edit (2026-11-01): WebGPU loads the batch header's words at their fixed addresses (TerrainBrgMath
+        // FishMMO edit: WebGPU loads the batch header's words at their fixed addresses (TerrainBrgMath
         // ContactOnAddress / FloraOnAddress — the very values SyncDots gives these names' metadata) instead of through a
-        // UserPropertyMetadata cbuffer: a browser stage binds at most 12 uniform buffers (Docs/Rendering/2026-11-01/webgpu-constants).
+        // UserPropertyMetadata cbuffer: a browser stage binds at most 12 uniform buffers.
         #define FISH_BRG_CONTACT_ON_ADDRESS 64u
         #define FISH_BRG_FLORA_ON_ADDRESS 68u
         #define _FishContactOn LoadDOTSInstancedData_float(FISH_BRG_CONTACT_ON_ADDRESS)

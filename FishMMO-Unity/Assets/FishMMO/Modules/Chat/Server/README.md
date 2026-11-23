@@ -2,7 +2,7 @@
 
 **Short description:** SceneServer authority for player messaging across World, Region, Say, Party, Guild, Team, Tell, Trade, System, and Discord channels, with token-bucket anti-spam, lock-free incoming queue, batch DB persistence, and outbound broadcast batching for 50,000-user scalability.
 
-> **Split 2026-11-20.** This file documents the whole chat pipeline as it was. The intake stages (receive, rate gate,
+> **Split.** This file documents the whole chat pipeline as it was. The intake stages (receive, rate gate,
 > queue, sanitising, slash commands, the mutes) are the core's `ChatSystem` now
 > ([its README](../../../Server/Implementation/World/SceneServer/Chat/README.md)); the channel handlers, the duplicate
 > filter, the cross-server pump, persistence and outbound batching are this module's `ChatChannelSystem`. File names

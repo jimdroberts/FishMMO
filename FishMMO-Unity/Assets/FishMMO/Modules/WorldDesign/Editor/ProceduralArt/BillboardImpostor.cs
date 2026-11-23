@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why one turning quad, not crossed ones (2026-10-02).</b> Two fixed quads crossing on the
+	/// <b>Why one turning quad, not crossed ones.</b> Two fixed quads crossing on the
 	/// trunk read as a box from every angle but the four they face: at 45° both show foreshortened,
 	/// and the picture's transparent margins make the planes' edges visible as a thin cross; with the
 	/// textures missing they drew as grey slabs. A quad turned about the trunk toward the camera
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// the same bytes every time, and runs in a test.
 	/// </para>
 	/// <para>
-	/// <b>Unlit, with its normals (2026-11-06).</b> The picture is the surface's own colour, and a normal map
+	/// <b>Unlit, with its normals.</b> The picture is the surface's own colour, and a normal map
 	/// beside it holds the front-most surface's normal; the vegetation shader lights the turned quad by it
 	/// (VegNormal) as it lights the meshes. It used to be lit here (a fixed sun, the back of the crown
 	/// darkened) and lit again in the scene: about 0.7 of the meshes' colour, so trees went duller and
@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The spares pictured (x limbs, y leaf cards: a part ranked above is left out, as the vegetation shader's VegVary drops it
 		/// from a plant that keeps no more); <see cref="Vector2.zero"/> pictures every part. Unset: the median tree's
 		/// (<see cref="MedianTreeKeep"/>). The billboard replaces trees that drop theirs, and a picture of every spare drew each
-		/// one denser than the tree it stood for (2026-11-06).
+		/// one denser than the tree it stood for.
 		/// </param>
 		public static Result Render(MeshBuilder tree, Shade shade, int height, float swayHeight, float tintable, Vector2? keep = null)
 		{
@@ -147,7 +147,7 @@ namespace FishMMO.Shared.WorldDesign
 								continue;
 							}
 							// The surface's own colour and normal, unlit: the shader lights the picture by its normals as it lights
-							// the meshes (2026-11-06). A picture lit once here (a fixed sun, the back of the crown darkened) and
+							// the meshes. A picture lit once here (a fixed sun, the back of the crown darkened) and
 							// again in the scene came out at about 0.7 of the meshes' colour: duller and browner than the tree it
 							// took over from.
 							Vector3 n = (tree.Normals[ia] * wa + tree.Normals[ib] * wb + tree.Normals[ic] * wc).normalized;

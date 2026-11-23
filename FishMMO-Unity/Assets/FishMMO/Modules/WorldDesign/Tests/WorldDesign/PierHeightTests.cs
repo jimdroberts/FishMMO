@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A pier stands over high water, not mean sea level (2026-10-12: "Fix the piers stand height so they don't become
+	/// A pier stands over high water, not mean sea level ("Fix the piers stand height so they don't become
 	/// awash, high tide should be the measurement"): PropsFeature.MeasureShore.
 	/// </summary>
 	public class PierHeightTests

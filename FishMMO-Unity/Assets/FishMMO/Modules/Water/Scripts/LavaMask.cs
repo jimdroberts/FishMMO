@@ -151,7 +151,7 @@ namespace FishMMO.Water
 			}
 
 			var bytes = new byte[resolution * resolution];
-			// Glowing ground counts as molten by its share (2026-10-25, phase I2r: GroundGlowMask, from the client's terrain layers).
+			// Glowing ground counts as molten by its share (GroundGlowMask, from the client's terrain layers).
 			System.Func<float, float, float> glowing = FishMMO.Shared.Weather.GroundGlowMask.ShareAt;
 			for (int i = 0; i < bytes.Length; i++)
 			{

@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decisions 29, 31, 38 and the field parts of 21/23/27 of the biome suite (2026-10-18, phase I2j-b): terraced fields (drystone,
+	/// Decisions 29, 31, 38 and the field parts of 21/23/27 of the biome suite: terraced fields (drystone,
 	/// earth-bund and grass-bank steps, terraced paddies) and the old terraces round a hamlet, orchards as a kind of field, crops the
 	/// detail scatter draws sown in rows, the corn-hill, baulatura, marcita and raised-bed surfaces, fields kept to the bottomland and
 	/// set to a centuriation grid, and the wet margin painted along stored channel lines. Every default is exactly what was cut before.

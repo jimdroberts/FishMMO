@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Furnishes the rooms of a site's buildings (2026-10-11: every building with a door gets an interior): each room
+	/// Furnishes the rooms of a site's buildings (every building with a door gets an interior): each room
 	/// the structure kit records (<see cref="StructureDraft.Room"/>) is laid out by its kind (<see cref="StructureInteriors"/>)
 	/// and its furniture added as props — instanced, with collision, and culled with the rest when the walls hide it.
 	/// </summary>
@@ -23,7 +23,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		public void Build(PointOfInterestSiteContext context)
 		{
-			// The shop-houses' trades first: their signs and stall-boards (2026-10-19, here rather than in a site builder of their
+			// The shop-houses' trades first: their signs and stall-boards (here rather than in a site builder of their
 			// own, which would move the draws of every builder registered after it).
 			PointOfInterestTrades.Lay(context);
 			if (context.Rooms.Count == 0)
@@ -38,7 +38,7 @@ namespace FishMMO.Shared.WorldDesign
 				PointOfInterestSiteContext.PlacedRoom placed = context.Rooms[i];
 				AddRoomBox(context, placed);
 				int seed = (int)PointOfInterestPlanner.Hash(context.Record != null ? context.Record.Id : 0, i, (int)placed.Room.Kind, 0x1A7E);
-				// A shop let to a trade is furnished as that trade's (2026-10-19), its plain shelves its trade's stocked ones.
+				// A shop let to a trade is furnished as that trade's, its plain shelves its trade's stocked ones.
 				StructureRoom room = placed.Room;
 				StructureTrade? trade = null;
 				if (room.Kind == StructureRoomKind.Shop)

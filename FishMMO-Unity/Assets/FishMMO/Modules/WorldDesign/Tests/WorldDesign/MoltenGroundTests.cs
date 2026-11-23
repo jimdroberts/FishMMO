@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Molten ground (2026-10-25, phase I2r; decisions 65, 93, 95): a ground layer's glow a pure function of the shared clock,
+	/// Molten ground: a ground layer's glow a pure function of the shared clock,
 	/// continuous across the wrap and FishGroundGlow.hlsl constant for constant; the lava-datum bands and landforms; the lava lines
 	/// and moats placed deterministically; the curtains of fire on THE slot function; and every template, spec and preset that names
 	/// none of it unchanged.
@@ -46,7 +46,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That((int)BiomeLandformDatum.SeaSurface, Is.EqualTo(1));
 			Assert.That((int)BiomeLandformDatum.LavaSurface, Is.EqualTo(2));
 			Assert.That(TerrainLayerTable.RowGlow, Is.EqualTo(8));
-			// GROUND-BANDS (2026-10-26) appended the clock rows 9 and 10 after the glow row.
+			// GROUND-BANDS appended the clock rows 9 and 10 after the glow row.
 			Assert.That(TerrainLayerTable.Rows, Is.EqualTo(11));
 		}
 

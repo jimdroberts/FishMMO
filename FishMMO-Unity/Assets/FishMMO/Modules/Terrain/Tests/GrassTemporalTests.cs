@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The blade grass under a temporal resolve (STP at 0.67 on High Fidelity, 2026-10-27): the blades write their own
+	/// The blade grass under a temporal resolve (STP at 0.67 on High Fidelity): the blades write their own
 	/// motion, rebuilt a frame back on the shared motion clock with the forward pass's own wind function, so the upscaler
 	/// keeps its history where the tips sway; a sliver under a RENDERED pixel is drawn a pixel wide with its true width as
 	/// a dither that turns every frame; the cylinder rounding is shown only where a blade is wide enough to show it.

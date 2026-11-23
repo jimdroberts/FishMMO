@@ -109,14 +109,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The clock the sea's motion runs on: the world's shared motion clock (<see cref="WorldMotion.Seconds"/>),
 		/// so every player's plants rock and fish swim in step, and never faster than real time however fast a
-		/// preview runs the sky (2026-10-06: "animated too fast").
+		/// preview runs the sky ("animated too fast").
 		/// </summary>
 		/// <remarks>
 		/// It had its own copy of that rule: the sky's clock, stepped at most a real frame at a time and drawn
 		/// back onto the sky's only while within thirty seconds of it. So a gap of thirty seconds to an hour —
 		/// the first anchor arriving after the client's own clock, a scene load longer than half a minute, a
 		/// large clock correction — was kept for good: that player's fish swam out of step with everyone else's
-		/// for the rest of the session (audit 2026-10-06). The shared clock jumps such a gap and leans across a
+		/// for the rest of the session. The shared clock jumps such a gap and leans across a
 		/// small one.
 		/// </remarks>
 		public static double MotionSeconds => WorldMotion.Seconds;
@@ -330,7 +330,7 @@ namespace FishMMO.Client
 				return;
 			}
 			Vector3 eye = camera.transform.position;
-			// The seas in the caves first (2026-10-26, I2n-b, decision 83: a sea hall's warm sea under an ice shell, on a world with no sea
+			// The seas in the caves first (a sea hall's warm sea under an ice shell, on a world with no sea
 			// of its own): each near pool's own animals, its interior's (SeaLifeSystem.CavePools.cs). Nothing where no cave holds one.
 			bool pools = PlacePools(settings, eye);
 			if (!seaPresent || eye.y - meanLevel > settings.MaxCameraHeight)
@@ -495,7 +495,7 @@ namespace FishMMO.Client
 				m.SetFloat(ZWriteId, jelly ? 0f : 1f);
 				// Jellies after the sea's surface (Transparent-100) and before the underwater pass (-90), which fogs them.
 				m.renderQueue = jelly ? (int)RenderQueue.Transparent - 95 : (int)RenderQueue.Geometry;
-				// Its own light (2026-10-25): the colour at its brightest, and how it runs over the body.
+				// Its own light: the colour at its brightest, and how it runs over the body.
 				m.SetVector(EmitColourId, EmitColour(kind));
 				m.SetVector(EmitPatternId, EmitPattern(kind));
 			}
@@ -934,7 +934,7 @@ namespace FishMMO.Client
 
 			/// <summary>
 			/// Whether a kind is at home in a biome, and the weight the biome gives it there: its template's Sea Life lists it
-			/// (2026-10-16, with the weight since I4b). A template never authored with it falls back on the kind's own list of biome
+			/// (with the weight). A template never authored with it falls back on the kind's own list of biome
 			/// names (<see cref="SeaLifePlacement.PrefersByName"/>) at the kind's own preferred weight, with one warning a session.
 			/// </summary>
 			private static bool TryHomeIn(SeaCreatureKind kind, BiomeTemplate biome, out float weight)

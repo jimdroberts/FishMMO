@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// What a vent's timing reads of the sky at a moment (2026-10-25, phase I2q-b): the shared motion clock and the sky's state the
+	/// What a vent's timing reads of the sky at a moment: the shared motion clock and the sky's state the
 	/// glows read (SceneGlowSky, itself a pure function of the world clock at the scene), so a vent and the glow beside it move as one.
 	/// </summary>
 	public struct VentSky
@@ -31,7 +31,7 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// How strong a vent is at a moment (2026-10-25, phase I2q-b; decisions 53, 66, 90, 93, 95): its biome's
+	/// How strong a vent is at a moment: its biome's
 	/// <see cref="BiomeVentTiming"/>, a pure function of the shared clock and the sky's state, in double precision where it reads
 	/// days, every slot length a divisor of the motion clock's 10 000 s wrap, so a vent is the same for every player and continuous
 	/// across the wrap. PRESENTATION ONLY: the weather's plumes and fallout, which the server also works out, never read it; any later
@@ -42,13 +42,13 @@ namespace FishMMO.Shared.Weather
 		/// <summary>A jet's flicker slots under the plume tide, seconds (each divides 10 000; the draft's 600–2400 s), by its seed.</summary>
 		public static readonly int[] FlickerSlots = { 625, 1000, 1250, 2000, 2500 };
 
-		/// <summary>The share of its slot a jet plays (55–90 %), its ramps, seconds; the Great Plume's floor (decision 53).</summary>
+		/// <summary>The share of its slot a jet plays (55–90 %), its ramps, seconds; the Great Plume's floor.</summary>
 		public const float FlickerLeast = 0.55f, FlickerMost = 0.9f, FlickerRamp = 20f, GreatPlumeFloor = 0.4f;
 
-		/// <summary>The sun's elevations a Solar vent wakes and is full at (decision 66: 8° → 35°), as sines.</summary>
+		/// <summary>The sun's elevations a Solar vent wakes and is full at (8° → 35°), as sines.</summary>
 		public static readonly float SolarWake = Mathf.Sin(8f * Mathf.Deg2Rad), SolarFull = Mathf.Sin(35f * Mathf.Deg2Rad);
 
-		/// <summary>A Solar plume's life slots, its shortest and longest life and its ramps, seconds (decision 66: 3–12 days on, then dormant).</summary>
+		/// <summary>A Solar plume's life slots, its shortest and longest life and its ramps, seconds (3–12 days on, then dormant).</summary>
 		public const double LifeSlotSeconds = 16.0 * 86400.0, ShortestLife = 3.0 * 86400.0, LongestLife = 12.0 * 86400.0, LifeRamp = 6.0 * 3600.0;
 
 		/// <summary>The quiet degassing between a Strombolian vent's bursts, and between a fountain's episodes, as a share of full.</summary>
@@ -63,7 +63,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>
 		/// A vent's strength now, 0..1. <paramref name="seed"/> is the vent's own (its draws), <paramref name="bearing"/> its crack's
 		/// direction (radians, for the kneading), <paramref name="episodes"/> its biome's fountain episodes (empty: the volcanic
-		/// default) and <paramref name="great"/> whether it is the scene's Great Plume (decision 53: never under 0.4 with the tide).
+		/// default) and <paramref name="great"/> whether it is the scene's Great Plume (never under 0.4 with the tide).
 		/// </summary>
 		public static float Strength(BiomeVentTiming timing, in VentSky sky, uint seed, float bearing, in BiomeFountainEpisodes episodes, bool great = false)
 		{
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
-		/// <summary>A jet's flicker (decision 53): one "on" span a slot of its own length, covering 55–90 % of it, with 20 s ramps (EpisodeSlots).</summary>
+		/// <summary>A jet's flicker: one "on" span a slot of its own length, covering 55–90 % of it, with 20 s ramps (EpisodeSlots).</summary>
 		public static float Flicker(float wrappedSeconds, uint seed)
 		{
 			uint h = TurbidityEpisodes.Mix(seed, FlickerSalt);
@@ -100,11 +100,11 @@ namespace FishMMO.Shared.Weather
 			return EpisodeSlots.At(wrappedSeconds, length, share * length, FlickerRamp, h);
 		}
 
-		/// <summary>The sun's part of a Solar vent (decision 66): nothing under 8° of elevation, full over 35°, smooth between.</summary>
+		/// <summary>The sun's part of a Solar vent: nothing under 8° of elevation, full over 35°, smooth between.</summary>
 		public static float Sun(float sunHeight) => SceneGlowModes.Smooth((sunHeight - SolarWake) / (SolarFull - SolarWake));
 
 		/// <summary>
-		/// A Solar plume's life (decision 66): the world cut into <see cref="LifeSlotSeconds"/> slots of the shared clock (in double), each
+		/// A Solar plume's life: the world cut into <see cref="LifeSlotSeconds"/> slots of the shared clock (in double), each
 		/// holding one life of 3–12 days at a hashed start that ends inside the slot, ramped over six hours; dormant between.
 		/// </summary>
 		public static float Life(double seconds, uint seed)
@@ -125,7 +125,7 @@ namespace FishMMO.Shared.Weather
 			return SceneGlowModes.Smooth((float)(into / LifeRamp)) * SceneGlowModes.Smooth((float)((life - into) / LifeRamp));
 		}
 
-		/// <summary>The tidal kneading (decision 90): the stress across a crack of this bearing, as the Kneading glow reads it.</summary>
+		/// <summary>The tidal kneading: the stress across a crack of this bearing, as the Kneading glow reads it.</summary>
 		public static float Kneading(Vector2 tidalStress, float bearing)
 		{
 			float stress = 0.5f + 0.5f * (tidalStress.x * Mathf.Cos(2f * bearing) + tidalStress.y * Mathf.Sin(2f * bearing));

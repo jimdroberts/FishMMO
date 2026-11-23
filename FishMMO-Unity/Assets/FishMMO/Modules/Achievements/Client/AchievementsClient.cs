@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	/// What the Achievements module adds to the client: the announcement of a completed tier, a floating label over the
 	/// character (<see cref="ClientMilestoneDisplay.ShowMilestone"/>) and a system line in chat, the lasting record of it.
 	/// </summary>
-	/// <remarks>Moved out of <c>ClientCombatDisplay</c> with the module (2026-11-20).</remarks>
+	/// <remarks>Moved out of <c>ClientCombatDisplay</c> with the module.</remarks>
 	public static class AchievementsClient
 	{
 		/// <summary>Subscribes once. Runs before the first scene loads; safe to run again.</summary>

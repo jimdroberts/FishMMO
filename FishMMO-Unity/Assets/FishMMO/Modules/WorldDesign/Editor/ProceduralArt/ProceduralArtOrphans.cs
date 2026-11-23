@@ -6,9 +6,9 @@ using System.IO;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The generated rock, stone, ice and cliff files on disk that no family makes any more (2026-10-26, phase I6f of the biome
-	/// suite, decision 22): the shared <c>Boulder_{Round,Slab,Spire}_LOD*</c>, <c>Rocks_Small</c> and <c>Pebbles</c> meshes every
-	/// material had before its own (I6b), a formation variant a lowered <see cref="RockVariantCounts"/> row drops, a shape or a
+	/// The generated rock, stone, ice and cliff files on disk that no family makes any more (of the biome
+	/// suite): the shared <c>Boulder_{Round,Slab,Spire}_LOD*</c>, <c>Rocks_Small</c> and <c>Pebbles</c> meshes every
+	/// material had before its own, a formation variant a lowered <see cref="RockVariantCounts"/> row drops, a shape or a
 	/// stone set removed from its table. Listed only: nothing here deletes (the owner removes them by hand), because a scene
 	/// may still reference a file until it is re-cut.
 	/// </summary>

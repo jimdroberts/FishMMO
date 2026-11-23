@@ -17,7 +17,7 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/SurfaceInput.hlsl"
 
 // The most layers one scene carries: what a byte of the index map can name. Matches SceneTerrainPalette.MaximumLayers,
-// TerrainArrayLayerParams.MaximumLayers and TerrainLayerTable.Width on the C# side (32, eight control maps, until 2026-10-16).
+// TerrainArrayLayerParams.MaximumLayers and TerrainLayerTable.Width on the C# side (32, eight control maps, formerly).
 #define FISH_TERRAIN_ARRAY_MAX_LAYERS 256
 
 // What TerrainArrayBinder pushes per tile through Terrain.SetSplatMaterialPropertyBlock.
@@ -141,7 +141,7 @@ void FishTerrainGpuSelectTile(uint tileIndex)
 // FishMMO edit: the ground on its world (FishFlora.hlsl, published by FloraPaletteMap): the living ground takes its biome's
 // ground shift (what the planet's light and air change; white on an Earth-like world), bare ground on an airless or
 // thin-aired world the world's own colour. Never a patch's look: those are the grass's and the plants', and on the ground
-// they blotched the layers' own textures (2026-10-15). Texel loads only, no sampler: a pass that never reads the albedo
+// they blotched the layers' own textures. Texel loads only, no sampler: a pass that never reads the albedo
 // (depth, shadow, depth-normals) strips it whole, with nothing left to orphan.
 #include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 
@@ -181,7 +181,7 @@ float4 FishLayerRow(int id, int row)
     return _FishLayerTable.Load(int3(clamp(id, 0, FISH_TERRAIN_ARRAY_MAX_LAYERS - 1), row, 0));
 }
 
-// FishMMO edit (2026-10-26, GROUND-BANDS): ground layers that come and go on the shared clock (FishGroundClock.hlsl), applied
+// FishMMO edit: ground layers that come and go on the shared clock (FishGroundClock.hlsl), applied
 // to the four strongest layers FishTopLayers returns.
 #include "FishGroundClock.hlsl"
 
@@ -453,7 +453,7 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
         return half4(1, 0, 0, 0);
     }
     weights /= total;
-    // A clocked ground's share to its main ground (2026-10-26, GROUND-BANDS); untouched on a scene with none.
+    // A clocked ground's share to its main ground; untouched on a scene with none.
     FishGroundClockShift(weights, ids);
     return weights;
 }
@@ -484,7 +484,7 @@ half4 FishTopLayers(float2 uv, out int4 ids, out half covered)
     uint2 t01 = FISH_INDEX_LOAD(i0.x, i1.y);
     uint2 t11 = FISH_INDEX_LOAD(i1.x, i1.y);
     half4 weights = (half4)FishIndexFilter(t00, t10, t01, t11, f, ids);
-    // A clocked ground's share to its main ground (2026-10-26, GROUND-BANDS); untouched on a scene with none.
+    // A clocked ground's share to its main ground; untouched on a scene with none.
     FishGroundClockShift(weights, ids);
     return weights;
 }
@@ -600,7 +600,7 @@ void FishPathVote(float4 slices, float weight, inout float4 first, inout float f
 /// <b>Why not the pixel's own layer.</b> Each biome paves with its own grounds (SceneTerrainPalette.PathLayerMap): a
 /// meadow's way is loam, a wood's is leaf litter. Chosen by the strongest layer at the pixel, a way crossing from meadow
 /// into wood changed from one to the other on the line where the wood's layer overtook the meadow's, a two-metre alphamap
-/// texel wide: the loam stopped dead on a straight edge and the litter beyond it read as no path at all (2026-10-20:
+/// texel wide: the loam stopped dead on a straight edge and the litter beyond it read as no path at all (
 /// "Road blending still isn't working").
 /// </para>
 /// <para>
@@ -792,7 +792,7 @@ void FishApplyPaths(inout FishArraySurface s, float2 uv, float2 uvPerMetre, floa
     float verge = smoothstep(-0.6, 0.0, p.edge) * (1.0 - smoothstep(0.0, 0.4, p.edge));
     albedo *= (half)(1.0 - 0.08 * verge * wear);
     /* Toward its edge the way takes on the ground it crosses, in patches: dust and leaves blown over it, soil trodden up
-     * from the verge. Its own colour edge to edge read as a band laid on the ground at full strength (2026-10-13). */
+     * from the verge. Its own colour edge to edge read as a band laid on the ground at full strength. */
     float band = FishPathEdgeBand(p);
     float nearEdge = smoothstep(-2.5 * band, 0.0, p.edge);
     float blown = 0.35 + 0.65 * FishPathNoise(xz * 0.8 + 57.0);
@@ -812,7 +812,7 @@ void FishApplyPaths(inout FishArraySurface s, float2 uv, float2 uvPerMetre, floa
 /// baker writes it on every platform, rather than through UnpackNormalScale, whose layout follows the platform's
 /// normal-map encoding).
 /// </summary>
-/* Cheaper ground, chosen from a browser A/B (2026-11-05; the owner picked these over the old look):
+/* Cheaper ground, chosen from a browser A/B (the owner picked these over the old look):
  * - the strongest FISH_TERRAIN_DEFAULT_LAYERS (3) layers a pixel are blended, the next one's weight taken off the kept ones
  *   (as the fifth is off the four, so a layer's edge stays continuous): only a three-way junction's faintest layer goes;
  * - the layers' normal and mask maps fade out between FISH_TERRAIN_DETAIL_FAR (40 to 80 m) and are not fetched past it
@@ -910,7 +910,7 @@ float3 FishTerrainGroundShift(float2 xz, float4 living, half4 weights)
 /// </para>
 /// <para>
 /// <b>Steep ground from the side.</b> Every layer is laid on the world's xz, so on a fall's wall or a gorge, 60–85°, one
-/// texel ran metres down the face: rock smeared into vertical streaks (2026-10-13: "the texturing of the waterfall walls,
+/// texel ran metres down the face: rock smeared into vertical streaks ("the texturing of the waterfall walls,
 /// it's stretched"). From about 40° the layers are also laid on the planes facing across the slope (zy and xy), blended
 /// by the ground's normal, so a face reads at the texture's own scale. Their normal maps are turned into the terrain's own
 /// tangent frame (tangent = (0, 0, 1) × normal, the frame the passes build), so lighting on the face matches. Under 40°

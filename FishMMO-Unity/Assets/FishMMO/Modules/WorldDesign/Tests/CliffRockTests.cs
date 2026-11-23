@@ -138,7 +138,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// Slid out of a convex brow, a face or fill section hung its flat floor over the falling ground and looked poised
-		/// in the air (2026-10-08). Every section, not only the footing, is lowered until no underside shows.
+		/// in the air. Every section, not only the footing, is lowered until no underside shows.
 		/// </summary>
 		[Test]
 		public void NoSectionShowsItsUnderside([Values("Granite", "Sandstone", "Basalt")] string type)
@@ -154,7 +154,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// Debris is cliff sections now, blocks with broad flat faces, and the best of 24 random orientations stood them
-		/// on an edge or a corner (2026-10-08: "randomly rotating … levitating"). A block rests flat on a face: its
+		/// on an edge or a corner ("randomly rotating … levitating"). A block rests flat on a face: its
 		/// lowest points are a face's worth of vertices, not one corner, and no orientation sits its centre lower.
 		/// </summary>
 		[Test]
@@ -208,7 +208,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// The slope normal leans down the hill. It was built leaning up it (a mirror of the slope, 2θ off), so every
-		/// talus rock was rested on a slope that was not there and stood on end on its cone (2026-10-08).
+		/// talus rock was rested on a slope that was not there and stood on end on its cone.
 		/// </summary>
 		[Test]
 		public void SlopeNormal_LeansDownTheHill()
@@ -331,7 +331,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// A section shows its face: buried along the slope normal as a boulder is, sections on a steep face went in
-		/// flush — three quarters of them underground, the face a flat cut patch (Flo Monolith, 2026-10-08).
+		/// flush — three quarters of them underground, the face a flat cut patch (Flo Monolith).
 		/// </summary>
 		[Test]
 		public void Sections_ShowTheirFace_NeverAFlatPatchOnTheSlope([Values("Granite", "Sandstone")] string type)
@@ -343,7 +343,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The sheer backdrop (2026-10-08: "larger variants as background ... the height scale based on the
+		/// The sheer backdrop ("larger variants as background ... the height scale based on the
 		/// height of the cliff itself"): scarps stand along the foot of the 48 m band, sized to it — the test band
 		/// takes one tier to near the crest, or a lower wall and a second on it — and stand upright, their back in
 		/// the hill and their face out of it.
@@ -412,7 +412,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── Variety and budget (2026-10-04: "sparse, and all identical") ──
+		// ── Variety and budget ("sparse, and all identical") ──
 
 		[Test]
 		public void FaceRoles_HaveSeveralVariants([Values("Granite", "Sandstone", "Basalt", "Slate", "Ice")] string type)
@@ -540,7 +540,7 @@ namespace FishMMO.UnitTests
 			BiomeArtSpec.Entry hills = BiomeArtSpec.For("Hills");
 			if (hills != null)
 			{
-				// The Hills round (2026-10-26): schist country, its own rock by its formations.
+				// The Hills biome: schist country, its own rock by its formations.
 				Assert.That(CliffRocks.RockTypeFor(Ground.Rock, hills), Is.EqualTo("Schist"), "the Hills' formations are schist: their cliffs are schist");
 			}
 		}
@@ -587,7 +587,7 @@ namespace FishMMO.UnitTests
 		/// No rock's footprint as seated (its seating mesh's bounds, turned and scaled, on a 5 × 5 grid at mid height) covers
 		/// excluded ground: the planner refuses it as it is seated, so the scene side has nothing to take out afterwards.
 		/// It used to drop such rocks once the plan was made, and the rocks seated on their tops stayed in the air
-		/// (2026-10-21: a gneiss block 8 m over the slope beside a cave mouth).
+		/// (a gneiss block 8 m over the slope beside a cave mouth).
 		/// </summary>
 		[Test]
 		public void Excluded_NoRockStandsOverIt([Values("Granite", "Sandstone", "Ice")] string type)

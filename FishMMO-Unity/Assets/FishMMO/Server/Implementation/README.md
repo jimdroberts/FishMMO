@@ -74,8 +74,10 @@ Addressables label and the scene server adopts it at start (`Server.AdoptModuleS
 `CommerceSystem` and `TradeSystem` (Commerce), `FactionSystem`, `HousingSystem`, `LeaderboardSystem`,
 `MatchmakingSystem` (group finder, dungeon finder, arenas), `AchievementSystem`, `ChatChannelSystem` (the chat channels), `HotkeySystem` (Hotkeys), `WorldInteractableSystem` (dialogue and containers, World Interactables), `QuestSystem`, `FriendSystem` / `PartySystem` /
 `GuildSystem` (Social), `StaffSystem` (the `/gm` and `/admin` commands, the staff console, support), and
-`WaypointTravelSystem` (Travel). World Simulation adds `WeatherServerService` as a scene server module service. See
-[Assets/FishMMO/README.md](../../README.md#modules).
+`WaypointTravelSystem` (Travel). World Simulation adds `WeatherServerService` as a scene server module service. A
+system with nothing to author can instead be declared in code, `[assembly: ModuleServerSystem(typeof(T), "SceneServer")]`,
+and the scene server creates one at start (`Server.AdoptDeclaredModuleSystems`; an asset of the same type wins):
+`MapFogSystem` (Map, account-wide fog of war). See [Assets/FishMMO/README.md](../../README.md#modules).
 
 ## Supported Platforms
 
@@ -147,7 +149,7 @@ This is an integrated module within the FishMMO Unity project. No separate insta
 ### Database assemblies in IL2CPP server builds
 
 UnityLinker strips constructors that EF Core and Microsoft.Extensions.DependencyInjection create by reflection, and the
-server then fails before it registers (2026-10-25: `SingletonOptionsInitializer` lost its constructor).
+server then fails before it registers (`SingletonOptionsInitializer` lost its constructor).
 `ServerDatabaseLinkerProcessor` (an `IUnityLinkerProcessor`, in the dashboard's `CustomBuildTool/Linker/`) writes
 `Library/FishMMO/Linker/ServerDatabase.link.xml` for **dedicated-server builds only**, preserving the runtime EF Core,
 Npgsql, naming-convention, FishMMO database and DI/configuration/cache/logging assemblies. It reads the build report's

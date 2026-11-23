@@ -55,7 +55,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (PointOfInterestTemplateSpec spec in specs)
 			{
 				bool cave = CaveShaper.TryForm(spec.Kind, out _);
-				// Or a carved ground kind that lays props on its cut (a cenote's altar, a sandworm pit's bones: 2026-10-27).
+				// Or a carved ground kind that lays props on its cut (a cenote's altar, a sandworm pit's bones).
 				Assert.That(cave || PointOfInterestKinds.Info(spec.Kind).Has(PointOfInterestTraits.Structure) || PointOfInterestTemplateSpecs.CarvedGround(spec.Kind), Is.True,
 					$"{spec.Name} is for a kind the kit or a shaper builds");
 				// A mine is dug by the cave shaper too, but its template is the yard before the adit (its ore is in the stope).
@@ -81,7 +81,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// The template assets on disk, not the specs: an asset authored before a piece was retired keeps naming it and
-		/// lays nothing in its place (2026-10-15: windmill sites without a windmill), since authoring keeps existing assets.
+		/// lays nothing in its place (windmill sites without a windmill), since authoring keeps existing assets.
 		/// </summary>
 		[Test]
 		public void EveryTemplateAssetResolvesInTheKit()
@@ -159,7 +159,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(spec.Layout, Is.EqualTo(PointOfInterestLayout.Walled), spec.Name);
 				Assert.That(spec.Pieces.Exists(p => p.Role == PointOfInterestSlotRole.Street), Is.True, $"{spec.Name} has streets");
-				// (2026-10-19) Its palace compound where the keep was (PointOfInterestPalace).
+				// Its palace compound where the keep was (PointOfInterestPalace).
 				Assert.That(spec.Pieces.Exists(p => p.Role == PointOfInterestSlotRole.Centre && p.Tag == PointOfInterestTemplateSpecs.Palace), Is.True, $"{spec.Name} has its palace at the centre");
 			}
 		}
@@ -554,7 +554,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				bool met = false;
 				for (int j = 0; j < ends.Count && !met; j++)
 				{
-					// Within each one's run on past the corner (2026-10-19: the module off a gate leaves along its x, so the next
+					// Within each one's run on past the corner (the module off a gate leaves along its x, so the next
 					// joint turns a little more than the ring's own curve).
 					met = j != i && j / 2 != i / 2 && Vector2.Distance(ends[i], ends[j]) < 0.3f;
 				}
@@ -617,7 +617,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Gates stand on the ways' own bearings whatever they are (2026-10-18: a road comes in on its own bearing), round an
+		/// Gates stand on the ways' own bearings whatever they are (a road comes in on its own bearing), round an
 		/// outline that is no circle, every module of the ring meeting the next (or a gate's side) within a few centimetres,
 		/// and nothing of the ring outside the outline.
 		/// </summary>
@@ -685,7 +685,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A moated site's wall keeps to its berm (2026-10-18: "Palisades and town walls land in moats sometimes"): every
+		/// A moated site's wall keeps to its berm ("Palisades and town walls land in moats sometimes"): every
 		/// corner of the ring stands inside the ditch's inner bank by the footing's clearance, even where the moat runs
 		/// nearer than the outline's edge.
 		/// </summary>
@@ -1009,7 +1009,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			PointOfInterestLayoutRequest request = Request(PointOfInterestLayout.Linear, 10f, (PointOfInterestSlotRole.Span, SpanSize, 4f, 1));
 			request.SpanHalf = 13f;
 			List<PointOfInterestLayoutPiece> spans = PointOfInterestLayouts.Place(request, new DeterministicRNG(1));
-			// 26 m in modules of 4: six, each fitted to 4.33 m, so the deck ends exactly at the crossing's ends (2026-10-11:
+			// 26 m in modules of 4: six, each fitted to 4.33 m, so the deck ends exactly at the crossing's ends (
 			// whole modules overshot by most of one, over the path).
 			Assert.That(spans.Count, Is.EqualTo(Mathf.RoundToInt(26f / 4f)));
 			float module = 26f / spans.Count;

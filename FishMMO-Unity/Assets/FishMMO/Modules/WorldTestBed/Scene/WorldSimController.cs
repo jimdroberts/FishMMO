@@ -1285,7 +1285,7 @@ namespace FishMMO.TestHarness.World
 		/// The scene generator dresses every generated scene with this bed (GeneratedSceneDressing), and the
 		/// shipped world scenes kept it. Loaded by a game client it replaced the server's world clock with its own
 		/// held one (<see cref="LocalWorldClock"/>, <c>Hold</c>), its tick and an empty timeline, so the sky, the
-		/// weather, the wind, the sea and the grass all stood still in a web build (2026-11-08). The bed is for a
+		/// weather, the wind, the sea and the grass all stood still in a web build. The bed is for a
 		/// scene opened on its own (play in the editor, the benchmark players), where no network is started.
 		/// </remarks>
 		private static bool NetworkedGame()

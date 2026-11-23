@@ -2033,7 +2033,7 @@ namespace FishMMO.Shared
 		private bool ApplyHit(ICharacter hitCharacter, GameObject hitKey, Vector3 point, Vector3 normal, Vector3 localPoint, bool isAuthoritativeEcho = false)
 		{
 			/* Scenery is passed through, not struck, by an object that only strikes characters (a charge's volume: the
-			 * ground rising ahead on a slope overlapped it, spent its one hit and ran the rush's stop event; 2026-11-21).
+			 * ground rising ahead on a slope overlapped it, spent its one hit and ran the rush's stop event).
 			 * Walls still stop the rush, through the motor's own blocked rule. Checked first, so it costs no hit slot. */
 			if (hitCharacter == null && StrikesCharactersOnly)
 			{
@@ -3824,7 +3824,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <para>
 		/// The spawner (AbilitySpawnPoint) is a child of the character's graphical object (Smoothing), which FishNet's tick
-		/// smoother holds behind the simulated root on the owner by the owner interpolation (a tick; two until 2026-11-14),
+		/// smoother holds behind the simulated root on the owner by the owner interpolation (a tick; two formerly),
 		/// and does not move on the server. During a tick the smoother leaves that lag in place
 		/// (UniversalTickSmoother.OnPreTick caches, OnPostTick restores; the graphical rides along with the root in
 		/// between), so the owner read the hand where it was DRAWN while the server read it where it IS: two predictions
@@ -4021,7 +4021,7 @@ namespace FishMMO.Shared
 							 * and its bounds are empty. Read as bounds, this term was zero — Punch and
 							 * Orc Slam spawned centred on the caster's surface, half inside it, and an
 							 * NPC that had stopped at the reach AIAbilityReach computed from the real
-							 * shape hit nothing (reported 2026-09-07). Read the shape instead, through
+							 * shape hit nothing (reported). Read the shape instead, through
 							 * the same helper the reach uses. */
 							Vector3 prefabHalfExtents = AbilityPrefabColliderCache.ResolveShapeHalfExtents(collider);
 							distance += prefabHalfExtents.z;

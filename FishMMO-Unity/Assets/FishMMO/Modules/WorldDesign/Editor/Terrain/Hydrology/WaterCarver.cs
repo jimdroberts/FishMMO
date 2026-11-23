@@ -197,13 +197,12 @@ namespace FishMMO.Shared.WorldDesign
 			/* Per sample: the highest ground any water within a levee's reach of it needs, from ANY river or reach: that water's
 			 * levee top, less its back slope past the crest for how far out from the water's channel the sample stands. Kept as
 			 * the highest top and its distance instead, a pool's outlet 11.7 m off (back-sloped to 245.0 m) decided a sample 2.9 m
-			 * from the rapid below it (which needed 247.5 m), and the rapid ran 2 m over a scour hole beside it (Flo Monolith,
-			 * 2026-10-15). */
+			 * from the rapid below it (which needed 247.5 m), and the rapid ran 2 m over a scour hole beside it (Flo Monolith). */
 			float[] holdNeed = null;
 			/* Per sample: the highest water it stands beside, from a channel it lies across from (not off a segment's end): what
 			 * the water's edge is held to. The levee hold (holdNeed) reaches a levee's distance round every point, so in a steep rapid it is the
 			 * water two or three points upstream, half a metre higher, and an edge held to it stood over the water beside it
-			 * (2026-10-13 re-cut: 131 pinched points, from 51). */
+			 * (a re-cut: 131 pinched points, from 51). */
 			float[] edgeTop = null;
 			// Per sample: whether the water its owner gives it is falling, or past the brink of a fall: it holds no levee.
 			bool[] noLevee = null;
@@ -251,7 +250,7 @@ namespace FishMMO.Shared.WorldDesign
 					 * and the river's last metres hung over a V-shaped hole, black from upstream (Flo Monolith). Held at the
 					 * lip's level for a grid cell past it instead, the ground stood out as a shelf where the water had already
 					 * left it: the curtain leaves at the lip, so its strips struck the shelf and ran along it, and the cell's
-					 * step wandered a whole sample across the lip, a ragged comb at the top of every fall (2026-10-13: "the
+					 * step wandered a whole sample across the lip, a ragged comb at the top of every fall ("the
 					 * waterfall lip needs to be smoothed"). Past the lip the ground follows the arc the water falls in, so
 					 * wherever the grid's samples land the terrain between them lies under the water and rounds over. */
 					bool lipSegment = river.Reach != null && river.Reach[v] != RiverReach.Fall && river.Reach[v + 1] == RiverReach.Fall;
@@ -259,7 +258,7 @@ namespace FishMMO.Shared.WorldDesign
 					FallBasin basin = basinOf?[v];
 					/* The water over a fall's brink and down its face holds nothing: a levee raised from it, or from the lip's
 					 * water past the brink, stood the lip's level out over the drop either side of the curtain, a shelf at the
-					 * lip and a slot the water fell down (2026-10-13: "weird lips"). Water running on below the step, and the
+					 * lip and a slot the water fell down ("weird lips"). Water running on below the step, and the
 					 * pool's, holds its banks as any river's does. */
 					bool fallingWater = basin != null && v >= basin.Lip && v < basin.Plunge
 						&& river.Surface[v] - river.Surface[v + 1] >= 2f * settings.FallGradient * Math.Max(1e-3f, river.S[v + 1] - river.S[v]);
@@ -467,12 +466,12 @@ namespace FishMMO.Shared.WorldDesign
 					 * samples about 2 m apart and the terrain between them a plane, so a bank sample standing at its height
 					 * next to a channel sample tilted the ground up across the water's last metre or two: a river three or
 					 * four metres wide showed one or two, cut off where its banks pinched it, the grass on them and the leaves
-					 * lying over it (2026-10-13). Held at the water, the ground can only rise past the water's edge, never into
+					 * lying over it. Held at the water, the ground can only rise past the water's edge, never into
 					 * it; grass rooted there is at the water line and is not grown. */
 					/* At the highest water beside it, whoever's: a bank sample owned by the reach below a pool still holds the pool.
 					 * And raised to it where the ground beside the water lies lower: this sample is the bank's own edge, and the
 					 * levee it replaces raised it. Held only from above, a pool in a hollow lay over ground half a metre under its
-					 * water a metre past its bank (2026-10-13). Not where no levee is built (falling water, past a brink, a
+					 * water a metre past its bank. Not where no levee is built (falling water, past a brink, a
 					 * lake's or the sea's mouth, a pond): there it is only lowered. */
 					float edgeWater = Math.Max(surface[i], edgeTop[i]) - settings.EdgeShelfMetres;
 					shaped = built ? edgeWater : Math.Min(shaped, edgeWater);
@@ -486,7 +485,7 @@ namespace FishMMO.Shared.WorldDesign
 					/* A levee: its top held out past the water's drawn margin, then a back slope down to the ground. Eased from its
 					 * top to the ground across its whole width instead, it sank under the water a metre or two out wherever the
 					 * ground beside a river lay lower than it, and the water's surface ended there over sunken ground: the river
-					 * perched, its pools not filled to their banks (2026-10-13 coverage map: 852 m² on Flo Monolith). */
+					 * perched, its pools not filled to their banks (coverage map: 852 m² on Flo Monolith). */
 					if (built && outsideMetres < leveeReach && shaped < top)
 					{
 						shaped = Math.Max(shaped, top - Math.Max(0f, outsideMetres - leveeCrest) * bankTan);
@@ -704,7 +703,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// a fall that boundary is the lip's line: every bank the fall's lowered water cut ended on it, so the drop stood as one
 	/// straight wall across the whole cut, tens of metres either side of a curtain a few metres wide, with ruled 38° planes
 	/// below it and square corners where they met; the lip's hold kept a shelf of its level a cell out over the drop, and
-	/// the lip's levee stood up either side of the curtain (2026-10-13: "waterfall terrain cuts are making weird lips").
+	/// the lip's levee stood up either side of the curtain ("waterfall terrain cuts are making weird lips").
 	/// The lip holds no shelf now: past it the ground rounds over under the falling water (<see cref="UnderBrink"/>).
 	/// </para>
 	/// <para>

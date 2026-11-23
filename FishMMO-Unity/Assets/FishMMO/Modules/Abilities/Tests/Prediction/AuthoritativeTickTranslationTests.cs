@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests
 	/// matching cooldown path.
 	///
 	/// <para>
-	/// Historical bug report (May 2026): a buff applied via <c>ApplyAuthoritative</c>
+	/// Historical bug report: a buff applied via <c>ApplyAuthoritative</c>
 	/// could last <c>D + K</c> ticks on the owning client instead of <c>D</c>, where
 	/// <c>K = serverLocalTick - clientInputTick</c>. The fix was to translate the raw
 	/// server tick into the controller's replicate-tick domain via
@@ -350,7 +350,7 @@ namespace FishMMO.UnitTests
 		}
 
 		// ─────────────────────────────────────────────────────────────────────────
-		//  Regression: the exact scenario from the May 2026 bug report
+		//  Regression: the exact scenario from the historical bug report
 		// ─────────────────────────────────────────────────────────────────────────
 
 		/// <summary>

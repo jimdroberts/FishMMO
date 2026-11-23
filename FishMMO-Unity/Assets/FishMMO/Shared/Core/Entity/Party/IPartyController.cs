@@ -7,7 +7,7 @@ namespace FishMMO.Shared.Core
 	/// A character's party membership, as the rest of the game reads it: which party, what rank, and who is in it.
 	/// </summary>
 	/// <remarks>
-	/// The core contract of the Social module's party (Phase 3, 2026-11-16). Read-only: the group finder, the dungeon
+	/// The core contract of the Social module's party. Read-only: the group finder, the dungeon
 	/// finder, arenas, instances, chat, the map, the harm rule and observer streaming all ask "are these two in the
 	/// same party?" and "does this one lead it?", and none of them change it. Joining, leaving, invitations and the
 	/// roster window are the module's (<c>IPartyMembership</c>, <c>IPartySystem</c>). Without the module no character

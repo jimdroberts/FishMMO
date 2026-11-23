@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class StructurePieces
 	{
 		/// <summary>
-		/// The fantasy wave's Cold pack: its new pieces (2026-10-27, poi-fantasy-wave/WAVE.md). The frozen north's halls and relics (a frost
+		/// The fantasy set's Cold pack: its new pieces. The frozen north's halls and relics (a frost
 		/// giant's ice-block longhouse hung with mammoth tusks, a dragon asleep in the ice, the lich's frost-bound black spire, the
 		/// ice court's hall and its spires, a soldier of the frozen army), the longship drawn up on a strand, and the sea folk's coral
 		/// halls and shell houses. All are laid by id (=IceBlockHall, =IceEncasedDragon, =LichSpire, =IceSpireHall, =IceSpire,

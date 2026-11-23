@@ -240,6 +240,7 @@ The abstract base for all ability templates. Defines shared fields and ECA-based
 | `AbilityObjectPrefab`  | `GameObject`                  | Prefab to instantiate as the ability object |
 | `AbilitySpawnTarget`   | `AbilitySpawnTarget`          | Where the object spawns relative to caster  |
 | `RequiresTarget`       | `bool`                        | Whether a target is needed                  |
+| `InterruptedByDamage`  | `bool`                        | Any damage taken while casting breaks the cast (lost, no cooldown). Off by default; the travel spells use it |
 | `AdditionalEventSlots` | `byte`                        | Extra crafting slots for events             |
 | `HitCount`             | `int`                         | Max collision hits before destruction       |
 | `Type`                 | `AbilityType`                 | Physical/Magic/Grounded/Aerial, Block (held guard), Roll, Deflect (parry); picks the caster's animation |
@@ -252,7 +253,16 @@ The abstract base for all ability templates. Defines shared fields and ECA-based
 | `OnSpawnEvents`        | `List<AbilityOnSpawnEvent>`   | Spawn-phase event list                      |
 | `OnDestroyEvents`      | `List<AbilityOnDestroyEvent>` | Destroy-phase event list                    |
 
-#### Block, Deflect, fork, ricochet, chain (2026-11-22)
+#### Interrupted by damage (issue #241)
+
+`AbilityTemplate.InterruptedByDamage` makes a cast breakable by attacking the caster. The server's `AbilitySystem`
+subscribes to `ICharacterDamageController.OnDamaged`; for each hit above zero it calls
+`AbilityController.InterruptIfDamageBreaksCast()` on the defender, which interrupts through the same server path an
+interrupt ability uses (`Interrupt`: the cast is lost, not put on cooldown) when the cast in progress is a known ability
+with the flag. Damage-over-time ticks count. Consumable uses are never broken this way. The tooltip adds "Taking damage
+interrupts the cast." Pinned by `InterruptedByDamageTests`.
+
+#### Block, Deflect, fork, ricochet, chain
 
 - **Block** (`AbilityType.Block`) is HELD: the guard is up from the cast's first tick until release (or `ActivationTime`,
   the longest hold), then the cooldown starts; nothing spawns. `HeldGuardMitigation` (installed as the core's

@@ -52,7 +52,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.AreEqual(new Vector3(10f, 0f, 20f), FloatingBoats.PointAt(lane, 99f));
 		}
 
-		// ── Solid ships (2026-10-12: "Solid sailing ships needs to be done.") ──────────────────────────────────────
+		// ── Solid ships ("Solid sailing ships needs to be done.") ──────────────────────────────────────
 
 		private const double TickDelta = 1.0 / 30.0;
 

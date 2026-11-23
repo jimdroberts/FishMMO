@@ -79,10 +79,10 @@ half4 FishFragmentPBR(InputData inputData, half3 albedo, half metallic, half smo
     AmbientOcclusionFactor aoFactor = CreateAmbientOcclusionFactor(inputData, surfaceData);
     uint meshRenderingLayers = GetMeshRenderingLayer();
     Light mainLight = GetMainLight(inputData, shadowMask, aoFactor);
-    // FishMMO edit (2026-10-25): under the sea the daylight dims with depth (FishWeather.hlsl's FishSeaDaylight; 1 elsewhere).
+    // FishMMO edit: under the sea the daylight dims with depth (FishWeather.hlsl's FishSeaDaylight; 1 elsewhere).
     half seaDaylight = FishSeaDaylight(inputData.positionWS);
     mainLight.color *= seaDaylight;
-    // FishMMO edit (2026-11-11): in the shadow of the terrain between it and the light (FishTerrainShade.hlsl), however
+    // FishMMO edit: in the shadow of the terrain between it and the light (FishTerrainShade.hlsl), however
     // far off. The shadow maps end at the quality level's shadow distance (100 m at High Fidelity), and past it a low
     // moon lit a valley floor its mountain had put in shade: dark round the player, bright snow beyond a line. Only
     // the deep shadow counts (FishGroundSunlit), so inside the maps their own sharper edge is the one seen.

@@ -19,7 +19,7 @@ TEXTURE3D(_FishAirFogVolume);
 SAMPLER(sampler_FishAirFogVolume);
 float4 _FishAirFogVolumeRange;  // x near, y far, z depth-curve exponent, w 1 when the volume is live
 
-// ── Under the hill (2026-10-20, caves livened) ──────────────────────────
+// ── Under the hill (caves livened) ──────────────────────────
 //
 // A cave's water (its streams, pools and falls, a grotto's pool) lies under the hillside, where the
 // weather's fog and clouds are not: the fog passes and the cloud composite fade themselves there by how far
@@ -157,7 +157,7 @@ half3 FishWaterAirFog(half3 color, float3 positionWS, float2 screenUV, out half 
 /// carries the falls' mist alone, which the buffer does not. The sea, the rivers and the falls skipped both
 /// (mist rising off a fall stood in front of the water behind it unseen); the swash, the caustics and the
 /// lava skipped neither, so on a foggy shore the swash took the fog twice and glowed through it as a pale
-/// band (audit 2026-10-09).
+/// band.
 /// </summary>
 half3 FishWaterAirFogOver(half3 color, float3 positionWS, float2 screenUV, out half keep)
 {
@@ -237,7 +237,7 @@ float4 _FishCloudAerosol;
 /// The air between the eye and the water, by the law the cloud composite hazes the ground with (FishAerialThrough,
 /// FishClouds.shader) and the march every cloud: this world's molecules and haze, each thinning with height. The sea is
 /// drawn after that composite and covered the haze it had laid over the ground beneath, so the far sea stayed its own
-/// dark to a hard horizon under the hazed deck and sky (2026-10-26); hazed the same way, it meets them there.
+/// dark to a hard horizon under the hazed deck and sky; hazed the same way, it meets them there.
 /// </summary>
 half3 FishWaterAirHaze(half3 color, float3 positionWS)
 {
@@ -259,7 +259,7 @@ half3 FishWaterAirHaze(half3 color, float3 positionWS)
 	// And all of it by the camera's far plane. From a few dozen metres up the sea's own horizon lies past the far plane
 	// (55 km from 342 m, against 20.5 km): the sea is cut off there, and its last row, only partly hazed, stood a step
 	// darker than the sky under the deck just above it, which is the haze — "the clouds don't meet the water"
-	// (2026-10-26). What lies past the cut is more sea, hazier still and ending in that same haze, so the sea goes the
+	//. What lies past the cut is more sea, hazier still and ending in that same haze, so the sea goes the
 	// rest of the way to it over the last stretch before the cut. From a beach the horizon is nearer than the cut and
 	// nothing changes.
 	float far = _ProjectionParams.z;

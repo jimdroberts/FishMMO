@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Where a carved cave's air is, as the lit surfaces' underground darkness reads it (2026-10-21): per column of the world's
+	/// Where a carved cave's air is, as the lit surfaces' underground darkness reads it: per column of the world's
 	/// <see cref="Cell"/> grid under the cave, the lowest and highest of the rock's inner faces (the floor and the roof seen
 	/// from inside) and how shut in from the daylight the column is, 0 at a mouth or under a skylight to 1 deep in. Baked by
 	/// the cut from the cave's own rock, kept on its <see cref="CaveVisibility"/>.

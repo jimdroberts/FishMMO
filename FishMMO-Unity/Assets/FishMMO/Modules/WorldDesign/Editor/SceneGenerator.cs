@@ -417,12 +417,12 @@ namespace FishMMO.Shared.WorldDesign
 				poi.Field = ground;
 				if (landforms != null)
 				{
-					// The landforms the sites and the ways keep off (2026-10-26, I2g-f, BiomeLandform.KeepClear: a sciara's chute).
+					// The landforms the sites and the ways keep off (BiomeLandform.KeepClear: a sciara's chute).
 					foreach (Vector3 disc in SceneLandforms.KeepClearDiscs(landforms.Sites))
 					{
 						poi.Avoided.Add(new PointOfInterestKeepOut { Id = -1, X = disc.x, Z = disc.y, Radius = disc.z });
 					}
-					// The strike-slip traces the ways jog at (2026-10-26, I2l-b, PathJogs): none until a round names a strike-slip preset.
+					// The strike-slip traces the ways jog at (PathJogs): none until a round names a strike-slip preset.
 					poi.Faults.AddRange(SceneLandforms.StrikeSlipTraces(landforms.Sites));
 				}
 				/* No stretch of a river may lie under the ground it was laid in (RiverBurial). Where the shaped ground
@@ -506,7 +506,7 @@ namespace FishMMO.Shared.WorldDesign
 				clock.Lap("Terrain tiles");
 				if (landforms != null)
 				{
-					// The landforms carved into the ground (2026-10-18, I2g), kept with the scene: the paint below and every repaint read them.
+					// The landforms carved into the ground, kept with the scene: the paint below and every repaint read them.
 					SceneLandforms.Store(scene, landforms);
 				}
 
@@ -568,7 +568,7 @@ namespace FishMMO.Shared.WorldDesign
 					// And the flow down every river, solved round its boulders, kept in the biome map for clients.
 					RiverFlowBake.Bake(hydrology, result.BiomeMap, result.Notes);
 				}
-				/* The plants floating on the still water (2026-10-18, I2i), on the surfaces just measured and saved: each body's its
+				/* The plants floating on the still water, on the surfaces just measured and saved: each body's its
 				 * shore biome's (FloatingPlants). None in any biome by default, when this only clears an earlier cut's. */
 				FloatingPlants.Lay(scene, water, hydrologyPath != null ? AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath) : null, result.BiomeMap,
 					tileGround, poi.DetailExcludes, SceneSeed(request), result.Notes);
@@ -1025,7 +1025,7 @@ namespace FishMMO.Shared.WorldDesign
 				surfaceAt: (east, north) => Mathf.Max(sea, water != null ? water.SurfaceAt(east, north) : float.NegativeInfinity),
 				groundAt: (east, north) => GroundAltitude(terrains, plan, east, north),
 				lavaLevel: lava);
-			/* Every tile keeps only the terrain layers it paints (2026-10-27; TerrainTileLayerSync): last, once everything that
+			/* Every tile keeps only the terrain layers it paints (TerrainTileLayerSync): last, once everything that
 			 * paints the splat has, and before anything is baked from it, so the stored index maps and the detail bake name the
 			 * scene's layers through each tile's own map. Every weight byte stays as painted. */
 			TerrainTileLayerSync.Compact(scene, tiles, notes);
@@ -1099,7 +1099,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			var stages = new StageClock("Biomes");
-			/* The last run's hot ground out of the ground before anything reads it (2026-10-18, I2q; a repaint has taken it out
+			/* The last run's hot ground out of the ground before anything reads it (a repaint has taken it out
 			 * already, so this finds nothing): the field, the sites and the carve below then come out exactly as the cut's. */
 			GeothermalGroundCarve.Restore(scene, terrains, result.Notes);
 			// Read once a cut: the canyon walls read it first (on the same ground and water) and hand it on.
@@ -1154,7 +1154,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			BiomeTerrainLayers.ClearCache();
-			// The world's air picks between a biome's air-banded grounds (decision 44, 2026-10-18); nothing banded, nothing changes.
+			// The world's air picks between a biome's air-banded grounds; nothing banded, nothing changes.
 			SceneTerrainPalette palette = SceneTerrainPalette.Build(field, scope.PaletteResolver(BiomeTerrainLayers.Resolve), BiomeTerrainLayers.Placeholder,
 				water != null ? RiverSediment() : null, poi != null && poi.HasPaths ? PathSurfaces() : null, WorldAir(system, request.Body),
 				BiomeWorldConditions.For(system, request.Body));
@@ -1181,10 +1181,10 @@ namespace FishMMO.Shared.WorldDesign
 			/* The scene's placement climate, the field the biomes were chosen from: the splat reads it for the ground layers that
 			 * carry a climate band (and the climate variants' ground overrides), the scatter below for the rules that do. */
 			ScenePlacementClimate placementClimate = ScenePlacementClimate.For(system, request.Body, request.Footprint, request.ResolvedRadiusKm, true);
-			/* The hot ground (2026-10-18, I2q, decision 47): the geothermal sites the client steams, found on the map this field is
+			/* The hot ground: the geothermal sites the client steams, found on the map this field is
 			 * written as below (same name, same seed), dug into the ground (pools, cones, rims, runoff) before the splat and the
 			 * scatter read it, and its heat baked for their heat bands and the map. No steaming biome: no site, heat 0 everywhere.
-			 * The planned hot spring points of interest outside the steaming ground warm 15 m round them too (decision 54). */
+			 * The planned hot spring points of interest outside the steaming ground warm 15 m round them too. */
 			bool sea = climate.Conditions.HasLiquidWater;
 			GeothermalGroundCarve.Plan hotGround = GeothermalGroundCarve.Lay(scene, terrains, plan, field, $"{WorldEditorAssets.Sanitize(request.SceneName)} Biome Map",
 				(east, north) =>
@@ -1192,17 +1192,17 @@ namespace FishMMO.Shared.WorldDesign
 					float at = GroundAltitude(terrains, plan, east, north);
 					return (sea && at < 0f) || (inland != null && inland(east, north) > at + 0.3f);
 				}, keptOut, result.Notes, GeothermalGroundCarve.HotSpringsOf(poi?.Plan));
-			// The sites it dug, as points of interest (2026-10-27): named, found and on the map with the planner's, the Great Spout a landmark.
+			// The sites it dug, as points of interest: named, found and on the map with the planner's, the Great Spout a landmark.
 			GeothermalPointsOfInterest.AddTo(poi, hotGround, field, request, terrains, plan, result.Notes);
 			BiomeHeatMask heat = hotGround.Heat;
 			stages.Lap("hot ground");
 			/* The sea's tide from its coast's biomes (decision 45) and its floor's daylight from its sea-floor biomes (decision 36 (c)),
-			 * 2026-10-25, phase I2m: written to the scene's sea before the splat, whose estuary low water and tide bands read the tide. */
+			 * Written to the scene's sea before the splat, whose estuary low water and tide bands read the tide. */
 			float seaTide = SceneSeaFloor.Apply(scene, field, terrains, plan, result.Notes);
 			var options = new BiomeSplatOptions
 			{
 				TideMetres = seaTide,
-				// The lava's surface a lava band measures from (2026-10-25, I2r); NaN with no lava.
+				// The lava's surface a lava band measures from; NaN with no lava.
 				LavaLevel = SceneGround.LavaLevel(request, system),
 				// Planet-relative, so a layer's height band means the same height in every scene.
 				NormalizedHeight = (x, y, z) => climate.HeightOfAltitude(y / verticalScale),
@@ -1212,19 +1212,19 @@ namespace FishMMO.Shared.WorldDesign
 				BarAt = water != null ? water.BarAt : (Func<float, float, Vector2>)null,
 				RockAt = FallRock(water),
 				ClimateAt = ClimateOf(placementClimate),
-				// Which of the bed is a river's, and its current: the riverbed under rivers, the lakebed under lakes (decision 35 (h)).
+				// Which of the bed is a river's, and its current: the riverbed under rivers, the lakebed under lakes.
 				RiverAt = RiverBed(water),
 				HeatAt = (east, north) => heat.At(east, north),
-				// The landform zones a detail layer's zone band reads (2026-10-25, I2g-b, decision 55): the sites this scene stores.
+				// The landform zones a detail layer's zone band reads: the sites this scene stores.
 				LandformZones = new BiomeLandformZones(SceneLandforms.Sites(scene), SceneLandforms.ContextOf(field, SceneLandforms.SeaLevel(scene))),
-				// The compass a facing band measures against and the planned sites a site band paints round (2026-10-26, GROUND-BANDS).
+				// The compass a facing band measures against and the planned sites a site band paints round.
 				Compass = TerrainScatter.CompassFor(request, system),
 				Sites = TerrainScatter.SitesOf(poi?.Plan),
 			};
 			BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);
-			// The wet margins along the channels the scene's last placing stored (2026-10-18, I2j-b, decision 38): nothing where it stores none.
+			// The wet margins along the channels the scene's last placing stored: nothing where it stores none.
 			ChannelMarginPaint.Paint(scene, tiles, palette, result.Notes);
-			// The ground layers the scene's sculpted landforms paint over their parts (2026-10-18, I2g): nothing where it stores none.
+			// The ground layers the scene's sculpted landforms paint over their parts: nothing where it stores none.
 			LandformPaint.Paint(scene, tiles, palette, field, result.Notes);
 			stages.Lap("palette and splat");
 
@@ -1248,7 +1248,7 @@ namespace FishMMO.Shared.WorldDesign
 			TerrainScatterReport scatter = TerrainScatter.Scatter(tiles, palette, field, options.Seed,
 				new TerrainScatterOptions { NormalizedHeight = options.NormalizedHeight, Prefabs = scope.ScatterPrefabs, HasLiquidWater = options.HasLiquidWater,
 					InlandWaterSurface = inland, RiverAt = options.RiverAt, Excluded = keptOut, DetailExcluded = detailKeptOut,
-					// The wind, the moon's east, the equator and the planned sites the rules' scatter modes read (SCATTER-MODES, 2026-10-26).
+					// The wind, the moon's east, the equator and the planned sites the rules' scatter modes read.
 					Compass = TerrainScatter.CompassFor(request, system), Sites = TerrainScatter.SitesOf(poi?.Plan),
 					LandformZones = options.LandformZones, HeatAt = options.HeatAt }, placementClimate);
 			result.Notes.AddRange(scatter.InvalidPrefabs);
@@ -1286,7 +1286,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				/* No cliff rock stands in a channel or a lake, nor within RockClearMetres of one. Tested at the site alone,
 				 * a rock sized to a cliff and sited on a river's carved bank (cut to 38°, so painted cliff) stood out over
-				 * the water, and a gorge filled with faceted prisms (2026-10-06: "poor carving"). The walls further
+				 * the water, and a gorge filled with faceted prisms ("poor carving"). The walls further
 				 * back keep their rock. */
 				bool Wet(float x, float z)
 				{
@@ -1384,19 +1384,19 @@ namespace FishMMO.Shared.WorldDesign
 				field.WriteTo(map);
 				AssetDatabase.CreateAsset(map, mapPath);
 			}
-			// The ground's heat with it (2026-10-18, I2q), after the grid (writing the grid clears it).
+			// The ground's heat with it, after the grid (writing the grid clears it).
 			map.SetHeat(heat);
-			// And the Great Spout the cut chose (2026-10-25, I2q (d)): the largest geyser it dug, read by a Spout clock with no search.
+			// And the Great Spout the cut chose (I2q (d)): the largest geyser it dug, read by a Spout clock with no search.
 			FishMMO.Shared.Weather.GeothermalSite spout = hotGround.GreatSpout >= 0 ? hotGround.Sites[hotGround.GreatSpout] : default;
 			map.SetGreatSpout(hotGround.GreatSpout >= 0, spout.Position, spout.Seed, spout.Size);
-			// And the vent lines its sites were found on, with its Great Plume (2026-10-25, I2q-b): the client's search reads both.
+			// And the vent lines its sites were found on, with its Great Plume: the client's search reads both.
 			map.SetVentLines(hotGround.Lines);
 			map.SetGreatPlume(hotGround.GreatPlume >= 0, hotGround.GreatPlume >= 0 ? hotGround.Sites[hotGround.GreatPlume].Seed : 0u);
-			// And every landform line for the glows (2026-10-25, I6i-b): a TRAIL creeps along the nearest, a KNEADING reads its bearing.
+			// And every landform line for the glows: a TRAIL creeps along the nearest, a KNEADING reads its bearing.
 			map.SetGlowLines(SceneGlowPlaces.FromLandforms(SceneLandforms.Sites(scene)));
-			// And its chutes and talus cones on the carved ground (2026-10-25, I2u falling stone): the client's rockfall reads them.
+			// And its chutes and talus cones on the carved ground (falling stone): the client's rockfall reads them.
 			StoreRockChutes(map, SceneLandforms.Sites(scene), SceneLandforms.Pads(scene), (east, north) => GroundAltitude(terrains, plan, east, north));
-			// And its molten lines (2026-10-25, I2r, decision 65 (c)): the client draws a lava ribbon along each.
+			// And its molten lines (I2r, decision 65 (c)): the client draws a lava ribbon along each.
 			map.SetLavaLines(BiomeLavaChannels.FromLandforms(SceneLandforms.Sites(scene)));
 			EnsureLavaRibbons(scene, map, field);
 			EditorUtility.SetDirty(map);
@@ -1414,7 +1414,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Dresses an existing scene's canyon walls in the rock the current templates give each of their cells
 		/// (<see cref="CanyonWalls.Redress"/>, with <see cref="BiomeRocks"/> of the repaint's field), from the cells and
 		/// geology the cut kept beside its terrain (<see cref="SceneCanyonWallCells"/>). A scene with walls but no record (cut
-		/// before 2026-10-16) keeps the rock it was cut with and says once that a re-cut is needed; a LOCAL copy, whose walls
+		/// formerly) keeps the rock it was cut with and says once that a re-cut is needed; a LOCAL copy, whose walls
 		/// are the committed scene's meshes, is left alone.
 		/// </summary>
 		private static void RedressCanyonWalls(Scene scene, SceneGenerationRequest request, TerrainTilePlan plan, string terrainFolder,
@@ -1432,7 +1432,7 @@ namespace FishMMO.Shared.WorldDesign
 			var record = AssetDatabase.LoadAssetAtPath<SceneCanyonWallCells>(CanyonWalls.RecordPath(terrainFolder, request.SceneName));
 			if (record == null)
 			{
-				notes.Add("Canyon walls: this scene was cut before its walls' cells were kept (2026-10-16), so they keep the rock they were cut with. Re-cut it to have them follow the templates.");
+				notes.Add("Canyon walls: this scene was cut before its walls' cells were kept, so they keep the rock they were cut with. Re-cut it to have them follow the templates.");
 				return;
 			}
 			CanyonWallReport walls = CanyonWalls.Redress(scene, plan, record, BiomeRocks(field));
@@ -1527,7 +1527,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Road layer and Cobbles layer (<see cref="BiomeTemplateArt.Grounds"/>), which the biome art authoring fills with
 		/// the path grounds the spec names for it: loam through grass, a littered track through forest, packed sand through
 		/// desert, trampled snow over ice. Then the ways its ground layers carry of their own (<see cref="BiomeTemplateArt.Grounds.LayerWays"/>,
-		/// 2026-10-16: a Taiga bog layer's corduroy road), which the palette's path maps prefer on their ground.
+		/// a Taiga bog layer's corduroy road), which the palette's path maps prefer on their ground.
 		/// </summary>
 		internal static Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> PathSurfaces()
 		{
@@ -1650,7 +1650,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The scene's lava ribbons root (2026-10-25, phase I2r, decision 65 (c)/95: FishMMO.Water.LavaRibbonRenderer, client only), made
+		/// The scene's lava ribbons root (phase I2r, decision 65 (c)/95: FishMMO.Water.LavaRibbonRenderer, client only), made
 		/// when the map stores a lava line or a biome on the scene fills its moats with lava, and taken away when neither: a scene with
 		/// neither keeps none, as before.
 		/// </summary>
@@ -1786,7 +1786,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				/* A lake's level, or the river's where its centre line comes nearest: smooth down a falling river. The grid's
 				 * highest-of-four-samples stepped at every sample there, and the bed paint and the plants' waterline up the
-				 * banks came out as teeth (2026-10-11). The grid still answers what neither does. */
+				 * banks came out as teeth. The grid still answers what neither does. */
 				float surface = Mathf.Max(water.LakeSurfaceNear(x, z), water.RiverSurfaceNear(x, z));
 				WaterKind kind = water.KindAt(x, z);
 				if (float.IsNegativeInfinity(surface) && (kind == WaterKind.River || kind == WaterKind.Lake))
@@ -1928,7 +1928,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The air of the world a scene is cut on, as the ground layers' air bands read it (TerrainTextureLayer.airBand, decision 44):
+		/// The air of the world a scene is cut on, as the ground layers' air bands read it (TerrainTextureLayer.airBand):
 		/// its body's (BiomeWorldConditions.For, the conditions its biomes were chosen by); the home world's for no body.
 		/// </summary>
 		internal static BiomeAtmosphereRequirement WorldAir(SolarSystemProfile system, WorldBody body)
@@ -2023,7 +2023,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Stores a scene's chutes and talus cones with its biome map (2026-10-25, phase I2u falling stone; RockChutes.FromLandforms): the
+		/// Stores a scene's chutes and talus cones with its biome map (falling stone; RockChutes.FromLandforms): the
 		/// stored landforms' chute lines head to runout on the carved ground, and their cones. None stored (no chute or cone landform): empty.
 		/// </summary>
 		internal static void StoreRockChutes(SceneBiomeMap map, IReadOnlyList<BiomeLandformSite> sites, IReadOnlyList<BiomeLandformPad> pads, Func<float, float, float> groundAt)

@@ -38,12 +38,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		Glass,
 		/// <summary>
-		/// A lantern's lit horn pane or a candle's flame, always alight (2026-10-13, the cave and mine kit): underground no
+		/// A lantern's lit horn pane or a candle's flame, always alight (the cave and mine kit): underground no
 		/// dusk comes to light it, so it glows by its emission day and night alike (BiomeArtGenerator.Structures.cs),
 		/// where <see cref="Glass"/> is dark until _FishNightLights rises.
 		/// </summary>
 		Lamplight,
-		// The structure palette's own surfaces (2026-10-16, I6a: "new surfaces such as log, shingle, slate, adobe, sandstone,
+		// The structure palette's own surfaces ("new surfaces such as log, shingle, slate, adobe, sandstone,
 		// bamboo, marble, ice block, bone, reed"). No kit builder builds in them: a biome's palette gives a role one of them,
 		// and the cut lays the piece in it (StructurePalettes). Mirrored by BiomeStructureMaterial.
 		/// <summary>Round or adze-hewn logs laid in courses, their ends notched: log walls.</summary>
@@ -66,7 +66,7 @@ namespace FishMMO.Shared.WorldDesign
 		BoneWork,
 		/// <summary>Reed bundles laid as thatch, paler and finer than straw: the fens' roofs.</summary>
 		Reed,
-		// The cold glows (2026-10-18, I6g): lit as Lamplight is by its emission, but cool, and pulsing with its piece's light
+		// The cold glows: lit as Lamplight is by its emission, but cool, and pulsing with its piece's light
 		// (SceneEmitterKind.Glow) and dark by day (a material marked _FishStructure = 3, FishStructureWeathering.hlsl).
 		/// <summary>Rune-light: the pale blue-white lacquer glowing in a rune stone's cut runes.</summary>
 		Runelight,
@@ -88,8 +88,8 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// One submesh of a structure mesh: the material its parts are built of and the palette part they play (null for none),
-	/// 2026-10-16 (I6a). Ordered by material, then part (none first).
+	/// One submesh of a structure mesh: the material its parts are built of and the palette part they play (null for none).
+	/// Ordered by material, then part (none first).
 	/// </summary>
 	public readonly struct StructureSlot : IEquatable<StructureSlot>, IComparable<StructureSlot>
 	{
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why solids, not a mesh.</b> A ruin is made FROM the intact piece (2026-10-10: cut planes, tilt and missing
+	/// <b>Why solids, not a mesh.</b> A ruin is made FROM the intact piece (cut planes, tilt and missing
 	/// chunks by a decay parameter), and a solid can be cut by a plane and stay closed: <see cref="Clip"/> keeps one side
 	/// and caps the opening, so a broken wall shows a broken top, not a hole into nothing. Clipping a box by its twelve
 	/// edge planes is also how the bevels are made (<see cref="StructureShapes.ChamferBox"/>).
@@ -173,7 +173,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public BiomeStructureRole[] Hint;
 		/// <summary>
-		/// The part of the building it is in a biome's structure palette (2026-10-16, I6a): the palette's material for this role
+		/// The part of the building it is in a biome's structure palette: the palette's material for this role
 		/// in the piece's style is what the cut lays it in. Null for a part no palette changes (glass, a lamp's pane, a fire's
 		/// ash, hay). Always one whose kit material is <see cref="Material"/>, so the kit's palette lays every part as built.
 		/// Set when the level is built (StructurePieces.BuildSolids), from <see cref="Hint"/>.
@@ -1016,8 +1016,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The solids as one mesh with a submesh per material and palette part used (<see cref="StructureSlot"/>, 2026-10-16,
-		/// I6a), in material order and, within a material, part order (no part first): a material's submeshes are neighbours,
+		/// The solids as one mesh with a submesh per material and palette part used (<see cref="StructureSlot"/>),
+		/// in material order and, within a material, part order (no part first): a material's submeshes are neighbours,
 		/// and the kit's palette gives them all that material again, so the instanced renderer (which batches by material)
 		/// draws them in the calls it drew the one submesh in. The vertices are written in the solids' order whatever the
 		/// slots, so they are the same as when a submesh was a material.

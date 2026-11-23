@@ -55,8 +55,7 @@ namespace FishMMO.Shared
 
 	/// <summary>
 	/// The core's messaging state as a Core module: gives every player its <see cref="ChatState"/>, which the core chat
-	/// intake (rate gate, mute) and the Chat module (repeat filter) use. Named "chat" until the Chat module took that id
-	/// (2026-11-20).
+	/// intake (rate gate, mute) and the Chat module (repeat filter) use. Named "chat" until the Chat module took that id.
 	/// </summary>
 	public sealed class MessagingModule : GameModule
 	{

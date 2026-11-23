@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Which part of a building each solid of a structure piece is in a biome's structure palette (2026-10-16, I6a): the role
+	/// Which part of a building each solid of a structure piece is in a biome's structure palette: the role
 	/// whose material the palette gives it (<see cref="BiomeStructureRole"/>).
 	/// </summary>
 	/// <remarks>
@@ -27,7 +27,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// are no part: no palette changes them.
 	/// </para>
 	/// <para>
-	/// <b>Hay, straw and bone (decided 2026-10-16, I6c).</b> Goods of thatch (hay bales, a straw bed, a skep's straw, a stall's
+	/// <b>Hay, straw and bone.</b> Goods of thatch (hay bales, a straw bed, a skep's straw, a stall's
 	/// bedding) and every bone (a bone pile, an altar's skulls, a drying rack's antlers) are what they are in every biome, so
 	/// they never take a part. A building of bone is the palette's to make: a biome gives its walls or its roof
 	/// <c>BoneWork</c> (lashed long bones, BiomeStructureMaterial.BoneWork), and every wall or roof of its buildings is laid in
@@ -136,7 +136,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// What one submesh is laid in once a palette has spoken: a material, its tint over its surface, and the surface variant
-	/// (I9's per-biome texture variant id, empty for the surface every biome shares). The structure material asset is named
+	/// (the later per-biome texture variant id, empty for the surface every biome shares). The structure material asset is named
 	/// after it (<see cref="MaterialName"/>); a key that is the kit's own is named as the kit's material always was.
 	/// </summary>
 	public readonly struct StructureSurfaceKey : IEquatable<StructureSurfaceKey>
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The structure palette made art (2026-10-16, I6a): what material each submesh of a kit piece is laid in under a biome's
+	/// The structure palette made art: what material each submesh of a kit piece is laid in under a biome's
 	/// palette, the material keys every palette needs (generated once each, deduplicated, by the art generator), and the roof
 	/// rules the new surfaces bring.
 	/// </summary>
@@ -341,8 +341,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The pitch a roof role is built at by the kit, degrees (StructurePieces.MinimumPitch of its kit material): a palette lays
 		/// another material on the same roof, so a material that wants it steeper (reed or thatch on a shingle roof) is laid
-		/// too flat for it. Null for a role that is no roof. Since 2026-10-18 a house's roof (I6e) and every roof a piece builds
-		/// for itself (I6h) is built at its palette's pitch instead (StructureRoofs); this is the rule for the roofs that do not
+		/// too flat for it. Null for a role that is no roof. A house's roof and every roof a piece builds
+		/// for itself is built at its palette's pitch instead (StructureRoofs); this is the rule for the roofs that do not
 		/// follow (a lean-to's, a lid's, an awning's).
 		/// </summary>
 		public static float? BuiltPitch(BiomeStructureStyle style, BiomeStructureRole role)

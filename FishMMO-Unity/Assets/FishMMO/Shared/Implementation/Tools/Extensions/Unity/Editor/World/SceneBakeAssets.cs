@@ -7,8 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// Where a scene's baked assets are kept beside it (its "&lt;Scene&gt; Terrain" folder), and how a rebake keeps every
-	/// reference to them: the terrain details, the props and the other per-scene bakes. Core editor (Phase 4 of the core and
-	/// modules plan, 2026-11-18): the terrain detail baker uses it whether or not the World Design module is installed.
+	/// reference to them: the terrain details, the props and the other per-scene bakes. Core editor: the terrain detail baker uses it whether or not the World Design module is installed.
 	/// </summary>
 	public static class SceneBakeAssets
 	{

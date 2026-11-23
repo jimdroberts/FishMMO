@@ -47,7 +47,7 @@ namespace FishMMO.Shared.Biomes
 		Monolith,
 		Glass,
 		Lamplight,
-		// The palette's own surfaces (2026-10-16, I6a): no kit builder uses them; a biome's palette builds a role in them.
+		// The palette's own surfaces: no kit builder uses them; a biome's palette builds a role in them.
 		/// <summary>Round or hewn logs laid in courses.</summary>
 		Log,
 		/// <summary>Riven wooden shingles in staggered courses.</summary>
@@ -68,7 +68,7 @@ namespace FishMMO.Shared.Biomes
 		BoneWork,
 		/// <summary>Reed bundles laid as thatch.</summary>
 		Reed,
-		// The cold glows (2026-10-18, I6g): a lamp's pane in cool light, no palette role builds in them.
+		// The cold glows: a lamp's pane in cool light, no palette role builds in them.
 		/// <summary>Rune-light: a rune stone's glowing runes.</summary>
 		Runelight,
 		/// <summary>Faerie-light: a glowjar's mote.</summary>
@@ -98,7 +98,7 @@ namespace FishMMO.Shared.Biomes
 		Fence,
 		/// <summary>Yards, squares, steps and the ground worked round a building.</summary>
 		Paving,
-		// The roles every piece is built of (2026-10-16, I6a): the kit's pieces that are not houses, and the parts of houses a
+		// The roles every piece is built of: the kit's pieces that are not houses, and the parts of houses a
 		// palette could not reach before. Each is the same material in every style (KitMaterial).
 		/// <summary>Walls of logs or heavy planks: a smithy's back wall, a timber longhouse, a stilt hut.</summary>
 		LogWall,
@@ -121,7 +121,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The pitch a palette builds a roof role at (2026-10-18, I6h): the material's own (its least pitch: thatch and reed 50°,
+	/// The pitch a palette builds a roof role at: the material's own (its least pitch: thatch and reed 50°,
 	/// shingles 45°, slate 40°, sandstone and sod 35°, bamboo and logs 30°, mud brick flat), or a class named for the biome
 	/// (the Valley's broad 30° shingle roofs, the Carpathian pastures' 60° shakes). The runtime mirror of the structure kit's
 	/// StructureRoofPitch, one value on (a test holds them equal). Every roofed piece follows it (StructureRoofs).
@@ -174,7 +174,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// Every value, exactly: "Style/Role=Material(r,g,b,a)@surface", the tint's channels round-tripped, then "^pitch" when a
-		/// pitch is named (2026-10-18: an entry at the material's own pitch signs as it always did, so no authoring mark moves).
+		/// pitch is named (an entry at the material's own pitch signs as it always did, so no authoring mark moves).
 		/// </summary>
 		public string Signature() => $"{Style}/{Role}={Material}({R(Tint.r)},{R(Tint.g)},{R(Tint.b)},{R(Tint.a)})@{Surface ?? string.Empty}"
 			+ (Pitch == BiomeRoofPitch.Material ? string.Empty : "^" + Pitch);
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A biome's structure palette (<see cref="BiomeTemplate.StructurePalette"/>, 2026-10-16): for each structure style, what its
+	/// A biome's structure palette (<see cref="BiomeTemplate.StructurePalette"/>): for each structure style, what its
 	/// buildings make each part of in this biome (walls, upper walls, thatched and shingled roofs, plinth, trim, door, floor,
 	/// fences, paving), with a
 	/// tint and the surface variant, so a desert's timber town can be built of adobe and palm thatch and a fen's of reed.
@@ -204,7 +204,7 @@ namespace FishMMO.Shared.Biomes
 	/// banners, carvings, dressed stone).
 	/// </para>
 	/// <para>
-	/// <b>How a palette becomes art</b> (2026-10-16, I6a). Every solid of every kit piece plays one role (StructureParts: a
+	/// <b>How a palette becomes art</b>. Every solid of every kit piece plays one role (StructureParts: a
 	/// house's walls and roof, a fence, woodwork, ironwork, cloth…), and the piece's meshes have a submesh per material and role;
 	/// its prefab wears the kit's materials. The cut lays the kit's prefab with this palette's material on each submesh (the
 	/// art generator makes one material per key — material, tint, surface — and finish that any palette lays), so a palette
@@ -287,7 +287,7 @@ namespace FishMMO.Shared.Biomes
 		public static readonly BiomeStructureRole[] Roles = (BiomeStructureRole[])Enum.GetValues(typeof(BiomeStructureRole));
 
 		/// <summary>
-		/// The palette every biome's buildings were built in until 2026-10-16: <see cref="KitSurface"/> for every style and role,
+		/// The palette every biome's buildings were built in formerly: <see cref="KitSurface"/> for every style and role,
 		/// in style then role order. A fresh object each call.
 		/// </summary>
 		public static BiomeStructurePalette Kit()
@@ -322,7 +322,7 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public static BiomeStructureMaterial KitMaterial(BiomeStructureStyle style, BiomeStructureRole role)
 		{
-			// The roles added with the palette's art (2026-10-16): one material in every style, what the kit's builders use there.
+			// The roles added with the palette's art: one material in every style, what the kit's builders use there.
 			switch (role)
 			{
 				case BiomeStructureRole.LogWall:

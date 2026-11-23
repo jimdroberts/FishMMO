@@ -652,7 +652,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		// ── The caves' light-makers (2026-10-20) ─────────────────────
+		// ── The caves' light-makers ─────────────────────
 
 		private static void Millipede(Builder b, Color back, Color belly, Color accent)
 		{

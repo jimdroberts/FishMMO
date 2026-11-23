@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Every way into a site marked on the map, run once a site is built (2026-10-20: "Every dungeon entrance or marker should
+	/// Every way into a site marked on the map, run once a site is built ("Every dungeon entrance or marker should
 	/// be clearly marked as a dungeon entrance. Some are simply generated as background meshes?"; "Caves now have multi
 	/// entrances/exits and should be properly marked for both as Points of Interest").
 	/// </summary>

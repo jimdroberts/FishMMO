@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// <para>
 	/// A module's scene components (a banker, a plot foundation, an arena board) live in the module. A game built without
 	/// that module still has those objects in its scenes, now with a missing script: harmless, since nothing runs on them,
-	/// and the honest result of removing the module (Jim, 2026-11-21). Unity reports each one separately and without
+	/// and the honest result of removing the module. Unity reports each one separately and without
 	/// context; this adds one line per scene that names the likely cause, so a missing script is never mistaken for
 	/// corruption.
 	/// </para>

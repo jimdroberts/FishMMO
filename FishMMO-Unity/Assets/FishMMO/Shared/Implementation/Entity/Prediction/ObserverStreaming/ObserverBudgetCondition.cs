@@ -73,7 +73,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			/* A pet's owner always observes it, whatever the budget or the crowd (2026-11-21; see CompanionVisibility). */
+			/* A pet's owner always observes it, whatever the budget or the crowd (see CompanionVisibility). */
 			if (companion.OwnerSees(NetworkObject, connection))
 			{
 				return true;

@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 	/// instance; a <see cref="SceneName"/> naming another scene is refused with a warning until
 	/// the world-map transfer lands.</para>
 	/// </remarks>
-	// Moved into the Travel module's assembly (Phase 2): serialized references written under FishMMO.Shared still resolve.
+	// Moved into the Travel module's assembly: serialized references written under FishMMO.Shared still resolve.
 	[UnityEngine.Scripting.APIUpdating.MovedFrom(true, sourceNamespace: "FishMMO.Shared", sourceAssembly: "FishMMO.Shared")]
 	[Serializable]
 	public class TeleportToWaypointAction : BaseAction, IAbortableAction

@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Deadwood props added by the vegetation expansion (2026-10-10): fallen logs, stumps, driftwood, a petrified log and a
+	/// Deadwood props added by the vegetation expansion: fallen logs, stumps, driftwood, a petrified log and a
 	/// windthrow root plate, at three levels of detail each, for the tree channel (bedded baked props with streamed mesh
 	/// colliders). Written by BiomeArtGenerator.Deadwood.cs, named and listed in ProceduralArtCatalogue.Flora.cs.
 	/// </summary>

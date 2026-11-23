@@ -67,8 +67,8 @@ namespace FishMMO.UnitTests
 		private static HashSet<string> removedGuids;
 
 		/// <summary>
-		/// Whether a finding is a world scene's reference into a module the gate removed (Jim's rule for the World Simulation
-		/// gate, 2026-11-18): a scene is the modules' content, so a scene made with a module names its scripts and assets, and a project
+		/// Whether a finding is a world scene's reference into a module the gate removed (the rule for the World Simulation
+		/// gate): a scene is the modules' content, so a scene made with a module names its scripts and assets, and a project
 		/// without that module cannot load it whole. Only scenes (anything under Assets/Scenes/), and only GUIDs of the removed
 		/// modules' own files (a missing script or a dangling asset reference); every other broken reference still fails the audit.
 		/// </summary>

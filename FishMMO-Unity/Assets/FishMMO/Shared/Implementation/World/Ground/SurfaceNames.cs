@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// The keyword table that names a ground: the terrain layers are generated as <c>Ground_&lt;Kind&gt;</c> (Ground_Grass,
 	/// Ground_Gravel, Ground_PathMud…) and the props are named for what they are (Tree_Oak, Cliff_Massive…), so one table reads
-	/// both. Moved into the core from the footsteps (GroundSurface, 2026-11-21) so the server build can read its terrain
+	/// both. Moved into the core from the footsteps (GroundSurface) so the server build can read its terrain
 	/// layers by the same words before it strips them (<see cref="TerrainGroundKinds"/>).
 	/// </summary>
 	public static class SurfaceNames

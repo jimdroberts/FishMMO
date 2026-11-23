@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Ice)
 				.Wildlife(BiomeHabitat.Ice)
 				.Moat(BiomeMoatWater.Frozen)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 0.2f), (POIType.Shrine, 0.2f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 0.2f),
 					(POIType.Monument, 0.2f), (POIType.Wreck, 0.2f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SmugglersCove, 0.2f), (POIType.PirateCove, 0.2f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f),
 					(POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 0.2f), (POIType.BossLair, 0.2f), (POIType.OreVein, 0.2f),
 					(POIType.CrystalFormation, 0.2f), (POIType.HerbGrove, 0.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.8f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.FrostGiantSteading, 1.2f), (POIType.RuneStone, 1f), (POIType.FrozenArmy, 1.2f), (POIType.MammothGraveyard, 0.6f),
 					(POIType.WinterWolfDen, 1f), (POIType.AuroraShrine, 1f), (POIType.LichSpire, 1f), (POIType.IcePalace, 2f), (POIType.LostThrone, 0.4f),
 					(POIType.Keep, 1f), (POIType.Tower, 1f))
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 1f)
@@ -55,7 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Stone", 0.2f)
 				.Prefers(POIType.Tower, "Observatory", 0.2f)
 				.Prefers(POIType.Tower, "Wizard", 0.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Gathers("Silver Vein", "Lumen Quartz Cluster", "Frostbloom Patch")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)
 				.ErodesAs("Periglacial");

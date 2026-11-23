@@ -1,7 +1,7 @@
 #ifndef FISH_CAVE_COVER_INCLUDED
 #define FISH_CAVE_COVER_INCLUDED
 
-// The run-time cave cover's draw (FishMMO/Cave Cover, CaveCoverRenderer, 2026-10-20): every instance is a 32-byte record
+// The run-time cave cover's draw (FishMMO/Cave Cover, CaveCoverRenderer): every instance is a 32-byte record
 // FishCaveCover.compute wrote this frame into its (type, level) slot; the mesh is the cover art's one mesh (CaveCover_Set),
 // a submesh a type and level. No textures: the vertex colour is the albedo (sRGB) and, below 255 in alpha, the glowing part;
 // UV0.x the height up the item (its foot shaded).
@@ -235,7 +235,7 @@ half4 CoverForwardFragment(CoverVaryings input) : SV_Target
     float daylight = 1.0 - _CoverDarkness.x * under;
 
     Light mainLight = GetMainLight(CoverShadowCoord(input.positionWS), input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
-    // In the sun's beam through an opening in the roof (2026-10-20, FishSkylights.hlsl) its shadowed light is kept.
+    // In the sun's beam through an opening in the roof (FishSkylights.hlsl) its shadowed light is kept.
     float sunDaylight = 1.0 - _CoverDarkness.x * under * (1.0 - FishSkylightSun(input.positionWS, mainLight.direction));
     float3 colour = CoverLit(mainLight.direction, mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation) * sunDaylight,
         albedo, n, V, smoothness) * foot;

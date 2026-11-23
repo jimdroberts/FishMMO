@@ -176,7 +176,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			/* An allowed read is recorded, like every other staff action. After the throttle, so a
 			 * request that is dropped unanswered is not recorded as having been answered. Not for an
-			 * automatic refresh (the owner's decision, 2026-09-14): the flag is the client's word, and
+			 * automatic refresh (the owner's decision): the flag is the client's word, and
 			 * it is trusted because this is a read and the refusal above never consults it. */
 			if (!autoRefresh)
 			{

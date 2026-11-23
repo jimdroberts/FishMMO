@@ -4,7 +4,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The High Fidelity quality level ships native scale with 4× MSAA (the owner's default for High, 2026-11-05); players
+	/// The High Fidelity quality level ships native scale with 4× MSAA (the owner's default for High); players
 	/// choose otherwise in the options (ClientDisplaySettings.MsaaOption), and WebGPU offers only off or 4×.
 	/// </summary>
 	public class HighQualityMsaaTests

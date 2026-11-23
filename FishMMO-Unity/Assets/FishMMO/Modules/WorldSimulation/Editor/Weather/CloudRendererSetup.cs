@@ -10,8 +10,7 @@ namespace FishMMO.Client
 	/// a renderer asset by hand.
 	/// </summary>
 	/// <remarks>
-	/// A renderer feature lives inside its renderer asset as a sub-asset. The host is the only one the weather needs (Phase 4
-	/// of the core and modules plan, 2026-11-18); its tier comes from the renderer's name.
+	/// A renderer feature lives inside its renderer asset as a sub-asset. The host is the only one the weather needs; its tier comes from the renderer's name.
 	/// </remarks>
 	public static class CloudRendererSetup
 	{
@@ -33,7 +32,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Gives the profile's cloud feature its material and compute kernels where it has none, and puts the core's module
-		/// passes host on every renderer that has none (Phase 4 of the core and modules plan, 2026-11-18: the weather's passes
+		/// passes host on every renderer that has none (the weather's passes
 		/// stand in the weather render profile now, drawn by the renderers' Fish Module Passes). Returns how many renderers
 		/// were changed.
 		/// </summary>

@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Every detail layer emptied under the buildings at the cut (2026-10-27, PointOfInterestDetailClearance): Moron 2's houses
+	/// Every detail layer emptied under the buildings at the cut (PointOfInterestDetailClearance): Moron 2's houses
 	/// had grass, flowers, ferns and bushes standing inside them, because the buildings were kept clear only by the path field
 	/// and the CPU chunk renderer, which draws most of a biome-suite scene's detail kinds, never reads it.
 	/// </summary>

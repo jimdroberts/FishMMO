@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// What a defender's buffs do to an incoming hit: absorb it (a shield's charges), deflect a projectile, block it at a
 	/// guard volume, and the active shield volumes. The Combat and Abilities modules call these; the Buffs module installs
-	/// the implementation (2026-11-20, <c>BuffDamageMitigation</c>). Without it nothing is mitigated.
+	/// the implementation (<c>BuffDamageMitigation</c>). Without it nothing is mitigated.
 	/// </summary>
 	public static class DamageMitigation
 	{
@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		/// <summary>Installed by the Buffs module.</summary>
 		public static System.Action<ICharacter, List<ShieldVolume>> ShieldCollector;
 
-		/// <summary>Installed by the Abilities module (2026-11-22, <c>HeldGuardMitigation</c>): a held Block ability's guard.</summary>
+		/// <summary>Installed by the Abilities module (<c>HeldGuardMitigation</c>): a held Block ability's guard.</summary>
 		public static System.Func<ICharacter, ICharacter, int, bool, int> GuardNegator;
 
 		/// <summary>

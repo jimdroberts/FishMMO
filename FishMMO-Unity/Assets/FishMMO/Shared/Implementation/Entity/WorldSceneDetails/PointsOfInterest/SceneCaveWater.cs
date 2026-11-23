@@ -3,8 +3,8 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What lives on and in a cave's still water as every client draws it (2026-10-26, phase I2n-c; decision 86 (i) and its leeches,
-	/// decision 97): marsh-gas BEADS rising in trails from the drowned muck and ringing out on the surface, and LEECHES swimming in it,
+	/// What lives on and in a cave's still water as every client draws it (decision 86 (i) and its leeches):
+	/// marsh-gas BEADS rising in trails from the drowned muck and ringing out on the surface, and LEECHES swimming in it,
 	/// toward whoever wades in. Pure; FishCaveWaterLife.shader mirrors it number for number (CaveWaterLife draws it).
 	/// </summary>
 	/// <remarks>
@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>The leeches are each viewer's.</b> At rest a leech's slow circuit of its pool is the clock's as the beads are; how far it has
 	/// turned toward a wader is a presentation each client eases on its own (<see cref="Attract"/>): nothing on the wire, no damage,
-	/// nothing anyone else sees moves (decision 97: viewer-reactive effects only as per-viewer presentation).
+	/// nothing anyone else sees moves (viewer-reactive effects only as per-viewer presentation).
 	/// </para>
 	/// </remarks>
 	public static class SceneCaveWater

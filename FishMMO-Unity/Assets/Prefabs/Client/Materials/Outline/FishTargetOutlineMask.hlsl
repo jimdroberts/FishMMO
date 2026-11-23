@@ -4,7 +4,7 @@
 // The target outline's mask fragment (TargetOutlineFeature), shared so a shader that deforms its vertices can draw its own
 // silhouette into the mask: add a pass tagged "LightMode" = "FishOutlineMask" whose vertex poses the mesh exactly as the
 // lit pass does and whose fragment returns FishOutlineMaskFragment. The feature draws that pass instead of the generic
-// mask (which knows nothing of the pose: a dead animal's outline stood up, 11-16). The tag is unknown to URP, so the pass
+// mask (which knows nothing of the pose: a dead animal's outline stood up). The tag is unknown to URP, so the pass
 // is never drawn by anything else.
 
 TEXTURE2D(_FishOutlineDepth);

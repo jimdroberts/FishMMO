@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The houses' fenced yards and the edge pieces the town layout lays (2026-10-19): a house with no yard stands exactly where it
+	/// The houses' fenced yards and the edge pieces the town layout lays: a house with no yard stands exactly where it
 	/// did, a yard's fences keep off the streets, the buildings and each other and close round it, its gate stands before the door,
 	/// a shop keeps its front on the street, and an edge piece stands in the band inside the boundary with its long side along it.
 	/// Pure: no scene.

@@ -4,13 +4,13 @@ using System;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Which vines grow in which biome, and how thickly at each kind of place they grow on (2026-10-12: "Cave mouths,
+	/// Which vines grow in which biome, and how thickly at each kind of place they grow on ("Cave mouths,
 	/// Ruins and old walls, Cliffs and outcrops, Trees … none in deserts/ice"). Kept beside <see cref="BiomeArtSpec"/> and
 	/// keyed the same way, by the biome asset's name.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Only the cut's fallback since 2026-10-26</b> (phase CODE-TABLE CLEARANCE, decision 1): every row was written into its
+	/// <b>Only the cut's fallback</b>: every row was written into its
 	/// biome's spec file (<see cref="BiomeArtSpec.Entry.GrowsVines"/>), which the authoring writes onto the template, and only
 	/// BiomeTemplateArt.Vines reads this table, for a template never authored (warning once). Change a biome's vines in its file.
 	/// </para>

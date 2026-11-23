@@ -102,7 +102,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// The NetworkObject that owns the switch, not one on the switch's own GameObject. A generated door's switch is
-		/// on Door N/Leaf/Panel and its NetworkObject on Door N: looked up with GetComponent (2026-11-13) no broadcast was
+		/// on Door N/Leaf/Panel and its NetworkObject on Door N: looked up with GetComponent no broadcast was
 		/// ever sent, the server opened the door (its leaf no longer solid) while every client kept it shut and solid,
 		/// walking in was corrected through a closed door, and the next press closed it again unseen.
 		/// </remarks>

@@ -52,7 +52,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// True for a kind whose outline is a walled plot, straight-sided (<see cref="State.Plot"/>), not a blob: a graveyard,
-		/// a field fenced off and filled in rows (2026-10-19: "Graveyards are always circular fields").
+		/// a field fenced off and filled in rows ("Graveyards are always circular fields").
 		/// </summary>
 		internal static bool Plots(POIType kind) => kind == POIType.Graveyard;
 

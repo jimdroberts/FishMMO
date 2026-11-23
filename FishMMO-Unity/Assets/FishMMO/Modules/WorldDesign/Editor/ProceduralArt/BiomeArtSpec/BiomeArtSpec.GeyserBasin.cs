@@ -10,8 +10,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Geyser Basin</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry GeyserBasin()
 		{
-			// The geothermal highland of the Icelandic interior in the Commonwealth age (biome round, approved 2026-10-18, authored
-			// 2026-10-26): a cold, dry fell-field of grey gravel and cream tephra, snow lying late in the lee, and in its hollows the hot
+			// The geothermal highland of the Icelandic interior in the Commonwealth age:
+			// a cold, dry fell-field of grey gravel and cream tephra, snow lying late in the lee, and in its hollows the hot
 			// ground — white geyserite aprons beaded like coral, sapphire pools, orange-ochre-olive thermophile mats fanning down the
 			// runoff, grey mud pots, steaming rose-and-yellow clay hills and spouts that throw boiling water on their own clock; round
 			// every vent a ring of startling green where the warm ground keeps a lawn all winter. Free farmers under no king: herringbone
@@ -20,9 +20,9 @@ namespace FishMMO.Shared.WorldDesign
 			// water-horse of the cold lakes and the sun-spar that shows where the hidden sun is.
 			// Reaches (the heat mask of the geothermal sites): HOT CORE heat ≥ 0.65 (bare geyserite), WARM RING 0.35–0.65 (mats, clay),
 			// HALO 0.1–0.35 (green lawn, moss), COLD MELUR < 0.1 (fell-field, tephra, late snow). By temperature: COLD t ≤ −0.15, MILD.
-			// LATER (I9): every ground and object texture as Geyser Basin's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Hverfire + Huldusheen.
-			// LATER (I2q-c): the HotPoolBasin and RunoffChannels landform presets (the cut already digs the pools and traces the runoff),
+			// LATER: every ground and object texture as Geyser Basin's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Hverfire + Huldusheen.
+			// LATER: the HotPoolBasin and RunoffChannels landform presets (the cut already digs the pools and traces the runoff),
 			// the Thufur field surface, the Sintered coat's per-decay chance; Snag_SinterSock deadwood and the Móberg/Raven-flint variants.
 			return E("Geyser Basin", L(Ground.GravelMelurFell,
 					// The melur's only grass, a campion, the odd woolly willow in a gully.
@@ -79,14 +79,14 @@ namespace FishMMO.Shared.WorldDesign
 				// LATER (glow mode): the sun-spar brightens on the faces turned toward the sun; the sun-height mode stands in.
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Sun)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Pulse)
-				// The hot ground's landforms (I2g): sinter shields under the geyser clusters (paint the apron), blast craters, painted hills.
+				// The hot ground's landforms: sinter shields under the geyser clusters (paint the apron), blast craters, painted hills.
 				.Landforms(BiomeLandformPresets.Named("SinterShield").Painted(1, BiomeLandformPart.Whole),
 					BiomeLandformPresets.Named("ExplosionCrater"),
 					BiomeLandformPresets.Named("PaintedHills").Painted(3, BiomeLandformPart.Whole))
 				.Look(BiomeLookClass.Cold)
 				.Wildlife(BiomeHabitat.Volcanic | BiomeHabitat.Tundra)
 				.Moat(BiomeMoatWater.Wet)
-				/* Its hot ground (2026-10-18, phase I2q, decision 47; vents I2q-b). Steam is the emission; a quarter geysers, two fifths
+				/* Its hot ground (vents I2q-b). Steam is the emission; a quarter geysers, two fifths
 				 * springs, a fifth fumaroles and the rest mud pots, on the grid of geothermal sites the cut digs (geyserite cones and
 				 * pools, runoff, the heat mask the ground bands above read), erupting steadily on their own pure clock: this basin has no
 				 * stored vent lines, so its layout stays the grid and its timing steady, which are the defaults (the Great Spout is the largest geyser dug). Its
@@ -145,7 +145,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.FishingCamp, 0.4f), (POIType.LeyNexus, 0.4f), (POIType.BossLair, 0.4f), (POIType.Town, 0.3f), (POIType.Monastery, 0.3f),
 					(POIType.HuntingLodge, 0.3f), (POIType.Volcano, 0.3f), (POIType.Keep, 1f), (POIType.StoneCircle, 0.2f), (POIType.FallenStar, 0.2f),
 					(POIType.Glacier, 0.2f), (POIType.Fortress, 0.1f), (POIType.Portal, 0.1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.4f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f), (POIType.Hamlet, 0.3f),
 					(POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f), (POIType.SpellScar, 0.8f),
@@ -166,7 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Graveyard, "Earthen", 1.4f)
 				.Prefers(POIType.Graveyard, "Railed", 0f)
 				.Prefers(POIType.Fortress, "Palisade", 0f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -181,8 +181,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.DragonLair, "Hoard", 1.4f)
 				.Prefers(POIType.WarbandCamp, "Black Host", 1.4f)
 				.Prefers(POIType.FireTemple, "Colonnade", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Geyser Basin's signature pieces and variants — the passage farm, longhall, turf church, bathing pool, bread
+				// (the fantasy set's variants end here)
+				// LATER: Geyser Basin's signature pieces and variants — the passage farm, longhall, turf church, bathing pool, bread
 				// ground, washing springs, Thing, rétt, refuge hut, cairn way, shieling, outlaw hut, boat-grave mound, tephra-buried farm,
 				// raven-flint quarry, spar cavity, blessed well, virki, elf rock, dawn troll, spout clock, troll-wife's cave. Until then
 				// the kit's nearest variants stand in at those weights, the generic rest at 0 (approved).
@@ -192,7 +192,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Timber, 0.3f)
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: herringbone turf walls, driftwood gables, turf roofs at 45 degrees over birch brush, basalt footings with moss
-				// joints, homespun. LATER (NEW-SURFACES): KlombruTurf, DriftwoodGable, TorfRoof, BasaltCourse, CarvedDriftDoor,
+				// joints, homespun. LATER: KlombruTurf, DriftwoodGable, TorfRoof, BasaltCourse, CarvedDriftDoor,
 				// InterlaceRoundel, TurfStoneDyke, Vadmal and TarredStave as Geyser Basin's own surfaces; the shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Wall, BiomeStructureMaterial.Earth, UplandHex("#4a5a2e"))
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Timber, UplandHex("#8a8478"))
@@ -222,7 +222,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Sintered: a white silica bloom creeping up the lower courses, condensate streaks under the eaves, bleached timber.
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Sintered, 0.5f, 0.6f)
-				// Homefield hay on the farms, a little warm-bed barley. LATER (I2j-b): the Thufur hummocked field surface.
+				// Homefield hay on the farms, a little warm-bed barley. LATER: the Thufur hummocked field surface.
 				.Crops(("Detail_GrassHayMeadow", 1f), ("Detail_CropBarleySixRow", 0.3f))
 				.Lines(new Entry.Line("Tungardur"))
 				// Iron cruse lamps on the farms, brazier fires at the Thing, glowjars in the elf rocks, a sun-spar post on the cave routes.
@@ -246,7 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 				.ErodesAs("Volcanic");
 		}
 
-		/// <summary>The rhyolite boulders (I6b stones of the crust rock): round, slab and spire (the Geyser Basin file's).</summary>
+		/// <summary>The rhyolite boulders (stones of the crust rock): round, slab and spire (the Geyser Basin file's).</summary>
 		private static string[] RhyoliteBoulders => new[] { Boulder("Rhyolite", "Round"), Boulder("Rhyolite", "Slab"), Boulder("Rhyolite", "Spire") };
 	}
 }

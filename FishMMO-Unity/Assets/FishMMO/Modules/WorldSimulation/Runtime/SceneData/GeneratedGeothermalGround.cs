@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What the cut did to a scene's hot ground (2026-10-18, phase I2q, decision 47): the heightmap edits that dug its springs'
+	/// What the cut did to a scene's hot ground: the heightmap edits that dug its springs'
 	/// pools and mud pots, raised its geysers' cones and rims and ran its runoff channels, the pools' water, and where its Great
 	/// Spout stands. The next repaint takes the edits out before anything reads the ground (so every site is carved again from
 	/// the ground it was first carved on, never on top of itself), and the place stage writes the pools' water again.

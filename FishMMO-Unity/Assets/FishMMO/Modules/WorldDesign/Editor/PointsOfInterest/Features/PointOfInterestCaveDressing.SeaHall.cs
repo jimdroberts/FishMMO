@@ -7,8 +7,8 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A sea hall dressed (2026-10-26, phase I2n-b, decision 83): its smokers' chimneys from the stored list (CaveSystem.Smokers), its
-	/// flooded floor grown with the sea biome's own aquatic rules (the interior's Sea() rules, decision 83 Q3: "flooded cave floors grow
+	/// A sea hall dressed: its smokers' chimneys from the stored list (CaveSystem.Smokers), its
+	/// flooded floor grown with the sea biome's own aquatic rules (the interior's Sea() rules: "flooded cave floors grow
 	/// the interior's Sea() rules"), heat-banded by the smokers' heat; and the spots the client reads the hall by: its dome (the roof the
 	/// brinicles hang from, the smoke ceiling under it), its sea (a Pool spot, where its sea life swims), its smokers (the plumes) and its
 	/// brine pools (the mirrors). Each on its own stream after every other pass, so nothing laid before moves; nothing for any other cave.
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Whether a template's rule grows on a flooded cave floor (decision 83 Q3): a live rule with art that names the sea in its waters
+		/// Whether a template's rule grows on a flooded cave floor: a live rule with art that names the sea in its waters
 		/// (what its round writes with Under(Sea(...)) / In(BiomeBedWaters.Sea, ...)).
 		/// </summary>
 		public static bool GrowsOnFloodedFloor(PrefabSpawnRule rule)

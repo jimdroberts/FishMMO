@@ -2,7 +2,7 @@
 
 All of FishMMO's own code lives here. The core is what every game needs: log in, create a character, enter a world
 scene, move and save. The gameplay still in the core (combat, abilities, items, NPCs and others) is moving into modules
-(from 2026-11-20). A module is a feature a game may leave out: delete its folder and the game still compiles,
+. A module is a feature a game may leave out: delete its folder and the game still compiles,
 builds and runs.
 
 ## Layout
@@ -46,13 +46,14 @@ assembly is the boundary, and scenes, prefabs and assets keep resolving their sc
 | [Map](Modules/Map/README.md) | `map` | The world map and minimap, fog of war, map notes and marker filters. | World Design |
 | [Matchmaking](Modules/Matchmaking/README.md) | `matchmaking` | Group finder, dungeon finder and instances, arenas. | |
 | [Naming](Modules/Naming/README.md) | `naming` | The name generator and the names scene objects are given. | World Design |
+| [Mounts](Modules/Mounts/README.md) | `mounts` | Saddles, the Mount ability (a mount is a buff), how each mount moves, the drawn mount, Dismount, the Stablemaster. | |
 | [NPCs & AI](Modules/NPCs/README.md) | `npcs` | The server's NPC brains, threat and spawners; the NPC designer. | Pets, Wildlife, Staff, World Design |
 | [Pets](Modules/Pets/README.md) | `pets` | Pets and summons, the pet system and the pet control panel. | |
 | [Quests](Modules/Quests/README.md) | `quests` | Quests, the quest log and quest givers. | |
 | [Social](Modules/Social/README.md) | `social` | Friends, party and guild. | |
 | [Staff and Support](Modules/Staff/README.md) | `staff` | `/gm` and `/admin`, the staff console, reports and tickets. | |
 | [Terrain](Modules/Terrain/README.md) | `terrain` | The client's GPU drawing of the ground: trees, props, grass, scatter. | World Test Bed, World Design, Naming |
-| [Travel](Modules/Travel/README.md) | `travel` | Waypoint discovery and fast travel. | |
+| [Travel](Modules/Travel/README.md) | `travel` | Waypoint discovery and fast travel; the travel spells (Portal to Bind, Mark, Recall, Gate to Gate Stones, Call to Arms). | |
 | [Water](Modules/Water/README.md) | (none) | The sea, shores, rivers, lakes and lava. | All seven world modules |
 | [Wildlife](Modules/Wildlife/README.md) | `wildlife` | Prey, predators and territorial animals outside factions. | World Design |
 | [World Design](Modules/WorldDesign/README.md) | (none, editor only) | The world generator and its tools. | |
@@ -94,11 +95,15 @@ the ones it uses.
 | `[assembly: HarmRelation(typeof(X))]` | Shared, `Relations/HarmRule.cs` | A relation in the rule that decides who may harm whom. |
 | `[assembly: OperatorCommandProvider(typeof(X))]` | Server, `OperatorCommandContracts.cs` | Adds `/gm` and `/admin` commands (hosted by the Staff module). |
 | Addressables label `SceneServer_Systems` | `Server.AdoptModuleSystems` | A `ServerBehaviour` asset with this label is adopted by the scene server at start. |
+| `[assembly: ModuleServerSystem(typeof(T), "SceneServer")]` | `Server.AdoptDeclaredModuleSystems` | The scene server creates a `T` at start, unless an asset of that type was already adopted — for a module system with nothing to author. |
+| `PartySignals` | Server, `World/SceneServer/Party/PartySignals.cs` | A server-to-server message addressed to a party, carried by the party chat pump to every scene server hosting a member and shown to no client. The Chat module posts and dispatches; Travel's Call to Arms uses it. |
+| `GateStoneChoice` | Shared core, `Entity/Travel/GateStoneChoice.cs` | The client's choice of a Gate Stone for a Gate spell: Travel begins and ends it, the map shows it. |
 | Addressables label `ClientWorldGUI_Panels` | `ModulePanelHost` | A window prefab with this label is placed into ClientWorldGUI when that scene loads. |
 | `GameMenuEntries`, `CharacterMenuEntries` | Client | Entries in the game menu and in character right-click menus. |
 | `ClientServices`, `SceneServerModuleServices` | Client, Server | Services started with the client or the scene server. |
 | `CachedScriptableObject` + `[TemplateOf("Type")]` | Shared | Core content holds a module's template (an achievement, an ability, a merchant) without naming its type; the inspector filters to that type. |
 | `IAbilityController`, `IAbilityPersistence`, `AbilityGrants` | Shared | The cast in progress for prediction and streaming; abilities in the character save; abilities taught by content and an NPC's kit (installed by the Abilities module). |
+| `ICharacterMount`, `MountMotion`, `ItemSlot.MountSaddle` | Shared | The mount a player rides and how it moves (read by the motor every tick), and the saddle socket. |
 | `IPersistedPet`, `IPetRoster`, `NPC.CompanionOwner` | Shared | Pets in the character save and the summon pre-filter; whom a companion fights for (harm rule, loot rights, credit). |
 | `ICharacterBuffs`, `IBuffPersistence`, `IBuffTemplateInfo`, `DamageMitigation` | Shared | Buffs applied by weather, read by the target frame, dismissed, cleared on death, saved; a hit mitigated by shields and deflection (installed by the Buffs module). |
 | `IWildlifeSpecies`, `WildlifeRules` | Shared | A species' role, carcass time, herd size, habitats and speeds for the harm rule, the AI and the spawners. |
@@ -132,9 +137,9 @@ Every module was checked by removing it. To repeat the check:
    `-buildTarget Linux64 -standaloneBuildSubtarget Player`, or the run finds no tests.
 5. **Restore** the folders, the groups and `link.xml`, and delete `RemovedGuids.txt`.
 
-The Phase 4 gate went further: with all seven world modules removed, a client and a server were built and a new
+The world-module gate went further: with all seven world modules removed, a client and a server were built and a new
 character logged into the Core Gate world (`Tests/TestHarness/Editor/CoreGateSceneGenerator.cs`), lit and shadowed
-(2026-11-18).
+.
 
 ### Writing a module README
 

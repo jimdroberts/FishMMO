@@ -751,7 +751,7 @@ namespace FishMMO.Shared.Celestial
 		/// With no atmosphere humidity is pinned to its minimum.
 		/// </para>
 		/// <para>
-		/// <b>No latitude here any more (2026-10-15).</b> A place's temperature and its season are the body's climate table's
+		/// <b>No latitude here any more.</b> A place's temperature and its season are the body's climate table's
 		/// (<see cref="FishMMO.Shared.Biomes.PlanetClimateTable"/>): day length, heat capacity, land and sea. The noon-sun
 		/// latitude term this used to add, and the mean and seasonal offsets built on it, are gone with it.
 		/// </para>

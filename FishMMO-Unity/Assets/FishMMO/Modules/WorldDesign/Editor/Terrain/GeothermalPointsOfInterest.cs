@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The hot ground's sites as points of interest (2026-10-27): every geyser, hot spring, mud pot, fumarole and sulphur pool the
+	/// The hot ground's sites as points of interest: every geyser, hot spring, mud pot, fumarole and sulphur pool the
 	/// cut dug (<see cref="GeothermalGroundCarve"/>) becomes a named, found-in-the-ground site on the world map, and the scene's
 	/// Great Spout (the largest geyser dug, I2q decision 47 (d)) a landmark drawn further out than the rest.
 	/// </summary>

@@ -14,10 +14,9 @@
 //
 // Only where it is needed and nothing else changes: DXC programs (UNITY_COMPILER_DXC: Vulkan, `#pragma use_dxc vulkan`) of
 // the procedural variants. FXC platforms (WebGPU, D3D) see the same tokens as before, so their binding order — which decides
-// WebGPU's dynamic uniform slots (Docs/Rendering/2026-11-02/webgpu-dynamic-uniforms) — is unchanged; DOTS variants have no
-// UnityPerDraw and read their matrices from the batch buffer. Measured 2026-11-03 on the heaviest ForwardLit variant: FXC
-// 12.4 s for the fragment alone (298 KB of DXBC, then HLSLcc and glslang), DXC 1 s for both stages to SPIR-V
-// (Docs/Rendering/2026-11-03/shader-compile-cost).
+// WebGPU's dynamic uniform slots — is unchanged; DOTS variants have no
+// UnityPerDraw and read their matrices from the batch buffer. Measured on the heaviest ForwardLit variant: FXC
+// 12.4 s for the fragment alone (298 KB of DXBC, then HLSLcc and glslang), DXC 1 s for both stages to SPIR-V.
 //
 // Include FIRST in every pass that includes FishIndirectInstancing.hlsl, before anything that reaches Core.hlsl
 // (TerrainBrgTests.EveryIndirectPass_HasItsDotsVariant).

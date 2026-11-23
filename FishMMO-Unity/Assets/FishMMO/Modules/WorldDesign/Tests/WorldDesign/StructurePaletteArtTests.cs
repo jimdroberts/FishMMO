@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The structure palette made art (2026-10-16, I6a): the palette's ten new surfaces, the part every solid plays, the
+	/// The structure palette made art: the palette's ten new surfaces, the part every solid plays, the
 	/// material keys and their names, the roof rules, and the one invariant that keeps the kit's look (every part's kit
 	/// material is its own). Pure: the builders themselves are exercised in StructureKitTests (they need native maths).
 	/// </summary>
@@ -163,9 +163,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void RoofPitch_KeepsTheKitsAndKnowsTheNewRoofs()
 		{
-			// The kit's own, as built since 2026-10-12.
+			// The kit's own, as built.
 			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Thatch), Is.EqualTo(50f));
-			// Turf was laid on any pitch until 2026-10-18 (I6h: "earth roofs are pitched sod/turf, only adobe gives flat roofs"):
+			// Turf was laid on any pitch formerly ("earth roofs are pitched sod/turf, only adobe gives flat roofs"):
 			// sod at 35°. No kit roof is built differently for it (the turf longhouse's own rise is the larger).
 			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Earth), Is.EqualTo(35f));
 			foreach (StructureMaterial m in AllMaterials.Except(PaletteMaterials).Except(new[] { StructureMaterial.Thatch, StructureMaterial.Earth }))
@@ -461,9 +461,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				string text = ProjectFiles.ReadAllText(file);
 				string name = Path.GetFileName(file);
-				if (name == "WaypointFeature.cs")
+				if (name == "WaypointFeature.cs" || name == "GateStoneFeature.cs")
 				{
-					continue; // a waypoint's own prefab, not a kit piece
+					continue; // a waypoint's own prefab (a Gate Stone is one), not a kit piece
 				}
 				bool makesObjects = text.Contains("Object.Instantiate(prefab") || text.Contains("PrefabUtility.InstantiatePrefab(prefab");
 				Assert.That(!makesObjects || text.Contains("StructurePaletteDressing.Dress("), Is.True, $"{name} makes scene objects of pieces without dressing them in the palette");

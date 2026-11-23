@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The ground's rock and crystal scatter ranges wide and leans small (2026-10-20: "we want massive crystals"): BiomeArtSpec's
+	/// The ground's rock and crystal scatter ranges wide and leans small ("we want massive crystals"): BiomeArtSpec's
 	/// pass over every entry, the earlier version kept for the authoring tool, and the plants left as they were.
 	/// </summary>
 	public class MassiveScatterTests

@@ -34,6 +34,8 @@
                 <ui:Label name="header-title" class="fish-panel__title map-header__title" text="WORLD MAP" />
                 <ui:Label name="header-subtitle" class="fish-panel__subtitle map-header__subtitle" text="" />
             </ui:VisualElement>
+            <!-- Which entered scene the map shows; hidden while there is only one. -->
+            <ui:DropdownField name="map-scene-select" class="fish-dropdown map-header__scene" />
             <ui:Button name="close-button" class="fish-close-btn" text="✕" />
         </ui:VisualElement>
 

@@ -12,10 +12,10 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Client.Weather.Editor")]
 [assembly: InternalsVisibleTo("FishMMO.Shared.Biomes.Editor")]
-// The Items module's inventory system moved out of this assembly (Phase 5, 2026-11-20); it and its tests keep the access.
+// The Items module's inventory system moved out of this assembly; it and its tests keep the access.
 [assembly: InternalsVisibleTo("FishMMO.Items.Server")]
 [assembly: InternalsVisibleTo("FishMMO.Items.Tests")]
-// The Combat module's system took the death, respawn and resurrect handlers out of this assembly (Phase 5, 2026-11-20).
+// The Combat module's system took the death, respawn and resurrect handlers out of this assembly.
 [assembly: InternalsVisibleTo("FishMMO.Combat.Server")]
 [assembly: InternalsVisibleTo("FishMMO.Combat.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Abilities.Tests")]

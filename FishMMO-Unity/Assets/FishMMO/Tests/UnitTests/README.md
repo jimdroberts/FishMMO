@@ -1,6 +1,6 @@
 # FishMMO Unit Tests
 
-The core's test suite: **397 fixtures / ~3,660 test methods** (counted 2026-11-19), in two assemblies:
+The core's test suite: **397 fixtures / ~3,660 test methods**, in two assemblies:
 
 - **`FishMMO.UnitTests`**: 390 EditMode fixtures, all running without a NetworkManager, a
   physics simulation, or a live server.
@@ -21,11 +21,11 @@ files checks `InstalledModules` and skips when the module is removed.
 | **Servers & operations** | `Server/` | 14 | Scene placement and instance lifetimes, world routing and its clock, the world-queue place memory, shutdown countdowns, maintenance and daemon clocks, server bandwidth |
 | **PlayMode sims** | `PlayMode/` | 7 | The four simulation scenes, the prediction probe, the prop collider streamer, and an `Update`-dispatch cost probe |
 | **Currency** | `Currency/` | 3 | Spend/grant paths and the persisted ledger numbering (the map's tests are the Map module's) |
-| **Persistence, travel, NPC designer, modules** | `Persistence/`, `Teleport/`, `Waypoint/`, `NPC/`, `CoreModules/` | 6 | The 2026-09-07 persistence audit invariants, teleporter keys, waypoint unlock bits, the dashboard NPC designer, the core's own modules |
+| **Persistence, travel, NPC designer, modules** | `Persistence/`, `Teleport/`, `Waypoint/`, `NPC/`, `CoreModules/` | 6 | The persistence audit invariants, teleporter keys, waypoint unlock bits, the dashboard NPC designer, the core's own modules |
 
 The suite is a **regression ledger** as much as a test suite: a large share of the
 `Prediction/` fixtures are named after the audit that found the defect
-(`CombatAudit20260831Round3Tests`, `PredictionAuditRegressionTests`,
+(`CombatAudit3Round3Tests`, `PredictionAuditRegressionTests`,
 `AuditFollowUpFixTests`) and each test names the defect it pins.
 
 ### The authentication harness
@@ -158,7 +158,7 @@ Assets/FishMMO/Tests/UnitTests/
 ├── Currency/                     (3)         # Spend/grant path, persisted ledger numbering, trade currency settlement
 ├── Housing/                     (14)         # Plot identity, access, placement, lifecycle, tax billing and routing, fees, sync window
 ├── NPC/                          (1)         # Dashboard NPC designer / NPCPrefabFactory
-├── Persistence/                  (1)         # 2026-09-07 persistence audit invariants
+├── Persistence/                  (1)         # persistence audit invariants
 ├── Prediction/                  (97)         # Prediction, combat, observers, bandwidth
 ├── Server/                      (12)         # Placement, instance lifetimes, world routing, shutdown, maintenance, daemon, bandwidth
 ├── Teleport/                     (1)         # Teleporter key + live-vs-baked waypoints
@@ -287,9 +287,9 @@ single method, and are the right place to start reading:
 | File | Pins |
 | --- | --- |
 | `PredictionSystemMapTests.cs` | An enforced map of what is predicted, what is interpolated, and what rides a broadcast |
-| `PredictionAuditRegressionTests.cs` | The 2026-08-28 audit's 35 defects across three rounds |
-| `CombatAuditRoundTwoTests.cs`, `CombatAuditFollowUpTests.cs`, `CombatAudit20260830Tests.cs`, `CombatAudit20260830FixTests.cs` | The 2026-08-29 and 2026-08-30 combat audits and the fixes applied after them |
-| `CombatAudit20260831Tests.cs`, `CombatAudit20260831Round3Tests.cs`, `CombatAudit20260831RecommendedFixTests.cs` | The 2026-08-31 audit, its round 3, and the ten recommendations the follow-up session implemented |
+| `PredictionAuditRegressionTests.cs` | The audit's 35 defects across three rounds |
+| `CombatAuditRoundTwoTests.cs`, `CombatAuditFollowUpTests.cs`, `CombatAudit2Tests.cs`, `CombatAudit2FixTests.cs` | The combat audits and the fixes applied after them |
+| `CombatAudit3Tests.cs`, `CombatAudit3Round3Tests.cs`, `CombatAudit3RecommendedFixTests.cs` | The audit, its round 3, and the ten recommendations the follow-up session implemented |
 | `AuditFollowUpFixTests.cs`, `RiskRemediationTests.cs`, `RegressionHistoryTests.cs` | Remaining audit follow-ups and the historical broadcast-path divergence |
 | `LagCompensationClosedLoopTests.cs` | **"You hit what you saw"** — composes the client and server halves of the rewind derivation across a spread of round trips and asserts sub-millimetre agreement |
 | `LagCompensationTests.cs` | The position ring's resolution, clamping and refusal rules |
@@ -297,7 +297,7 @@ single method, and are the right place to start reading:
 | `ReconcileDeltaChainTests.cs`, `DeltaSerializerStreamAlignmentTests.cs`, `ReplicateDeltaPacketTests.cs` | The delta chain's loss detection and framing |
 | `DeltaSerializerRegistrationTests.cs` | Fails the build when a prediction type has no delta serializer — the condition FishNet used to report at runtime |
 | `ObserverSynchronizationProofTests.cs`, `AbilityObserverReproductionTests.cs`, `LateJoinerReplayTests.cs` | That a late joiner reconstructs what a continuous observer holds |
-| `ObserverStreamingPolicyTests.cs`, `ObserverCullingAuditTests.cs`, `ObserverInterestBoundaryTests.cs`, `ObserverSendShapingTests.cs` | Per-observer relevance, LOD intervals, density-scaled range, and the 2026-09-08 culling audit's outcome |
+| `ObserverStreamingPolicyTests.cs`, `ObserverCullingAuditTests.cs`, `ObserverInterestBoundaryTests.cs`, `ObserverSendShapingTests.cs` | Per-observer relevance, LOD intervals, density-scaled range, and the culling audit's outcome |
 | `ObservedBuffBaselineTests.cs`, `ObservedBuffDeltaTests.cs`, `ObservedBuffSimulationTests.cs` | The observed-buff contract: what the server may re-baseline, and that an observed peer counts its own durations down without applying effects |
 | `TargetSelectorBodyIdentityTests.cs`, `SpatialQueryGrowLoopTests.cs`, `OverlapHitRootResolutionTests.cs`, `EcaDeterminismTests.cs` | Hit-root resolution, per-body dedupe, grow-on-full, broadphase-order independence |
 | `PredictedSelectionTests.cs`, `PredictedCombatEventTests.cs`, `PredictedAbilityStateHistoryTests.cs` | Selection is not authority; the predict/confirm/reject cycle for numbers the caster draws itself |
@@ -340,13 +340,13 @@ One line per fixture, from its `<summary>`.
 | `AIPersonalityIntentAssetTests.cs` | Asserts that the shipped personality assets actually lean the way their names promise, now that leaning is the only thing steering an archetype toward the right half of its spellbook. |
 | `AIRetreatBudgetTests.cs` | Pins the memory that lets a chase end: the cumulative retreat cap, the hold once it is spent, and the hold imposed by choosing to turn and fight (issue #262). |
 | `AIRetreatDecisionTests.cs` | Pins the rules that stop a fleeing NPC running forever (issue #262). |
-| `AIScheduleSpreadTests.cs` | Pins how NPC brain work is spread across network ticks, and the per-tick body work a brain skips when there is nothing to do (hot-path audit, 2026-09-25: M1, M3, M4, L9). |
+| `AIScheduleSpreadTests.cs` | Pins how NPC brain work is spread across network ticks, and the per-tick body work a brain skips when there is nothing to do (hot-path audit: M1, M3, M4, L9). |
 | `AISeparationTests.cs` | Pins the scene-scoped NPC separation that replaces NavMesh crowd avoidance (issue #220). |
 | `AIStateClockTests.cs` | Pins that a state update is told the real interval it covers, not one brain tick. |
-| `AIThreatEntryTests.cs` | Pins how an NPC enters combat from a hit and how it evades on a leash return (hot-path audit, 2026-09-25: H9, L10, L11, L12). |
+| `AIThreatEntryTests.cs` | Pins how an NPC enters combat from a hit and how it evades on a leash return (hot-path audit: H9, L10, L11, L12). |
 | `AIThreatIntegrationTests.cs` | Proofs for the parts of the threat system that exist to be driven from outside the AI — taunts and scripted aggro grabs. |
 | `AggressionControllerTests.cs` | Proofs for the NPC threat table. |
-| `AggressionReverseIndexTests.cs` | Pins the dispatcher's reverse index — character ID to the NPCs whose tables track it — that heal and kill events are routed through (hot-path audit, 2026-09-25: M5). |
+| `AggressionReverseIndexTests.cs` | Pins the dispatcher's reverse index — character ID to the NPCs whose tables track it — that heal and kill events are routed through (hot-path audit: M5). |
 | `BossAddLifetimeTests.cs` | A boss's adds: which NPCs are the boss's to send away, that a leash reset sends them away, and the cap on how many a timed mechanic keeps alive. |
 | `NPCPackTests.cs` | Pins spawner-owned NPC packs (optional change O33): who is in a pack and when they leave, when a pack is released, how a respawn finds its pack again, how the brain host ticks packs inside the AI tick and LOD contract, the tactic geometry, and the boss adds that join a boss's pack. |
 | `NavMeshSceneBakeTests.cs` | Pins the NavMesh bake settings a terrain scene needs for NPCs to stand on the ground. |
@@ -402,15 +402,15 @@ One line per fixture, from its `<summary>`.
 
 | File | Pins |
 | --- | --- |
-| `AIShelterTests.cs` | Whether an NPC goes and stands out of the weather, and which cover it picks (Q15). |
-| `BuffVolumeTests.cs` | Which region buffs a character standing at a point should have (N13). |
+| `AIShelterTests.cs` | Whether an NPC goes and stands out of the weather, and which cover it picks. |
+| `BuffVolumeTests.cs` | Which region buffs a character standing at a point should have. |
 | `CelestialTimeTests.cs` | Day and night from the solar system, and the world clock every scene reads them from. |
 | `SkyTests.cs` | The sky: where bodies appear in a scene, the events a changing sky raises, the colours a sun altitude gives, the lightning and meteor schedules every client must agree on, and the rule that one component owns the render settings the sky needs. |
 | `StormCellShapeTests.cs` | The shapes a storm covers the ground in: a disc, a front, a hurricane's eye, a tornado. |
 | `SurfaceShaderTests.cs` | The weather surface shaders are copies of URP's own, with a few edits. |
-| `WeatherContentTests.cs` | The content layer over the weather (Q16): what a designer can gate a spawn on, test in a trigger, and scale an ability by. |
+| `WeatherContentTests.cs` | The content layer over the weather: what a designer can gate a spawn on, test in a trigger, and scale an ability by. |
 | `WeatherExposureStateTests.cs` | What the weather has to be doing to put a character into a state, how fast it builds and wears off, and how those levels survive the wire. |
-| `WeatherExposureTickTests.cs` | The closed loop between the prediction replicate's tick and the tick the weather is read at (N12). |
+| `WeatherExposureTickTests.cs` | The closed loop between the prediction replicate's tick and the tick the weather is read at. |
 | `WeatherHostSchedulingTests.cs` | The weather host's scene rotation and resync rule, and the terrain lookup every weather and biome sample goes through. |
 | `WeatherModelTests.cs` | The weather model both sides evaluate: how layers blend, how a storm re-types with the temperature, how cover builds and clears, and how the timeline moves between revisions. |
 | `WeatherPresentationTests.cs` | The client's weather presentation, minus the GPU: fog laid over region fog, which kinds are drawn and how they fall, the precipitation mesh, the sky occlusion map, audio levels and the shader globals. |
@@ -436,8 +436,8 @@ One line per fixture, from its `<summary>`.
 | `Currency/CurrencyLedgerStateTests.cs` | Tests for the currency ledger's persisted numbering. |
 | `Currency/TradeCurrencySettlementTests.cs` | Proofs for the currency half of a trade's commit: credits applied at the apply and held, exact reversal on a refusal, and the save path leaving a settling attribute to the trade. |
 | `NPC/NPCPrefabFactoryTests.cs` | Pins what the dashboard's NPC designer produces: a prefab cloned from a working base with exactly the recipe's race, brain, stats, kit and role written onto it, and nothing foreign left inside. |
-| `Persistence/PersistenceAuditTests.cs` | Pins the invariants the 2026-09-07 persistence audit restored: factions and archetypes carry a dirty mark and a version that advances on mutation, restored rows are clean, a pooled attribute forgets its previous occupant's version stream, the faction reader refuses a frame too short to hold its header, and the player prefab requires every controller the save legs write. |
-| `Teleport/TeleportTests.cs` | Pins the teleport-system rules that were fixed on 2026-09-08: the one spelling of a teleporter's lookup key, and the live-vs-baked waypoint comparison. |
+| `Persistence/PersistenceAuditTests.cs` | Pins the invariants the persistence audit restored: factions and archetypes carry a dirty mark and a version that advances on mutation, restored rows are clean, a pooled attribute forgets its previous occupant's version stream, the faction reader refuses a frame too short to hold its header, and the player prefab requires every controller the save legs write. |
+| `Teleport/TeleportTests.cs` | Pins the teleport-system rules that were: the one spelling of a teleporter's lookup key, and the live-vs-baked waypoint comparison. |
 | `Waypoint/WaypointTests.cs` | Pins the waypoint system's invariants: the bit set that is the unlock record, the travel rules as a truth table, the framed spawn payload, the map's "unlocked or invisible" rule, and the achievement dirty tracking the waypoint achievements depend on. |
 
 ### Harness files (`Harness/`)

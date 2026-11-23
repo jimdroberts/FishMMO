@@ -13,7 +13,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The party in the Social module (Phase 3, 2026-11-16): the core reads a membership through a read-only
+	/// The party in the Social module: the core reads a membership through a read-only
 	/// <see cref="IPartyController"/> and changes it only through <see cref="IPartySystem{TConnection}"/>; everything else
 	/// about a party is the module's.
 	/// </summary>

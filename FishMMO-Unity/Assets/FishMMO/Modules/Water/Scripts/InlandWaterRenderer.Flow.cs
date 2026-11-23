@@ -26,7 +26,7 @@ namespace FishMMO.Water
 		private SceneContentLoads.Load flowContentLoad;
 
 		/* Each lake, river, curtain and spray draws with a copy of its material of its own, carrying its numbers in the
-		 * shader's UnityPerMaterial (2026-10-28). They rode property blocks, and a renderer with a block is drawn outside the
+		 * shader's UnityPerMaterial. They rode property blocks, and a renderer with a block is drawn outside the
 		 * SRP Batcher: URP set up each river's whole shader state again (a SetPass call per river); copies of one shader
 		 * variant batch, uploading only each one's constants. Same draws, same order (sortingOrder), same stencil. */
 		private readonly DrawMaterials surfaceCopies = new DrawMaterials("inland water");
@@ -161,7 +161,7 @@ namespace FishMMO.Water
 				ApplyRiverLook(pair.Key, own);
 			}
 			ApplyLakeLooks();
-			// And each fall's sheet and spray, the look of the water it pours from (Looks, 2026-10-18).
+			// And each fall's sheet and spray, the look of the water it pours from (Looks).
 			ApplyFallLooks();
 		}
 

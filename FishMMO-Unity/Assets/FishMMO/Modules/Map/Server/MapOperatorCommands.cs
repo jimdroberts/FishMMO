@@ -11,20 +11,18 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// <c>/gm reveal map|waypoints|sites|all</c>: hands the caller the scene they stand in as if they had walked all of it
-	/// (Jim, 2026-11-22).
+	/// <c>/gm reveal map|waypoints|sites|all</c>: hands the caller the scene they stand in as if they had walked all of it.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>The caller only, this scene only</b> (Jim: usable on GMs and admins, never on players; current scene, self only).
+	/// <b>The caller only, this scene only</b> (usable on GMs and admins, never on players; current scene, self only).
 	/// There is no character argument, so the only character it can touch is the staff member typing it.
 	/// </para>
 	/// <para>
-	/// <b>Map</b> asks the caller's client to explore the scene (<see cref="MapRevealBroadcast"/>): exploration lives in the
-	/// player's own files. <b>Waypoints</b> unlocks every waypoint registered in the scene through the waypoint controller,
+	/// <b>Map</b> records the whole scene as explored in the account's server-side fog (<c>MapFogSystem.RevealEverything</c>),
+	/// then asks the caller's client to draw it (<see cref="MapRevealBroadcast"/>). <b>Waypoints</b> unlocks every waypoint registered in the scene through the waypoint controller,
 	/// so they are saved and announced exactly as one found on foot. <b>Sites</b> marks every point of interest discovered
-	/// in the character's record. Both credit the achievement the content counts them with (Jim: "mark discovered +
-	/// credit"): the <see cref="AchievementIncrementAction"/> that follows the unlock or discovery action in the waypoint's
+	/// in the character's record. Both credit the achievement the content counts them with: the <see cref="AchievementIncrementAction"/> that follows the unlock or discovery action in the waypoint's
 	/// or site's own triggers, once per newly found one, so an already found one is never counted twice. Neither can be
 	/// undone: unlock and discovery bits are only ever set.
 	/// </para>
@@ -93,6 +91,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return "Map: you have no client to reveal it on.";
 			}
 			string sceneName = character.CurrentSceneName();
+			// Recorded on the server (account-wide fog), then drawn on the client.
+			MapFogSystem.Current?.RevealEverything(character);
 			owner.Broadcast(new MapRevealBroadcast() { SceneName = sceneName });
 			return $"Map: {sceneName} explored.";
 		}

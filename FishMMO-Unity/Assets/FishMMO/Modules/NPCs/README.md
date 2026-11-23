@@ -11,7 +11,7 @@ systems, and the editor tools that design NPC prefabs and manage AI assets.
 | **Depends on** | The core; Abilities (an NPC casts); Buffs (the AI reads and applies buffs); Combat |
 | **Depended on by** | Pets, Wildlife (both drive their creatures with this AI), Staff (simulated players), World Design (spawner placement) |
 | **Remove together with** | Pets, Wildlife, Staff, World Design |
-| **Moved** | Out of the core, 2026-11-20 |
+| **Moved** | Out of the core |
 
 The NPC character itself (`NPC`) stays in the core: a merchant or quest giver needs no brain.
 

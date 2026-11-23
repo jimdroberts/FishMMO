@@ -16,7 +16,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Achievements module (2026-11-20): accomplishments counted toward achievements, the save participant, dirty
+	/// The Achievements module: accomplishments counted toward achievements, the save participant, dirty
 	/// tracking, and the wiring that lets the folder be removed (a part, a label-adopted system, a label-placed window).
 	/// Moved from CharacterCoreTests and WaypointTests with the module.
 	/// </summary>

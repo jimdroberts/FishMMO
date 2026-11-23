@@ -12,7 +12,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2n "caves have a biome" (2026-10-25; decisions 37, 46, 51, 57): the per-form interior links, the shells an interior
+	/// The per-form interior links, the shells an interior
 	/// forms in, the template formations and glow (defaults = the dressing's old rules, so nothing moves until a round changes them),
 	/// the underground band, the Glow fallback for linked lights, the host's accent crystals, the merged variant weights, the cave
 	/// life's interior id, and the wiring of every consumer. Pure: no Unity object is made (templates are native).
@@ -36,7 +36,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeCaveInteriors.TryLink(forest, BiomeCaveForm.Grotto, out string grotto) && grotto == "Cave", Is.True);
 			Assert.That(BiomeCaveInteriors.TryLink(forest, BiomeCaveForm.Mine, out _), Is.False);
 			// The spec writes exactly the defaults until a round names its own: the swamps link their caves and grottos to the Swamp
-			// Cave (2026-10-25, decisions 86–88, I2n-c), every other form as the defaults.
+			// Cave, every other form as the defaults.
 			var swamps = new[] { "Swamp", "Swamp Ruins", "Swamp Temple" };
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
@@ -47,7 +47,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				if (SeaHallTests.Hosts.Any(h => h.Biome == entry.Biome))
 				{
-					// The sea halls' hosts (2026-10-26, I2n-b, decision 83), the link last in the forms' order.
+					// The sea halls' hosts, the link last in the forms' order.
 					expected.Add("SeaHall=Subsurface Ocean Vent");
 				}
 				Assert.That(entry.CaveInteriors().Select(l => l.ToString()), Is.EqualTo(expected), entry.Biome);
@@ -68,11 +68,11 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(BiomeCaveInteriors.Holds(BiomeCaveForm.Cave, cave, rock), Is.False, rock ?? "null");
 			}
-			// Decision 51: ice and the rock ice caves' rocks.
+			// Ice and the rock ice caves' rocks.
 			List<string> ice = BiomeCaveInteriors.DefaultInteriorRocks("Ice Cave");
 			Assert.That(new[] { "Ice", "Limestone", "Dolomite", "Marble", "Gypsum" }.All(r => BiomeCaveInteriors.Holds(BiomeCaveForm.IceCave, ice, r)), Is.True);
 			Assert.That(BiomeCaveInteriors.Holds(BiomeCaveForm.IceCave, ice, "Chalk"), Is.False);
-			// Decision 57: basalt, whatever the Lava Tube's own air.
+			// Basalt, whatever the Lava Tube's own air.
 			List<string> tube = BiomeCaveInteriors.DefaultInteriorRocks("Lava Tube");
 			Assert.That(tube, Is.EqualTo(new[] { "Basalt" }));
 			Assert.That(BiomeCaveInteriors.Holds(BiomeCaveForm.LavaTube, tube, "Basalt"), Is.True);
@@ -146,7 +146,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(palette, Does.Contain("FungusWeight = 1f,"));
 			string glow = Code(WorldFolder + "/PointsOfInterest/Features/PointOfInterestCaveDressing.Glow.cs");
 			Assert.That(glow, Does.Contain("return fungus == 1f ? share : BiomeCaveInteriors.CrystalShare(share, fungus);"));
-			// 2026-10-26 (I2n-c): the worms' mount weighs the roof colonies too, ×1 on the roof (every biome's): as it was.
+			// The worms' mount weighs the roof colonies too, ×1 on the roof (every biome's): as it was.
 			Assert.That(glow, Does.Contain("chance *= Colours().WormChance * BiomeCaveWaters.RoofShare(Colours().WormMount);"));
 			Assert.That(BiomeCaveWaters.RoofShare(BiomeCaveWormMount.Roof), Is.EqualTo(1f));
 		}
@@ -178,7 +178,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeCaveInteriors.ForAir(in route, false).Light, Is.EqualTo(BiomeWayLightKind.CrystalPost));
 			var glowjar = new BiomeCaveLight(BiomeCaveLightPlace.Camp, BiomeWayLightKind.Glowjar, 0f);
 			Assert.That(BiomeCaveInteriors.ForAir(in glowjar, false).ToString(), Is.EqualTo(glowjar.ToString()));
-			// Decision 57: a thin/airless-only interior keeps fire cave lights; others as I2o.
+			// A thin/airless-only interior keeps fire cave lights; others as before.
 			Assert.That(BiomeCaveInteriors.GlowCaveLights(true, true), Is.False);
 			Assert.That(BiomeCaveInteriors.GlowCaveLights(true, false), Is.True);
 			string art = Code(WorldFolder + "/Terrain/CaveInteriorArt.cs");

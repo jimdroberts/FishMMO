@@ -6,7 +6,7 @@ using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Scene view label of an object spawner (the NPCs module's since 2026-11-20), drawn with the core label helpers in
+	/// The Scene view label of an object spawner (the NPCs module's), drawn with the core label helpers in
 	/// <see cref="SceneObjectGizmoLabelDrawer"/>.
 	/// </summary>
 	public static class ObjectSpawnerGizmoLabelDrawer

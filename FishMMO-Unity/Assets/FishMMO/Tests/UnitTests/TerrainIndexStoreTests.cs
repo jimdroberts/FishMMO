@@ -8,7 +8,7 @@ using Random = System.Random;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Stored index maps (decision 24, 2026-10-16): the cut's CPU bake of a tile's alphamaps
+	/// Stored index maps: the cut's CPU bake of a tile's alphamaps
 	/// (<see cref="TerrainIndexMap.Bake(float[,,])"/>) is the GPU bake's texels exactly, a stored map is drawn only while it
 	/// is current, a client build leaves a tile's alphamaps out only when its stored map is theirs texel for texel, and the
 	/// CPU readers that used the alphamaps (the grass's surface layers, the ground colour map) read the same layers off a

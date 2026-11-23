@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What hangs from a cave's roof and what piles under it (2026-10-20, caves livened): glow-worm silk fringes along a damp
+	/// What hangs from a cave's roof and what piles under it (caves livened): glow-worm silk fringes along a damp
 	/// roof joint, long tap roots that come down through a thin roof to the floor, and the guano heaps under a bat roost.
 	/// Built as the rest of the glow art is (<see cref="Build"/>), three levels each; their kinds, hues and materials are
 	/// ProceduralArtCatalogue.Cave.cs's (<see cref="CaveGlowKind.GlowSilk"/>, <see cref="CaveGlowKind.TapRoots"/>,
@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly float[] GlowSilkSpans = { 2.4f, 3.6f, 1.2f };
 
 		/// <summary>
-		/// Glow-worm silk along a roof joint (2026-10-20): where water seeps through a crack in a damp roof the larvae line it,
+		/// Glow-worm silk along a roof joint: where water seeps through a crack in a damp roof the larvae line it,
 		/// each hanging its snare straight down in the still air, beaded with sticky droplets evenly spaced as the mucus beads
 		/// along a thread. The colony's snares (<see cref="GlowWorms"/>) are a few hand-spans long; these are the long ones of a
 		/// fantasy cave's oldest colonies, 0.25–1.6 m, so a fringe reads from across a passage as lines of light. The larva at
@@ -107,7 +107,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float TapRootLength = 4f;
 
 		/// <summary>
-		/// Tree roots that have come down through a thin roof all the way to the floor (2026-10-20), as roots do in a shallow cave
+		/// Tree roots that have come down through a thin roof all the way to the floor, as roots do in a shallow cave
 		/// under a wood: they follow the joints down, hang free across the void, and where they reach the floor spread over it in
 		/// rootlets feeling for water. Hung from the roof at the origin, <see cref="TapRootLength"/> long (the dressing scales
 		/// y so their feet stand on the floor; their horizontal rootlets are unchanged by it). Not lit: the root material (pale
@@ -275,7 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly float[] GuanoRadii = { 0.7f, 1.3f, 1.0f };
 
 		/// <summary>
-		/// A heap of bat guano under a roost (2026-10-20): droppings pile where a colony hangs year after year, a low mound with a
+		/// A heap of bat guano under a roost: droppings pile where a colony hangs year after year, a low mound with a
 		/// ragged edge, steepening into cones under the spots most hung from (guano stalagmites), the fresh top darker and moist,
 		/// the old crust round its foot pale and dry. A floor piece, origin at its foot's middle; its skirt runs a little under
 		/// the floor so it seats on uneven rock. The glow coordinate is only its brightness through the ramp (it does not glow): low

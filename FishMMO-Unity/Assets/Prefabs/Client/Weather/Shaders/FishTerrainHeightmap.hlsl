@@ -1,4 +1,4 @@
-// FishMMO: the client's own draw of the terrain heightmaps (TerrainHeightmapSystem, 2026-10-28), shared by the patch selection
+// FishMMO: the client's own draw of the terrain heightmaps (TerrainHeightmapSystem), shared by the patch selection
 // (FishTerrainHeightmap.compute) and the patches' vertex stage (FishMMO/Weather Terrain Array GPU, FISH_TERRAIN_GPU).
 //
 // Every tile of a scene is drawn as one quadtree of 16 x 16-quad patches (TerrainHeightmapMath.PatchQuads), all tiles in one

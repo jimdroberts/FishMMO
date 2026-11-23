@@ -65,7 +65,7 @@ namespace FishMMO.Shared.Biomes
 			[Tooltip("How far past its half-width the water reaches on its left and right (looking downstream) at each point, metres, where the cut ground lies under it: a scoured pool wider than its channel. Empty for none.")]
 			public float[] ShoreLeft = Array.Empty<float>();
 			public float[] ShoreRight = Array.Empty<float>();
-			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body before 2026-10-25). A cave's water takes the look of the cave biome dressing its inside (I2n-c), where that biome has a look of its own.")]
+			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body formerly). A cave's water takes the look of the cave biome dressing its inside, where that biome has a look of its own.")]
 			public int LookBiome;
 		}
 
@@ -99,7 +99,7 @@ namespace FishMMO.Shared.Biomes
 			public float MaskCell = 4f;
 			public int MaskWidth;
 			public int MaskHeight;
-			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body before 2026-10-25). A cave's water takes the look of the cave biome dressing its inside (I2n-c), where that biome has a look of its own.")]
+			[Tooltip("The biome whose water look this body takes, by its id; 0 by its shores (every body formerly). A cave's water takes the look of the cave biome dressing its inside, where that biome has a look of its own.")]
 			public int LookBiome;
 
 			/// <summary>True when the lake's water stands over a scene position.</summary>
@@ -120,7 +120,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// How far under its surface a carved surface pool's floor is taken to lie, metres (2026-10-21): a paddy, a terrace's
+		/// How far under its surface a carved surface pool's floor is taken to lie, metres: a paddy, a terrace's
 		/// tread, a canal's pound or a hot spring is never so deep (the deepest, a spring's pool, about three metres), and no
 		/// cave's water lies so near the ground (its roof keeps three metres of rock, its passage stands over its water).
 		/// </summary>

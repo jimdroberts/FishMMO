@@ -39,7 +39,7 @@ session in the editor.
 Housing is **off by default**. `HousingOwnershipMode.Neither` means a server that has not asked
 for housing carries none of its persistent world state, recurring tax, or destruction of unpaid
 plots. The `HousingSystem.asset` listed in `SceneServer.unity` was switched to `Player` with a rent
-of 50 every 7 days on 2026-11-15, to test generated plots; `Neither` turns it all off again.
+of 50 every 7 days, to test generated plots; `Neither` turns it all off again.
 
 A scene whose plots cannot be resolved yet is retried on a timer, never every frame: 30 s after a
 database failure, 5 s after the async worker refused the work, 1 s while the scene still waits for
@@ -55,7 +55,7 @@ Fifteen client requests, all registered `requireAuthentication: true` (the thirt
 `HousingVaultForfeitBroadcast`, and the plot panel's `HousingPlotInfoRequestBroadcast`,
 `HousingClaimBroadcast` and `HousingReleaseBroadcast`.
 
-**Interacting with a plot does not buy it** (2026-11-15). Generated plots carry the `Plot Interact`
+**Interacting with a plot does not buy it**. Generated plots carry the `Plot Interact`
 trigger, whose `OpenPlotPanelAction` asks the server to describe the plot
 (`PlotFoundation.Registry.OnPanelRequested`); the server answers with `HousingPlotInfoBroadcast`
 (price, size, owner name, rent, and — to the owner only — when rent falls due and how long it has

@@ -148,7 +148,7 @@ namespace FishMMO.Client
 			/// </summary>
 			/// <remarks>
 			/// A shader that poses its vertices (the wildlife's gait, bite and fall) is drawn into the mask by its own pass;
-			/// the generic mask knows nothing of the pose, so a dead animal's outline stood up (11-16).
+			/// the generic mask knows nothing of the pose, so a dead animal's outline stood up.
 			/// </remarks>
 			private readonly List<Material> drawOwnMaterial = new List<Material>();
 

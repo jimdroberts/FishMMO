@@ -284,7 +284,7 @@ namespace FishMMO.Water
 
 		// ── The sea state, a pure function of the world clock ──────────────
 		//
-		// 2026-10-15 ("everything needs to be deterministic and properly driven by WorldTime"): the sea was eased per client
+		// "everything needs to be deterministic and properly driven by WorldTime": the sea was eased per client
 		// on its own frame steps from whatever wind it had last held, a client that joined snapped to the wind of the
 		// moment while the others lagged it, and its fetch was re-measured whenever its own eased heading swung twelve
 		// degrees past the last — so two players on one coast could see different seas, surf and breakers for as long as

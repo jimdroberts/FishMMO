@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The World Design module (Phase 4 of the core and modules plan, 2026-11-18): the world's editor tools live in
+	/// The World Design module: the world's editor tools live in
 	/// <c>Assets/FishMMO/Modules/WorldDesign</c> and plug into the core editor through its seams; the dashboards, the weather
 	/// content generator and the core tools name none of them.
 	/// </summary>

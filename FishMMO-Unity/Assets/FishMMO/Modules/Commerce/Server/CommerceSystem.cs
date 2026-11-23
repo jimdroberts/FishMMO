@@ -17,7 +17,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// trade is the module's <see cref="TradeSystem"/>.
 	/// </summary>
 	/// <remarks>
-	/// The Commerce module (Phase 3, 2026-11-17). These were partials of <c>InteractableSystem</c>; they are their own
+	/// The Commerce module. These were partials of <c>InteractableSystem</c>; they are their own
 	/// system now, with their own request guard and main-thread queue, so a game without commerce leaves the module out.
 	/// Merchants and mailboxes placed in the world stay in the core, and their ECA actions open the windows; a corpse's
 	/// loot window opens from <see cref="IInteractableSystem.OnPlayerInteracting"/>.

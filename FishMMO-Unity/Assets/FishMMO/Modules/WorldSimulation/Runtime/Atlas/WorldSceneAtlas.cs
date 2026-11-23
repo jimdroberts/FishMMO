@@ -8,8 +8,8 @@ namespace FishMMO.Shared
 	/// its time of day.
 	/// </summary>
 	/// <remarks>
-	/// The world atlas's extension of the core's <see cref="WorldSceneSettings"/> (Phase 4 of the core and modules plan,
-	/// 2026-11-17): these were properties of the component, and are the same reads, so <c>settings.Body()</c> is what
+	/// The world atlas's extension of the core's <see cref="WorldSceneSettings"/>:
+	/// these were properties of the component, and are the same reads, so <c>settings.Body()</c> is what
 	/// <c>settings.Body</c> was. The core itself sees only <see cref="WorldSceneSettings.Entry"/>.
 	/// </remarks>
 	public static class WorldSceneAtlas

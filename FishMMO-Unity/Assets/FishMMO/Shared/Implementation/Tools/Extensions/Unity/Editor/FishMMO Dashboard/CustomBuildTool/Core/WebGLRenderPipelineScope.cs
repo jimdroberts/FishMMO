@@ -14,7 +14,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 	/// WebGPU cannot use Unity's GPU Resident Drawer. Serialize browser pipelines without that mode,
 	/// which otherwise forces DOTS/probe-atlas shader paths. Restore the Editor/native configuration
 	/// after content AND player writes, including recovery after a native Editor crash.
-	/// BatchRendererGroup variants are KEPT (2026-11-01): the GPU-driven props/trees draw through a batch group in the browser
+	/// BatchRendererGroup variants are KEPT: the GPU-driven props/trees draw through a batch group in the browser
 	/// too, and ClientShaderBuildProcessor removes every other shader's DOTS variants from WebGPU builds, as StripAll did.
 	/// Serialize native resolution / MSAA before the first camera can request an unavailable STP kernel.
 	/// </summary>

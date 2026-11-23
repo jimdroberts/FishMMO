@@ -91,7 +91,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// With a pin held, one press moves it to the character under the pointer; pointing at the pinned character itself, or
-		/// at nothing, releases it (11-16). The strict toggle it replaced (#286) always released first, so moving a pin took
+		/// at nothing, releases it. The strict toggle it replaced (#286) always released first, so moving a pin took
 		/// two presses.
 		/// </summary>
 		[Test]

@@ -56,7 +56,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Choosing.</b> Each site of a kind draws one of the kind's templates, seeded by the site, weighted by
-	/// <see cref="WeightFor"/>: the biome's weight (the biome template's for the template's variant and style, 2026-10-16),
+	/// <see cref="WeightFor"/>: the biome's weight (the biome template's for the template's variant and style),
 	/// the race's fit, and whether its size class is allowed.
 	/// </para>
 	/// <para>
@@ -87,7 +87,7 @@ namespace FishMMO.Shared.WorldDesign
 		[Min(0f)] public float DefaultBiomeWeight = 1f;
 		/// <summary>
 		/// The biomes this variant was written for, by name: the default the biome art authoring writes onto the biome templates
-		/// (2026-10-16), which the cut reads instead. Only a biome template never authored with its variant weights still
+		///, which the cut reads instead. Only a biome template never authored with its variant weights still
 		/// reads these, by its name, with a warning.
 		/// </summary>
 		public List<PointOfInterestBiomeWeight> BiomeWeights = new List<PointOfInterestBiomeWeight>();
@@ -99,7 +99,7 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Medium = true;
 		public bool Large = true;
 		/// <summary>
-		/// Built only on a world with liquid water on its surface (decision 96, 2026-10-25): a holy well's spring chapel, where its
+		/// Built only on a world with liquid water on its surface: a holy well's spring chapel, where its
 		/// silent well-head stands anywhere. Off for every template written before, so no pick changes (<see cref="WaterFit"/>).
 		/// </summary>
 		public bool NeedsLiquidWater;
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The weight the template's own biome list gives a biome by its asset name (<see cref="BiomeWeights"/>, a later entry
 		/// winning; <see cref="DefaultBiomeWeight"/> for a biome it does not name, or none): what the pick used until
-		/// 2026-10-16, read now only for a biome template never authored with its variant weights (BiomeTemplateArt).
+		/// read now only for a biome template never authored with its variant weights (BiomeTemplateArt).
 		/// </summary>
 		public float BiomeWeightByName(string biomeName)
 		{

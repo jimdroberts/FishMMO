@@ -7,7 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class PointOfInterestRules
 	{
-		/// <summary>The fantasy wave's Dry pack (poi-fantasy-wave/WAVE.md): one row per kind, hosted by no biome by default.</summary>
+		/// <summary>The fantasy set's Dry pack: one row per kind, hosted by no biome by default.</summary>
 		private static IEnumerable<PointOfInterestKindRule> FantasyDryRows()
 		{
 			return new List<PointOfInterestKindRule>

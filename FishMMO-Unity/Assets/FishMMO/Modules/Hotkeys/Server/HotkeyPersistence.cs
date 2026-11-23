@@ -15,8 +15,8 @@ using FishMMO.Server.Core.World.SceneServer;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The hotkey bar's part of the character load and save (moved out of <c>CharacterSystem</c> with the Hotkeys module,
-	/// 2026-11-20). The bar loads with the character; a resident's changes are written by the hotkey system's own pump,
+	/// The hotkey bar's part of the character load and save (moved out of <c>CharacterSystem</c> with the Hotkeys module).
+	/// The bar loads with the character; a resident's changes are written by the hotkey system's own pump,
 	/// so the periodic save captures nothing, and a departing character's bar is written whole from the live bar
 	/// (<see cref="CaptureDeparture"/>), keyed behind anything the pump queued for it.
 	/// </summary>

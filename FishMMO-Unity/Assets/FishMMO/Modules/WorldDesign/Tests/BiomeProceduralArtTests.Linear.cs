@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests
 	public partial class BiomeProceduralArtTests
 	{
 		/// <summary>
-		/// I2f (2026-10-18): one authoring run writes a template's linear features (the woodland's laid hedges since its round G1) and
+		/// One authoring run writes a template's linear features (the woodland's laid hedges since its round G1) and
 		/// marks them as the tool's, a second changes nothing, and a hand-made style is kept beside them. Unity-only (it makes a BiomeTemplate).
 		/// </summary>
 		[Test]

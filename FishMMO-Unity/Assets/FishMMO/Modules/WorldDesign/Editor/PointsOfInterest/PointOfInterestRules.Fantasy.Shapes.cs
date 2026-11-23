@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed partial class PointOfInterestRules
 	{
 		/// <summary>
-		/// The fantasy wave's carved kinds (2026-10-27, poi-fantasy-wave/WAVE.md, cost C): each one's ground is cut by its own shaper
+		/// The fantasy set's carved kinds (cost C): each one's ground is cut by its own shaper
 		/// (Shapers/FantasyShapers.cs, DungeonEntranceShaper for the dwarven gate), so its row asks for the ground the cut needs. Hosted
 		/// by no biome by default (.Only()): the biomes' .Sites name them.
 		/// </summary>

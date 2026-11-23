@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2q-b (2026-10-25, decisions 53, 66, 84, 90, 93, 95): vent layouts along the scene's stored lines, vent timings on the
+	/// Vent layouts along the scene's stored lines, vent timings on the
 	/// shared clock, the new geothermal kinds, a template's own site rate, line heat, the thin-air lean, the melt look, and that every
 	/// template keeps today's vents unless its round names otherwise. Pure: no Unity object is made.
 	/// </summary>
@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests.WorldDesign
 	{
 		private const string BiomeFolder = "Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes";
 
-		/// <summary>The rounds' vent columns (decisions 53, 66, 90, 93, 95): biome → layout/timing signature.</summary>
+		/// <summary>The rounds' vent columns: biome → layout/timing signature.</summary>
 		private static readonly Dictionary<string, string> NamedVents = new Dictionary<string, string>
 		{
 			{ "Ice Geyser Field", new BiomeVents(BiomeVentLayout.Fissures, BiomeVentTiming.PlumeTide).Signature() },
@@ -46,8 +46,8 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That((int)GeothermalKind.MudPot, Is.EqualTo(3));
 			Assert.That((int)GeothermalKind.Jet, Is.EqualTo(4));
-			Assert.That((int)GeothermalKind.SulphurPool, Is.EqualTo(5), "decision 97: landing order");
-			Assert.That((int)GeothermalKind.Smoker, Is.EqualTo(6), "decision 97: the next free value");
+			Assert.That((int)GeothermalKind.SulphurPool, Is.EqualTo(5), "landing order");
+			Assert.That((int)GeothermalKind.Smoker, Is.EqualTo(6), "the next free value");
 			Assert.That((int)BiomeVentLayout.Grid, Is.EqualTo(0));
 			Assert.That((int)BiomeVentLayout.Ridges, Is.EqualTo(3));
 			Assert.That((int)BiomeVentTiming.Steady, Is.EqualTo(0));

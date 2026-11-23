@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-// Module test assemblies (2026-11-20: the core tests that exercise this module moved with it).
+// Module test assemblies (the core tests that exercise this module moved with it).
 [assembly: InternalsVisibleTo("FishMMO.Abilities.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.NPCs.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Pets.Tests")]

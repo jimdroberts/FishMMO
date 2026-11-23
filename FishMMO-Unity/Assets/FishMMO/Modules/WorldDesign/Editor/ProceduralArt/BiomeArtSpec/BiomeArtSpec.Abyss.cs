@@ -10,15 +10,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Abyss</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Abyss()
 		{
-			// The hadal trench joined to the cold seeps of the Gulf (biome round, approved 2026-10-18, authored 2026-10-26): an inner
+			// The hadal trench joined to the cold seeps of the Gulf: an inner
 			// wall of olive-black peridotite scaling into rusty ledges, an outer wall of glassy pillow basalt, a lightless floor of
 			// grey-brown ooze under falling marine snow; seeps of white-and-orange mats, seep mussels and lamellibrachia bushes round
 			// brine lakes, fire-ice mounds, asphalt flows, serpentinite mud volcanoes; sea pigs, tripod fish, harp sponges. The only
 			// light is living: lure polyps, the umbellula's ring, the crystals' slow heartbeat. Fantasy: leviathan falls, galleons
 			// pickled whole in the brine, a cyclopean fane, Alexander's glass bell, the Drowned Chain.
-			// Painted and grown under the sea (decision 36 (a), I2m: UnderTheSea, no depth bands: the whole floor is the trench).
-			// LATER (I9 T1): every ground and object texture as Abyss's own variant of its recipe (decision 12); until then its own recipes.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Atolla (wine-crimson) + Photophore (pure photophore blue).
+			// Painted and grown under the sea (UnderTheSea, no depth bands: the whole floor is the trench).
+			// LATER: every ground and object texture as Abyss's own variant of its recipe; until then its own recipes.
+			// LATER (no spec column yet): rare looks Atolla (wine-crimson) + Photophore (pure photophore blue).
 			// LATER (I9 T7 / ground bands): the seep, asphalt and fire-ice patches lie "near the seep fields"; no band reads a seep, so
 			// their noise and slope place them.
 			return E("Abyss", L(Ground.SiltHadalOoze,
@@ -59,8 +59,8 @@ namespace FishMMO.Shared.WorldDesign
 					SmallRocks("Basalt"), Pebbles("Nodule"))
 				.Ways(path: Ground.FlagstoneProcessional, road: Ground.FlagstoneCyclopeanCauseway, cobbles: Ground.PebblesPillowGlass)
 				.Bars(sand: Ground.SandHyaloclastite, gravel: Ground.GravelPeridotiteBar)
-				// Own rock peridotite (its ledges and buttresses; approved Q2), accepting the pillow basalt and the serpentinite of the mud
-				// volcanoes. LATER (I9): Basalt's pillow and Serpentinite's blue-green mud-volcano looks as Abyss's own.
+				// Own rock peridotite (its ledges and buttresses), accepting the pillow basalt and the serpentinite of the mud
+				// volcanoes. LATER: Basalt's pillow and Serpentinite's blue-green mud-volcano looks as Abyss's own.
 				.Accepts(RockTypes.Basalt, RegionalRocks.Serpentinite)
 				.CaveShell(CaveForm.Cave, "Peridotite").CaveShell(CaveForm.Grotto, "Peridotite").CaveShell(CaveForm.SeaCave, "Basalt")
 				.CaveShell(CaveForm.Mine, "Peridotite").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
@@ -68,17 +68,17 @@ namespace FishMMO.Shared.WorldDesign
 				// The hadalite's slow cold heartbeat, in its caves and on its crystal posts and lure-orb cages.
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Pulse)
-				// Serpentinite mud volcanoes and brine lakes with a mirror surface below their rim (approved Q3).
+				// Serpentinite mud volcanoes and brine lakes with a mirror surface below their rim.
 				.Landforms("MudVolcano", "BrineLake")
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				// LATER (SEA-LIFE, floor-relative depth on I2m's NearFloor kinds): hadal snailfish 5, amphipod swarms 4, giant isopods 3,
+				// LATER (floor-relative depth on I2m's NearFloor kinds): hadal snailfish 5, amphipod swarms 4, giant isopods 3,
 				// dumbo octopus 2, siphonophores 2, anglerfish 1, the Leviathan 0.5 (never within 80 m) and the Deepwisps 2. The kit's kinds
 				// swim 1-80 m under the surface, nowhere near a hadal floor, so no sea life is named until those kinds exist.
 				.NoVines()
 				.NoCrops()
 				.Herbs()
-				// Open water (2026-10-26): the trench's sea is cold but liquid; the old Frozen moat was the cold-only envelope's.
+				// Open water: the trench's sea is cold but liquid; the old Frozen moat was the cold-only envelope's.
 				.Moat(BiomeMoatWater.Wet)
 				// The brine lakes: a black mirror, no foam.
 				.WaterTint(new BiomeWaterLook(SeaHex("#22323a"), SeaHex("#04080c"), new Vector3(0.6f, 0.3f, 0.2f), 0.15f, SeaHex("#3a342a"), SeaHex("#b8c0c8")))
@@ -106,16 +106,16 @@ namespace FishMMO.Shared.WorldDesign
 					},
 					about: "Drowned-liturgical mariner: the hadal trench (Grund, Myrk, Bathy, Tenebr; -deep, -fathom, -grund, -maw, -trench)")
 				// What fell from the world above rests here: galleons pickled in the brine, the cyclopean fane and its city, the brine
-				// ring, the kraken's maw, the Drowned Chain (at most one a scene), the glass bell and the hadalite garden (approved Q7:
-				// all, rare). The trench itself (Gorge) kept; the land detections, the islands, bays and headlands zeroed.
-				// LATER (I7): the named pieces — the leviathan fall (skull, vertebral row, rib vault, bone-worm plumes, amphipod swarm),
+				// ring, the kraken's maw, the Drowned Chain (at most one a scene), the glass bell and the hadalite garden
+				// (all, rare). The trench itself (Gorge) kept; the land detections, the islands, bays and headlands zeroed.
+				// LATER: the named pieces — the leviathan fall (skull, vertebral row, rib vault, bone-worm plumes, amphipod swarm),
 				// the brine-pickled galleon standing in a brine lake, the cyclopean fane with its fish-king statues and rose window,
 				// Alexander's glass bell with its lit lantern, the Drowned Chain and its ring-stone, the brine-lake ring, the kraken's
 				// maw. The kit's variants below stand in.
 				.Sites((POIType.Gorge, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 0.15f),
 					(POIType.SunkenShrine, 0.3f), (POIType.SeaMonsterDen, 0.3f), (POIType.SeaCrystalFormation, 0.4f),
 					(POIType.SunkenMonument, 0.1f), (POIType.SunkenStatue, 0.1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.KrakenWreck, 0.6f))
 				.Prefers(POIType.SunkenCity, "Drowned", 0.3f)
 				.Prefers(POIType.SunkenCity, "Reef Halls", 0f)
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, SeaHex("#2a2638"))
 				// Nothing is built here by the living: streets unlit. The sunken sites hold lure-orb cages (photophore blue, a slow pulse);
 				// the caves' routes the same.
-				// LATER (I7a): lights at non-town sites are laid once I7a places them; the entries are the template's already.
+				// LATER: lights at non-town sites are laid once a later pass places them; the entries are the template's already.
 				.Unlit(POIType.Village).Unlit(POIType.Town).Unlit(POIType.City).Unlit(POIType.Capital).Unlit(POIType.Port)
 				.Lights(POIType.SunkenCity, BiomeWayLightKind.Lurelight, 18f)
 				.Lights(POIType.SunkenRuins, BiomeWayLightKind.Lurelight, 18f)

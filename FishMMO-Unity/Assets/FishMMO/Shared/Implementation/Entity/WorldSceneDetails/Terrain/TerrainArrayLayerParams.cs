@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 		/// The most layers one scene's arrays hold: what a byte of the terrain's index map can name
 		/// (<see cref="TerrainIndexMap"/>), and the depth every target graphics API guarantees a texture array.
 		/// </summary>
-		/// <remarks>It was 32 (eight control maps of four channels, all read per pixel) until 2026-10-16.</remarks>
+		/// <remarks>It was 32 (eight control maps of four channels, all read per pixel) formerly.</remarks>
 		public const int MaximumLayers = TerrainIndexMap.MaximumLayers;
 
 		/// <summary>

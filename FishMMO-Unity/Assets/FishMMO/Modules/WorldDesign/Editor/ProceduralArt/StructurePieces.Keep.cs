@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The keep (2026-10-19: "Keeps are single story instead of multi floor interiors, you can't get to the top of a keep to look
+	/// The keep ("Keeps are single story instead of multi floor interiors, you can't get to the top of a keep to look
 	/// out?"): a great stone tower walked floor over floor from its door to its battlements.
 	/// </summary>
 	public static partial class StructurePieces
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A great keep (2026-10-19), after the Norman keeps and the later tower houses: three floors over a battered footing, each a
+		/// A great keep, after the Norman keeps and the later tower houses: three floors over a battered footing, each a
 		/// room a player walks into, and the roof a walk behind the battlements. The undercroft is the storeroom (no window but arrow
 		/// slits); the first floor the great hall, its hearth on the back wall under the chimney and two-light windows; the second the
 		/// lord's solar; then the roof walk, the lookout. v0 is entered as the Norman keeps were, at the hall: a forebuilding against

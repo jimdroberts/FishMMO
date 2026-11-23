@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Detail cells per rendered patch side (Unity's 8–128).</summary>
 		/// <remarks>
 		/// <para>
-		/// 16 cells of a metre (was 32 until 2026-10-02). Unity culls details a whole patch at a time at
+		/// 16 cells of a metre (was 32 formerly). Unity culls details a whole patch at a time at
 		/// the draw distance, which read as grass popping in square chunks; the vegetation shader now
 		/// dissolves details over a band that must end a patch diagonal inside the draw distance
 		/// (the client's VegetationDistanceFade), so the patch size decides how much of the draw
@@ -177,7 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float InlandFullMetres = 0.9f;
 
 		/// <summary>
-		/// Aquatic plants under a lake or a river (decision 35 (a), 2026-10-18) fade in from this height relative to THAT water's
+		/// Aquatic plants under a lake or a river fade in from this height relative to THAT water's
 		/// surface to <see cref="InlandAquaticFullMetres"/> (both at or below 0): fresh water has no tide, so a few centimetres under
 		/// it is under water for good. Their depth bands are read below the same surface.
 		/// </summary>
@@ -192,27 +192,27 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, Vector3> RiverAt;
 
 		/// <summary>
-		/// The ground's heat at (x, z), 0 cold … 1 boiling (2026-10-18, phase I2q; the scene's heat mask, GeothermalGroundCarve): what
+		/// The ground's heat at (x, z), 0 cold … 1 boiling (the scene's heat mask, GeothermalGroundCarve): what
 		/// a rule's heat band (PrefabSpawnRule.useHeatBand) reads. Thread-safe (an array read). Null: every heat band passes.
 		/// </summary>
 		public Func<float, float, float> HeatAt;
 
 		/// <summary>
-		/// The scene's landform zones (2026-10-25, phase I2g-b, decision 55; BiomeLandformZones of the sites the cut stored): what a
+		/// The scene's landform zones (BiomeLandformZones of the sites the cut stored): what a
 		/// rule's landform band (PrefabSpawnRule.landformBand) reads. Asked only for a rule whose band is on; thread-safe. Null: no
 		/// landform, so an "on the part" band grows nothing and an "off the part" band everywhere.
 		/// </summary>
 		public BiomeLandformZones LandformZones;
 
 		/// <summary>
-		/// The scene's prevailing wind, the moon's local east and the way to the equator, in scene axes (2026-10-26, phase SCATTER-MODES):
+		/// The scene's prevailing wind, the moon's local east and the way to the equator, in scene axes:
 		/// what a rule's wind, plasma and sunward modes (PrefabSpawnRule.scatterMode) read. Default (all zero): those modes turn and lean
 		/// nothing and a lee has no wind (only an anchored rule's floor grows).
 		/// </summary>
 		public BiomeScatterCompass Compass;
 
 		/// <summary>
-		/// The scene's points of interest (centre, footprint radius, kind): what a NearSite mode reads (SCATTER-MODES). Null: none, so a
+		/// The scene's points of interest (centre, footprint radius, kind): what a NearSite mode reads. Null: none, so a
 		/// NearSite rule grows only its floor.
 		/// </summary>
 		public System.Collections.Generic.IReadOnlyList<BiomeScatterSite> Sites;

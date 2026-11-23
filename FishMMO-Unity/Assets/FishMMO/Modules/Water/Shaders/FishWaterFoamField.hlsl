@@ -85,7 +85,7 @@ FishFoamFieldSample FishFoamFieldAt(float2 xz)
 /// Most carried foam is thin: at a third of the surface or less the lace cuts it into clumps and strands, which is
 /// what foam that has drifted for a few seconds looks like. Only where it is being made, or has piled up, does it
 /// close into froth; fed at the rates the first try used, every crest and stone left an opaque flat flake that
-/// lingered (2026-10-13 renders).
+/// lingered.
 /// </remarks>
 half FishFoamFieldCoverage(half amount)
 {
@@ -105,7 +105,7 @@ half FishFoamFieldBody(FishFoamFieldSample s)
 //
 // WHY. The foam's fine look is its lace (the foam map's alpha), and every surface read it FLOW-MAPPED: two copies slid
 // along the current for a short cycle each and cross-faded, so the lace changed under the eye every cycle, and every
-// patch of foam on a river or the sea throbbed in step (2026-10-13: "the foam just pulses"). The near window keeps
+// patch of foam on a river or the sea throbbed in step ("the foam just pulses"). The near window keeps
 // instead, for each texel, how far its water has moved since it was last reset (_FishFoamLace0: rg one layer, ba the
 // other), carried with the foam by the same current; the lace is read back through that, so it moves exactly as the
 // water does, eddies and convergence included. Each layer is reset every FISH_FOAM_LACE_PERIOD seconds, the two half a

@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 	/// The scene server disconnects a client that claims a character and then never finishes the
 	/// scene handshake, so a stalled client cannot hold its character online. A fixed deadline
 	/// cut off slow but healthy loads instead: a web client on a cold cache downloads the world's
-	/// content first, and one took 96 s against a 90 s limit (2026-11-12). Each of these pushes
+	/// content first, and one took 96 s against a 90 s limit. Each of these pushes
 	/// the deadline back, up to an absolute cap, so only a client that has stopped loading times out.
 	/// No data: arrival is the whole message.
 	/// </remarks>

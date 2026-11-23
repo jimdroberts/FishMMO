@@ -222,7 +222,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 		/// <summary>
 		/// Whether and how this NPC shelters from the weather, or null when the archetype says
-		/// nothing about it. Off unless an archetype turns it on (Q15).
+		/// nothing about it. Off unless an archetype turns it on.
 		/// </summary>
 		public AIShelterSettings Shelter => archetype != null ? archetype.Shelter : null;
 
@@ -2663,7 +2663,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 
 		/// <summary>
 		/// Sends the NPC to stand out of the weather, and brings it back out when the weather has
-		/// passed (Q15).
+		/// passed.
 		/// </summary>
 		/// <remarks>
 		/// <para>

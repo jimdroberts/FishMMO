@@ -46,7 +46,7 @@ Shader "Hidden/FishMMO/Weather/HeatShimmer"
             float4 _HeatScreen;  // x uv per radian across, y up; z the most displacement allowed (uv, up); w unused
             float4 _HeatEye;     // xyz the camera; w the ground under it (m)
 
-            // The hot air over a lava tube's molten lava (2026-10-20, CaveLavaHeat): balls of boiling air over the nearest lava
+            // The hot air over a lava tube's molten lava (CaveLavaHeat): balls of boiling air over the nearest lava
             // lights, xyz centre and w radius (m); x of the params how many, y the jitter rms across one's whole width (rad).
             #define HEAT_SPOTS 8
             float4 _HeatSpots[HEAT_SPOTS];

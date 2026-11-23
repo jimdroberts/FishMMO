@@ -11,7 +11,7 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>In kelvin, unclamped (2026-10-15).</b> The climate scale stops at ±33 °C, and a weather sample used to be read on
+	/// <b>In kelvin, unclamped.</b> The climate scale stops at ±33 °C, and a weather sample used to be read on
 	/// it and turned into kelvin through the world's mean — so every place past the scale's end read exactly its world's
 	/// mean, and a frozen moon or a hot desert world had no warmer or colder place anywhere on it. The scale is now derived
 	/// from this, never the other way round.

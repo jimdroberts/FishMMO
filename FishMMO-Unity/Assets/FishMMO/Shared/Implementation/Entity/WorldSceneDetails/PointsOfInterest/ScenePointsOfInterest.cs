@@ -48,7 +48,7 @@ namespace FishMMO.Shared
 
 		/// <summary>The world map zoom tier; 0 = always, higher = only zoomed in.</summary>
 		public int DetailTier;
-		/// <summary>Hidden until the fog of war reveals it. Every generated POI starts true (2026-10-10).</summary>
+		/// <summary>Hidden until the fog of war reveals it. Every generated POI starts true.</summary>
 		public bool RequiresDiscovery = true;
 
 		/// <summary>The POI this one belongs to (a graveyard's town, a cave's dungeon), or -1.</summary>
@@ -211,7 +211,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Per terrain layer (array slice), the slice of its biome's own path ground (footpaths, trails, tracks), road ground
 		/// and cobbles, −1 for none: the overlay wears a way into the ground of the biome under each pixel, and paves its
-		/// cobbled stretches with that biome's stone. 32 entries each. A scene cut before the cobbles had a map (2026-10-15)
+		/// cobbled stretches with that biome's stone. 32 entries each. A scene cut before the cobbles had a map
 		/// has none, and paves with <see cref="PathLayers"/>.z everywhere until it is repainted.
 		/// </summary>
 		public float[] PathEarthMap = Array.Empty<float>();

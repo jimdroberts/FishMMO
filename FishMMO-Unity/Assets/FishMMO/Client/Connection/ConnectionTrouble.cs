@@ -34,7 +34,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// An open time under <see cref="LocalOpenMilliseconds"/> cannot be a real server: a QUIC
 	/// handshake plus the WebTransport request is at least one round trip. The confirmed case
-	/// (ESET, 2026-11-12) answered in about 1 ms. A player on the same machine or network as the
+	/// (ESET) answered in about 1 ms. A player on the same machine or network as the
 	/// server can also open that fast; they see this only if that server then says nothing.
 	/// </para>
 	/// </remarks>

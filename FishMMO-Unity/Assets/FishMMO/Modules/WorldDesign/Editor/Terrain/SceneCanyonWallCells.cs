@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// Written by <see cref="CanyonWalls.Build"/> at the cut, in the same folder as the wall meshes; a re-cut clears the folder
-	/// and writes it again. A scene cut before 2026-10-16 has none, and its walls keep the rock they were cut with.
+	/// and writes it again. A scene cut by an older generator has none, and its walls keep the rock they were cut with.
 	/// </para>
 	/// </remarks>
 	public sealed class SceneCanyonWallCells : ScriptableObject

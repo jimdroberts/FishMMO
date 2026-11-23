@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Ways jogging where they cross a strike-slip trace (2026-10-26, phase I2l-b; the I2g-f follow-up of decision 90): the ground on the
+	/// Ways jogging where they cross a strike-slip trace (the follow-up of decision 90): the ground on the
 	/// trace's left side has slipped along it (SceneLandforms' ShiftLines moves every landform line carved before it), so a way across
 	/// the fault meets it, runs along it for the slip and leaves it again where its far side now lies. Pure.
 	/// </summary>

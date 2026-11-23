@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The ONE lookup of what hangs from a cave's roof and piles under it (2026-10-20, caves livened), and the rules its pieces
+	/// The ONE lookup of what hangs from a cave's roof and piles under it (caves livened), and the rules its pieces
 	/// keep: pure, so the biome suite can move the choices into template fields later. By form, then by the biome over the roof
 	/// (<see cref="Wooded"/>: whether trees grow there to send their roots down).
 	/// </summary>
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveHangingPlan For(CaveForm form) => Coded(form);
 
 		/// <summary>
-		/// The plan for a cave of a form dressed by a biome (2026-10-25, phase I2n-c, decision 86 (d)): the biome's Cave Hangings entry
+		/// The plan for a cave of a form dressed by a biome: the biome's Cave Hangings entry
 		/// for the form (BiomeTemplate.CaveHangings, authored from <see cref="Coded"/>, so nothing moves), else the form's own. The
 		/// entry's root art and windows are read by the dressing from <see cref="Entry"/>.
 		/// </summary>
@@ -67,7 +67,7 @@ namespace FishMMO.Shared.WorldDesign
 			return new BiomeCaveHanging((BiomeCaveForm)form, p.Silk, p.DeepRoots, CaveFungi.CodedRootsNearMouth(form), p.Guano);
 		}
 
-		/// <summary>The plan by form alone, as the dressing chose it until 2026-10-25 (what <see cref="BiomeTemplate.CaveHangings"/> is authored from).</summary>
+		/// <summary>The plan by form alone, as the dressing chose it formerly (what <see cref="BiomeTemplate.CaveHangings"/> is authored from).</summary>
 		public static CaveHangingPlan Coded(CaveForm form)
 		{
 			CaveHangingPlan p;
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// What hangs from a cave's roof and piles under it (2026-10-20, caves livened): glow-worm silk along its damp roof joints in
+	/// What hangs from a cave's roof and piles under it (caves livened): glow-worm silk along its damp roof joints in
 	/// the dark, tree roots come down through a thin roof where trees grow over it, and guano heaped under its bats' roosts.
 	/// </summary>
 	/// <remarks>
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>What hangs from the roof: glow-worm threads, roots through a thin roof, guano under the roosts (cave-life programme HANGING).</summary>
 			private void Hanging()
 			{
-				// The biome dressing the inside's (2026-10-25, I2n-c: its Cave Hangings, authored as the form's own plan).
+				// The biome dressing the inside's (its Cave Hangings, authored as the form's own plan).
 				CaveHangingPlan plan = CaveHanging.For(biome, system.Form);
 				BiomeCaveHanging hung = CaveHanging.Entry(biome, system.Form);
 				waterRoots = hung.Roots == BiomeCaveRootArt.WaterRoots;
@@ -211,7 +211,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					GuanoUnderRoosts(new DeterministicRNG(unchecked(system.Seed * 0x1E8D + 0x7C35)), plan.Guano);
 				}
-				// 2026-10-25 (I2n-c, decision 86 (c)/(e)/(f)): glow-worms threaded along the roots, roots round the root windows, what
+				// I2n-c, decision 86 (c)/(e)/(f): glow-worms threaded along the roots, roots round the root windows, what
 				// floats on the water; each on a stream of its own after every other, so nothing above moves (…CaveDressing.Drowned.cs).
 				Drowned();
 				if (silkHung + tapRoots + shortRoots + guanoHeaps > 0)
@@ -470,7 +470,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				// Water roots (2026-10-25, I2n-c, decision 86 (d)): over the cave's water the tap root ends at the water's surface, its
+				// Water roots: over the cave's water the tap root ends at the water's surface, its
 				// tassels trailing in it, rather than giving way to a short tangle; after every draw, so no stream moves.
 				if (waterRoots && Submerged(ground) && WaterRoot(ground, roof, hue, pick, yaw, girth))
 				{
@@ -479,7 +479,7 @@ namespace FishMMO.Shared.WorldDesign
 				// To the floor where it is off every way and dry; over a way (or too high to reach) a tangle that clears heads.
 				bool clear = room >= CaveHanging.TapRoomMin && room <= CaveHanging.TapRoomMax && !Submerged(ground)
 					&& !InLane(ground, 1.1f) && !OnWay(ground, 1.1f);
-				// In the water roots' hue where the biome's root art is theirs (2026-10-26, I2n-c: the art's own otherwise, as before).
+				// In the water roots' hue where the biome's root art is theirs (the art's own otherwise, as before).
 				if (clear && CaveArt.TryGlow(CaveGlowKind.TapRoots, waterRoots ? CaveGlowPalettes.HueOf(CaveGlowKind.TapRoots, WaterRootsHue, hue) : hue, Mathf.FloorToInt(pick * 997f), out CaveGlowArt tap))
 				{
 					float sy = CaveHanging.TapScaleY(room, tap.Height);

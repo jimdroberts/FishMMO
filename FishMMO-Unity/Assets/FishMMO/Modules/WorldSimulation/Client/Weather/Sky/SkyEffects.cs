@@ -112,7 +112,7 @@ namespace FishMMO.Client
 			colors.Clear();
 			indices.Clear();
 			ActiveBolts = 0;
-			/* Under water the sky is not seen (2026-10-06: strikes were visible from under the sea): no bolts, and
+			/* Under water the sky is not seen (strikes were visible from under the sea): no bolts, and
 			 * of the flash only a dim, diffuse brightening comes down through the surface, less the deeper the eye. */
 			float underwater = 1f;
 			bool submerged = false;
@@ -1088,7 +1088,7 @@ namespace FishMMO.Client
 		/// A light without a cookie draws every lit shader without _LIGHT_COOKIES, so each time the cloud shadow came off (the
 		/// first frames of Play while the clouds load, a tier without cloud shadows, the switch, an airless world, the shadow
 		/// moving from sun to moon) every material changed to another variant, which the editor compiled there and then
-		/// (2026-10-18). White lets every light through: the same lighting, the same variant. The sun is not brightened for
+		///. White lets every light through: the same lighting, the same variant. The sun is not brightened for
 		/// the cloud while its shadow is off (SkySystem: <c>far</c> is 1), so nothing is to be dimmed back.
 		/// </remarks>
 		public void Clear(Light light)

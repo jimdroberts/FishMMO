@@ -230,7 +230,7 @@ namespace FishMMO.UnitTests.NPCs
 			// The boilerplate came along.
 			Assert.IsNotNull(created.GetComponent<FishNet.Object.NetworkObject>());
 			Assert.IsNotNull(created.GetComponent<CharacterPredictionController>());
-			// The cooldown and ability controllers are parts the character adds at wake (2026-11-21), never the prefab's.
+			// The cooldown and ability controllers are parts the character adds at wake, never the prefab's.
 			Assert.IsNull(created.GetComponent<CooldownController>());
 			Assert.IsNull(created.GetComponent<AbilityController>());
 			Assert.IsNotNull(created.GetComponent<NPC>().CharacterNameplate, "the overhead nameplate must survive the clone");

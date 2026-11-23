@@ -103,7 +103,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The pre-cut prompt (2026-10-10): before every cut and re-cut on the World Atlas page, asks
+	/// The pre-cut prompt: before every cut and re-cut on the World Atlas page, asks
 	/// whether the scene holds the capital and how dense its points of interest are.
 	/// </summary>
 	/// <remarks>
@@ -242,7 +242,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How deep the scene's caves may go (2026-10-21): each cave's depth is still rolled at random from its seed, within this
+		/// How deep the scene's caves may go: each cave's depth is still rolled at random from its seed, within this
 		/// range (CaveSystem.DepthFor), so a scene of shallow pockets or one of abysses is a choice made here.
 		/// </summary>
 		private void DrawCaveDepths()

@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Jungle</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Jungle()
 		{
-			// The living lowland rainforest of the Bight of Benin (biome round, approved 2026-10-18, authored 2026-10-26): iroko, obeche
+			// The living lowland rainforest of the Bight of Benin: iroko, obeche
 			// and African mahogany on plank buttresses over a dim, dripping floor of bronze leaf litter on red laterite, oil palms in
 			// every gap, raffia swamps along the streams, bare grey granite inselbergs above the canopy and ironstone pavements where
 			// the forest thins. Its people are yam-farmers, palm-wine tappers, iron-smelters and brass-casters in red mud-walled
@@ -18,9 +18,9 @@ namespace FishMMO.Shared.WorldDesign
 			// and leafglass. Two reaches: SEMI-DECIDUOUS (humidity below 0.6: obeche, more oil-palm bush) and EVERGREEN (0.6 and up:
 			// mahogany, denser understorey). The neotropical kit (kapok, bromeliads, monstera) is Jungle Ruins'; strangler figs are
 			// Jungle Temple's.
-			// LATER (I9): every ground and object texture as Jungle's own variant of its recipe (decision 12); until then the grounds
+			// LATER: every ground and object texture as Jungle's own variant of its recipe; until then the grounds
 			// below are Jungle's own recipes and the stones, barks and leaves the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Camwood + Leafward (BiomeTemplate.rareLookA/B).
+			// LATER (no spec column yet): rare looks Camwood + Leafward (BiomeTemplate.rareLookA/B).
 			return E("Jungle", L(Ground.JungleFloorBronze,
 					// The canopy: mixed leathery trees with mahogany and kola, crowns closing.
 					Stand(Was(3f, 5f), 30f, W(0.9f, 1f), "ForestCanopy", "AfricanMahogany", "Kola"),
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 					Plants("TermiteCaps", 1.5f), Plants("MushroomTermite", 0.3f), Plants("DebrisRainforest", 8f, 128), Plants("DebrisPods", 0.5f, 128),
 					Bush("Dracaena", 0.75f), Band(Bush("WildCoffee", 0.85f), -1f, 1f, 0.6f, 1f), Band(Bush("WildCoffee", 0.78f), -1f, 1f, -1f, 0.6f),
 					Bush("Ixora", 0.78f), Bush("Rattan", 0.55f),
-					// LATER (I9b): the buttressed root end, Lampcap clusters on the log; the lightning snag's hornbill holes.
+					// LATER: the buttressed root end, Lampcap clusters on the log; the lightning snag's hornbill holes.
 					Logs("Fallen logs", 0.004f, 30f, Wood("FallenLog_Buttressed", "Stump_Bracket")),
 					Logs("Iroko snags", 0.001f, 80f, Wood("Snag_Iroko")),
 					Stones(SmallRocks("Laterite"), 1f),
@@ -78,15 +78,15 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveShell(CaveForm.Cave, "Granite").CaveShell(CaveForm.Grotto, "Laterite").CaveShell(CaveForm.Mine, "Laterite")
 				.Crystals((BiomeCaveCrystalKind.WatermelonTourmaline, 0.6f), (BiomeCaveCrystalKind.Leafglass, 0.4f))
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse)
-				// The inselbergs, the laterite breakaways and the iya ditch-and-bank round a town (LATER (I7): the iya sited on its town).
+				// The inselbergs, the laterite breakaways and the iya ditch-and-bank round a town (LATER: the iya sited on its town).
 				.Landforms("Inselberg", "LateriteBreakaway", "Iya")
 				// The woven liana bridge for the spans a river leaves (ends in the kit's bridge outside its spans).
 				.Crosses(BiomeCrossingStyle.Liana)
 				.Look(BiomeLookClass.Jungle)
 				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Jungle)
-				// LATER (AMBIENT-LIFE): the fruit-bat dusk exodus, grey parrots roosting, hornbills, colobus and mona troops, forest elephant
+				// LATER: the fruit-bat dusk exodus, grey parrots roosting, hornbills, colobus and mona troops, forest elephant
 				// and bush-cow at the streams, driver-ant columns (client decal), Leafwarden flickers in the sacred groves, Iroko nights.
-				// LATER (RARE-LOOKS): Camwood and Leafward.
+				// LATER: Camwood and Leafward.
 				.Moat(BiomeMoatWater.Dry)
 				.Floats((BiomeFloatingPlantKind.WaterLily, 0.6f), (BiomeFloatingPlantKind.WaterLettuce, 0.4f))
 				// Gold-ochre forest river, green-shaded under the canopy.
@@ -142,7 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 					// Kept as they were: the landform kinds at the rule's 1.
 					(POIType.Rapids, 1f), (POIType.River, 1f), (POIType.Lake, 1f), (POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Mesa, 1f),
 					(POIType.Butte, 1f), (POIType.Island, 1f), (POIType.Bay, 1f), (POIType.Headland, 1f), (POIType.NaturalArch, 1f), (POIType.SeaCave, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f), (POIType.Hamlet, 0.3f),
 					(POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f), (POIType.SpellScar, 0.8f),
@@ -168,7 +168,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Ruins, "Burned", 0.4f)
 				.Prefers(POIType.Ruins, "Temple", 0f)
 				.Prefers(POIType.HuntingLodge, "Lodge", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -190,8 +190,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.StepPyramid, "Sun Steps", 1.5f)
 				.Prefers(POIType.LostCity, "Fallen Seat", 1.5f)
 				.Prefers(POIType.LizardfolkVillage, "Mudhall Wallow", 1.4f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7 I28): Jungle's signature pieces — the impluvium compound (Village 1.6), the yam-barn hamlet, the walled ditch town,
+				// (the fantasy set's variants end here)
+				// LATER: Jungle's signature pieces — the impluvium compound (Village 1.6), the yam-barn hamlet, the walled ditch town,
 				// the palace city with brass-bird turrets, the potsherd shrine, the brass-casters' street, the bloomery furnace site, the
 				// sacred grove, the tree market, the palm-wine camp, the hunters' shelter, the canopy lookout, the liana bridge, the inselberg
 				// refuge, the fallen compound, the speaking heads, the leafward ring and the iroko spirit-tree; until then the kit's variants.
@@ -201,7 +201,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Hide, 0f)
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: burnished red laterite swish walls with a white kaolin band, stitched raffia-leaf thatch at 50 degrees, dark
-				// iroko shingle turrets at 60, carved iroko posts, raffia-rib screens, cast brass and terracotta. LATER (NEW-SURFACES U6/U8):
+				// iroko shingle turrets at 60, carved iroko posts, raffia-rib screens, cast brass and terracotta. LATER:
 				// LateriteSwish, KaolinBand, RaffiaLeafThatch, IrokoShingle, CarvedIroko, RaffiaRib, CastBrass, Terracotta, AsoStrip and
 				// RedApplique as Jungle's own surfaces; the shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Wall, BiomeStructureMaterial.Earth, WoodsHex("#a8502a"))
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Ironwork, BiomeStructureMaterial.Iron, WoodsHex("#2a2826"))
 				.BuildsAll(BiomeStructureRole.Cloth, BiomeStructureMaterial.Canvas, WoodsHex("#3e4a7a"))
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, WoodsHex("#b8201e"))
-				// The rain-washed walls: algae streaks, fluted and reddened at the foot (LATER (NEW-COATS): Rainwashed; Algae + Streaked stand in).
+				// The rain-washed walls: algae streaks, fluted and reddened at the foot (LATER: Rainwashed; Algae + Streaked stand in).
 				.Weathers(BiomeStructureFinish.Algae, 0.6f, 0.7f)
 				.Coated(BiomeStructureCoat.Streaked, 0.5f, 0.8f)
 				// Yams on mounds, egusi melons under the stumps, African rice on the bottomland; oil-palm, kola and plantain orchards.
@@ -240,7 +240,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Lines(new Entry.Line(BiomeLinearForm.Wild, BiomeLinearPlace.SiteBounds, "Dracaena"),
 					new Entry.Line(BiomeLinearForm.EarthBank, BiomeLinearPlace.SiteBounds),
 					new Entry.Line(BiomeLinearForm.Wattle, BiomeLinearPlace.Folds))
-				// Clay palm-oil lamps in the compound niches (LATER (NEW-LIGHTS): ClayLamp; the niche lamp stands in), braziers at the palaces,
+				// Clay palm-oil lamps in the compound niches (LATER: ClayLamp; the niche lamp stands in), braziers at the palaces,
 				// leafglass posts at the groves.
 				.Lights(POIType.Village, BiomeWayLightKind.NicheLamp, 16f)
 				.Lights(POIType.Town, BiomeWayLightKind.NicheLamp, 16f)
@@ -255,7 +255,7 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.Route, BiomeWayLightKind.CrystalPost)
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.WallTorch, 12f)
 				.CaveLight(BiomeCaveLightPlace.MineStope, BiomeWayLightKind.Brazier)
-				// Lianas curtaining the cliffs and cave mouths, rattan whips and epiphytes in the crowns (LATER (I9b): the span vine).
+				// Lianas curtaining the cliffs and cave mouths, rattan whips and epiphytes in the crowns (LATER: the span vine).
 				.GrowsVines(0.9f, 0.9f, 0.6f, 0.5f, ("Liana", 0.6f), ("RattanWhip", 0.25f), ("Epiphytes", 0.15f))
 				.Gathers("Kola Nuts", "Palm Fruit", "Palm Wine", "Alligator Pepper", "Bitter Leaf", "Scent Leaf", "Costus Stem", "Calabar Bean",
 					"Camwood Heartwood", "Iroko Timber", "Raffia Fibre", "Laterite Iron Ore", "Watermelon Tourmaline", "Leafglass", "Termite Mushrooms")

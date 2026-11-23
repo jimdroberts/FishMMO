@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The NPCs module (2026-11-20): the module declares itself, the scene server adopts the AI and spawner systems by label,
+	/// The NPCs module: the module declares itself, the scene server adopts the AI and spawner systems by label,
 	/// and the AI reads pets and wildlife only through seams (<see cref="IAICompanion"/>, <see cref="IWildlifeSpecies"/>), so
 	/// neither module is referenced by this one.
 	/// </summary>

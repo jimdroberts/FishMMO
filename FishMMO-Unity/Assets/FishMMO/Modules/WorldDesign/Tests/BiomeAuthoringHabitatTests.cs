@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The biome authoring writes the habitat, sea life, vines, gathering and herbs onto the template, and the habitat's Alien bit is read live (split from BiomeProceduralArtTests, Phase 4, 2026-11-17). How the Ambient Life module reads a template is its own test.
+	/// The biome authoring writes the habitat, sea life, vines, gathering and herbs onto the template, and the habitat's Alien bit is read live (split from BiomeProceduralArtTests). How the Ambient Life module reads a template is its own test.
 	/// </summary>
 	[TestFixture]
 	public class BiomeAuthoringHabitatTests
@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The template carries its wildlife, sea life, vines, gathering resources and herb-grove herbs (2026-10-16): one run
+		/// The template carries its wildlife, sea life, vines, gathering resources and herb-grove herbs: one run
 		/// writes what the biome's name gave (the client and the cut then read those), a second changes nothing, and values
 		/// edited or cleared by hand are kept. A template never authored still reads its name.
 		/// </summary>
@@ -91,7 +91,7 @@ namespace FishMMO.UnitTests
 			Assert.That(forest.Habitat, Is.EqualTo(entry.Habitat));
 			Assert.That(forest.SeaLife, Is.Empty);
 			VineBiomes.Habitat vines = BiomeTemplateArt.Vines(forest);
-			// The file's own vines (the Forest round's honeysuckle among them), as the authoring writes them.
+			// The file's own vines (the Forest biome's honeysuckle among them), as the authoring writes them.
 			BiomeVines own = entry.VineGrowth();
 			Assert.That(vines.Species, Is.EqualTo(own.Species.ConvertAll(v => (v.Species, v.Weight)).ToArray()));
 			Assert.That(vines.Caves, Is.EqualTo(own.Caves));
@@ -110,7 +110,7 @@ namespace FishMMO.UnitTests
 			Assert.That(forest.Habitat, Is.EqualTo(BiomeHabitat.Desert), "a hand-set habitat was overwritten:\n" + third);
 			Assert.That(BiomeTemplateArt.Vines(forest), Is.Null, "vines cleared by hand grew again");
 			Assert.That(BiomeTemplateArt.Gathering(forest), Is.EqualTo(new[] { "Iron Vein" }));
-			// The habitat, the vines' densities and their species (one mark each since 2026-10-16, I5b), the gathering list.
+			// The habitat, the vines' densities and their species (one mark each), the gathering list.
 			Assert.That(third.ValuesKept, Is.EqualTo(4));
 
 			// A sea biome's sea life; a dry one's empty lists are decisions, not gaps.
@@ -131,7 +131,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// I4b (2026-10-16): the habitat's Alien bit is the template's air, read live, never stored. A bit stored by I4's authoring
+		/// The habitat's Alien bit is the template's air, read live, never stored. A bit stored by the authoring
 		/// (with its mark) is masked on read, dropped by the next authoring, and the habitat stays the tool's to rewrite; a
 		/// hand-set Alien bit is dropped too; an unauthored template takes it from its air as well.
 		/// </summary>
@@ -142,7 +142,7 @@ namespace FishMMO.UnitTests
 			geysers.Atmosphere = BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin;
 			geysers.Requires = BiomeWorldRequirement.Cryovolcanic;
 
-			// As I4's authoring left it: the bit stored, and in the mark.
+			// As the authoring left it: the bit stored, and in the mark.
 			var so = new SerializedObject(geysers);
 			so.FindProperty("habitat").intValue = (int)(BiomeHabitat.Ice | BiomeHabitat.Alien);
 			so.ApplyModifiedPropertiesWithoutUndo();

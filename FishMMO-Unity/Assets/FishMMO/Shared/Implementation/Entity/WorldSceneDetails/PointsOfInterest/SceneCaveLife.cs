@@ -31,20 +31,20 @@ namespace FishMMO.Shared
 		/// <summary>Still damp air under a high roof, where glow-worms hang their threads and fungus gnats dance.</summary>
 		Glow = 6,
 		/// <summary>
-		/// A sea hall's smoker (2026-10-26, phase I2n-b, decision 83; its kind in <see cref="SceneCaveLifeFlags"/>):
+		/// A sea hall's smoker (its kind in <see cref="SceneCaveLifeFlags"/>):
 		/// <see cref="SceneCaveLifeSpot.Position"/> its orifice, <see cref="SceneCaveLifeSpot.Extent"/> x the orifice's radius, y the
 		/// chimney's height under it, z the clear water and air over it to the roof; <see cref="SceneCaveLifeSpot.Yaw"/> its own turn
 		/// (where its flanges face). What the client's plumes rise from (SceneSeaHallVents); nothing lives on it.
 		/// </summary>
 		Smoker = 7,
 		/// <summary>
-		/// A sea hall's dome (2026-10-26, I2n-b): <see cref="SceneCaveLifeSpot.Position"/> its vault's centre (an ellipsoid on a flat
+		/// A sea hall's dome: <see cref="SceneCaveLifeSpot.Position"/> its vault's centre (an ellipsoid on a flat
 		/// floor), <see cref="SceneCaveLifeSpot.Extent"/> its half-extents along <see cref="SceneCaveLifeSpot.Yaw"/>, up and across: the
 		/// roof the client's brinicles hang from and its smoke ceiling spreads under. Its water is the hall's Pool spot.
 		/// </summary>
 		Hall = 8,
 		/// <summary>
-		/// A hot brine pool on a sea hall's floor (2026-10-26, I2n-b): <see cref="SceneCaveLifeSpot.Position"/> its mirror's middle (the
+		/// A hot brine pool on a sea hall's floor: <see cref="SceneCaveLifeSpot.Position"/> its mirror's middle (the
 		/// brine's surface under the sea water), <see cref="SceneCaveLifeSpot.Extent"/> x its radius, y how far its rim stands over the
 		/// mirror. Drawn by the client as a shimmering mirror; nothing lives in it.
 		/// </summary>
@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 		LavaTube = 4,
 		/// <summary>A worked mine: its drifts and stopes.</summary>
 		Mine = 5,
-		/// <summary>A sea hall under an ice shell (2026-10-26, I2n-b): its life is its sea's, swimming in its water.</summary>
+		/// <summary>A sea hall under an ice shell: its life is its sea's, swimming in its water.</summary>
 		SeaHall = 6,
 	}
 
@@ -80,7 +80,7 @@ namespace FishMMO.Shared
 		Damp = 1 << 0,
 		/// <summary>By (or in) the sea's water, not fresh: crabs, never olms.</summary>
 		Salt = 1 << 1,
-		/// <summary>A <see cref="SceneCaveLifeKind.Smoker"/> that is its hall's Great Smoker, its crown out of the water (2026-10-26, I2n-b).</summary>
+		/// <summary>A <see cref="SceneCaveLifeKind.Smoker"/> that is its hall's Great Smoker, its crown out of the water.</summary>
 		Great = 1 << 2,
 		/// <summary>A <see cref="SceneCaveLifeKind.Smoker"/> that is a white smoker (anhydrite, white plume, carbon-dioxide beads).</summary>
 		White = 1 << 3,
@@ -137,7 +137,7 @@ namespace FishMMO.Shared
 		public int SiteId;
 
 		/// <summary>
-		/// The cave biome dressing the inside of its cave (2026-10-25, phase I2n: its biome template's id, BiomeRegistry.IDOf), where
+		/// The cave biome dressing the inside of its cave (its biome template's id, BiomeRegistry.IDOf), where
 		/// the biome it opens in links one (a limestone cave in karst country is the Cave inside); 0 where the cave is its host land's,
 		/// read as the biome map's there, as before.
 		/// </summary>

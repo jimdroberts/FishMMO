@@ -8,7 +8,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Core (Phase 4 of the core and modules plan, 2026-11-17; the "core surface stack" decision). FishWeatherLit and
+	/// Core (the "core surface stack" decision). FishWeatherLit and
 	/// FishVegetation, with their includes (Assets/FishMMO/Shaders/Surface), are core rendering: core content (the
 	/// characters, the teleporter, the gathering nodes) is drawn with them. Their globals are core-owned, and the world
 	/// modules only set them: the sky its ambient, the weather its wind, cover and snow line, the terrain its ground maps.

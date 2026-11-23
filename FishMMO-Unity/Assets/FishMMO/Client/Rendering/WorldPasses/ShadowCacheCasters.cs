@@ -10,8 +10,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// The cache is core rendering; what it caches belongs to whichever world module draws it. A caster joins
-	/// <see cref="ShadowCacheCasters"/> while it is live, so the cache iterates casters, never a module's renderer type
-	/// (Phase 4 of the core and modules plan, 2026-11-17).
+	/// <see cref="ShadowCacheCasters"/> while it is live, so the cache iterates casters, never a module's renderer type.
 	/// </remarks>
 	public interface IShadowCacheCaster
 	{

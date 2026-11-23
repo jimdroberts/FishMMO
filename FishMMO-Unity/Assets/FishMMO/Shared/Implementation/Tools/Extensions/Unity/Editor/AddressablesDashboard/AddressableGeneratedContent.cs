@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Generated content modules tell the Addressables dashboard about (Phase 4 of the core and modules plan, 2026-11-18): the
+	/// Generated content modules tell the Addressables dashboard about: the
 	/// paths each machine regenerates and builds into its own groups (the World Design module's procedural art and planet
 	/// surfaces), and the clean-up that keeps them out of the committed groups. The dashboard names no module.
 	/// </summary>

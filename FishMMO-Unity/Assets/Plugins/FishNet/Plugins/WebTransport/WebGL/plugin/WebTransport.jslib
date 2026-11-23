@@ -63,7 +63,7 @@ var LibraryFishWebTransport = {
          *  as live until it is explicitly closed or failed. */
         /** A read that failed because its session closed: a server hop (login -> world -> scene) closes the old session on
          *  purpose, and its pending reads reject with "The session is closed." before readyState or _closed catch up.
-         *  That is the session's normal end, not an error (2026-11-21: three red/yellow lines on every hop). */
+         *  That is the session's normal end, not an error (three red/yellow lines on every hop). */
         _isClosedRead: function(session, e) {
             if (!FishWebTransport._isLive(session)) return true;
             var msg = (e && e.message) ? String(e.message) : '';
@@ -203,7 +203,7 @@ var LibraryFishWebTransport = {
          *  writer.write() is not awaited, so while the browser cannot transmit (congestion, a
          *  stalled network) every datagram the game sends used to queue without limit. The
          *  browser then flushed the backlog in one burst, which the server's inbound flood gate
-         *  (200 msg/s, burst 400) answers by disconnecting the player: seen 2026-11-12 with 1,340
+         *  (200 msg/s, burst 400) answers by disconnecting the player: seen with 1,340
          *  queued datagrams failing at once when the scene server dropped a Chrome player.
          *  Unreliable state is worthless once stale, so dropping at the source is right; at 30
          *  ticks/s this is about a second of sends. */

@@ -11,11 +11,11 @@ using System.Runtime.CompilerServices;
 // The combat sim runs NPC brains, which live in the server assembly, so it builds into the
 // server-side harness assembly and needs the same access (LagCompensationTick.ClaimOverride).
 [assembly: InternalsVisibleTo("FishMMO.TestHarness.Server")]
-// The Ambient Life module's tests moved out of FishMMO.UnitTests (Phase 4, 2026-11-17) and keep the access they had.
+// The Ambient Life module's tests moved out of FishMMO.UnitTests and keep the access they had.
 [assembly: InternalsVisibleTo("FishMMO.AmbientLife.Tests")]
-// The World Design module's tests moved out of FishMMO.UnitTests (Phase 4, 2026-11-18).
+// The World Design module's tests moved out of FishMMO.UnitTests.
 [assembly: InternalsVisibleTo("FishMMO.WorldDesign.Tests")]
-// The Naming module's tests moved out of FishMMO.UnitTests (Phase 4, 2026-11-18).
+// The Naming module's tests moved out of FishMMO.UnitTests.
 [assembly: InternalsVisibleTo("FishMMO.Naming.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Naming")]
 [assembly: InternalsVisibleTo("FishMMO.WorldSimulation")]
@@ -28,13 +28,13 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.WorldSimulation.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Client.Weather.Editor")]
 [assembly: InternalsVisibleTo("FishMMO.Shared.Biomes.Editor")]
-// The Items module (Phase 5, 2026-11-20): the containers and the equipment moved out of this assembly with the item
+// The Items module: the containers and the equipment moved out of this assembly with the item
 // internals they were written against (Item's write primitives, the prediction seams); its tests keep the access they had.
 [assembly: InternalsVisibleTo("FishMMO.Items")]
 [assembly: InternalsVisibleTo("FishMMO.Items.Server")]
 [assembly: InternalsVisibleTo("FishMMO.Items.Client")]
 [assembly: InternalsVisibleTo("FishMMO.Items.Tests")]
-// The Combat module (Phase 5, 2026-11-20): the damage controller moved out of this assembly with the internals it was
+// The Combat module: the damage controller moved out of this assembly with the internals it was
 // written against; its tests keep the access they had.
 [assembly: InternalsVisibleTo("FishMMO.Combat")]
 [assembly: InternalsVisibleTo("FishMMO.Combat.Server")]

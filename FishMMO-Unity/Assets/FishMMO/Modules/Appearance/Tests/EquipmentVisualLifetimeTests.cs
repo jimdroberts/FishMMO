@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	/// <remarks>
 	/// <para>Source scans, because every defect pinned here was invisible to behaviour: the
-	/// picture was right and the memory was wrong. They came out of the 2026-09-15 hunt for a
+	/// picture was right and the memory was wrong. They came out of the hunt for a
 	/// client that grew about a megabyte a minute in a world scene and were verified by reading
 	/// the Addressables 3.1 source, not by a profiler — so the pins say exactly what the code
 	/// must keep doing, and a profiler run in the client is what confirms the rate.</para>

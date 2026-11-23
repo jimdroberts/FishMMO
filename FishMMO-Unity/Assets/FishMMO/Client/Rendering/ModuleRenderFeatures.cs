@@ -15,8 +15,7 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// A module's render feature, hosted by the core's <see cref="FishModulePassesFeature"/> on every renderer (Phase 4 of the
-	/// core and modules plan, 2026-11-18): the weather's clouds, height fog, froxel fog and heat shimmer. Written as a URP
+	/// A module's render feature, hosted by the core's <see cref="FishModulePassesFeature"/> on every renderer: the weather's clouds, height fog, froxel fog and heat shimmer. Written as a URP
 	/// renderer feature is (Create, AddRenderPasses, Dispose), but plain C#: its settings live in the module's profile, so the
 	/// core renderers carry no module script and a build without the module loads them cleanly.
 	/// </summary>

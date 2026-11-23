@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
@@ -18,6 +19,9 @@ namespace FishMMO.Shared
 		/// <summary>The waypoint's authored index within its scene.</summary>
 		public int Index;
 
+		/// <summary>A fast-travel point or a Gate Stone (issue #241). A cache baked before kinds existed reads Waypoint.</summary>
+		public WaypointKind Kind;
+
 		/// <summary>The player-facing name.</summary>
 		public string Name;
 
@@ -30,5 +34,21 @@ namespace FishMMO.Shared
 
 		/// <summary>Icon drawn for the waypoint. Falls back to the type's themed marker when null.</summary>
 		public Sprite Icon;
+
+		/// <summary>
+		/// Whether <see cref="ArrivalPosition"/> and <see cref="ArrivalYaw"/> were baked (a cache from formerly has
+		/// neither). A Gate spell arriving at a Gate Stone on another scene server lands here: the destination is not loaded
+		/// where the gate is cast, so the cache is the only place the caster's server can read it from.
+		/// </summary>
+		public bool HasArrival;
+
+		/// <summary>Where a traveller lands (the waypoint's arrival point), in world space.</summary>
+		public Vector3 ArrivalPosition;
+
+		/// <summary>The arrival point's facing, degrees about up.</summary>
+		public float ArrivalYaw;
+
+		/// <summary>Whether this is a Gate Stone.</summary>
+		public bool IsGateStone => Kind == WaypointKind.GateStone;
 	}
 }

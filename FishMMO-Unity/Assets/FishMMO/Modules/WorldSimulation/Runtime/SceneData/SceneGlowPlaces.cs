@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What a glow reads of the stored world round it (2026-10-25, I6i-b; decisions 34, 76, 90, 93): the nearest stored landform line
+	/// What a glow reads of the stored world round it: the nearest stored landform line
 	/// (how far along it the glow stands, and the line's bearing doubled) and the nearest stored fountain vent (its seed and schedule).
 	/// <see cref="None"/> (a scene that stores neither) is what every glow read before: a TRAIL along a fixed bearing, a KNEADING crack
 	/// bearing from a smooth field, an EPISODE seeded by its 500 m cell.
@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// One stretch of a stored landform line as the glows read it (2026-10-25, I6i-b): the GPU's <c>_FishGlowLines</c> (A, B) and
+	/// One stretch of a stored landform line as the glows read it: the GPU's <c>_FishGlowLines</c> (A, B) and
 	/// <c>_FishGlowLineData</c> (along at A, along span to B, cos 2b, sin 2b), the site lights' the same numbers.
 	/// </summary>
 	public struct SceneGlowLine
@@ -46,7 +46,7 @@ namespace FishMMO.Shared
 		public float Cos2, Sin2;
 	}
 
-	/// <summary>A stored fountain vent as the glows read it (2026-10-25, I6i-b): the GPU's <c>_FishGlowVents</c>.</summary>
+	/// <summary>A stored fountain vent as the glows read it: the GPU's <c>_FishGlowVents</c>.</summary>
 	public struct SceneGlowVent
 	{
 		public Vector2 Position;
@@ -57,7 +57,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// A disc of the ground whose glows all read one biome's row of the glow table (2026-10-25, I6i-b): a site straddling an edge of
+	/// A disc of the ground whose glows all read one biome's row of the glow table: a site straddling an edge of
 	/// the biome grid between biomes whose glows move differently reads its centre's biome everywhere in it, and a light standing by
 	/// such an edge outside any site reads its own row within <see cref="SceneGlowPlaces.LightReach"/>, so a light and the stone that
 	/// casts it (the GPU reads the stone's origin, the site lights the light's place) read the same row. The GPU's <c>_FishGlowAnchors</c>.
@@ -139,7 +139,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// The glows' stored places (2026-10-25, I6i-b; decision 34: the I6i stand-ins switched to the stored data): the scene's landform
+	/// The glows' stored places (the stand-ins switched to the stored data): the scene's landform
 	/// lines (<see cref="SceneBiomeMap.GlowLines"/>, else its vent lines), its fountain vents (VolcanicVents' Episode vents) and the
 	/// discs that keep a light and its stone on one biome's row. Pure: one definition read by the site lights and, number for number,
 	/// by the GPU (FishGlowModes.hlsl), so every player sees the same trail creep along the same rille.

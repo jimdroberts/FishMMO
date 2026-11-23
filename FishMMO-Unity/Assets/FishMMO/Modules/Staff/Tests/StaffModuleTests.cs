@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Staff and Support module (Phase 3, 2026-11-17): one StaffSystem hosts the operator sets, the console, game
+	/// The Staff and Support module: one StaffSystem hosts the operator sets, the console, game
 	/// master presence, support and reports; the scene and chat systems run without it.
 	/// </summary>
 	[TestFixture]

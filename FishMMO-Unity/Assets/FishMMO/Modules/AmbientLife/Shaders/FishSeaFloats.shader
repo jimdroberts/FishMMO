@@ -1,4 +1,4 @@
-// What drifts on the open sea (SeaFloatSystem, FishMMO.Client/World/SeaFloats, 2026-10-25, phase I2p): sargassum, by-the-wind
+// What drifts on the open sea (SeaFloatSystem, FishMMO.Client/World/SeaFloats): sargassum, by-the-wind
 // sailors, barnacled logs, propagule rafts, corklines, growlers, pumice, pancake and brash ice. Pass code and the instance
 // contract are in FishSeaFloats.hlsl. Drawn only with Graphics.RenderMeshIndirect by SeaFloatSystem, which binds the instance and
 // command-base buffers on its own material instance; nothing else should use it.

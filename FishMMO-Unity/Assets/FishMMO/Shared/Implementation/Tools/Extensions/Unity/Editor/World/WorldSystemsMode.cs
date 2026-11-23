@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The scene details cache builder's world systems pass (Phase 4 of the core and modules plan, 2026-11-18): the World
+	/// The scene details cache builder's world systems pass: the World
 	/// Simulation module's audit of each scene's atlas entry, climate and sky. Installed by the module; without it the cache is
 	/// rebuilt and nothing is checked.
 	/// </summary>

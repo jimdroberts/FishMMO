@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				foreach (PointOfInterestKindRule rule in input.Rules.Ordered(PointOfInterestPlacement.Placed))
 				{
-					// A kind that stands by the ways is sited once they are laid (PlaceBesideWays, 2026-10-27): they are planned from these sites.
+					// A kind that stands by the ways is sited once they are laid (PlaceBesideWays): they are planned from these sites.
 					if (rule.BesideWays)
 					{
 						continue;
@@ -203,8 +203,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Cells of the open sea, and their summed-area table for <see cref="OpenShareAt"/>.</summary>
 			public readonly bool[] OpenSea;
 			/// <summary>
-			/// The distance to anything but the open sea (ground, a shut-in basin), metres: how far offshore a cell lies (2026-10-25, I2p;
-			/// measured the first time a rule asks, so a scene no offshore kind is sited in pays nothing). Land past the scene's edge is not seen.
+			/// The distance to anything but the open sea (ground, a shut-in basin), metres: how far offshore a cell lies
+			/// (measured the first time a rule asks, so a scene no offshore kind is sited in pays nothing). Land past the scene's edge is not seen.
 			/// </summary>
 			public float[] LandDistance
 			{
@@ -439,8 +439,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How gladly a kind is sited on a cell: its biome's weight for the kind (the template's, PointOfInterestBiome.Kinds,
-			/// 2026-10-16); the kind's default weight on a cell with no biome. Never below 0.
+			/// How gladly a kind is sited on a cell: its biome's weight for the kind (the template's, PointOfInterestBiome.Kinds);
+			/// the kind's default weight on a cell with no biome. Never below 0.
 			/// </summary>
 			public float BiomeWeight(PointOfInterestKindRule rule, int cell)
 			{

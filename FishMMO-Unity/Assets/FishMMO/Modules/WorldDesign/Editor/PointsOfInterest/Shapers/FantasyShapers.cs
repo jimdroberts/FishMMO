@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
 {
-	/// <summary>Registers the fantasy wave's shapers (2026-10-27) after the cave family's.</summary>
+	/// <summary>Registers the fantasy set's shapers after the cave family's.</summary>
 	[InitializeOnLoad]
 	internal static class FantasyShapersRegistration
 	{
@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 	}
 
-	/// <summary>Bits the fantasy wave's shapers share.</summary>
+	/// <summary>Bits the fantasy set's shapers share.</summary>
 	internal static class FantasyShaping
 	{
 		public static Vector2 Dir(float yaw) => new Vector2(Mathf.Sin(yaw * Mathf.Deg2Rad), Mathf.Cos(yaw * Mathf.Deg2Rad));
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 	// ── The cenote ─────────────────────────────────────────────────────
 
 	/// <summary>
-	/// A cenote (2026-10-27, the fantasy wave): a round, sheer-sided well in the rock cut down to its water, a pool at the bottom, a
+	/// A cenote: a round, sheer-sided well in the rock cut down to its water, a pool at the bottom, a
 	/// ledge a little over the pool with the site's altar on it, a stair cut down into the wall round to the ledge, and roots hanging
 	/// from the lip over the drop.
 	/// </summary>
@@ -369,7 +369,7 @@ namespace FishMMO.Shared.WorldDesign
 	// ── The sandworm's funnel ──────────────────────────────────────────
 
 	/// <summary>
-	/// A sandworm's pit (2026-10-27): a funnel of loose sand cut into the open desert, its sides at the sand's angle of repose
+	/// A sandworm's pit: a funnel of loose sand cut into the open desert, its sides at the sand's angle of repose
 	/// (<see cref="SideDegrees"/>), its throat <see cref="ThroatRadius"/> across where the worm lies (the site's boss lair). The lip is the
 	/// site's radius, the depth what the cone reaches at it under the ring's mean height. Pure cut, idempotent (only lowers to a cone
 	/// fixed by the plan).
@@ -463,7 +463,7 @@ namespace FishMMO.Shared.WorldDesign
 	// ── The tidal causeway ─────────────────────────────────────────────
 
 	/// <summary>
-	/// A tidal island's causeway (2026-10-27): a bank of sand from the island's shore to the mainland's, its crest
+	/// A tidal island's causeway: a bank of sand from the island's shore to the mainland's, its crest
 	/// <see cref="Crest"/> over the mean sea, so the high tide covers it and the low uncovers it (the sea's tide is measured from the
 	/// coast's biomes only after the sites are planned, so the crest is set for any tide). The site (the abbey) is the planner's, on the
 	/// island's heart facing the crossing; the shaper finds the shortest crossing round that heading on the ground as it stands.
@@ -602,7 +602,7 @@ namespace FishMMO.Shared.WorldDesign
 	// ── Set against a face ─────────────────────────────────────────────
 
 	/// <summary>
-	/// Snaps a face kind's site onto its rock face (2026-10-27): the foot found along the planner's heading and the heading turned square
+	/// Snaps a face kind's site onto its rock face: the foot found along the planner's heading and the heading turned square
 	/// to the face (DungeonEntranceShaper.FindFace), with no cut. A hanging monastery (its pieces carry their own beams into the rock
 	/// and stilts to the foot) then stands where the face at its deck's height is <see cref="StructurePieces.HangingBackReach"/> behind
 	/// it, and needs a face sheer enough to hang from (<see cref="SheerRise"/> over the 8 m behind its foot); a site whose face is not

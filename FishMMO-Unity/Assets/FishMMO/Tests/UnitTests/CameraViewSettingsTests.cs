@@ -10,7 +10,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Proofs for the camera view options (Options → Gameplay → CAMERA and OVER SHOULDER, 2026-11-15): that each value
+	/// Proofs for the camera view options (Options → Gameplay → CAMERA and OVER SHOULDER): that each value
 	/// is clamped, saved, read back and put on the camera, and that the over-the-shoulder view no longer moves where a
 	/// projectile starts.
 	/// </summary>

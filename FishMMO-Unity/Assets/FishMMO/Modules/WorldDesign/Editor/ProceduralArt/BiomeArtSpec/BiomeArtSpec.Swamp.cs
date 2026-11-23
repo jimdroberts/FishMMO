@@ -25,11 +25,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Wetland)
 				.Wildlife(BiomeHabitat.Wetland)
 				.Moat(BiomeMoatWater.Wet)
-				// 2026-10-25 (decisions 86–88, phase I2n-c): its natural caves and grottos are the Swamp Cave's drowned galleries
+				// Its natural caves and grottos are the Swamp Cave's drowned galleries
 				// inside, where they are cut in a rock the Swamp Cave forms in (its soluble set); elsewhere its own, as before.
 				.CaveInterior(CaveForm.Cave, BiomeCaveInteriors.SwampCave)
 				.CaveInterior(CaveForm.Grotto, BiomeCaveInteriors.SwampCave)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its vines, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -47,7 +47,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.PirateCove, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f),
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.HerbGrove, 1.2f), (POIType.Dockyard, 0.15f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HauntedManor, 0.6f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -57,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SwampCathedral, 0.6f), (POIType.LadyOfTheLake, 0.4f))
 				.Prefers(POIType.Village, "Timber", 0.4f)
 				.Prefers(POIType.Tower, "Wizard", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 1f)
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.2f)
 				.Prefers(POIType.LizardfolkVillage, "Basking", 1.4f)
 				.Prefers(POIType.SwampCathedral, "Black Abbey", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.GrowsVines(0.8f, 0.8f, 0.25f, 0.1f, ("Liana", 0.6f), ("Ivy", 0.4f))
 				.Gathers("Mirewort Patch", "Bog Puffball Cluster")
 				.Weathers(BiomeStructureFinish.Algae, 0.3f, 0.6f)

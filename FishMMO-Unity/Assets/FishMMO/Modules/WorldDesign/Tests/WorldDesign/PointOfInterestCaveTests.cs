@@ -178,7 +178,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TwoCavesNearEachOtherJoinDeepDown()
 		{
 			CaveSystem a = PlanCave(CaveForm.Cave, 1, 1, out Func<float, float, float> g, 0f);
-			// (Seed 4243 since 2026-10-21: depths are rolled now, and 4242's cave became a 20 m pocket-shallow one that no link
+			// (Seed 4243: depths are rolled now, and 4242's cave became a 20 m pocket-shallow one that no link
 			// from the other's 70 m floor reaches beside its trunk; most such pairs still join.)
 			CaveSystem b = CaveSystem.Plan(CaveForm.Cave, 1, new Vector3(140f, 0f, -1f), YawOut(1f * 13f % 40f - 20f), 4243, 2, Patch(g), 0f, out string problem);
 			Assert.That(b, Is.Not.Null, problem);
@@ -467,7 +467,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── The way in (2026-10-18) ───────────────────────────────
+		// ── The way in ───────────────────────────────
 
 		/// <summary>The ground as the plan leaves it before a dry cave's mouth: graded to its floor, as CaveShaper grades the terrain's samples.</summary>
 		private static Func<float, float, float> Graded(CaveSystem system, Func<float, float, float> g, int mouth = 0)
@@ -519,7 +519,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheMouthsVinesHangFromTheBrowOfTheOpening()
 		{
-			// The lintel the vines hang from is where the hillside closes over the passage (2026-10-19: "float outside of the
+			// The lintel the vines hang from is where the hillside closes over the passage ("float outside of the
 			// cave in front of it"). It walked out while the field still had a roof, and with the outcrop gone that roof is
 			// the first passage's rounded end standing in the open air, metres before the hole.
 			foreach ((CaveForm form, int size) in new[] { (CaveForm.Cave, 0), (CaveForm.Cave, 1), (CaveForm.Cave, 2), (CaveForm.LavaTube, 1) })
@@ -539,7 +539,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(ground(hill.x, hill.z), Is.GreaterThan(mid.y - 0.6f), $"{what}: no hillside over the lintel at {mid}: it hangs in the air");
 					Assert.That(ground(front.x, front.z), Is.LessThan(mid.y), $"{what}: the ground before the lintel stands over it: it is inside the hill");
 					Assert.That(mid.y - (system.Origin.y + mouth.Floor.y), Is.EqualTo(height).Within(0.5f), $"{what}: the opening's height is not the crown's");
-					// Hung from the rock (2026-10-19: "still not touching"): the meshed lip stands just over the crown.
+					// Hung from the rock ("still not touching"): the meshed lip stands just over the crown.
 					Assert.That(system.Field(mid - system.Origin + Vector3.up * 0.3f, rock), Is.LessThan(0f), $"{what}: no rock just over the crown at {mid}: the curtains do not touch the lip");
 					Assert.That(height, Is.GreaterThan(1.5f), $"{what}: the opening under the lintel is {height:0.00} m");
 					Assert.That(Vector3.Distance(left, right), Is.GreaterThan(0.5f * mouth.Radius), $"{what}: the lintel is {Vector3.Distance(left, right):0.0} m across a {mouth.Radius:0.0} m bore");
@@ -682,7 +682,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── Ways through (2026-10-18) ─────────────────────────────
+		// ── Ways through ─────────────────────────────
 
 		/// <summary>
 		/// A ridge running east–west: its feet at 70 m on both sides (|z| = <paramref name="half"/>), each face rising 60 m over
@@ -830,7 +830,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(joined, Is.GreaterThanOrEqualTo(2), "caves 520 m apart (the kind's spacing, past the old reach) join");
 		}
 
-		// ── Under water and behind falls (2026-10-18) ─────────────
+		// ── Under water and behind falls ─────────────
 
 		/// <summary>A floor 8 m under <paramref name="water"/> running in to a cliff that rises out of it to a hill 60 m over it (north).</summary>
 		private static Func<float, float, float> DrownedCliff(float water, float depth = 8f)
@@ -1058,7 +1058,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>A test's own line (purerun prints Console, NUnit its context).</summary>
 		private static void TestContextWrite(string line) => Console.WriteLine(line);
 
-		// ── Characters and their features (2026-10-13) ────────────
+		// ── Characters and their features ────────────
 
 		private static List<(CaveSystem System, Func<float, float, float> Ground)> variety;
 
@@ -1246,10 +1246,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheRockStaysWithinItsBudget()
 		{
-			// Measured 2026-10-13: 30k–170k triangles a system, ~2–7 MB of render mesh and as much collider, ≤ 21k a piece.
-			// 2026-10-18, halls to 250 m across: a halls cave nets 430k–480k triangles, thinned (CaveMesher.Simplify) to
+			// Measured: 30k–170k triangles a system, ~2–7 MB of render mesh and as much collider, ≤ 21k a piece.
+			// halls to 250 m across: a halls cave nets 430k–480k triangles, thinned (CaveMesher.Simplify) to
 			// 140k–165k, 11–14 MB; the others 28k–61k, ≤ 12k a piece. The caps stand as they were.
-			// 2026-10-21, depth rolled (to 500 m, levels following it): these five 53k–224k (the halls cave of seed 6 224k, ~19 MB);
+			// depth rolled (to 500 m, levels following it): these five 53k–224k (the halls cave of seed 6 224k, ~19 MB);
 			// on a high escarpment the deepest systems (300 m+, 5–8 levels) 150k–270k, ≤ 7.3k a piece, ~13–24 MB. Raised to
 			// 300k triangles and 26 MB a system on purpose; a piece's cap stands.
 			foreach ((CaveForm form, int size, int seed) in new[] { (CaveForm.Cave, 2, 3), (CaveForm.Cave, 2, 4), (CaveForm.LavaTube, 2, 4), (CaveForm.Mine, 1, 4), (CaveForm.Cave, 2, 6) })

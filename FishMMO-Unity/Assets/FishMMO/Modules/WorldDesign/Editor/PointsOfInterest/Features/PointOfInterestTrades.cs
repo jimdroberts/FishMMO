@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Lets a site's shop-houses to their trades (2026-10-19: "Did we get a carpenter, tailor, leatherworker, fletcher ... and
+	/// Lets a site's shop-houses to their trades ("Did we get a carpenter, tailor, leatherworker, fletcher ... and
 	/// other profession archetypes?"): after the template's features, every laid building with a <c>"sign"</c> or
 	/// <c>"stall"</c> mark (StructurePieces.MarksOf: the ShopHouse) is given a trade, its TradeSign hung at the sign mark and
 	/// its StallGoods laid on the stall-board; PointOfInterestInteriors furnishes its shop as that trade's room.
@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// ship-chandler's, a cooper's and a chartmaker's town; a castle's shops are the garrison's (fletcher, leatherworker,
 	/// ironmonger); a monastery's are the scribe's, the apothecary's and the chandler's (<see cref="Weights"/>). Two shops
 	/// within <see cref="NeighbourRange"/> never share a trade, a trade already let is less likely to be let again, and no
-	/// settlement lets more than two shops to one trade (PointOfInterestStructureCaps.TradeCap, 2026-10-20).
+	/// settlement lets more than two shops to one trade (PointOfInterestStructureCaps.TradeCap).
 	/// </para>
 	/// </remarks>
 	public static class PointOfInterestTrades
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 				return az != bz ? az.CompareTo(bz) : a.CompareTo(b);
 			});
 			float[] baseWeights = Weights(kind, sizeClass);
-			// No more than two shops to a trade in a settlement (2026-10-20, PointOfInterestStructureCaps).
+			// No more than two shops to a trade in a settlement (PointOfInterestStructureCaps).
 			int cap = PointOfInterestStructureCaps.TradeCap(kind);
 			var used = new int[StructurePieces.TradeCount];
 			var done = new List<int>(n);

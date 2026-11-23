@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// Which way a ground faces for a <see cref="BiomeFacingBand"/> (2026-10-26, phase GROUND-BANDS, decision 71): the scene's compass
+	/// Which way a ground faces for a <see cref="BiomeFacingBand"/>: the scene's compass
 	/// (<see cref="BiomeScatterCompass"/>) gives each direction. Append-only: authored layers store the number.
 	/// </summary>
 	public enum BiomeFacing
@@ -25,7 +25,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A FACING band (2026-10-26, phase GROUND-BANDS, decision 71: "a FACING band on ground layers (frost on shaded/poleward faces)"):
+	/// A FACING band ("a FACING band on ground layers (frost on shaded/poleward faces)"):
 	/// a ground layer or spawn rule only on slopes whose fall line points within <see cref="HalfWidth"/> degrees of one compass
 	/// direction, softened over <see cref="Falloff"/> degrees past it, and only once the slope passes <see cref="MinSlope"/> (flat ground
 	/// faces nothing). All zero (the default) is off: every layer and rule paints and grows as before.
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A SITE band (2026-10-26, phase GROUND-BANDS: the drafts' "sites paint their own layer" — Abyssal Plain's blackened whale-fall
+	/// A SITE band (the drafts' "sites paint their own layer" — Abyssal Plain's blackened whale-fall
 	/// halo, Wasteland's old burn at its waste vills): a detail ground painted only on and round the planned points of interest of the
 	/// named kinds, fully within their footprints and fading out over <see cref="Metres"/> past them
 	/// (<see cref="BiomeScatterModes.NearSite"/>, the NearSite scatter anchor's own reach). Off (the default) paints as before.
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A ground that comes and goes on the SHARED CLOCK (2026-10-26, phase GROUND-BANDS: AbyssalPlain Q5 "seasonal ground-cover strength
+	/// A ground that comes and goes on the SHARED CLOCK (AbyssalPlain Q5 "seasonal ground-cover strength
 	/// from the shared clock", decision 84 "daily ground band (SO₂ frost at dawn, gone by noon)"). Painted at the cut like any detail; on
 	/// the GPU its weight is scaled each frame by a window of the local year or day (<see cref="Factor"/>, mirrored in FishGroundClock.hlsl)
 	/// and what it gives up goes to its biome's main ground, so every viewer sees the same ground at the same moment. None (the default)

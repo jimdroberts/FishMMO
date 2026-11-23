@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The heightmap edits the cut's ridge-and-furrow fields made (2026-10-18, phase I2h), so the next repaint or Regenerate
+	/// The heightmap edits the cut's ridge-and-furrow fields made, so the next repaint or Regenerate
 	/// POIs can take them out before anything reads the ground: every field is carved again from the ground it was first
 	/// carved on, never on top of its own ridges.
 	/// </summary>

@@ -8,7 +8,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 19 of the biome suite (2026-10-16, the Taiga round): a biome's main and detail layers may carry ways of their
+	/// Decision 19 of the biome suite: a biome's main and detail layers may carry ways of their
 	/// own (TerrainTextureLayer.ways: a path, road and cobble ground each), and where one is set the terrain draws that way
 	/// across that ground with it, the biome's own way grounds everywhere else. Empty is the biome's own, as every ground was
 	/// before, so a template authored from a spec that sets none cuts the same scene. These are the pure parts: the slot
@@ -194,7 +194,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(SceneTerrainPalette.WayLayer(bare, "main", SceneTerrainPalette.SlotPathGravel), Is.EqualTo(-1));
 			Assert.That(SceneTerrainPalette.WayLayer(null, "main", SceneTerrainPalette.SlotPathGravel), Is.EqualTo(-1));
 
-			// No ground carries a way of its own: exactly the biome's, as PathLayerMap chose before 2026-10-16.
+			// No ground carries a way of its own: exactly the biome's, as PathLayerMap chose formerly.
 			var plain = taiga.FindAll(e => !BiomeLocalArt.TryParseWaySlot(e.Slot, out _, out _));
 			foreach (string ground in new[] { "main", "detail/0", "detail/1" })
 			{
@@ -222,7 +222,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			string palette = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "Terrain/SceneTerrainPalette.cs"));
 			Assert.That(palette, Does.Contain("int way = WayLayer(byBiome[entry.BiomeIndex], entry.Variant != null ? BiomeLocalArt.GroundSlot(entry.Ground) : entry.Slot, slot);"),
-				"PathLayerMap chooses per ground (a climate variant's override by the ground it stands in for, 2026-10-18)");
+				"PathLayerMap chooses per ground (a climate variant's override by the ground it stands in for)");
 			string authoring = ProjectFiles.ReadAllText(Path.Combine(WorldFolder, "ProceduralArt/BiomeArtAuthoring.cs"));
 			Assert.That(authoring, Does.Contain("AuthorLayerWays(biome, entry, source, report, apply);"));
 			Assert.That(authoring, Does.Contain("foreach ((string key, TerrainTextureLayer ground, string way) in WaysOf(biome))"), "LOCAL ways move to the sidecar");

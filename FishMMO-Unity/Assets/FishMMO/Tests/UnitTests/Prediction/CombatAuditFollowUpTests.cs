@@ -8,7 +8,7 @@ using UnityLogAssert = UnityEngine.TestTools.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Regressions for the defects the 2026-08-29 follow-up audit found: a coalesced combat report
+	/// Regressions for the defects the follow-up audit found: a coalesced combat report
 	/// settling only one of the predictions it stood for, two <see cref="ModifierSource"/> keys that
 	/// collided with themselves, an unframed reconcile snapshot, and a non-atomic item id counter.
 	/// </summary>

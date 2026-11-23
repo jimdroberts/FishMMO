@@ -1195,7 +1195,7 @@ namespace FishMMO.Shared
 			/* The reference itself may already hold a load these tables do not track (a failed one they dropped, or one
 			 * started outside the processor). A second LoadAssetAsync on it is an Addressables error ("already been
 			 * loaded") that answers an INVALID handle, and subscribing to that throws inside whatever asked, such as a
-			 * broadcast handler (2026-11-20, character select). A held load that is live or succeeded is handed over; a
+			 * broadcast handler (character select). A held load that is live or succeeded is handed over; a
 			 * failed one is released so this request loads afresh. */
 			AsyncOperationHandle held = assetReference.OperationHandle;
 			if (held.IsValid())

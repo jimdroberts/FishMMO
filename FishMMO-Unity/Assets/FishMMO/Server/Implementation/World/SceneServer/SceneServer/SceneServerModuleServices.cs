@@ -8,7 +8,7 @@ using FishMMO.Shared;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// A module's piece of the scene server that lives as long as it does (Phase 4 of the core and modules plan, 2026-11-18): the
+	/// A module's piece of the scene server that lives as long as it does: the
 	/// weather, hosted on the core's world clock. Started after the clock, ticked every frame after it, stopped before it.
 	/// </summary>
 	public interface ISceneServerModuleService

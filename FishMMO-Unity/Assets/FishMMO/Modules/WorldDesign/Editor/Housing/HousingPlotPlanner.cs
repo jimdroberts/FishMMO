@@ -51,7 +51,7 @@ namespace FishMMO.Shared
 		public const int LotsPerRun = 6;
 
 		/// <summary>
-		/// How far a district stands from its settlement's edge, metres (tried in order). 150 and 220 added 2026-11-22: Moron 1's
+		/// How far a district stands from its settlement's edge, metres (tried in order). 150 and 220: Moron 1's
 		/// capital stands on the coast, and every spot within 100 m of it was sea or shore, so it had no district at all.
 		/// </summary>
 		public static readonly float[] RingMetres = { 30f, 60f, 100f, 150f, 220f };
@@ -67,7 +67,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Spots tried in a chosen cell before it is given up: one spot was too few, as a coast or a wooded slope
-		/// (Moron 1, 11-15) refused every cell's single try and the scene got no lot at all.
+		/// (Moron 1) refused every cell's single try and the scene got no lot at all.
 		/// </summary>
 		public const int CountryTries = 16;
 
@@ -115,7 +115,7 @@ namespace FishMMO.Shared
 			/// <summary>Lots a previous cut laid; laid again first, never moved.</summary>
 			public List<ScenePlotManifest.Lot> Kept = new List<ScenePlotManifest.Lot>();
 			/// <summary>
-			/// How far the ground may vary under a lot (and its margin), metres. 4 (2026-11-22, was 2): the cut levels every lot to
+			/// How far the ground may vary under a lot (and its margin), metres. 4 (was 2): the cut levels every lot to
 			/// its post, so a gentler limit only refused ground the levelling handles; Moron 1 had no lot at all by its capital.
 			/// </summary>
 			public float MaxRelief = 4f;

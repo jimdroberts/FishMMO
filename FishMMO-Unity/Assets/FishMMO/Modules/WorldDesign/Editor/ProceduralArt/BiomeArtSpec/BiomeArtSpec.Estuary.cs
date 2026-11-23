@@ -10,19 +10,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Estuary</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Estuary()
 		{
-			// The tidal Wadden of the Frisian sea-coast (biome round, approved 2026-10-18, authored 2026-10-26): grey schlick bared by
+			// The tidal Wadden of the Frisian sea-coast: grey schlick bared by
 			// the ebb and braided by shining creeks, lugworm casts, green gutweed and blue-black mussel banks; landward the saltings
-			// zoned by the TIDE (decision 45: bands in tides, 0 mean sea, 1 mean high water): glasswort and cordgrass on the pioneer
+			// zoned by the TIDE (bands in tides, 0 mean sea, 1 mean high water): glasswort and cordgrass on the pioneer
 			// mud, the sea-lavender low marsh, the sheep-cropped kwelder with its thrift and dark rush patches, round white pannes.
 			// A treeless coast whose free marsh-folk raise their villages on terps and warften, wall the sea out with siel-gated dikes,
 			// boil salt from peat and lay cogs aground on the mud. The sea has a real tide on the shared clock, so the flats bare and
 			// drown twice a day. Cool band (t <= 0.15): no golden samphire or shrubby sea-blite; warm band (t >= 0.4): both.
 			// Fantasy: Rungholt rising from the flats with ghost lights, Ekke Nekkepenn, Fosite's well, Ebbspar glowing while the tide is out.
-			// LATER (I9 T1): every ground and object texture as Estuary's own variant of its recipe (decision 12); until then the grounds
+			// LATER: every ground and object texture as Estuary's own variant of its recipe; until then the grounds
 			// are its own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Halliglilac + Rungholt.
-			// LATER (SEA-LIFE): harbour seal 1.6, flounder 1.5, brown shrimp 1.5, harbour porpoise 0.4, sturgeon 0.2, Ekke Nekkepenn 0.05;
-			// the kit's baitfish and crabs stand in. LATER (AMBIENT-LIFE): wader flocks over the flats, avocets, spoonbills, brent geese in
+			// LATER (no spec column yet): rare looks Halliglilac + Rungholt.
+			// LATER: harbour seal 1.6, flounder 1.5, brown shrimp 1.5, harbour porpoise 0.4, sturgeon 0.2, Ekke Nekkepenn 0.05;
+			// the kit's baitfish and crabs stand in. LATER: wader flocks over the flats, avocets, spoonbills, brent geese in
 			// the cool band, salt-marsh sheep, hares on the dike, Ekke Nekkepenn on a sandbank at dusk.
 			return E("Estuary", L(Ground.MudSchlickFlat,
 					// The flats: gutweed and lugworm casts at low water, the first cordgrass and glasswort at the top of the tide, cockles,
@@ -58,7 +58,7 @@ namespace FishMMO.Shared.WorldDesign
 						Plants("FlowersThrift", 6f, 200, 14f), Plants("FlowersKwelder", 4f, 200, 14f), Plants("FlowersSeaLavender", 4f, 200, 14f),
 						Plants("SeaPlantain", 3f, 160, 14f), Plants("ScurvyGrass", 2f, 160, 14f), Plants("SeaWormwood", 4f, 160, 14f), Grass("GrassSeaCouch", 14f, 200, 14f),
 						Plants("Teek", 8f, 128, 14f), Band(Plants("FlowersGoldenSamphire", 3f, 200, 14f), 0.4f, 1f), Band(Bush("ShrubbySeablite", 1.5f), 0.4f, 1f),
-						// LATER (I7): the terps' and warften's ash and elder within 120 m of a settlement; they stand on the mounds' crowns here.
+						// LATER: the terps' and warften's ash and elder within 120 m of a settlement; they stand on the mounds' crowns here.
 						OnLandform(Trees(0.04f, 12f, 12f, "TerpAsh"), BiomeLandformPart.Top, "Terp"), OnLandform(Trees(0.04f, 12f, 12f, "TerpAsh"), BiomeLandformPart.Top, "Warft"),
 						OnLandform(Bush("Elder", 0.4f), BiomeLandformPart.Flank, "Terp"))
 						.Tide(1.1f, BiomeSeaFloors.OpenDepth),
@@ -81,14 +81,14 @@ namespace FishMMO.Shared.WorldDesign
 				.Ways(path: Ground.PathMudSheepTrack, road: Ground.ClayKleiweg, cobbles: Ground.FlagstoneMoppen)
 				.Bars(sand: Ground.SandShoalCockle, gravel: Ground.GravelSchill)
 				// Own rock Till (Kliff, Slump, Lag, the Findling erratics), accepting the red Heligoland sandstone and the white chalk
-				// with its flint bands. LATER (I9): Sandstone "Fositesland" and Chalk "Witte Kliff" as Estuary's own looks.
+				// with its flint bands. LATER: Sandstone "Fositesland" and Chalk "Witte Kliff" as Estuary's own looks.
 				.Accepts(RegionalRocks.Till, RockTypes.Sandstone, RockTypes.Chalk)
 				.CaveShell(CaveForm.Cave, "Sandstone").CaveShell(CaveForm.SeaCave, "Sandstone").CaveShell(CaveForm.Grotto, "Chalk")
 				.CaveShell(CaveForm.Mine, "Till").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
 				// Vivianite, the blue marsh-clay phosphate, and fantasy Ebbspar. LATER (GLOW): Ebbspar's glow follows the SeaTide (full at
 				// low water, dark at high) with a faint 8 s shimmer; it glows steadily here.
 				.Crystals((BiomeCaveCrystalKind.Vivianite, 0.6f), (BiomeCaveCrystalKind.Ebbspar, 0.4f))
-				// Tidal creek network, terps, warften, the sea dike and the pannes (decision 45).
+				// Tidal creek network, terps, warften, the sea dike and the pannes.
 				.Landforms("TidalCreeks", "Terp", "Warft", "SeaDike", "SaltPannes")
 				.Look(BiomeLookClass.Coastal)
 				.Water(BiomeWaterRole.Estuary)
@@ -123,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Blades("FlowersGoldenSamphire", t => WoodsBlade(t, "#6a8a5a", "#7a9a62", 0.35f, width: 1.2f,
 					head: GrassBladeHead.Flower, sprinkle: 8f, headSize: 0.05f, heads: new[] { "#e8c030" }))
 				// Sites: the villages are free marsh-folk's, the harbours sielhafens; the drowned town Rungholt is rare (one a scene).
-				// LATER (I7): the named pieces — the Wierde round village, the Wohnstallhaus longhouse, Hallig warft, tuff church and
+				// LATER: the named pieces — the Wierde round village, the Wohnstallhaus longhouse, Hallig warft, tuff church and
 				// klokkenstoel, the Stins tower-house, the siel with its tide-swung flap gates, the tide mill whose wheel turns only on the
 				// ebb, salt sieden, wattle weirs and stow nets, the Sielhafen with cogs aground, the cog yard, the Bluese beacon, the
 				// Upstalsboom, the Biike, the Denghoog, drowned Rungholt (tide-bared, ghost lights), Fosite's well, the stranded cog and the
@@ -137,7 +137,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Monument, 0.3f), (POIType.BanditCamp, 0.3f), (POIType.HuntingLodge, 0.3f), (POIType.MonsterDen, 0.3f), (POIType.Battlefield, 0.3f),
 					(POIType.Windmill, 0.2f), (POIType.Hermitage, 0.2f), (POIType.WitchHut, 0.2f), (POIType.Statue, 0.2f), (POIType.City, 0.1f), (POIType.Castle, 0.05f),
 					(POIType.Capital, 0.02f), (POIType.River, 1f), (POIType.Lake, 1f), (POIType.Bridge, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HauntedManor, 0.6f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 1f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f),
@@ -165,10 +165,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Temple, "Court", 1.2f)
 				.Prefers(POIType.Graveyard, "Earthen", 1.4f)
 				.Prefers(POIType.Barrow, "Ringed", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.ReedVillage, "Marsh Town", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Favours(BiomeStructureStyle.Earth, 1.4f)
 				.Favours(BiomeStructureStyle.Stone, 1f)
 				.Favours(BiomeStructureStyle.Timber, 0.8f)
@@ -176,7 +176,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: blue-grey clay-sod walls, wattle-and-daub, dense reed thatch (hipped), tarred oak, Rhenish tuff ashlar and
 				// big monastic brick, grey-brown Frisian wool striped madder and woad.
-				// LATER (NEW-SURFACES U1/U6): KleiSod, FrisianReet, Tuffstone, Moppen, MonkNun, Fries, Barksail as surfaces of their own;
+				// LATER: KleiSod, FrisianReet, Tuffstone, Moppen, MonkNun, Fries, Barksail as surfaces of their own;
 				// the kit's earth, reed, stone and shingle materials, tinted, stand in.
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Wall, BiomeStructureMaterial.Earth, SeaHex("#6a6c5c"))
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Plaster, SeaHex("#a8a08a"))
@@ -213,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The summer dike round the fields and the ditches along the lanes.
 				.Lines(new Entry.Line("Tungardur"), new Entry.Line(BiomeLinearForm.EarthDitch, BiomeLinearPlace.Lanes))
 				// Horn-paned fish-oil lanterns on crooks, wall lanterns in the towns, braziers at a keep, cressets on the dikes; the
-				// drowned town and its ghosts burn glowjars. LATER (I7a): non-town site lights are laid once I7a places them.
+				// drowned town and its ghosts burn glowjars. LATER: non-town site lights are laid once a later pass places them.
 				.Lights(POIType.Village, BiomeWayLightKind.CrookLantern, 16f)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.CrookLantern, 16f)
 				.Lights(POIType.Waystation, BiomeWayLightKind.CrookLantern, 16f)

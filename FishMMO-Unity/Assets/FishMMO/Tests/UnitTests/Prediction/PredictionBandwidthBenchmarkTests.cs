@@ -301,7 +301,7 @@ namespace FishMMO.UnitTests
 			walking.Position = standing.Position + new Vector3(0.12f, 0f, 0.04f);
 			walking.BaseVelocity = new Vector3(3.6f, 0f, 1.2f);
 			walking.Rotation = Quaternion.Euler(0f, 22f, 0f);
-			/* Floor lowered from 75% to 72% on 2026-08-28 for the motor state's leading mode byte.
+			/* Floor lowered from 75% to 72% for the motor state's leading mode byte.
 			 * The byte is gone on FishNet's delta prediction (a root's full reconcile is now FishNet's
 			 * job), so this scenario clears the floor by more than it used to; the floor was left
 			 * where it was rather than raised on an unmeasured guess.
@@ -309,7 +309,7 @@ namespace FishMMO.UnitTests
 			 * If this floor needs to move, check that it is a real regression first — the message
 			 * below names the usual cause, and it is still the right thing to look at.
 			 *
-			 * Lowered from 72% to 65% on 2026-11-13, deliberately: position, rotation and both velocities are now
+			 * Lowered from 72% to 65%, deliberately: position, rotation and both velocities are now
 			 * LOSSLESS (LosslessFloatDelta) so a reconcile restores the server's state bit for bit. Measured: full 91 B
 			 * (exact rotation, was 83 with the 64-bit packing), walking delta 28 B, about 3 B over the old rounded form,
 			 * mostly the 22-degree turn. The rounded form restored the owner a millimetre or two off and millimetre

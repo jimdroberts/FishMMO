@@ -8,7 +8,7 @@ using FishMMO.Client;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The vegetation's pipelines in the opaque pass (draw-call round 2026-10-28). A per-material choice that does not
+	/// The vegetation's pipelines in the opaque pass. A per-material choice that does not
 	/// change fixed-function state is a uniform branch, not a keyword: bark (normal map) and deadwood (none) are one shader
 	/// variant, one pipeline. <c>_ALPHATEST_ON</c> stays a keyword (a discard turns early depth off for every draw of the
 	/// variant, and leaves and bark differ in cull mode anyway). The primed and unprimed alpha-tested lit draws differ in

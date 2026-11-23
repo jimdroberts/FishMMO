@@ -15,8 +15,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Carved, not placed</b> (2026-10-10: "carve our own"). Unity's terrain has no caves, only holes, so the
-	/// cave is meshes of our own and the terrain is holed where it opens. Deep (2026-10-11: "caves should go very
+	/// <b>Carved, not placed</b> ("carve our own"). Unity's terrain has no caves, only holes, so the
+	/// cave is meshes of our own and the terrain is holed where it opens. Deep ("caves should go very
 	/// deep, open up into chambers, connect to each other"): a trunk passage falls tens of metres under its mouth through
 	/// rooms to a great cavern, side passages wander off, and a cave planned near one already carved is joined to it deep
 	/// down, so the two sites are one system with two mouths. A mine is a straight adit with drifts and stopes. A large
@@ -57,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How far apart two caves' mouths may be and still be joined into one system, metres: past the spacing the planner keeps
-		/// between caves of a kind (500–600 m), so neighbours on one hill do join (2026-10-18: at 420 m next to none could).
+		/// between caves of a kind (500–600 m), so neighbours on one hill do join (at 420 m next to none could).
 		/// </summary>
 		public const float JoinReach = 760f;
 
@@ -77,7 +77,7 @@ namespace FishMMO.Shared.WorldDesign
 				case POIType.IceCave: form = CaveForm.IceCave; return true;
 				case POIType.LavaTube: form = CaveForm.LavaTube; return true;
 				case POIType.Mine: form = CaveForm.Mine; return true;
-				// A sea hall's melt shaft (2026-10-26, phase I2n-b, decision 83: CaveSystem.SeaHall.cs).
+				// A sea hall's melt shaft (CaveSystem.SeaHall.cs).
 				case POIType.SeaHall: form = CaveForm.SeaHall; return true;
 				default: form = CaveForm.Cave; return false;
 			}
@@ -112,11 +112,11 @@ namespace FishMMO.Shared.WorldDesign
 			TerrainTilePlan tiles = context.Tiles;
 			CaveSystem.Profile profile = CaveSystem.ProfileFor(form, site.SizeClass);
 			// Wide enough for a graph's branches and halls to wander off the trunk's line (CaveSystem.Layout), not only its length:
-			// a large cave's hall runs to 250 m across with its lobes round it (2026-10-18), and every lobe must lie in the sample.
+			// a large cave's hall runs to 250 m across with its lobes round it, and every lobe must lie in the sample.
 			float spread = form == CaveForm.Grotto || form == CaveForm.SeaCave ? 0f : form == CaveForm.SeaHall ? 40f : site.SizeClass >= 2 ? 320f : 180f;
 			CaveGround ground = SampleGround(context.GroundAt, tiles, site.Position.x, site.Position.z, profile.TrunkMax + 60f + spread);
 			float water = form == CaveForm.Grotto ? WaterBefore(context, site) : float.NaN;
-			// Behind a waterfall or under water (2026-10-18), where the planner sited it so (PointOfInterestPlanner.CaveWater).
+			// Behind a waterfall or under water, where the planner sited it so (PointOfInterestPlanner.CaveWater).
 			CaveOpening opening = OpeningFor(context, site, form, out CaveFallMouth fall, out string refused);
 			if (refused != null)
 			{
@@ -125,14 +125,14 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			Vector3 at = opening.Kind == CaveMouthKind.Shelf ? fall.Mouth : site.Position;
 			float yaw = opening.Kind == CaveMouthKind.Shelf ? fall.Yaw : site.Yaw;
-			// Within the scene's cave depth range (its pre-cut prompt, 2026-10-21); none set, the planner's own.
+			// Within the scene's cave depth range (its pre-cut prompt); none set, the planner's own.
 			PointOfInterestSettings settings = context.Request != null ? context.Request.PointsOfInterest : null;
 			Vector2 depths = settings != null ? settings.CaveDepthRange : new Vector2(CaveSystem.LeastDepth, CaveSystem.MaxCaveDepth);
-			// Drowned by its water table where the cave biome says so (2026-10-25, phase I2n-c, decision 86 (a)): NaN for as before.
+			// Drowned by its water table where the cave biome says so: NaN for as before.
 			CaveBiome planned = CaveInteriorArt.OfSite(context.Request, site);
 			if (form == CaveForm.SeaHall && !planned.Linked)
 			{
-				// A sea hall is its sea's (decision 83): with no interior holding here (no host links one, or the world is not frozen
+				// A sea hall is its sea's: with no interior holding here (no host links one, or the world is not frozen
 				// through over a warm interior, its Requires), there is no sea under the ice to open.
 				context.Reject(site, "no sea lies under the ice here (its biome links no sea hall, or the world is not the interior's)");
 				return;
@@ -162,7 +162,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Openings in its great chambers' roofs up to the ground, where the rock over them is thin (CaveShaper.Skylights.cs):
 			// mouths of their own kind, holed and kept clear with the rest below (and taken along if the system is joined).
 			TrySkylights(context, site, system, ground);
-			// And small root windows under a wooded, wet host where the cave biome opens them (2026-10-25, I2n-c, decision 86 (f)).
+			// And small root windows under a wooded, wet host where the cave biome opens them.
 			TryRootWindows(context, site, system, ground, in planned);
 
 			// Joined to a system already carved near it, where a passage fits between them deep down.
@@ -461,7 +461,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A lava tube's molten lava (2026-10-20, <see cref="CaveLava.Plan"/>: rivers in the channels its field cut, lakes, plunge
+		/// A lava tube's molten lava (<see cref="CaveLava.Plan"/>: rivers in the channels its field cut, lakes, plunge
 		/// pools, falls) written into the scene's hydrology as lava (CaveLavaWater: ids in the grotto pools' range with bit 28), so
 		/// it is drawn, burns and is pathed round as the lava seas are. Written after the scene's water is saved, on every cut,
 		/// repaint and regeneration, as a grotto's pool is; a cooled tube's write clears whatever an earlier build left.
@@ -481,7 +481,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A wet cave's water (2026-10-20, caves livened, <see cref="CaveStreams.Plan"/>: streams in the channels its field cut, their
+		/// A wet cave's water (caves livened, <see cref="CaveStreams.Plan"/>: streams in the channels its field cut, their
 		/// springs and falls, pools, flooded basins, gours, winzes and dead ends) written into the scene's hydrology (CaveStreamWater:
 		/// ids in the grotto pools' range, bits 24..27 the body), so it is drawn, waded and swum as any river or lake. Written after
 		/// the scene's water is saved, on every cut, repaint and regeneration, as a grotto's pool is; a dry or frozen plan's write
@@ -508,7 +508,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static void WritePool(PointOfInterestPlaceContext context, PointOfInterestRecord site, CaveSystem system, CaveGround ground)
 		{
-			// A sea hall's water is its own sea under the ice (decision 83), wherever the ice puts it: its world has no sea surface (SceneGenerator.AddWater).
+			// A sea hall's water is its own sea under the ice, wherever the ice puts it: its world has no sea surface (SceneGenerator.AddWater).
 			bool hall = system.Form == CaveForm.SeaHall;
 			if (system.Form != CaveForm.Grotto && !system.HasSump && !system.Drowned && !hall || float.IsNaN(system.WaterLevel) || !hall && system.WaterLevel <= SeaLevel + 0.05f
 				|| string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null)
@@ -885,7 +885,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			// The ground over its rock raised where it has come down to its air since the plan (the ways carved, other sites' pads
-			// levelled, 2026-10-27): no hole onto the sky where the cut opened none (CaveShaper.RoofSeal.cs).
+			// levelled): no hole onto the sky where the cut opened none (CaveShaper.RoofSeal.cs).
 			SealRoof(context, system, label);
 			CaveGround ground = GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles);
 			string assetPath = string.IsNullOrEmpty(context.TerrainFolder) || context.Request == null ? null
@@ -938,13 +938,13 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			else
 			{
-				// The shell's rock with the habitat's layers on (2026-10-20): silt, gravel, litter and worn ways on its floors, wet,
+				// The shell's rock with the habitat's layers on: silt, gravel, litter and worn ways on its floors, wet,
 				// stains, moss and glow crust on its walls, by the vertex habitat the mesher wrote (CaveHabitat, FishCaveRock.hlsl).
-				// 2026-10-25 (I2n): the floors' grounds are the biome dressing the cave's inside (its interior where the host links
+				// The floors' grounds are the biome dressing the cave's inside (its interior where the host links
 				// one, CaveInteriorArt); an ice shell's inner wall the interior's own ice, where it carries one.
 				CaveBiome caves = CaveInteriorArt.Of(context.Request, site, system);
 				CaveRockLook look = CaveRockLayers.For(caves, system.Form, rock);
-				// The tea ring at the water's line where the cave biome's water leaves one (2026-10-25, I2n-c, decision 86 (g)).
+				// The tea ring at the water's line where the cave biome's water leaves one.
 				look = CaveRockLayers.WithStain(look, in caves, system.Form, system.WaterLevel);
 				material = CaveRockMaterials.For(material, in look, assetPath, out bool written);
 				if (written && assetPath != null)
@@ -953,13 +953,13 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			// The run-time cave cover's choice for this cave (its types and glow by biome and form) on its Visual (CaveCoverSpecies),
-			// with what the cover reads of its rock (2026-11-03): a kept cave gets its bake once, as its colliders above.
+			// with what the cover reads of its rock: a kept cave gets its bake once, as its colliders above.
 			CaveCoverBake cover = CoverBakeFor(assetPath, site.Id, meshes, rebuilt, live);
 			CaveCoverSpecies.Attach(Build(context.Root, system, mouths, meshes, material, colliders), system, CaveInteriorArt.Of(context.Request, site, system), cover);
 			WritePool(context, site, system, ground);
 			WriteLava(context, site, system);
 			WriteStreams(context, site, system);
-			// The cave's water takes its interior's look, where that biome has one of its own (2026-10-25, I2n-c, decision 86 (b)).
+			// The cave's water takes its interior's look, where that biome has one of its own.
 			StampWaterLook(context, site, CaveInteriorArt.LookBiome(CaveInteriorArt.Of(context.Request, site, system)));
 		}
 
@@ -973,7 +973,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The rock a cave of a form is cut in at a point: its biome template's shell for the form (BiomeTemplateArt.CaveShell,
-		/// 2026-10-16; until then basalt for a lava tube and glacier ice for an ice cave were decided here), the ground's own
+		/// until then basalt for a lava tube and glacier ice for an ice cave were decided here), the ground's own
 		/// rock there by the biome's rock rule where the template says Ground.
 		/// </summary>
 		public static string RockOf(CaveForm form, SceneGenerationRequest request, PointOfInterestRecord site, Vector3 at)
@@ -1141,7 +1141,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>Bump on any change to how a cave is meshed that the inputs key would not see (it already sees every code change, below).</summary>
-		/// <remarks>2: every vertex carries its habitat (COLOR + UV3, <see cref="CaveHabitat"/>), 2026-10-20.</remarks>
+		/// <remarks>2: every vertex carries its habitat (COLOR + UV3, <see cref="CaveHabitat"/>).</remarks>
 		public const int MeshVersion = 2;
 
 		/// <summary>
@@ -1300,7 +1300,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// As above, with each piece's collider mesh (<see cref="ColliderName"/>, <see cref="CaveMesher.ColliderOf"/>) written
-		/// beside it into <paramref name="colliders"/>. Stored pieces are written unreadable (2026-10-20): nothing at run time
+		/// beside it into <paramref name="colliders"/>. Stored pieces are written unreadable: nothing at run time
 		/// reads their vertices on the CPU (the colliders have their own meshes; the cave cover binds their GPU buffers, which an
 		/// unreadable mesh keeps), so a client drops its copy of them once they are on the GPU.
 		/// </summary>

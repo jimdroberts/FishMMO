@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Boardwalks (2026-10-18, phase I2i, decision 27: "raised boardwalks as real walkable structures along swamp ways and between
+	/// Boardwalks ("raised boardwalks as real walkable structures along swamp ways and between
 	/// village houses"): a plank deck on stringers with a pole handrail, four metres a module, and the bent of two driven piles
 	/// under each joint, laid along a way by PathBoardwalks the way a moat's bridge is laid (PropsFeature.LayMoatBridge).
 	/// </summary>
@@ -47,7 +47,7 @@ namespace FishMMO.Shared.WorldDesign
 				BoardwalkSpan, "boardwalk");
 			span.Anchor = StructureAnchor.Deck;
 			span.ModuleLength = BoardwalkModule;
-			// The country styles (2026-10-25, I2i-b) as variants 2–5 (BoardwalkStyleVariant): v0 and v1 build as before.
+			// The country styles as variants 2–5 (BoardwalkStyleVariant): v0 and v1 build as before.
 			span.Variants = BoardwalkVariants;
 			StructurePiece bent = Piece(list, "BoardwalkBent", StructureStyle.Timber, StructureSize.Medium,
 				"A boardwalk's bent across x at z = 0, under a joint of two spans: a cap under the stringers on two driven round piles 1.2 m down; v1 braced; v2 passerella stubs, v3 forked posts and a crosspole, v4 sleeper on stakes, v5 forked stakes (v2, v4, v5 0.6 m down). Scale y to the ground.",
@@ -143,7 +143,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── Country styles (2026-10-25, phase I2i-b) ──────────────────────
+		// ── Country styles ──────────────────────
 		// The walks the biome drafts name, one variant of each piece a style (BiomeBoardwalkStyle): the passerella of the Lombard
 		// meadows, the landing walk of the prairie rivers, the Alpine Bohlensteg over a fen, the coast's pole-walk through the
 		// mangal. Each is built at its own width and depth (BoardwalkStyleShape), so a way lays it unscaled across and its bents
@@ -176,7 +176,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The variant both pieces build a country style as (2–5); the plank walk's own are 0 and 1.</summary>
 		public static int BoardwalkStyleVariant(BiomeBoardwalkStyle style) => style == BiomeBoardwalkStyle.Planked ? 0 : 1 + (int)style;
 
-		/// <summary>The shape of a style's walk; an unknown style is the plank walk's (I2i's constants, unchanged).</summary>
+		/// <summary>The shape of a style's walk; an unknown style is the plank walk's (the constants, unchanged).</summary>
 		public static BoardwalkStyleShape BoardwalkShape(BiomeBoardwalkStyle style, bool footway)
 		{
 			switch (style)

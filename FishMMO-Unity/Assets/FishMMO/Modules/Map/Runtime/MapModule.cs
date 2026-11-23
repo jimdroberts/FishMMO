@@ -5,7 +5,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Map module (2026-11-20): the player's maps. The world map and the minimap, fog of war, map notes, marker
+	/// The Map module: the player's maps. The world map and the minimap, fog of war, map notes, marker
 	/// filters, the compass and the client's map state (<c>ClientMapSystem</c>) are the module's, all on the client.
 	/// </summary>
 	/// <remarks>

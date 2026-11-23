@@ -7,7 +7,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Travel module (Phase 2): discovering waypoints and fast travel between them.
+	/// The Travel module: discovering waypoints and fast travel between them.
 	/// </summary>
 	/// <remarks>
 	/// <para>Here: the per-character record (<see cref="WaypointController"/>, a character part), the travel rule

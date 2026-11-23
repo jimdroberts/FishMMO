@@ -7,8 +7,8 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// Full-width designer pages modules add to the dashboard (the World Design module's Solar System and World Atlas):
-	/// each is a category of its own that fills the inspector and entity columns (Phase 4 of the core and modules plan,
-	/// 2026-11-18). The dashboard names none of them.
+	/// each is a category of its own that fills the inspector and entity columns.
+	/// The dashboard names none of them.
 	/// </summary>
 	public static class DashboardFullPages
 	{

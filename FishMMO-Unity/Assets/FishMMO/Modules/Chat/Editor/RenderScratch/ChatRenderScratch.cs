@@ -11,7 +11,7 @@ namespace FishMMO.RenderScratch
 {
 	/// <summary>
 	/// The Chat module's part of the panel render rig: the chat window, filled with sample lines, in the all-panels render,
-	/// the interface scaling render and the HUD overlap probe (moved out of the core rig with the module, 2026-11-20).
+	/// the interface scaling render and the HUD overlap probe (moved out of the core rig with the module).
 	/// </summary>
 	public static class ChatRenderScratch
 	{

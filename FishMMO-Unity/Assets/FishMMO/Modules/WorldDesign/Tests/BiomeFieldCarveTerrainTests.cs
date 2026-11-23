@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// I2h (2026-10-18): ridge and furrow carved into a real terrain, taken out and carved again: the ground comes back bit for
+	/// Ridge and furrow carved into a real terrain, taken out and carved again: the ground comes back bit for
 	/// bit, the second carve is the first bit for bit, the record is editor-only and goes with the restore, and a tree standing
 	/// in the field keeps its height over the ground. Unity-only (it makes a TerrainData and scene objects).
 	/// </summary>

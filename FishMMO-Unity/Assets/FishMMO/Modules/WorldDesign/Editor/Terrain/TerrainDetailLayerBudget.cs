@@ -12,14 +12,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Unity keeps a detail layer's index in one byte.</b> A detail patch stores the layers it holds as 8-bit indices, so
 	/// <c>TerrainData.SetDetailLayer</c> with layer 256 or above writes into layer <c>index &amp; 0xFF</c>, another plant's,
-	/// and nothing ever reads back from the layer asked for. Measured on 2026-10-27 over every world tile: the 30 tiles with
+	/// and nothing ever reads back from the layer asked for. Measured over every world tile: the 30 tiles with
 	/// more than 256 prototypes (Moron 1's 313, Moron 2's 578, Moron 3's 657) held no data in any layer from 256 up, and
 	/// Moron 2's Woodland pasture grass (layer 560) had been painted into the Forest's holly bush (layer 48 = 560 − 512): a
 	/// carpet of 6.5 m bushes over every woodland.
 	/// </para>
 	/// <para>
 	/// <b>So a tile is given only the prototypes it paints</b> (<see cref="TileLayers"/>), each the first time its rule writes
-	/// cells there: a few dozen biomes' out of a scene's hundreds (at most ~160 painted on any tile of the 2026-10-27 cuts,
+	/// cells there: a few dozen biomes' out of a scene's hundreds (at most ~160 painted on any tile of the cuts,
 	/// where the rules of the biomes on a tile hold up to ~365). Past the limit a prototype is refused there, loudly, rather
 	/// than written into another's layer.
 	/// </para>

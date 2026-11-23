@@ -1579,7 +1579,7 @@ namespace FishMMO.Shared
 					: FactionAllianceLevel.Neutral;
 			}
 
-			/* Two NPCs of one faction are one side, aggressive or not (2026-11-22: a camp's raiders are aggressive so they
+			/* Two NPCs of one faction are one side, aggressive or not (a camp's raiders are aggressive so they
 			 * attack every player, and "aggressive" made every one of them an enemy of the others too: elf raiders fought
 			 * elf raiders). Aggression widens an NPC's enemies to everyone OUTSIDE its faction. */
 			if (Character is NPC && otherFactionController.Character is NPC)

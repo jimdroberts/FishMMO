@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests.Weather
 	/// <summary>
 	/// The one clock the world's motion runs on (WorldMotion), and the pure functions the motion is
 	/// worked out from on top of it (SurfaceAirDrift), so every player sees the same wave, gust and fog
-	/// bank at the same moment (audit 2026-10-06).
+	/// bank at the same moment.
 	/// </summary>
 	[TestFixture]
 	public class WorldMotionClockTests

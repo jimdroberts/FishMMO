@@ -116,7 +116,8 @@ namespace FishMMO.Shared
 			foreach (KeyValuePair<int, IWaypoint> entry in scene)
 			{
 				IWaypoint waypoint = entry.Value;
-				if (waypoint == null || waypoint.GameObject == null)
+				// A Gate Stone is never a fast-travel point, so never a travel origin either (issue #241).
+				if (waypoint == null || waypoint.GameObject == null || waypoint.Kind == WaypointKind.GateStone)
 				{
 					continue;
 				}

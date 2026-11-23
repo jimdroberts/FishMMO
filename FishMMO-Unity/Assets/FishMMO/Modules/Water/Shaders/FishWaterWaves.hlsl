@@ -2,7 +2,7 @@
 #define FISHMMO_WATER_WAVES_INCLUDED
 
 #include "FishWaterInput.hlsl"
-// The wave sum shared with whatever rides the sea (2026-10-25): the cascades, the seabed's depth and calm, the shore's
+// The wave sum shared with whatever rides the sea: the cascades, the seabed's depth and calm, the shore's
 // distance; it includes FishWaterSurf.hlsl (the shore's clock, the world's gravity, where the sea hands over to the breakers).
 #include "FishWaterSwell.hlsl"
 

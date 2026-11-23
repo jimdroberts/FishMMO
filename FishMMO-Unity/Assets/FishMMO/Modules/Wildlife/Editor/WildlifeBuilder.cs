@@ -138,7 +138,7 @@ namespace FishMMO.Shared
 				Density = 0.45f, GroupMin = 2, GroupMax = 4,
 				Surfaces = SurfaceMask.Grass | SurfaceMask.Leaves | SurfaceMask.Dirt | SurfaceMask.Mud,
 			},
-			// 2026-11-21 (Jim: "add giant bats for cave wildlife"): a predator colony deep in the caves, drawn flying over the floor.
+			// Giant bats for cave wildlife: a predator colony deep in the caves, drawn flying over the floor.
 			new Species
 			{
 				Name = "Giant Bat", PrefabName = "a giant bat", Race = "Giant Bat", Role = WildlifeRole.Predator, Walk = 2.2f, Run = 8f,
@@ -153,7 +153,7 @@ namespace FishMMO.Shared
 				Habitats = BiomeHabitat.None, Density = 0f, GroupMin = 3, GroupMax = 6,
 				Shelter = WildlifeShelter.Cave, CaveColonies = true, RespawnMin = 240f, RespawnMax = 480f,
 			},
-			// ── Monsters (2026-11-22, Jim: "generate some like we did with wolves, deer, giant bats" for the points of interest's
+			// ── Monsters (built as the wolves, deer and giant bats are, for the points of interest's
 			// monster packs and elites). Never placed in the wild (no habitat, no density): only a site's MonsterPack and Elite
 			// spawners draw them, through the point-of-interest NPC table. Predators, so they hunt players, NPCs and every other
 			// pack; one species to a spawner (SpawnerFeatures), since each species is its own pack.

@@ -128,7 +128,7 @@ half3 FishStructureGlow(float3 positionWS, float3 originWS)
 float _FishGlowLights;
 
 /// <summary>
-/// A glowing part's light (a material marked _FishStructure = 3: a glowjar's mote, a rune stone's runes, 2026-10-18): what
+/// A glowing part's light (a material marked _FishStructure = 3: a glowjar's mote, a rune stone's runes): what
 /// its emission is scaled by. The very pulse its piece's light pulses with (SceneGlow.Pulse, constant for constant: a pure
 /// function of the shared motion clock, _FishWeatherMisc.w from FishWeather.hlsl, and the piece's origin on the ground), times
 /// how much of a glow shows now (_FishGlowLights), all of it underground. Needs FishWeather.hlsl included first.
@@ -144,7 +144,7 @@ half FishStructureGlowLight(float3 originWS, half underground)
 }
 
 /// <summary>
-/// The stormglass's flicker (2026-10-18, decision 33; SceneGlow.Flicker, constant for constant): a low steady glow and bright
+/// The stormglass's flicker (SceneGlow.Flicker, constant for constant): a low steady glow and bright
 /// uneven flashes where three crackles on the shared motion clock meet, phased by the glowing piece's origin on the ground,
 /// so a crystal and the light beside it flash together. 0.45 between flashes, 1 at a flash's height. What a flickering
 /// crystal's emission is scaled by (a material marked _FishStructure = -1: a glowing mineral, not weathered as a building).

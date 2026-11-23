@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Sets a dungeon entrance's door into its rock face (2026-10-18: "Dungeon entrances look boring and misaligned"): finds
+	/// Sets a dungeon entrance's door into its rock face ("Dungeon entrances look boring and misaligned"): finds
 	/// the face's foot along the site's heading, turns the heading square to the real face, moves the site to the door's
 	/// threshold there, and cuts the ground so the door stands recessed in the rock with a level forecourt before it.
 	/// </summary>
@@ -39,12 +39,12 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly DungeonEntranceShaper Instance = new DungeonEntranceShaper();
 
 		public const string ShaperName = "DungeonEntrance";
-		/// <summary>Format 2 (2026-10-27) adds the door's scale; a format 1 plan reads as scale 1.</summary>
+		/// <summary>Format 2 adds the door's scale; a format 1 plan reads as scale 1.</summary>
 		private const int Format = 2;
 		private const int ValueCount = 8;
 
 		/// <summary>
-		/// The scale a dwarven gate's door is laid at (2026-10-27, the fantasy wave: "a great carved door"): its template lays the
+		/// The scale a dwarven gate's door is laid at ("a great carved door"): its template lays the
 		/// kit's square dwarven portal this much larger, and the cut is made to the frame at this scale.
 		/// </summary>
 		public const float DwarvenGateScale = 1.5f;
@@ -170,7 +170,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="FindFace(Func{float, float, float}, Vector3, float, out Plan, out string)"/> for a door laid at
-		/// <paramref name="scale"/>: its forecourt and recess that much larger (a dwarven gate's, 2026-10-27).
+		/// <paramref name="scale"/>: its forecourt and recess that much larger (a dwarven gate's).
 		/// </summary>
 		public static bool FindFace(Func<float, float, float> ground, Vector3 start, float yaw, float scale, out Plan plan, out string problem)
 		{
@@ -333,7 +333,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The ground is cut at plan time; the door is the template's (its props and DungeonEntranceFeature).
 		}
 
-		/// <summary>The plan stored for a site, false for none (a site cut before 2026-10-18, or not a dungeon entrance).</summary>
+		/// <summary>The plan stored for a site, false for none (a site cut by an older generator, or not a dungeon entrance).</summary>
 		public static bool TryPlan(IEnumerable<PointOfInterestShape> shapes, int siteId, out Plan plan)
 		{
 			plan = default;

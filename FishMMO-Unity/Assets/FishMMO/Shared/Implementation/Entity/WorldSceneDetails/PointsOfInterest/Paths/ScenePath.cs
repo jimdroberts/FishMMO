@@ -64,29 +64,29 @@ namespace FishMMO.Shared
 		/// </summary>
 		Floor = 1 << 4,
 		/// <summary>
-		/// On a boardwalk (2026-10-18): a segment between two such points is walked on a plank deck on piles laid along it, so,
+		/// On a boardwalk: a segment between two such points is walked on a plank deck on piles laid along it, so,
 		/// as under a bridge's deck, nothing is drawn or carved on the ground beneath (Biomes.BiomeBoardwalks).
 		/// </summary>
 		Boardwalk = 1 << 5,
 		/// <summary>
-		/// On a rope ferry's crossing (decision 35 (i), 2026-10-18): a segment between two such points is travelled on the ferry
+		/// On a rope ferry's crossing: a segment between two such points is travelled on the ferry
 		/// flat, so, as under a bridge's deck, nothing is drawn or carved on the river's bed beneath.
 		/// </summary>
 		Ferry = 1 << 6,
 		/// <summary>
-		/// On a straight road's stair (2026-10-26, phase I2l-b): a segment between two such points climbs a cliff the road keeps its line
+		/// On a straight road's stair: a segment between two such points climbs a cliff the road keeps its line
 		/// over, cut as one even flight from the foot to the top (PathCarver) rather than evened to the road's grade.
 		/// </summary>
 		Stairs = 1 << 7,
 	}
 
 	/// <summary>
-	/// How a way runs (<see cref="ScenePath.Form"/>, 2026-10-26, phase I2l-b; decisions 50, 56, 87): routed round the ground as every way
+	/// How a way runs (<see cref="ScenePath.Form"/>): routed round the ground as every way
 	/// was, or one of the straight roads, with the profile it is built to. Append only; the ordinal is stored in scene assets.
 	/// </summary>
 	public enum ScenePathForm : byte
 	{
-		/// <summary>Routed round the ground (every way until 2026-10-26).</summary>
+		/// <summary>Routed round the ground (every way formerly).</summary>
 		Routed = 0,
 		/// <summary>Dead-straight, cut and filled to its grade, stairs cut where a cliff stands across it.</summary>
 		Straight = 1,
@@ -125,7 +125,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public float FromEntrance = float.NaN;
 		public float ToEntrance = float.NaN;
-		/// <summary>How the way runs: routed (every way before 2026-10-26) or one of the straight roads (<see cref="ScenePathForm"/>).</summary>
+		/// <summary>How the way runs: routed (every way formerly) or one of the straight roads (<see cref="ScenePathForm"/>).</summary>
 		public ScenePathForm Form = ScenePathForm.Routed;
 
 		public Vector3[] Points = Array.Empty<Vector3>();
@@ -259,7 +259,7 @@ namespace FishMMO.Shared
 		public const float CutMetres = 5f;
 
 		/// <summary>
-		/// A way's numbers by its class and form (<see cref="ScenePath.Form"/>, 2026-10-26, phase I2l-b): a routed way's are its class's
+		/// A way's numbers by its class and form (<see cref="ScenePath.Form"/>): a routed way's are its class's
 		/// exactly (<see cref="For(ScenePathClass)"/>). A straight road evens its line over twice its class's length and cuts and fills
 		/// up to 4 m to hold its grade; a raised one stands <see cref="RaisedMetres"/> over the ground between short steep sides; a cut
 		/// one lies <see cref="CutMetres"/> down between near-sheer walls. The trodden width, surface and grade are the class's.

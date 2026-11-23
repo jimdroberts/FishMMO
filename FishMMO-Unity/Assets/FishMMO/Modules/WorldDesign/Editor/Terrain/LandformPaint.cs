@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The ground the scene's sculpted landforms paint (2026-10-18, phase I2g): each stored landform whose entry names a ground layer
+	/// The ground the scene's sculpted landforms paint: each stored landform whose entry names a ground layer
 	/// of its biome (<see cref="BiomeLandform.PaintGround"/>) has that layer blended over the part of it the entry names (a crater's
 	/// rays, a cryodome's streaks, a playa's floor, a tell's mound, a dune's sand up to its angle of repose), by the landform's own
 	/// mask (<see cref="BiomeLandforms.Shape.Mask"/>).

@@ -11,7 +11,7 @@ namespace FishMMO.UnitTests.Weather
 	/// thinnest cloud that can be at its height.
 	/// </summary>
 	/// <remarks>
-	/// Issue #238, 2026-09-29: in the editor the Ray Jitter diagnostic proved the grain was the rays'
+	/// Issue #238: in the editor the Ray Jitter diagnostic proved the grain was the rays'
 	/// phase, and turning it off left rings across a thin layer and terraces inside cumulus. The march
 	/// strode through a band's empty air at up to 0.15 of the band's depth in height per stride and walked
 	/// back on the stride's grid when it landed in cloud: a sheet thinner than a stride was all or nothing
@@ -196,7 +196,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheRaysPhaseNoLongerMovesTheCloud()
 		{
-			// 2026-09-29: each sample's extinction was held over its whole step, which is the cloud moved
+			// each sample's extinction was held over its whole step, which is the cloud moved
 			// along the ray by (jitter − ½)·step — so where a ray's phase put its samples changed its
 			// answer wherever the extinction changes across a step: the grain. Between consecutive
 			// samples in straight lines, the phase drops out to first order. The spread of one ray's
@@ -327,13 +327,13 @@ namespace FishMMO.UnitTests.Weather
 		public double EmptyRamp = 4.0;
 		/// <summary>
 		/// The trapezoid between consecutive samples, as the shader integrates (<c>_FishCloudFix.x</c> 0);
-		/// false holds each sample's extinction over its whole step, as it did until 2026-09-29.
+		/// false holds each sample's extinction over its whole step, as it did formerly.
 		/// </summary>
 		public bool Trapezoid = true;
 		/// <summary>
 		/// Dense cloud walked as the shader walks it (<c>_FishCloudFixB.y</c> 0): the in-cloud optical-depth
 		/// limit loosened as the ray dims, 1/√T, and every limit on a step grown as √(0.2/T) once under a
-		/// fifth of the light is left; false keeps them fixed, as they were until 2026-09-29. (The haze under
+		/// fifth of the light is left; false keeps them fixed, as they were formerly. (The haze under
 		/// a base is not in this twin: it has no haze.)
 		/// </summary>
 		public bool Economy = true;

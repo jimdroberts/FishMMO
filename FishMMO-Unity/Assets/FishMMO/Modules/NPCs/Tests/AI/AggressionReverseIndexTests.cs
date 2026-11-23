@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
 	/// Pins the dispatcher's reverse index — character ID to the NPCs whose tables track it —
-	/// that heal and kill events are routed through (hot-path audit, 2026-09-25: M5).
+	/// that heal and kill events are routed through (hot-path audit: M5).
 	/// </summary>
 	/// <remarks>
 	/// Heal and kill events used to walk every registered NPC state: every scene instance on the

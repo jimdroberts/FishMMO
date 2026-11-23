@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class PointOfInterestFeatureDefaults
 	{
 		/// <summary>
-		/// The fantasy wave's features (2026-10-27): its lived-in places as settlements, its strongholds' waypoints and guards, its
+		/// The fantasy set's features: its lived-in places as settlements, its strongholds' waypoints and guards, its
 		/// markets' merchants, its vaults' and tombs' dungeon entrances and the waygate's portal. A hostile kind's pack and elite
 		/// come from its trait, after this; a great lair's boss after that (<see cref="FantasyBoss"/>).
 		/// </summary>
@@ -32,6 +32,12 @@ namespace FishMMO.Shared.WorldDesign
 					break;
 				case POIType.WaygateRing:
 					features.Add(new PortalFeature());
+					break;
+				case POIType.Henge:
+				case POIType.ElfWaystone:
+				case POIType.RuneStone:
+					// The Gate spell's destinations (issue #241).
+					features.Add(new GateStoneFeature());
 					break;
 				case POIType.DwarvenGate:
 				case POIType.IdolVault:
@@ -71,7 +77,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>The fantasy wave's great lairs: an empty boss spawner from medium size, after their pack (a designer assigns the boss).</summary>
+		/// <summary>The fantasy set's great lairs: an empty boss spawner from medium size, after their pack (a designer assigns the boss).</summary>
 		private static void FantasyBoss(POIType kind, int size, List<PointOfInterestFeature> features)
 		{
 			switch (kind)

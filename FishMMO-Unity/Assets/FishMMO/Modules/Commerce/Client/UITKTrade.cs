@@ -499,7 +499,7 @@ namespace FishMMO.Client
 
 			/* Declined, never dropped. This returned in silence while the window had no character — which was every
 			 * session where the window (a module prefab placed after an Addressables load) registered after the
-			 * player spawned (2026-11-17) — and the server kept the request pending, so the requester's next try was
+			 * player spawned — and the server kept the request pending, so the requester's next try was
 			 * refused with "already has a pending trade request". UIManager now hands late windows the character;
 			 * if there is still none, the requester gets an answer. */
 			if (Character == null)

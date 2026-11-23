@@ -6,7 +6,7 @@ using FishMMO.Server.Implementation.World.SceneServer;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the teleport-system rules that were fixed on 2026-09-08: the one spelling of a
+	/// Pins the teleport-system rules that were: the one spelling of a
 	/// teleporter's lookup key, and the live-vs-baked waypoint comparison.
 	/// </summary>
 	[TestFixture]

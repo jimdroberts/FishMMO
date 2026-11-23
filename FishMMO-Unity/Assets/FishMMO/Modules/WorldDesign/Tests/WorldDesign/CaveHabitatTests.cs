@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cave habitat (<see cref="CaveHabitat"/>, 2026-10-20) on caves planned on a synthetic escarpment: the same system gives the
+	/// The cave habitat (<see cref="CaveHabitat"/>) on caves planned on a synthetic escarpment: the same system gives the
 	/// same field; every value is 0..1; sediment lies on floors and never on walls or roofs; the daylight falls off along the way in
 	/// from the mouth and is gone deep in; the lanes are worn and the floor beside them is not; a lava tube does not glow and a
 	/// limestone cave does; the mesher writes the field to every vertex of every piece (COLOR and UV channel 3); and the rock
@@ -196,7 +196,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				var floor = new Vector3(node.Centre.x, node.Floor, node.Centre.z);
 				float walked = habitat.WalkedFromMouth(floor);
-				// Past where rain and snowmelt blow in at the mouth, and short of the cold zone's edge (90 m, decision 51).
+				// Past where rain and snowmelt blow in at the mouth, and short of the cold zone's edge (90 m).
 				if (walked > 25f && walked < 80f)
 				{
 					Assert.That(habitat.Sample(floor, Vector3.up).Wet, Is.LessThanOrEqualTo(0.1f), $"the floor {walked:0} m into an ice cave is frozen dry");

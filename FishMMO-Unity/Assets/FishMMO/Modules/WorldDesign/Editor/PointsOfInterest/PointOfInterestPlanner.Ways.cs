@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Sites the kinds that stand by the ways (<see cref="PointOfInterestKindRule.BesideWays"/>: a toll gate, an ambush, a wrecked
-		/// caravan beside a way, a crossroads at a junction) against the ways the path planner laid (2026-10-27, the fantasy wave).
+		/// caravan beside a way, a crossroads at a junction) against the ways the path planner laid.
 		/// Returns the records it added to <paramref name="plan"/> (with their keep-outs; no pads: the ways are carved already).
 		/// </summary>
 		/// <remarks>

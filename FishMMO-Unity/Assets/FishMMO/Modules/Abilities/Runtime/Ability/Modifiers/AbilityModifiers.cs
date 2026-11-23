@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Held on templates and events as <c>[SerializeReference]</c>, so the ability data names no module: a removed module's
-	/// rules drop out and every number is unscaled (Phase 4 of the core and modules plan, 2026-11-17). A rule must be a pure
+	/// rules drop out and every number is unscaled. A rule must be a pure
 	/// function of the context, which both peers evaluate alike, because ability numbers are predicted.
 	/// </remarks>
 	public interface IAbilityModifier

@@ -53,13 +53,13 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, float> Ground;
 		/// <summary>The sea's surface; negative infinity for none.</summary>
 		public float SeaLevel = float.NegativeInfinity;
-		/// <summary>The LAVA's surface (2026-10-25, phase I2r): what a lava-datum landform measures from; NaN where the low ground holds none.</summary>
+		/// <summary>The LAVA's surface: what a lava-datum landform measures from; NaN where the low ground holds none.</summary>
 		public float LavaLevel = float.NaN;
 		/// <summary>The prevailing wind's heading, degrees from +x toward +z (where the wind blows to).</summary>
 		public float WindYaw;
 		/// <summary>The world's air (None: unknown, every landform's air band passes).</summary>
 		public BiomeAtmosphereRequirement Air = BiomeAtmosphereRequirement.None;
-		/// <summary>The world's conditions for the landforms' world bands (decision 68); null when unknown (every band passes).</summary>
+		/// <summary>The world's conditions for the landforms' world bands; null when unknown (every band passes).</summary>
 		public BiomeWorldConditions? World;
 		/// <summary>The local climate at (x, y, z): temperature and humidity, −1 … 1; null when unknown (every band passes).</summary>
 		public Func<float, float, float, Vector2> Climate;
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The sculpted landforms' cut stage (2026-10-18, phase I2g; decisions 25, 26, 36(e), 38–50): every biome's landforms
+	/// The sculpted landforms' cut stage: every biome's landforms
 	/// (BiomeTemplate.Landforms, read through <see cref="BiomeTemplateArt.Landforms"/>) placed on its painted patches and carved into
 	/// the scene's ground in the height stage, after erosion and before the final water (SceneGround.Shape) — so lakes fill the
 	/// craters and pans and rivers find their way round the mounds — then kept with the scene so the repaint paints them again.
@@ -347,7 +347,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (f.Form == BiomeLandformForm.Rille && f.Roofed > 0f)
 				{
-					// Each roofed stretch of a lava tube's rille, its roof's middle (2026-10-26, I2g-f); its head's pad follows.
+					// Each roofed stretch of a lava tube's rille, its roof's middle; its head's pad follows.
 					foreach ((Vector2 centre, float radius) in new BiomeLandforms.Shape(site, context).RoofedStretches())
 					{
 						pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = centre, Radius = radius, Level = carved(centre.x, centre.y) });
@@ -358,7 +358,7 @@ namespace FishMMO.Shared.WorldDesign
 					case BiomeLandformForm.Rimstone:
 						foreach ((Vector2 centre, float radius, float level) in new BiomeLandforms.Shape(site, context).RimstonePools())
 						{
-							// A flight with lips holds pools; one without is dry treads (2026-10-25, I2g-d: a precinct's terraces).
+							// A flight with lips holds pools; one without is dry treads (a precinct's terraces).
 							pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = centre, Radius = radius, Level = level, Water = f.Rim > 0f });
 						}
 						break;
@@ -378,7 +378,7 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						break;
 					case BiomeLandformForm.PitChain:
-						// Every pit of the chain (2026-10-25, I2g-b: a lava tube's skylights).
+						// Every pit of the chain (a lava tube's skylights).
 						foreach (Vector2 pit in PitCentres(site))
 						{
 							pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = pit, Radius = Mathf.Max(1f, site.HalfWidth), Level = carved(pit.x, pit.y) });
@@ -386,7 +386,7 @@ namespace FishMMO.Shared.WorldDesign
 						break;
 					case BiomeLandformForm.MultiRing:
 					{
-						// The mare's middle, and each mare pit (where a lava tube's site goes, decision 55).
+						// The mare's middle, and each mare pit (where a lava tube's site goes).
 						pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = site.Centre, Radius = site.Radius * 0.3f, Level = carved(site.Centre.x, site.Centre.y) });
 						foreach (Vector3 pit in new BiomeLandforms.Shape(site, context).BasinPits)
 						{
@@ -395,7 +395,7 @@ namespace FishMMO.Shared.WorldDesign
 						break;
 					}
 					case BiomeLandformForm.Cycloid:
-						// Every cusp of a cycloid's chain (2026-10-25, I2g-d, decision 90).
+						// Every cusp of a cycloid's chain.
 						foreach (Vector2 cusp in CycloidCusps(site))
 						{
 							pads.Add(new BiomeLandformPad { Kind = f.Kind, BiomeID = site.BiomeID, Centre = cusp, Radius = Mathf.Max(1f, site.HalfWidth), Level = carved(cusp.x, cusp.y) });
@@ -416,7 +416,7 @@ namespace FishMMO.Shared.WorldDesign
 						float radius = Mathf.Max(1f, Mathf.Min(site.Radius, site.HalfLength) * Mathf.Max(0.25f, f.Top));
 						float level = carved(site.Centre.x, site.Centre.y);
 						bool water = false;
-						// (A lava-datum pan's floor is flooded by the lava's own surface, not a brine mirror: no water pad, 2026-10-25, I2r.)
+						// (A lava-datum pan's floor is flooded by the lava's own surface, not a brine mirror: no water pad.)
 						if (f.Form == BiomeLandformForm.Pan && (f.DatumDepth.x != 0f || f.DatumDepth.y != 0f) && !float.IsNaN(site.Level)
 							&& f.Datum != BiomeLandformDatum.LavaSurface)
 						{
@@ -434,7 +434,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The discs that keep the points of interest and the ways off the landforms whose entries ask it (pure; 2026-10-26, I2g-f,
+		/// The discs that keep the points of interest and the ways off the landforms whose entries ask it (pure, I2g-f,
 		/// <see cref="BiomeLandform.KeepClear"/>: a sciara's loose chute): along a line, a disc of its half width and a tenth more
 		/// every half width; any other site, one disc of its reach. Each is (x, z, radius), world metres.
 		/// </summary>
@@ -532,7 +532,7 @@ namespace FishMMO.Shared.WorldDesign
 			public Vector4 Box;
 			public float AreaKm2;
 			public float Diameter;
-			/// <summary>Its long axis, degrees from +x toward +z (2026-10-26, I2g-f): the principal axis of its cells' spread.</summary>
+			/// <summary>Its long axis, degrees from +x toward +z: the principal axis of its cells' spread.</summary>
 			public float Axis;
 		}
 
@@ -657,7 +657,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (input.Climate != null && (!(form.Temperature.x == 0f && form.Temperature.y == 0f) || !(form.Humidity.x == 0f && form.Humidity.y == 0f)))
 			{
-				// An entry banded on the sea's climate reads it at the surface over a drowned place (2026-10-26, I2g-f: plough marks).
+				// An entry banded on the sea's climate reads it at the surface over a drowned place (plough marks).
 				float at = form.SeaClimate && !float.IsNegativeInfinity(input.SeaLevel) ? Mathf.Max(ground, input.SeaLevel) : ground;
 				Vector2 climate = input.Climate(p.x, at, p.y);
 				if (!BiomeLandforms.InBand(form.Temperature, climate.x) || !BiomeLandforms.InBand(form.Humidity, climate.y))
@@ -728,7 +728,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						continue;
 					}
-					// A landform banded to other worlds (decision 68) is not carved here; its Passes and lee forms with it.
+					// A landform banded to other worlds is not carved here; its Passes and lee forms with it.
 					if (input.World.HasValue && !form.World.Admits(input.World.Value))
 					{
 						continue;
@@ -748,12 +748,12 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else if (form.Family == BiomeLandformFamily.Dunes && form.Density > 0f && form.Density < 1f)
 					{
-						// A lone dune field under a density of 1 covers that share of its patch (2026-10-25, I2g-d: blowout dunes on a quarter).
+						// A lone dune field under a density of 1 covers that share of its patch (blowout dunes on a quarter).
 						mixHigh = form.Density;
 					}
 					if (form.OnHost)
 					{
-						// On each site of its host entry (2026-10-25, phase I2g-d, decision 80: a pinnacle on a guyot, spurs off its flank).
+						// On each site of its host entry (a pinnacle on a guyot, spurs off its flank).
 						string host = HostKind(forms, e);
 						if (host != null)
 						{
@@ -763,7 +763,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (form.Anchor == BiomeLandformAnchor.LeeOf)
 					{
-						// In the lee of each site of the entry before it (2026-10-25, decision 64: a blue-ice tail behind each nunatak).
+						// In the lee of each site of the entry before it (a blue-ice tail behind each nunatak).
 						if (e > 0)
 						{
 							PlaceInLee(input, form, forms[e - 1].Kind, id, b, e, sites);
@@ -773,7 +773,7 @@ namespace FishMMO.Shared.WorldDesign
 					int inScene = 0;
 					int entryStart = sites.Count, entrySpacing = spacing.Count;
 					bool field = form.Placement == BiomeLandformPlacement.Field || BiomeLandforms.IsField(form.Form);
-					// A field anchored on the highest ground takes its biome's highest patches first (2026-10-26, I2g-f: the fold belt).
+					// A field anchored on the highest ground takes its biome's highest patches first (the fold belt).
 					List<Patch> patchOrder = field && form.Anchor == BiomeLandformAnchor.Highest ? ByHeight(input, own) : own;
 					foreach (Patch patch in patchOrder)
 					{
@@ -783,7 +783,7 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						if (form.Form == BiomeLandformForm.MultiRing && patch.Diameter < Mathf.Min(form.Size.x, form.Size.y))
 						{
-							// A multi-ring basin only in a patch as wide as its smallest (decision 55: the basin detection's own threshold).
+							// A multi-ring basin only in a patch as wide as its smallest (the basin detection's own threshold).
 							continue;
 						}
 						uint patchSeed = BiomeLandforms.Hash(input.Seed, (uint)id, (uint)patch.First, (uint)e);
@@ -796,7 +796,7 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							if (form.Upper > 0f)
 							{
-								// Only over the patch's highest share (2026-10-26, I2g-f): the shape gates its field on this level.
+								// Only over the patch's highest share: the shape gates its field on this level.
 								fieldSite.Level = UpperLevel(input, patch, form.Upper);
 							}
 							sites.Add(fieldSite);
@@ -813,7 +813,7 @@ namespace FishMMO.Shared.WorldDesign
 							float expected = form.Density * patch.AreaKm2;
 							if (form.DryDensity > 0f)
 							{
-								// More of them over the patch's dry share (2026-10-26, I2g-f: a dry cap's ice tablets twice as many).
+								// More of them over the patch's dry share (a dry cap's ice tablets twice as many).
 								expected *= 1f + (form.DryDensity - 1f) * DryShare(input, patch);
 							}
 							wanted = Mathf.FloorToInt(expected) + (BiomeLandforms.Unit(BiomeLandforms.Hash(patchSeed, 0x11u)) < expected - Mathf.Floor(expected) ? 1 : 0);
@@ -833,7 +833,7 @@ namespace FishMMO.Shared.WorldDesign
 						List<int> candidates = Candidates(input, form, patch, patchSeed);
 						if (form.Upper > 0f)
 						{
-							// Only on the patch's highest share of ground (2026-10-26, I2g-f: a salt dome, a kopje), in the anchor's order.
+							// Only on the patch's highest share of ground (a salt dome, a kopje), in the anchor's order.
 							float upper = UpperLevel(input, patch, form.Upper);
 							candidates = candidates.FindAll(c =>
 							{
@@ -867,7 +867,7 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							if (form.Placement == BiomeLandformPlacement.Chain)
 							{
-								// A chain's members overlap each other (merged rims) but keep apart from everything else (2026-10-25, decision 71).
+								// A chain's members overlap each other (merged rims) but keep apart from everything else.
 								List<BiomeLandformSite> members = Chain(input, form, id, b, patch, at, siteSeed, out float chainReach);
 								bool chainClear = members.Count >= 2;
 								foreach ((Vector2 other, float radius) in spacing)
@@ -887,7 +887,7 @@ namespace FishMMO.Shared.WorldDesign
 								inScene++;
 								continue;
 							}
-							// A size law draws each one's size (decision 72: a crater population, many small, few large).
+							// A size law draws each one's size (a crater population, many small, few large).
 							float drawn = form.SizePower > 0f ? BiomeLandforms.PowerLawPick(form.Size, form.SizePower, BiomeLandforms.Unit(BiomeLandforms.Hash(siteSeed, 0x9017u))) : float.NaN;
 							if (!TrySite(input, form, id, b, patch, at, ground, siteSeed, out BiomeLandformSite site, drawn))
 							{
@@ -913,7 +913,7 @@ namespace FishMMO.Shared.WorldDesign
 							sites.Add(site);
 							if (form.Shift != Vector2.zero)
 							{
-								// A strike-slip trace shifts every line carved before it (2026-10-25, decision 90).
+								// A strike-slip trace shifts every line carved before it.
 								ShiftLines(sites, sites.Count - 1);
 							}
 							placed++;
@@ -922,7 +922,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (form.Ages && sites.Count - entryStart > 1)
 					{
-						// Old craters first, so each younger bowl is carved over (cuts the rims of) the older (decision 72); stable.
+						// Old craters first, so each younger bowl is carved over (cuts the rims of) the older; stable.
 						var aged = sites.GetRange(entryStart, sites.Count - entryStart);
 						var order = new List<int>(aged.Count);
 						for (int i = 0; i < aged.Count; i++)
@@ -986,7 +986,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A chain's members (<see cref="BiomeLandformPlacement.Chain"/>, pure but for the ground; 2026-10-25, decision 71): up to
+		/// A chain's members (<see cref="BiomeLandformPlacement.Chain"/>, pure but for the ground): up to
 		/// <see cref="BiomeLandform.Count"/> sites of the form along a line through <paramref name="at"/>, straight or bent through
 		/// <see cref="BiomeLandform.Lean"/> of a half turn, their sizes tapering to both ends; a member whose place falls outside the
 		/// scene, the biome or the form's conditions is left out. <paramref name="reach"/> is the chain's half length plus its largest member.
@@ -1073,8 +1073,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The height above which the highest <paramref name="share"/> of a patch's cells stand (pure but for the ground, 2026-10-26,
-		/// I2g-f): the level an <see cref="BiomeLandform.Upper"/> entry keeps above.
+		/// The height above which the highest <paramref name="share"/> of a patch's cells stand (pure but for the ground):
+		/// the level an <see cref="BiomeLandform.Upper"/> entry keeps above.
 		/// </summary>
 		private static float UpperLevel(LandformPlanInput input, Patch patch, float share)
 		{
@@ -1246,7 +1246,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformAnchor.PatchEdge:
 				{
-					// The cells the inset inside the patch's edge (a neighbour inside the scene but outside the patch; decision 70).
+					// The cells the inset inside the patch's edge (a neighbour inside the scene but outside the patch).
 					var inPatch = new HashSet<int>(cells);
 					List<int> edge = AtInset(input, cells, c => true, n => !inPatch.Contains(n), form.NearWater > 0f ? form.NearWater : 40f);
 					Shuffle(edge, seed);
@@ -1254,7 +1254,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformAnchor.ShoreSetback:
 				{
-					// The cells the setback from the shoreline, inland or (an entry asking water depth) out to sea (decision 74).
+					// The cells the setback from the shoreline, inland or (an entry asking water depth) out to sea.
 					var setback = new List<int>();
 					if (!float.IsNegativeInfinity(input.SeaLevel))
 					{
@@ -1271,7 +1271,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformAnchor.BayMouth:
 				{
-					// Shallow water with a shore within reach on two opposite sides and open water off one end (decision 74).
+					// Shallow water with a shore within reach on two opposite sides and open water off one end.
 					var mouths = new List<int>();
 					if (!float.IsNegativeInfinity(input.SeaLevel))
 					{
@@ -1439,10 +1439,10 @@ namespace FishMMO.Shared.WorldDesign
 				case BiomeLandformAlign.Wind:
 					return input.WindYaw + 10f * (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA1u)) - 0.5f);
 				case BiomeLandformAlign.AcrossWind:
-					// Square to the wind (2026-10-26, I2g-f): a wave field's crests then run along it.
+					// Square to the wind: a wave field's crests then run along it.
 					return input.WindYaw + 90f + 10f * (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA1u)) - 0.5f);
 				case BiomeLandformAlign.PatchAxis when patch != null:
-					// Along its patch's long axis, within three degrees (I2g-f).
+					// Along its patch's long axis, within three degrees.
 					return patch.Axis + 6f * (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA5u)) - 0.5f);
 				case BiomeLandformAlign.Downslope:
 				case BiomeLandformAlign.Contour:
@@ -1455,7 +1455,7 @@ namespace FishMMO.Shared.WorldDesign
 					return BiomeLandforms.Unit(BiomeLandforms.Hash(input.Seed, 0xA815u)) * 180f + 6f * (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA2u)) - 0.5f);
 				case BiomeLandformAlign.Cardinal:
 				case BiomeLandformAlign.Meridian:
-					// Square to the compass (2026-10-25, I2g-b): east, or north, within a degree.
+					// Square to the compass: east, or north, within a degree.
 					return (form.Align == BiomeLandformAlign.Meridian ? 90f : 0f) + (BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA4u)) - 0.5f);
 				default:
 					return BiomeLandforms.Unit(BiomeLandforms.Hash(seed, 0xA3u)) * 360f;
@@ -1556,7 +1556,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 			if (form.Anchor == BiomeLandformAnchor.BayMouth && !float.IsNegativeInfinity(input.SeaLevel))
 			{
-				// Laid along the mouth's span, shore to shore and a little into each (decision 74: an ayre).
+				// Laid along the mouth's span, shore to shore and a little into each (an ayre).
 				float reach = 0.5f * Mathf.Max(80f, Mathf.Max(form.Length.x, form.Length.y));
 				if (!BayAxis(input, at, reach, out float bayYaw, out Vector2 middle, out float bayHalf))
 				{
@@ -1566,7 +1566,7 @@ namespace FishMMO.Shared.WorldDesign
 				site.Centre = middle;
 				site.HalfLength = bayHalf + 2f * site.HalfWidth;
 			}
-			// A liquid's datum: the sea's, or the lava's (2026-10-25, I2r) where the scene has lava; else the landform stands on its ground.
+			// A liquid's datum: the sea's, or the lava's where the scene has lava; else the landform stands on its ground.
 			bool seaDatum = (form.Datum == BiomeLandformDatum.SeaSurface && !float.IsNegativeInfinity(input.SeaLevel))
 				|| (form.Datum == BiomeLandformDatum.LavaSurface && !float.IsNaN(input.LavaLevel));
 			float datum = seaDatum ? (form.Datum == BiomeLandformDatum.LavaSurface ? input.LavaLevel : input.SeaLevel) - BiomeLandforms.Pick(form.DatumDepth, U(14u)) : float.NaN;
@@ -1575,12 +1575,12 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case BiomeLandformFamily.Crater:
 					// A crater's depth is a share of its diameter; a ring basin's graben are metres deep whatever its size.
-					// An ageing crater's share is its class's (decision 72).
+					// An ageing crater's share is its class's.
 					site.Height = form.Form == BiomeLandformForm.RingGraben ? height : (form.Ages ? BiomeLandforms.CraterAgeDepth(BiomeLandforms.CraterAge(seed)) : height) * size;
 					site.HalfLength = radius;
 					if (form.Form == BiomeLandformForm.RingGraben)
 					{
-						// The palimpsest settles towards the mean of its own ground (decision 71: pale and near flat).
+						// The palimpsest settles towards the mean of its own ground (pale and near flat).
 						site.Level = RingMean(input, at, radius * 0.18f);
 					}
 					if (form.Form == BiomeLandformForm.Ghost)
@@ -1589,7 +1589,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else if (form.Form == BiomeLandformForm.MultiRing)
 					{
-						// The mare's level (decision 55): the sunk floor filled back to six tenths of its sink.
+						// The mare's level: the sunk floor filled back to six tenths of its sink.
 						site.Level = RingMean(input, at, radius * 0.3f) - 0.4f * site.Height;
 					}
 					break;
@@ -1600,7 +1600,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					else if (seaDatum)
 					{
-						// A tower, cone or dome standing to a level under the sea's surface, raised only (2026-10-25, decision 80: a pinnacle
+						// A tower, cone or dome standing to a level under the sea's surface, raised only (a pinnacle
 						// breaking the swell); its height is what that leaves above the ground it stands on.
 						site.Level = datum;
 						site.Height = Mathf.Max(0.5f, datum - ground);
@@ -1617,7 +1617,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (form.Form == BiomeLandformForm.Pan || form.Form == BiomeLandformForm.Tank)
 					{
-						// A pan with a sea datum floors at that level (2026-10-25, I2g-b: an ukanda's at the spring tides' reach).
+						// A pan with a sea datum floors at that level (an ukanda's at the spring tides' reach).
 						site.Level = seaDatum && form.Form == BiomeLandformForm.Pan ? datum : Mathf.Min(ground, RingMean(input, at, radius * 0.9f)) - height;
 					}
 					break;
@@ -1625,7 +1625,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (form.Form == BiomeLandformForm.Table && seaDatum)
 					{
 						// A table standing from the sea at its datum, joined to the nearest shore by a neck MoatDepth under the sea's
-						// surface and Width wide (decision 74: a tidal brough and its causeway), when Width is set.
+						// surface and Width wide (a tidal brough and its causeway), when Width is set.
 						site.Level = datum;
 						if (form.Width.x > 0f || form.Width.y > 0f)
 						{
@@ -1681,11 +1681,11 @@ namespace FishMMO.Shared.WorldDesign
 					site.Level = datum;
 					site.Radius = form.Form == BiomeLandformForm.Scarp ? radius : site.HalfWidth;
 					site.Segments = Line(points, site.HalfWidth, height, true);
-					// Also a set of ridges with no ditch (2026-10-25, I2g-d: the three arcs of the Hafgerðingar, a pressure belt's crests).
+					// Also a set of ridges with no ditch (the three arcs of the Hafgerðingar, a pressure belt's crests).
 					if ((form.Form == BiomeLandformForm.Graben || (form.Form == BiomeLandformForm.Straight || form.Form == BiomeLandformForm.Arc || form.Form == BiomeLandformForm.Contour)
 						&& form.Moat > 0f && form.MoatDepth <= 0f) && form.Count > 1)
 					{
-						// A set of parallel troughs Moat metres apart, outward from the first (decision 76: an arcuate rille's arcs).
+						// A set of parallel troughs Moat metres apart, outward from the first (an arcuate rille's arcs).
 						for (int k = 1; k < form.Count; k++)
 						{
 							var offset = new List<Vector2>(points.Count);
@@ -1707,7 +1707,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						return false;
 					}
-					// A channel floored under the sea's surface (decision 68) cuts to that level.
+					// A channel floored under the sea's surface cuts to that level.
 					site.Level = seaDatum ? datum : float.NaN;
 					site.Segments = new List<BiomeLandformSegment>();
 					foreach ((List<Vector2> line, int order) in lines)
@@ -1725,7 +1725,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (form.Form == BiomeLandformForm.Canyon)
 					{
-						// A canyon deepens from four tenths of its depth at its head to all of it a third of the way down (decision 92).
+						// A canyon deepens from four tenths of its depth at its head to all of it a third of the way down.
 						for (int i = 0; i < site.Segments.Count; i++)
 						{
 							BiomeLandformSegment seg = site.Segments[i];
@@ -1736,7 +1736,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (form.Form == BiomeLandformForm.Rille)
 					{
-						// A rille narrows to half its width from its head to its toe (decision 76).
+						// A rille narrows to half its width from its head to its toe.
 						for (int i = 0; i < site.Segments.Count; i++)
 						{
 							BiomeLandformSegment seg = site.Segments[i];
@@ -1758,7 +1758,7 @@ namespace FishMMO.Shared.WorldDesign
 			Vector4 scene = input.SceneBounds;
 			if (form.Form == BiomeLandformForm.Impact && form.RayReach > 0f)
 			{
-				// Long rays paint only (2026-10-26, I2g-f): the bowl's two radii must fit the scene, its rays end at its edge.
+				// Long rays paint only: the bowl's two radii must fit the scene, its rays end at its edge.
 				float c = 2f * site.Radius;
 				if (site.Centre.x - c < scene.x || site.Centre.y - c < scene.y || site.Centre.x + c > scene.z || site.Centre.y + c > scene.w)
 				{
@@ -1824,7 +1824,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformForm.Graben when form.Size.x > 0f || form.Size.y > 0f:
 				{
-					// An arcuate graben: an arc of the circle its size spans, through its place (decision 76).
+					// An arcuate graben: an arc of the circle its size spans, through its place.
 					float arcRadius = Mathf.Max(site.Radius, 10f);
 					Vector2 normal = new Vector2(-axis.y, axis.x);
 					Vector2 centre = at + normal * arcRadius;
@@ -1852,7 +1852,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					// Straight: centred on its place, or out from the shore down the slope when anchored there.
 					int steps = Mathf.Clamp(Mathf.CeilToInt(length / 40f), 1, 200);
-					// From its place when it starts there: off the shore, down from the high ground (2026-10-25: a sciara), off a host's flank.
+					// From its place when it starts there: off the shore, down from the high ground (a sciara), off a host's flank.
 					Vector2 from = form.Anchor == BiomeLandformAnchor.Shore || form.Anchor == BiomeLandformAnchor.Highest || form.Anchor == BiomeLandformAnchor.OnFlankOf
 						? at : at - axis * (length * 0.5f);
 					for (int i = 0; i <= steps; i++)
@@ -1944,7 +1944,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case BiomeLandformForm.Grooves when form.Align == BiomeLandformAlign.Azimuth:
 				{
-					// Along its own heading whatever the slope, bending a little as it goes (2026-10-26, I2g-f: a plough mark dragged
+					// Along its own heading whatever the slope, bending a little as it goes (a plough mark dragged
 					// by the current); stored from its far end (the keel's resting pit) back to its place, as a groove is.
 					float bend = 0.5f * (BiomeLandforms.Unit(BiomeLandforms.Hash(site.Seed, 0x9A0Eu)) - 0.5f);
 					var line = new List<Vector2>();
@@ -1985,7 +1985,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformForm.Geo:
 				{
-					// From a little out to sea at its shore place straight inland (up the ground) to its head (decision 74).
+					// From a little out to sea at its shore place straight inland (up the ground) to its head.
 					Vector2 g = Gradient(input, site.Centre, Mathf.Max(2f, input.CellMetres * 0.5f));
 					Vector2 inland = g.sqrMagnitude > 1e-8f ? g.normalized : axis;
 					var line = new List<Vector2> { site.Centre - inland * (site.HalfWidth * 2f), site.Centre + inland * length };
@@ -1998,7 +1998,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				case BiomeLandformForm.Spiral:
 				{
-					// Troughs spiralling out from the place, one turn and a little over (2026-10-25, decision 64), each its own line.
+					// Troughs spiralling out from the place, one turn and a little over, each its own line.
 					int arms = Mathf.Max(1, form.Count);
 					float outer = Mathf.Max(site.Radius, site.HalfWidth * 8f);
 					float inner = 0.12f * outer;
@@ -2038,7 +2038,7 @@ namespace FishMMO.Shared.WorldDesign
 				case BiomeLandformForm.Rille:
 				case BiomeLandformForm.Canyon:
 				{
-					// From its head down the slope to its toe, the head first (decision 76): a rille's vent hollow, a canyon's amphitheatre.
+					// From its head down the slope to its toe, the head first: a rille's vent hollow, a canyon's amphitheatre.
 					List<Vector2> line = Downhill(input, biomeIndex, site, length, false);
 					if (line == null)
 					{
@@ -2047,7 +2047,7 @@ namespace FishMMO.Shared.WorldDesign
 					lines.Add((line, 0));
 					if (form.Form == BiomeLandformForm.Canyon && form.Count > 0)
 					{
-						// Its tributaries (2026-10-26, I2g-f): Count side canyons, each from its own head on the slope beside it down
+						// Its tributaries: Count side canyons, each from its own head on the slope beside it down
 						// into the main one at a junction a fifth to four fifths of the way along, alternating sides.
 						lines.AddRange(Tributaries(input, form, site, line));
 					}
@@ -2133,7 +2133,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A canyon's tributaries (pure but for the ground, 2026-10-26, I2g-f): up to <see cref="BiomeLandform.Count"/> lines, each
+		/// A canyon's tributaries (pure but for the ground): up to <see cref="BiomeLandform.Count"/> lines, each
 		/// stored head first like the canyon, from a head off to one side and upstream of its junction (at 30–50° to the main line,
 		/// a third to a half of its length long) straight down into the main line; one whose head leaves the scene is left out.
 		/// </summary>
@@ -2268,7 +2268,7 @@ namespace FishMMO.Shared.WorldDesign
 			return records;
 		}
 
-		/// <summary>The landforms a scene was cut with (empty for a scene cut with none, or before 2026-10-18).</summary>
+		/// <summary>The landforms a scene was cut with (empty for a scene cut with none, or formerly).</summary>
 		public static List<BiomeLandformSite> Sites(Scene scene)
 		{
 			var sites = new List<BiomeLandformSite>();

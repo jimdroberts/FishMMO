@@ -14,7 +14,7 @@ namespace FishMMO.Shared.Celestial
 	/// server's tick carried to world seconds by <see cref="WorldClock"/> — so two players standing
 	/// side by side see the same wave at the same moment, and a rejoin or a hitch puts the sea back
 	/// where everyone else has it. Every presenter used to keep a private sum of its own frame times
-	/// from zero, so its phase was how long that client had been running (audit 2026-10-06).
+	/// from zero, so its phase was how long that client had been running.
 	/// </para>
 	/// <para>
 	/// <b>Smoothed, never backwards.</b> FishNet re-estimates the server's tick about once a second
@@ -26,7 +26,7 @@ namespace FishMMO.Shared.Celestial
 	/// <b>Never faster than real time.</b> A preview runs the world clock hundreds of times faster to
 	/// watch a day go by, and the sky and the clouds keep up with it. The motion down here does not:
 	/// stopped when the clock stops and slowed when it slows (<see cref="Rate"/>), but held to real
-	/// time when it races. The sea was let follow the clock (2026-09-25) and it could not be made to
+	/// time when it races. The sea was let follow the clock and it could not be made to
 	/// look right: at the sky's hundred and eighty times a four-second wave comes forty times a
 	/// second. Once a preview stops racing, the motion rejoins the clock in one step.
 	/// </para>

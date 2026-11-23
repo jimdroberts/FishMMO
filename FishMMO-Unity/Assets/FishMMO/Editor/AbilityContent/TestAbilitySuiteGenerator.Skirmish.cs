@@ -8,7 +8,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.AbilityContent
 {
 	/// <summary>
-	/// Stealth, skirmish and utility abilities for combat testing (2026-11-22, second round): Invisibility, See Invisible,
+	/// Stealth, skirmish and utility abilities for combat testing (second round): Invisibility, See Invisible,
 	/// Stab and the Backstab effect, Swipe, Disrupting Strike, Hamstring, Provoke, Arcane Ward, Piercing Arrow, Crossbow Shot and Drain Life,
 	/// and the Pet Regeneration summon effect.
 	/// </summary>
@@ -274,7 +274,7 @@ namespace FishMMO.AbilityContent
 			}));
 			events.Add(sight);
 
-			// ── Stab, and the Backstab effect (Jim, 2026-11-22: the position is an effect, the attack is an ability) ────
+			// ── Stab, and the Backstab effect (the position is an effect, the attack is an ability) ────
 			AbilityOnHitEvent stab = SaveEvent<AbilityOnHitEvent>(MeleeEventFolder, "Stab Impact", ev =>
 			{
 				ev.TargetSelector = Hostiles(new EventTargetSelector { FallbackToInitiator = false });
@@ -358,7 +358,7 @@ namespace FishMMO.AbilityContent
 			events.Add(swipeHit);
 
 			// ── Disrupting Strike, Hamstring ────────────────────────────────────────────────────
-			/* Bases and effects (Jim, 2026-11-22: players craft abilities from bases and effects). The rider of each of these
+			/* Bases and effects (players craft abilities from bases and effects). The rider of each of these
 			 * is an EFFECT asset — Interrupt, Hamstring — bundled on its own base here, sold on its own, and craftable onto any
 			 * base with a free slot. The damage is the base's (Light Strike Impact). */
 			AbilityOnHitEvent lightStrike = SaveEvent<AbilityOnHitEvent>(MeleeEventFolder, "Light Strike Impact", ev =>

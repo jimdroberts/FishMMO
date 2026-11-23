@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The live caves' columns round the camera (<see cref="CaveEnclosure"/>, 2026-10-21), for the lit surfaces' underground
+	/// The live caves' columns round the camera (<see cref="CaveEnclosure"/>), for the lit surfaces' underground
 	/// darkness (FishGroundMap.hlsl FishCaveEnclosed): a window of <see cref="Resolution"/> columns either way on the world's
 	/// column grid, gathered again when the camera has moved <see cref="Recentre"/> from its middle or a cave is enabled or
 	/// disabled.

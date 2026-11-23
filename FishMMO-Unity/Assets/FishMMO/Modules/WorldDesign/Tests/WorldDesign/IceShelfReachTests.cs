@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2s of the biome suite (2026-10-25, decision 68 (a), 34): the open ice shelf. Where the ice sheet meets a sea colder
+	/// The open ice shelf. Where the ice sheet meets a sea colder
 	/// than −5 °C mean, the ice runs out 2–8 km over it at 12–35 m freeboard to a vertical calving front, then fast ice at
 	/// +0.6 m to a floe edge; the new water role IceShelf (= 7) makes the role's holder the biome of those cells. Opt-in: no
 	/// name stands in for the role and no spec biome holds it, so no scene changes until a template does. Pure.
@@ -80,7 +80,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeTemplateArt.LegacyWaterBiomeName(BiomeWaterRole.IceShelf), Is.Null, "no name stands in: nothing is laid until a template holds it");
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
-				Assert.That(entry.WaterRole, Is.Not.EqualTo(BiomeWaterRole.IceShelf), entry.Biome + " holds it: the change is opt-in (see I2s)");
+				Assert.That(entry.WaterRole, Is.Not.EqualTo(BiomeWaterRole.IceShelf), entry.Biome + " holds it: the change is opt-in");
 			}
 			Assert.That(BiomeArtSpec.For("Ice Shelf").WaterRole, Is.EqualTo(BiomeWaterRole.None));
 			Assert.That(BiomeWaterLooks.IsWaterBody(BiomeWaterRole.IceShelf), Is.False, "the shelf is ground, not a body of water");

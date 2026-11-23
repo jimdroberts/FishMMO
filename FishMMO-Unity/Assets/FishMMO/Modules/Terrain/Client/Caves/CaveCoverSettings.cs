@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The run-time cave cover (<see cref="CaveCoverSystem"/>, 2026-10-20): how far it reaches, how it thins and steps down with
+	/// The run-time cave cover (<see cref="CaveCoverSystem"/>): how far it reaches, how it thins and steps down with
 	/// distance, how thick it grows and how its glowing part glows. On the Weather Render Profile ("Cave cover"); read every
 	/// frame, so changes apply while playing.
 	/// </summary>

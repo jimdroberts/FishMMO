@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Steppe</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Steppe()
 		{
-			// The Kazakh (Sary-Arka) steppe (biome round, approved 2026-10-25, authored 2026-10-26): a flat-to-rolling upland where
+			// The Kazakh (Sary-Arka) steppe: a flat-to-rolling upland where
 			// feather grass runs silver to every horizon, combed by a wind that never stops; drier southward it thins to grey wormwood
 			// and fescue, then to pink-autumn saltwort on light chestnut earth, white crusted sors in the hollows, smooth takyr pans that
 			// ring under hooves and hummocky kum sands with black-twisted saxaul. Out of the plain rise the sopkas, low worn hills of
@@ -20,9 +20,9 @@ namespace FishMMO.Shared.WorldDesign
 			// a few brick towns with melon-ribbed tombs alone on the plain, chains of stone-capped mounds along the crests. Its fantasy:
 			// the blue-maned wolf, the windfoal, the singing tomb, the twin lakes, the homing wormwood. Bands: TRUE h ≥ −0.35, DRY
 			// −0.6…−0.35, DESERT h < −0.6; COLD t < −0.4 (frost steppe, no tulips). Grassland keeps the stone figures and loess.
-			// LATER (I9): every ground and object texture as the Steppe's own variant of its recipe (decision 12); the feather grass and
-			// tumbleweed keep their catalogue textures, the Steppe their only user (approved Q13).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Skymane V(0.545, 0.46, 0.94) and Ordugold V(0.115, 0.50, 0.64).
+			// LATER: every ground and object texture as the Steppe's own variant of its recipe; the feather grass and
+			// tumbleweed keep their catalogue textures, the Steppe their only user.
+			// LATER (no spec column yet): rare looks Skymane V(0.545, 0.46, 0.94) and Ordugold V(0.115, 0.50, 0.64).
 			return E("Steppe", L(Ground.GrassDryKovylSward,
 					// The kovyl sward: Lessing's feather grass (thinning dryward), tyrsa and tipchak fescue between, the April tulips.
 					Band(Grass("GrassFeather", 30f), -1f, 1f, -0.6f, 1f), Grass("GrassTyrsa", 14f), Grass("GrassTipchak", 20f),
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 					// The wandering manna lichen, the black crust between the tussocks, harvester-ant discs, shed awns, the odd skull.
 					Plants("LichenManna", 3f), Plants("LichenSoilCrust", 2f), Plants("DebrisHarvesterDisc", 0.3f, 128), Plants("DebrisAwns", 6f, 128),
 					Plants("DebrisSaigaSkull", 0.05f, 128), Moded(Plants("DebrisSaigaSkull", 0.4f, 128), BiomeScatterMode.NearSites("Battlefield", 60f)),
-					// Wind-polished white vein quartz. LATER (NEW-ROCK-TYPES): a steppe-quartz pebble set of its own; quartzite stands in.
+					// Wind-polished white vein quartz. LATER: a steppe-quartz pebble set of its own; quartzite stands in.
 					Stones(Pebbles("Quartzite"), 2f), Stones(SmallRocks("Porphyry"), 1f)),
 				Ds(
 					// d0: chestnut earth trodden round the camps, wells and folds (≤ 12°): tyrsa, izen, chiy, harvester discs.
@@ -51,7 +51,7 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.ClayTakyr, 140f, 4f, 0f, 2f, Plants("LichenSoilCrust", 3f), Plants("Biyurgun", 2f))
 						.Ways(path: Ground.PathTakyrPolish, road: Ground.PathTakyrPolish),
 					// d3: sors (≤ 2°, the dry low ground; the SaltPan landform paints them): glasswort-red rims, chiy, the salt tree, red-bed
-					// scarps on the rims. LATER (I2l): a fascine causeway of chiy bundles at a sor's neck (the ways skirt it until then).
+					// scarps on the rims. LATER: a fascine causeway of chiy bundles at a sor's neck (the ways skirt it until then).
 					D(Ground.SaltCrustSor, 112f, 4f, 0f, 2f, Plants("Biyurgun", 3f), Grass("GrassChiy", 2f, 140), Bush("SaltTree", 0.6f),
 						Blocks("Red-bed scarps", 0.003f, 60f, F(RockTypes.Sandstone, "Ledges"))).Humid(-1f, -0.5f),
 					// d4: porphyry grit on the sopka shoulders (12–35°; the Sopka landform paints its crown): hedgehog cushions, wormwood,
@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 					// d6: the bobak mounds' pale spoil (the BobakMounds landform paints their tops): crested wheatgrass on the nitrophile ground.
 					D(Ground.SoilBobakMound, 24f, 4f, 0f, 12f, Grass("GrassZhitnyak", 6f, 160)),
 					// d7: the logs, dry-valley meadows (≤ 8°; the Wash landform paints their floors): tall kovyl, Phlomis, tulips, the karagach
-					// elms in singles and pairs and their fallen boughs. LATER (SCATTER-MODES): the elms at springs and wells (a near-water
+					// elms in singles and pairs and their fallen boughs. LATER: the elms at springs and wells (a near-water
 					// anchor); the valley floors stand in.
 					D(Ground.GrassDryLogMeadow, 64f, 2f, 0f, 8f, Grass("GrassFeather", 10f), Grass("GrassZhitnyak", 6f), Plants("FlowersPhlomis", 3f, 180),
 						Band(Plants("FlowersTulipSteppe", 4f, 180), -0.4f, 1f), Plants("DebrisAwns", 4f, 128), Grass("GrassChiy", 2f, 140), Bush("SaltTree", 0.2f),
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Wind, warm: true)
 				.Look(BiomeLookClass.Arid)
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Scrub)
-				// LATER (AMBIENT-LIFE N22): saiga herds migrating north and south with the halves of the shared year, kulan, tarpan, bobak
+				// LATER: saiga herds migrating north and south with the halves of the shared year, kulan, tarpan, bobak
 				// sentries on the mound pads, corsac fox, steppe eagles on the mounds and standards, demoiselle cranes dancing by the sors,
 				// sociable lapwing, black lark, steppe wolves; the blue-maned wolf and the windfoal (0.02 each).
 				// Approved: dry moats; cold slate-blue brackish water with a white salt rime. LATER (WATER C12): the sors' brine look and
@@ -111,7 +111,7 @@ namespace FishMMO.Shared.WorldDesign
 					BiomeLandformPresets.Named("SaltPan").Painted(4, BiomeLandformPart.Floor).Capped(2, 3),
 					BiomeLandformPresets.Named("Playa").Painted(3, BiomeLandformPart.Floor).Capped(2, 4),
 					BiomeLandformPresets.Named("Wash").Painted(8, BiomeLandformPart.Floor).Capped(2, 5))
-				// Approved: spring burns now and then. LATER (I2t): the burn on the TRUE band only (h ≥ −0.35); the whole biome's
+				// Approved: spring burns now and then. LATER: the burn on the TRUE band only (h ≥ −0.35); the whole biome's
 				// occasional regime stands in.
 				.Burns(BiomeBurnRegime.Occasional)
 				.Describe("The dry steppe running further than anyone has walked it — silver feather grass and grey wormwood over chestnut earth, white sors, felt yurts on the move, and the stone mounds of older riders")
@@ -162,7 +162,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Pass, 0.2f), (POIType.Gorge, 0.2f), (POIType.Island, 0.2f), (POIType.Grotto, 0.2f), (POIType.LeyNexus, 0.2f), (POIType.Portal, 0.2f),
 					(POIType.Crypt, 0.2f), (POIType.Ossuary, 0.2f), (POIType.Statue, 0.2f), (POIType.Obelisk, 0.2f), (POIType.AbandonedFarm, 0.2f),
 					(POIType.DungeonEntrance, 0.2f), (POIType.BossLair, 0.2f), (POIType.HotSpring, 0.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.2f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.BurnedVillage, 0.6f),
@@ -204,7 +204,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Mine, "Abandoned", 1.6f)
 				.Prefers(POIType.HuntingLodge, "Lodge", 1.4f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.6f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.DragonLair, "Bone Roost", 1.2f)
 				.Prefers(POIType.GiantsSteading, "Bone Garth", 1.2f)
@@ -215,14 +215,14 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.TitansBones, "Sunken Skull", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.4f)
 				.Prefers(POIType.NomadCamp, "Felt Yurts", 1.4f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7, I24, I26, I28): the Steppe's signature pieces — the felt yurt on its red lattice, the cart-yurt and the Moving
+				// (the fantasy set's variants end here)
+				// LATER: the Steppe's signature pieces — the felt yurt on its red lattice, the cart-yurt and the Moving
 				// Ordo, winter quarters dug into a lee hollow, the foal line and kumis tripod, the felt-capped well with its horse-drawn rope,
 				// the relay post, the horse fair, the Horde town of square-brick courtyards, the khan's melon-ribbed tomb, the corbelled
 				// stone tent, oba chains on their pads, the balbal line running east, the eagle camp, the copper pits, the brick fort, the
 				// singing tomb (wind-played), the twin lakes and Wolf Ridge (approved); until then the kit's variants below stand in.
-				// LATER (I7): the sod-brick winter quarters ("Winter Quarters"); longhouses stand in.
-				// LATER (I7): the Horde town and the Moving Ordo; stone towns and a yurt-ringed palisade stand in.
+				// LATER: the sod-brick winter quarters ("Winter Quarters"); longhouses stand in.
+				// LATER: the Horde town and the Moving Ordo; stone towns and a yurt-ringed palisade stand in.
 				.Favours(BiomeStructureStyle.Hide, 1.8f)
 				.Favours(BiomeStructureStyle.Earth, 1f)
 				.Favours(BiomeStructureStyle.Stone, 0.6f)
@@ -230,8 +230,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0.1f)
 				// The palette: pressed grey-cream felt over a red willow lattice (white-limed for the khan's), patterned felt rugs, chiy
 				// screens wound with wool, horse-tail standards; sod-brick winter quarters under flat dung-plastered earth roofs on porphyry
-				// rubble; square baked brick in the Horde towns, cobalt and turquoise glazed insets sparing, porphyry plinths. LATER
-				// (NEW-SURFACES U2/U3): SteppeFelt, RedLattice, Syrmak, ChiyScreen, TugStandard, SodBrick, SquareBrick and GlazedInset
+				// rubble; square baked brick in the Horde towns, cobalt and turquoise glazed insets sparing, porphyry plinths. LATER:
+				// SteppeFelt, RedLattice, Syrmak, ChiyScreen, TugStandard, SodBrick, SquareBrick and GlazedInset
 				// surfaces; the kit's canvas, timber, earth, adobe and fieldstone tinted stand in.
 				.Builds(BiomeStructureStyle.Hide, BiomeStructureRole.Wall, BiomeStructureMaterial.Canvas, OpenHex("#d0c6b0"))
 				.Builds(BiomeStructureStyle.Hide, BiomeStructureRole.Roof, BiomeStructureMaterial.Canvas, OpenHex("#c8bca4"))

@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// More variety in the settlements (2026-10-19: "We need more variation for town group types"): a template slot pins a piece's
+	/// More variety in the settlements ("We need more variation for town group types"): a template slot pins a piece's
 	/// variant ("=Church#1" the chapel); every castle's ward lays its garrison's village, a barracks and a stable among it, inside its
 	/// wall at every size; a city and the capital lay one cathedral; a churchyard's wall, lychgate and mausoleums keep off the church
 	/// and its graves; and the outskirts' layouts (a beekeeper's hives, a cemetery, the spots beside the ways out) are pure and
@@ -235,7 +235,7 @@ namespace FishMMO.UnitTests.WorldDesign
 						List<PointOfInterestLayoutPiece> pieces = Lay(spec, size, 7, out PointOfInterestLayoutRequest request);
 						/* The cathedral (22 × 39 m) fronts the square where its depth fits before the ring street behind the square's fronts:
 						 * in a large city and the capital. A smaller city's ring street stands too near the square for it yet; the packer's
-						 * fronts would have to turn a deep landmark's long side to its frontage (2026-10-19, reported). Never more than one. */
+						 * fronts would have to turn a deep landmark's long side to its frontage (reported). Never more than one. */
 						int laid = pieces.FindAll(p => p.Slot == cathedral).Count;
 						Assert.That(laid, Is.EqualTo(size == 2 ? 1 : laid).And.LessThanOrEqualTo(1), $"{spec.Name} at size {size}");
 					}

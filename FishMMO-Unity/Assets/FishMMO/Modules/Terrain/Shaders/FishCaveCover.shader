@@ -1,4 +1,4 @@
-// The run-time cave cover (CaveCoverRenderer, FishMMO.Client/World/Caves/Cover, 2026-10-20): small dense cover scattered on a
+// The run-time cave cover (CaveCoverRenderer, FishMMO.Client/World/Caves/Cover): small dense cover scattered on a
 // carved cave's rock every frame by FishCaveCover.compute and drawn here off the cover art's one mesh (CaveCover_Set). The
 // pass code and the instance contract are in FishCaveCover.hlsl. Drawn only with Graphics.RenderMeshIndirect by the renderer,
 // which binds the instance, command-base, palette and look buffers on its own material instance; nothing else should use it.

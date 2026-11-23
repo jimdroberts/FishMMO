@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What furnishes the rooms the buildings now have (2026-10-11: every building with a door gets an interior):
+	/// What furnishes the rooms the buildings now have (every building with a door gets an interior):
 	/// beds, tables and stools, chests, shelves, hearths, a bar, pews and a lectern, a sarcophagus, stable stalls.
 	/// PointOfInterestInteriors lays them out by room kind. Each faces −z into the room, its back (+z) to the wall it
 	/// stands against, on the floor at y = 0; a hearth gives off a fire, a lectern's candle a lamp.

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// What a linear feature is (2026-10-18, phase I2f, decisions 23 and 29): the long, narrow things a farmed or grazed country is
+	/// What a linear feature is: the long, narrow things a farmed or grazed country is
 	/// divided and watered by, laid by the cut along lines (a field's edges, a lane's verges, a wood's margin, a site's bounds, a
 	/// sheepfold's round, a terrace's lip) as baked props (PointOfInterestLinearFeatures). Append-only (stored by value).
 	/// </summary>
@@ -26,7 +26,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A clearance row: the stones picked off a field heaped along its edge (clapas, consumption dykes).</summary>
 		ClearanceRow = 5,
 		/// <summary>
-		/// Markers (2026-10-26, phase I2f-b): single posts, wands or cairns set one by one along a way at a spacing (a wand line over
+		/// Markers: single posts, wands or cairns set one by one along a way at a spacing (a wand line over
 		/// the ice, serge posts, tamga poles, a cairn line, ahu on the lava trails), each a piece of its own, never joined.
 		/// </summary>
 		Markers = 6,
@@ -45,7 +45,7 @@ namespace FishMMO.Shared.Biomes
 		Clipped = 1,
 		/// <summary>Grown out: tall, shaggy and gapped, standard trees left to grow up through it.</summary>
 		Wild = 2,
-		/// <summary>A dead hedge (2026-10-26, I2f-b): the old thorn standing dead and silver, gapped, its hollow pollards along it.</summary>
+		/// <summary>A dead hedge: the old thorn standing dead and silver, gapped, its hollow pollards along it.</summary>
 		Dead = 3,
 
 		// ── Walls ──
@@ -58,11 +58,11 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Slabs of stone set upright on edge side by side (the Alpine Plattenzaun, the Caithness flagstone fence).</summary>
 		UprightSlabs = 13,
 		/// <summary>
-		/// A long barrier wall of fired brick (2026-10-26, I2f-b): 2–5 m, an outer ditch, square brick forts along it, broken through
+		/// A long barrier wall of fired brick: 2–5 m, an outer ditch, square brick forts along it, broken through
 		/// every 40–200 m; one to a scene (<see cref="BiomeLinearPlace.Frontier"/>).
 		/// </summary>
 		BrickBarrier = 14,
-		/// <summary>Blocks of wind-packed snow cut and stacked in a curved wall, 1.5–2 m, on a camp's windward side (2026-10-26, I2f-b).</summary>
+		/// <summary>Blocks of wind-packed snow cut and stacked in a curved wall, 1.5–2 m, on a camp's windward side.</summary>
 		SnowWall = 15,
 
 		// ── Fences ──
@@ -79,13 +79,13 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Sharpened logs on rails (the structure kit's palisade).</summary>
 		Palisade = 25,
 		/// <summary>
-		/// A hand rope (2026-10-26, I2f-b): iron-shod stakes every few metres carrying a sagging hemp rope up a steep way, laid only where
+		/// A hand rope: iron-shod stakes every few metres carrying a sagging hemp rope up a steep way, laid only where
 		/// the ground climbs steeper than <see cref="BiomeLinearFeatures.MinSlopeOf"/>.
 		/// </summary>
 		HandRope = 26,
-		/// <summary>A screen of palm ribs (jarid) set upright close on a palm-trunk rail, holding the sand off a garden (2026-10-26, I2f-b).</summary>
+		/// <summary>A screen of palm ribs (jarid) set upright close on a palm-trunk rail, holding the sand off a garden.</summary>
 		PalmRib = 27,
-		/// <summary>A windbreak of cut fir boughs laid against stakes and a rail, 1.2–1.8 m (2026-10-26, I2f-b).</summary>
+		/// <summary>A windbreak of cut fir boughs laid against stakes and a rail, 1.2–1.8 m.</summary>
 		BoughBreak = 28,
 
 		// ── Tree rows ──
@@ -102,22 +102,22 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A lined channel: its head and its falls built in stone or brick, stone partitions where it divides (the roggia).</summary>
 		LinedChannel = 41,
 		/// <summary>
-		/// A bisse (2026-10-26, I2f-b): a long earth leat carried along the contour from far up a valley, hung across the cliffs in a plank
+		/// A bisse: a long earth leat carried along the contour from far up a valley, hung across the cliffs in a plank
 		/// flume on iron brackets with a walkway beside it, a water-hammer knocking at its head while the water runs.
 		/// </summary>
 		Bisse = 42,
 		/// <summary>
-		/// A roggia (2026-10-26, I2f-b): a straight brick-lined channel laid on the land's grid (the centuriation's, else the scene's),
+		/// A roggia: a straight brick-lined channel laid on the land's grid (the centuriation's, else the scene's),
 		/// turning only at right angles, a stone sluice every 150–300 m and a stone partition where it divides.
 		/// </summary>
 		Roggia = 43,
 		/// <summary>
-		/// A great canal (2026-10-26, I2f-b): one to a scene, 10–20 m wide and 3 m deep, taken off a river at a brush-and-boulder weir,
+		/// A great canal: one to a scene, 10–20 m wide and 3 m deep, taken off a river at a brush-and-boulder weir,
 		/// lined and banked with its own spoil, its laterals carried off it to the other settlements' fields.
 		/// </summary>
 		GreatCanal = 44,
 		/// <summary>
-		/// A qanat gallery (2026-10-26, I2f-b, decision 67): carried underground from a scarp's foot (no trench), a line of shaft mouths
+		/// A qanat gallery: carried underground from a scarp's foot (no trench), a line of shaft mouths
 		/// every 15–20 m over it, daylighting at an arched gallery mouth into a lined channel the last stretch to the fields.
 		/// </summary>
 		Gallery = 45,
@@ -128,7 +128,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A clearance bank grown over with turf, only its stones' tops showing.</summary>
 		Turfed = 51,
 
-		// ── Markers (2026-10-26, I2f-b) ──
+		// ── Markers ──
 		/// <summary>A wand line: birch wands with a saffron rag every 12–18 m across the ice, a cairn at each end of a run.</summary>
 		WandLine = 60,
 		/// <summary>Serge posts: carved larch hitching posts in ring bands, a white horsehair tassel; every fifth a fat-lamp hook.</summary>
@@ -157,12 +157,12 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Along the lip of a terrace (laid by the terraced fields' own builder, PointOfInterestLinearFeatures.LayAlong).</summary>
 		TerraceEdges = 5,
 		/// <summary>
-		/// On the windward arc of a camp or small settlement (2026-10-26, I2f-b): a curved break against the prevailing wind, the scene's
+		/// On the windward arc of a camp or small settlement: a curved break against the prevailing wind, the scene's
 		/// own (none on an airless world: a drawn bearing).
 		/// </summary>
 		Windbreaks = 6,
 		/// <summary>
-		/// One long line across the scene through the biome's ground (2026-10-26, I2f-b): a frontier's barrier wall, one to a scene, its
+		/// One long line across the scene through the biome's ground: a frontier's barrier wall, one to a scene, its
 		/// ways breaking through it.
 		/// </summary>
 		Frontier = 7,
@@ -192,7 +192,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// One of a biome's linear-feature styles (<see cref="BiomeTemplate.LinearFeatures"/>, 2026-10-18, phase I2f): what is built
+	/// One of a biome's linear-feature styles (<see cref="BiomeTemplate.LinearFeatures"/>): what is built
 	/// (<see cref="Kind"/>, <see cref="Form"/>), where (<see cref="Where"/>), how much of it (<see cref="Density"/>), how high and how
 	/// close its plants stand, its gates and gaps, the species it is grown of, and the material its stone or timber is laid in.
 	/// </summary>
@@ -333,7 +333,7 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public static bool Allows(BiomeLinearKind kind, BiomeLinearPlace where)
 		{
-			// Markers stand one by one along the ways and nowhere else (2026-10-26, I2f-b).
+			// Markers stand one by one along the ways and nowhere else.
 			if (kind == BiomeLinearKind.Markers)
 			{
 				return where == BiomeLinearPlace.Lanes;
@@ -356,7 +356,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// Whether a form may be laid at a place (pure, 2026-10-26, I2f-b): its kind <see cref="Allows"/> it, and the forms with a place
+		/// Whether a form may be laid at a place (pure): its kind <see cref="Allows"/> it, and the forms with a place
 		/// of their own keep to it: a bisse, a great canal and a qanat gallery only from a settlement's fields (an earth ditch, a lined
 		/// channel or a roggia also along the lanes), a brick barrier only as the scene's frontier, a hand rope only along the ways.
 		/// </summary>
@@ -527,7 +527,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A style's gate width: its own, else its form's.</summary>
 		public static float GateOf(in BiomeLinearStyle style) => style.GateWidth > 0f ? style.GateWidth : DefaultGate(style.Form);
 
-		// ── The new forms' own rules (2026-10-26, I2f-b) ──
+		// ── The new forms' own rules ──
 
 		/// <summary>The gentlest ground a form is laid over, degrees (pure): a hand rope only up ways steeper than 15°; 0 for every other.</summary>
 		public static float MinSlopeOf(BiomeLinearForm form) => form == BiomeLinearForm.HandRope ? 15f : 0f;

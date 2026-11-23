@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 	/// The world generator (WorldDesign) plans lots, levels them, routes a path spur to each and makes the post (its network
 	/// object and collider). The plot itself (its component, its interaction, its look) belongs to the Housing module, which
 	/// registers a layer here. With no layer registered the generator plans no lots at all: a world without housing gets
-	/// no empty deed posts (2026-11-21, second-wave moves; a core seam rather than one module referencing the other).
+	/// no empty deed posts (second-wave moves; a core seam rather than one module referencing the other).
 	/// </remarks>
 	public static class PlotLayers
 	{

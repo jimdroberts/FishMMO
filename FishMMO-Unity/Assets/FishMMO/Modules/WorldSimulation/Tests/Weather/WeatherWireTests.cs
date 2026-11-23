@@ -214,7 +214,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheWebPlayerIsWebGPUOnly()
 		{
-			// The web player is WebGPU only (2026-10-26): no WebGL 2 fallback. A browser without
+			// The web player is WebGPU only: no WebGL 2 fallback. A browser without
 			// WebGPU is not a supported client, so the build carries no GLES 3 player for it.
 			GraphicsDeviceType[] apis = PlayerSettings.GetGraphicsAPIs(BuildTarget.WebGL);
 			LogAssert.IsFalse(PlayerSettings.GetUseDefaultGraphicsAPIs(BuildTarget.WebGL), "the list is explicit, not automatic");

@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// the player chose to stand. That only works if the spot is somewhere they can be put back
 	/// down safely — a bind point is consumed by the respawn path with no further validation, so a
 	/// bad one is permanent until the player binds again, and they may well be respawning into it
-	/// precisely because they died. <see cref="IsValidBindPosition"/> is what makes the player's
+	/// precisely because they died. <see cref="StandingSpot.IsValid"/> is what makes the player's
 	/// position safe to trust.
 	/// </remarks>
 	[Serializable]
@@ -43,29 +43,8 @@ namespace FishMMO.Shared
 		[Tooltip("Total vertical clearance a bind spot needs, in metres from the ground. Always at least the character's height + 1m.")]
 		public float RequiredClearance = 3.0f;
 
-		/// <summary>
-		/// Free space a character needs above its own head to be able to move after respawning.
-		/// </summary>
-		/// <remarks>
-		/// One metre. Enough that a respawn cannot land somebody in a gap they exactly fill — which
-		/// passes an overlap test and is still stuck — while staying under any sane indoor ceiling,
-		/// so a bindstone inside a building is not refused for being inside a building.
-		/// </remarks>
-		public const float MINIMUM_CLEARANCE_MARGIN = 1.0f;
-
-		/// <summary>
-		/// Buffer for the capsule overlap test.
-		/// </summary>
-		/// <remarks>
-		/// Static and shared: the sweep is fully consumed inside a single synchronous
-		/// <see cref="IsValidBindPosition"/> call, so no two binds can be mid-test at once.
-		/// </remarks>
-		private static readonly Collider[] overlapBuffer = new Collider[8];
-
-		/// <summary>
-		/// Buffer for the headroom sweep.
-		/// </summary>
-		private static readonly RaycastHit[] sweepBuffer = new RaycastHit[8];
+		/// <summary>The floor on <see cref="RequiredClearance"/> above the capsule; see <see cref="StandingSpot.MinimumClearanceMargin"/>.</summary>
+		public const float MINIMUM_CLEARANCE_MARGIN = StandingSpot.MinimumClearanceMargin;
 
 		/// <summary>
 		/// Sets the player's <see cref="IPlayerCharacter.BindPosition"/> and <see cref="IPlayerCharacter.BindScene"/>
@@ -120,7 +99,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			if (!IsValidBindPosition(player, out string rejection))
+			if (!StandingSpot.IsValid(player, RequiredClearance, out string rejection))
 			{
 				Log.Debug("BindstoneAction", $"CharID={player.ID} cannot bind here: {rejection}");
 				// The detailed rejection is a diagnostic (it can name colliders); the player
@@ -134,8 +113,8 @@ namespace FishMMO.Shared
 
 			/* The whole visible effect of a bind is two fields changing server-side, so without
 			 * this line a successful bind is indistinguishable from a refused one from where the
-			 * player stands — which reads as "the bindstone doesn't work" (reported live,
-			 * 2026-09-01). Same System-channel pattern the dungeon finder uses. */
+			 * player stands — which reads as "the bindstone doesn't work" (reported live).
+			 * Same System-channel pattern the dungeon finder uses. */
 			SendFeedback(player, "Your home point has been set.");
 
 			if (bindstone?.AchievementTemplate != null)
@@ -161,93 +140,5 @@ namespace FishMMO.Shared
 			}, true, Channel.Reliable);
 		}
 
-		/// <summary>
-		/// Returns true when the player is standing somewhere they can safely be put back down.
-		/// </summary>
-		/// <remarks>
-		/// <para>
-		/// Every query runs against the motor's own <see cref="KinematicCharacterMotor.PhysicsScene"/>
-		/// and its own capsule dimensions, rather than the global <c>Physics</c> API. Both matter:
-		/// scene stacking loads several copies of a scene at once, so a global query would happily
-		/// answer using another channel's geometry, and the character's real capsule is what has to
-		/// fit — a point test would pass in a gap the player cannot occupy.
-		/// </para>
-		/// <para>
-		/// The layer masks come from the motor too (<c>CollidableLayers</c>, <c>StableGroundLayers</c>),
-		/// so "solid" here means exactly what it means to the character controller. A second,
-		/// hand-maintained mask on this action would be one more thing to drift.
-		/// </para>
-		/// </remarks>
-		/// <param name="player">The binding player.</param>
-		/// <param name="rejection">Receives why the position was refused.</param>
-		/// <returns>True when the position is safe to record.</returns>
-		private bool IsValidBindPosition(IPlayerCharacter player, out string rejection)
-		{
-			rejection = null;
-
-			KinematicCharacterMotor motor = player.Motor;
-			if (motor == null)
-			{
-				rejection = "no character motor";
-				return false;
-			}
-
-			/* Ask the controller, rather than re-deriving grounding from a raycast. IsStableOnGround
-			 * already means "touching ground the character may stand on", slope limit included, and
-			 * it is the same answer the movement code acts on — so a bind can never be accepted on
-			 * a surface the player would immediately slide off. FoundAnyGround is deliberately not
-			 * enough: that is true on a 70-degree face the character is sliding down. */
-			if (!motor.GroundingStatus.IsStableOnGround)
-			{
-				rejection = "not standing on stable ground";
-				return false;
-			}
-
-			Vector3 position = motor.Transform.position;
-			Quaternion rotation = motor.Transform.rotation;
-
-			/* Inside geometry. The controller de-collides itself as it moves, so an overlap here
-			 * means the character is somewhere it could not have walked — clipped into terrain, or
-			 * pushed inside a wall by a knockback. Recording that position would respawn them
-			 * inside it, with no movement input able to get them out. */
-			if (motor.CharacterCollisionsOverlap(position, rotation, overlapBuffer) > 0)
-			{
-				rejection = "overlapping world geometry";
-				return false;
-			}
-
-			/* Clearance, and with it the under-the-map case. A player who has clipped through the
-			 * world stands on the underside of the terrain perfectly stably and overlaps nothing,
-			 * so neither check above sees it — but there is world directly above their head, which
-			 * there is not when standing on the world the right way up.
-			 *
-			 * Swept with the character's own capsule rather than raycast from a point, so a gap the
-			 * player's shoulders would not fit through does not read as open sky.
-			 *
-			 * The sweep measures travel available above the head, and the capsule already occupies
-			 * its own height — so the distance asked for is the total clearance minus that height,
-			 * not the total. Sweeping the full figure would demand a room more than twice the
-			 * player's height and refuse every honest indoor bind. */
-			float capsuleHeight = motor.Capsule != null ? motor.Capsule.height : 0f;
-			float requiredClearance = Mathf.Max(RequiredClearance, capsuleHeight + MINIMUM_CLEARANCE_MARGIN);
-			float requiredHeadroom = Mathf.Max(requiredClearance - capsuleHeight, MINIMUM_CLEARANCE_MARGIN);
-
-			int hits = motor.CharacterCollisionsSweep(
-				position,
-				rotation,
-				motor.CharacterUp,
-				requiredHeadroom,
-				out RaycastHit closestHit,
-				sweepBuffer);
-
-			if (hits > 0 && closestHit.collider != null)
-			{
-				rejection = $"needs {requiredClearance:0.00}m of clearance but only has " +
-							$"{capsuleHeight + closestHit.distance:0.00}m below '{closestHit.collider.name}'";
-				return false;
-			}
-
-			return true;
-		}
 	}
 }

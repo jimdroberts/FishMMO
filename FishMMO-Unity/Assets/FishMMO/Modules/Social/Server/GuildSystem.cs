@@ -1636,7 +1636,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <summary>
 		/// Reads a spawned member's guild roster and rank ladder and sends them, with the officer notes filtered for the
 		/// viewer, then refreshes the server's cache of the member's standing. Async worker; parameters captured on the
-		/// main thread. Moved from <c>CharacterSystem</c>'s social payload with the guild (2026-11-16).
+		/// main thread. Moved from <c>CharacterSystem</c>'s social payload with the guild.
 		/// </summary>
 		/// <param name="owner">Network connection of the character owner (captured on main thread).</param>
 		/// <param name="characterID">The character the payload is for (captured on main thread).</param>
@@ -2650,7 +2650,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Tells the inviter what became of an invitation: sent, or why not. An invitation that ended in silence was
-		/// indistinguishable from one the target ignored (2026-11-17).
+		/// indistinguishable from one the target ignored.
 		/// </summary>
 		private void SendInviteToast(NetworkConnection conn, string text, ToastSeverity severity)
 		{

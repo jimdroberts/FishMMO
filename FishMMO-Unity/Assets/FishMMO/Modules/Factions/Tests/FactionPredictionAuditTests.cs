@@ -19,7 +19,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Regression guards for the defects found by the 2026-08-28 prediction-pipeline audit. Each
+	/// Regression guards for the defects found by the prediction-pipeline audit. Each
 	/// test names the defect it pins and failed against the code as it was before the fix.
 	/// </summary>
 	[TestFixture]

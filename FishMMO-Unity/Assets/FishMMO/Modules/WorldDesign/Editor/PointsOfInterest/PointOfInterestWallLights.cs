@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Street lights hung on the walls of the buildings along a street (2026-10-18, I6g): where a biome's way lights name a
+	/// Street lights hung on the walls of the buildings along a street: where a biome's way lights name a
 	/// wall light for a settlement's streets (a torch in a sconce, a lantern on a bracket, a lantern from a scrolled iron arm),
 	/// each is fixed to a street-facing wall of a building laid there, at the light's spacing, between 2.4 and 3 m up, facing
 	/// the street and clear of the doors and windows; where no wall is within reach of a light's place, a post of the same kind
@@ -44,7 +44,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float Proud = 0.03f;
 
 		/// <summary>
-		/// The room a hung light takes in front of its wall (2026-10-18, I6h), metres: from <see cref="ClearFrom"/> out of the face
+		/// The room a hung light takes in front of its wall, metres: from <see cref="ClearFrom"/> out of the face
 		/// (past the framing, sills and surrounds, which stand at most 0.14 m proud) to <see cref="ClearOut"/> (a bracket's 0.6 m arm
 		/// and its lantern), <see cref="ClearBeside"/> either side, from <see cref="Below"/> under the fixing to <see cref="Above"/>
 		/// over it. Nothing else of the building may stand there: a tavern's sign on its bracket, a chimney stack, a buttress, a
@@ -291,7 +291,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			// Out in the open in front of it: not in a room of the building, nor inside another of its parts (a porch, a buttress),
-			// and nothing else hung on or standing off the wall where the light hangs (2026-10-18, I6h: a sign, a hood, the eaves).
+			// and nothing else hung on or standing off the wall where the light hangs (a sign, a hood, the eaves).
 			Vector3 probe = at + n * 0.45f;
 			return !InRoom(probe, rooms) && !InsideAny(probe, solids, own) && !Crowded(at, n, u, h, solids, own);
 		}

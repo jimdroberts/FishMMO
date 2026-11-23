@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bd708e51cafd34ff886b5f135027047, type: 3}
+  m_Name: Cow
+  m_EditorClassIdentifier: FishMMO.Mounts::FishMMO.Shared.MountBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Riding a cow: steady, patient and not very fast. Casting, a hit, deep water, a ladder or a roof overhead gets you off; click it off to dismount.'
+  icon:
+    m_AssetGUID: eb0e4bcc8a847d2db1b92b0a1ceaa856
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 0
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 1
+  GroundSpeedMultiplier: 1.3
+  JumpHeightMultiplier: 1
+  LeapSpeed: 0
+  MaxSlopeDegrees: 0
+  Flies: 0
+  FlySpeed: 15
+  FlySprintMultiplier: 2
+  FlightStaminaPerSecond: 3
+  GlideSinkSpeed: 3
+  GlideSpeedShare: 0.6
+  Body:
+    Length: 1.6
+    Depth: 0.75
+    Width: 0.62
+    LegLength: 0.66
+    LegThickness: 0.1
+    NeckLength: 0.35
+    NeckRaise: 22
+    HeadLength: 0.5
+    HeadSize: 0.27
+    EarSize: 0.13
+    Horns: 4
+    HornSize: 0.26
+    TailLength: 0.7
+    TailRaise: 5
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.86, g: 0.82, b: 0.74, a: 1}
+    Belly: {r: 0.93, g: 0.9, b: 0.84, a: 1}
+    Accent: {r: 0.22, g: 0.17, b: 0.15, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  SaddleBack: 0.05
+  GaitRunSpeed: 7.7999997

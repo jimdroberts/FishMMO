@@ -152,7 +152,7 @@ namespace FishMMO.Shared.Biomes
 		public bool TryGetSurface(float x, float z, out float level, out bool lava) => TryGetSurfaceNear(x, z, 0f, out level, out lava);
 
 		/// <summary>
-		/// The surface a height stands in or over at a scene position (2026-10-21): only lakes and rivers whose floor lies no more
+		/// The surface a height stands in or over at a scene position: only lakes and rivers whose floor lies no more
 		/// than <see cref="SurfaceWater.FloorReach"/> over <paramref name="y"/> answer, so a cave's stream is not drowned by a lava
 		/// tube's river on the level over it, nor by a lake on the hill. A lake whose floor is unknown reaches down without end.
 		/// </summary>
@@ -286,7 +286,7 @@ namespace FishMMO.Shared.Biomes
 			/* The river's surface where its centre line comes nearest, not the highest of every segment in reach: down a
 			 * falling river the segment upstream reaches a little past its end and stands higher, so the highest stepped
 			 * at every segment, and the grass's waterline and the banks' bed paint came out as a row of teeth pointing
-			 * downstream (2026-10-11). The nearest varies smoothly along the river. */
+			 * downstream. The nearest varies smoothly along the river. */
 			// The nearest of each liquid's apart: a lava tube's river under a river on the hill is its own, and the higher answers.
 			float nearestWater = float.PositiveInfinity, water = float.NegativeInfinity;
 			float nearestLava = float.PositiveInfinity, molten = float.NegativeInfinity;
@@ -447,7 +447,7 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava) => FlowAt(x, z, out reach, out broken, lava, float.PositiveInfinity);
 
 		/// <summary>
-		/// <see cref="FlowAt(float, float, out float, out float, bool)"/> of the water a height stands in (2026-10-21): rivers whose
+		/// <see cref="FlowAt(float, float, out float, out float, bool)"/> of the water a height stands in: rivers whose
 		/// floor lies over it (a level above) move none of it.
 		/// </summary>
 		public Vector2 FlowAt(float x, float z, out float reach, out float broken, bool lava, float height)

@@ -48,12 +48,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How glossy the wet makes the rock, 0..1.</summary>
 		public float WetGloss;
 		/// <summary>
-		/// The inner wall in place of the shell rock's own texture, or none (2026-10-25, I2n, decision 51: "an Ice shell wears the
+		/// The inner wall in place of the shell rock's own texture, or none ("an Ice shell wears the
 		/// interior's scalloped-ice wall texture inside"): a linked interior's Interior-banded cliff layer, for an ice shell only.
 		/// </summary>
 		public CaveRockLayer Wall;
 		/// <summary>
-		/// The tea ring at the water's line (2026-10-25, phase I2n-c, decision 86 (g)): the cave biome's stain colour and strength (alpha,
+		/// The tea ring at the water's line: the cave biome's stain colour and strength (alpha,
 		/// 0 none: every cave's until then), the water's level (world y), the highest flood over it and the top edge's fade, metres.
 		/// </summary>
 		public Color FloodStain;
@@ -112,7 +112,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The one lookup of how a cave's rock is dressed (2026-10-20): by the biome its host site stands in and the cave's form.
+	/// The one lookup of how a cave's rock is dressed: by the biome its host site stands in and the cave's form.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -123,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// glow's colour, the guano and the moss are the form's alone for now.
 	/// </para>
 	/// <para>
-	/// Kept to this one function so the biome suite's cave interiors (I2n, decisions 37(b)/51/57: cave floor layers by surface
+	/// Kept to this one function so the biome suite's cave interiors (cave floor layers by surface
 	/// angle, walls and roofs the shell's rock) can move each choice into template fields without touching the shaper or the
 	/// shader: an interior biome's own floor grounds, its glow colour (decision 37(c) caveGlow), its stain.
 	/// </para>
@@ -135,7 +135,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] OrganicFamilies = { Ground.ForestFloor, Ground.NeedleLitter, Ground.JungleFloor, Ground.Peat, Ground.Sphagnum, Ground.Heath };
 
 		/// <summary>
-		/// The look of a cave by its cave biomes (2026-10-25, I2n): the floors' grounds the biome dressing its inside takes
+		/// The look of a cave by its cave biomes: the floors' grounds the biome dressing its inside takes
 		/// (<see cref="CaveBiome.Content"/>: its interior where linked), and for a linked cave cut in glacier ice
 		/// (<paramref name="shell"/> Ice) the interior's own inner wall where it carries one (its first cliff layer banded Interior).
 		/// </summary>
@@ -154,7 +154,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The look with the tea ring of the biome dressing the cave's inside (2026-10-25, I2n-c, decision 86 (g), its Cave Stains for the
+		/// The look with the tea ring of the biome dressing the cave's inside (its Cave Stains for the
 		/// form) at the cave's water (<paramref name="waterLevel"/>, world y; NaN for a dry cave: no ring), over the host's rock. The look
 		/// as it was where either is missing.
 		/// </summary>
@@ -246,7 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 					look.Moss = 0.7f;
 					break;
 				case CaveForm.SeaHall:
-					// A sea hall (2026-10-26, I2n-b): the sea's own sediment and grit (the interior's), soot and rust under the smoke, brine
+					// A sea hall: the sea's own sediment and grit (the interior's), soot and rust under the smoke, brine
 					// salt; wet everywhere, no glow crust (its light is its vents' and its Glow pieces').
 					look.Stain = new Color(0.16f, 0.12f, 0.1f);
 					look.Crust = new Color(0.86f, 0.9f, 0.92f);
@@ -298,7 +298,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The biome's first ground layer (main, details, beds, bars) made of one of <paramref name="families"/>, in their order, that
-		/// may floor a cave (2026-10-25, its underground band, <see cref="BiomeUndergrounds.CaveRank"/>): a layer banded Interior before
+		/// may floor a cave (its underground band, <see cref="BiomeUndergrounds.CaveRank"/>): a layer banded Interior before
 		/// any other of the family, never one banded Surface. With no band set anywhere, the first of the family as before.
 		/// </summary>
 		private static TerrainTextureLayer Find(BiomeTemplate biome, string[] families)
@@ -408,7 +408,7 @@ namespace FishMMO.Shared.WorldDesign
 			// x moss in the twilight, y wet gloss, z 1 when the ground textures are bound (else flat colours), w unused.
 			bool bound = siltAlbedo != null && gravelAlbedo != null && organicAlbedo != null && troddenAlbedo != null;
 			material.SetVector("_FishCaveParams", new Vector4(look.Moss, look.WetGloss, bound ? 1f : 0f, 0f));
-			// The tea ring (I2n-c): x the water's level (world y), y the highest flood over it, z the top edge's fade, w on; its colour
+			// The tea ring: x the water's level (world y), y the highest flood over it, z the top edge's fade, w on; its colour
 			// and strength. Set only on a ringed cave's own material: every other keeps the shader's default (w 0, the branch never
 			// runs) and its bytes as they were.
 			if (look.FloodStain.a > 0f && material.HasProperty("_FishCaveFlood"))
@@ -425,7 +425,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					material.SetTexture("_BaseMap", wallAlbedo);
 					material.SetTextureScale("_BaseMap", Vector2.one * (RockMeshes.TextureMetres / wallTile));
-					// A shell whose maps are look array slices (ProceduralArtLookArrays, 2026-10-28): the overridden slots let go of their
+					// A shell whose maps are look array slices (ProceduralArtLookArrays): the overridden slots let go of their
 					// slices, and cave rock reads an empty slot from the material's own 2D map (FishWeatherLitInput.hlsl).
 					EmptyLookSlice(material, 0);
 					if (wallNormal != null && material.HasProperty("_BumpMap"))

@@ -1,7 +1,7 @@
 #ifndef FISHMMO_WATER_SWELL_INCLUDED
 #define FISHMMO_WATER_SWELL_INCLUDED
 
-// The sea's wave sum on its own (2026-10-25, phase I2p): the FFT cascades, the depth they fade with over the shore and
+// The sea's wave sum on its own: the FFT cascades, the depth they fade with over the shore and
 // where the open sea reaches, for anything that has to ride the SAME sea as the ocean surface — the floats on it
 // (FishMMO/Sea Floats: weed, drift logs, ice). FishWaterWaves.hlsl includes this after FishWaterInput.hlsl and builds the
 // ocean surface from exactly these functions, so the sea is unchanged and the two cannot drift apart.

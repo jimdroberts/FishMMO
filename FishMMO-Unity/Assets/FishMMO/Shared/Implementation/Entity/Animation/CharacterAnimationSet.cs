@@ -65,5 +65,11 @@ namespace FishMMO.Shared
 		public float SeatHeight = 0.46f;
 		[Tooltip("How tall the figure the clips were keyed on stood, metres (the seat height scales with the model's height).")]
 		public float KeyedHeight = 1.8f;
+
+		[Header("Riding (issue #109)")]
+		[Tooltip("Astride a mount: knees spread round its barrel, feet hanging in the stirrups, hands forward on the reins. Without it the seated clip stands in.")]
+		public AnimationClip Ride;
+		[Tooltip("The hip joints' height over the clip's origin in Ride, metres, on a figure KeyedHeight tall (the rider is raised so they meet the saddle).")]
+		public float RideHipHeight = 0.848f;
 	}
 }

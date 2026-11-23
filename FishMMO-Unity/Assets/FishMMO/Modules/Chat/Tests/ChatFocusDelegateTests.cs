@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests
 	/// Enter opening chat must focus the field although the chat keeps every element out of the Tab ring.
 	/// </summary>
 	/// <remarks>
-	/// The browser log (11-16): canGrabFocus True, chat panel selected in the EventSystem, yet focus on nothing after every
+	/// The browser log: canGrabFocus True, chat panel selected in the EventSystem, yet focus on nothing after every
 	/// <c>Focus()</c> and never a FocusOut. A TextField delegates focus to its first child that can grab focus AND has
 	/// <c>tabIndex &gt;= 0</c>; the chat sets -1 on every focusable element, so the delegate was null and
 	/// <c>SwitchFocus(null)</c> did nothing. A click lands on the inner text element and needs no delegate.

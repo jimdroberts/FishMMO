@@ -179,7 +179,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void RiderVolume_AlwaysQueriesThePlayerLayer()
 		{
-			/* Riding regression, reported live 2026-09-01: players stood on platforms (solid
+			/* Riding regression, reported live: players stood on platforms (solid
 			 * collision fine) while the deck slid out from under them. The rider-detection
 			 * NetworkCollision was scene-authored to query Default only, and BaseCharacter.Awake
 			 * moves every character to the Player layer at runtime — so OnEnter never fired,

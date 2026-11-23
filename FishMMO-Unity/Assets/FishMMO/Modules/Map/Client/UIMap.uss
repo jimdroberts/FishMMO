@@ -72,6 +72,15 @@
     white-space: nowrap;
 }
 
+/* The scene dropdown: between the title and the close button, never wider than a third of the header. */
+.map-header__scene {
+    flex-shrink: 1;
+    min-width: 160px;
+    max-width: 33%;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
 
 /* ═══════════════════════════════════════════════════════════
    BODY

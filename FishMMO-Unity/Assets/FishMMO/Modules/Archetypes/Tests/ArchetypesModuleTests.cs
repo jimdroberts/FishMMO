@@ -13,7 +13,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Archetypes module (Phase 3, 2026-11-17): the archetype is a character part, saved through its participant;
+	/// The Archetypes module: the archetype is a character part, saved through its participant;
 	/// the template stays in the core. The controller tests moved here from ObserverPayloadShapingTests and
 	/// PersistenceAuditTests with the controller.
 	/// </summary>

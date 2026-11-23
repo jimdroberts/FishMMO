@@ -30,7 +30,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>What the table achieves, measured</b> (the real <see cref="PlanetClimateField"/> on a synthetic
-	/// Earth and on the project's own bodies, 10⁵–10⁶ points each, re-measured 2026-10-02 with the
+	/// Earth and on the project's own bodies, 10⁵–10⁶ points each, re-measured with the
 	/// physical land zones and the field-derived water test): land outside every envelope 0.11% on
 	/// the Earth-like body and 0.20% on Arthis, sea floor 0%; every climate-selected Earth biome
 	/// chosen somewhere on the Earth-like body; the shore biomes 2% of its land, as Earth's
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Rilles and tidal fractures are not shore landforms</b>, so they are tier 9 — channels and
-	/// fractures cut ground of every height — and since 2026-10-02 the resolver offers a tier-9 biome
+	/// fractures cut ground of every height — and the resolver now offers a tier-9 biome
 	/// in EVERY tier, inside its height band, to win on climate fit and weight like the tier's own
 	/// biomes (it used to offer them only where a world had no biome of the point's tier). On a cold
 	/// airless moon every reading is the same corner of the climate plane (−1, −1), so weight alone
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// atmosphere, 13% water) used to read liquid seas; frozen through, it now takes Snow, High
 	/// Desert, Alpine and ice, its frozen sea (raised to the shore tier by the cut) and its shores, natural
 	/// and raised, the Ice Shelf; the warm sea UNDER that shell is the Subsurface Ocean Vent, an interior
-	/// biome no surface selects (weight 0, decision 83) that the ice biomes' sea halls open onto (Rocky Coast, which needs water to have a coast
+	/// biome no surface selects (weight 0) that the ice biomes' sea halls open onto (Rocky Coast, which needs water to have a coast
 	/// rather than liquid water, keeps the shores of a cold world with open seas). That is why
 	/// Cryovolcanic Plain is airless or thin-aired only — every confirmed cryovolcanic surface is
 	/// (Europa, Enceladus, Triton, Pluto's Wright Mons, Ceres' Ahuna Mons); under real air the same
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// temperature −1 — rather than shaped to dodge an Earth climate they happen to resemble.
 	/// </para>
 	/// <para>
-	/// <b>The tiers are landform bands at physical altitudes</b> (2026-10-02,
+	/// <b>The tiers are landform bands at physical altitudes</b> (
 	/// <see cref="ClimateSettings.TierEdgeMetres"/>, Earth metres scaled by the body's relief): tier 3
 	/// the shore to 30 m, tier 4 lowland and plateau to 1.5 km, tier 5 highland to 2.5 km, tier 6
 	/// mountain to 3.5 km, tier 7 alpine to 4.5 km, tier 8 nival above. They used to be fractions of
@@ -231,7 +231,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float TenDegrees = 10f / 33.1f;
 
 		/// <summary>
-		/// The warmest-season ranges (2026-10-10): what grows is decided by the summer, not the
+		/// The warmest-season ranges: what grows is decided by the summer, not the
 		/// year — Köppen's ice cap (no month above 0 °C), tundra (0–10 °C) and forest (10 °C and up),
 		/// the same lines that put the treeline at the 10 °C summer isotherm on every continent. A
 		/// tabled biome not listed here keeps −1…1 (asks nothing): rock, water, deserts and the aliens.
@@ -322,7 +322,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Ocean floor. The temperature is the water's at the surface: the abyss under cold seas is the sediment-blanketed plain, canyons cut the cold wet slopes, seamount chains stand in the warm subtropical gyres.
 			new Entry("Deep Ocean", 0, 0f, 0.2f, -0.3f, 1f, -1f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Abyssal Plain", 0, 0f, 0.2f, -1f, 0.1f, -1f, 1f, 1f, A.Living, true, R.None),
-			// The hadal trenches (2026-10-25, phase I2m, decision 36 (f)): the deepest sea floor, below about 6 000 m (the tier-0 band's
+			// The hadal trenches: the deepest sea floor, below about 6 000 m (the tier-0 band's
 			// 0.14), at any surface temperature, weighted over the plain and the deep ocean that share its readings there. A scene whose
 			// floor stays above that depth (every coast and shelf scene) chooses exactly as before.
 			new Entry("Abyss", 0, 0f, 0.14f, -1f, 1f, -1f, 1f, 1.2f, A.Living, true, R.None),
@@ -340,7 +340,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			// Lowland and plateau (tier 4, 30 m to 1.5 km): the vegetation, laid out the way Whittaker's diagram lays it out, with the peat bogs of the cold wet lowlands. The snow plain sits with the tundra at the coldest end; permanent ice belongs to the summits.
 			new Entry("Snow", 4, 0.45f, 0.6f, -1f, -0.7f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
-			// Tundra, Taiga and Steppe (and the highland Hills and Valley) reach the coldest yearly temperatures (2026-10-10): what separates them is the summer (Seasons — trees from a 10 °C summer, tundra below it, ice where nothing thaws), not the year's mean, which left holes once the summer test arrived — a strongly tilted world's −30 °C year can still have a thawing summer. Measured on a T × H × summer grid: no holes, no wrong picks in any tier.
+			// Tundra, Taiga and Steppe (and the highland Hills and Valley) reach the coldest yearly temperatures: what separates them is the summer (Seasons — trees from a 10 °C summer, tundra below it, ice where nothing thaws), not the year's mean, which left holes once the summer test arrived — a strongly tilted world's −30 °C year can still have a thawing summer. Measured on a T × H × summer grid: no holes, no wrong picks in any tier.
 			new Entry("Tundra", 4, 0.45f, 0.6f, -1f, 0.3f, -1f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Taiga", 4, 0.45f, 0.6f, -1f, 0.05f, -0.2f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Steppe", 4, 0.45f, 0.6f, -1f, 0.45f, -1f, -0.2f, 1f, A.Living, true, R.None),
@@ -360,10 +360,10 @@ namespace FishMMO.Shared.WorldDesign
 			new Entry("Oasis", 4, 0.45f, 0.6f, 0.5f, 0.9f, 0.8f, 1f, 0f, A.Living, true, R.None),
 
 			// Highland (tier 5, 1.5 to 2.5 km): high desert where dry (volcanic plateaus where it is also warm and the world volcanic), alpine meadow above the treeline, valleys where wet with geyser basins in their core, karst where warm and wet, hills between.
-			// High Desert runs to the hot end too (2026-10-10): a dry highland is a high desert whether it is the Altiplano or the Iranian plateau; capped at 0.2 it left hot dry highland on non-volcanic worlds to a nearest miss.
+			// High Desert runs to the hot end too: a dry highland is a high desert whether it is the Altiplano or the Iranian plateau; capped at 0.2 it left hot dry highland on non-volcanic worlds to a nearest miss.
 			new Entry("High Desert", 5, 0.6f, 0.75f, -1f, 1f, -1f, -0.45f, 1f, A.Living, false, R.None),
 			new Entry("Volcanic", 5, 0.6f, 0.75f, 0.2f, 1f, -1f, -0.45f, 1f, A.Any, false, R.Volcanic),
-			// Alpine Meadow takes the cool wet highland up to 0.2 (2026-10-10), bounded by its summer (Seasons: a thaw, under 10 °C) — Hills is dry and Valley needs a forest's summer, which left the cool wet highland with no biome under the summer test.
+			// Alpine Meadow takes the cool wet highland up to 0.2, bounded by its summer (Seasons: a thaw, under 10 °C) — Hills is dry and Valley needs a forest's summer, which left the cool wet highland with no biome under the summer test.
 			new Entry("Alpine Meadow", 5, 0.6f, 0.75f, -1f, 0.2f, -0.45f, 1f, 1f, A.Living, true, R.None),
 			new Entry("Hills", 5, 0.6f, 0.75f, -1f, 1f, -0.45f, 0f, 1f, A.Living, true, R.None),
 			new Entry("Valley", 5, 0.6f, 0.75f, -1f, 0.2f, 0f, 1f, 1f, A.Living, true, R.None),
@@ -377,14 +377,14 @@ namespace FishMMO.Shared.WorldDesign
 			new Entry("Scree", 7, 0.9f, 1f, -0.65f, 1f, -1f, 1f, 1f, A.Any, false, R.None),
 			new Entry("Permanent Ice", 7, 0.9f, 0.95f, -1f, -0.65f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
 			new Entry("Glacier", 8, 0.95f, 1f, -1f, 0.3f, -1f, 1f, 1f, A.Any, false, R.SurfaceWater),
-			// Ice Sheet (2026-10-10): land whose summer never thaws, from the shore to the mountains (tier 9, band shore…mountain; Permanent Ice and Glacier keep the summits). Its warmest-season cap (Seasons) is what places it; the envelope only keeps it to cold ground (any humidity: a frozen summer keeps whatever snow falls). Weighted over the Snow plain it shares a reading with.
+			// Ice Sheet: land whose summer never thaws, from the shore to the mountains (tier 9, band shore…mountain; Permanent Ice and Glacier keep the summits). Its warmest-season cap (Seasons) is what places it; the envelope only keeps it to cold ground (any humidity: a frozen summer keeps whatever snow falls). Weighted over the Snow plain it shares a reading with.
 			new Entry("Ice Sheet", 9, 0.42f, 0.9f, -1f, 0.1f, -1f, 1f, 1.1f, A.Any, false, R.SurfaceWater),
 
-			// Alien biomes, kept off any world that is not theirs by BiomeTemplate.Requires; each envelope sits where its own world's readings fall (an airless body reads humidity -1, a moon past the frost line temperature -1). Impact Basin and Methane Lake also claim the ground below their tier in the fallback pass: on a world with no sea, everything under the datum is a basin (Subsurface Ocean Vent weighs 0: an interior only, decision 83). Molten Surface is the lowest ground of a world with molten rock open at its surface — a magma ocean, or lava lakes over an interior heated past the lake threshold (R.MoltenRock, the lava code's own test) — where the melt stands; any temperature, since the heat is the rock's, not the sunlight's. Ice Shelf is the frozen sea of a world frozen through, whose below-datum ground the scene raises to the shore tier; it outweighs Rocky Coast there. Runaway Greenhouse Plain claims every height in the fallback pass.
+			// Alien biomes, kept off any world that is not theirs by BiomeTemplate.Requires; each envelope sits where its own world's readings fall (an airless body reads humidity -1, a moon past the frost line temperature -1). Impact Basin and Methane Lake also claim the ground below their tier in the fallback pass: on a world with no sea, everything under the datum is a basin (Subsurface Ocean Vent weighs 0: an interior only). Molten Surface is the lowest ground of a world with molten rock open at its surface — a magma ocean, or lava lakes over an interior heated past the lake threshold (R.MoltenRock, the lava code's own test) — where the melt stands; any temperature, since the heat is the rock's, not the sunlight's. Ice Shelf is the frozen sea of a world frozen through, whose below-datum ground the scene raises to the shore tier; it outweighs Rocky Coast there. Runaway Greenhouse Plain claims every height in the fallback pass.
 			new Entry("Dust Sea", 0, 0f, 0.2f, -1f, 1f, -1f, -0.6f, 1f, A.Airless | A.Thin, false, R.RockSurface),
 			new Entry("Molten Surface", 0, 0f, 0.2f, -1f, 1f, -1f, 1f, 1.1f, A.Any, false, R.MoltenRock),
 			new Entry("Impact Basin", 1, 0f, 0.42f, -1f, 1f, -1f, -0.6f, 0.8f, A.Airless | A.Thin, false, R.None),
-			// Never on a surface (2026-10-26, phase I2n-b, decision 83): an interior, the sea under an ice moon's shell, linked by its hosts' sea halls.
+			// Never on a surface: an interior, the sea under an ice moon's shell, linked by its hosts' sea halls.
 			new Entry("Subsurface Ocean Vent", 1, 0f, 0.42f, -1f, -0.3f, -1f, 1f, 0f, A.Any, false, R.Cryovolcanic),
 			new Entry("Lava Tube", 2, 0.35f, 0.42f, -1f, 0.8f, -1f, -0.5f, 1f, A.Airless | A.Thin, false, R.NoLiquidWater | R.RockSurface),
 			new Entry("Methane Lake", 2, 0f, 0.42f, -1f, -0.65f, -1f, 1f, 1f, A.Breathing, false, R.MethaneCycle),
@@ -496,7 +496,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <b>Why here.</b> A build loads biomes through Addressables and registers only what it loads,
 		/// so a biome with no entry exists in the editor and silently not in the game: the resolver
 		/// never offers it and a baked map cell naming it resolves to nothing. Assets got entries only
-		/// when somebody opened them in the inspector, so the 23 biomes added by script on 2026-09-23
+		/// when somebody opened them in the inspector, so the 23 biomes added by script
 		/// — every alien among them — went unregistered, and so would anything this tool creates.
 		/// Registering here makes applying the table also make it loadable.
 		/// </para>

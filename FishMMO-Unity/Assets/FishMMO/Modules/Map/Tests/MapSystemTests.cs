@@ -42,7 +42,7 @@ namespace FishMMO.UnitTests
 		{
 			for (int i = 0; i < temporaryCharacters.Count; ++i)
 			{
-				FogOfWarStore.DeleteAll(temporaryCharacters[i]);
+				MapNoteStore.DeleteAll(temporaryCharacters[i]);
 			}
 			temporaryCharacters.Clear();
 
@@ -344,9 +344,15 @@ namespace FishMMO.UnitTests
 			/* The default constant, not a number typed in here. What this test is about is the shipped
 			 * configuration, and a grain that moved without it following would leave it proving a
 			 * property of a grid no player has. */
-			Assert.AreEqual(28, fog.ChunksX);
-			Assert.AreEqual(scene.xMin, fog.GridRect.xMin, 1e-3f, "the grid starts where the scene does");
-			Assert.AreEqual(scene.yMin, fog.GridRect.yMin, 1e-3f);
+			// From the chunk line at or before -540.96 (-560) to past 564.96: twenty-nine chunks.
+			Assert.AreEqual(29, fog.ChunksX);
+			/* On a whole chunk line at or before the scene's corner, so its chunks are the world-anchored ones
+			 * the server keeps. */
+			Assert.LessOrEqual(fog.GridRect.xMin, scene.xMin, "the grid starts at or before the scene");
+			Assert.LessOrEqual(fog.GridRect.yMin, scene.yMin);
+			Assert.AreEqual(0.0f, Mathf.Repeat(fog.GridRect.xMin, fog.ChunkSize), 1e-3f, "on a whole chunk line");
+			Assert.AreEqual(0.0f, Mathf.Repeat(fog.GridRect.yMin, fog.ChunkSize), 1e-3f);
+			Assert.Greater(fog.GridRect.xMin + fog.ChunkSize, scene.xMin, "and no more than one chunk before it");
 			Assert.AreEqual(fog.ChunksX * fog.ChunkSize, fog.GridRect.width, 1e-3f, "and spans whole chunks");
 			Assert.AreEqual(fog.ChunksZ * fog.ChunkSize, fog.GridRect.height, 1e-3f);
 			Assert.GreaterOrEqual(fog.GridRect.width, scene.width, "which must cover the scene, never crop it");
@@ -500,104 +506,10 @@ namespace FishMMO.UnitTests
 
 		// ── Explored-map file ───────────────────────────────────────
 
-		[Test]
-		public void FogStore_RoundTripsAnExploredMap()
-		{
-			long characterID = Temporary(918273645);
-			Rect rect = new Rect(-100.0f, -100.0f, 400.0f, 400.0f);
 
-			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
-			written.Reveal(new Vector3(0.0f, 0.0f, 0.0f));
-			written.Reveal(new Vector3(80.0f, 0.0f, 20.0f));
 
-			Assert.IsTrue(FogOfWarStore.Save(characterID, "TestScene", written));
-			Assert.IsFalse(written.IsDirty, "A successful save clears the dirty flag.");
 
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 50.0f);
 
-			Assert.IsNotNull(read);
-			CollectionAssert.AreEqual(written.Chunks, read.Chunks);
-			Assert.AreEqual(written.ExploredChunkCount, read.ExploredChunkCount);
-			Assert.AreEqual(written.ExploredFraction(), read.ExploredFraction(), 1e-5f);
-		}
-
-		[Test]
-		public void FogStore_RejectsAnEditedFile()
-		{
-			/* The signature is tamper-EVIDENT, not tamper-proof — the key ships in the client. What
-			 * this test protects is that the check is wired up at all: a verification that silently
-			 * passes everything is worse than none, because the code reads as though something is
-			 * being checked. */
-			long characterID = Temporary(918273646);
-			Rect rect = new Rect(0.0f, 0.0f, 200.0f, 200.0f);
-
-			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
-			written.Reveal(new Vector3(100.0f, 0.0f, 100.0f));
-			FogOfWarStore.Save(characterID, "TestScene", written);
-
-			string path = FogOfWarStore.FilePath(characterID, "TestScene");
-			byte[] bytes = File.ReadAllBytes(path);
-			bytes[bytes.Length / 2] ^= 0xFF;
-			File.WriteAllBytes(path, bytes);
-
-			/* The store logs a warning for a file that fails its signature check, which is the
-			 * point of it — but an unexpected log entry fails a Unity test by default. */
-			LogAssert.ignoreFailingMessages = true;
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", rect, 50.0f);
-			LogAssert.ignoreFailingMessages = false;
-
-			Assert.IsNull(read, "A file whose contents no longer match its signature must be discarded.");
-		}
-
-		[Test]
-		public void FogStore_RejectsAnotherCharactersFile()
-		{
-			long owner = Temporary(918273647);
-			long thief = Temporary(918273648);
-			Rect rect = new Rect(0.0f, 0.0f, 200.0f, 200.0f);
-
-			FogOfWarMap written = new FogOfWarMap(rect, 50.0f);
-			written.RevealAll();
-			FogOfWarStore.Save(owner, "TestScene", written);
-
-			// Copy the owner's file into the other character's folder, as a player might.
-			string source = FogOfWarStore.FilePath(owner, "TestScene");
-			string destination = FogOfWarStore.FilePath(thief, "TestScene");
-			Directory.CreateDirectory(Path.GetDirectoryName(destination));
-			File.Copy(source, destination, true);
-
-			LogAssert.ignoreFailingMessages = true;
-			FogOfWarMap read = FogOfWarStore.Load(thief, "TestScene", rect, 50.0f);
-			LogAssert.ignoreFailingMessages = false;
-
-			Assert.IsNull(read, "A map signed for one character must not load for another.");
-		}
-
-		[Test]
-		public void FogStore_RejectsAMapRecordedAgainstDifferentBounds()
-		{
-			/* A scene's bounds move when a level designer moves a boundary volume. Reusing a grid
-			 * that no longer lines up with the world would put the player's explored ground in the
-			 * wrong place — worse than starting again, because it looks plausible. */
-			long characterID = Temporary(918273649);
-
-			FogOfWarMap written = new FogOfWarMap(new Rect(0.0f, 0.0f, 200.0f, 200.0f), 50.0f);
-			written.RevealAll();
-			FogOfWarStore.Save(characterID, "TestScene", written);
-
-			FogOfWarMap read = FogOfWarStore.Load(characterID, "TestScene", new Rect(0.0f, 0.0f, 400.0f, 400.0f), 50.0f);
-
-			Assert.IsNull(read);
-		}
-
-		[Test]
-		public void FogStore_MissingFileIsNotAnError()
-		{
-			FogOfWarMap read = FogOfWarStore.Load(Temporary(918273650), "NeverVisited",
-				new Rect(0.0f, 0.0f, 100.0f, 100.0f), 50.0f);
-
-			Assert.IsNull(read);
-		}
 
 		// ── Notes ───────────────────────────────────────────────────
 

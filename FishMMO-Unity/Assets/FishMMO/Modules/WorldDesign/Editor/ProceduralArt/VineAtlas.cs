@@ -33,7 +33,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The texture every generated vine is cut from (2026-10-12: "vines and ivy in the world"): a 4×2 grid of
+	/// The texture every generated vine is cut from ("vines and ivy in the world"): a 4×2 grid of
 	/// 256-pixel cells (<see cref="VineCell"/>), alpha for the outline, near-white for the colour.
 	/// </summary>
 	/// <remarks>

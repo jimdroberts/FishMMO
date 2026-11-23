@@ -7,7 +7,7 @@
 //
 // The rock shader (FishRockContact.hlsl) finds the cell under a pixel and measures how far it is from each OTHER rock
 // there through that rock's own field. (A separate "skirt" of geometry round rock and trunk bases was tried and removed,
-// 2026-10-08: no extra geometry can follow the terrain's DRAWN surface — its distance LOD, its snow lift — nor be lit by
+// no extra geometry can follow the terrain's DRAWN surface — its distance LOD, its snow lift — nor be lit by
 // its lighting path; the base blend in FishGroundColour.hlsl renders the terrain itself there instead.)
 // Each shape's field is drawn, not computed (FishRockSdf.shader): an 8-bit 3D atlas is a render target on every API,
 // while WebGPU's compute can only store 32-bit floats. Client only; the grid follows the camera.

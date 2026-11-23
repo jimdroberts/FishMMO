@@ -21,7 +21,7 @@ namespace FishMMO.Shared
 	/// the controller, so a waypoint granted by a quest reward is persisted and announced by the
 	/// same code as one found on foot.</para>
 	/// </remarks>
-	// Moved into the Travel module's assembly (Phase 2): serialized references written under FishMMO.Shared still resolve.
+	// Moved into the Travel module's assembly: serialized references written under FishMMO.Shared still resolve.
 	[UnityEngine.Scripting.APIUpdating.MovedFrom(true, sourceNamespace: "FishMMO.Shared", sourceAssembly: "FishMMO.Shared")]
 	[Serializable]
 	public class UnlockWaypointAction : BaseAction, IAbortableAction
@@ -63,6 +63,15 @@ namespace FishMMO.Shared
 			if (controller.Unlock(waypoint.SceneName, waypoint.WaypointIndex))
 			{
 				return true;
+			}
+
+			/* A discovered Gate Stone is used, not a map (issue #241): lit, it takes a traveller who came through a gate to it
+			 * home (GateStoneUse); dormant, it says so. It is never a fast-travel point, so opening the map on it would offer
+			 * nothing. */
+			if (waypoint.Kind == WaypointKind.GateStone)
+			{
+				GateStoneUse.Use(player, waypoint);
+				return false;
 			}
 
 			if (OpenMapWhenAlreadyUnlocked)

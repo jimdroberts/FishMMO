@@ -7,8 +7,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The "Plot for sale" markers on the minimap and the world map (2026-11-22, Jim: "We would like a Plot for sale map
-	/// marker"): one <see cref="MapMarker"/> of type <see cref="MapMarkerType.HousingPlot"/> per unclaimed plot of the
+	/// The "Plot for sale" markers on the minimap and the world map: one <see cref="MapMarker"/> of type <see cref="MapMarkerType.HousingPlot"/> per unclaimed plot of the
 	/// character's scene, from the server's list (<see cref="HousingPlotsForSaleBroadcast"/>).
 	/// </summary>
 	/// <remarks>

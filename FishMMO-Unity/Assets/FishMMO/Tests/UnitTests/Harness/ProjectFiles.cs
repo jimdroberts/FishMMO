@@ -43,7 +43,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// The game's own code: the four core folders (engine-free Core, Shared, Client, Server) under Assets/FishMMO, without
-		/// modules, tests or editor tools. What a scan of "the scripts" meant before the 2026-11-17 reorganisation, when they
+		/// modules, tests or editor tools. What a scan of "the scripts" meant before the reorganisation, when they
 		/// sat alone in Assets/Scripts.
 		/// </summary>
 		public static readonly string[] CoreFolders =
@@ -75,7 +75,7 @@ namespace FishMMO.UnitTests
 				foreach (string file in Directory.GetFiles(modules, "*.cs", SearchOption.AllDirectories))
 				{
 					string path = file.Replace('\\', '/');
-					// The World Test Bed module is test tooling, as Tests/ is (its scene components moved there, Phase 4, 2026-11-18).
+					// The World Test Bed module is test tooling, as Tests/ is (its scene components moved there).
 					if (!path.Contains("/Tests/") && !path.Contains("/Modules/WorldTestBed/"))
 					{
 						files.Add(file);

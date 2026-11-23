@@ -11,7 +11,7 @@ channels, delivery across scene servers, chat persistence, and the chat window w
 | **Depends on** | The core (the chat message, the slash-command registry, the chat intake, party and guild contracts) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 
@@ -39,6 +39,7 @@ Assets/FishMMO/Modules/Chat/
 | `IChatWindow` / `ChatWindow` (client core) | `UITKChat` registers as the window; the core and other modules write lines and start tells through `ChatWindow`. |
 | `ClientWorldGUI_Panels` label | `UIChat` and `UIChatChannelPicker` prefabs are placed into the world GUI. |
 | `[assembly: GameModule]` | `ChatModule` ("chat"). |
+| `PartySignals` (server core) | `ChatChannelSystem` installs the poster (a signal is persisted as a party row) and hands every pumped party row that is a signal to its module instead of showing it. A party line a **player** sends that starts with the marker is dropped (issue #241: Call to Arms rides it). |
 
 ## What stays in the core
 

@@ -23,7 +23,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// and a plank is the same width on a crate as on a house.
 	/// </para>
 	/// <para>
-	/// <b>Finishes change only the albedo</b> (2026-10-10: tint variants via material, not new meshes): moss settles in
+	/// <b>Finishes change only the albedo</b> (tint variants via material, not new meshes): moss settles in
 	/// the hollows and patches, char blackens all but a little ember brown in the cracks, algae lays a dark streaked film.
 	/// The normal and mask maps are shared, so a finish costs one texture per surface.
 	/// </para>
@@ -31,7 +31,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class StructureSurfaces
 	{
 		/// <summary>
-		/// Every surface's texture size. 1024 (2026-10-11, was 512): a 2 m plank tile at 512 was 4 mm a texel, soft at the
+		/// Every surface's texture size. 1024 (was 512): a 2 m plank tile at 512 was 4 mm a texel, soft at the
 		/// distance a player stands from a house wall.
 		/// </summary>
 		public const int Size = 1024;
@@ -61,10 +61,10 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureMaterial.Glass: return "Iron";
 				// Scraped horn and oiled parchment: smooth, a little clouded; its own albedo is also its glow (StructureLamplight).
 				case StructureMaterial.Lamplight: return "Plaster";
-				// The cold glows' lacquer and mote (2026-10-18): as a lamp's pane, their albedo also their glow.
+				// The cold glows' lacquer and mote: as a lamp's pane, their albedo also their glow.
 				case StructureMaterial.Runelight:
 				case StructureMaterial.Faelight: return "Plaster";
-				// The structure palette's surfaces, one each (2026-10-16, I6a).
+				// The structure palette's surfaces, one each.
 				case StructureMaterial.Log: return "Log";
 				case StructureMaterial.Shingle: return "Shingle";
 				case StructureMaterial.Slate: return "Slate";
@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static float StructureFlag(StructureMaterial material) => material == StructureMaterial.Glass ? 2f : TryGlow(material, out _) ? 3f : 1f;
 
-		/// <summary>The cold glow a material gives off (2026-10-18, I6g: rune-light, faerie-light); false for every other material.</summary>
+		/// <summary>The cold glow a material gives off (rune-light, faerie-light); false for every other material.</summary>
 		public static bool TryGlow(StructureMaterial material, out SceneGlowHue hue)
 		{
 			switch (material)

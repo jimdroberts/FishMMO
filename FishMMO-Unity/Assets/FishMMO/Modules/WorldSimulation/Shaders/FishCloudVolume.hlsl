@@ -129,7 +129,7 @@ float4 _FishCloudShapeParams;// x how much of a marched texel's cone the finest 
 float4 _FishCloudLodParams;
 // The far imposter panorama's texel as an angle (radians; FishCloudsFeature): its march's pixel cone (FishCloudPixelCone).
 float _FishCloudImposterCone;
-// 1: the march's paths before 2026-10-13's cuts (the far depth for every lit sample, a fresh field for every edge probe, the
+// 1: the march's paths formerly's cuts (the far depth for every lit sample, a fresh field for every edge probe, the
 // screen's pixel cone in the imposter): ScenePerfProbe's `cloud:legacy` A/B. 0 as shipped.
 float _FishCloudLegacy;
 float4 _FishCloudWind;       // xy accumulated drift (m), z detail wind gain, w drift multiplier
@@ -163,7 +163,7 @@ float4 _FishCloudDiagScale;
 // The near-field step (the profile's Near Step Scale): x its scale over Step Scale (1 or 0: none), y the distance it holds
 // to (m), z how far it then eases back to Step Scale over (m).
 float4 _FishCloudNearStep;
-// The 2026-09-29 audit's fixes, each 1 to go back to the old behaviour (the profile's diagnostics, "Fixes
+// The audit's fixes, each 1 to go back to the old behaviour (the profile's diagnostics, "Fixes
 // under trial"; all zeros is as shipped): x each sample's extinction held over its whole step instead of
 // the trapezoid between samples, y one light-march phase for the whole screen instead of each pixel's,
 // z the carve eased by the step instead of by what the screen resolves, w the light march's shorter
@@ -182,7 +182,7 @@ static float4 FishCloudMarchDebug = float4(0.0, 0.0, 0.0, 1.0);
 // 1 for a ray into open sky, 0 for one that ends on the world (set by the march passes). The rain haze under a wet
 // column is the falling rain's own extinction AT THE CAMERA (_FishCloudSub.w) — the very figure the pipeline's
 // distance fog lays over every surface while it rains (WeatherFogPresenter.UniformExtinction) — so drawn in front
-// of the ground as well, the rain was counted twice there (audit 2026-10-09). Over the sky no surface fog is drawn
+// of the ground as well, the rain was counted twice there. Over the sky no surface fog is drawn
 // and the haze is the rain's only trace.
 static float FishCloudRainHangScale = 1.0;
 
@@ -254,7 +254,7 @@ float FishCloudPeriodicGradient(float2 p, int period, uint seed)
 // The tower lattice and the formation noise are fixed patterns in their own drifting frames, each repeating
 // every few cells (TowerPeriodTiles, MesoscalePeriodTiles), and smooth over kilometres. Worked out per sample they
 // were most of what the field cost — the tower's nine-cell search alone 5.8 ms of fair weather's march at 2560x1440,
-// the noise's two octaves 3.6 (ScenePerfProbe, 2026-10-07) — so each is drawn once into a tile that wraps
+// the noise's two octaves 3.6 (ScenePerfProbe) — so each is drawn once into a tile that wraps
 // (CloudFieldTiles, the CloudFieldTile pass) and read back in one fetch. The weather's contrast is applied after.
 TEXTURE2D(_FishCloudTowerTile);
 TEXTURE2D(_FishCloudMesoTile);
@@ -951,7 +951,7 @@ float2 FishCloudAxis()
 ///
 /// Applied as a shear of the whole column — the field it is read from and the noise alike — so a
 /// tower leans as one cloud and its anvil stays on top of it. A shear keeps the height, so the lookup
-/// can never fold however steep the lean (the rings of 2026-09-20 were a lookup that did); and it is
+/// can never fold however steep the lean (the earlier rings were a lookup that did); and it is
 /// metres added, not a multiplier on the drifted lookup, so the 42-tile wrap is untouched.
 float FishCloudLean(float altitude)
 {
@@ -1266,7 +1266,7 @@ float FishCloudDensityAt(float3 position, float detailAmount, float footprint, F
         // is what carries it up into its anvil — at the band's own softness a storm drew as a heap
         // half its height, with the anvil floating kilometres over it.
         float riseM = max(0.02, c.y) * ceilingM;
-        // No more than _FishCloudBase.z metres (2026-10-21, WeatherRenderProfile.BaseRiseMetres): a share of a deep cloud's
+        // No more than _FishCloudBase.z metres (WeatherRenderProfile.BaseRiseMetres): a share of a deep cloud's
         // height let each cloud's base sit wherever its noise first crossed the cut inside the rise, a bumpy underside
         // a hundred metres deep; a base is the condensation level, one height under the whole cloud.
         if (_FishCloudBase.z > 0.0)
@@ -1760,7 +1760,7 @@ float4 _FishCloudFarTail;
 float _FishCloudFieldReuse;
 // The field is the air's: its maps' texels are kilometres, and a tower's flank falls off over hundreds of metres.
 // Steps inside a cumulus are ten to thirty metres. Looked up at every one, the field was a fifth of fair weather's
-// march (3.6 of 16.6 ms at 2560x1440, ScenePerfProbe 2026-10-07).
+// march (3.6 of 16.6 ms at 2560x1440, ScenePerfProbe).
 #define FISH_CLOUD_FIELD_REUSE 40.0
 
 // The density at a point from the volume, or −1 outside it (the caller asks the field instead).
@@ -2171,7 +2171,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
     // And the tier's step count, which is what it means by quality: 32 walks the cloud at the steps above,
     // fewer lengthens them in proportion (24 by a third, 16 by twice). It was only ever the divisor of a
     // ray's length, clamped to 18–90 m, and any ray through a shell kilometres deep met the 90 m ceiling:
-    // halving it changed nothing (ScenePerfProbe, 2026-10-07), while the step's length is what the
+    // halving it changed nothing (ScenePerfProbe), while the step's length is what the
     // march's cost follows.
     float tierStep = clamp(32.0 / max(4.0, (float)steps), 0.5, 3.0);
     float stepScale = clamp((1.0 + _FishCloudDiagScale.z) * tierStep, 0.25, 4.0);
@@ -2631,7 +2631,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // The steps grow by one ratio from the ordinary step at the plane, so the steps left reach the ray's end:
             // fine just past the plane, long only far out, where the haze has the cloud. They were the distance left
             // over the steps left — evenly, so from 13 km to a ray ending 150 km off the first was 6 km — which thinned
-            // the horizon's thin cloud more and lit its edges in sparkles where a long step landed (2026-10-09: against
+            // the horizon's thin cloud more and lit its edges in sparkles where a long step landed (against
             // the clouds marched in full to 20 km, the horizon band differed 1.51/255 on average that way, 1.15 this way).
             if (tailFrom < 0)
             {
@@ -2821,7 +2821,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                     {
                         // Found once the bracket is narrower than half a pixel's cone there: finer is not drawn.
                         // Five halvings always — a thirty-second of the gap — were a quarter of fair weather's march
-                        // (2.8 of 11.2 ms at 2560x1440, ScenePerfProbe 2026-10-07) for edges far off placed to
+                        // (2.8 of 11.2 ms at 2560x1440, ScenePerfProbe) for edges far off placed to
                         // centimetres; near ones still get all five.
                         if (_FishCloudFieldSkip != 65536.0 && within - outside < max(0.25, 0.5 * within * FishCloudCone()))
                         {
@@ -2905,7 +2905,7 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
             // found in five halvings between the last haze sample and this one, and the steps begin
             // again on it, with the cloud's own extinction to size them.
             //
-            // Whether the sample before held any haze does not decide it (2026-10-09). The haze tapers to nothing
+            // Whether the sample before held any haze does not decide it. The haze tapers to nothing
             // over the last tenth under the base, so the sample before the base was haze on one texel and clear
             // air on the next, by each texel's phase, new every frame — and only the first kind was found this
             // way; the second walked on into the cloud with the haze's stride (mistStride) and its own count of
@@ -3016,11 +3016,11 @@ float4 FishCloudMarch(float3 origin, float3 direction, float depth, float jitter
                     // edge: under a deck that runs to the horizon it is the deck's own grey, the air's light through the
                     // low cloud (_FishCloudHazeOpen.w, SkySystem.AirLightThrough). Taken as open sky, the rain under a far
                     // overcast was lit at a third of a clear day's haze and drew a pale band right along the horizon, over
-                    // the far ground too (the far imposter marches by direction, rain and all), 2026-10-26.
+                    // the far ground too (the far imposter marches by direction, rain and all).
                     float lit = saturate(lerp(1.0, min(1.0, 1.25 * through) + spot.sideSky * saturate(_FishCloudHazeOpen.w), spot.under));
                     // And never more than the air under the low cloud gets: `under` is this column's own water, so where its
                     // noise thins the hang was lit as open air although the deck overhead still covered it — a pale mottled
-                    // band in the cloud's own pattern along the horizon under a dark deck (2026-10-26).
+                    // band in the cloud's own pattern along the horizon under a dark deck.
                     lit = min(lit, saturate(_FishCloudHazeOpen.w) * (1.0 - spot.under) + lit * spot.under);
                     cloudColour = air * lit;
                 }

@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The guild and party update pumps and the party vitals pump, after the 2026-09-25 server
+	/// The guild and party update pumps and the party vitals pump, after the server
 	/// hot-path audit (findings H7, M15, M16, L1, L25).
 	/// </summary>
 	/// <remarks>

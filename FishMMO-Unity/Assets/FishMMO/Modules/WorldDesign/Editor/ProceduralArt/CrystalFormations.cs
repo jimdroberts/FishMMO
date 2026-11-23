@@ -9,7 +9,7 @@ using Facet = FishMMO.Shared.WorldDesign.RockFormations.Facet;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Mineral and alien formations added by the vegetation expansion (2026-10-10): crystal clusters (prismatic,
+	/// Mineral and alien formations added by the vegetation expansion: crystal clusters (prismatic,
 	/// bladed, acicular, cubic, jagged, plates), vent cones (spatter cones, hornitos, fumaroles, geyser and ice vent
 	/// cones, black smokers), rimstone terraces, crater rims, salt-polygon plates, termite mounds, stalagmites and
 	/// flowstone, frost-capped knobs, ventifacts, sastrugi, penitentes, lobate flow fronts and glacier tables — the

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Those who came this way before (2026-10-13: "Torches, lanterns, hanging lanterns, encampments"): now and then an
+	/// Those who came this way before ("Torches, lanterns, hanging lanterns, encampments"): now and then an
 	/// explorers' camp in a great room off the ways (its fire, its bedrolls, its stores, a lantern on a stand), and lanterns
 	/// on stands at a bridge's or a climb's head, marking an adventurers' route. A mine's miners' camp is pitched the same.
 	/// </summary>
@@ -127,7 +127,7 @@ namespace FishMMO.Shared.WorldDesign
 						Lay(CaveArt.WaterBucket, 0, waterAt, Quaternion.Euler(0f, storeYaw, 0f), Vector3.one);
 					}
 				}
-				// The camp's lamp outward of the fire (the biome's Cave Lights, 2026-10-16: a lantern's stand in every biome before), its
+				// The camp's lamp outward of the fire (the biome's Cave Lights: a lantern's stand in every biome before), its
 				// arm (−z) leaning in over the camp.
 				Vector3 stand = Dir(rest + 1.4f * spread);
 				int standVariant = random.Range(0, 2);
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private void RouteLanterns(DeterministicRNG random)
 			{
-				// The route's mark (the biome's Cave Lights, 2026-10-16: a lantern on a stand in every biome before).
+				// The route's mark (the biome's Cave Lights: a lantern on a stand in every biome before).
 				bool routeLit = CaveLight(BiomeCaveLightPlace.Route, out BiomeCaveLight route);
 				var ends = new List<(Vector3 end, Vector3 toward, float half)>();
 				foreach (CaveSolid s in system.Solids)

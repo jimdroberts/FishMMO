@@ -13,7 +13,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The World Interactables module (2026-11-20): the wiring that lets the folder be removed (a label-adopted system,
+	/// The World Interactables module: the wiring that lets the folder be removed (a label-adopted system,
 	/// label-placed windows, actions that keep resolving in the trigger assets), and pins moved here with the kinds they
 	/// pin (from SpawnTableBakeTests and ObserverPayloadShapingTests).
 	/// </summary>

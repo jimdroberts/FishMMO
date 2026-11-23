@@ -27,7 +27,7 @@ float FishCloudIgn(float2 pixel)
 /// pattern the per-texel part of the phase makes. With interleaved gradient noise that pattern is a lattice, and
 /// it does not matter how the noise is "moved": the noise is linear in the pixel inside its frac, so the pixel
 /// shifted by any offset is the same pattern plus one constant (IGN(p + o) − IGN(p) varies by 0.017 over the
-/// screen). Moving it by 5.588238 a frame (2026-10-09, morning) only re-rolled a phase for the whole frame; the
+/// screen). Moving it by 5.588238 a frame (morning) only re-rolled a phase for the whole frame; the
 /// lattice came back as soon as the camera stood still long enough for the steadying to settle.
 ///
 /// Blue noise has no lattice to leave, and is nearly as evenly spread over a neighbourhood, which is what the

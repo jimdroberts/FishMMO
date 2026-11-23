@@ -9,7 +9,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The burn mosaic's globals (2026-10-25, phase I2t, decisions 75/82/84; <see cref="BurnMosaic"/>, FishBurn.hlsl): which biome
+	/// The burn mosaic's globals (<see cref="BurnMosaic"/>, FishBurn.hlsl): which biome
 	/// burns how (one regime per flora row, live from the templates), the scene's thermal year at the shared clock, its prevailing
 	/// wind and seed, the night for the blue fire, and the nearest brimstone vents. Client only, presentation only.
 	/// </summary>

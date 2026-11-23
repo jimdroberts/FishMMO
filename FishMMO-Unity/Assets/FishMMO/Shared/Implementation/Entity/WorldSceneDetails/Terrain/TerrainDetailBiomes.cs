@@ -24,12 +24,12 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// <b>A point of interest's prototypes</b> (a herb grove's herbs and flowers, a cave mouth's growth, a field's wheat:
-	/// prototypes a site adds to a tile after the scatter) are recorded too since 2026-10-16, for the biome the site stands
+	/// prototypes a site adds to a tile after the scatter) are recorded too, for the biome the site stands
 	/// in, marked <see cref="Entry.Site"/>: they take that biome's look of the prefab (or the old look where it has none), and
 	/// keep their material's tints, as they had before, since no rule of the biome chose them.
 	/// </para>
 	/// <para>
-	/// <b>A site paints its own biome's prototype</b> (2026-10-16, I4b): it reuses a tile's prototype of the plant only when
+	/// <b>A site paints its own biome's prototype</b>: it reuses a tile's prototype of the plant only when
 	/// that prototype is its own biome's (a rule's or an earlier site's, <see cref="SiteLayer"/>); where the tile's prototype of
 	/// the plant is another biome's, the site adds one of its own (a copy of that one, with a noise seed of its own,
 	/// <see cref="SiteSeed"/>), so the plant takes the look of the biome the site stands in rather than whichever biome's
@@ -80,7 +80,7 @@ namespace FishMMO.Shared
 			return false;
 		}
 
-		// ── A point of interest's own prototypes (2026-10-16) ─────────
+		// ── A point of interest's own prototypes ─────────
 
 		/// <summary>
 		/// The prototype a point of interest of biome <paramref name="biomeID"/> paints a plant (<paramref name="prefabName"/>)

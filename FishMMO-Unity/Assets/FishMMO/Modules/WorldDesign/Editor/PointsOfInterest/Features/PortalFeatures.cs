@@ -12,7 +12,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A dormant portal at the site: a same-scene <see cref="Teleporter"/> or a cross-scene <see cref="SceneTeleporter"/>,
-	/// with a <see cref="PortalActivation"/> whose scope is a seeded draw (2026-10-10: both kinds; destinations empty
+	/// with a <see cref="PortalActivation"/> whose scope is a seeded draw (both kinds; destinations empty
 	/// and set by hand; inactive until activated; any-of conditions; the key designer-assigned and left empty; scope per
 	/// portal, a seeded mix when generated).
 	/// </summary>
@@ -82,7 +82,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			GameObject portal = PointOfInterestFeatureKit.AddChildAt(context, PointOfInterestFeatureKit.UniqueName(context, "Portal"), Offset);
 			// The frame the site's props already laid (a portal template's centrepiece): the portal stands in it, and no second
-			// frame is laid over it at another turn and height (2026-10-18: two frames, often an arch through a ring).
+			// frame is laid over it at another turn and height (two frames, often an arch through a ring).
 			bool framed = TryLaidFrame(context, out PointOfInterestSiteContext.PlacedProp laidFrame);
 			if (framed)
 			{
@@ -144,7 +144,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A <see cref="DungeonEntrance"/> with an EMPTY dungeon name (2026-10-10: dungeon interiors are hand-made scenes
+	/// A <see cref="DungeonEntrance"/> with an EMPTY dungeon name (dungeon interiors are hand-made scenes
 	/// on other atlas layers, linked by hand), in the doorway of its door: at its own site the door the props laid (the
 	/// DungeonPortal or DungeonBarrow centrepiece, at the threshold DungeonEntranceShaper cut into the face), in a large cave
 	/// the gate this lays against its great cavern's wall (DungeonEntranceShaper.TryCavernGate; PointOfInterestChamberFeature
@@ -152,7 +152,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>In the doorway</b> (2026-10-18: "boring and misaligned"; it was a bare 4 × 4 m box 7 m out in front of a solid
+	/// <b>In the doorway</b> ("boring and misaligned"; it was a bare 4 × 4 m box 7 m out in front of a solid
 	/// slab): the interaction box fills the doorway's reveal, from the threshold to the passage, its clear width and height
 	/// (<see cref="DoorwayBox"/>), turned and scaled with the door; the passage behind it is a dark room for the client
 	/// (SceneRoom). The forecourt is dressed about the door's axis on this feature's own stream: braziers either side of the
@@ -160,7 +160,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>A site whose props laid no door (its art not generated) keeps the old box at <see cref="Offset"/>.</para>
 	/// <para>
-	/// <b>Marked as a dungeon</b> (2026-10-20: "Every dungeon entrance or marker should be clearly marked as a dungeon
+	/// <b>Marked as a dungeon</b> ("Every dungeon entrance or marker should be clearly marked as a dungeon
 	/// entrance"): the site's own map entry is drawn as a dungeon entrance (<see cref="ScenePointOfInterest.HoldsDungeon"/>),
 	/// or, in a cave, the gate gets an entry of its own in the cavern (<see cref="ScenePointOfInterest.Entrances"/>), the
 	/// cave's mouths keeping theirs. Both are baked scene data, on both maps once discovered; the entrance's streamed marker
@@ -298,7 +298,7 @@ namespace FishMMO.Shared.WorldDesign
 			NetworkObject networkObject = PointOfInterestFeatureKit.AddNetworkObject(entrance);
 			BoxCollider box = entrance.AddComponent<BoxCollider>();
 			box.size = size;
-			/* The entrance component is the Matchmaking module's, found through its core interface (2026-11-21, second-wave
+			/* The entrance component is the Matchmaking module's, found through its core interface (second-wave
 			 * moves): without the module the doorway is built and leads nowhere, as a door with no dungeon would. */
 			Type entranceType = DungeonEntranceComponentType;
 			if (entranceType == null)

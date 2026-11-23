@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Relaxation time: the viscosity. Not water's own but the eddy viscosity of a turbulent river (its eddies mix fast and
 		/// slow water across the current), still low enough that a slack wake stands behind each rock. At 0.56 the jets past
 		/// the rocks were a cell or two wide beside dead water, up to 4.8 times the section's mean speed, and the ripples
-		/// carried on them tore into bright lines along the flow (Flo Monolith, 2026-10-07).
+		/// carried on them tore into bright lines along the flow (Flo Monolith).
 		/// </summary>
 		public const float Tau = 0.62f;
 

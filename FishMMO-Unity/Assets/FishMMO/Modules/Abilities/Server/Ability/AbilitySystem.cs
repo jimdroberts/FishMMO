@@ -167,6 +167,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				characterSystem.OnSpawnCharacter += CharacterSystem_OnSpawnCharacter;
 			}
 
+			// Casts authored to break on damage (travel spells) are broken here, on the server, for every hit.
+			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
+			ICharacterDamageController.OnDamaged += CharacterDamageController_OnDamaged;
+
 			ingressDebounceMilliseconds = Mathf.Max(0, ingressDebounceMilliseconds);
 			ingressSweepIntervalSeconds = Mathf.Max(0.25f, ingressSweepIntervalSeconds);
 			ingressEntryTtlSeconds = Mathf.Max(1.0f, ingressEntryTtlSeconds);
@@ -188,6 +192,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Server.NetworkWrapper.UnregisterBroadcast<AbilityForgetBroadcast>(OnServerAbilityForgetBroadcastReceived);
+			ICharacterDamageController.OnDamaged -= CharacterDamageController_OnDamaged;
 
 			if (characterSystem != null)
 			{
@@ -201,12 +206,31 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 		}
 
+		/// <summary>
+		/// Breaks the defender's cast when its ability is <see cref="AbilityTemplate.InterruptedByDamage"/>.
+		/// </summary>
+		/// <remarks>
+		/// Any damage counts, a damage-over-time tick included: a travel spell is meant to be stopped by attacking the
+		/// caster. Zero damage (fully absorbed or evaded) is not a hit and breaks nothing.
+		/// </remarks>
+		private void CharacterDamageController_OnDamaged(ICharacter attacker, ICharacter defender, int amount, DamageAttributeTemplate damageAttribute)
+		{
+			if (amount <= 0 || defender == null || !defender.TryGet(out IAbilityController controller))
+			{
+				return;
+			}
+			if (controller is AbilityController abilityController && abilityController.InterruptIfDamageBreaksCast())
+			{
+				Log.Debug("AbilitySystem", $"Character {defender.ID}'s cast was broken by damage.");
+			}
+		}
+
 		/// <summary>The character system whose spawns send a player its known abilities.</summary>
 		private ICharacterSystem<NetworkConnection, Scene> characterSystem;
 
 		/// <summary>
 		/// Sends a player who has just spawned the ability templates and ability events it knows. Moved from
-		/// <c>CharacterSystem</c>'s login data with the module (2026-11-20); one batch of each.
+		/// <c>CharacterSystem</c>'s login data with the module; one batch of each.
 		/// </summary>
 		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)
 		{

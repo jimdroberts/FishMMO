@@ -146,7 +146,7 @@ namespace FishMMO.Client
 		/// How far a camera may move, metres, and turn, degrees, before its instances are generated again. Between, the last
 		/// generation is drawn as it stands: nothing in it moves with time (the wind is the vertex stage's), so a camera
 		/// standing still or creeping regenerated the same instances every frame — about 0.8 ms of GPU and 0.4 ms of the main
-		/// thread at Flo Monolith's meadow (ScenePerfProbe, 2026-10-08). Generated against a frustum widened by what that
+		/// thread at Flo Monolith's meadow (ScenePerfProbe). Generated against a frustum widened by what that
 		/// move and turn sweep at the farthest reach, so nothing the camera can turn to is missing. The move is kept short,
 		/// shorter than the grass's and the props' (RegatherMetres 1.5), because unlike theirs this reuse skips the per-instance
 		/// work too: the distance fades, the thinning and a bush's level are as from where the camera stood, and a shorter
@@ -161,7 +161,7 @@ namespace FishMMO.Client
 		public static bool CullInstances = true;
 
 		/// <summary>
-		/// Draw the commands of one material, view and set of render parameters with one call (2026-11-04; the harness setting
+		/// Draw the commands of one material, view and set of render parameters with one call (the harness setting
 		/// `scatterBatching` for A/B): their parts merged into a pooled mesh, a submesh a part, as the props' renderer does
 		/// (TerrainGpuRenderer.BatchDraws). Each call is replayed in every pass that draws it (the camera's, its depth, every
 		/// shadow cascade), and every replay set its material up again: in the browser that set-up was most of the scatter's
@@ -171,7 +171,7 @@ namespace FishMMO.Client
 		public static bool BatchDraws = true;
 
 		/// <summary>
-		/// Whether scattered types whose materials draw identically share one clone (2026-11-04, the harness setting
+		/// Whether scattered types whose materials draw identically share one clone (the harness setting
 		/// `mergeMaterials`): TerrainGpuRenderer.ContentKey, the same shader, keywords, queue, passes and every property value. The
 		/// art generator writes a material per kind; the 121 Detail_Bush_* materials hold two value sets and the 678 Detail_* 195,
 		/// so types that drew as separate calls (<see cref="BatchDraws"/> groups by material) join one. Exact: the image is unchanged.
@@ -200,7 +200,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Draw the scattered kinds of one vegetation structure through one family material (2026-11-04, the harness setting
+		/// Draw the scattered kinds of one vegetation structure through one family material (the harness setting
 		/// `vegTable`; TerrainVegTableMath): each kind's scalars a row of the family's table, named by its pooled part's uv4, so
 		/// the kinds that differed only in their tints, wind, burial and sink share a material and so a call. 614 of the 678
 		/// Detail_* materials are one structure. Exact up to the table's half precision.
@@ -819,7 +819,7 @@ namespace FishMMO.Client
 			return swept;
 		}
 
-		/// <summary>The variant meshes a type's instances cycle (2026-10-26): 1 for a bush or any type with levels.</summary>
+		/// <summary>The variant meshes a type's instances cycle: 1 for a bush or any type with levels.</summary>
 		public static int VariantsOf(DetailScatterType type)
 		{
 			int n = type.Variants != null ? type.Variants.Length : 1;

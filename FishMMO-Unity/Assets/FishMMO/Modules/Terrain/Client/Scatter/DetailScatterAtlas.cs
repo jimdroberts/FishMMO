@@ -9,7 +9,7 @@ namespace FishMMO.Client
 	/// Every scattered terrain's GPU data in one place, as the blade grass keeps it (<see cref="GrassTerrainAtlas"/>), so
 	/// FishDetailScatter.compute generates all terrains of a camera in ONE dispatch per resolution group with bindings and
 	/// constants that never change between terrains: the heights and holes as slices of texture arrays, and one table
-	/// buffer holding each terrain's parameters (and its channels' placement settings) and its sparse density (2026-10-27:
+	/// buffer holding each terrain's parameters (and its channels' placement settings) and its sparse density (
 	/// item headers and entries, <see cref="DetailScatterDensity"/>; the dense half-float slices of eight channels it
 	/// replaced cost 72 MB on Moron 2 for a fraction of its kinds). A work item carries its terrain's index. One dispatch
 	/// per terrain, rebinding and re-uploading constants between them, disturbed other GPU-driven renderers on OpenGL; the

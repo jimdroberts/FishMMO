@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The biome suite's cave content (2026-10-16, phase I6c): each biome's cave crystals (a catalogue of kinds, each its own
+	/// The biome suite's cave content: each biome's cave crystals (a catalogue of kinds, each its own
 	/// habit and material, sound, budgeted, deterministic and distinct; selenite exactly the old crystal), the new way-light kinds
 	/// (kit pieces that give off their light), the caves' and mines' lights moved onto the template (every biome's default the
 	/// cave dressing's old rule), and the structure palette's leftovers from I6a (decks are floors, a turf roof's ridge its trim,
@@ -36,7 +36,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string[] names =
 			{
 				"Selenite", "Amethyst", "ClearQuartz", "SmokyQuartz", "GreenFluorite", "FrostCrystal", "Obsidian", "Amberlight", "Wyrdstone", "Sunstone",
-				// 2026-10-26 (NEW-CRYSTALS): every kind the biome drafts name, appended.
+				// Every kind the biome drafts name, appended.
 				"Phillipsite", "Lodeheart", "FireIce", "Hadalite", "Gwindel", "PinkFluorite", "Starfrost", "Stibnite", "Rhodochrosite", "Stormglass", "FireOpal",
 				"Perilight", "Twinquartz", "Jadeite", "Hotarubi", "Aragonite", "Pearlspar", "Galena", "Chalcopyrite", "Wyrmglass", "BlueJohn", "Helictite",
 				"Echospar", "Cassiterite", "Bellspar", "Apatite", "Lagoonglass", "Tektite", "Starglass", "SalAmmoniac", "Eitrglass", "Dogtooth", "Stellamaris",
@@ -197,7 +197,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Selenite_IsTheOldCrystal_EveryBiomesDefault_AndPicksAreByWeight()
 		{
-			// The chambers' crystal before 2026-10-16: gypsum's Crystal formation, its variant drawn from the formations' four.
+			// The chambers' crystal formerly: gypsum's Crystal formation, its variant drawn from the formations' four.
 			Assert.That(ProceduralArtCatalogue.CaveMineralVariants, Is.EqualTo(RockTypes.VariantCount));
 			for (int v = 0; v < RockTypes.VariantCount; v++)
 			{
@@ -265,7 +265,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			[BiomeWayLightKind.WallLantern] = SceneEmitterKind.Lamp,
 			[BiomeWayLightKind.Cresset] = SceneEmitterKind.Fire,
 			[BiomeWayLightKind.CrookLantern] = SceneEmitterKind.Lamp,
-			// The cold glows (2026-10-18, I6g): faerie, crystal and rune light.
+			// The cold glows: faerie, crystal and rune light.
 			[BiomeWayLightKind.Glowjar] = SceneEmitterKind.Glow,
 			[BiomeWayLightKind.CrystalPost] = SceneEmitterKind.Glow,
 			[BiomeWayLightKind.RuneStone] = SceneEmitterKind.Glow,
@@ -276,7 +276,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void WayLightKinds_AreAppendOnly_KitPieces_ThatGiveOffTheirLight()
 		{
 			string[] names = { "LanternPost", "TorchPost", "Brazier", "LanternStand", "WallTorch", "HangingLantern", "WallLantern", "Cresset", "CrookLantern", "Glowjar", "CrystalPost", "RuneStone", "HangingBracket" };
-			// The first thirteen keep their names and numbers; the suite's lights (2026-10-26) follow them (WayLightSuiteTests).
+			// The first thirteen keep their names and numbers; the suite's lights follow them (WayLightSuiteTests).
 			Assert.That(Enum.GetNames(typeof(BiomeWayLightKind)).Take(names.Length), Is.EqualTo(names));
 			foreach (BiomeWayLightKind light in (BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 			{
@@ -323,7 +323,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(StructurePieces.Build(StructureKit.Get("HangingBracket"), 0, 0, Seed).Materials, Does.Contain(StructureMaterial.Iron).And.Member(StructureMaterial.Lamplight));
 		}
 
-		/// <summary>The lights before 2026-10-16 (the street lights and the cave kit's lamps): every kind past them is I6c's.</summary>
+		/// <summary>The lights formerly (the street lights and the cave kit's lamps): every kind past them is I6c's.</summary>
 		private const BiomeWayLightKind LastOldLight = BiomeWayLightKind.WallLantern;
 
 		[Test]
@@ -333,7 +333,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The new lights are laid by id only (=Cresset), so no query a template or the template specs make may name one.
 			var newLights = new HashSet<string>(((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 				.Where(l => l > LastOldLight).Select(BiomeWayLights.PieceId), StringComparer.Ordinal);
-			// I6c's six and the suite's own (2026-10-26): every one laid by id only.
+			// The six and the suite's own: every one laid by id only.
 			Assert.That(newLights, Has.Count.EqualTo(BiomeWayLights.Count - 1 - (int)LastOldLight));
 			var queries = new SortedSet<string>(StringComparer.Ordinal);
 			foreach (System.Reflection.FieldInfo f in typeof(PointOfInterestTemplateSpecs).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
@@ -405,7 +405,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void CaveLights_DefaultsAreTheDressingsOldRule_ForEveryBiome()
 		{
-			// What the cave dressing laid before 2026-10-16, in every biome (copied from its code as it was).
+			// What the cave dressing laid formerly, in every biome (copied from its code as it was).
 			var old = new Dictionary<BiomeCaveLightPlace, (string piece, BiomeWayLightMount mount)>
 			{
 				[BiomeCaveLightPlace.Route] = ("LanternStand", BiomeWayLightMount.Ground),
@@ -468,7 +468,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string workings = Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Workings.cs");
 			string glow = Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Glow.cs");
 			string all = main + camps + workings + glow + Code("PointsOfInterest/Features/PointOfInterestCaveDressing.Ways.cs");
-			// 2026-10-25 (I2n): through the cave's biomes (its host's lights, a linked interior's under the world's air).
+			// Through the cave's biomes (its host's lights, a linked interior's under the world's air).
 			Assert.That(main, Does.Contain("CaveInteriorArt.CaveLight(in caves, place, breathable, out known.light)"));
 			Assert.That(main, Does.Contain("CaveLight(BiomeCaveLightPlace.MineDrift, out BiomeCaveLight drift)"));
 			Assert.That(main, Does.Contain("CaveLight(BiomeCaveLightPlace.MineStope, out BiomeCaveLight stopeLight)"));
@@ -484,7 +484,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			// The chambers' deposits are the biome's crystals (as the shells are its rock), the ways' glow its glowing ones.
 			Assert.That(main, Does.Contain("set.Crystals = CaveInteriorArt.Crystals(in caves);"));
 			Assert.That(main, Does.Contain("CaveBiome caves = CaveInteriorArt.Of(context.Request, context.Record, system);"), "the cave's biomes: its host site's and its interior");
-			// 2026-10-26 (NEW-CRYSTALS): in the look the biome grows the kind in.
+			// In the look the biome grows the kind in.
 			Assert.That(main, Does.Contain("FloorPiece(depositFoot - dir * 0.5f, () => Mineral(kind, BiomeCaveCrystals.LookOf(set.Crystals, kind)), 1f, rng.Range(0.8f, 1.6f), true, -dir, out Vector3 laid)"));
 			Assert.That(main, Does.Contain("int variant = rng.Range(0, RockTypes.VariantCount);"), "a crystal's variant is drawn as a formation's");
 			Assert.That(glow, Does.Contain("CaveGlowPalettes.For(system.Form, system.Seed, in caves)"));
@@ -497,7 +497,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(props, Does.Contain("BiomeWayLights.MountOf(light.Light) == BiomeWayLightMount.Ground"), "a street light stands on the ground");
 		}
 
-		// ── The structure palette's leftovers (I6a) ───────────────────
+		// ── The structure palette's leftovers ───────────────────
 
 		[Test]
 		public void Decks_AreFloors_TheTurfRidgeIsTrim_AndHayAndBoneAreNeverAPart()

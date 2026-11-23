@@ -8,7 +8,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase NEW-ROCK-TYPES of the biome suite (2026-10-25, decision 34): every rock type, shape and stone set the 83 drafts
+	/// Every rock type, shape and stone set the 83 drafts
 	/// name resolves in the catalogue; the biomes' crust rocks are cliffs with their own stones; the formation-only rocks never
 	/// are; the soluble set takes coral rag and refuses salt rock, alunite, caliche and laterite; the volcanic cave's molten set
 	/// (conflict C14) exists; nothing that was there moved (append-only). Pure: no Unity object is made.
@@ -187,7 +187,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(CliffRocks.IsCliffRock(name), Is.True, name);
 				Assert.That(CliffRocks.MaterialName(name), Is.EqualTo(ProceduralArtCatalogue.RockMaterial(name)), name);
 				Assert.That(materials, Does.Contain(ProceduralArtCatalogue.RockMaterial(name)), $"{name}: its material is written");
-				// Decision 6: its own stones, not granite's shapes, wearing its own material; a river on it drops them.
+				// Its own stones, not granite's shapes, wearing its own material; a river on it drops them.
 				Assert.That(StoneStyles.Has(name), Is.True, $"{name} has stone shapes of its own");
 				RockMaterialSpec stone = ProceduralArtCatalogue.AllRockMaterials.Single(m => m.Name == name);
 				Assert.That(stone.WearsRockType, Is.EqualTo(name), name);
@@ -210,7 +210,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(type.FormationsOnly, Is.True, type.Name);
 				Assert.That(CliffRocks.IsCliffRock(type.Name), Is.False, type.Name);
-				// Unless a draft asks for its stones by name (2026-10-26, I6f: Tholin Plain's Duneslab, StoneStyles.Named.cs).
+				// Unless a draft asks for its stones by name (Tholin Plain's Duneslab, StoneStyles.Named.cs).
 				Assert.That(stones.Contains(type.Name), Is.EqualTo(StoneStyles.NamedStoneNames.Contains(type.Name)), $"{type.Name} is formations only, with no stone set but a named one");
 				Assert.That(RockTypes.FormationRocks, Has.Some.Matches<RockType>(t => t.Name == type.Name), type.Name);
 				Assert.That(new[] { "Ice", "Nodule", "Coral", "Flint", "Cobble" }, Does.Not.Contain(type.Name), "Rock_ names of small-rock materials");

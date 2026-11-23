@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The hot ground made ground at the cut (2026-10-18, phase I2q, decision 47): every geothermal site the client steams
+	/// The hot ground made ground at the cut: every geothermal site the client steams
 	/// (GeothermalVents) dug or raised into the heightmap where it stands — a hot spring's funnel pool inside a beaded sinter
 	/// rim, flooded to just under its brim; a geyser's sinter cone with its orifice; a mud pot's dish; a fumarole's lip — short
 	/// runoff channels run down the ground from the springs and geysers, and the ground's HEAT baked into a mask
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Water.</b> The pools are lakes of the scene's hydrology in the paddies' id range (kind 7 of
 	/// <see cref="PointOfInterestFieldTerraces.LakeId"/>'s bits), so the place stage's clearing of the paddies' water takes them
 	/// out and <see cref="WriteWater"/> puts them back from the record each time it runs, and the cut's own water never reads them
-	/// as natural. A scene with no hydrology asset (no river or lake on its ground) is given one for them (2026-10-27).
+	/// as natural. A scene with no hydrology asset (no river or lake on its ground) is given one for them.
 	/// </para>
 	/// </remarks>
 	public static class GeothermalGroundCarve
@@ -84,9 +84,9 @@ namespace FishMMO.Shared.WorldDesign
 			public readonly List<BiomeHeatSource> HeatSources = new List<BiomeHeatSource>();
 			/// <summary>The Great Spout's index among <see cref="Sites"/>, −1 with no geyser.</summary>
 			public int GreatSpout = -1;
-			/// <summary>The Great Plume's index among <see cref="Sites"/> (the largest heated jet on a line, 2026-10-25, I2q-b), −1 for none.</summary>
+			/// <summary>The Great Plume's index among <see cref="Sites"/> (the largest heated jet on a line), −1 for none.</summary>
 			public int GreatPlume = -1;
-			/// <summary>The scene's stored vent lines the sites were found with (2026-10-25, I2q-b; IceStripes), which the map stores.</summary>
+			/// <summary>The scene's stored vent lines the sites were found with (IceStripes), which the map stores.</summary>
 			public readonly List<VentLine> Lines = new List<VentLine>();
 			public BiomeHeatMask Heat = BiomeHeatMask.None;
 
@@ -158,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				case GeothermalKind.Geyser: return GeothermalVents.ConeRadius(site);
 				case GeothermalKind.Fumarole: return GeothermalVents.SourceRadius(site) + 1f;
-				// A jet's lip round its slot (2026-10-25, I2q-b), as a fumarole's.
+				// A jet's lip round its slot, as a fumarole's.
 				case GeothermalKind.Jet: return GeothermalVents.SourceRadius(site) + 0.6f;
 				default: return GeothermalVents.SourceRadius(site);
 			}
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 				case GeothermalKind.SulphurPool:
 				case GeothermalKind.MudPot:
 				{
-					// A sulphur pond is dug and flooded as a spring's pool is (2026-10-25, I2q-b, decision 84), shallower.
+					// A sulphur pond is dug and flooded as a spring's pool is, shallower.
 					float depth = GeothermalVents.IsPool(site.Kind) ? GeothermalVents.PoolDepth(site) + PoolFreeboard : GeothermalVents.DishDepth(site);
 					if (r < radius)
 					{
@@ -336,11 +336,11 @@ namespace FishMMO.Shared.WorldDesign
 			return line;
 		}
 
-		/// <summary>How far a hot spring point of interest outside the steaming biomes warms the ground round it, m, and how hot at its middle (decision 54).</summary>
+		/// <summary>How far a hot spring point of interest outside the steaming biomes warms the ground round it, m, and how hot at its middle.</summary>
 		public const float HotSpringSiteHeatReach = 15f, HotSpringSiteHeatPeak = 0.9f;
 
 		/// <summary>
-		/// The heat round the scene's hot spring points of interest that stand outside the steaming biomes (2026-10-25, decision 54):
+		/// The heat round the scene's hot spring points of interest that stand outside the steaming biomes:
 		/// a spring the planner found where a river rises in a biome listing hot springs (an ice palace's warm well, a volcano's
 		/// spring) has no geothermal site under it, so it warms <see cref="HotSpringSiteHeatReach"/> m of ground round itself, which a
 		/// heat band can then dress. A spring on steaming ground (<paramref name="steaming"/>) is left to that ground's own sites. Pure.
@@ -373,7 +373,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (PointOfInterestRecord record in plan.Records)
 			{
-				// Not the hot ground's own springs (GeothermalPointsOfInterest, 2026-10-27), which a repaint reads back: they stand on
+				// Not the hot ground's own springs (GeothermalPointsOfInterest), which a repaint reads back: they stand on
 				// steaming ground the sites already warm.
 				if (record != null && record.Kind == FishMMO.Shared.NameGeneration.POIType.HotSpring && !GeothermalPointsOfInterest.IsHotGroundRecord(record))
 				{
@@ -432,7 +432,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			/* The Great Spout among the geysers dug (2026-10-25): one under water the client never draws, and one in a site's
+			/* The Great Spout among the geysers dug: one under water the client never draws, and one in a site's
 			 * footprint the cut leaves without its cone, is never the scene's landmark. */
 			var dug = new HashSet<int>();
 			foreach (Dug d in plan.Dug)
@@ -440,7 +440,7 @@ namespace FishMMO.Shared.WorldDesign
 				dug.Add(d.Index);
 			}
 			plan.GreatSpout = GeothermalVents.GreatSpoutIndex(plan.Sites, dug.Contains);
-			/* The Great Plume (2026-10-25, I2q-b, decision 53): the largest jet on a line the client draws (one under water it never
+			/* The Great Plume: the largest jet on a line the client draws (one under water it never
 			 * does is never the scene's), heated, dug or not. */
 			plan.GreatPlume = GeothermalVents.GreatPlumeIndex(plan.Sites, i => wet == null || !wet(plan.Sites[i].Position.x, plan.Sites[i].Position.y));
 			if (moreHeat != null)
@@ -584,7 +584,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Plans, carves and records a scene's hot ground (the cut's biome stage and every repaint): the sites of the map
 		/// <paramref name="field"/> is about to be written as, under the name <paramref name="mapName"/> (so the seed is the
 		/// client's), dug into <paramref name="terrains"/> from the ground as it stands, and the heat of the hot spring points of
-		/// interest at <paramref name="hotSprings"/> (world xz; decision 54) outside the steaming ground. Returns the plan (its heat
+		/// interest at <paramref name="hotSprings"/> (world xz) outside the steaming ground. Returns the plan (its heat
 		/// for the splat, the scatter and the map). Call <see cref="Restore"/> first when an earlier run's carve may be in the ground.
 		/// </summary>
 		public static Plan Lay(Scene scene, Terrain[,] terrains, TerrainTilePlan tiles, SceneBiomeField field, string mapName,
@@ -592,7 +592,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			var sites = new List<GeothermalSite>();
 			List<BiomeHeatSource> springHeat;
-			/* The scene's vent lines (2026-10-25, I2q-b, decision 53): the stored landforms' lines of every biome whose vents follow
+			/* The scene's vent lines: the stored landforms' lines of every biome whose vents follow
 			 * lines (a tiger stripe, a rift, a double ridge; a terrace's pads), stored with the map so the client's search finds the
 			 * same jets the cut digs and heats. None when no biome of the scene lays its vents on lines. */
 			List<VentLine> lines = IceStripes.FromLandforms(SceneLandforms.Sites(scene), SceneLandforms.Pads(scene),
@@ -611,7 +611,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				UnityEngine.Object.DestroyImmediate(map);
 			}
-			// The lines' own heat after the springs' (decision 53: I2q's heat mask takes line sources).
+			// The lines' own heat after the springs' (the heat mask takes line sources).
 			int springs = springHeat.Count;
 			springHeat.AddRange(IceStripes.Heat(lines));
 			Func<float, float, float> groundAt = (east, north) => SceneGenerator.GroundAltitude(terrains, tiles, east, north);
@@ -652,7 +652,7 @@ namespace FishMMO.Shared.WorldDesign
 				record.GreatSpoutSize = spout.Size;
 			}
 			EditorUtility.SetDirty(record);
-			// Sized by the kinds there are (append-only, decision 53: a fissure's jets come next).
+			// Sized by the kinds there are (append-only, a fissure's jets come next).
 			int[] kinds = new int[Enum.GetValues(typeof(GeothermalKind)).Length];
 			foreach (GeothermalSite site in plan.Sites)
 			{
@@ -796,7 +796,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Writes the scene's hot spring pools (from its record) into its hydrology asset, replacing any pool lake there: the place
 		/// stage calls it after clearing the paddies' water, so the pools stand again on every cut, repaint and Regenerate POIs.
 		/// Returns how many were written; none without a record. A scene with no hydrology asset (no river or lake on its ground) is
-		/// given one for them (2026-10-27, PointOfInterestPaddies.EnsureHydrology, at <paramref name="seaLevel"/>): until then this
+		/// given one for them (PointOfInterestPaddies.EnsureHydrology, at <paramref name="seaLevel"/>): until then this
 		/// ran before any cave's water made one and every such scene's pools stood dry. Only a LOCAL copy's keep dry here.
 		/// </summary>
 		public static int WriteWater(Scene scene, string terrainFolder, string sceneName, List<string> notes, float seaLevel = float.NegativeInfinity)

@@ -6,7 +6,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// material's <c>_FishMoss</c> (0..1; the shader's default 0 grows none). The scene's dampness multiplies it at
 	/// run time (MossClimate, from the biome), so these say only what the SURFACE allows: porous, rough, lime-rich stone
 	/// holds water and spores and greens over; glassy, salty, sulphurous or metallic ground never does
-	/// (2026-10-12: "a moss layer that can be applied to objects").
+	/// ("a moss layer that can be applied to objects").
 	/// </summary>
 	/// <remarks>
 	/// Deadwood is drawn with FishMMO/Vegetation, whose forward pass grows the same layer from the same
@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 				case Bark.Palm:
 				case Bark.DatePalm:
 					return 0.5f;
-				// A fallen culm on a damp grove floor (the Bamboo Forest round's) greens over as a log does, a little less.
+				// A fallen culm on a damp grove floor greens over as a log does, a little less.
 				case Bark.Bamboo: return 0.55f;
 				case Bark.Dead: return 0.1f;
 				// A dead cactus is a dry woody skeleton in a desert.

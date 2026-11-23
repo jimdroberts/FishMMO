@@ -5,7 +5,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A character window that registers after world entry is handed the character in play (2026-11-17).
+	/// A character window that registers after world entry is handed the character in play.
 	/// </summary>
 	/// <remarks>
 	/// Module windows (ModulePanelHost) are placed after an Addressables load that can finish after the player spawned.

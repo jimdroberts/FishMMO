@@ -26,6 +26,17 @@ namespace FishMMO.Shared
 		public bool RequiresTarget;
 
 		/// <summary>
+		/// Whether taking damage while casting breaks the cast (issue #241: travel spells).
+		/// </summary>
+		/// <remarks>
+		/// Applied by the server's ability system on any damage the caster takes during <see cref="BaseAbilityTemplate.ActivationTime"/>,
+		/// through the same server interrupt an interrupt ability uses: the cast is lost, not put on cooldown. Off by default, so
+		/// no existing ability changes.
+		/// </remarks>
+		[Tooltip("Any damage taken while casting breaks the cast (lost, no cooldown). For spells that must be stoppable by attacking the caster, such as travel spells.")]
+		public bool InterruptedByDamage;
+
+		/// <summary>
 		/// Additional event slots for the ability (for extensibility).
 		/// </summary>
 		public byte AdditionalEventSlots;

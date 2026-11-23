@@ -46,7 +46,7 @@ if(globalThis.GPUAdapter){let original=GPUAdapter.prototype.requestDevice;GPUAda
 // Test the real fallback device configuration by withholding this optional feature.
 // Optional experiment: the device's maxDynamicUniformBuffersPerPipelineLayout. Unity's WebGPU backend gives a pipeline's
 // uniform buffers past this many a dedicated buffer per update instead of a dynamic offset into its scratch pages
-// (Docs/Rendering/2026-11-01/webgpu-constants). Clamped by the browser to the adapter's own limit.
+//. Clamped by the browser to the adapter's own limit.
 if(process.env.FISHMMO_WEBGPU_DYNAMIC_UNIFORMS)await cdp.call('Page.addScriptToEvaluateOnNewDocument',{source:`
 if(globalThis.GPUAdapter){const request=GPUAdapter.prototype.requestDevice;
 GPUAdapter.prototype.requestDevice=function(desc={}){return request.call(this,{...desc,requiredLimits:{...(desc.requiredLimits||{}),maxDynamicUniformBuffersPerPipelineLayout:${Number(process.env.FISHMMO_WEBGPU_DYNAMIC_UNIFORMS)}}})}}`});

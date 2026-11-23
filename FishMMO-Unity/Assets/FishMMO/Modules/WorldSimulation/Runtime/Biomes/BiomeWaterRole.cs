@@ -6,7 +6,7 @@ namespace FishMMO.Shared.Biomes
 	/// biome is meant to hold each role; the cut takes the first in key order (<see cref="BiomeRegistry.WithWaterRole"/>).
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-15 the cut found these biomes by name ("Lake", "Methane Lake", "River", "Estuary", "Salt Flat", "Ice
+	/// Formerly the cut found these biomes by name ("Lake", "Methane Lake", "River", "Estuary", "Salt Flat", "Ice
 	/// Sheet"). The role is that decision as data: the biome art authoring writes each of those biomes its role, and a world's
 	/// own lake biome is made by giving its template the role, whatever it is called. Values are stored by number: append only.
 	/// </remarks>
@@ -27,8 +27,8 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The ground of the ice that buries land whose summer never thaws (IceSheetSurface); no sheet is laid without one.</summary>
 		IceSheet = 6,
 		/// <summary>
-		/// The floating shelf and its fast ice where the ice sheet meets a sea colder than −5 °C mean (IceShelfReach,
-		/// decision 68): the biome of those cells whatever the climate picks there, as the lake roles are. Opt-in: no name
+		/// The floating shelf and its fast ice where the ice sheet meets a sea colder than −5 °C mean (IceShelfReach):
+		/// the biome of those cells whatever the climate picks there, as the lake roles are. Opt-in: no name
 		/// stands in for it, so no shelf is laid until a template holds the role.
 		/// </summary>
 		IceShelf = 7,

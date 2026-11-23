@@ -18,8 +18,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The weather, hosted by the scene server as one of its module services (<see cref="SceneServerModuleServices"/>, Phase 4 of the
-	/// core and modules plan, 2026-11-18; a partial of the scene server before). The world clock it runs on is core
+	/// The weather, hosted by the scene server as one of its module services (<see cref="SceneServerModuleServices"/>; a partial of the scene server before). The world clock it runs on is core
 	/// (<c>SceneServerSystem.WorldClock</c>). Other systems reach the weather through <see cref="WeatherService"/>, or as
 	/// <c>sceneServer.Service&lt;WeatherServerService&gt;()</c>.
 	/// </summary>

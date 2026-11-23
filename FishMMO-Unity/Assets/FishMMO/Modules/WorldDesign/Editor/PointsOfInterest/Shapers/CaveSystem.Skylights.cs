@@ -7,7 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveSystem
 	{
-		// ── Skylights (2026-10-20, caves livened) ─────────────────
+		// ── Skylights (caves livened) ─────────────────
 
 		/*
 		 * An opening in a great chamber's roof up to the ground over it, where the roof was thin enough to fall in: the daylight
@@ -233,7 +233,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>A skylight over a point of a chamber's floor, if one fits there (see <see cref="TryAddSkylights"/>).</summary>
-		/// <param name="maxCover">The most rock over the vault (a root window's 4 m, 2026-10-25); a skylight's own by default.</param>
+		/// <param name="maxCover">The most rock over the vault (a root window's 4 m); a skylight's own by default.</param>
 		/// <param name="minVault">The least headroom where it opens (a root window's gallery roof); a skylight's own by default.</param>
 		private bool TrySkylightAt(in CaveChamber chamber, Vector3 p, float radius, float yaw, int siteId, CaveGround ground, Func<float, float, bool> refused,
 			out CaveMouth mouth, out string problem, float maxCover = SkylightMaxCover, float minVault = SkylightMinVault)

@@ -12,7 +12,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The rock type whose own material this stone wears (<c>Rock_{Type}</c>, written with the formations; the
 		/// stone's name is the type's, so the name is the same), or null when the stone writes <c>Rock_{Name}</c> itself
-		/// (2026-10-16: the crust's other rocks as stones, ProceduralArtCatalogue.Rocks.cs).
+		/// (the crust's other rocks as stones, ProceduralArtCatalogue.Rocks.cs).
 		/// </summary>
 		public string WearsRockType;
 	}
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>Written to the prefab's renderer, which is what the instanced detail renderer reads.</remarks>
 		public bool CastsShadows;
 
-		// ── Optional, for details added from 2026-10-10 on ──
+		// ── Optional, for the later details ──
 		// The spec table's helpers (BiomeArtSpec.Plants, PlantSink) know the legacy details by name; a detail added
 		// since carries its own values here instead, and the helpers read them only for names absent from their
 		// tables, so every legacy rule writes exactly what it did (its fingerprint unchanged). Zero = not given.
@@ -50,7 +50,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public Vector2 Sink;
 		/// <summary>
-		/// A glowing sea detail's own light, HDR (2026-10-25, phase I2m, decision 36 (d)): when brighter than black on an aquatic kind,
+		/// A glowing sea detail's own light, HDR: when brighter than black on an aquatic kind,
 		/// its material is made on the cave glow path (BiomeArtGenerator.CaveGlowLit: Weather Lit, its atlas as the emission map in
 		/// this colour) in place of the vegetation's, so it shines in the lightless deep (FishSeaDaylight dims only the daylight).
 		/// It stands still in the surge (Weather Lit has no sway). Black (the default): an ordinary sea plant.
@@ -99,8 +99,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Two kinds of generated file, neither committed.</b> The heavy ones — every texture and every
 	/// mesh — are the <i>payload</i> (<see cref="PayloadRoot"/>); the small ones — terrain layers,
-	/// materials, prefabs — are the <i>wrappers</i> biomes, scenes and terrain data point at. Since
-	/// 2026-10-02 the whole of <see cref="Root"/> is gitignored build output: every file's GUID is a
+	/// materials, prefabs — are the <i>wrappers</i> biomes, scenes and terrain data point at. The
+	/// whole of <see cref="Root"/> is gitignored build output: every file's GUID is a
 	/// function of its path and every object ID a function of what the object is
 	/// (<see cref="ProceduralArtPayload"/>, <see cref="ProceduralArtFileIds"/>), so each machine
 	/// regenerates byte-for-byte what every other has, and committed references resolve everywhere.
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string RockMaterial(string name) => "Rock_" + name;
 		public static string LeavesMaterial(string tree) => "Leaves_" + tree;
 		public static string BillboardMaterial(string tree) => "Billboard_" + tree;
-		/// <summary>A material's own boulder, small-rock and pebble meshes (StoneStyles; until 2026-10-16 one shared mesh a slot).</summary>
+		/// <summary>A material's own boulder, small-rock and pebble meshes (StoneStyles; formerly one shared mesh a slot).</summary>
 		public static string BoulderMesh(string material, string shape, int lod) => $"Boulder_{material}_{shape}_LOD{lod}";
 		public static string SmallRocksMesh(string material) => $"Rocks_Small_{material}";
 		public static string PebblesMesh(string material) => $"Pebbles_{material}";
@@ -310,7 +310,7 @@ namespace FishMMO.Shared.WorldDesign
 			return traits;
 		}
 
-		/// <summary>The floating plants' kinds' traits (ProceduralArtCatalogue.Floating.cs, 2026-10-18). Sets only the kinds it owns.</summary>
+		/// <summary>The floating plants' kinds' traits (ProceduralArtCatalogue.Floating.cs). Sets only the kinds it owns.</summary>
 		static partial void FloatingKindTraits(DetailKind kind, ref DetailKindTraits traits);
 
 		/// <summary>The land flora's kinds' traits (ProceduralArtCatalogue.Flora.cs). Sets only the kinds it owns.</summary>
@@ -343,7 +343,7 @@ namespace FishMMO.Shared.WorldDesign
 					var all = new List<DetailSpec>(CoreDetails);
 					all.AddRange(FloraDetails());
 					all.AddRange(SeaDetails());
-					// The plants floating on still water (2026-10-18), last so every earlier detail keeps its place.
+					// The plants floating on still water, last so every earlier detail keeps its place.
 					all.AddRange(FloatingDetails());
 					details = all.ToArray();
 				}
@@ -529,7 +529,7 @@ namespace FishMMO.Shared.WorldDesign
 			new TreeSpecies { Name = "Bamboo", Form = TreeForm.Bamboo, Height = 13f, TrunkRadius = 0.065f, CrownWidth = 0.3f, CrownBase = 0.45f, Branches = 12,
 				BarkFamily = Bark.Bamboo, LeafA = H("#4a7a2a"), LeafB = H("#6a9638"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 1.4f },
 
-			// ── The vegetation expansion (2026-10-10): a species for every biome that had none of its own ──
+			// ── The vegetation expansion: a species for every biome that had none of its own ──
 			// Appended, so no older species' order (or anything keyed by it) moves. Sizes are mature trees of each real
 			// species as they grow in their habitat; the biomes each stands in are in the design's per-biome table.
 
@@ -629,13 +629,13 @@ namespace FishMMO.Shared.WorldDesign
 			// mangrove and tidal creeks.
 			new TreeSpecies { Name = "Nipa", Form = TreeForm.Palm, Height = 7f, TrunkRadius = 0.25f, CrownWidth = 0.36f, CrownBase = 0.05f, Branches = 11,
 				BarkFamily = Bark.Palm, LeafA = H("#4a7a2a"), LeafB = H("#6a8e38"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.1f, Lean = 0.02f, FrondLift = 2.8f },
-			// ── Glacier (biome round, 2026-10-26) ── Bhojpatra (Betula utilis), the birch whose bark is paper: snow-pressed and gnarled at the
-			// tree line, up to the snout in the warm reach. LATER (I9b P11): its Papery salmon-and-copper bark; the birch bark stands in.
+			// ── Glacier ── Bhojpatra (Betula utilis), the birch whose bark is paper: snow-pressed and gnarled at the
+			// tree line, up to the snout in the warm reach. LATER: its Papery salmon-and-copper bark; the birch bark stands in.
 			new TreeSpecies { Name = "Bhojpatra", Form = TreeForm.Broadleaf, Height = 8f, TrunkRadius = 0.22f, CrownWidth = 0.4f, CrownBase = 0.35f, Branches = 6,
 				BarkFamily = Bark.Birch, LeafA = H("#4a6a3a"), LeafB = H("#6a8a40"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.2f, Deciduous = true,
 				Lean = 0.3f, Gnarl = 0.5f },
-			// ── Forest (biome round, 2026-10-26) ── The primeval forest's own trees (decision 12: species shared with other biomes come as
-			// the forest's own variants). LATER (I9b P11/P26): fissured lime, ridged ash and flaking Yew barks, the old fir's FlatTop
+			// ── Forest ── The primeval forest's own trees (species shared with other biomes come as
+			// the forest's own variants). LATER: fissured lime, ridged ash and flaking Yew barks, the old fir's FlatTop
 			// stork's-nest crown; the nearest barks stand in.
 			// Primeval European beech: a 35–40 m grey pillar flaring into root buttresses, a closed high vault.
 			new TreeSpecies { Name = "BeechForest", Form = TreeForm.Broadleaf, Height = 38f, TrunkRadius = 0.75f, CrownWidth = 0.26f, CrownBase = 0.4f, Branches = 8,
@@ -659,7 +659,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Ash: the ravine tree, an airy crown of pinnate leaves.
 			new TreeSpecies { Name = "Ash", Form = TreeForm.Broadleaf, Height = 32f, TrunkRadius = 0.5f, CrownWidth = 0.2f, CrownBase = 0.4f, Branches = 8,
 				BarkFamily = Bark.Olive, LeafA = H("#4a7a2c"), LeafB = H("#6a9a3a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2f, Deciduous = true },
-			// ── Woodland (biome round, 2026-10-26) ── The managed wood's trees. LATER (I9b P11/P27): Spiral and Cherry barks, pollards
+			// ── Woodland ── The managed wood's trees. LATER: Spiral and Cherry barks, pollards
 			// and coppice stools, mistletoe clumps; the nearest barks and whole trees stand in.
 			// Pedunculate oak of the wood-pasture: wide and low.
 			new TreeSpecies { Name = "OakWoodland", Form = TreeForm.Broadleaf, Height = 22f, TrunkRadius = 0.8f, CrownWidth = 0.42f, CrownBase = 0.15f, Branches = 8,
@@ -679,20 +679,20 @@ namespace FishMMO.Shared.WorldDesign
 			// Crab apple: small, wide and gnarled, the pasture's and the hedges'.
 			new TreeSpecies { Name = "CrabApple", Form = TreeForm.Broadleaf, Height = 8f, TrunkRadius = 0.25f, CrownWidth = 0.45f, CrownBase = 0.2f, Branches = 6,
 				BarkFamily = Bark.Brown, LeafA = H("#4a7a2c"), LeafB = H("#6a8a38"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.6f, Deciduous = true, Gnarl = 0.35f },
-			// ── Alpine Meadow (biome round, 2026-10-26) ── The stone pine on the knolls, dense and column-ovoid, old ones candelabra-
-			// topped; the wind-flagged spruce of the treeline (LATER (I9b P26): its Flag and Skirt fields); the lightning-struck
-			// silvered stone pine standing dead (LATER (I9b): a standing-snag deadwood form).
+			// ── Alpine Meadow ── The stone pine on the knolls, dense and column-ovoid, old ones candelabra-
+			// topped; the wind-flagged spruce of the treeline (LATER: its Flag and Skirt fields); the lightning-struck
+			// silvered stone pine standing dead (LATER: a standing-snag deadwood form).
 			new TreeSpecies { Name = "Cembra", Form = TreeForm.Conifer, Height = 18f, TrunkRadius = 0.45f, CrownWidth = 0.22f, CrownBase = 0.12f, Branches = 18,
 				BarkFamily = Bark.CembraPlate, LeafA = H("#2a4a3a"), LeafB = H("#4a6a5a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.4f, Gnarl = 0.45f },
 			new TreeSpecies { Name = "FlagSpruce", Form = TreeForm.Conifer, Height = 12f, TrunkRadius = 0.35f, CrownWidth = 0.18f, CrownBase = 0.02f, Branches = 16,
 				BarkFamily = Bark.Pine, LeafA = H("#1e3a26"), LeafB = H("#2e4a30"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.4f, Gnarl = 0.35f, Lean = 0.04f },
 			new TreeSpecies { Name = "SnagCembra", Form = TreeForm.Dead, Height = 6f, TrunkRadius = 0.4f, CrownWidth = 0.25f, CrownBase = 0.3f, Branches = 5,
 				BarkFamily = Bark.Dead, LeafA = H("#8a8478"), LeafB = H("#aaa498"), LeafCell = FoliageCell.Twigs, LeafSize = 0.9f, Gnarl = 0.7f },
-			// ── Mountain Slope (biome round, 2026-10-26) ── The cloud forest: the emergent yellowwood and the kosso, beard-hung; the
+			// ── Mountain Slope ── The cloud forest: the emergent yellowwood and the kosso, beard-hung; the
 			// frost-moor's giant heather (its own species, not the hills' tree-heath bush) and giant groundsel; the dry reach's pencil
-			// cedar and candelabra euphorbia (LATER (I9b P3): its many upturned arms; three stand in); the warm reach's meeting fig on
+			// cedar and candelabra euphorbia (LATER: its many upturned arms; three stand in); the warm reach's meeting fig on
 			// its buttresses and aerial roots; the ravines' tree fern (not the shared one); the dead heather's contorted skeleton.
-			// LATER (I9b P2): kosso's flower tassels.
+			// LATER: kosso's flower tassels.
 			new TreeSpecies { Name = "Podocarpus", Form = TreeForm.Pine, Height = 38f, TrunkRadius = 0.7f, CrownWidth = 0.18f, CrownBase = 0.6f, Branches = 16,
 				BarkFamily = Bark.Flaky, LeafA = H("#23402a"), LeafB = H("#34553a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.2f,
 				Hanging = 0.45f, HangingColour = H("#c4ccb0") },
@@ -717,7 +717,7 @@ namespace FishMMO.Shared.WorldDesign
 			new TreeSpecies { Name = "SnagHeather", Form = TreeForm.Dead, Height = 3f, TrunkRadius = 0.15f, CrownWidth = 0.3f, CrownBase = 0.2f, Branches = 6,
 				BarkFamily = Bark.Dead, LeafA = H("#8a8478"), LeafB = H("#a8a296"), LeafCell = FoliageCell.Twigs, LeafSize = 0.7f, Gnarl = 0.9f,
 				Hanging = 0.5f, HangingColour = H("#c4ccb0") },
-			// ── Scree (biome round, 2026-10-26) ── Korean fir, conical and wind-sheared, silver-backed needles; the ghost-firs standing
+			// ── Scree ── Korean fir, conical and wind-sheared, silver-backed needles; the ghost-firs standing
 			// silver and dead; the thousand-year yew, fluted, half dead and silvered, a live crown on one side.
 			new TreeSpecies { Name = "KoreanFir", Form = TreeForm.Conifer, Height = 12f, TrunkRadius = 0.3f, CrownWidth = 0.15f, CrownBase = 0.1f, Branches = 22,
 				BarkFamily = Bark.Smooth, LeafA = H("#2e4a2e"), LeafB = H("#4a6a5a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.2f, Gnarl = 0.2f },
@@ -725,9 +725,9 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.Dead, LeafA = H("#b8b4aa"), LeafB = H("#d0ccc2"), LeafCell = FoliageCell.Twigs, LeafSize = 0.8f },
 			new TreeSpecies { Name = "ThousandYew", Form = TreeForm.Pine, Height = 10f, TrunkRadius = 0.7f, CrownWidth = 0.4f, CrownBase = 0.2f, Branches = 10,
 				BarkFamily = Bark.Fibrous, LeafA = H("#1e3a22"), LeafB = H("#2e4a2a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1f, Gnarl = 0.95f, Lean = 0.15f },
-			// ── Scrubland (biome round, 2026-10-26) ── The Sonoran desert's trees: foothill and blue palo verde, ironwood along the washes,
+			// ── Scrubland ── The Sonoran desert's trees: foothill and blue palo verde, ironwood along the washes,
 			// the velvet mesquite of the bosques, whitethorn acacia, desert willow and Goodding's willow by the water, and the frost-free
-			// reach's elephant tree. LATER (I9b P2): the palo verde's yellow flower tassels and the desert willow's orchid trumpets; the
+			// reach's elephant tree. LATER: the palo verde's yellow flower tassels and the desert willow's orchid trumpets; the
 			// saguaro's candelabra arms by age (P3) on the catalogue's saguaro.
 			new TreeSpecies { Name = "PaloVerde", Form = TreeForm.Broadleaf, Height = 6f, TrunkRadius = 0.18f, CrownWidth = 0.5f, CrownBase = 0.25f, Branches = 7,
 				BarkFamily = Bark.GreenBark, LeafA = H("#8a9a4a"), LeafB = H("#a8b45a"), LeafCell = FoliageCell.Twigs, LeafSize = 0.95f, Gnarl = 0.5f },
@@ -745,7 +745,7 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.Brown, LeafA = H("#6a8a3a"), LeafB = H("#88a24a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.4f, Deciduous = true },
 			new TreeSpecies { Name = "ElephantTree", Form = TreeForm.Broadleaf, Height = 4f, TrunkRadius = 0.35f, CrownWidth = 0.5f, CrownBase = 0.35f, Branches = 6,
 				BarkFamily = Bark.PaperPeel, LeafA = H("#4a6a3a"), LeafB = H("#5e7e48"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 0.7f, Gnarl = 0.7f, TrunkSwell = 0.6f },
-			// ── Jungle (biome round, 2026-10-26) ── The Edo-Yoruba rainforest's own trees. LATER (I9b): FlakeGrey, ScaleRed and FrondBoots barks,
+			// ── Jungle ── The Edo-Yoruba rainforest's own trees. LATER: FlakeGrey, ScaleRed and FrondBoots barks,
 			// Kola pod clusters, oil-palm fruit bunches, the raffia's hanging fruit; the nearest barks and plain crowns stand in.
 			// Iroko (Milicia): THE emergent, a clear grey bole to 30 m under a wide flat crown.
 			new TreeSpecies { Name = "Iroko", Form = TreeForm.Broadleaf, Height = 48f, TrunkRadius = 1.0f, CrownWidth = 0.32f, CrownBase = 0.62f, Branches = 7,
@@ -766,7 +766,7 @@ namespace FishMMO.Shared.WorldDesign
 			new TreeSpecies { Name = "UmbrellaTree", Form = TreeForm.Umbrella, Height = 20f, TrunkRadius = 0.25f, CrownWidth = 0.55f, CrownBase = 0.75f, Branches = 5,
 				BarkFamily = Bark.Smooth, LeafA = H("#4a6a3a"), LeafB = H("#6a8a4a"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 3.2f,
 				PropRootCount = 8, PropRootTop = 0.075f, PropRootRing = 1.2f },
-			// Oil palm (Elaeis): in every gap and fallow, orange-red fruit bunches. LATER (I9b): the frond-boot bark and the bunches.
+			// Oil palm (Elaeis): in every gap and fallow, orange-red fruit bunches. LATER: the frond-boot bark and the bunches.
 			new TreeSpecies { Name = "OilPalm", Form = TreeForm.Palm, Height = 18f, TrunkRadius = 0.3f, CrownWidth = 0.36f, CrownBase = 0.88f, Branches = 18,
 				BarkFamily = Bark.Palm, LeafA = H("#2a4a1a"), LeafB = H("#3e6224"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.4f, Lean = 0.04f, FrondLift = 1.0f },
 			// Raffia palm: fronds from near the ground, erect and ten metres long, in the stream swamps.
@@ -775,7 +775,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Plantain: torn leaf ribbons, a purple bud and green finger bunches; compounds and orchards only.
 			new TreeSpecies { Name = "Plantain", Form = TreeForm.Palm, Height = 6f, TrunkRadius = 0.12f, CrownWidth = 0.42f, CrownBase = 0.6f, Branches = 8,
 				BarkFamily = Bark.Fibrous, LeafA = H("#4a7a2a"), LeafB = H("#6a9a34"), LeafCell = FoliageCell.Paddle, LeafSize = 0.8f, Lean = 0.03f, FrondLift = 1.5f },
-			// ── Bamboo Forest (biome round, 2026-10-26) ── The Heian bamboo hills' own trees. LATER (I9b `Running`): single leptomorph culms
+			// ── Bamboo Forest ── The Heian bamboo hills' own trees. LATER (`Running`): single leptomorph culms
 			// spaced through the stand (the clump form stands in); MosoCulm/MadakeCulm/SugiStrip/SakuraBand/ShiiFissure barks, PalmateLeaves and
 			// FanLeaves cells and the cherry blossom flush (the nearest barks, small leaves and pink leaf colours stand in).
 			// Moso (Phyllostachys edulis): pale powdered culms in endless groves.
@@ -802,9 +802,9 @@ namespace FishMMO.Shared.WorldDesign
 			// Ginkgo: the temple's great butter-gold tree, one to a shrine.
 			new TreeSpecies { Name = "Ginkgo", Form = TreeForm.Broadleaf, Height = 28f, TrunkRadius = 0.8f, CrownWidth = 0.28f, CrownBase = 0.35f, Branches = 8,
 				BarkFamily = Bark.Smooth, LeafA = H("#6a8a2a"), LeafB = H("#f0c820"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.3f, Deciduous = true },
-			// ── Savanna (biome round, 2026-10-26) ── The veld's trees: the flat-topped umbrella thorn, the plateau's own baobab, mopane in
+			// ── Savanna ── The veld's trees: the flat-topped umbrella thorn, the plateau's own baobab, mopane in
 			// stands on the clay, marula by the homesteads, fever trees round the vleis, jackalberry on the termite islands, leadwood
-			// alive and standing dead for centuries, the sausage tree on the sand-river banks and the kopjes' tree aloe. LATER (I9b P25):
+			// alive and standing dead for centuries, the sausage tree on the sand-river banks and the kopjes' tree aloe. LATER:
 			// the weaver nests on the umbrella thorns' west twigs; the sausage tree's hanging fruit and maroon bells; the aloe's red spikes.
 			new TreeSpecies { Name = "UmbrellaThorn", Form = TreeForm.Umbrella, Height = 10f, TrunkRadius = 0.3f, CrownWidth = 0.7f, CrownBase = 0.75f, Branches = 4,
 				BarkFamily = Bark.Brown, LeafA = H("#6a7a34"), LeafB = H("#7e8a40"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.2f },
@@ -826,9 +826,9 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.Smooth, LeafA = H("#3a5a2a"), LeafB = H("#4e6e34"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.2f },
 			new TreeSpecies { Name = "TreeAloe", Form = TreeForm.Rosette, Height = 5f, TrunkRadius = 0.15f, CrownWidth = 0.3f, CrownBase = 0.75f, Branches = 1,
 				BarkFamily = Bark.Fibrous, LeafA = H("#5a7a5a"), LeafB = H("#6e8a68"), LeafCell = FoliageCell.BambooLeaves, LeafSize = 0.9f },
-			// ── Grassland (biome round, 2026-10-26) ── The puszta's few trees, each a landmark: the lone wild pear, the forest-steppe's Turkey-oak
-			// islands, the sand puszta's white poplars, the ditches' white willows. LATER (I9b P27): the willow as a pollard; a short whole
-			// willow stands in. LATER (I9b): the poplar's felted white leaf undersides flickering in the wind (LeafB carries the white).
+			// ── Grassland ── The puszta's few trees, each a landmark: the lone wild pear, the forest-steppe's Turkey-oak
+			// islands, the sand puszta's white poplars, the ditches' white willows. LATER: the willow as a pollard; a short whole
+			// willow stands in. LATER: the poplar's felted white leaf undersides flickering in the wind (LeafB carries the white).
 			new TreeSpecies { Name = "WildPear", Form = TreeForm.Broadleaf, Height = 12f, TrunkRadius = 0.35f, CrownWidth = 0.28f, CrownBase = 0.25f, Branches = 7,
 				BarkFamily = Bark.Checker, LeafA = H("#3a6a2a"), LeafB = H("#5a8a34"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.4f, Deciduous = true, Gnarl = 0.35f },
 			new TreeSpecies { Name = "TurkeyOak", Form = TreeForm.Broadleaf, Height = 24f, TrunkRadius = 0.6f, CrownWidth = 0.3f, CrownBase = 0.35f, Branches = 7,
@@ -837,8 +837,8 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.WhitePoplar, LeafA = H("#3e5e30"), LeafB = H("#e0e4dc"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 2.2f, Deciduous = true, Lean = 0.15f },
 			new TreeSpecies { Name = "WhiteWillow", Form = TreeForm.Broadleaf, Height = 10f, TrunkRadius = 0.45f, CrownWidth = 0.35f, CrownBase = 0.25f, Branches = 8,
 				BarkFamily = Bark.Fibrous, LeafA = H("#8a9a80"), LeafB = H("#b0bca8"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.4f, Deciduous = true, Gnarl = 0.4f },
-			// ── Plains (biome round, 2026-10-26) ── Trees only in the river galleries, draws and breaks: the plains cottonwood (THE tree), the
-			// bur oak of the oak openings, the bowyer's Osage orange and the eastern red cedar of the breaks. LATER (I9b): the cottonwood's
+			// ── Plains ── Trees only in the river galleries, draws and breaks: the plains cottonwood (THE tree), the
+			// bur oak of the oak openings, the bowyer's Osage orange and the eastern red cedar of the breaks. LATER: the cottonwood's
 			// forked multi-bole trunk and the Osage orange's green fruit.
 			new TreeSpecies { Name = "PlainsCottonwood", Form = TreeForm.Broadleaf, Height = 28f, TrunkRadius = 0.9f, CrownWidth = 0.38f, CrownBase = 0.3f, Branches = 7,
 				BarkFamily = Bark.CottonwoodRidge, LeafA = H("#3e6a2a"), LeafB = H("#6a8a3a"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 3.6f, Deciduous = true, Gnarl = 0.35f },
@@ -848,29 +848,29 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.OsageStrip, LeafA = H("#3a6a2a"), LeafB = H("#5a8a34"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.45f, Deciduous = true, Gnarl = 0.7f },
 			new TreeSpecies { Name = "RedCedar", Form = TreeForm.Conifer, Height = 10f, TrunkRadius = 0.25f, CrownWidth = 0.18f, CrownBase = 0.05f, Branches = 16,
 				BarkFamily = Bark.FlakyRed, LeafA = H("#1e3a22"), LeafB = H("#2e4a2a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.2f, Gnarl = 0.3f },
-			// ── Steppe (biome round, 2026-10-26) ── Almost no trees: the karagach elm in the dry valleys and at springs, wells and tombs (the
-			// Rag Elm its ancient tree), and the saxaul's black-twisted stands on the kum. LATER (I9b): the saxaul's multi-stem trunk and
-			// jointed drooping twig leaves; twig tufts stand in. LATER (I7): the Rag Elm's cloth strips.
+			// ── Steppe ── Almost no trees: the karagach elm in the dry valleys and at springs, wells and tombs (the
+			// Rag Elm its ancient tree), and the saxaul's black-twisted stands on the kum. LATER: the saxaul's multi-stem trunk and
+			// jointed drooping twig leaves; twig tufts stand in. LATER: the Rag Elm's cloth strips.
 			new TreeSpecies { Name = "SteppeElm", Form = TreeForm.Broadleaf, Height = 9f, TrunkRadius = 0.35f, CrownWidth = 0.35f, CrownBase = 0.25f, Branches = 7,
 				BarkFamily = Bark.Karagach, LeafA = H("#3e5a2a"), LeafB = H("#5a7a34"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.2f, Deciduous = true,
 				Gnarl = 0.5f, Lean = 0.2f },
 			new TreeSpecies { Name = "Saxaul", Form = TreeForm.Broadleaf, Height = 4.5f, TrunkRadius = 0.2f, CrownWidth = 0.45f, CrownBase = 0.3f, Branches = 5,
 				BarkFamily = Bark.SaxaulTwist, LeafA = H("#6a7a4a"), LeafB = H("#7a8a54"), LeafCell = FoliageCell.Twigs, LeafSize = 0.9f, Gnarl = 0.9f, Lean = 0.15f },
-			// ── Estuary (biome round, 2026-10-26) ── The terps' and warften's wind-shorn ash, the saltings' only tree. LATER (I9b P26): its
+			// ── Estuary ── The terps' and warften's wind-shorn ash, the saltings' only tree. LATER: its
 			// leeward flag crown (Flag) and the Ash bark; the olive-green bark and a short, one-sided crown stand in.
 			new TreeSpecies { Name = "TerpAsh", Form = TreeForm.Broadleaf, Height = 14f, TrunkRadius = 0.35f, CrownWidth = 0.3f, CrownBase = 0.3f, Branches = 6,
 				BarkFamily = Bark.Olive, LeafA = H("#3a5a2a"), LeafB = H("#4a6a3a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.8f, Deciduous = true,
 				Lean = 0.12f, Gnarl = 0.3f },
-			// ── Desert (biome round, 2026-10-26) ── The desert date (the Steering Tree), leaning and gnarled with green spine-tipped twigs and
-			// yellow-green dates; the atil, dense and round on the reg. LATER (I9b P14): the atil's camel-cropped browse line (a flat cut
+			// ── Desert ── The desert date (the Steering Tree), leaning and gnarled with green spine-tipped twigs and
+			// yellow-green dates; the atil, dense and round on the reg. LATER: the atil's camel-cropped browse line (a flat cut
 			// underside at 2 m); a raised crown base stands in.
 			new TreeSpecies { Name = "Balanites", Form = TreeForm.Broadleaf, Height = 7f, TrunkRadius = 0.22f, CrownWidth = 0.42f, CrownBase = 0.35f, Branches = 6,
 				BarkFamily = Bark.BalanitesFurrow, LeafA = H("#6a7a4a"), LeafB = H("#8a9a5a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.2f, Gnarl = 0.6f, Lean = 0.08f },
 			new TreeSpecies { Name = "Atil", Form = TreeForm.Broadleaf, Height = 5f, TrunkRadius = 0.18f, CrownWidth = 0.5f, CrownBase = 0.4f, Branches = 6,
 				BarkFamily = Bark.AtilPale, LeafA = H("#4a5a3a"), LeafB = H("#5a6a44"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1f, Gnarl = 0.4f },
-			// ── Badlands (biome round, 2026-10-26) ── The apricot of the wash orchards, the oleaster with its two-tone silver leaves along the
+			// ── Badlands ── The apricot of the wash orchards, the oleaster with its two-tone silver leaves along the
 			// washes, the oriental plane at every fountain (the AncientTree's look), and the rock hackberry rooted in the cliff joints.
-			// LATER (I9b): the apricot's spring blossom and summer fruit, the plane's hollow bole and seed balls, the oleaster's silver leaf
+			// LATER: the apricot's spring blossom and summer fruit, the plane's hollow bole and seed balls, the oleaster's silver leaf
 			// undersides (one leaf colour pair stands in).
 			new TreeSpecies { Name = "Apricot", Form = TreeForm.Broadleaf, Height = 7f, TrunkRadius = 0.22f, CrownWidth = 0.42f, CrownBase = 0.3f, Branches = 7,
 				BarkFamily = Bark.ApricotScale, LeafA = H("#3e6a2a"), LeafB = H("#4e7a34"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 1.1f, Deciduous = true, Gnarl = 0.55f },
@@ -881,20 +881,20 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.PlaneFlake, LeafA = H("#3a6a2a"), LeafB = H("#4a7a34"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 3.6f, Deciduous = true, Gnarl = 0.4f },
 			new TreeSpecies { Name = "RockHackberry", Form = TreeForm.Broadleaf, Height = 5f, TrunkRadius = 0.15f, CrownWidth = 0.4f, CrownBase = 0.3f, Branches = 6,
 				BarkFamily = Bark.Smooth, LeafA = H("#4a6a3a"), LeafB = H("#5a7a44"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 0.85f, Deciduous = true, Gnarl = 0.8f },
-			// ── Salt Flat (biome round, 2026-10-26) ── The dobera, the herders' dense dark shade tree by the wells (one to every Ari camp).
-			// LATER (I9 T1): its own grey Smooth bark variant.
+			// ── Salt Flat ── The dobera, the herders' dense dark shade tree by the wells (one to every Ari camp).
+			// LATER: its own grey Smooth bark variant.
 			new TreeSpecies { Name = "Dobera", Form = TreeForm.Broadleaf, Height = 8f, TrunkRadius = 0.35f, CrownWidth = 0.55f, CrownBase = 0.25f, Branches = 6,
 				BarkFamily = Bark.Smooth, LeafA = H("#2e4a2a"), LeafB = H("#4a5e3a"), LeafCell = FoliageCell.BroadLeaves, LeafSize = 1.3f, Gnarl = 0.5f },
-			// ── Beach (biome round, 2026-10-26): the hot strands' coconut palm leaning seaward over the surf, and the dune-pine belt's wind-flagged
-			// pine. LATER (I9b): the flag crown (crown biased downwind, branches stripped windward, 10–25° seaward lean on the palm) as a tree
+			// ── Beach: the hot strands' coconut palm leaning seaward over the surf, and the dune-pine belt's wind-flagged
+			// pine. LATER: the flag crown (crown biased downwind, branches stripped windward, 10–25° seaward lean on the palm) as a tree
 			// parameter; a lean and a gnarl stand in.
 			new TreeSpecies { Name = "StrandCoconut", Form = TreeForm.Palm, Height = 12f, TrunkRadius = 0.16f, CrownWidth = 0.3f, CrownBase = 0.9f, Branches = 14,
 				BarkFamily = Bark.Palm, LeafA = H("#4a7a2a"), LeafB = H("#6a8a34"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.2f, Lean = 0.18f, FrondLift = 0.8f },
 			new TreeSpecies { Name = "WindPine", Form = TreeForm.Pine, Height = 9f, TrunkRadius = 0.22f, CrownWidth = 0.3f, CrownBase = 0.4f, Branches = 12,
 				BarkFamily = Bark.FlakyRed, LeafA = H("#2e4a2e"), LeafB = H("#46623a"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.4f, Gnarl = 0.6f, Lean = 0.12f },
-			// ── Hills (biome round, 2026-10-26) ── The terraced hills' trees: the split-boled terrace olive with silver undersides, the cork oak
+			// ── Hills ── The terraced hills' trees: the split-boled terrace olive with silver undersides, the cork oak
 			// of the montado, the woolly downy oak of the north sides, the almond, the umbrella stone pine on the crests, the dark chapel
-			// cypress. LATER (I9b): the cork oak's Stripped field (rust-orange boles stripped to 2–3 m with a white year number); the whole
+			// cypress. LATER: the cork oak's Stripped field (rust-orange boles stripped to 2–3 m with a white year number); the whole
 			// cork bark stands in.
 			new TreeSpecies { Name = "OliveTerrace", Form = TreeForm.Broadleaf, Height = 8f, TrunkRadius = 0.5f, CrownWidth = 0.45f, CrownBase = 0.35f, Branches = 7,
 				BarkFamily = Bark.Olive, LeafA = H("#4a5a3a"), LeafB = H("#9aa88a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.3f, Gnarl = 0.7f, TrunkSwell = 0.5f },
@@ -908,8 +908,8 @@ namespace FishMMO.Shared.WorldDesign
 				BarkFamily = Bark.PinePlate, LeafA = H("#3a5a2a"), LeafB = H("#4e6a32"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1.8f },
 			new TreeSpecies { Name = "CypressHills", Form = TreeForm.Columnar, Height = 18f, TrunkRadius = 0.3f, CrownWidth = 0.065f, CrownBase = 0.03f, Branches = 24,
 				BarkFamily = Bark.Fibrous, LeafA = H("#142e16"), LeafB = H("#1e3a1e"), LeafCell = FoliageCell.NeedleSpray, LeafSize = 1f },
-			// ── Wetlands (biome round, 2026-10-26) ── The Euphrates poplar on the old islands and levees (round-toothed small leaves), and the
-			// white-willow galleries of the cool delta reach. LATER (I9b): the poplar's two leaf forms (Dimorphic) and Turanga bark, the
+			// ── Wetlands ── The Euphrates poplar on the old islands and levees (round-toothed small leaves), and the
+			// white-willow galleries of the cool delta reach. LATER: the poplar's two leaf forms (Dimorphic) and Turanga bark, the
 			// willow's pollard heads (Pollard); the nearest barks and a small-leaved crown stand in.
 			new TreeSpecies { Name = "EuphratesPoplar", Form = TreeForm.Broadleaf, Height = 14f, TrunkRadius = 0.45f, CrownWidth = 0.32f, CrownBase = 0.3f, Branches = 7,
 				BarkFamily = Bark.Olive, LeafA = H("#6a8a6a"), LeafB = H("#9aaa80"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.3f, Deciduous = true,
@@ -917,7 +917,7 @@ namespace FishMMO.Shared.WorldDesign
 			new TreeSpecies { Name = "WillowGallery", Form = TreeForm.Broadleaf, Height = 20f, TrunkRadius = 0.55f, CrownWidth = 0.3f, CrownBase = 0.25f, Branches = 7,
 				BarkFamily = Bark.Olive, LeafA = H("#8a9a88"), LeafB = H("#c8d0c4"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 2.1f, Deciduous = true,
 				Weeping = 0.1f, Gnarl = 0.2f },
-			// ── Mangrove (biome round, 2026-10-26) ── The mangal's trees by their Swahili names. LATER (I9b): the mkoko's branch drop roots, the
+			// ── Mangrove ── The mangal's trees by their Swahili names. LATER: the mkoko's branch drop roots, the
 			// mchu's flaking bark and silver undersides, the mpia's powder-puff flowers, the muia's lenticels, the mkomafi's snaking plank
 			// roots, the coconut-and-doum fan fronds and forked trunk, the mkindu's clumped stems; the kit's roots, buttresses and fronds stand in.
 			// Mkoko (Rhizophora mucronata): a dense glossy crown on arching prop roots.
@@ -952,8 +952,8 @@ namespace FishMMO.Shared.WorldDesign
 			// Mkoma (Hyphaene compressa): the doum palm of the dry reach, grey-green fans on a forked trunk.
 			new TreeSpecies { Name = "Mkoma", Form = TreeForm.Palm, Height = 12f, TrunkRadius = 0.2f, CrownWidth = 0.24f, CrownBase = 0.85f, Branches = 16,
 				BarkFamily = Bark.Palm, LeafA = H("#6a8a6a"), LeafB = H("#8aa88a"), LeafCell = FoliageCell.PalmFrond, LeafSize = 1.6f, FrondLift = 0.8f },
-			// ── River (biome round, 2026-10-26) ── The crack willow (Salix x fragilis) of the islets and margins: a fissured grey bole, brittle
-			// split limbs, glossy leaves silvered beneath. LATER (I9b P27): the pollard form (hollow bole, broom of rods) and the leaning form
+			// ── River ── The crack willow (Salix x fragilis) of the islets and margins: a fissured grey bole, brittle
+			// split limbs, glossy leaves silvered beneath. LATER: the pollard form (hollow bole, broom of rods) and the leaning form
 			// (bole tilted 25-40 degrees over the water, one fallen limb rooted); this upright crown stands in.
 			new TreeSpecies { Name = "CrackWillow", Form = TreeForm.Broadleaf, Height = 14f, TrunkRadius = 0.45f, CrownWidth = 0.34f, CrownBase = 0.3f, Branches = 7,
 				BarkFamily = Bark.Olive, LeafA = H("#3e6a2e"), LeafB = H("#8a9a7a"), LeafCell = FoliageCell.SmallLeaves, LeafSize = 1.55f, Deciduous = true,
@@ -1005,11 +1005,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// bias of 1: LOD0 → LOD1 at 0.25 ≈ 52 m, LOD1 → the billboard at 0.16 ≈ 81 m, culled at 0.002 ≈
 		/// 4.3 km. The quality levels' LOD bias multiplies those distances (High's 2: ≈ 104 m and ≈ 162 m).
 		/// Screen shares scale with the tree, so a 28 m spruce steps proportionally further off, at the same
-		/// size on screen, which is what the shares are for: the trees grew to their real sizes (2026-10-04).
+		/// size on screen, which is what the shares are for: the trees grew to their real sizes.
 		/// The billboard used to start at 0.1, close enough that its flatness showed, then at 0.08. Since the
-		/// billboard is lit by its own normals like the meshes and takes its plant's size (2026-11-06) it
+		/// billboard is lit by its own normals like the meshes and takes its plant's size it
 		/// starts at 0.16: the owner's A/B at High, settlement view, GPU 9.24 → 8.26 ms for 4.8% of the
-		/// frame's pixels changed, the residue being a single picture's shape (measured 2026-11-05).
+		/// frame's pixels changed, the residue being a single picture's shape .
 		/// </para>
 		/// <para>
 		/// The cull height is set far past the terrain's tree distance on purpose: a terrain tree is

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/*
-	 * The rock over a cave where nothing holed it (2026-10-27, Moron 2: "we are still seeing holes in cave walls from the interior
+	 * The rock over a cave where nothing holed it (Moron 2: "we are still seeing holes in cave walls from the interior
 	 * facing out"). The shell stops a skin under the ground (Field's `buried`), so wherever the cave's air comes up into that skin
 	 * and the terrain over it was not holed, the cave has no roof but the terrain, which is drawn from above only: from inside, a
 	 * hole onto the sky. The layout keeps its ways MinCover under the ground it was planned on, but the ground is not left as it

@@ -13,7 +13,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Moves the world's materials onto the weather shaders, so rain wets them and snow settles on
-	/// them. Characters and effects are left alone (Q12).
+	/// them. Characters and effects are left alone.
 	/// </summary>
 	/// <remarks>
 	/// <para>

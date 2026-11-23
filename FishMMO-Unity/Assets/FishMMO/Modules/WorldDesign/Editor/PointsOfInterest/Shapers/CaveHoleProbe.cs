@@ -11,7 +11,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Finds holes in a generated scene's caves (2026-10-20: "Ensure they are fully enclosed as we noticed some holes in some
+	/// Finds holes in a generated scene's caves ("Ensure they are fully enclosed as we noticed some holes in some
 	/// smaller areas of the cave on moron 2"): the saved rock pieces of every cave, welded, and two kinds of opening.
 	/// </summary>
 	/// <remarks>

@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The core world contracts (Phase 4 of the core and modules plan, 2026-11-17): the world clock, the world tick, water,
+	/// The core world contracts: the world clock, the world tick, water,
 	/// climbing and the slim weather reading are core, so gameplay and every module can read them whether or not the sky,
 	/// the weather, the biomes or the water are installed. The world modules plug into them; the core never names a module.
 	/// </summary>
@@ -84,7 +84,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void TheCoreShaders_IncludeOnlyTheCoreAndUnity()
 		{
-			// The core surface stack (Jim, 2026-11-17): FishWeatherLit, FishVegetation and their includes are core rendering, so a
+			// The core surface stack: FishWeatherLit, FishVegetation and their includes are core rendering, so a
 			// world module removed takes none of what they compile from.
 			int files = 0;
 			var foreign = new System.Collections.Generic.List<string>();

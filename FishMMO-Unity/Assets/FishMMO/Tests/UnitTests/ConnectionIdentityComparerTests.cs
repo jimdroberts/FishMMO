@@ -10,7 +10,7 @@ namespace FishMMO.UnitTests
 	/// A dictionary keyed by NetworkConnection must still reach a connection after it disconnects. FishNet resets ClientId to
 	/// -1 on disconnect, and NetworkConnection's hash and equality follow ClientId (a -1 connection does not even equal
 	/// itself), so the scene server's send schedule lost a disconnected player's entry and threw KeyNotFoundException for
-	/// 'Id [-1]' on every tick from then on (live, 2026-11-18).
+	/// 'Id [-1]' on every tick from then on (live).
 	/// </summary>
 	[TestFixture]
 	public class ConnectionIdentityComparerTests

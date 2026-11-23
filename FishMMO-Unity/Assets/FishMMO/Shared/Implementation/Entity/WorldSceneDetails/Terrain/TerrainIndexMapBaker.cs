@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// copies and one small draw; nothing is read back.
 	/// </para>
 	/// <para>
-	/// <b>Baked live while the ground is edited, stored for play</b> (2026-10-16: "store index maps with the terrain at
+	/// <b>Baked live while the ground is edited, stored for play</b> ("store index maps with the terrain at
 	/// cut/repaint, still re-baked live while painting in the editor"). In edit mode every tile is baked here from its
 	/// alphamaps, on every change. The cut also stores each tile's map, baked on the CPU by the same rule
 	/// (<see cref="TerrainIndexMap.Bake(float[,,])"/>), in the scene's <see cref="TerrainDetailBake"/>; in play (the

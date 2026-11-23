@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The cave and mine kit (2026-10-13: "enormous caverns … rock bridges over chasms, ladders and ropes between levels …
+	/// The cave and mine kit ("enormous caverns … rock bridges over chasms, ladders and ropes between levels …
 	/// torches, lanterns, hanging lanterns, encampments"): what a climber climbs (timber and rope ladders, knotted ropes and
 	/// their anchors), what a chasm is crossed on (a rope walk and a mine's timber trestle, both laid end to end), the lamps
 	/// of a working mine (hung on chains, on wall brackets, on stands), a shaft's collar and windlass, a miner's tools,
@@ -341,7 +341,7 @@ namespace FishMMO.Shared.WorldDesign
 			const float walk = 1.3f, length = CaveSpanModule, half = length * 0.5f, rope = 0.035f;
 			bool worn = d.Variant == 1;
 			float hand = worn ? 0.95f : 1.02f;
-			// The planks are the walk's floor (2026-10-16).
+			// The planks are the walk's floor.
 			using (d.Builds(DeckRoles))
 			{
 				if (d.Lod == 2)
@@ -404,7 +404,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// The crossbar stands clear over a walker's head (<see cref="RopeBridgeHeadroom"/>): at 1.28 m it barred the way to
 		/// every character, whose capsule is 1.6 m tall, and the world sim walker stopped at the posts of all 47 of a cloud
-		/// world's bridges (2026-10-15).
+		/// world's bridges.
 		/// </remarks>
 		private static void RopeBridgeEnd(StructureDraft d)
 		{
@@ -457,7 +457,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			const float width = 2f, length = CaveSpanModule, half = length * 0.5f;
 			bool track = d.Variant == 1;
-			// The planks are the deck's floor (2026-10-16).
+			// The planks are the deck's floor.
 			using (d.Builds(DeckRoles))
 			{
 				if (d.Lod == 2)

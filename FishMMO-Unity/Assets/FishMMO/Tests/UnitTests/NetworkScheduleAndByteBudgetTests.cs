@@ -7,7 +7,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The bandwidth work of 2026-11-13: sending every Nth tick while simulating every tick (NetworkSendSchedule, with
+	/// The bandwidth work: sending every Nth tick while simulating every tick (NetworkSendSchedule, with
 	/// FishNet tick markers so batching cannot shift a message's tick), and each viewer's byte budget for observed characters
 	/// (ObserverStreamingPolicy.FitByteBudget).
 	/// </summary>

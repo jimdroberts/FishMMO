@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Water dripping in the caves near the camera (2026-10-20, caves livened): the nearest <see cref="MaxSources"/> drips within
+	/// Water dripping in the caves near the camera (caves livened): the nearest <see cref="MaxSources"/> drips within
 	/// <see cref="Reach"/> (<see cref="SceneEmitterKind.Drip"/>, baked by the cut) each drop on the shared clock (SceneDrip),
 	/// streak down their fall, spatter where they land and send rings over their puddles (FishCaveDrips.shader). One draw of a
 	/// pre-built set of quads for all of them; their sound is CaveDripPresenter's.

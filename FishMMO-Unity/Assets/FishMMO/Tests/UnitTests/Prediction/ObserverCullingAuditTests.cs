@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the outcome of the 2026-09-08 observer condition audit: entities exist out to 100 m and
+	/// Pins the outcome of the observer condition audit: entities exist out to 100 m and
 	/// are shaped by rate, not by despawning.
 	/// </summary>
 	/// <remarks>

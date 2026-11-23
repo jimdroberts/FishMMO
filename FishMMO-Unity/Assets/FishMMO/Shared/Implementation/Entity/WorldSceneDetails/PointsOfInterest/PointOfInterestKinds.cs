@@ -75,7 +75,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// A kind IS a <see cref="POIType"/>, so the name generator, the generated scene data and the map all speak of
-	/// the same thing. Each kind has its own <see cref="MapMarkerType"/> of the same name (2026-10-10), found
+	/// the same thing. Each kind has its own <see cref="MapMarkerType"/> of the same name, found
 	/// by name so the two enums can never drift apart silently: a kind with no marker type answers
 	/// <see cref="MapMarkerType.Landmark"/>, and a unit test pins that none does.
 	/// </remarks>
@@ -313,14 +313,14 @@ namespace FishMMO.Shared
 			Add(POIType.SunkenShip, Co, K | U, 2);
 			Add(POIType.SunkenRuins, Co, K | U | H, 2);
 			Add(POIType.SunkenCity, Co, K | U | H | R, 1);
-			// The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): a drowned shrine, a sea monster's den, a crystal
-			// garden, a monument and a statue the sea took. Their pieces are the land kinds' until I7 gives them their own.
+			// The sea floor's own sites: a drowned shrine, a sea monster's den, a crystal
+			// garden, a monument and a statue the sea took. Their pieces are the land kinds' until a later pass gives them their own.
 			Add(POIType.SunkenShrine, Co, K | U, 2, "Drowned Shrine");
 			Add(POIType.SeaMonsterDen, Co, K | U | R | H, 2, "Sea Monster's Den");
 			Add(POIType.SeaCrystalFormation, Co, K | U, 3, "Sea Crystal Formation");
 			Add(POIType.SunkenMonument, Co, K | U, 2);
 			Add(POIType.SunkenStatue, Co, K | U, 3);
-			// Adrift on the open sea (2026-10-25, I2p): surface sites, not the floor's, so neither U nor K (no template: a derelict's or
+			// Adrift on the open sea: surface sites, not the floor's, so neither U nor K (no template: a derelict's or
 			// a whaler's hull rides the tide from its site builder, PointOfInterestAdrift).
 			Add(POIType.AdriftDerelict, Co, PointOfInterestTraits.None, 2, "Derelict Adrift");
 			Add(POIType.WhaleFall, Co, PointOfInterestTraits.None, 3, "Whale Fall");
@@ -341,9 +341,9 @@ namespace FishMMO.Shared
 			Add(POIType.ImpactBasin, Al, D, 2);
 			Add(POIType.TidalRift, Al, D, 3);
 
-			/* The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS), sited only where a biome hosts them. A kind is K only
+			/* The biomes' own kinds, sited only where a biome hosts them. A kind is K only
 			 * where the kit's pieces already read as it (a gate, a chapel, a kiln); the rest are named and discoverable but lay
-			 * nothing until I7 gives them their pieces, as the whale fall adrift does. */
+			 * nothing until a later pass gives them their pieces, as the whale fall adrift does. */
 			Add(POIType.TrenchEdge, Co, U, 3);
 			Add(POIType.SeaCavern, Ts, U, 2);
 			Add(POIType.CinderCone, Vo, PointOfInterestTraits.None, 3);
@@ -374,13 +374,13 @@ namespace FishMMO.Shared
 			Add(POIType.SunkenWhaleFall, Co, U, 3);
 			Add(POIType.SeaHall, Ts, PointOfInterestTraits.None, 2);
 
-			// The hot ground's own sites (2026-10-27): found where the cut dug them (GeothermalPointsOfInterest), shown zoomed in; the
+			// The hot ground's own sites: found where the cut dug them (GeothermalPointsOfInterest), shown zoomed in; the
 			// scene's Great Spout is a Geyser record drawn at tier 2 like a waterfall. A hot spring's site is a HotSpring.
 			Add(POIType.Geyser, Vo, D, 3);
 			Add(POIType.MudPot, Vo, D, 3, "Mud Pot");
 			Add(POIType.Fumarole, Vo, D, 3);
 			Add(POIType.SulphurPool, Vo, D, 3, "Sulphur Pool");
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			Add(POIType.DragonLair, En, K | R | H | P, 1, "Dragon's Lair");
 			Add(POIType.TrollBridge, En, K | H, 2);
 			Add(POIType.GiantsSteading, Wi, K | R | H | P, 2, "Giant's Steading");

@@ -49,7 +49,7 @@ Shader "FishMMO/Backdrop Ground"
         // Last of the opaques (the queue ends at 2500): everything in the scene stands in front of the backdrop, so
         // drawn after it all, early depth rejects every pixel the scene covers. In the terrain's own queue
         // (Geometry-100) it drew first and paid the arrays for pixels trees and props then painted over: +0.96 ms
-        // opaque at the meadow view, where the backdrop is a sliver of horizon (ScenePerfProbe, 2026-10-08).
+        // opaque at the meadow view, where the backdrop is a sliver of horizon (ScenePerfProbe).
         Tags { "Queue" = "Geometry+490" "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "UniversalMaterialType" = "Lit" "IgnoreProjector" = "False" }
 
         Pass

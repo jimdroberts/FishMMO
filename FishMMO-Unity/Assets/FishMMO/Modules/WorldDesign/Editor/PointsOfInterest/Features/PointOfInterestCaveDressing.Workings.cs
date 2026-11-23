@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A mine's working dress (2026-10-13: "Ore veins in mines, Torches, lanterns, hanging lanterns"): the ore it was dug
+	/// A mine's working dress ("Ore veins in mines, Torches, lanterns, hanging lanterns"): the ore it was dug
 	/// for showing in its drifts' and stopes' walls (a glowing fantasy ore in its deepest level and in the natural cavern it
 	/// broke into), lanterns hung where its ways meet, in its stopes and at its shaft heads, its tools and sacks in the
 	/// stopes, boards at its shaft heads and its first level, and the miners' camp in a stope near the adit.
@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				int variant = random.Range(0, 2);
 				float yaw = random.Range(0f, 360f), hand = random.NextFloat() < 0.5f ? 1f : -1f;
-				// The lamp the biome hangs here (its Cave Lights, 2026-10-16: a hanging lantern, on a wall bracket where the roof is
+				// The lamp the biome hangs here (its Cave Lights: a hanging lantern, on a wall bracket where the roof is
 				// low, in every biome before); a wall light goes straight to the wall, a ground light stands at the wall's foot.
 				if (!CaveLight(BiomeCaveLightPlace.MineLamp, out BiomeCaveLight lamp))
 				{

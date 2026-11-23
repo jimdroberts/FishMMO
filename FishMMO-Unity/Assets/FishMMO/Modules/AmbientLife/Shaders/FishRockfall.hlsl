@@ -1,7 +1,7 @@
 #ifndef FISH_ROCKFALL_INCLUDED
 #define FISH_ROCKFALL_INCLUDED
 
-// FALLING STONE (2026-10-25, phase I2u; decisions 79, 95): the stones of the falls down the scene's stored chutes and the
+// FALLING STONE: the stones of the falls down the scene's stored chutes and the
 // Strombolian bombs rolling down its sciara, placed per vertex from a few numbers a fall (RockfallField, FishMMO.Client), every
 // stone's path hashed from its fall's seed. The C# twin is FishMMO.Shared.Weather.Rockfall (StoneOf, RunOf, AlongAt, SpeedAt, HopAt,
 // AcrossAt, StateAt) and StromboliBombs.GlowAt: constant for constant, salt for salt (RockfallTests checks the mirror). Nothing here

@@ -31,7 +31,7 @@ namespace FishMMO.Shared
 	/// they are now (<see cref="KeepAlphamapsReason"/>). A player draws the stored map
 	/// (TerrainArrayBinder), and the ground colour and the grass's surface layers read it on a tile
 	/// with no alphamaps; the arrays and the set hold everything else a layer was. Decision 24
-	/// (2026-10-16): "let client builds strip alphamaps". On a generated scene that is 6 maps of 512²
+	///: "let client builds strip alphamaps". On a generated scene that is 6 maps of 512²
 	/// RGBA with mips (8 MB) a tile against its 2 MB index map.</item>
 	/// <item>otherwise (no stored map, stored before the alphamaps were last written, another size or
 	/// layer count, or a texel that differs: one warning naming the reason) <b>the alphamaps</b>,

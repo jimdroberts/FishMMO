@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The run-time cave cover (2026-10-20): the cave's counterpart of the surface's blade grass and detail scatter. Carved caves'
+	/// The run-time cave cover: the cave's counterpart of the surface's blade grass and detail scatter. Carved caves'
 	/// rock is a mesh, not a heightmap, and the terrain is holed under them, so nothing small and dense grew inside; this
 	/// scatters it — moss and glow moss, gravel and grit, mushrooms and glowcaps, bones, guano, pearls, mud, root litter, frost,
 	/// basalt grit, sulphur, ember glints, lichen, glowing specks, bracket fungi, mineral glints, seeps, soda straws, roots,
@@ -379,7 +379,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// A player cannot re-target an unreadable mesh's index buffer (it holds no CPU copy to make it again: "index buffer is
-		/// null", 2026-11-03), and the stored pieces are unreadable, so a player reads only bakes; the editor reads either.
+		/// null"), and the stored pieces are unreadable, so a player reads only bakes; the editor reads either.
 		/// </remarks>
 		private static CaveCoverRenderer.Piece TakeOn(Cave cave, MeshFilter filter, Bounds bounds)
 		{

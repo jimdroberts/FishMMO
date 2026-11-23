@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The rock as the cut ships it, buried faces dropped, has no hole a player in the cave can see through (2026-10-21: "We see
+	/// The rock as the cut ships it, buried faces dropped, has no hole a player in the cave can see through ("We see
 	/// issues around these coordinates with cave walls", a lava tube's branch beside a cavern on Moron 2): every open edge left by
 	/// the cull lies on a face that looks out at the hill's rock, none on a face that looks out at the cave. On the same synthetic
 	/// escarpment as PointOfInterestCaveTests.
@@ -82,7 +82,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheArchsPullFadesOut_NeverLetsGoWithAStep()
 		{
-			// 2026-10-21 (Moron 2's lava tube): the mouth's arch (CaveSystem.ArchAt, read through by everything that reads the
+			// Moron 2's lava tube: the mouth's arch (CaveSystem.ArchAt, read through by everything that reads the
 			// field) drew points in toward a narrow second mouth from 30 m along its face and let them go a step further on, so the
 			// void jumped by metres there, and a ghost of the passage beside it ended in a torn skin of rock. Round every mouth,
 			// out past where the arch reaches, the pull moves smoothly: points a quarter metre apart are moved alike.
@@ -192,7 +192,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void ALinkAlongASteepHillsideKeepsItsDownhillWallUnderTheRock()
 		{
-			// 2026-10-26 (Moron 2, a link joining two caves under a 60° hillside): the link walker tested the rock only over the
+			// Moron 2, a link joining two caves under a 60° hillside: the link walker tested the rock only over the
 			// bore's middle, so a link run along the hill's contour kept 3–5 m over its middle and had its downhill wall 2 m out of
 			// the ground. The shell stops a skin under the ground, so there the cave lay open to the sky through a hole metres
 			// across. Walked along a face rising 2 m a metre across its way, every point of its air stays under the rock's skin.

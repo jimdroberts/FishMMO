@@ -10,7 +10,7 @@
 
 /* The figures below are staff reads (the Support policy). A player's sign-in lands here too, the
  * first route their level reaches, so a player gets their own home, built from the reads scoped
- * to their account, rather than a refused request shown as a broken page (2026-11-21). */
+ * to their account, rather than a refused request shown as a broken page. */
 const SUPPORT_LEVEL = 2;
 const OPEN_TICKET_STATUSES = new Set([0, 1, 2]);
 

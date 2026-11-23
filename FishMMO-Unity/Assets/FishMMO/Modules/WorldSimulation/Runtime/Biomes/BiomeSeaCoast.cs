@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The sea's SURFACE in the look of its coast (2026-10-18, phase I2k, decision 32): a small texture over the scene, baked from
+	/// The sea's SURFACE in the look of its coast: a small texture over the scene, baked from
 	/// the scene's biome map when the cut or a repaint writes it, that the ocean shader (FishWaterShading.hlsl FishSeaCoastLook)
 	/// reads once a pixel to tint its shallow, deep, sediment and scatter colours and scale its absorption, fading to the planet's
 	/// own sea (WaterEnvironment's climate colours) offshore. Pure: the bake, its encoding and a CPU mirror of the shader's read.

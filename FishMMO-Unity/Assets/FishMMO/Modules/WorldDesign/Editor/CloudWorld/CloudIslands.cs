@@ -457,7 +457,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How far apart two bridges' ends on one island stay, metres: room for both ends' posts and landings once they move
-		/// inland of the rim (2026-10-15: three bridges met on an islet within two metres, and each one's posts and ropes
+		/// inland of the rim (three bridges met on an islet within two metres, and each one's posts and ropes
 		/// barred the others' landings to a walker).
 		/// </summary>
 		public const float BridgeEndSpacing = 6f;

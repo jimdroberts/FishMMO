@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 68 (2026-10-25, phase I2g-c): the WORLD band on ground layers and landforms (a ground or a landform only on worlds where
+	/// The WORLD band on ground layers and landforms (a ground or a landform only on worlds where
 	/// water stands liquid, or only where it does not). Off (the default) nothing changes: every world admits, no mark.
 	/// </summary>
 	public class BiomeWorldBandTests

@@ -404,7 +404,7 @@ namespace FishMMO.Shared
 
 			// Discover candidate assets
 			var candidates = new List<string>();
-			// Each module keeps its templates in Modules/<Module>/Templates (2026-11-20); they are scanned like Assets/FishMMO/Templates.
+			// Each module keeps its templates in Modules/<Module>/Templates; they are scanned like Assets/FishMMO/Templates.
 			var scanDirectories = new List<string>(SmartGroupScanDirectories);
 			foreach (string moduleTemplates in Directory.GetDirectories("Assets/FishMMO/Modules"))
 			{

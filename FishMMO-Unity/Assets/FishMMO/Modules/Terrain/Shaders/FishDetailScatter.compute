@@ -3,13 +3,13 @@
 // grass. Nothing is resident but the per-terrain block counts and heights; every instance is a deterministic function
 // of its world block, its type's salt and its channel's seed (DetailScatterMath.cs is the CPU mirror; change both
 // together). The output is what the procedural-instancing twins (FishIndirectInstancing.hlsl) already draw: FishInstance
-// matrices and FishVisible entries in per-(type, view) regions, so the same materials draw it as the CPU chunk renderer's did (removed 2026-10-27).
+// matrices and FishVisible entries in per-(type, view) regions, so the same materials draw it as the CPU chunk renderer's did .
 //
 // Per camera, in order:
 //   FishScatterClear      zero every slot's counter
 //   FishScatterGenerate   ONCE per resolution group of DetailScatterAtlas (normally one): one 64-thread group per CPU work
 //                         item (8 x 8 blocks of one terrain), one thread per 2 m block; per painted channel (type) of
-//                         the block (its sparse entries, 2026-10-27) the block's exact count (whole + its coin), and per
+//                         the block (its sparse entries) the block's exact count (whole + its coin), and per
 //                         instance: its place in the block (in one of its painted cells at an edge), the ground height
 //                         and normal, its size from the noise, its turn, ground alignment and slope sink (the chunk
 //                         renderer's rules), distance thinning and the edge fade, frustum / sun-swept cull, append
@@ -49,7 +49,7 @@
 // (DetailScatterSettings.MaxVariants: a variant takes the slot a bush's level would).
 #define SCATTER_VARIANT_STREAM 5u
 #define SCATTER_MAX_VARIANTS 3u
-// The scatter modes (SCATTER-MODES; a channel's two words at cb + 8 and cb + 9, BiomeScatterModeWord in
+// The scatter modes (a channel's two words at cb + 8 and cb + 9, BiomeScatterModeWord in
 // FishMMO.Shared.Biomes, BiomeScatterMode.cs: the CPU mirror, change both together). Both 0 = every mode off: the
 // instance is exactly what it was before the modes existed. The hash streams of a lean's share and a power-law size.
 #define SCATTER_MODE_LEAN_STREAM 8u

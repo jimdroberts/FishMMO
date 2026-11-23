@@ -4,7 +4,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What every character's <see cref="AbilityController"/> reads its speed attributes from (2026-11-21): the attributes
+	/// What every character's <see cref="AbilityController"/> reads its speed attributes from: the attributes
 	/// that shorten an attack, a cast and a cooldown. Each prefab used to author them on its own controller before the
 	/// controller became a part the character adds at wake.
 	/// </summary>

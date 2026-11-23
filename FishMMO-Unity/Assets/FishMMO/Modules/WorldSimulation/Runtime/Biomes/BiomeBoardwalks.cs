@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// Which of a biome's ways are raised boardwalks (<see cref="BiomeTemplate.Boardwalks"/>, 2026-10-18, phase I2i, decision 27):
+	/// Which of a biome's ways are raised boardwalks (<see cref="BiomeTemplate.Boardwalks"/>):
 	/// plank walks on piles with a pole handrail, laid along the way and walked as any deck. Stored by number: append only.
 	/// </summary>
 	/// <remarks>
@@ -14,7 +14,7 @@ namespace FishMMO.Shared.Biomes
 	/// is a marsh biome whose ground is wet throughout; steep stretches (over <see cref="BiomeBoardwalkRules.MaxSlopeDegrees"/>)
 	/// stay on the ground, and rivers are crossed by their bridges and fords as anywhere.
 	/// </para>
-	/// <para>Until 2026-10-18 no way was a boardwalk; <see cref="None"/> (every biome's default) keeps it so.</para>
+	/// <para>Formerly no way was a boardwalk; <see cref="None"/> (every biome's default) keeps it so.</para>
 	/// </remarks>
 	[Flags]
 	public enum BiomeBoardwalks : byte
@@ -30,14 +30,14 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// How a biome's raised ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>, 2026-10-25, phase I2i-b): the plank walk on
+	/// How a biome's raised ways are built (<see cref="BiomeTemplate.BoardwalkStyle"/>): the plank walk on
 	/// piles of I2i, or one of the country walks the biome drafts name. Stored by number: append only. The streets of a settlement
 	/// keep the plank walk between its houses whatever the style; the style is the biome's routed ways' (its roads, paths and trails).
 	/// </summary>
-	/// <remarks>Until 2026-10-25 every boardwalk was planked; <see cref="Planked"/> (every biome's default) keeps it so.</remarks>
+	/// <remarks>Formerly every boardwalk was planked; <see cref="Planked"/> (every biome's default) keeps it so.</remarks>
 	public enum BiomeBoardwalkStyle : byte
 	{
-		/// <summary>The plank walk (I2i): split planks across stringers on bents of two driven piles, 0.9 m up, a pole handrail.</summary>
+		/// <summary>The plank walk: split planks across stringers on bents of two driven piles, 0.9 m up, a pole handrail.</summary>
 		Planked = 0,
 		/// <summary>A passerella (Farmland): oak planks on stub piles 0.3 m over a wet meadow, one pole rail.</summary>
 		Passerella = 1,

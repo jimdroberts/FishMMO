@@ -984,7 +984,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void DiscsAreDrawnLifeSizeUnlessAProfileAsksOtherwise()
 		{
-			// Decided 2026-09-17: life-size by default — a moon is as big as its radius and
+			// Decided: life-size by default — a moon is as big as its radius and
 			// distance make it — with a toggle for a flattered sky.
 			SkyProfile profile = Make<SkyProfile>("Sky");
 			LogAssert.IsFalse(profile.LargerThanLife, "life-size is the default");
@@ -1101,7 +1101,7 @@ namespace FishMMO.UnitTests.Weather
 		{
 			/* Where a strike lands and whether it happens is the patch's and the slot's, not the viewer's:
 			 * it was placed at an angle and distance from each viewer, so two players saw the same flash
-			 * kilometres apart (audit 2026-10-06). */
+			 * kilometres apart. */
 			WeatherTimeline timeline = LightningTimeline();
 			WeatherSample air = Thundering(1f);
 			var here = new List<LightningStrike>();

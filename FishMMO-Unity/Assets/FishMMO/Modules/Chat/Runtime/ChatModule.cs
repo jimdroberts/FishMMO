@@ -5,7 +5,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Chat module (2026-11-20): conversation between players. On the server its <c>ChatChannelSystem</c> takes the
+	/// The Chat module: conversation between players. On the server its <c>ChatChannelSystem</c> takes the
 	/// lines the core chat intake accepts and routes them to their channels; on the client the chat window shows them.
 	/// </summary>
 	/// <remarks>

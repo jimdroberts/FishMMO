@@ -2,7 +2,7 @@ namespace FishMMO.Shared.Weather
 {
 	/// <summary>
 	/// The weather at a place and tick, as gameplay reads it: the frame of channels, the air, the temperature and the
-	/// shelter. Core vocabulary (Phase 4 of the core and modules plan, 2026-11-17).
+	/// shelter. Core vocabulary.
 	/// </summary>
 	/// <remarks>
 	/// Predicted exposure, buff volumes, AI shelter and spawn conditions read this through <see cref="WeatherQuery"/>; the

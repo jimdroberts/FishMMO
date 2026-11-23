@@ -13,7 +13,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// The Chat module's channel system state: the cross-server pump, the channel handlers, persistence and the batched
-	/// outbound world messages. Split from the core chat intake's data with the module (2026-11-20).
+	/// outbound world messages. Split from the core chat intake's data with the module.
 	/// </summary>
 	public class ChatChannelRuntimeData : RuntimeDataContainer, IChatChannelRuntimeData
 	{

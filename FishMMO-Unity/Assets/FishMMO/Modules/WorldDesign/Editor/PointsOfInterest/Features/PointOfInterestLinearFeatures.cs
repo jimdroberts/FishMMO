@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The linear features of a scene (2026-10-18, phase I2f, decisions 23 and 29): each biome's hedges, walls, fences, rows of trees,
+	/// The linear features of a scene: each biome's hedges, walls, fences, rows of trees,
 	/// water channels and clearance rows (<see cref="BiomeTemplate.LinearFeatures"/>, <see cref="BiomeLinearStyle"/>) laid along the
 	/// lines its country is divided by, as baked props in the scene's point-of-interest prop set.
 	/// </summary>
@@ -237,7 +237,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A rectangle's four sides (pure; a field or a fold: centre, yaw degrees, size along its own x and z), each moved out by
 		/// <paramref name="outset"/> metres, the gate in the side whose outward normal faces <paramref name="toward"/> most (the
 		/// settlement), the same rule as the kit's field fence. Order: +z, −z, +x, −x, as the fence's. Each runs round the rectangle the
-		/// same way, its inside on the left (2026-10-19): every corner is one side's end and the next's start, so a fence whose modules
+		/// same way, its inside on the left: every corner is one side's end and the next's start, so a fence whose modules
 		/// carry their post at their start has exactly one post on each, and a gate swung to its left swings in.
 		/// </summary>
 		public static Side[] RectangleSides(Vector2 centre, float yaw, Vector2 size, Vector2 toward, float outset = 0f)
@@ -514,7 +514,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Lays a style along a line an outside builder found (the terraced fields' steps and lips, an orchard's rows, a garden's bed
-		/// edging, a baulatura's ditch banks; I2j-b): the same laying as every other place, seeded by <paramref name="seed"/>. Inside
+		/// edging, a baulatura's ditch banks): the same laying as every other place, seeded by <paramref name="seed"/>. Inside
 		/// <paramref name="ownField"/> (a field's centre, yaw and size) its own claim and keep-out stop nothing; <paramref name="seat"/>,
 		/// where given, is the height each module is seated at (a terrace wall on the bench below its step) in place of the ground's.
 		/// Given <paramref name="joins"/>, its modules are queued there to be laid with the other lines meeting them (a yard's runs: the
@@ -578,7 +578,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return 0;
 			}
-			// The last placing's channel lines go: this one stores its own (2026-10-18, I2j-b; a scene with none keeps none).
+			// The last placing's channel lines go: this one stores its own (a scene with none keeps none).
 			ChannelMarginPaint.Clear(scene);
 			SceneBiomeMap map = string.IsNullOrEmpty(terrainFolder) || string.IsNullOrEmpty(request.SceneName) ? null
 				: AssetDatabase.LoadAssetAtPath<SceneBiomeMap>($"{terrainFolder}/{WorldEditorAssets.Sanitize(request.SceneName)} Biome Map.asset");
@@ -632,7 +632,7 @@ namespace FishMMO.Shared.WorldDesign
 			laid += LayWoodEdges(scope, biomes);
 			laid += LaySiteBounds(scope);
 			laid += LayFolds(scope);
-			// The later drafts' places (2026-10-26, I2f-b): camps' windbreaks and a frontier across the scene.
+			// The later drafts' places: camps' windbreaks and a frontier across the scene.
 			laid += LayWindbreaks(scope);
 			laid += LayFrontiers(scope, biomes);
 			laid += LayChannels(scope);
@@ -664,9 +664,9 @@ namespace FishMMO.Shared.WorldDesign
 			public List<ScenePath> Ways;
 			/// <summary>The lane ditches laid so far (their pounds' lake ids follow the leats').</summary>
 			public int DitchCount;
-			/// <summary>The way the scene's prevailing wind blows, on the plan (zero on an airless world; 2026-10-26, I2f-b windbreaks).</summary>
+			/// <summary>The way the scene's prevailing wind blows, on the plan (zero on an airless world, I2f-b windbreaks).</summary>
 			public Vector2 WindTo;
-			/// <summary>How many of each capped form the scene has laid (BiomeLinearFeatures.SceneCapOf; 2026-10-26, I2f-b).</summary>
+			/// <summary>How many of each capped form the scene has laid (BiomeLinearFeatures.SceneCapOf).</summary>
 			public readonly Dictionary<BiomeLinearForm, int> Capped = new Dictionary<BiomeLinearForm, int>();
 			/// <summary>The settlements a great canal's laterals already water (their own channel styles are not laid again).</summary>
 			public readonly HashSet<int> Watered = new HashSet<int>();
@@ -1034,7 +1034,7 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						layer.Report();
 						laid += layer.Laid;
-						// Its pen kept as turf (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it.
+						// Its pen kept as turf (PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it.
 						if (layer.Laid > 0)
 						{
 							scope.Claims?.Enclose(centre, bearing, FoldSize, turf: true);
@@ -1213,7 +1213,7 @@ namespace FishMMO.Shared.WorldDesign
 						// Channels are carried by their own machinery (LayChannels, LayDitch).
 						break;
 					case BiomeLinearKind.Markers:
-						// Set one by one at their spacing (2026-10-26, I2f-b, PointOfInterestLinearFeatures.Forms.cs).
+						// Set one by one at their spacing (PointOfInterestLinearFeatures.Forms.cs).
 						Markers(line);
 						break;
 					default:
@@ -1242,7 +1242,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool[] kept = Kept(modules, k => ModuleBlocked(stations[k].At, stations[k + 1].At), gateModule, seed ^ lines * 0x3141, style.Breaks + (Broken ? 0.35f : 0f));
 				if (style.Form == BiomeLinearForm.BrickBarrier)
 				{
-					// A frontier's barrier is broken through every 40–200 m besides (2026-10-26, I2f-b).
+					// A frontier's barrier is broken through every 40–200 m besides.
 					bool[] breached = Breaches(modules, piece.ModuleLength, seed ^ lines * 0x2718);
 					for (int k = 0; k < modules; k++)
 					{
@@ -1264,7 +1264,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					int v = style.Form == BiomeLinearForm.Rail ? (BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 7)) < 0.5f ? 0 : 1)
-						// A frontier's barrier stands or has slumped module by module (2026-10-26, I2f-b).
+						// A frontier's barrier stands or has slumped module by module.
 						: style.Form == BiomeLinearForm.BrickBarrier ? (BiomeLinearFeatures.Unit(BiomeLinearFeatures.Hash(seed, k, lines, 7)) < 0.6f ? 1 : 0)
 						: variant;
 					GameObject prefab = StructureKit.Prefab(id, v);

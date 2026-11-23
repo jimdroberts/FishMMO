@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// What others left in the caves and mines (2026-10-20, caves livened): where <see cref="CaveStory.Plan"/> puts the remains of the
+	/// What others left in the caves and mines (caves livened): where <see cref="CaveStory.Plan"/> puts the remains of the
 	/// lost, carvings, falls, a mine's track and tubs and a hidden cache — the same every time, sparse, only at dead ends where a
 	/// way is filled, track only on a mine's level runs, carvings only in natural rock, nothing by a mouth or in a site's own
 	/// chamber — and the art the dressing lays them with (StructurePieces.CaveStory.cs): cold, measured as the placer is told,

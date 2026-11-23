@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The scene's area as a kind sees it (2026-10-25): each biome's share of the scene's cells times its weight for the kind
+		/// The scene's area as a kind sees it: each biome's share of the scene's cells times its weight for the kind
 		/// (<see cref="PointOfInterestBiome.WeightOf"/>), a cell with no biome at the kind's default. Weight 0 counts nothing, 0.2 a
 		/// fifth and 2 twice over, so a biome's favoured kinds turn up more and a kind it does not host is not squeezed onto the
 		/// scene's other ground at the whole scene's count, as it was while the weight only ranked the cells.
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// How deep a point lies under the water an underwater kind stands in: below a lake's own level where the kind lies under
 			/// lakes (<see cref="PointOfInterestKindRule.InLakes"/>) and a lake covers it, else below the sea's (NaN with no sea of
-			/// water), exactly as every sunken kind was sited before (decision 35 (d), 2026-10-18).
+			/// water), exactly as every sunken kind was sited before.
 			/// </summary>
 			private float UnderwaterDepth(PointOfInterestKindRule rule, float east, float north, float ground, WaterKind water)
 			{
@@ -90,12 +90,12 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The depth band an underwater kind stands in at a cell: its biome's own under the sea (BiomeTemplate.UnderwaterSiteDepth,
-			/// 2026-10-25, phase I2m, decision 36 (b): an abyss's wrecks at 6 000 m), else the kind's, as every sunken kind was sited
+			/// An abyss's wrecks at 6 000 m), else the kind's, as every sunken kind was sited
 			/// before; always the kind's under a lake.
 			/// </summary>
 			private Vector2 DepthBand(PointOfInterestKindRule rule, int cell)
 			{
-				// Afloat (2026-10-25): the kind's own band, never the biome's floor-site depths.
+				// Afloat: the kind's own band, never the biome's floor-site depths.
 				if (rule.Afloat)
 				{
 					return new Vector2(rule.MinDepth, rule.MaxDepth);
@@ -146,7 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 					PlaceTidalIslands(rule, budget);
 					return;
 				}
-				// A kind under lakes too (decision 35 (d): InLakes) is sited under a lake by its own level even with no sea.
+				// A kind under lakes too (InLakes) is sited under a lake by its own level even with no sea.
 				if (rule.Underwater && (!Input.HasSea || !Input.SeaIsWater) && !(rule.InLakes && Input.Water != null && Input.Water.SurfaceAt != null))
 				{
 					return;
@@ -275,7 +275,7 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							continue;
 						}
-						// Adrift sites (2026-10-25): far out on the open sea only.
+						// Adrift sites: far out on the open sea only.
 						if (rule.OffshoreMetres > 0f && (!Input.HasSea || G.LandDistance[i] < rule.OffshoreMetres))
 						{
 							continue;
@@ -285,7 +285,7 @@ namespace FishMMO.Shared.WorldDesign
 						{
 							continue;
 						}
-						// By a landform a detector finds (2026-10-27: a pass fort at its pass, a cairn on its peak), the nearer the better.
+						// By a landform a detector finds (a pass fort at its pass, a cairn on its peak), the nearer the better.
 						float landform = 0f;
 						if (rule.NearDetector != PointOfInterestDetector.None)
 						{
@@ -459,7 +459,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (rule.Underwater)
 					{
-						// Under its water all over: a lake's own level for a kind that lies under lakes (decision 35 (d)), else the sea's.
+						// Under its water all over: a lake's own level for a kind that lies under lakes, else the sea's.
 						if (rule.InLakes ? !(UnderwaterDepth(rule, x, z, h, Input.Water?.KindAt != null ? Input.Water.KindAt(x, z) : WaterKind.None) >= 1f) : h > Input.SeaLevel - 1f)
 						{
 							return false;
@@ -826,7 +826,7 @@ namespace FishMMO.Shared.WorldDesign
 							}
 							uint hash = Hash(Input.Seed, (int)rule.Kind, Mathf.RoundToInt(bx), Mathf.RoundToInt(bz));
 							float score = weight * (1f - 0.25f * Mathf.Abs(bank - StructurePieces.RiverBankFreeboard)) + 0.5f * Unit(Mix(hash ^ 0x5C0Eu));
-							// The floor at the freeboard its wheel is hung for (2026-10-15: "Watermills seem to sink into the ground"):
+							// The floor at the freeboard its wheel is hung for ("Watermills seem to sink into the ground"):
 							// seated on the bank's own height, a mill on a 3 m bank turned its wheel in the air, and its pad-less yard
 							// rose behind it over its plinth. The pad levels the yard to this floor (PointOfInterestPad.Shore).
 							float floor = float.IsNaN(surface) ? ground : surface + StructurePieces.RiverBankFreeboard;

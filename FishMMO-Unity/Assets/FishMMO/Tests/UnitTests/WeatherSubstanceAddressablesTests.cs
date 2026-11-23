@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	/// there. A biome's <c>Emits</c> reference brings its own substance in directly, so emission works
 	/// either way — but a substance nothing references is never cached, and a world condensing it falls
 	/// back to the water typing: methane drawn as rain streaks that wet the ground. Every substance
-	/// in the project had no entry on 2026-10-02.
+	/// in the project had no entry.
 	/// </para>
 	/// <para>
 	/// The same failure as <see cref="BiomeAddressablesTests"/>, and the same cause: assets made by a

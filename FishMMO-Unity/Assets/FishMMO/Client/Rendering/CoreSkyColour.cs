@@ -6,7 +6,7 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// A plain sky colour for a world with no sky (Phase 4 of the core and modules plan, 2026-11-18): the sky, its sun, clouds and
+	/// A plain sky colour for a world with no sky: the sky, its sun, clouds and
 	/// weather are the World Simulation module's, and without it a world scene's cameras cleared to black. While a world scene is
 	/// loaded and nothing has set a sky material (<c>RenderSettings.skybox</c>), each game camera clears to this colour instead;
 	/// when a sky is drawn (the module's, or a scene's own skybox) or the world is left, the camera gets its own colour back.

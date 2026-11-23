@@ -5,7 +5,7 @@ namespace FishMMO.UnitTests.Harness
 {
 	/// <summary>
 	/// Writes a value and reads it back through FishNet's generic serializers, after registering the ones its codegen
-	/// produced (2026-11-20: lifted out of the Commerce module's knowledge wire tests so every module's wire test shares it).
+	/// produced (lifted out of the Commerce module's knowledge wire tests so every module's wire test shares it).
 	/// </summary>
 	public static class WireRoundTrip
 	{

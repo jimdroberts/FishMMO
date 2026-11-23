@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// What the core character save reads of a live pet (2026-11-20: pets are the Pets module's). The save writes a pet's
+	/// What the core character save reads of a live pet (pets are the Pets module's). The save writes a pet's
 	/// row, attributes and buffs with the owner's own rows, under the owner's version, so the capture stays in the core.
 	/// </summary>
 	public interface IPersistedPet : ICharacter

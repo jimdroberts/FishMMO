@@ -52,7 +52,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string CrackedEarth = "CrackedEarth";
 		public const string Flagstone = "Flagstone";
 
-		// ── Added by the vegetation expansion (2026-10-10) ──
+		// ── Added by the vegetation expansion ──
 		// No biome paints with one until the spec names it.
 
 		/// <summary>Living sphagnum carpet of a raised bog: red, green and ochre cushions in hummocks, wet between.</summary>
@@ -76,7 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Titan's organic dune sand: dark orange-brown tholin grains in long ripples.</summary>
 		public const string TholinDune = "TholinDune";
 
-		// ── Paths (2026-10-10) ── The ground a way wears down to: what is under a biome's cover, packed by feet and
+		// ── Paths ── The ground a way wears down to: what is under a biome's cover, packed by feet and
 		// wheels (SurfaceCatalogue.PathGroundFor). Never painted by a biome's splat; the path overlay draws them.
 
 		/// <summary>Trodden loam under grass and moss: dark, packed, a little grit worked up through it.</summary>
@@ -100,7 +100,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A forest path: dark packed earth with the odd leaf and needle on it.</summary>
 		public const string PathLitter = "PathLitter";
 
-		// ── Jungle + Bamboo Forest (biome rounds, 2026-10-26): the Edo-Yoruba rainforest's and the Heian bamboo hills' own grounds. ──
+		// ── Jungle + Bamboo Forest: the Edo-Yoruba rainforest's and the Heian bamboo hills' own grounds. ──
 
 		/// <summary>Bronze leaf litter: big leathery bronze and black-brown leaves over red earth, white mycelium threads, winged seeds.</summary>
 		public const string JungleFloorBronze = "JungleFloorBronze";
@@ -165,7 +165,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Arc gravel: andesite, white granite, green schist and the odd red chert.</summary>
 		public const string GravelArc = "GravelArc";
 
-		// ── Forest (biome round, 2026-10-26): the primeval beech-and-fir forest's own grounds (decision 12; until I9's variants
+		// ── Forest: the primeval beech-and-fir forest's own grounds (until the later variants
 		// of a recipe, each its own recipe). ──
 
 		/// <summary>Beech-mast litter: copper beech leaves, tan husks and acorns, flecks of moss on a dark humus.</summary>
@@ -197,7 +197,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Sandstone and black flint shingle on a forest brook's bars.</summary>
 		public const string GravelSandstoneFlint = "GravelSandstoneFlint";
 
-		// ── Woodland (biome round, 2026-10-26): the managed lowland wood's own grounds, on chalk and flint. ──
+		// ── Woodland: the managed lowland wood's own grounds, on chalk and flint. ──
 
 		/// <summary>Grazed wood-pasture turf of bent and fescue, fallen oak leaves, acorn cups, chalk crumbs and molehills.</summary>
 		public const string GrassWoodPasture = "GrassWoodPasture";
@@ -230,8 +230,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Iron-stained flint gravel with white chalk pebbles.</summary>
 		public const string GravelFlint = "GravelFlint";
 
-		// ── Coastal Water (biome round, 2026-10-26): the Celtic Atlantic shelf's own grounds, painted under the sea (decision 12;
-		// until I9's variants of a recipe, each its own recipe). ──
+		// ── Coastal Water: the Celtic Atlantic shelf's own grounds, painted under the sea
+		// (until the later variants of a recipe, each its own recipe). ──
 
 		/// <summary>Atlantic shell-gravel sand in tide megaripples: broken shell, pink maerl and slate grit.</summary>
 		public const string SandShellGravel = "SandShellGravel";
@@ -266,7 +266,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Killas shingle: flat grey slate and quartz.</summary>
 		public const string GravelKillas = "GravelKillas";
 
-		// ── Ocean (biome round, 2026-10-26): the shelf edge and continental slope's own grounds, painted under the sea. ──
+		// ── Ocean: the shelf edge and continental slope's own grounds, painted under the sea. ──
 
 		/// <summary>Nephrops ground: warm grey-brown slope mud cratered by burrow mouths, foraminifera specks.</summary>
 		public const string MudNephrops = "MudNephrops";
@@ -299,8 +299,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Bar gravel of flat honey sandstone chips and mudstone.</summary>
 		public const string GravelSandstoneChip = "GravelSandstoneChip";
 
-		// ── Tundra (biome round, 2026-10-26): the treeless arctic's own grounds: dwarf-shrub mat, ice-wedge polygons, frost-sorted circles, tussock,
-		// fell-field, gneiss (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Tundra: the treeless arctic's own grounds: dwarf-shrub mat, ice-wedge polygons, frost-sorted circles, tussock,
+		// fell-field, gneiss (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>The tundra's dwarf-shrub and lichen mat: olive-russet mottle of dwarf birch, snow lichen, bearberry red, cotton tufts.</summary>
 		public const string LichenTundraMat = "LichenTundraMat";
 		/// <summary>An ice-wedge polygon mire: sedgy moss cells 8 m across, dark wet troughs between raised pale lichen rims.</summary>
@@ -336,8 +336,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Outwash bar gravel of basalt and gneiss, flecked with driftwood bark.</summary>
 		public const string GravelOutwashBark = "GravelOutwashBark";
 
-		// ── Ice Sheet (biome round, 2026-10-26): the continental ice cap's own grounds: katabatic wind-slab, glaze, blue ice, charnockite nunataks,
-		// and the Thin air band's Mars-cap ices (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Ice Sheet: the continental ice cap's own grounds: katabatic wind-slab, glaze, blue ice, charnockite nunataks,
+		// and the Thin air band's Mars-cap ices (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Katabatic wind-slab: hard snow combed into ripples along the wind, undercut prows in shadow, glitter.</summary>
 		public const string SnowKatabatic = "SnowKatabatic";
 		/// <summary>A thin-aired polar cap's layered deposit: ice and dust couplets, frost streaks.</summary>
@@ -381,8 +381,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Nunatak scree shingle: angular rinded charnockite.</summary>
 		public const string GravelNunatakShingle = "GravelNunatakShingle";
 
-		// ── Glacier (biome round, 2026-10-26): the valley glacier's own grounds: ablation ice, firn, icefall, polished greenstone, moraine till, the
-		// debris tongue and forefield (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Glacier: the valley glacier's own grounds: ablation ice, firn, icefall, polished greenstone, moraine till, the
+		// debris tongue and forefield (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Bare summer ablation ice: blue and white foliation bands, mauve ice-algae dusk, cryoconite dots in azure rims, wind grit.</summary>
 		public const string IceAblation = "IceAblation";
 		/// <summary>A firn basin: snow ribbed by downslope melt runnels, grey dust veils, avalanche balls.</summary>
@@ -420,8 +420,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A thin-aired firn: dust rimed with carbon-dioxide frost.</summary>
 		public const string FrostDustRimed = "FrostDustRimed";
 
-		// ── Alpine Meadow (biome round, 2026-10-26): the Carpathian high pastures' own grounds: bent-grass turf, hay meadow, mugo heath,
-		// flysch ribs, late snow and melt-turf, spring flushes, karren (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Alpine Meadow: the Carpathian high pastures' own grounds: bent-grass turf, hay meadow, mugo heath,
+		// flysch ribs, late snow and melt-turf, spring flushes, karren (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Polonyna turf: grazed bent and red fescue under a mauve haze, arnica, gentian, flysch chips and sheep pellets.</summary>
 		public const string GrassMeadowPolonyna = "GrassMeadowPolonyna";
 		/// <summary>An uncut flower hay-meadow: tall wind-combed grass, hay wisps, white and red clover, violet rampion.</summary>
@@ -459,7 +459,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Worn grooves and cut steps in bare limestone, grit in the hollows.</summary>
 		public const string PathKarrenSteps = "PathKarrenSteps";
 
-		// ── Mountain Slope (biome round, 2026-10-26): the Afromontane cloud forest's own grounds: moss-sleeved humus, kikuyu glades,
+		// ── Mountain Slope: the Afromontane cloud forest's own grounds: moss-sleeved humus, kikuyu glades,
 		// red nitisol, the frost-moor heath, phonolite ledges, the warm coffee floor. ──
 		/// <summary>Cloud-forest humus: dark leaflet litter, usnea tufts, moss flecks, podocarp needles, red earth.</summary>
 		public const string ForestFloorCloudHumus = "ForestFloorCloudHumus";
@@ -496,7 +496,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Phonolite stepping-stones sunk in the moss.</summary>
 		public const string PathPhonoliteSteps = "PathPhonoliteSteps";
 
-		// ── Scree (biome round, 2026-10-26): the moving stone of the summits' own grounds: fine scree, openwork talus, block streams,
+		// ── Scree: the moving stone of the summits' own grounds: fine scree, openwork talus, block streams,
 		// rock-glacier skin, fell-field nets, late snow, cone-toe loam, breathing talus, wedge spoil, and the thin and airless worlds' talus. ──
 		/// <summary>Fine scree at the angle of rest: salt-and-pepper grus-and-chip, buff grus, biotite glints.</summary>
 		public const string GravelFineScree = "GravelFineScree";
@@ -539,9 +539,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Stepping blocks across the talus: flat-topped blocks levered level, chinked with chips.</summary>
 		public const string PathSteppingBlocks = "PathSteppingBlocks";
 
-		// ── Scrubland (biome round, 2026-10-26): the Sonoran bajadas' own grounds: rotted-granite loam, creosote flats, caliche benches,
+		// ── Scrubland: the Sonoran bajadas' own grounds: rotted-granite loam, creosote flats, caliche benches,
 		// grus slopes, black malpaís, the mesquite bosque floor, banded mylonite fronts, braided wash sand and the canal builders' ways
-		// (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Bajada loam: granite-sand loam with angular pink feldspar, quartz, gravel stringers and caliche flecks, rain-pocked.</summary>
 		public const string SoilBajadaLoam = "SoilBajadaLoam";
 		/// <summary>A creosote flat: pale silty desert loam, a thin mixed-dark pebble lag, white bursage leaf litter, faint polygon cracks.</summary>
@@ -573,8 +573,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Wash bar gravel: pink granite, grey gneiss, black basalt, white quartz and caliche lumps.</summary>
 		public const string GravelWashCobble = "GravelWashCobble";
 
-		// ── Savanna (biome round, 2026-10-26): the Zimbabwe plateau's own grounds: tawny veld over granite loam, sandveld gruss, mopane
-		// clay, greenstone red earth, dwala slabs, vlei turf, the Matopo cliffs, sand rivers, pans and the cattle roads (decision 12). ──
+		// ── Savanna: the Zimbabwe plateau's own grounds: tawny veld over granite loam, sandveld gruss, mopane
+		// clay, greenstone red earth, dwala slabs, vlei turf, the Matopo cliffs, sand rivers, pans and the cattle roads. ──
 		/// <summary>Tawny veld: grass litter and straw stubs over red-brown granite loam, quartz grit and seed husks.</summary>
 		public const string GrassDryTawnyVeld = "GrassDryTawnyVeld";
 		/// <summary>Granite sandveld: pale grey-buff gruss of quartz and pink feldspar, biotite flecks.</summary>
@@ -608,7 +608,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Reef-and-ironstone bar pebbles: white quartz, black ironstone and schist.</summary>
 		public const string GravelReefIronstone = "GravelReefIronstone";
 
-		// ── Grassland (biome round, 2026-10-26): the Pannonian puszta's own grounds: meadow-steppe sward on black earth, goldbeard, blown sand, szik soda pans, loess banks and walls (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Grassland: the Pannonian puszta's own grounds: meadow-steppe sward on black earth, goldbeard, blown sand, szik soda pans, loess banks and walls (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Meadow-steppe sward: brome and beard-grass combed one way by the wind, dead straw, red beard-grass, black earth and banded snail shells.</summary>
 		public const string GrassPusztaSward = "GrassPusztaSward";
 		/// <summary>A goldbeard stand's litter: tall bronze-and-gold swathes, purple spikelets, straw.</summary>
@@ -642,9 +642,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Concretion-and-shell grit, the plain's only gravel: loess dolls, mussel shells, brick crumbs.</summary>
 		public const string GravelConcretionGrit = "GravelConcretionGrit";
 
-		// ── Desert (biome round, 2026-10-26): the West Saharan erg and reg's own grounds: wind-combed erg sand, avalanched slip faces,
+		// ── Desert: the West Saharan erg and reg's own grounds: wind-combed erg sand, avalanched slip faces,
 		// varnished desert pavement, gassi granule corridors, varnished sandstone slabs, the green Sahara's lake marl, the fringe's red
-		// sand sheets, Nubian walls, wadi gravels and the caravan ways (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// sand sheets, Nubian walls, wadi gravels and the caravan ways (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Erg sand: orange-gold aeolian sand combed into wind-aligned ripples, dark heavy-mineral lag in the troughs, quartz glints.</summary>
 		public const string SandErg = "SandErg";
 		/// <summary>A dune's slip face: paler avalanched sand in smooth grainflow tongues, no ripples, a cornice line at the crest.</summary>
@@ -680,9 +680,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A frost-glazed erg (the Frozen variant's): white hoar in the ripple troughs, rime on the crests' lee, varnish dulled.</summary>
 		public const string SandFrostErg = "SandFrostErg";
 
-		// ── Badlands (biome round, 2026-10-26): the Cappadocian fairy-chimney country's own grounds: pumice-ash steppe, rilled and red tuff,
+		// ── Badlands: the Cappadocian fairy-chimney country's own grounds: pumice-ash steppe, rilled and red tuff,
 		// pink wash silt, ash-loam tilth, lapilli fans, the basalt caprock, the banded ignimbrite walls and the ways worn into the tuff
-		// (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Lapilli-ash steppe: pale volcanic regosol, white pumice lapilli, dark lithics, grey bunchgrass tufts, obsidian chips.</summary>
 		public const string AshLapilliSteppe = "AshLapilliSteppe";
 		/// <summary>Rilled tuff: bare banded rose, cream, ochre and white tuff cut by downslope runnels, tafoni pits.</summary>
@@ -722,9 +722,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Salt-baked ash (the Scorched variant's): cracked buff crust under a white efflorescence.</summary>
 		public const string CrackedEarthSaltBaked = "CrackedEarthSaltBaked";
 
-		// ── Salt Flat (biome round, 2026-10-26): the Afar salt plain's own grounds: bedded amole crust in polygon plates, etched margin crust,
+		// ── Salt Flat: the Afar salt plain's own grounds: bedded amole crust in polygon plates, etched margin crust,
 		// brine-edge ooze, the khaki clay pan, the black lava reg and its salted soot sand, the warm springs' cauliflower crust, the cold
-		// band's alkali playa, salt cliffs and the bar roads (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// band's alkali playa, salt cliffs and the bar roads (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Amole crust: hard bedded white halite in metre polygon plates with raised rims, brown mud threads, glints.</summary>
 		public const string SaltAmoleCrust = "SaltAmoleCrust";
 		/// <summary>Etched crust: rain-etched knobbly grey crust with brown mud cores.</summary>
@@ -762,7 +762,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A basalt track: the lava reg cleared to both sides as low windrows, a pale silt floor.</summary>
 		public const string PathBasaltTrack = "PathBasaltTrack";
 
-		// ── Plains (biome round, 2026-10-26): the High Plains prairie's own grounds: mixed-grass, shortgrass and tallgrass swards, sandhills, buffalo wallows, playas, the red Gyp Hills (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Plains: the High Plains prairie's own grounds: mixed-grass, shortgrass and tallgrass swards, sandhills, buffalo wallows, playas, the red Gyp Hills (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Mixed-grass prairie sward: blue-grey wheatgrass and copper little bluestem combed by the wind, silver seed tufts, buffalo chips.</summary>
 		public const string GrassDryMixedPrairie = "GrassDryMixedPrairie";
 		/// <summary>Shortgrass sod: dense curly buffalograss and blue grama, eyelash flags, bare dust, a dog town's clipped rings.</summary>
@@ -804,8 +804,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The scorched reach's dust plain: cracked earth, sparse dead grama.</summary>
 		public const string CrackedDustPlain = "CrackedDustPlain";
 
-		// ── Estuary (biome round, 2026-10-26): the Frisian Wadden's own grounds: schlick, sand flat, zostera flat, pioneer saltings, low and
-		// high marsh, pannes, creek banks, the Kliff, fluid mud, the Kleiweg and the Wattweg (decision 12; until I9's variants of a recipe,
+		// ── Estuary: the Frisian Wadden's own grounds: schlick, sand flat, zostera flat, pioneer saltings, low and
+		// high marsh, pannes, creek banks, the Kliff, fluid mud, the Kleiweg and the Wattweg (until the later variants of a recipe,
 		// each its own recipe). ──
 
 		/// <summary>Schlick: silky grey tidal mud with a wet sheen, ladder ripples, mud-snail specks, bird-foot prints.</summary>
@@ -843,7 +843,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A schill bank: shell ridge of cockle, mussel and tellin with clay balls.</summary>
 		public const string GravelSchill = "GravelSchill";
 
-		// ── Coral Reef, Beach and Abyss (biome round, 2026-10-26): the atoll shelf, the Baltic amber strand and the hadal trench's own grounds (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Coral Reef, Beach and Abyss: the atoll shelf, the Baltic amber strand and the hadal trench's own grounds (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Atoll coral sand: Halimeda coins, red foraminifera and coral crumbs in soft ripples.</summary>
 		public const string SandAtoll = "SandAtoll";
 		/// <summary>The live reef framework: knobbly coral heads in olive, mauve, sage and coralline pink, fish-bite scars.</summary>
@@ -941,7 +941,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Peridotite and pillow gravel: olive-black chips, rust and green.</summary>
 		public const string GravelPeridotiteBar = "GravelPeridotiteBar";
 
-		// ── Steppe (biome round, 2026-10-26): the Sary-Arka's own grounds: feather-grass sward on chestnut earth, wormwood steppe, takyr and sor pans, porphyry grit, kum sand, bobak mounds, dry-valley meadow, frost steppe (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Steppe: the Sary-Arka's own grounds: feather-grass sward on chestnut earth, wormwood steppe, takyr and sor pans, porphyry grit, kum sand, bobak mounds, dry-valley meadow, frost steppe (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Kovyl sward: feather grass and fescue tussocks combed one way, chestnut gaps, silver awn mats, black soil crust, wandering lichen.</summary>
 		public const string GrassDryKovylSward = "GrassDryKovylSward";
 		/// <summary>Chestnut earth trodden round the camps, wells and folds: fine salt flecks, hoof pocks, dung.</summary>
@@ -983,7 +983,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Bar gravel of porphyry, white quartz and grey granite.</summary>
 		public const string GravelPorphyryQuartz = "GravelPorphyryQuartz";
 
-		// ── Hills (biome round, 2026-10-26): the terraced schist hill country's own grounds: sheep pasture, terrace tilth, summer-burnt slopes, broom fells, schist shatter, quartz crests, the cold fells' turf (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Hills: the terraced schist hill country's own grounds: sheep pasture, terrace tilth, summer-burnt slopes, broom fells, schist shatter, quartz crests, the cold fells' turf (until the later variants of a recipe, each its own recipe). ──
 		/// <summary>Sheep-bitten hill pasture: tawny-green fescue, schist chips, mica glints, rust chips, thyme pink, sheep pellets.</summary>
 		public const string GrassHillPasture = "GrassHillPasture";
 		/// <summary>Terrace tilth: hoed schist loam full of flat shards, mica, vine prunings and olive leaves.</summary>
@@ -1019,8 +1019,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Flat schist shingle with white quartz pebbles and rust-stained plates.</summary>
 		public const string GravelSchistShingle = "GravelSchistShingle";
 
-		// ── Wetlands (biome round, 2026-10-26): the Batiha reed marsh's own grounds: reedbed silt, shell marl, buffalo lawn, sabkha levee,
-		// floating raft, dibin silt-sand, river banks, alabaster (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Wetlands: the Batiha reed marsh's own grounds: reedbed silt, shell marl, buffalo lawn, sabkha levee,
+		// floating raft, dibin silt-sand, river banks, alabaster (until the later variants of a recipe, each its own recipe). ──
 
 		/// <summary>Reedbed silt: olive-grey silt under broken culm strips, snail shells, red Azolla flecks.</summary>
 		public const string MudReedbedSilt = "MudReedbedSilt";
@@ -1055,8 +1055,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A shell bar: no stone in the alluvium, only valves, spired shells, rolled clay balls and sherds.</summary>
 		public const string GravelShellBar = "GravelShellBar";
 
-		// ── Mangrove (biome round, 2026-10-26): the Swahili coast's mangal grounds: black mkoko mud, fiddler flat, pencil-root mud, back-
-		// mangal floor, the hypersaline ukanda, raised coral rag, red shamba sand, creek banks (decision 12; until I9's variants of a
+		// ── Mangrove: the Swahili coast's mangal grounds: black mkoko mud, fiddler flat, pencil-root mud, back-
+		// mangal floor, the hypersaline ukanda, raised coral rag, red shamba sand, creek banks (until the later variants of a
 		// recipe, each its own recipe). ──
 
 		/// <summary>Mkoko mud: soft black sulphidic mud under a brown oxidised skin, crab-burrow holes with rust halos, fallen yellow leaves.</summary>
@@ -1094,7 +1094,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Rag rubble and shell: dark jagged rag cobbles, oyster valves, propagules.</summary>
 		public const string GravelRagShell = "GravelRagShell";
 
-		// ── Lake and River (biome round, 2026-10-26): the clear cold lake's and the Rhenish river's own grounds (decision 12; until I9's variants of a recipe, each its own recipe). ──
+		// ── Lake and River: the clear cold lake's and the Rhenish river's own grounds (until the later variants of a recipe, each its own recipe). ──
 
 		/// <summary>Lake strand shingle: flat wave-sorted discs imbricated seaward, a dark wet band at the low edge, algae and chaff specks.</summary>
 		public const string PebblesStrandShingle = "PebblesStrandShingle";
@@ -1157,7 +1157,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>River bleached bar: sun-dried quartz-white gravel, twigs, sand lenses.</summary>
 		public const string GravelBleachedBar = "GravelBleachedBar";
 
-		// Rocky Terrain (biome round, 2026-10-26): the shattered high cold desert of the Pamir's own grounds.
+		// Rocky Terrain: the shattered high cold desert of the Pamir's own grounds.
 		/// <summary>Frost-split hornstone pavement: knife-edged blue-black joints, cordierite knots, a rust skin and yellow and white crust lichens.</summary>
 		public const string RockHornstoneShatter = "RockHornstoneShatter";
 		/// <summary>Hornfels chip aprons: angular splinters with conchoidal glints and white quartz-vein chips.</summary>
@@ -1195,7 +1195,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Braid-bar gravel: sub-rounded mixed cobbles.</summary>
 		public const string GravelBraid = "GravelBraid";
 
-		// Geyser Basin (biome round, 2026-10-26): the hot ground of the Icelandic interior's own grounds.
+		// Geyser Basin: the hot ground of the Icelandic interior's own grounds.
 		/// <summary>Frost-sorted fell-field gravel: basalt grit, rose and cream rhyolite chips, pumice-pale lapilli and obsidian glints.</summary>
 		public const string GravelMelurFell = "GravelMelurFell";
 		/// <summary>Geyserite apron: scalloped micro-rims and beaded popcorn knobs, opal sheen, a pink splash tinge.</summary>
@@ -1243,7 +1243,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Bamboo = "Bamboo";
 		public const string Dead = "Dead";
 
-		// ── Added by the vegetation expansion (2026-10-10) ──
+		// ── Added by the vegetation expansion ──
 
 		/// <summary>Smooth silver-grey bark, faintly wrinkled and lichen-blotched: beech, kapok, baobab, dragon tree.</summary>
 		public const string Smooth = "Smooth";
@@ -1256,7 +1256,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Shaggy reddish fibrous bark in long strips: Joshua tree, cypress, bald cypress, tree fern, banana.</summary>
 		public const string Fibrous = "Fibrous";
 
-		// ── Biome rounds (2026-10-26) ──
+		// ── The biomes' own ──
 
 		/// <summary>Grey-brown scaly plates with resin streaks: the stone pine (Alpine Meadow's Cembra).</summary>
 		public const string CembraPlate = "CembraPlate";
@@ -1276,38 +1276,38 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Powder = "Powder";
 		/// <summary>Pale grey bark broken into small rectangular plates: Savanna's leadwood.</summary>
 		public const string SnakeSkin = "SnakeSkin";
-		// Grassland (biome round, 2026-10-26).
+		// Grassland.
 		/// <summary>A wild pear's dark grey bark broken into small square plates.</summary>
 		public const string Checker = "Checker";
 		/// <summary>Turkey oak bark: deep grey furrows with orange-red fissure floors.</summary>
 		public const string Cerris = "Cerris";
 		/// <summary>White poplar bark: grey-white with black diamond lenticels, dark and furrowed at the foot.</summary>
 		public const string WhitePoplar = "WhitePoplar";
-		// Plains (biome round, 2026-10-26).
+		// Plains.
 		/// <summary>Plains cottonwood bark: deep grey furrows between flat ridges.</summary>
 		public const string CottonwoodRidge = "CottonwoodRidge";
 		/// <summary>Bur oak bark: corky deep ridges.</summary>
 		public const string CorkRidge = "CorkRidge";
 		/// <summary>Osage orange bark: orange-brown fibrous strips.</summary>
 		public const string OsageStrip = "OsageStrip";
-		// Steppe (biome round, 2026-10-26).
+		// Steppe.
 		/// <summary>Steppe elm bark: rough dark grey-brown, deep-furrowed.</summary>
 		public const string Karagach = "Karagach";
 		/// <summary>Saxaul bark: grey-brown, spiral-fissured, very hard.</summary>
 		public const string SaxaulTwist = "SaxaulTwist";
-		// Desert (biome round, 2026-10-26).
+		// Desert.
 		/// <summary>The desert date's grey-brown bark in deep fissures, green under-bark showing in the cracks.</summary>
 		public const string BalanitesFurrow = "BalanitesFurrow";
 		/// <summary>The atil's smooth grey-white bark with dark knots.</summary>
 		public const string AtilPale = "AtilPale";
-		// Badlands (biome round, 2026-10-26).
+		// Badlands.
 		/// <summary>The apricot's red-brown lenticelled bark with amber gum beads.</summary>
 		public const string ApricotScale = "ApricotScale";
 		/// <summary>The oleaster's shaggy grey-brown bark in long strips.</summary>
 		public const string OleasterStrip = "OleasterStrip";
 		/// <summary>The oriental plane's camouflage of flaking cream, olive and grey.</summary>
 		public const string PlaneFlake = "PlaneFlake";
-		// Hills (biome round, 2026-10-26).
+		// Hills.
 		/// <summary>Cork oak bark: thick pale-grey corky ridges.</summary>
 		public const string Cork = "Cork";
 		/// <summary>Stone pine bark: orange-red puzzle plates between grey fissures.</summary>
@@ -1425,7 +1425,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.Frost, 6f, 0.03f, "#b8b0b8", "#d8d0d8", "#f0ecf0", 6, SurfaceMotif.Ridges, 10, 0.025f, 0.6f, "#e8e2e8", "#ffffff", 0.55f, 0.1f, 0.5f),
 			R(Ground.CrackedEarth, 4f, 0.04f, "#6a5034", "#8a6a48", "#a8886a", 6, SurfaceMotif.Cracks, 14, 0.03f, 0.7f, "#3a2a1a", "#4a3424", 0.1f),
 			R(Ground.Flagstone, 4f, 0.04f, "#5a5650", "#7a766e", "#9a968c", 6, SurfaceMotif.Cobbles, 6, 0.04f, 0.8f, "#6a665e", "#aaa69a", 0.2f, 0.1f, 0.8f),
-			// ── The vegetation expansion (2026-10-10) ── Appended, so no other family's order moves (each texture is
+			// ── The vegetation expansion ── Appended, so no other family's order moves (each texture is
 			// seeded by its own family's name anyway, SurfaceSynth).
 
 			// Raised-bog sphagnum: Sphagnum magellanicum's wine-red and S. papillosum's ochre cushions among green
@@ -1462,7 +1462,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Tholin dunes: dark orange-brown organic sand in long ripples, darker grains in the troughs.
 			R(Ground.TholinDune, 4f, 0.03f, "#4a2410", "#7a3e1c", "#a05c2e", 6, SurfaceMotif.Ripples, 16, 0.1f, 0.6f, "#5a2a12", "#9a5a2c", 0.06f, 0.05f, 0.45f,
 				speckles: Hexes("#2e160a"), speckleCount: 600, speckleSize: 0.002f),
-			// ── Paths (2026-10-10) ── What a way wears down to (PathGroundFor). Low relief and fine grain: packed ground has
+			// ── Paths ── What a way wears down to (PathGroundFor). Low relief and fine grain: packed ground has
 			// lost its loose crumb, and what shows is grit and small stones worked up through it, a little shine where pressed.
 
 			// Trodden loam: dark brown packed earth, fine and close, grey grit and the odd pebble.
@@ -1496,7 +1496,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.PathLitter, 3f, 0.015f, "#2a1f15", "#433222", "#5e4733", 6, SurfaceMotif.Leaves, 8, 0.025f, 0.35f, "#5a3a1a", "#9a6a32", 0.15f, 0.15f, 0.8f,
 				motifCount: 400, speckles: Hexes("#6a6258", "#3a2e22"), speckleCount: 800, speckleSize: 0.003f),
 
-			// ── Jungle + Bamboo Forest (biome rounds, 2026-10-26) ── The drafts' palettes and grains; tiles as the families' own.
+			// ── Jungle + Bamboo Forest ── The drafts' palettes and grains; tiles as the families' own.
 			R(Ground.JungleFloorBronze, 3f, 0.04f, "#24160c", "#4a3020", "#725034", 6, SurfaceMotif.Leaves, 8, 0.045f, 0.85f, "#8a5a2a", "#2a1a10", 0.2f, 0.2f, 0.85f,
 				motifCount: 2200, speckles: Hexes("#c8b090", "#e0dccc", "#b0905a", "#7a3a1e"), speckleCount: 700, speckleSize: 0.003f),
 			R(Ground.SoilRedForest, 5f, 0.04f, "#5a2210", "#8a3a1e", "#b4623a", 6, SurfaceMotif.Granular, 36, 0.1f, 0.6f, "#3e1a0c", "#1a1410", 0.15f, 0.1f, 0.8f,
@@ -1551,7 +1551,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandMasaGrus, 2f, 0.02f, "#9a8e74", "#c4b898", "#e4dcc4", 6, SurfaceMotif.Ripples, 10, 0.1f, 0.4f, "#8a7e64", "#ece4d0", 0.15f, 0.1f, 0.5f,
 				speckles: Hexes("#f0ece0", "#c8a090", "#2a2826"), speckleCount: 650, speckleSize: 0.0025f),
 			R(Ground.GravelArc, 2f, 0.03f, "#3a3836", "#6e6a64", "#a8a296", 8, SurfaceMotif.Cobbles, 34, 0.12f, 0.85f, "#5e5c58", "#d8d2c4", 0.35f, 0.15f, 0.85f),
-			// ── Forest (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the
+			// ── Forest ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the
 			// families' own (a motif's size is a share of its tile, so a leaf litter stays a 3 m tile).
 			R(Ground.ForestFloorBeech, 3f, 0.04f, "#2a1810", "#52321a", "#86552c", 6, SurfaceMotif.Leaves, 8, 0.032f, 0.85f, "#7a4220", "#c08a48", 0.2f, 0.2f, 0.85f,
 				motifCount: 2600, speckles: Hexes("#4a3020", "#8a6a30", "#4e6a24"), speckleCount: 600, speckleSize: 0.003f),
@@ -1580,7 +1580,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandHumic, 4f, 0.02f, "#6a5a44", "#8e7c60", "#b09c7c", 6, SurfaceMotif.Ripples, 12, 0.1f, 0.4f, "#5e5040", "#bca888", 0.15f, 0.1f, 0.5f,
 				speckles: Hexes("#d8d0c0", "#4a3018"), speckleCount: 700, speckleSize: 0.0025f),
 			R(Ground.GravelSandstoneFlint, 2f, 0.03f, "#5a4e3e", "#7e705a", "#a2947a", 8, SurfaceMotif.Cobbles, 48, 0.12f, 0.85f, "#2a2826", "#b0a284", 0.2f, 0.1f, 0.85f),
-			// ── Woodland (biome round, 2026-10-26) ── The draft's palettes and grains; tiles as the families' own.
+			// ── Woodland ── The draft's palettes and grains; tiles as the families' own.
 			R(Ground.GrassWoodPasture, 3f, 0.03f, "#2e3c1a", "#4e6a2a", "#7e9a44", 4, SurfaceMotif.Blades, 8, 0.02f, 0.8f, "#3e5a22", "#9ab454", 0.15f, motifCount: 38000,
 				speckles: Hexes("#8a6a30", "#6a5a34", "#e0dccf", "#4a3a28"), speckleCount: 900, speckleSize: 0.003f),
 			R(Ground.ForestFloorCopse, 3f, 0.04f, "#3a2814", "#6a4a26", "#9a7440", 6, SurfaceMotif.Leaves, 8, 0.035f, 0.85f, "#8a6a30", "#c0a048", 0.2f, 0.2f, 0.85f,
@@ -1612,9 +1612,9 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelFlint, 2f, 0.03f, "#6a5a40", "#8a7a5a", "#b8a888", 8, SurfaceMotif.Cobbles, 48, 0.12f, 0.85f, "#3a3430", "#e8e4da", 0.25f, 0.1f, 0.85f,
 				speckles: Hexes("#8a6a3a"), speckleCount: 400, speckleSize: 0.004f),
 
-			// ── Coastal Water (biome round, 2026-10-26) ── The draft's palettes and grains. One motif a recipe: where the draft gives
+			// ── Coastal Water ── The draft's palettes and grains. One motif a recipe: where the draft gives
 			// two (the kelp reef's joints and its coralline crust) the one that reads under water is drawn, the other is a speckle.
-			// LATER (I9 T7): a Honeycomb motif for the Sabellaria reef (fine Cracks cells stand in) and a joint-plus-crust pair.
+			// LATER: a Honeycomb motif for the Sabellaria reef (fine Cracks cells stand in) and a joint-plus-crust pair.
 			R(Ground.SandShellGravel, 4f, 0.03f, "#5e5c50", "#8a8574", "#b4ad98", 6, SurfaceMotif.Ripples, 5, 0.1f, 0.6f, "#4e4c42", "#c4bca6", 0.15f, 0.05f, 0.5f,
 				speckles: Hexes("#e6e0d0", "#c48a9a", "#3a3e44"), speckleCount: 950, speckleSize: 0.003f),
 			R(Ground.DoleriteKelpReef, 6f, 0.3f, "#1c2220", "#36403c", "#5a6660", 4, SurfaceMotif.Clumps, 30, 0.35f, 0.6f, "#c88aa0", "#e2b4c2", 0.35f, 0.15f, 0.8f,
@@ -1643,7 +1643,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#c48a9a", "#ece6dc"), speckleCount: 700, speckleSize: 0.003f),
 			R(Ground.GravelKillas, 2f, 0.03f, "#2a2e32", "#50565c", "#80868a", 8, SurfaceMotif.Cobbles, 40, 0.12f, 0.85f, "#3a3e44", "#e4e0d8", 0.2f, 0.1f, 0.85f),
 
-			// ── Ocean (biome round, 2026-10-26) ── The draft's palettes and grains. LATER (I9 T7): a Craters motif for the Nephrops
+			// ── Ocean ── The draft's palettes and grains. LATER: a Craters motif for the Nephrops
 			// burrow mouths and Ridges-plus-Cobbles for the plough-mark furrows (Granular and Cobbles stand in).
 			R(Ground.MudNephrops, 4f, 0.03f, "#3a342c", "#5e5446", "#847864", 6, SurfaceMotif.Granular, 46, 0.1f, 0.45f, "#24201a", "#6e6252", 0.4f, 0.3f,
 				speckles: Hexes("#c8c0ac", "#24201a"), speckleCount: 500, speckleSize: 0.004f),
@@ -1669,7 +1669,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandCoralGrit, 2f, 0.02f, "#8a867c", "#b0aca0", "#d4d0c4", 6, SurfaceMotif.Granular, 40, 0.1f, 0.5f, "#7a766c", "#e0dcd0", 0.12f, 0.05f,
 				speckles: Hexes("#e8a080"), speckleCount: 150, speckleSize: 0.003f),
 			R(Ground.GravelSandstoneChip, 2f, 0.03f, "#5a4e3c", "#84765c", "#ac9e84", 8, SurfaceMotif.Cobbles, 40, 0.12f, 0.85f, "#3a342e", "#b8aa90", 0.2f, 0.1f, 0.85f),
-			// ── Tundra (biome round, 2026-10-26) ── The draft's palettes and grains; tiles as the families' own, the patterned grounds at their cells'
+			// ── Tundra ── The draft's palettes and grains; tiles as the families' own, the patterned grounds at their cells'
 			// size (polygons 8 m, circles 2.4 m).
 			R(Ground.LichenTundraMat, 3f, 0.03f, "#3a3622", "#66603e", "#928a62", 6, SurfaceMotif.Clumps, 40, 0.3f, 0.65f, "#8a4a24", "#d8d09a", 0.15f, 0.1f, 0.7f,
 				speckles: Hexes("#b02a1c", "#f4f2ea", "#5a6a2e", "#2a2420"), speckleCount: 2600, speckleSize: 0.003f),
@@ -1702,7 +1702,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#e8e8e0"), speckleCount: 600, speckleSize: 0.0025f),
 			R(Ground.GravelOutwashBark, 2f, 0.03f, "#545658", "#7a7e80", "#a2a6a6", 8, SurfaceMotif.Cobbles, 44, 0.12f, 0.85f, "#2a2a2c", "#8e7270", 0.15f, 0.1f, 0.85f,
 				speckles: Hexes("#6a5a48"), speckleCount: 200, speckleSize: 0.004f),
-			// ── Ice Sheet (biome round, 2026-10-26) ── The draft's palettes and grains; the Thin band's own (layered deposits, Swiss-cheese slab, spiral
+			// ── Ice Sheet ── The draft's palettes and grains; the Thin band's own (layered deposits, Swiss-cheese slab, spiral
 			// scarps, red-dust rock).
 			R(Ground.SnowKatabatic, 6f, 0.04f, "#a8b4c4", "#d4dde8", "#f4f7fb", 4, SurfaceMotif.Ridges, 6, 0.04f, 0.55f, "#8e9cb0", "#b8c4d4", 0.5f, 0.1f, 0.45f,
 				speckles: Hexes("#ffffff"), speckleCount: 700, speckleSize: 0.002f),
@@ -1734,7 +1734,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandCharnockiteGrus, 4f, 0.02f, "#5e5444", "#8a7c64", "#b4a68a", 6, SurfaceMotif.Granular, 22, 0.1f, 0.5f, "#4e4434", "#c8a878", 0.12f, 0.1f, 0.5f,
 				speckles: Hexes("#8aa0b8", "#c8a878"), speckleCount: 700, speckleSize: 0.003f),
 			R(Ground.GravelNunatakShingle, 2f, 0.03f, "#4a443a", "#786e5c", "#a4987e", 8, SurfaceMotif.Cobbles, 24, 0.13f, 0.85f, "#8a6a3e", "#b0a488", 0.15f, 0.1f, 0.85f),
-			// ── Glacier (biome round, 2026-10-26) ── The draft's palettes and grains; the Thin air band's dust-mantled lobate ice and rimed dust.
+			// ── Glacier ── The draft's palettes and grains; the Thin air band's dust-mantled lobate ice and rimed dust.
 			R(Ground.IceAblation, 8f, 0.05f, "#4a6e8c", "#8fb4cc", "#dce9f1", 3, SurfaceMotif.Fractured, 5, 0.03f, 0.5f, "#5f92b4", "#eef4f8", 0.6f, 0.15f, 0.5f, warp: 0.15f,
 				speckles: Hexes("#2a2420", "#5ab0e0", "#6a645c", "#8a7a88"), speckleCount: 800, speckleSize: 0.003f),
 			R(Ground.SnowFirnRunnels, 6f, 0.03f, "#a8b6c6", "#d4dee8", "#f2f6fa", 4, SurfaceMotif.Ridges, 14, 0.03f, 0.5f, "#c0cad6", "#fbfdfe", 0.45f, 0.1f, 0.45f,
@@ -1766,8 +1766,8 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#3a4a5a"), speckleCount: 300, speckleSize: 0.004f),
 			R(Ground.IceDustMantled, 8f, 0.05f, "#6a5a4a", "#8e7a66", "#b4a08a", 4, SurfaceMotif.Ridges, 10, 0.06f, 0.6f, "#5a4a3a", "#c4b49e", 0.3f, 0.1f, 0.6f),
 			R(Ground.FrostDustRimed, 6f, 0.03f, "#8a7a6a", "#b4a492", "#dcd2c4", 4, SurfaceMotif.Granular, 20, 0.1f, 0.4f, "#6a5a4a", "#f0e8e0", 0.4f, 0.1f, 0.5f),
-			// ── Alpine Meadow (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the
-			// draft gives them. LATER (I9): the sledge track's two polished skids and the trod's terracette risers as motifs of their own.
+			// ── Alpine Meadow ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the
+			// draft gives them. LATER: the sledge track's two polished skids and the trod's terracette risers as motifs of their own.
 			R(Ground.GrassMeadowPolonyna, 3f, 0.04f, "#3a4424", "#66703a", "#9aa060", 4, SurfaceMotif.Blades, 8, 0.02f, 0.8f, "#4e5a2c", "#a8a86a", 0.15f, motifCount: 32000,
 				speckles: Hexes("#8a6a7a", "#e8a830", "#3a5ac0", "#6a6c5e", "#2a2218"), speckleCount: 1000, speckleSize: 0.003f),
 			R(Ground.GrassFlowerHay, 4f, 0.04f, "#3e4a22", "#6a7a34", "#a4a858", 4, SurfaceMotif.Blades, 8, 0.04f, 0.8f, "#4a5a28", "#b4b468", 0.15f, motifCount: 26000,
@@ -1803,7 +1803,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#8a8478", "#3a2a1a"), speckleCount: 400, speckleSize: 0.004f),
 			R(Ground.PathKarrenSteps, 4f, 0.03f, "#6a6a62", "#9a9a90", "#c8c8be", 6, SurfaceMotif.Cracks, 8, 0.05f, 0.6f, "#4a4a44", "#d4d4ca", 0.25f, 0.1f, 0.8f,
 				speckles: Hexes("#7a7a70"), speckleCount: 500, speckleSize: 0.003f),
-			// ── Mountain Slope (biome round, 2026-10-26) ── The draft's palettes and grains. LATER (I9): the mule road's braided runnels and
+			// ── Mountain Slope ── The draft's palettes and grains. LATER: the mule road's braided runnels and
 			// the root stair's root bars as motifs of their own.
 			R(Ground.ForestFloorCloudHumus, 3f, 0.04f, "#1a160e", "#33291a", "#54442a", 6, SurfaceMotif.Leaves, 8, 0.02f, 0.85f, "#5a3e1e", "#8a6a34", 0.25f, 0.2f, 0.85f,
 				motifCount: 2400, speckles: Hexes("#b8c4a0", "#4a6a22", "#7a5a30", "#7a3a22"), speckleCount: 1200, speckleSize: 0.003f),
@@ -1839,7 +1839,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#3a4a1e"), speckleCount: 400, speckleSize: 0.003f),
 			R(Ground.PathPhonoliteSteps, 3f, 0.03f, "#2a3a16", "#646a5a", "#8a9080", 6, SurfaceMotif.Cobbles, 10, 0.06f, 0.75f, "#3a5a1a", "#a0a494", 0.25f, 0.1f, 0.8f,
 				speckles: Hexes("#3a5a1a"), speckleCount: 600, speckleSize: 0.003f),
-			// ── Scree (biome round, 2026-10-26) ── The draft's palettes and grains; the nets on the sorted-circle motif. LATER (I9): the fine
+			// ── Scree ── The draft's palettes and grains; the nets on the sorted-circle motif. LATER: the fine
 			// scree's slide streaks along the fall line and the nets' SortedStripes motif on 4–14° slopes.
 			R(Ground.GravelFineScree, 6f, 0.05f, "#4e5052", "#7c7d7a", "#aeaca4", 8, SurfaceMotif.Cobbles, 50, 0.1f, 0.85f, "#3a3c3e", "#b8b0a0", 0.15f, 0.1f, 0.85f,
 				speckles: Hexes("#1a1a1a", "#e4e0d6", "#b8b0a0"), speckleCount: 800, speckleSize: 0.003f),
@@ -1874,8 +1874,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelTorrentShingle, 2f, 0.03f, "#4a4c4a", "#767874", "#a4a49c", 8, SurfaceMotif.Cobbles, 22, 0.12f, 0.85f, "#2e2e30", "#b4b4ac", 0.25f, 0.1f, 0.85f),
 			R(Ground.PathSteppingBlocks, 3f, 0.04f, "#4a4a48", "#76746e", "#a09e96", 6, SurfaceMotif.Cobbles, 8, 0.06f, 0.8f, "#2a2a2a", "#b0aea6", 0.2f, 0.1f, 0.85f),
 
-			// ── Scrubland (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T13): the caliche bench's nodular-knob motif and the wash's braid-lens bars (cobbles and ripples stand in), and the
+			// ── Scrubland ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: the caliche bench's nodular-knob motif and the wash's braid-lens bars (cobbles and ripples stand in), and the
 			// loam's downslope rill lines.
 			R(Ground.SoilBajadaLoam, 5f, 0.04f, "#7a5e44", "#a88462", "#ccae88", 6, SurfaceMotif.Granular, 40, 0.1f, 0.6f, "#6a4e38", "#d4b894", 0.15f, 0.1f, 0.75f,
 				speckles: Hexes("#c8907a", "#e8e4dc", "#e4dccc"), speckleCount: 900, speckleSize: 0.003f),
@@ -1907,8 +1907,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelWashCobble, 2f, 0.03f, "#4a3e36", "#8a7a6a", "#c8baa8", 8, SurfaceMotif.Cobbles, 30, 0.12f, 0.85f, "#2a2420", "#e0d8c4", 0.2f, 0.1f, 0.85f,
 				speckles: Hexes("#c8907a", "#e8e4dc", "#2a2420"), speckleCount: 300, speckleSize: 0.005f),
 
-			// ── Savanna (biome round, 2026-10-26) ── The draft's palettes and grains. The burnt veld (the draft's d5) is not painted: the burn
-			// mosaic draws it on the GPU from the shared clock (I2t). LATER (I9 T1): the dwala's onion-skin sheets and gnamma pans as motifs.
+			// ── Savanna ── The draft's palettes and grains. The burnt veld (the draft's d5) is not painted: the burn
+			// mosaic draws it on the GPU from the shared clock. LATER: the dwala's onion-skin sheets and gnamma pans as motifs.
 			R(Ground.GrassDryTawnyVeld, 6f, 0.04f, "#4a3220", "#86643c", "#b8945c", 6, SurfaceMotif.Blades, 30, 0.03f, 0.7f, "#7a4a2a", "#c8a868", 0.15f, 0.1f, 0.75f,
 				motifCount: 24000, speckles: Hexes("#e8e2d6", "#a07a48", "#7a4a2a"), speckleCount: 800, speckleSize: 0.003f),
 			R(Ground.SandGraniteSandveld, 4f, 0.02f, "#6a6052", "#a49686", "#d2c6b4", 6, SurfaceMotif.Granular, 60, 0.1f, 0.5f, "#5a5044", "#dcd0be", 0.15f, 0.1f, 0.6f,
@@ -1940,7 +1940,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#c89a86", "#f0ece4"), speckleCount: 600, speckleSize: 0.0025f),
 			R(Ground.GravelReefIronstone, 2f, 0.03f, "#2a2420", "#7a6e62", "#e6e0d6", 8, SurfaceMotif.Cobbles, 26, 0.12f, 0.85f, "#1a1612", "#f0ece4", 0.25f, 0.1f, 0.85f,
 				speckles: Hexes("#f0ece4", "#1a1612", "#5a6a5a"), speckleCount: 300, speckleSize: 0.005f),
-			// ── Grassland (biome round, 2026-10-26) ── The draft's palettes and grains; the loess wall and bluff vertical, the szik's polygon cracks.
+			// ── Grassland ── The draft's palettes and grains; the loess wall and bluff vertical, the szik's polygon cracks.
 			R(Ground.GrassPusztaSward, 3f, 0.04f, "#3a3c1c", "#6a6a32", "#a09a58", 4, SurfaceMotif.Blades, 8, 0.035f, 0.8f, "#5a6030", "#b0a460", 0.15f, 0.1f, 0.8f, motifCount: 32000,
 				speckles: Hexes("#c0aa6a", "#8a4a30", "#2a2018", "#ece4d4"), speckleCount: 1980, speckleSize: 0.003f),
 			R(Ground.GrassDryGoldbeard, 4f, 0.05f, "#4a3a22", "#8a6a3a", "#c09a5a", 4, SurfaceMotif.Blades, 8, 0.045f, 0.8f, "#7a4a3a", "#d0a858", 0.12f, 0.1f, 0.8f, motifCount: 26000,
@@ -1974,8 +1974,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelConcretionGrit, 2f, 0.03f, "#7a6a50", "#a08c6c", "#c8b490", 8, SurfaceMotif.Cobbles, 40, 0.1f, 0.85f, "#6a5a44", "#d8ccb0", 0.15f, 0.1f, 0.85f,
 				speckles: Hexes("#d0c8b8", "#9a4a30"), speckleCount: 300, speckleSize: 0.004f),
 
-			// ── Desert (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T3): the varnish skin as its own channel on the sandstone and the reg; (I9 T1) the caravan piste's 6–14 braided
+			// ── Desert ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: the varnish skin as its own channel on the sandstone and the reg; the caravan piste's 6–14 braided
 			// trails and the slip face's grainflow tongues as motifs of their own (granular grain and ridges stand in).
 			R(Ground.SandErg, 4f, 0.03f, "#b0743a", "#d49a5a", "#ecc48a", 6, SurfaceMotif.Ripples, 30, 0.1f, 0.6f, "#6a4a32", "#f0c890", 0.12f, 0.05f, 0.4f,
 				speckles: Hexes("#6a4a32", "#f6eedc"), speckleCount: 1200, speckleSize: 0.002f),
@@ -2008,7 +2008,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandFrostErg, 4f, 0.03f, "#9a8a7a", "#c8b8a4", "#e8eaec", 6, SurfaceMotif.Ripples, 30, 0.1f, 0.6f, "#6a5a4a", "#f4f6f8", 0.35f, 0.1f, 0.45f,
 				speckles: Hexes("#e8eaec", "#f6eedc"), speckleCount: 1500, speckleSize: 0.002f),
 
-			// ── Badlands (biome round, 2026-10-26) ── The draft's palettes and grains. LATER (I9 T4): the Rills motif on the bare tuff and the
+			// ── Badlands ── The draft's palettes and grains. LATER: the Rills motif on the bare tuff and the
 			// rut-cut road's twin ruts (strata and granular grain stand in).
 			R(Ground.AshLapilliSteppe, 4f, 0.02f, "#8a7a62", "#b8a688", "#dccdb0", 6, SurfaceMotif.Granular, 48, 0.1f, 0.5f, "#6a5e4a", "#e8dcc4", 0.1f, 0.05f, 0.6f,
 				speckles: Hexes("#f0ece4", "#4a443c", "#8a8e78", "#1e1c1e"), speckleCount: 1540, speckleSize: 0.0025f),
@@ -2046,8 +2046,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.CrackedEarthSaltBaked, 4f, 0.04f, "#9a8670", "#c0a888", "#e0d0b8", 6, SurfaceMotif.Cracks, 12, 0.03f, 0.7f, "#7a6a56", "#f4f0ea", 0.12f, 0.05f, 0.7f,
 				speckles: Hexes("#f4f0ea"), speckleCount: 600, speckleSize: 0.004f),
 
-			// ── Salt Flat (biome round, 2026-10-26) ── The draft's palettes and grains; the amole crust on the polygon motif (its metre plates).
-			// LATER (I9 T1): every ground as Salt Flat's own variant of its family (SaltCrust, Mud, CrackedEarth, Reg, Sand, Gravel, PathSalt,
+			// ── Salt Flat ── The draft's palettes and grains; the amole crust on the polygon motif (its metre plates).
+			// LATER: every ground as Salt Flat's own variant of its family (SaltCrust, Mud, CrackedEarth, Reg, Sand, Gravel, PathSalt,
 			// Flagstone); the hopper rims and the mirror morning's wet sheen (WATER C21) are not drawn.
 			R(Ground.SaltAmoleCrust, 6f, 0.03f, "#b8b2a6", "#dedad0", "#f8f6f0", 6, SurfaceMotif.Polygons, 5, 0.04f, 0.7f, "#c4bca8", "#ffffff", 0.55f, 0.1f, 0.6f,
 				speckles: Hexes("#8a7458", "#ffffff"), speckleCount: 600, speckleSize: 0.002f),
@@ -2081,7 +2081,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.PathCrustCauseway, 3f, 0.03f, "#a8a296", "#ccc6ba", "#ece8e0", 6, SurfaceMotif.Cobbles, 6, 0.05f, 0.8f, "#5a4e3e", "#f4f2ec", 0.3f, 0.1f, 0.75f),
 			R(Ground.PathBasaltTrack, 4f, 0.02f, "#8a7e6c", "#a89a86", "#c8bca8", 6, SurfaceMotif.Granular, 30, 0.1f, 0.45f, "#7a6e5c", "#d4c8b4", 0.15f, 0.1f, 0.7f,
 				speckles: Hexes("#2a2624"), speckleCount: 400, speckleSize: 0.006f),
-			// ── Plains (biome round, 2026-10-26) ── The draft's palettes and grains; the red beds' strata, the playa's polygon cracks, the travois trace's grooves as ridges.
+			// ── Plains ── The draft's palettes and grains; the red beds' strata, the playa's polygon cracks, the travois trace's grooves as ridges.
 			R(Ground.GrassDryMixedPrairie, 3f, 0.04f, "#4a4a30", "#7e7a52", "#b0a878", 4, SurfaceMotif.Blades, 8, 0.03f, 0.8f, "#7a8a82", "#c8b888", 0.12f, 0.1f, 0.8f, motifCount: 28000,
 				speckles: Hexes("#7a8a82", "#a05a30", "#e0dccc", "#4a3a28"), speckleCount: 1660, speckleSize: 0.003f),
 			R(Ground.GrassShortgrassSod, 3f, 0.03f, "#4e5236", "#7a7a56", "#a8a480", 4, SurfaceMotif.Blades, 8, 0.008f, 0.75f, "#5a6a48", "#b8b080", 0.12f, 0.1f, 0.8f, motifCount: 40000,
@@ -2121,9 +2121,9 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.CrackedDustPlain, 5f, 0.04f, "#6a4a32", "#8a6a4a", "#b08e6a", 6, SurfaceMotif.Cracks, 10, 0.04f, 0.7f, "#4a3222", "#c8a87a", 0.12f, 0.05f, 0.7f,
 				speckles: Hexes("#c8b480"), speckleCount: 400, speckleSize: 0.003f),
 
-			// ── Estuary (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T1): every ground as Estuary's own variant of its family (Mud, Sand, Grass, SaltCrust, Silt, Gravel, PathMud, Till);
-			// LATER (I9 T7): the lugworm-cast and combed-strand motifs (Clumps and Fibres stand in).
+			// ── Estuary ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: every ground as Estuary's own variant of its family (Mud, Sand, Grass, SaltCrust, Silt, Gravel, PathMud, Till);
+			// LATER: the lugworm-cast and combed-strand motifs (Clumps and Fibres stand in).
 			R(Ground.MudSchlickFlat, 4f, 0.02f, "#3a3a34", "#5a5a50", "#7e7c6e", 6, SurfaceMotif.Ripples, 6, 0.1f, 0.4f, "#2a2a24", "#8a8a7c", 0.75f, 0.2f, 0.6f,
 				speckles: Hexes("#4a3e30", "#e0dace", "#6a6e66"), speckleCount: 1000, speckleSize: 0.003f),
 			R(Ground.SandSandwatt, 4f, 0.03f, "#5e5a48", "#8a8468", "#b4ac8c", 6, SurfaceMotif.Clumps, 40, 0.3f, 0.5f, "#3a362c", "#7a7058", 0.5f, 0.15f, 0.6f,
@@ -2158,7 +2158,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#e8e0d0", "#e8b0b8"), speckleCount: 300, speckleSize: 0.003f),
 			R(Ground.GravelSchill, 2f, 0.03f, "#4a4a4c", "#8a8680", "#d4cec4", 8, SurfaceMotif.Cobbles, 50, 0.1f, 0.85f, "#6a6458", "#ece6da", 0.3f, 0.15f, 0.8f,
 				speckles: Hexes("#1e2228", "#e8a8b0"), speckleCount: 400, speckleSize: 0.004f),
-			// ── Coral Reef, Beach and Abyss (biome round, 2026-10-26) ── The draft's palettes and grains; one motif a recipe (the draft's second
+			// ── Coral Reef, Beach and Abyss ── The draft's palettes and grains; one motif a recipe (the draft's second
 			// motif is a speckle or left to I9 T7).
 			R(Ground.SandAtoll, 4f, 0.03f, "#b4ac94", "#dcd4bc", "#f4eedc", 6, SurfaceMotif.Ripples, 7, 0.1f, 0.4f, "#c4bca4", "#f8f4e6", 0.15f, 0.05f, 0.5f,
 				speckles: Hexes("#e6e2c8", "#d89090", "#c8b898"), speckleCount: 980, speckleSize: 0.003f),
@@ -2243,7 +2243,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.SandHyaloclastite, 2f, 0.02f, "#1a1a18", "#34322e", "#524e48", 6, SurfaceMotif.Granular, 40, 0.1f, 0.45f, "#121210", "#7a8088", 0.2f, 0.05f, 0.5f,
 				speckles: Hexes("#7a8088"), speckleCount: 400, speckleSize: 0.003f),
 			R(Ground.GravelPeridotiteBar, 2f, 0.03f, "#141612", "#2c3226", "#4a5040", 8, SurfaceMotif.Cobbles, 40, 0.12f, 0.85f, "#7a4a26", "#4a6a3a", 0.25f, 0.1f, 0.85f),
-			// ── Steppe (biome round, 2026-10-26) ── The draft's palettes and grains; the takyr's polygon plates, the sor's puffy crust domes, the Horde road's braided ruts as ridges.
+			// ── Steppe ── The draft's palettes and grains; the takyr's polygon plates, the sor's puffy crust domes, the Horde road's braided ruts as ridges.
 			R(Ground.GrassDryKovylSward, 4f, 0.04f, "#5a5236", "#8e8458", "#c4b888", 4, SurfaceMotif.Blades, 8, 0.03f, 0.75f, "#6a4e34", "#e0dccc", 0.12f, 0.1f, 0.8f, motifCount: 22000,
 				speckles: Hexes("#e0dccc", "#2a2620", "#a8a490"), speckleCount: 1250, speckleSize: 0.003f),
 			R(Ground.SoilChestnut, 4f, 0.03f, "#3e2c1e", "#6a4e34", "#946e4c", 8, SurfaceMotif.Granular, 40, 0.1f, 0.5f, "#2a1e14", "#a07a56", 0.12f, 0.1f, 0.75f,
@@ -2280,7 +2280,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#b07a6a"), speckleCount: 300, speckleSize: 0.0025f),
 			R(Ground.GravelPorphyryQuartz, 2f, 0.03f, "#4a3a38", "#7a6460", "#a8948e", 8, SurfaceMotif.Cobbles, 34, 0.12f, 0.85f, "#6a3e3a", "#ece8e0", 0.15f, 0.1f, 0.85f,
 				speckles: Hexes("#8a8480"), speckleCount: 200, speckleSize: 0.004f),
-			// ── Hills (biome round, 2026-10-26) ── The draft's palettes and grains; the schist crenulated and warped, the cliff's quartz veins vertical.
+			// ── Hills ── The draft's palettes and grains; the schist crenulated and warped, the cliff's quartz veins vertical.
 			R(Ground.GrassHillPasture, 3f, 0.04f, "#34361c", "#5e6232", "#9a965a", 4, SurfaceMotif.Blades, 8, 0.025f, 0.8f, "#4a5028", "#a8a060", 0.15f, 0.1f, 0.8f, motifCount: 30000,
 				speckles: Hexes("#8a887a", "#e0e0d4", "#8a5a34", "#b07aa0"), speckleCount: 1630, speckleSize: 0.003f),
 			R(Ground.SoilTerraceTilth, 4f, 0.03f, "#3e2e1e", "#6a5034", "#96784e", 8, SurfaceMotif.Granular, 52, 0.1f, 0.5f, "#7a7668", "#d8d8cc", 0.12f, 0.1f, 0.75f,
@@ -2316,8 +2316,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelSchistShingle, 2f, 0.03f, "#4a4842", "#77746a", "#a8a49a", 8, SurfaceMotif.Cobbles, 44, 0.1f, 0.85f, "#5a584e", "#ecebe4", 0.15f, 0.1f, 0.85f,
 				speckles: Hexes("#8a5a34"), speckleCount: 200, speckleSize: 0.004f),
 
-			// ── Wetlands (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T1): every ground as Wetlands' own variant of its family (Mud, Limestone, Grass, SaltCrust, Peat, Sand, Silt, Gypsum, Clay,
+			// ── Wetlands ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: every ground as Wetlands' own variant of its family (Mud, Limestone, Grass, SaltCrust, Peat, Sand, Silt, Gypsum, Clay,
 			// PathMud, Flagstone); the winter reedbed's frost-silvered band (a band of the main ground) paints the same silt.
 			R(Ground.MudReedbedSilt, 4f, 0.03f, "#2e3020", "#4a4c34", "#6e6e50", 6, SurfaceMotif.Fibres, 34, 0.06f, 0.55f, "#8a7a52", "#c8b88a", 0.5f, 0.3f, 0.65f,
 				speckles: Hexes("#b0a070", "#d8d4c8", "#8a3a22"), speckleCount: 900, speckleSize: 0.003f),
@@ -2352,9 +2352,9 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelShellBar, 2f, 0.03f, "#5a5446", "#8a8270", "#c8c2b0", 8, SurfaceMotif.Cobbles, 42, 0.1f, 0.85f, "#3a3a42", "#ecebe0", 0.3f, 0.15f, 0.8f,
 				speckles: Hexes("#8a7a5a", "#b88a5a"), speckleCount: 300, speckleSize: 0.004f),
 
-			// ── Mangrove (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T1): every ground as Mangrove's own variant of its family (Mud, ForestFloor, SaltCrust, Soil, Sand, Gravel, PathMud);
-			// LATER (I9 T7): a CoralRag family with phytokarst pits (Fractured and Clumps stand in); the road and the chokaa floor's motifs.
+			// ── Mangrove ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: every ground as Mangrove's own variant of its family (Mud, ForestFloor, SaltCrust, Soil, Sand, Gravel, PathMud);
+			// LATER: a CoralRag family with phytokarst pits (Fractured and Clumps stand in); the road and the chokaa floor's motifs.
 			R(Ground.MudMkokoBrown, 3f, 0.02f, "#1e1c18", "#3a342a", "#5a5040", 6, SurfaceMotif.Granular, 70, 0.06f, 0.4f, "#0e0c0a", "#7a4a2a", 0.85f, 0.2f, 0.55f,
 				speckles: Hexes("#0e0c0a", "#7a4a2a", "#b8a040"), speckleCount: 800, speckleSize: 0.003f),
 			R(Ground.MudFiddlerFlat, 4f, 0.02f, "#4a463a", "#6e6852", "#948c70", 6, SurfaceMotif.Clumps, 50, 0.2f, 0.5f, "#2a2620", "#8a826a", 0.6f, 0.2f, 0.6f,
@@ -2390,8 +2390,8 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelRagShell, 2f, 0.03f, "#2e2c28", "#6a665a", "#b4ac98", 8, SurfaceMotif.Cobbles, 40, 0.1f, 0.85f, "#1a1a18", "#d8d0c0", 0.3f, 0.15f, 0.8f,
 				speckles: Hexes("#d8d0c0", "#4a5a2a"), speckleCount: 300, speckleSize: 0.004f),
 
-			// ── Lake and River (biome round, 2026-10-26) ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
-			// LATER (I9 T1): every ground as the biome's own variant of its family; the mud Prints motif (River wet margin) is a granular stand-in.
+			// ── Lake and River ── The draft's palettes (dark/mid/light, motif dark/light) and grains; tiles as the draft's.
+			// LATER: every ground as the biome's own variant of its family; the mud Prints motif (River wet margin) is a granular stand-in.
 			R(Ground.PebblesStrandShingle, 3f, 0.03f, "#5a5a52", "#8a887c", "#b4b0a2", 8, SurfaceMotif.Cobbles, 46, 0.1f, 0.85f, "#3e3e38", "#c8c4b6", 0.3f, 0.1f, 0.8f,
 				speckles: Hexes("#6a7a4a", "#8a7a5a"), speckleCount: 500, speckleSize: 0.003f),
 			R(Ground.SandIsoetidFlat, 3f, 0.02f, "#7a7462", "#a8a28c", "#d0cab4", 6, SurfaceMotif.Granular, 52, 0.03f, 0.4f, "#6a6450", "#c8c2ac", 0.25f, 0.1f, 0.5f,
@@ -2453,7 +2453,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Ground.GravelBleachedBar, 2f, 0.03f, "#6a665e", "#9a948a", "#ccc6ba", 8, SurfaceMotif.Cobbles, 30, 0.1f, 0.85f, "#8a8478", "#e8e4da", 0.3f, 0.1f, 0.8f,
 				speckles: Hexes("#e8e4da", "#6a5a42"), speckleCount: 300, speckleSize: 0.004f),
 
-			// Rocky Terrain (biome round, 2026-10-26): the shattered high cold desert of the Pamir's own grounds.
+			// Rocky Terrain: the shattered high cold desert of the Pamir's own grounds.
 			R(Ground.RockHornstoneShatter, 8f, 0.3f, "#2a2830", "#46424a", "#6a6470", 4, SurfaceMotif.Fractured, 12, 0.1f, 0.85f, "#18161c", "#8a5a3a", 0.25f, 0.1f, 0.85f,
 				speckles: Hexes("#3a3640", "#d8b030", "#d8d8cc"), speckleCount: 900, speckleSize: 0.004f),
 			R(Ground.GravelSplinterGrit, 4f, 0.05f, "#2e2c32", "#4e4a52", "#747078", 8, SurfaceMotif.Cobbles, 30, 0.1f, 0.85f, "#1c1a20", "#d8d4cc", 0.2f, 0.1f, 0.85f,
@@ -2489,7 +2489,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#e8e8f0"), speckleCount: 300, speckleSize: 0.0025f),
 			R(Ground.GravelBraid, 2f, 0.03f, "#4a4a4e", "#6e6c70", "#949296", 8, SurfaceMotif.Cobbles, 34, 0.1f, 0.85f, "#3a3a3e", "#a8a6aa", 0.25f, 0.1f, 0.85f),
 
-			// Geyser Basin (biome round, 2026-10-26): the hot ground of the Icelandic interior's own grounds.
+			// Geyser Basin: the hot ground of the Icelandic interior's own grounds.
 			R(Ground.GravelMelurFell, 6f, 0.06f, "#4a4642", "#6e6a62", "#9a948a", 8, SurfaceMotif.Cobbles, 30, 0.1f, 0.85f, "#2e2c2a", "#c49a88", 0.2f, 0.1f, 0.85f,
 				speckles: Hexes("#d8cbb0", "#101014", "#e4dccb"), speckleCount: 600, speckleSize: 0.003f),
 			R(Ground.SinterGeyseriteApron, 4f, 0.1f, "#9a968c", "#c8c4b8", "#ecebe4", 6, SurfaceMotif.Ridges, 8, 0.1f, 0.7f, "#8a867c", "#f4f0ea", 0.4f, 0.1f, 0.7f,
@@ -2600,7 +2600,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── What each ground is made of (2026-10-15) ─────────────────
+		// ── What each ground is made of ─────────────────
 
 		/// <summary>Wholly mineral: rock, sand, soil, ash (takes a thin-aired world's own ground colour).</summary>
 		private static readonly Vector3 Mineral = new Vector3(0f, 0f, 1f);
@@ -2613,7 +2613,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// What each generated ground is made of, as the planet's looks see it (x living, y lichen, z mineral): a property of the
 		/// surface, written by the biome art authoring onto every template slot holding it (TerrainTextureLayer.GroundMakeup)
-		/// and baked per terrain array layer from there. Until 2026-10-15 the runtime read it from the layer's NAME
+		/// and baked per terrain array layer from there. Formerly the runtime read it from the layer's NAME
 		/// (BiomeLooks.GroundShareOf); every value here is what that reading gave the ground's layer, Ground_&lt;Name&gt;, so
 		/// nothing changed (BiomeLooksTests pins it).
 		/// </summary>
@@ -2674,7 +2674,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathAsh, Mineral },
 			{ Ground.PathSalt, Mineral },
 			{ Ground.PathLitter, Living(0.25f) },
-			// Jungle + Bamboo Forest (biome rounds, 2026-10-26).
+			// Jungle + Bamboo Forest.
 			{ Ground.JungleFloorBronze, Living(0.7f) },
 			{ Ground.SoilRedForest, Mineral },
 			{ Ground.MossRavine, Living(1f) },
@@ -2706,7 +2706,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathIshidan, Mineral },
 			{ Ground.SandMasaGrus, Mineral },
 			{ Ground.GravelArc, Mineral },
-			// Forest (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Forest: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.ForestFloorBeech, Living(0.4f) },
 			{ Ground.MossCushion, Living(1f) },
 			{ Ground.ForestFloorRamsons, Living(0.4f) },
@@ -2721,7 +2721,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneSandstone, Mineral },
 			{ Ground.SandHumic, Mineral },
 			{ Ground.GravelSandstoneFlint, Mineral },
-			// Woodland (biome round, 2026-10-26).
+			// Woodland.
 			{ Ground.GrassWoodPasture, Living(1f) },
 			{ Ground.ForestFloorCopse, Living(0.4f) },
 			{ Ground.ForestFloorBluebell, Living(0.4f) },
@@ -2737,7 +2737,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneFlint, Mineral },
 			{ Ground.SandChalky, Mineral },
 			{ Ground.GravelFlint, Mineral },
-			// Coastal Water and Ocean (biome rounds, 2026-10-26): sea floors, mineral (no grass grows on them) but for the drowned peat
+			// Coastal Water and Ocean: sea floors, mineral (no grass grows on them) but for the drowned peat
 			// and the coral grounds, which take what their names read as (the runtime reading this table replaced).
 			{ Ground.SandShellGravel, Mineral },
 			{ Ground.DoleriteKelpReef, Mineral },
@@ -2770,7 +2770,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PebblesArriBiribil, Mineral },
 			{ Ground.SandCoralGrit, new Vector3(0f, 0.6f, 0.4f) },
 			{ Ground.GravelSandstoneChip, Mineral },
-			// Tundra (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Tundra: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.LichenTundraMat, new Vector3(0f, 1f, 0f) },
 			{ Ground.MossPolygonMire, Living(1f) },
 			{ Ground.GravelSortedCircles, Mineral },
@@ -2788,7 +2788,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathSlabCauseway, Mineral },
 			{ Ground.SandGlacialFlour, Mineral },
 			{ Ground.GravelOutwashBark, Mineral },
-			// Ice Sheet (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Ice Sheet: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.SnowKatabatic, Frozen },
 			{ Ground.IceLayeredDeposit, Frozen },
 			{ Ground.IceWindGlaze, Frozen },
@@ -2810,7 +2810,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.SnowBlockYard, Frozen },
 			{ Ground.SandCharnockiteGrus, Mineral },
 			{ Ground.GravelNunatakShingle, Mineral },
-			// Glacier (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Glacier: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.IceAblation, Frozen },
 			{ Ground.SnowFirnRunnels, Frozen },
 			{ Ground.IceIcefall, Frozen },
@@ -2829,7 +2829,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathRubbleTrod, Mineral },
 			{ Ground.IceDustMantled, Frozen },
 			{ Ground.FrostDustRimed, Frozen },
-			// Alpine Meadow (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Alpine Meadow: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.GrassMeadowPolonyna, Living(1f) },
 			{ Ground.GrassFlowerHay, Living(1f) },
 			{ Ground.HeathMugo, Living(0.85f) },
@@ -2848,7 +2848,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.GravelFlyschShingle, Mineral },
 			{ Ground.PathKnieholzCut, Mineral },
 			{ Ground.PathKarrenSteps, Mineral },
-			// Mountain Slope (biome round, 2026-10-26).
+			// Mountain Slope.
 			{ Ground.ForestFloorCloudHumus, Living(0.4f) },
 			{ Ground.MossBlanket, Living(1f) },
 			{ Ground.GrassMeadowKikuyu, Living(1f) },
@@ -2866,7 +2866,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.GravelRedBlack, Mineral },
 			{ Ground.PathBundleCauseway, Mineral },
 			{ Ground.PathPhonoliteSteps, Mineral },
-			// Scree (biome round, 2026-10-26).
+			// Scree.
 			{ Ground.GravelFineScree, Mineral },
 			{ Ground.RockOpenworkTalus, Mineral },
 			{ Ground.RockStoneRiver, Mineral },
@@ -2887,7 +2887,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.SandGrus, Mineral },
 			{ Ground.GravelTorrentShingle, Mineral },
 			{ Ground.PathSteppingBlocks, Mineral },
-			// Scrubland (biome round, 2026-10-26).
+			// Scrubland.
 			{ Ground.SoilBajadaLoam, Mineral },
 			{ Ground.SiltCreosoteFlat, Mineral },
 			{ Ground.CalicheBench, Mineral },
@@ -2903,7 +2903,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathMalpaisTrail, Mineral },
 			{ Ground.SandWashBar, Mineral },
 			{ Ground.GravelWashCobble, Mineral },
-			// Savanna (biome round, 2026-10-26).
+			// Savanna.
 			{ Ground.GrassDryTawnyVeld, Living(0.55f) },
 			{ Ground.SandGraniteSandveld, Mineral },
 			{ Ground.ClayMopane, Mineral },
@@ -2920,7 +2920,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathSlabSteps, Mineral },
 			{ Ground.SandPinkGruss, Mineral },
 			{ Ground.GravelReefIronstone, Mineral },
-			// Grassland (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Grassland: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.GrassPusztaSward, Living(1f) },
 			{ Ground.GrassDryGoldbeard, Living(0.55f) },
 			{ Ground.SoilChernozem, Mineral },
@@ -2937,7 +2937,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.BrickHerringbone, Mineral },
 			{ Ground.SandMicaRiver, Mineral },
 			{ Ground.GravelConcretionGrit, Mineral },
-			// Desert (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf); the frost-glazed erg keeps its white.
+			// Desert: what each ground's name gives (BiomeLooks.GroundShareOf); the frost-glazed erg keeps its white.
 			{ Ground.SandErg, Mineral },
 			{ Ground.SandSlipFace, Mineral },
 			{ Ground.RegPavement, Mineral },
@@ -2955,7 +2955,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.GravelWadiBar, Mineral },
 			{ Ground.PathRegTrack, Mineral },
 			{ Ground.SandFrostErg, Frozen },
-			// Badlands (biome round, 2026-10-26); the snow on the ash keeps its white.
+			// Badlands; the snow on the ash keeps its white.
 			{ Ground.AshLapilliSteppe, Mineral },
 			{ Ground.TuffRilled, Mineral },
 			{ Ground.ClayWashFloor, Mineral },
@@ -2975,7 +2975,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PathWashTrace, Mineral },
 			{ Ground.AshSnowOn, Frozen },
 			{ Ground.CrackedEarthSaltBaked, Mineral },
-			// Salt Flat (biome round, 2026-10-26).
+			// Salt Flat.
 			{ Ground.SaltAmoleCrust, Mineral },
 			{ Ground.SaltEtchedCrust, Mineral },
 			{ Ground.MudBrineEdge, Mineral },
@@ -2994,7 +2994,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.GravelCrustedPebbles, Mineral },
 			{ Ground.PathCrustCauseway, Mineral },
 			{ Ground.PathBasaltTrack, Mineral },
-			// Plains (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Plains: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.GrassDryMixedPrairie, Living(0.55f) },
 			{ Ground.GrassShortgrassSod, Living(1f) },
 			{ Ground.GrassMeadowTallgrass, Living(1f) },
@@ -3015,7 +3015,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.GravelOgallala, Mineral },
 			{ Ground.SnowCrustSward, Frozen },
 			{ Ground.CrackedDustPlain, Mineral },
-			// Estuary (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Estuary: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.MudSchlickFlat, Mineral },
 			{ Ground.SandSandwatt, Mineral },
 			{ Ground.MudZosteraFlat, Mineral },
@@ -3033,7 +3033,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneMoppen, Mineral },
 			{ Ground.SandShoalCockle, Mineral },
 			{ Ground.GravelSchill, Mineral },
-			// Coral Reef, Beach and Abyss (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Coral Reef, Beach and Abyss: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.SandAtoll, Mineral },
 			{ Ground.ReefFramework, Mineral },
 			{ Ground.RubbleBranchRods, Mineral },
@@ -3082,7 +3082,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.PebblesPillowGlass, Mineral },
 			{ Ground.SandHyaloclastite, Mineral },
 			{ Ground.GravelPeridotiteBar, Mineral },
-			// Steppe (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Steppe: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.GrassDryKovylSward, Living(0.55f) },
 			{ Ground.SoilChestnut, Mineral },
 			{ Ground.GrassDryWormwoodSteppe, Living(0.55f) },
@@ -3103,7 +3103,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.BrickSquareHorde, Mineral },
 			{ Ground.SandGreyRiver, Mineral },
 			{ Ground.GravelPorphyryQuartz, Mineral },
-			// Hills (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Hills: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.GrassHillPasture, Living(1f) },
 			{ Ground.SoilTerraceTilth, Mineral },
 			{ Ground.GrassDryBurntSlope, Living(0.55f) },
@@ -3121,7 +3121,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneSchistEdge, Mineral },
 			{ Ground.SandMicaSchist, Mineral },
 			{ Ground.GravelSchistShingle, Mineral },
-			// Wetlands (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Wetlands: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.MudReedbedSilt, Mineral },
 			{ Ground.MarlShellFlat, Mineral },
 			{ Ground.GrassBuffaloLawn, Living(1f) },
@@ -3138,7 +3138,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneBitumenBrick, Mineral },
 			{ Ground.SandShellHash, Mineral },
 			{ Ground.GravelShellBar, Mineral },
-			// Mangrove (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Mangrove: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.MudMkokoBrown, Mineral },
 			{ Ground.MudFiddlerFlat, Mineral },
 			{ Ground.MudPencilRoot, Mineral },
@@ -3156,7 +3156,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneChokaa, Mineral },
 			{ Ground.SandCreekMouth, Mineral },
 			{ Ground.GravelRagShell, Mineral },
-			// Lake and River (biome round, 2026-10-26): what each ground's name gives (BiomeLooks.GroundShareOf).
+			// Lake and River: what each ground's name gives (BiomeLooks.GroundShareOf).
 			{ Ground.PebblesStrandShingle, Mineral },
 			{ Ground.SandIsoetidFlat, Mineral },
 			{ Ground.LitterGeschwemmsel, Living(0.25f) },
@@ -3187,7 +3187,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.BasaltRhenishSetts, Mineral },
 			{ Ground.SandPointBar, Mineral },
 			{ Ground.GravelBleachedBar, Mineral },
-			// Rocky Terrain (biome round, 2026-10-26): the shattered high cold desert of the Pamir's own grounds.
+			// Rocky Terrain: the shattered high cold desert of the Pamir's own grounds.
 			{ Ground.RockHornstoneShatter, Mineral },
 			{ Ground.GravelSplinterGrit, Mineral },
 			{ Ground.GrassDrySazTurf, Living(0.55f) },
@@ -3206,7 +3206,7 @@ namespace FishMMO.Shared.WorldDesign
 			{ Ground.FlagstoneFortStreet, Mineral },
 			{ Ground.SandMicaPamir, Mineral },
 			{ Ground.GravelBraid, Mineral },
-			// Geyser Basin (biome round, 2026-10-26): the hot ground of the Icelandic interior's own grounds.
+			// Geyser Basin: the hot ground of the Icelandic interior's own grounds.
 			{ Ground.GravelMelurFell, Mineral },
 			{ Ground.SinterGeyseriteApron, Mineral },
 			{ Ground.SinterThermophileMat, Mineral },
@@ -3244,7 +3244,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#e8e0c0"), speckleCount: 800, speckleSize: 0.0025f),
 			R(Bark.Bamboo, 1f, 0.01f, "#4a7a2a", "#6a9a3a", "#8ab45a", 4, SurfaceMotif.Strata, 4, 0.1f, 0.5f, "#3a6020", "#a0c070", 0.5f),
 			R(Bark.Dead, 1f, 0.02f, "#5a564e", "#7a766c", "#9a968a", 4, SurfaceMotif.Fibres, 24, 0.1f, 0.8f, "#3a3630", "#aaa69a", 0.1f, vertical: true),
-			// ── The vegetation expansion (2026-10-10) ──
+			// ── The vegetation expansion ──
 			// Smooth: a beech's silver-grey skin, near flat, with faint wrinkles running round the stem and blotches
 			// of pale and greenish lichen; worn by kapok, baobab and dragon tree too.
 			R(Bark.Smooth, 1f, 0.006f, "#6a6a64", "#8e8e86", "#aeada4", 4, SurfaceMotif.Fibres, 20, 0.1f, 0.3f, "#5e5e58", "#b8b6ac", 0.25f,
@@ -3259,7 +3259,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Bark.DatePalm, 1f, 0.04f, "#3e3224", "#6e5c44", "#8e7a5e", 4, SurfaceMotif.Cobbles, 8, 0.12f, 0.85f, "#3a2e20", "#a08a68", 0.1f, 0.1f, 0.85f),
 			// Fibrous: shaggy reddish-brown bark in long, fine, peeling strips.
 			R(Bark.Fibrous, 1f, 0.03f, "#3a2a20", "#5e4634", "#80644c", 4, SurfaceMotif.Fibres, 40, 0.1f, 0.85f, "#24180f", "#9a7a5a", 0.08f, vertical: true),
-			// ── Biome rounds (2026-10-26) ── The stone pine's scaly plates with resin streaks; the yellowwood's and the kosso's peeling
+			// ── The biomes' own ── The stone pine's scaly plates with resin streaks; the yellowwood's and the kosso's peeling
 			// plates (grey and red); the giant heather's moss sleeve.
 			R(Bark.CembraPlate, 1f, 0.025f, "#4a3e34", "#6a5a4c", "#8a7a6a", 4, SurfaceMotif.Cracks, 12, 0.05f, 0.75f, "#2a221c", "#a89880", 0.12f,
 				speckles: Hexes("#c8b890", "#5a4a3e"), speckleCount: 200, speckleSize: 0.004f),
@@ -3267,7 +3267,7 @@ namespace FishMMO.Shared.WorldDesign
 			R(Bark.FlakyRed, 1f, 0.025f, "#4a2a1c", "#7a4a32", "#a87a5a", 4, SurfaceMotif.Cobbles, 10, 0.08f, 0.7f, "#3a2014", "#b8886a", 0.1f),
 			R(Bark.MossSleeve, 1f, 0.03f, "#2a3218", "#3e4a26", "#6a7a3a", 4, SurfaceMotif.Clumps, 20, 0.4f, 0.7f, "#2e3a1e", "#7a8a44", 0.15f, vertical: true,
 				speckles: Hexes("#c4ccb0", "#5a4a30"), speckleCount: 300, speckleSize: 0.005f),
-			// Scrubland + Savanna (biome rounds, 2026-10-26): the palo verde's smooth green skin, the ironwood's grey shreds, the
+			// Scrubland + Savanna: the palo verde's smooth green skin, the ironwood's grey shreds, the
 			// elephant tree's paper over copper; the fever tree's lime powder, the leadwood's small grey plates.
 			R(Bark.GreenBark, 1f, 0.006f, "#6a7a38", "#8a9a48", "#a8b45a", 4, SurfaceMotif.Fibres, 20, 0.1f, 0.3f, "#7a7a62", "#b8c068", 0.3f,
 				speckles: Hexes("#8a8a7a", "#6a6a5a"), speckleCount: 200, speckleSize: 0.008f),
@@ -3277,19 +3277,19 @@ namespace FishMMO.Shared.WorldDesign
 			R(Bark.Powder, 1f, 0.005f, "#a8a840", "#c8c860", "#dcdc80", 4, SurfaceMotif.Fibres, 16, 0.1f, 0.25f, "#8a8a34", "#e4e49a", 0.35f,
 				speckles: Hexes("#6a6a2a", "#e8e8b0"), speckleCount: 260, speckleSize: 0.006f),
 			R(Bark.SnakeSkin, 1f, 0.025f, "#4a4640", "#8a867c", "#b4b0a6", 4, SurfaceMotif.Cobbles, 30, 0.06f, 0.85f, "#3a3630", "#c0bcb2", 0.1f, 0.1f, 0.85f),
-			// Grassland (biome round, 2026-10-26).
+			// Grassland.
 			R(Bark.Checker, 1f, 0.02f, "#2a2622", "#3a3430", "#5a524a", 4, SurfaceMotif.Cracks, 18, 0.05f, 0.8f, "#1a1614", "#6a625a", 0.1f),
 			R(Bark.Cerris, 1f, 0.03f, "#2a2420", "#3a3028", "#5a4c40", 4, SurfaceMotif.Fibres, 22, 0.1f, 0.85f, "#b05a2a", "#6a5a4c", 0.08f, vertical: true),
 			R(Bark.WhitePoplar, 1f, 0.01f, "#9a9a8e", "#c8c8bc", "#e0e0d6", 4, SurfaceMotif.Fibres, 28, 0.1f, 0.5f, "#2a2622", "#4a4640", 0.2f,
 				speckles: Hexes("#1e1c1a", "#3a3632"), speckleCount: 300, speckleSize: 0.012f),
-			// Plains (biome round, 2026-10-26).
+			// Plains.
 			R(Bark.CottonwoodRidge, 1f, 0.035f, "#4a4640", "#5a5650", "#8a867c", 4, SurfaceMotif.Fibres, 20, 0.1f, 0.85f, "#2a2622", "#9a968c", 0.08f, vertical: true),
 			R(Bark.CorkRidge, 1f, 0.04f, "#3a342c", "#4a443a", "#7a7262", 4, SurfaceMotif.Fibres, 16, 0.12f, 0.85f, "#241e18", "#8a826e", 0.08f, vertical: true),
 			R(Bark.OsageStrip, 1f, 0.03f, "#6a4222", "#8a5a2a", "#c07a3a", 4, SurfaceMotif.Fibres, 36, 0.1f, 0.85f, "#3a2414", "#d08a48", 0.08f, vertical: true),
-			// Steppe (biome round, 2026-10-26).
+			// Steppe.
 			R(Bark.Karagach, 1f, 0.035f, "#2a221c", "#3a3028", "#5a4c40", 4, SurfaceMotif.Fibres, 26, 0.1f, 0.85f, "#1a1410", "#6a5c4e", 0.08f, vertical: true),
 			R(Bark.SaxaulTwist, 1f, 0.03f, "#4a3c2e", "#5a4a3a", "#8a7a64", 4, SurfaceMotif.Fibres, 18, 0.1f, 0.8f, "#2a2018", "#9a8a74", 0.1f, warp: 0.25f, vertical: true),
-			// Desert + Badlands (biome rounds, 2026-10-26): the desert date's fissures with green in the cracks, the atil's pale smooth
+			// Desert + Badlands: the desert date's fissures with green in the cracks, the atil's pale smooth
 			// skin; the apricot's lenticels and gum, the oleaster's shaggy strips, the plane's flaking camouflage.
 			R(Bark.BalanitesFurrow, 1f, 0.03f, "#3a2e24", "#5a4a3a", "#7a6a56", 4, SurfaceMotif.Fibres, 22, 0.1f, 0.85f, "#6a7a4a", "#8a7a64", 0.08f, vertical: true),
 			R(Bark.AtilPale, 1f, 0.008f, "#a8a090", "#c8c0b0", "#dcd6c8", 4, SurfaceMotif.Fibres, 20, 0.1f, 0.3f, "#5a4a3a", "#e4dece", 0.25f,
@@ -3298,7 +3298,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#c88a3a", "#c8b8a0"), speckleCount: 300, speckleSize: 0.005f),
 			R(Bark.OleasterStrip, 1f, 0.03f, "#4a3e30", "#6a5a48", "#9a8a72", 4, SurfaceMotif.Fibres, 34, 0.1f, 0.85f, "#2e261e", "#a89880", 0.08f, vertical: true),
 			R(Bark.PlaneFlake, 1f, 0.012f, "#6a6a5a", "#8a8a6a", "#e0d8c0", 4, SurfaceMotif.Cobbles, 12, 0.1f, 0.75f, "#5a5a4a", "#ece4cc", 0.2f),
-			// Hills (biome round, 2026-10-26).
+			// Hills.
 			R(Bark.Cork, 1f, 0.05f, "#6a6458", "#8a8274", "#b0a898", 4, SurfaceMotif.Cracks, 10, 0.06f, 0.85f, "#4a443a", "#c0b8a8", 0.06f),
 			R(Bark.PinePlate, 1f, 0.03f, "#5a4a40", "#a8502a", "#c87a4a", 4, SurfaceMotif.Cracks, 12, 0.05f, 0.8f, "#3a2e28", "#d08a5a", 0.1f),
 		};

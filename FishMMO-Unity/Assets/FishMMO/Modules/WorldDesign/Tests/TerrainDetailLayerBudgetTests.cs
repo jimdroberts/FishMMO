@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// Unity keeps a terrain's detail layer index in a byte (TerrainDetailLayerBudget): the scatter gives each tile only the
 	/// prototypes of the rules that reach it, so every rule's map lands in its own prototype, and the cut checks that every
-	/// painted plant stands on its own biome's ground. 2026-10-27: Moron 2's 578 prototypes on every tile put Woodland's
+	/// painted plant stands on its own biome's ground. Moron 2's 578 prototypes on every tile put Woodland's
 	/// pasture grass (layer 560) into the Forest's holly bush (layer 48), a carpet of bushes over every woodland.
 	/// </summary>
 	public class TerrainDetailLayerBudgetTests

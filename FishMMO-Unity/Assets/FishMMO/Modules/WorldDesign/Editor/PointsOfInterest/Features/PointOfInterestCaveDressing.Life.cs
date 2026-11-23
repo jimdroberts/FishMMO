@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 			public int LifeSpots;
 
 			/// <summary>
-			/// Where the system's animals live (2026-10-18: "Caves need critters, bats, lizards, etc."): its flat floors, walls and
+			/// Where the system's animals live ("Caves need critters, bats, lizards, etc."): its flat floors, walls and
 			/// roofs, its open air, its pools and its mouths, measured from its field (<see cref="CaveLifeBake"/>) and written to the
 			/// scene's cave life for the client's ambient life. Nothing is placed: no prop moves for it.
 			/// </summary>
@@ -25,7 +25,7 @@ namespace FishMMO.Shared.WorldDesign
 					return;
 				}
 				List<SceneCaveLifeSpot> spots = CaveLifeBake.Bake(system, context.Record.Id);
-				// A linked cave's animals are its interior's (2026-10-25, I2n): each spot carries the interior biome's id, read by the
+				// A linked cave's animals are its interior's: each spot carries the interior biome's id, read by the
 				// client's ambient life in place of the biome map over it.
 				int inside = caves.Linked ? BiomeRegistry.IDOf(caves.Interior) : 0;
 				if (inside != 0)
@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// the rest are kept for the homes of its light-makers, so a great cave that fills the first share still gets them.
 		/// </summary>
 		public const int MaxSpots = 1120;
-		/// <summary>The spots kept for the light-makers' homes (<c>Lights</c>, 2026-10-20): the low glow air and the patches by it.</summary>
+		/// <summary>The spots kept for the light-makers' homes (<c>Lights</c>): the low glow air and the patches by it.</summary>
 		public const int MaxLightSpots = 160;
 		/// <summary>The most a floor, wall or roof patch may stray from its plane, metres, anywhere within its radius.</summary>
 		public const float Flatness = 0.07f;
@@ -160,11 +160,11 @@ namespace FishMMO.Shared.WorldDesign
 				Lights();
 			}
 
-			// ── The light-makers' homes (2026-10-20) ──────────────
+			// ── The light-makers' homes ──────────────
 
 			/// <summary>
 			/// Homes for the cave's light-makers (glowing millipedes, snails, beetles, newts and worms on the rock; spore motes and wisp
-			/// moths in the air), kept low where a person walks (2026-10-19: a colony 19 m up a hall is never seen): boxes of glow air a
+			/// moths in the air), kept low where a person walks (a colony 19 m up a hall is never seen): boxes of glow air a
 			/// metre or two over the floor, each with a patch of floor and of wall by it, in the chambers and every so often along the
 			/// ways, and over the pools. Thickest where the cave's glow gathers (<see cref="GlowAt"/>), as the glowing fungus is.
 			/// Lava tubes and ice caves get only the patches: their light-makers crawl (ember mites, ice worms).
@@ -331,8 +331,8 @@ namespace FishMMO.Shared.WorldDesign
 						TryRoost(new Vector3(p.x, p.y + 1.5f, p.z));
 					}
 				}
-				// The air: a box of the room's middle, if it is clear enough to wheel in; a great hall (to 250 m across since
-				// 2026-10-18) a few, each no wider than a colony keeps to (and than a box's 27 points can vouch for: a column or a
+				// The air: a box of the room's middle, if it is clear enough to wheel in; a great hall (to 250 m across)
+				// a few, each no wider than a colony keeps to (and than a box's 27 points can vouch for: a column or a
 				// ramp standing in a hall's middle is missed by a lattice 75 m apart).
 				int boxes = great && reach > 30f ? 3 : 1;
 				for (int i = 0; i < boxes; i++)

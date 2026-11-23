@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why it exists (2026-10-02).</b> Every generated material and terrain layer had been written
+	/// <b>Why it exists.</b> Every generated material and terrain layer had been written
 	/// with empty texture slots — distant trees drew as grey slabs (an untextured billboard cross with
 	/// the shader's white default, alpha 1, under alpha clip) and the ground drew flat — and the
 	/// generator reported 34 problems among 1830 writes but still wrote every one of them, and a
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// terrain layer needs all three of its maps (the generator always writes albedo, normal and mask).
 	/// </para>
 	/// <para>
-	/// <b>Look arrays (2026-10-28).</b> On an array-backed material (keyword <c>_FISH_LOOK_ARRAY</c>,
+	/// <b>Look arrays.</b> On an array-backed material (keyword <c>_FISH_LOOK_ARRAY</c>,
 	/// <see cref="ProceduralArtLookArrays"/>) a slot is filled by its array and slice instead of a 2D map: the
 	/// slot's kind of array bound and its component of <c>_FishLookSlices</c> at least zero.
 	/// </para>

@@ -21,7 +21,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// The Chat module's conversation: routes the lines the core chat intake accepted (<see cref="IChatLineHandler"/>) to
 	/// their channels (say, region, world, trade, tell, party, guild, team), delivers them across servers through the
 	/// database pump, persists them in batches and sends world chat in batches. Split from <c>ChatSystem</c> with the
-	/// module (2026-11-20); the intake, slash commands, mutes and system messages stay in the core's <c>ChatSystem</c>.
+	/// module; the intake, slash commands, mutes and system messages stay in the core's <c>ChatSystem</c>.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ChatChannelSystem", menuName = "FishMMO/Server/SceneServer/Chat Channel System", order = 1)]
 	[RequiresDataContainer(typeof(ChatChannelRuntimeData))]
@@ -1137,6 +1137,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// The channel words ("/w", "/g", …) the core's command registry resolves to these handlers.
 			ChatHelper.InitializeOnce(GetChannelCommand);
 
+			// Party-addressed server signals (Call to Arms) ride this system's party rows.
+			PartySignals.Poster = PostPartySignal;
+
 			if (Server is IPeriodicUpdateSystem periodicSystem)
 			{
 				periodicSystem.RegisterPeriodicCallback(MessagePumpRate, OnPeriodicMessagePump);
@@ -1172,6 +1175,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				Log.Error("ChatChannelSystem", "OnDeinitialize: Server is null");
 				return;
+			}
+
+			if (PartySignals.Poster == (Func<IPlayerCharacter, long, string, bool>)PostPartySignal)
+			{
+				PartySignals.Poster = null;
 			}
 
 			// Flush any remaining outbound World/Trade broadcast buffers.
@@ -1212,7 +1220,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Routes one line the core intake accepted to its channel and queues it for persistence. Moved from the tail of
-		/// <c>ChatSystem.ProcessNewChatMessage</c> (2026-11-20).
+		/// <c>ChatSystem.ProcessNewChatMessage</c>.
 		/// </summary>
 		public void HandleChatLine(NetworkConnection conn, IPlayerCharacter sender, ChatBroadcast msg, string command, long receivedTicks, int maxMessageLength)
 		{

@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Temperate)
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Farmland)
 				.Moat(BiomeMoatWater.Wet)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its vines, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1.2f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
 					(POIType.OreVein, 1f), (POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1f), (POIType.Dockyard, 1.2f),
 					(POIType.Windmill, 1.2f), (POIType.Watermill, 1.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.4f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HauntedManor, 1f), (POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f),
 					(POIType.WreckedCaravan, 0.6f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 0.8f),
@@ -47,9 +47,9 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Grange, 1.2f), (POIType.Dovecote, 1f), (POIType.BeeGarden, 1f), (POIType.VillageGreen, 0.6f), (POIType.ScarecrowField, 1.2f),
 					(POIType.LongBarrow, 1f), (POIType.Henge, 1f), (POIType.GallowsHill, 0.8f), (POIType.StoneFigures, 0.4f), (POIType.RuneStone, 0.4f),
 					(POIType.LadyOfTheLake, 0.3f), (POIType.NymphPool, 0.4f), (POIType.Commandery, 0.5f), (POIType.RoyalMausoleum, 0.4f))
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.GrowsVines(0.6f, 0.65f, 0.15f, 0.06f, ("Ivy", 0.75f), ("Creeper", 0.25f))
 				.Gathers("Silverleaf Patch")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)

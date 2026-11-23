@@ -18,6 +18,22 @@ namespace FishMMO.UnitTests
 	{
 		private readonly List<GameObject> created = new List<GameObject>();
 
+		/// <summary>
+		/// A private Awake here replaced Interactable's (Unity calls only the most derived one): no cached transform, a
+		/// squared range of 0, and InRange refused every player, so no deed post could be used.
+		/// </summary>
+		[Test]
+		public void KeepsTheBaseAwake_AndExtendsTheBaseOnDestroy()
+		{
+			const System.Reflection.BindingFlags declared = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public |
+				System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.DeclaredOnly;
+			Assert.That(typeof(PlotFoundation).GetMethod("Awake", declared, null, System.Type.EmptyTypes, null), Is.Null,
+				"PlotFoundation must not declare Awake: use OnAwake.");
+			System.Reflection.MethodInfo destroy = typeof(PlotFoundation).GetMethod("OnDestroy", declared, null, System.Type.EmptyTypes, null);
+			Assert.That(destroy == null || destroy.GetBaseDefinition().DeclaringType == typeof(Interactable), Is.True,
+				"PlotFoundation's OnDestroy must override Interactable's.");
+		}
+
 		[TearDown]
 		public void TearDown()
 		{

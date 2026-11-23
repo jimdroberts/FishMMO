@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A site's beacons (2026-10-26, the biome suite's way lights): where the site biome's Way Lights name a beacon for the site's
+	/// A site's beacons (the biome suite's way lights): where the site biome's Way Lights name a beacon for the site's
 	/// kind (<see cref="BiomeWayLightClass.Beacon"/>: a fire basket, a signal pyre, a wart fire, a blubber pyre, a five-pit
 	/// beacon), it is laid on the lookout of the site's towers and keeps (their "lookout" mark), up to <see cref="MaxBeacons"/>
 	/// a site; a site with no lookout stands one of the ground pyres (not the iron basket, which wants a tower) on open ground

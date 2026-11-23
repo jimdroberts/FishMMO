@@ -7,8 +7,8 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Each stone material's own boulders, small rocks and pebbles (decision 6 of the biome suite, 2026-10-16:
-	/// <see cref="StoneMeshes"/>, <see cref="StoneStyles"/>): every material has its shapes, every mesh is sound, inside
+	/// Each stone material's own boulders, small rocks and pebbles
+	/// (<see cref="StoneMeshes"/>, <see cref="StoneStyles"/>): every material has its shapes, every mesh is sound, inside
 	/// the budget the shared meshes had (boulders 1 200 / 300 / 48 triangles, a small rock 108 + its companion's 48,
 	/// pebbles no more than 216), deterministic, bedded, and the materials measurably differ the way their rocks do.
 	/// Pure C#: every test here runs outside the editor.

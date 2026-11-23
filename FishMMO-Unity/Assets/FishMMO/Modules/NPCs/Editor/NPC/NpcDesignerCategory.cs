@@ -11,7 +11,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The dashboard's NPCs category (the NPCs module's since 2026-11-20): lists every NPC prefab, designs new ones from a recipe, and edits the
+	/// The dashboard's NPCs category (the NPCs module's): lists every NPC prefab, designs new ones from a recipe, and edits the
 	/// designer-facing components of an existing one without leaving the dashboard.
 	/// </summary>
 	/// <remarks>

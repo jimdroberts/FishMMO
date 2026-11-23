@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Desert)
 				.Wildlife(BiomeHabitat.Scrub | BiomeHabitat.Desert | BiomeHabitat.Mountain)
 				.Moat(BiomeMoatWater.Dry)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process, and what its ground gives the air.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SmugglersCove, 1f), (POIType.PirateCove, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f),
 					(POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f),
 					(POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1f), (POIType.Dockyard, 0.3f), (POIType.Windmill, 0.3f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.4f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.BurnedVillage, 0.6f),
@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Ruins, "Excavation", 1.3f)
 				.Prefers(POIType.Hermitage, "Stone", 2f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.3f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.DragonLair, "Hoard", 1.2f)
 				.Prefers(POIType.WreckedCaravan, "Last Camp", 1.4f)
@@ -85,7 +85,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Pyramid, "Smooth-sided", 1.3f)
 				.Prefers(POIType.Pyramid, "Stepped", 1.2f)
 				.Prefers(POIType.CaravanHalt, "Well Camp", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Gathers("Copper Lode", "Gold Vein", "Sunpetal Patch")
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.ErodesAs("Arid")

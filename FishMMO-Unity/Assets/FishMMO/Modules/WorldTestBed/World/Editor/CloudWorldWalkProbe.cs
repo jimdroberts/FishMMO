@@ -13,7 +13,7 @@ namespace FishMMO.TestHarness.World.Editor
 	/// play mode: from the grass a couple of metres inland of one end, along the bridge, onto the grass past the other. A
 	/// bridge passes when the walker gets there; it fails if the walker falls (below both ends) or stops (no headway).
 	/// What a geometry test cannot say: that the planks, the landings and the rim's stone, as streamed collision, carry a
-	/// capsule of the players' size across (2026-10-15: "the bridges… need to accommodate our world sim walker").
+	/// capsule of the players' size across ("the bridges… need to accommodate our world sim walker").
 	/// </summary>
 	/// <remarks>
 	/// <c>-executeMethod FishMMO.TestHarness.World.Editor.CloudWorldWalkProbe.Run</c> in a GUI editor (play mode needs one;

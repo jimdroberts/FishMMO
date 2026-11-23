@@ -1,7 +1,7 @@
 #ifndef FISH_SKYLIGHTS_INCLUDED
 #define FISH_SKYLIGHTS_INCLUDED
 
-// Openings in caves' roofs up to the sky round the camera (2026-10-20, caves livened): the nearest few skylights
+// Openings in caves' roofs up to the sky round the camera (caves livened): the nearest few skylights
 // (SceneEmitterKind.Skylight) that CaveSkylights hands the shaders each frame. Deep in a cave the lit surfaces take no sky
 // and no sun (FishUnderground, FishGroundMap.hlsl); under an opening they see some of the sky, and where a line toward
 // the sun leaves through the opening the sun's own light is kept (the shadow map — the terrain's, its hole clipped, and the

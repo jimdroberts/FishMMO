@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 			RmDelving = "=MinePortal#2", RmAdit = "=MinePortal#0", RmAbandonedAdit = "=MinePortal#1", RmMineCart = "=MineCart", RmCaveIn = "=CaveInTimbers",
 			RmRing = "=PortalRing", RmArch = "=PortalArch", RmHolestone = "=CircleStone#1", RmGarden = "=MarketCross#1", RmBarn = "=Barn";
 
-		/// <summary>The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the templates of the Realm pack's kinds (33).</summary>
+		/// <summary>The fantasy set: the templates of the Realm pack's kinds (33).</summary>
 		private static void FantasyRealm(List<PointOfInterestTemplateSpec> a)
 		{
 			// ── Dragon's Lair: a hoard door in charred rock, a roost of bones, a hold the wyrm burned out ──

@@ -5,7 +5,7 @@ where its bounds are, what is labelled on it, and which objects ask to be drawn 
 here is data and scene authoring; nothing here draws.
 
 > The rendering half — both panels, the fog grid, the marker visibility rules and the local stores —
-> is the Map module (2026-11-20) and is documented in
+> is the Map module and is documented in
 > [`Modules/Map/Client/README.md`](../../../../Modules/Map/Client/README.md). Read that one for
 > how a map is drawn and why the minimap is not a radar. This file covers what a scene author and
 > the server-side assemblies touch.

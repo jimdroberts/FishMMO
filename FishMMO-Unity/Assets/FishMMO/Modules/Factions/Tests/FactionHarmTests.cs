@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins three combat and client fixes of 2026-11-14 to their source, where a regression would be silent in play.
+	/// Pins three combat and client fixes to their source, where a regression would be silent in play.
 	/// </summary>
 	public class FactionHarmTests
 	{
@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void AggressiveNpcsOfOneFactionAreOneSide()
 		{
-			// 2026-11-22: elf raiders (aggressive, to attack every player) fought each other, because aggression made everyone an
+			// elf raiders (aggressive, to attack every player) fought each other, because aggression made everyone an
 			// enemy before the factions were asked. Two NPCs of one faction are allies; aggression widens only past it.
 			string controller = ReadModule("Runtime/FactionController.cs");
 			int sameFaction = controller.IndexOf("own == FactionTemplate.InitialFor(otherFactionController.RaceTemplate)", System.StringComparison.Ordinal);
@@ -57,7 +57,7 @@ namespace FishMMO.UnitTests
 				"arena, then wildlife, then companions, then factions: aggression is never friendly fire");
 
 			string rule = Read("Shared/Implementation/Entity/Relations/HarmRule.cs");
-			// Through the core companion seam since 2026-11-20 (a pet answers NPC.CompanionOwner).
+			// Through the core companion seam (a pet answers NPC.CompanionOwner).
 			LogAssert.IsTrue(rule.Contains("character is NPC npc && npc.CompanionOwner != null ? npc.CompanionOwner : character"),
 				"a pet answers as its owner, attacking and attacked");
 			LogAssert.IsTrue(rule.Contains("party.ID != 0 && party.ID == otherParty.ID") && rule.Contains("guild.ID != 0 && guild.ID == otherGuild.ID"),

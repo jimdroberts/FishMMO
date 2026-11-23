@@ -22,12 +22,12 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Alien)
 				.Wildlife(BiomeHabitat.Barren)
 				.Moat(BiomeMoatWater.Wet)
-				// Its vents (2026-10-25, I2q-b, decision 90): Cryo Tephra puffing from its ridge lines with the tidal kneading.
+				// Its vents: Cryo Tephra puffing from its ridge lines with the tidal kneading.
 				.Vents(BiomeVentLayout.Ridges, BiomeVentTiming.Kneading)
-				// Its sea halls (2026-10-26, phase I2n-b, decision 83): a melt shaft down through the shell to the warm sea under it, the hall
+				// Its sea halls: a melt shaft down through the shell to the warm sea under it, the hall
 				// inside the Subsurface Ocean Vent's; held only on a world frozen through over a warm interior (its Requires), weighed 0.6.
 				.CaveInterior(CaveForm.SeaHall, BiomeCaveInteriors.SubsurfaceOceanVent)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process, and what its ground gives the air.
 				.Sites((POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Monument, 0.5f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
 					(POIType.River, 1f), (POIType.Lake, 1f), (POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Peak, 1f), (POIType.Pass, 1f),
@@ -35,7 +35,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SeaCave, 1f), (POIType.LeyNexus, 0.5f), (POIType.FallenStar, 0.7f), (POIType.Portal, 0.5f), (POIType.Ruins, 0.5f),
 					(POIType.Obelisk, 0.5f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.OreVein, 0.6f),
 					(POIType.CrystalFormation, 0.6f), (POIType.TidalRift, 1f), (POIType.SeaHall, 0.6f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.ElderMonolith, 0.6f), (POIType.WaygateRing, 0.3f))
 				.Gathers("Voidstone Cluster")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)

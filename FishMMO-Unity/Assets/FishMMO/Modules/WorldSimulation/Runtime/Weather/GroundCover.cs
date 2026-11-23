@@ -325,7 +325,7 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Why the ground needed it (2026-10-16).</b> The ground remembers six hours (<see cref="MemorySeconds"/>), and its
+		/// <b>Why the ground needed it.</b> The ground remembers six hours (<see cref="MemorySeconds"/>), and its
 		/// prior is the hour's air, so a peak's snow came and went with the day: the afternoon's warmth took a mountain's
 		/// snowfield in a few hours, as it takes a dusting off a road, and no snow line ever stood on the hills. A snowpack is
 		/// a season's snowfall: it lies where the season is cold, from the season (the climate table's, sun-driven and
@@ -446,7 +446,7 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>One weather, many climates (2026-10-15).</b> The ground's forcing is read once, at the area's middle, so every
+		/// <b>One weather, many climates.</b> The ground's forcing is read once, at the area's middle, so every
 		/// texel of the cover map snowed and melted by the middle's temperature: a ridge three hundred metres up, the far
 		/// end of a scene four degrees of latitude away, a cold inland basin and a mild coast all whitened together. The
 		/// weather over them is one air and is still read once; each place's own climate is its offset from the middle's,

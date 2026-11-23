@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Where fences and walls join up (2026-10-19: "fences aren't fully connecting in some cases"; PointOfInterestLinearFeatures.Joins):
+	/// Where fences and walls join up ("fences aren't fully connecting in some cases"; PointOfInterestLinearFeatures.Joins):
 	/// over many seeded rectangles, polylines and slopes, consecutive modules' ends meet, every corner of an enclosure has exactly one
 	/// post, every gap (a gate's, a break's, a dropped module's, a run's end) is bounded by posts, a gate fills its gap, a solid piece's
 	/// corner is closed and its dips sink its neighbours with it. Pure: no scene.

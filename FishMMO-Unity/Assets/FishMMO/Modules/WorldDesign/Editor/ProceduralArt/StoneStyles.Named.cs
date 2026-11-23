@@ -5,10 +5,10 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The named stone sets the biome drafts ask for beyond each rock's own (2026-10-26, phase I6f of the biome suite, decisions
+	/// The named stone sets the biome drafts ask for beyond each rock's own (of the biome suite, decisions
 	/// 6 and 34): maerl and coral rubble, river gravels, ruin rubble and fallen dressed blocks, chert, furrow and strand stones,
-	/// haze knots, ice cobbles, striated glacial stones, tezontle, duneslab. Each is a stone material of decision 6's machinery
-	/// (I6b): <c>Boulder_{Name}_{Round,Slab,Spire}</c>, <c>Detail_Rocks_{Name}</c>, <c>Detail_Pebbles_{Name}</c>, its own material
+	/// haze knots, ice cobbles, striated glacial stones, tezontle, duneslab. Each is a stone material of the machinery:
+	/// <c>Boulder_{Name}_{Round,Slab,Spire}</c>, <c>Detail_Rocks_{Name}</c>, <c>Detail_Pebbles_{Name}</c>, its own material
 	/// over its rock's surface (<see cref="NamedStones"/>), and three variant meshes a detail (<see cref="RockVariantCounts"/>).
 	/// </summary>
 	/// <remarks>

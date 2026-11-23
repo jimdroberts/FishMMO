@@ -9,7 +9,7 @@ namespace FishMMO.Client
 	public static partial class SeaLifeSystem
 	{
 		/*
-		 * The seas in the caves (2026-10-26, phase I2n-b, decision 83 Q3: "sea life swims in cave water via cave-life spots carrying the
+		 * The seas in the caves ("sea life swims in cave water via cave-life spots carrying the
 		 * interior id"): a sea hall's warm sea under an ice shell, on a world whose own seas are frozen through (no sea surface at all), is
 		 * its interior biome's own sea, and that biome's Sea Life swims in it, placed and moved exactly as in the open sea
 		 * (SeaLifePlacement.TryPlace / Evaluate) over the hall's pool as its sea floor (CavePoolGround). Only the kinds the interior lists

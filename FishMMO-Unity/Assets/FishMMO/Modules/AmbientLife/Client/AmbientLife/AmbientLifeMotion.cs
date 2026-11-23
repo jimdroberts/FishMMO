@@ -341,7 +341,7 @@ namespace FishMMO.Client
 				{
 					continue;
 				}
-				// An offshore kind (2026-10-25) lives only over the open sea, far from any land.
+				// An offshore kind lives only over the open sea, far from any land.
 				if (kind.Offshore > 0f && !(seaHere && wet && IsOffshore(world, home, kind.Offshore)))
 				{
 					continue;
@@ -384,7 +384,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// True when no dry ground lies on eight bearings round a place at <paramref name="metres"/> and at half of it (2026-10-25): an
+		/// True when no dry ground lies on eight bearings round a place at <paramref name="metres"/> and at half of it: an
 		/// offshore kind's test. Past the loaded ground (no terrain) counts as open sea.
 		/// </summary>
 		public static bool IsOffshore(IAmbientWorld world, Vector3 at, float metres)
@@ -1060,7 +1060,7 @@ namespace FishMMO.Client
 			}
 			List<Vector4> perches = f.Perches;
 			/* A bird up in a crown 10–30 m over the path is not seen, and one in the grass barely: the open ground and the
-			 * flights between are where the eye finds them (2026-10-10: "still rarely seeing birds"), so most episodes
+			 * flights between are where the eye finds them ("still rarely seeing birds"), so most episodes
 			 * are on the ground and they are short, so a bird is often on the wing. */
 			// An owl hunts from a perch and drops onto the grass now and then; it does not forage about on foot.
 			float treeShare = kind.Shape == AmbientShape.Owl ? 0.75f : kind.Shape == AmbientShape.Crow ? 0.3f : 0.35f;
@@ -1609,7 +1609,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// A ground animal's spot in an episode: somewhere dry within its run of its own home spot (a crab's may be wet sand),
 		/// the most open of a few: in 0.5 m grass a mouse or a rat is not seen at all, so they forage on paths, sand, rock
-		/// and short turf where there is any (2026-10-10). With no grass anywhere this is the first dry place, as before.
+		/// and short turf where there is any. With no grass anywhere this is the first dry place, as before.
 		/// </summary>
 		private static Vector3 CritterSpot(in AmbientGroup g, AmbientCreatureKind kind, uint own, long episode, Vector3 home, IAmbientWorld world)
 		{
@@ -1798,7 +1798,7 @@ namespace FishMMO.Client
 				}
 			}
 
-			// A squirrel spends some of its rests on a trunk a couple of metres up, where it is seen (2026-10-10): it
+			// A squirrel spends some of its rests on a trunk a couple of metres up, where it is seen: it
 			// ran to the trunk's foot, climbs, clings, and comes down head first before it runs on (no jumps up or down).
 			if (onTrunk && stride <= 0f)
 			{

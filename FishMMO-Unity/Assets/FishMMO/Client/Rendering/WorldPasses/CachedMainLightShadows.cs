@@ -24,7 +24,7 @@ namespace FishMMO.Client
 	/// gives. Nothing a receiver reads changes.
 	/// </para>
 	/// <para>
-	/// <b>Windows, not URP's slices (2026-11-03).</b> URP re-fits each cascade to the camera every frame, snapped to its texels.
+	/// <b>Windows, not URP's slices.</b> URP re-fits each cascade to the camera every frame, snapped to its texels.
 	/// Caching URP's slice itself meant a moving camera redrew every cascade nearly every frame (natively ~1,240 static draws a
 	/// frame, +2 ms CPU, no saving). Each cascade is now cached over a <b>window</b>: URP's slice at the refresh with its
 	/// orthographic projection widened by <see cref="MarginDivisor"/> of its texels on each side (and a quarter of its depth
@@ -56,12 +56,11 @@ namespace FishMMO.Client
 		public static bool Enabled = DefaultOn;
 
 		/// <summary>
-		/// Whether the cache starts on. The owner chose on in browser players and off natively (2026-11-03); it stays off
-		/// everywhere until its merge is right. 2026-11-06: with URP's three cascades in the browser, the cache's image has dark
+		/// Whether the cache starts on. The owner chose on in browser players and off natively; it stays off
+		/// everywhere until its merge is right. With URP's three cascades in the browser, the cache's image has dark
 		/// areas the live map has nowhere (the live map with one cascade has none either), and the merge alone, with nothing
 		/// cached (harness `shadowCacheDrawNothing`), still changed ~8% of the close view's pixels: on WebGPU the merge writes
-		/// depth that no caster put there. The editor (Vulkan) merge wrote nothing in the same state (RenderDoc; measured
-		/// 2026-11-05).
+		/// depth that no caster put there. The editor (Vulkan) merge wrote nothing in the same state (RenderDoc).
 		/// </summary>
 		public const bool DefaultOn = false;
 
@@ -141,7 +140,7 @@ namespace FishMMO.Client
 		/// Whether the batch group leaves the static casters out of URP's culling for this camera: the cache serves it, and the
 		/// last frame merged. Culling comes before the cache pass knows whether it can merge, so a frame after one that could not
 		/// keeps them in URP's map (drawn twice if this one merges too: the depth test keeps one depth), and only the first frame
-		/// of a failure lacks them. Before 2026-11-05 every refused frame did.
+		/// of a failure lacks them. Formerly every refused frame did.
 		/// </summary>
 		public static bool OmitsStaticCasters(Camera camera) => AppliesTo(camera) && !lastFrameUnmerged && !DebugDrawNothing;
 
@@ -487,7 +486,7 @@ namespace FishMMO.Client
 					}
 				}
 			}
-			/* In double precision (2026-11-05): the views carry world translations of thousands of metres and the near cascade is
+			/* In double precision: the views carry world translations of thousands of metres and the near cascade is
 			 * metres across, so float products and an inverse put a fresh window's texel centres a few hundredths of a texel off
 			 * and TryMap refused the very slice it was built from (browser, settlement close: ~1 frame in 6). */
 			D4 worldToSlice = D4.From(GL.GetGPUProjectionMatrix(slice.Projection, true)) * D4.From(slice.View);
@@ -739,7 +738,7 @@ namespace FishMMO.Client
 				/* The cache in the depth format URP's own map is in on this device (seen by the merge pass, a frame late; 16-bit until
 				 * then): a caster's depth bias is in units of its target's depth format, and the cache's casters are drawn with URP's
 				 * bias, so a cache in another format kept another bias. In the browser that left the cached structures' grazing edges
-				 * (roof eaves, wall corners) shaded unlike URP's own map (2026-11-05). */
+				 * (roof eaves, wall corners) shaded unlike URP's own map. */
 				GraphicsFormat wantedFormat = GraphicsFormatUtility.IsDepthFormat(shadowFormat) ? shadowFormat : GraphicsFormat.None;
 				bool atlasChanged = cache == null || cacheWidth != atlas.x || cacheHeight != atlas.y || cachedCount != count || cachedSize != size
 					|| cachedFormat != wantedFormat;
@@ -786,8 +785,8 @@ namespace FishMMO.Client
 				{
 					/* A slice this cache cannot read through a margin window this frame. The batch group has already left the static
 					 * casters out of URP's culling (decided before this pass knows), so every cascade is drawn over a window that IS
-					 * URP's slice (no margin, its own projection) and merged one texel to one texel at depth unchanged: until
-					 * 2026-11-05 a refused frame had no structure shadows at all. */
+					 * URP's slice (no margin, its own projection) and merged one texel to one texel at depth unchanged: formerly
+					 * a refused frame had no structure shadows at all. */
 					Skip(SkipRefused);
 					mask = 0;
 					for (int i = 0; i < count; i++)

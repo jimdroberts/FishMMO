@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The cave biome a surface biome's caves of one form are inside (<see cref="BiomeTemplate.CaveInteriors"/>, 2026-10-18,
+	/// The cave biome a surface biome's caves of one form are inside (<see cref="BiomeTemplate.CaveInteriors"/>,
 	/// decisions 37 and 51, phase I2n "caves have a biome"): the biome whose template dresses the cave's inside (its formations,
 	/// crystals, glow, lights, floor grounds and animals), while the mouth, the shell's rock and every mine stay the host's.
 	/// </summary>
@@ -52,7 +52,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// One formation a biome's caves of a form take in a place (<see cref="BiomeTemplate.CaveFormations"/>, 2026-10-18, I2n): a
+	/// One formation a biome's caves of a form take in a place (<see cref="BiomeTemplate.CaveFormations"/>): a
 	/// rock shape name (Stalagmite, Flowstone, Gours, Block, Dribble, FrostFlowers…) drawn in the cave's own rock, with how often
 	/// among the place's others and the worlds it forms on.
 	/// </summary>
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// What lights a biome's caves of a form by itself (<see cref="BiomeTemplate.CaveGlows"/>, 2026-10-18, I2n): the glowing
+	/// What lights a biome's caves of a form by itself (<see cref="BiomeTemplate.CaveGlows"/>): the glowing
 	/// crystal's lead hue, and how much luminous fungus and how many glow-worm colonies its caves hold.
 	/// </summary>
 	[Serializable]
@@ -105,9 +105,9 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float Fungus;
 		[Tooltip("How often its chambers have glow-worm colonies hung from their roofs (1 the cave dressing's own chance, 0 none).")]
 		[Min(0f)] public float Worms;
-		[Tooltip("The glow-worms' hue by its name in the cave glow art (2026-10-25, I2n-c, decision 86 (e): Rootlight…). Empty: the glow art's first, every cave's until then.")]
+		[Tooltip("The glow-worms' hue by its name in the cave glow art (Rootlight…). Empty: the glow art's first, every cave's until then.")]
 		public string WormHue;
-		[Tooltip("Where its glow-worm colonies hang: from the high roofs (every cave's until 2026-10-25), threaded along the roots through the roof, or on drowned wood.")]
+		[Tooltip("Where its glow-worm colonies hang: from the high roofs (every cave's formerly), threaded along the roots through the roof, or on drowned wood.")]
 		public BiomeCaveWormMount WormMount;
 
 		public BiomeCaveGlow(BiomeCaveForm form, string crystal, float fungus, float worms, string wormHue = null, BiomeCaveWormMount wormMount = BiomeCaveWormMount.Roof)
@@ -122,7 +122,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// The entry as the authoring marks and reports it: "Form=crystal|fungus|worms", the worms' hue and mount after a fourth '|'
-		/// only when either is set (every entry authored before 2026-10-25 marks as it did).
+		/// only when either is set (every entry authored formerly marks as it did).
 		/// </summary>
 		public override string ToString()
 		{
@@ -136,14 +136,14 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// Where a ground layer is laid (<see cref="TerrainTextureLayer.underground"/>, 2026-10-25, phase I2n, decision 57: "an
+	/// Where a ground layer is laid (<see cref="TerrainTextureLayer.underground"/>: "an
 	/// UNDERGROUND band on ground layers, one template carries surface and interior palettes"): on the open ground the terrain
 	/// is painted with, on the floors and walls of the caves the biome dresses inside, or both.
 	/// </summary>
 	/// <remarks>Append only; the ordinal is stored in template assets. Both (0) is every layer's as it was before the band.</remarks>
 	public enum BiomeUnderground : byte
 	{
-		/// <summary>On the open ground and inside the caves alike (every layer before 2026-10-25).</summary>
+		/// <summary>On the open ground and inside the caves alike (every layer formerly).</summary>
 		Both = 0,
 		/// <summary>Only on the open ground: never a cave's floor or wall.</summary>
 		Surface = 1,
@@ -169,10 +169,10 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The zones of an ice cave's cold trap (decision 51, 2026-10-18): the COLD zone near a mouth and in the cold sink below its
+	/// The zones of an ice cave's cold trap: the COLD zone near a mouth and in the cold sink below its
 	/// sill holds the ice, a THAW ring beyond it the ice's leavings, and past that the cave is bare dripping ROCK. Built into the
-	/// cave habitat and the ice dressing (CaveHabitat, CaveIce, 2026-10-21); as a ground layer band (the zones a layer floors) it is
-	/// a hook for the Ice Cave round: no layer carries one yet, as the cave rock's four floor grounds are one set a cave.
+	/// cave habitat and the ice dressing (CaveHabitat, CaveIce); as a ground layer band (the zones a layer floors) it is
+	/// a hook for the Ice Cave biome: no layer carries one yet, as the cave rock's four floor grounds are one set a cave.
 	/// </summary>
 	[Flags]
 	public enum BiomeCaveZone : byte
@@ -190,14 +190,14 @@ namespace FishMMO.Shared.Biomes
 		// ── The link ──────────────────────────────────────────────────
 
 		/// <summary>
-		/// The rocks a limestone-type cave forms in (decisions 37 and 46): the soluble rocks water dissolves into caves. What the
-		/// Cave biome's interior rocks are authored from. Coral rag (Mangrove's raised fossil reef) joined 2026-10-25; salt rock,
+		/// The rocks a limestone-type cave forms in: the soluble rocks water dissolves into caves. What the
+		/// Cave biome's interior rocks are authored from. Coral rag (Mangrove's raised fossil reef) joined; salt rock,
 		/// alunite, caliche and laterite dissolve or rot but are kept out by their drafts (no limestone cave in them).
 		/// </summary>
 		public static readonly string[] SolubleRocks = { "Limestone", "Chalk", "Marble", "Gypsum", "Travertine", "Dolomite", "CoralRag" };
 
 		/// <summary>
-		/// The shells an ice cave's cold trap holds ice in (decision 51): glacier ice itself, and the soluble rocks of the rock ice
+		/// The shells an ice cave's cold trap holds ice in: glacier ice itself, and the soluble rocks of the rock ice
 		/// caves (Kungur's gypsum, Scărișoara's limestone).
 		/// </summary>
 		public static readonly string[] IceCaveRocks = { "Ice", "Limestone", "Dolomite", "Marble", "Gypsum" };
@@ -241,27 +241,27 @@ namespace FishMMO.Shared.Biomes
 		public static bool Links(BiomeCaveForm form) => form != BiomeCaveForm.Mine;
 
 		/// <summary>
-		/// Whether the every-form default lists carry a form (shells, formations, glows, hangings, 2026-10-26): every form but a sea hall,
-		/// which is only ever an interior's (decision 83) and is written only where a biome's file names it, so the 83 templates'
+		/// Whether the every-form default lists carry a form (shells, formations, glows, hangings): every form but a sea hall,
+		/// which is only ever an interior's and is written only where a biome's file names it, so the 83 templates'
 		/// authored lists stay what they were.
 		/// </summary>
 		public static bool InEveryList(BiomeCaveForm form) => form != BiomeCaveForm.SeaHall;
 
 		/// <summary>
-		/// Whether a form's link holds only on a world its interior's Requires admits (2026-10-26, phase I2n-b, decision 83: "the link
+		/// Whether a form's link holds only on a world its interior's Requires admits ("the link
 		/// gated by the interior's Requires"): a sea hall's, whose sea exists only on a world frozen through over a warm interior.
 		/// Every other form's link is as it was (the shell alone gates it).
 		/// </summary>
 		public static bool GatedByWorld(BiomeCaveForm form) => form == BiomeCaveForm.SeaHall;
 
-		/// <summary>The interior a Subsurface Ocean Vent host's sea halls link (decision 83): the biome is an interior only.</summary>
+		/// <summary>The interior a Subsurface Ocean Vent host's sea halls link: the biome is an interior only.</summary>
 		public const string SubsurfaceOceanVent = "Subsurface Ocean Vent";
 
 		/// <summary>The cave biomes' asset names: the interiors the authoring links (Cave, Ice Cave, Lava Tube) and the two whose rounds will (Volcanic Cave, Swamp Cave).</summary>
 		public const string Cave = "Cave", IceCave = "Ice Cave", LavaTube = "Lava Tube", VolcanicCave = "Volcanic Cave", SwampCave = "Swamp Cave";
 
 		/// <summary>
-		/// The interior every surface biome's caves of a form are linked to by default (decisions 37, 51 and 57, 2026-10-18/19): a
+		/// The interior every surface biome's caves of a form are linked to by default: a
 		/// natural cave, a grotto and a sea cave the Cave (where the shell is soluble), an ice cave the Ice Cave (in ice or the rock
 		/// ice caves form in), a lava tube the Lava Tube (in basalt); a mine none. Null for none.
 		/// </summary>
@@ -307,7 +307,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// The shell rocks a cave biome is the inside of (<see cref="BiomeTemplate.CaveInteriorRocks"/>) by default: the Cave the
-		/// soluble rocks, the Ice Cave ice and the rock ice caves' rocks, the Lava Tube basalt (decision 57, whatever the interior's
+		/// soluble rocks, the Ice Cave ice and the rock ice caves' rocks, the Lava Tube basalt (whatever the interior's
 		/// own Atmosphere); every other biome none (it is nobody's interior until its round says so). A fresh list each call.
 		/// </summary>
 		public static List<string> DefaultInteriorRocks(string biomeName)
@@ -336,24 +336,24 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The interior's habitat bits a cave-life spot reads in a linked cave (2026-10-25): the interior's own, but the BARREN bit the
-		/// host land's (the land over a cave is its air and water; the Lava Tube's Barren speaks of its open lava fields, decision 57:
+		/// The interior's habitat bits a cave-life spot reads in a linked cave: the interior's own, but the BARREN bit the
+		/// host land's (the land over a cave is its air and water; the Lava Tube's Barren speaks of its open lava fields:
 		/// the link ignores the interior's Atmosphere). <paramref name="host"/> and <paramref name="interior"/> are habitat masks;
 		/// <paramref name="barren"/> the barren bit.
 		/// </summary>
 		public static int LinkedHabitat(int host, int interior, int barren) => interior & ~barren | host & barren;
 
 		/// <summary>
-		/// <see cref="LinkedHabitat(int, int, int)"/> for a cave of a form (2026-10-26, phase I2n-b, decision 83 Q7): a sea hall keeps its
+		/// <see cref="LinkedHabitat(int, int, int)"/> for a cave of a form: a sea hall keeps its
 		/// interior's habitat whole, the host's Barren bit not taken (the ice over it is airless; the warm sea under it is the life).
 		/// </summary>
 		public static int LinkedHabitat(BiomeCaveForm form, int host, int interior, int barren)
 			=> form == BiomeCaveForm.SeaHall ? interior : LinkedHabitat(host, interior, barren);
 
 		/// <summary>
-		/// Whether a template's cave lights are authored as the cold Glow kinds (decision 41: a biome found only under thin air or
-		/// none; decision 62: or only on a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or molten-rock world, together
-		/// BiomeAir.NeverBreathable), with decision 57's exception: a template other biomes link their caves to keeps its fire lights,
+		/// Whether a template's cave lights are authored as the cold Glow kinds (a biome found only under thin air or
+		/// none: or only on a methane, cryogenic, frozen-nitrogen, runaway-greenhouse or molten-rock world, together
+		/// BiomeAir.NeverBreathable), with the exception: a template other biomes link their caves to keeps its fire lights,
 		/// as the cave dressing turns them to Glow on a world whose air will not burn them (<see cref="ForAir"/>).
 		/// </summary>
 		public static bool GlowCaveLights(bool neverBreathable, bool isInterior) => neverBreathable && !isInterior;
@@ -364,7 +364,7 @@ namespace FishMMO.Shared.Biomes
 		// ── Formations ────────────────────────────────────────────────
 
 		/// <summary>
-		/// The formations a form's caves took until 2026-10-18 (the cave dressing's SetFor, one shape a place): what every biome's
+		/// The formations a form's caves took formerly (the cave dressing's SetFor, one shape a place): what every biome's
 		/// template is authored with. A fresh list each call, in place order.
 		/// </summary>
 		public static List<BiomeCaveFormation> DefaultFormations(BiomeCaveForm form)
@@ -394,7 +394,7 @@ namespace FishMMO.Shared.Biomes
 					Add(BiomeCaveFormationRole.Breakdown, "Scree");
 					break;
 				case BiomeCaveForm.SeaHall:
-					// The dressing's own set for a sea hall (2026-10-26, I2n-b): icicles and fallen ice; its chimneys are its smokers'.
+					// The dressing's own set for a sea hall: icicles and fallen ice; its chimneys are its smokers'.
 					Add(BiomeCaveFormationRole.Hanging, "Stalagmite");
 					Add(BiomeCaveFormationRole.Breakdown, "Lobe");
 					break;
@@ -489,7 +489,7 @@ namespace FishMMO.Shared.Biomes
 		// ── Glow ──────────────────────────────────────────────────────
 
 		/// <summary>
-		/// What lit a form's caves by itself until 2026-10-18 (the cave dressing's palette by form): an ice cave's ice-blue crystal and
+		/// What lit a form's caves by itself formerly (the cave dressing's palette by form): an ice cave's ice-blue crystal and
 		/// a lava tube's amber with neither fungus nor glow-worms, a mine's fungus without glow-worms, every other cave's crystal hues
 		/// by chance with both.
 		/// </summary>
@@ -552,11 +552,11 @@ namespace FishMMO.Shared.Biomes
 
 		// ── Crystals ──────────────────────────────────────────────────
 
-		/// <summary>The share of its weight a host's glowing crystal grows with in a linked interior (decision 51: an accent).</summary>
+		/// <summary>The share of its weight a host's glowing crystal grows with in a linked interior (an accent).</summary>
 		public const float HostAccent = 0.5f;
 
 		/// <summary>
-		/// A linked interior's crystals with the host's glowing ones as accents (decision 51, 2026-10-18: Glacier's Nāgamani in its
+		/// A linked interior's crystals with the host's glowing ones as accents (Glacier's Nāgamani in its
 		/// ice caves): the interior's list, then each glowing kind of the host's it does not grow at <see cref="HostAccent"/> of the
 		/// host's weight. The interior's own list (the same object) when the host adds nothing.
 		/// </summary>
@@ -596,7 +596,7 @@ namespace FishMMO.Shared.Biomes
 		// ── Lights ────────────────────────────────────────────────────
 
 		/// <summary>
-		/// A linked interior's cave light under the world's air (decision 51): as named where people can breathe, else the cold Glow
+		/// A linked interior's cave light under the world's air: as named where people can breathe, else the cold Glow
 		/// kind in its place (<see cref="BiomeGlowLights.CaveLights"/>' mapping: a crystal post on a route or in a stope, a glowjar
 		/// elsewhere), at the same spacing. A Glow kind stays.
 		/// </summary>
@@ -614,11 +614,11 @@ namespace FishMMO.Shared.Biomes
 
 		// ── Site variants ─────────────────────────────────────────────
 
-		/// <summary>The share of its weight an interior's own variant keeps where the host names variants of the kind (decision 51).</summary>
+		/// <summary>The share of its weight an interior's own variant keeps where the host names variants of the kind.</summary>
 		public const float InteriorVariantShare = 0.4f;
 
 		/// <summary>
-		/// A cave site's template weight with its host's and its interior's variant lists merged (decision 51, 2026-10-18): the host's
+		/// A cave site's template weight with its host's and its interior's variant lists merged: the host's
 		/// entry where it names the variant; else the interior's (<paramref name="interiorNamed"/>: the interior named it, so its
 		/// pieces take the interior's palette), at <see cref="InteriorVariantShare"/> of it where the host names variants of its own for
 		/// the kind; else <paramref name="elsewhere"/>.
@@ -657,7 +657,7 @@ namespace FishMMO.Shared.Biomes
 
 		// ── The cold trap ─────────────────────────────────────────────
 
-		/// <summary>How far from a mouth the ice lies, metres (decision 51).</summary>
+		/// <summary>How far from a mouth the ice lies, metres.</summary>
 		public const float ColdReach = 90f;
 		/// <summary>How far below a mouth's sill the cold sink lies, metres: winter air pools there.</summary>
 		public const float SinkDepth = 8f;
@@ -667,7 +667,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// The zone of an ice cave's cold trap at a point: <paramref name="distance"/> from the nearest mouth's sill, metres, and how
 		/// far below it the point lies (<paramref name="belowSill"/>, metres, negative above it). COLD within <see cref="ColdReach"/>,
-		/// and anywhere in the sink (<see cref="SinkDepth"/> or more below) however far in (2026-10-21, "cold traps freeze deep":
+		/// and anywhere in the sink (<see cref="SinkDepth"/> or more below) however far in ("cold traps freeze deep":
 		/// decision 51 held the sink's ice to 160 m); THAW in the <see cref="ThawRing"/> past the cold zone; ROCK beyond. A cave in an
 		/// ice shell is all cold (<paramref name="iceShell"/>).
 		/// </summary>

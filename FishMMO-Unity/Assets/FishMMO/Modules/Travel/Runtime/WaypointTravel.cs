@@ -141,6 +141,13 @@ namespace FishMMO.Shared
 				return false;
 			}
 
+			// A Gate Stone shares the waypoint index space and record but is the Gate spell's, never fast travel's (issue #241).
+			if (waypoint.Kind == WaypointKind.GateStone)
+			{
+				reason = WaypointTravelRefusalReason.NotATravelPoint;
+				return false;
+			}
+
 			player.TryGet(out IWaypointController controller);
 
 			bool unlocked = false;

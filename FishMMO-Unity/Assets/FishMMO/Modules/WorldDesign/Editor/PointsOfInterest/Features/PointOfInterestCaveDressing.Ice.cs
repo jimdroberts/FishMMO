@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 			public int IceFalls, IceCurtains, IcePools, IceFrost, IceStreams, IceLights;
 
 			/// <summary>
-			/// An ice cave's ice (2026-10-20, caves livened: "frozen waterfalls down walls and drops, icicle curtains along roof edges,
+			/// An ice cave's ice (caves livened: "frozen waterfalls down walls and drops, icicle curtains along roof edges,
 			/// frozen pools on floors (walkable, glassy), frost on the walls near them"): laid by <see cref="CaveIce.Lay"/> over the
 			/// cave's cold zone and over the water its streams' plan freezes (<see cref="CaveStreams.Plan"/>). Last of all the passes,
 			/// on streams of its own, so nothing laid before it moves; nothing at all in any other form of cave.
@@ -105,14 +105,14 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// An ice cave's ice (2026-10-20, caves livened): frozen waterfalls down its walls and over its drops, icicle curtains along its
+	/// An ice cave's ice (caves livened): frozen waterfalls down its walls and over its drops, icicle curtains along its
 	/// roof's edges, frozen pools in its basins and sheets of ice on its floors (walked on, glassy), hoarfrost on the walls round
 	/// them, and the water its streams' plan would run frozen in place (<see cref="CaveStreamPlan.Frozen"/>).
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// <b>Where it is cold.</b> An ice cave is frozen in its cold zone (CaveHabitat: <see cref="ColdReach"/> m walked in from a
-	/// mouth) and everywhere it lies more than <see cref="ColdSinkDepth"/> m under its mouth's sill, however far in (2026-10-21,
+	/// mouth) and everywhere it lies more than <see cref="ColdSinkDepth"/> m under its mouth's sill, however far in (
 	/// "cold traps freeze deep": the winter air sinks and pools there and never leaves; this replaced biome-suite decision 51's
 	/// 160 m reach for the sink), and meltwater from the thaw ring past the zone runs back in and freezes (<see cref="ThawRing"/>):
 	/// the ice is laid over both (<see cref="Cold"/>); the cold trap the layout sank in the deepest chamber
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		/// <summary>
 		/// The cold zone and the thaw ring (CaveHabitat's), metres walked in from a mouth, and how far under the mouth's sill a
-		/// point lies in the cold trap, frozen however far in (2026-10-21; it was frozen only within 160 m, decision 51).
+		/// point lies in the cold trap, frozen however far in (it was frozen only within 160 m).
 		/// </summary>
 		public const float ColdReach = 90f, ColdSinkDepth = 8f, ThawRing = 20f;
 		/// <summary>The least face a fall is laid down, and the most of a face it covers (a seep high on a taller one), metres.</summary>
@@ -240,7 +240,7 @@ namespace FishMMO.Shared.WorldDesign
 			feature ??= (p, m) => false;
 			var laying = new Laying(system, habitat, way, feature, lights, layout);
 			int chambers = system.Chambers.Count;
-			// As many as its chambers call for (2026-10-21: a deep system's dozens of frozen chambers were held to a small cave's ice).
+			// As many as its chambers call for (a deep system's dozens of frozen chambers were held to a small cave's ice).
 			laying.MaxFalls = Mathf.Clamp(2 + chambers / 2, 2, 40);
 			laying.MaxCurtains = Mathf.Clamp(4 + chambers, 4, 80);
 			laying.MaxSheets = Mathf.Clamp(2 + chambers / 2, 2, 40);

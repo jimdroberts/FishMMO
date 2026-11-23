@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How a biome's ground burns on the shared clock (<see cref="BiomeTemplate.BurnRegime"/>, 2026-10-25, phase I2t, decisions 75, 82
+	/// How a biome's ground burns on the shared clock (<see cref="BiomeTemplate.BurnRegime"/>, 82
 	/// and 84): never, the occasional spring burn of a steppe, a savanna's annual veld fires at the end of the dry season, or the blue
 	/// sulphur fire that walks a brimstone plain at night. Presentation only, drawn by the client on the GPU (FishBurn.hlsl) from
 	/// <see cref="FishMMO.Shared.Weather.BurnMosaic"/>: no damage, nothing on the wire.
@@ -11,13 +11,13 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>APPEND-ONLY: the value is serialised on the templates and packed into the GPU's burn rows.</remarks>
 	public enum BiomeBurnRegime : byte
 	{
-		/// <summary>Never burns: every biome before 2026-10-25.</summary>
+		/// <summary>Never burns: every biome formerly.</summary>
 		None = 0,
-		/// <summary>A cell burns in about one shared year in five, in spring (decision 82, Steppe).</summary>
+		/// <summary>A cell burns in about one shared year in five, in spring (Steppe).</summary>
 		Occasional = 1,
-		/// <summary>Most cells burn every year, in the late dry season (decision 75, Savanna).</summary>
+		/// <summary>Most cells burn every year, in the late dry season (Savanna).</summary>
 		Annual = 2,
-		/// <summary>Blue sulphur flames over the hot ground from dusk to dawn, on breathable worlds only (decision 84, Sulphur Flats).</summary>
+		/// <summary>Blue sulphur flames over the hot ground from dusk to dawn, on breathable worlds only (Sulphur Flats).</summary>
 		Brimstone = 3,
 	}
 
@@ -31,7 +31,7 @@ namespace FishMMO.Shared.Biomes
 		public static bool IsVeld(BiomeBurnRegime regime) => regime == BiomeBurnRegime.Occasional || regime == BiomeBurnRegime.Annual;
 
 		/// <summary>
-		/// The regime a scene draws for a biome: its own, except that sulphur burns blue only in air that holds oxygen (decision 84):
+		/// The regime a scene draws for a biome: its own, except that sulphur burns blue only in air that holds oxygen:
 		/// on a world whose air is not breathable (<see cref="BiomeAir.IsBreathable(in BiomeWorldConditions)"/>) a Brimstone biome
 		/// draws nothing. Veld fires need a world that grew grass, which the biome's own selection already asks.
 		/// </summary>

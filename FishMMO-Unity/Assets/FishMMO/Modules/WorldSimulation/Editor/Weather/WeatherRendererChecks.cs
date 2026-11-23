@@ -33,8 +33,7 @@ namespace FishMMO.Client
 			WorldSystemsAudit.ProjectChecks.Add(Inspect);
 		}
 
-		/// <summary>The passes a renderer must carry, and what each one draws: the core's host for the weather's module passes
-		/// (Phase 4 of the core and modules plan, 2026-11-18).</summary>
+		/// <summary>The passes a renderer must carry, and what each one draws: the core's host for the weather's module passes.</summary>
 		private static readonly (System.Type Feature, string Name, string Draws)[] Passes =
 		{
 			(typeof(FishModulePassesFeature), "Fish Module Passes",

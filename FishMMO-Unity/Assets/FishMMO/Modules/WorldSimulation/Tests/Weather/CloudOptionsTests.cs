@@ -253,7 +253,7 @@ namespace FishMMO.UnitTests.Weather
 		{
 			// On one frame every texel is looked through at the same place, so each place's phase is the
 			// frame's. A pixel is steadied mostly from its own place and its neighbours': those must not
-			// share a phase, or the step error that phase leaves ramps across the texel (2026-09-29, the
+			// share a phase, or the step error that phase leaves ramps across the texel (the
 			// scale pattern). The Bayer order puts neighbouring places at least three sixteenths apart.
 			Assert.Greater(Neighbours(CloudOptions.JitterPhase), 2.5f / 16f, "neighbouring places nearly in phase");
 			// The control: the old bit-reversed order is a Morton ramp, neighbours a sixteenth apart.

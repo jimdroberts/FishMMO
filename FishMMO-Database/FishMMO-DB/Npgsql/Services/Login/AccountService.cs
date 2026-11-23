@@ -1583,8 +1583,8 @@ namespace FishMMO.Database.Npgsql.Services
 				/* A null is passed as null, never as DBNull.Value. EF Core 5's raw-SQL parameters look up
 				 * a type mapping for the CLR type of each value, and there is none for DBNull: the call
 				 * throws before anything is sent. A plain null becomes a database NULL on its own. That
-				 * pattern made every profile with a blank field unwritable, and permanent bans and
-				 * mute clears with it, until 2026-09-14. */
+				 * pattern once made every profile with a blank field unwritable, and permanent bans and
+				 * mute clears with it. */
 				int rows = await dbContext.Database.ExecuteSqlRawAsync(sql, new object[]
 				{
 					normalized,

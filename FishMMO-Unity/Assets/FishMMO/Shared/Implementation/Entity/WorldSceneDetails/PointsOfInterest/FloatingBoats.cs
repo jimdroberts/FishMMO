@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Boats on the water: moored ones riding the tide at their harbour (and settling on the mud, heeled over, when it goes
 	/// out from under them), and ships under way along the scene's sea lanes, solid, with a deck a player can stand on and be
-	/// carried by (2026-10-12: "We need docks…, accurate ships and boats"; "We should have ships floating out in the
+	/// carried by ("We need docks…, accurate ships and boats"; "We should have ships floating out in the
 	/// ocean too?"; "Solid sailing ships needs to be done.").
 	/// </summary>
 	/// <remarks>
@@ -24,7 +24,7 @@ namespace FishMMO.Shared
 	/// few metres), so a hull fixed at mean sea level would stand clear of the water at low tide and be swamped at high.
 	/// </para>
 	/// <para>
-	/// <b>A moored boat collides</b> (2026-10-12: "Add collision to floating boats so we don't swim through them"). Its
+	/// <b>A moored boat collides</b> ("Add collision to floating boats so we don't swim through them"). Its
 	/// root, which the server keeps, carries its hull's collider and moves only with the tide: its level is worked out from
 	/// <see cref="WaterQuery"/> at the synced tick, on the server and every client alike and to the millimetre, so a
 	/// prediction meets the hull where the server does (and the tide moves it a tenth of a millimetre a second). Its bob and
@@ -78,7 +78,7 @@ namespace FishMMO.Shared
 	/// switched off: nothing can run into a ship nobody can see.
 	/// </para>
 	/// <para>
-	/// <b>Airships</b> (a cloud world's, 2026-10-14: "flying ships") are the same ships on lanes through the air
+	/// <b>Airships</b> (a cloud world's: "flying ships") are the same ships on lanes through the air
 	/// (<see cref="Airborne"/>): a lane point's y is the ship's own height, climbing and descending between landing
 	/// stages, and the root's frame has the deck at y 0 instead of the waterline. At a port end such a lane holds the ship
 	/// still alongside its stage and swings it only at the end of its wait (<see cref="Lane.BerthSwing"/>). Everything

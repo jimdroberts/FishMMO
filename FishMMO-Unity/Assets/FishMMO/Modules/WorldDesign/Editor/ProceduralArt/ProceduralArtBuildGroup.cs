@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// scenes reference it by path-derived GUIDs, and a project's own art replaces it through LOCAL. So it has
 	/// no business in the committed Addressables groups: there it lists thousands of files that do not exist on
 	/// a fresh clone, churns every time the generator renames something, and ships every placeholder whether
-	/// or not anything uses it. Smart Group put 1,947 of them there on 2026-10-02; it now skips the generated
+	/// or not anything uses it. Smart Group put 1,947 of them there; it now skips the generated
 	/// folders and takes out what it finds (<see cref="RemoveCommittedEntries"/>).
 	/// </para>
 	/// <para>

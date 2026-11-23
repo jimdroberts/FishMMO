@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>A cave system's lava: whether it still runs molten, and its bodies.</summary>
 	public sealed class CaveLavaPlan
 	{
-		/// <summary>A cooled system: no molten lava at all (as every lava tube was before 2026-10-20).</summary>
+		/// <summary>A cooled system: no molten lava at all (as every lava tube was formerly).</summary>
 		public static readonly CaveLavaPlan Cooled = new CaveLavaPlan();
 
 		/// <summary>Whether the system still runs molten.</summary>
@@ -52,7 +52,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Molten lava in the caves (2026-10-20: "Lava caves/tunnels/tubes should have more lava? lava pits? magma? etc?"): which
+	/// Molten lava in the caves ("Lava caves/tunnels/tubes should have more lava? lava pits? magma? etc?"): which
 	/// systems still run molten (most lava tubes, some cooled) and where the lava lies in them.
 	/// </summary>
 	/// <remarks>
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The nearest a narrow tube's channel comes to its centre line (no nearer than the lane and a walker's shoulder), metres.</summary>
 		public const float LaneClearLeast = CaveSystem.WayLane + 0.35f;
 		/// <summary>
-		/// The most bodies a system's plan holds (2026-10-21: 16 before, filled by a long tube's rivers before any lake; the scene's
+		/// The most bodies a system's plan holds (16 before, filled by a long tube's rivers before any lake; the scene's
 		/// water ids keep eight bits for a body, CaveLavaWater).
 		/// </summary>
 		public const int MaxBodies = 64;

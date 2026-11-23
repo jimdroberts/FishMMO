@@ -320,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 						float reach = faceR * profile;
 						/* Rough rock: ragged in and out, banded like strata, coming in over the first dozen metres under the face.
 						 * Its reach is metres, not a share of the island: a share put a city's rock ten metres in and out a
-						 * few metres under its rim, and the wall met the rim in a row of great V's (2026-10-15 render). */
+						 * few metres under its rim, and the wall met the rim in a row of great V's. */
 						float rough = Mathf.SmoothStep(0f, 1f, (faceY - y) / RoughIn);
 						float wx = dir.x * reach, wz = dir.y * reach;
 						float n = CloudIslands.ValueNoise(wx / 9f, y / 7f, wz / 9f, seed) - 0.5f;
@@ -383,7 +383,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <b>Why it is there.</b> The underside alone is a shell, its walls and a ledge reaching a little way in under the turf,
 		/// and hollow inside; the terrain is not drawn from below. So any sight line that slipped in between the rock's edge
 		/// and the turf's staircase of cells (at any angle, from the island's own edge or another) ran on under the turf,
-		/// through the hollow, and out the other side: the sky, in slivers all round every island (2026-10-14/15, three
+		/// through the hollow, and out the other side: the sky, in slivers all round every island (three
 		/// rounds of moving the edge, which only moved the slivers). Closed by this, such a line meets rock. Drawn only:
 		/// nothing stands under the turf, so it has no collider, and it casts no shadow from under the ground.
 		/// </remarks>
@@ -531,12 +531,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// hole where its filtered holes texture reads zero, up to half a cell past the last solid cell, cut diagonally at the
 		/// staircase's corners and nudged by compression. So the turf rolls down at its edge (CloudIslands.RollUnder) and the
 		/// rim lies over it: wherever within a cell the drawn edge falls, it falls under stone, and the grass meets the rock
-		/// where it rises past the ledge, at the stone's level (2026-10-14/15).
+		/// where it rises past the ledge, at the stone's level.
 		/// </para>
 		/// <para>
 		/// <b>Smooth, round the staircase's outside.</b> Column by column the turf's last solid point jumps a whole cell in and
 		/// out along the staircase. A rim that followed it left the rolled turf of the next cell out standing past the stone
-		/// in every notch (a red stripe of it, painted) and the wall dropping from every tooth in a spike (2026-10-15 render).
+		/// in every notch (a red stripe of it, painted) and the wall dropping from every tooth in a spike.
 		/// So the rim's outer edge is the outermost last solid point within <see cref="RimWindowCells"/> cells either way,
 		/// <see cref="RimPastEdge"/> cells past it, smoothed; the ledge's inner edge the innermost, <see cref="LedgeIn"/> in.
 		/// The heights are the turf's own (<paramref name="turf"/>: as shaped, before it rolled down; null: <paramref name="ground"/>),
@@ -652,7 +652,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// How far rolled down (metres) the turf is where it starts to give way to stone, and where it is all stone: only
 		/// under the rock's rim, where the turf's drawn fringe may show. Painted further in, the ground-colour map (a couple
-		/// of metres a texel) carried the stone's pale colour into the grass by the rim, which looked dead (2026-10-15 render).
+		/// of metres a texel) carried the stone's pale colour into the grass by the rim, which looked dead.
 		/// </summary>
 		public const float BlendFrom = 0.35f, BlendTo = 0.8f;
 
@@ -836,7 +836,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// It used to hang from end posts two and a half metres in from the outline, sagging from the first plank: once the
-		/// rim of stone lay over the turf's edge, the first planks ran into it and the walk came out under it (2026-10-15).
+		/// rim of stone lay over the turf's edge, the first planks ran into it and the walk came out under it.
 		/// </remarks>
 		public static bool BridgeWay(CloudIslands.Island a, RimProfile rimA, CloudIslands.Island b, RimProfile rimB, Func<float, float, float> ground,
 			out List<Vector3> joints, out int landA, out int landB, List<Vector3> postsA = null, List<Vector3> postsB = null)
@@ -934,7 +934,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How far a bridge end is pitched about its posts, degrees, so its landing lies on the grass behind them however the
-		/// ground slopes there (2026-10-15: on a steep islet a level landing stood most of a metre off the grass, a ledge a
+		/// ground slopes there (on a steep islet a level landing stood most of a metre off the grass, a ledge a
 		/// walker could not step up); a little over the ground rather than in it, and no more than 25°.
 		/// </summary>
 		public static float LandingPitch(Vector3 post, Vector3 outward, Func<float, float, float> ground)
@@ -988,7 +988,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Returns each bridge's two landings, end post to end post, for the record.
 		/// </summary>
 		/// <remarks>
-		/// <paramref name="structures"/>: the world body's own (2026-10-18, I6e; a cloud world stands in no biome): the palette the
+		/// <paramref name="structures"/>: the world body's own (a cloud world stands in no biome): the palette the
 		/// bridges are laid in, and the light beside each end (<see cref="CloudWorldWayPlace.BridgeEnd"/>). Null or empty, the kit's
 		/// own materials and no lights, as before.
 		/// </remarks>
@@ -1021,7 +1021,7 @@ namespace FishMMO.Shared.WorldDesign
 			string lightQuery = structures != null && structures.TryLight(CloudWorldWayPlace.BridgeEnd, out CloudWorldWayLight endLight)
 				&& FishMMO.Shared.Biomes.BiomeWayLights.MountOf(endLight.Light) == FishMMO.Shared.Biomes.BiomeWayLightMount.Ground ? endLight.PieceQuery : null;
 			int lights = 0, unlit = 0;
-			// What the lights of the bridge being laid give off (2026-10-25, I6i), kept on its crossing for the client's site lights.
+			// What the lights of the bridge being laid give off, kept on its crossing for the client's site lights.
 			var endLights = new List<SceneEmitter>();
 			void LightEnd(CloudIslands.Island island, Vector3 post, Vector3 outward, List<Vector3> taken)
 			{
@@ -1035,7 +1035,7 @@ namespace FishMMO.Shared.WorldDesign
 					GameObject prefab = PointOfInterestPieceResolver.Resolve(new PointOfInterestPieceRequest(lightQuery, "timber",
 						unchecked((int)(seed ^ (uint)Mathf.RoundToInt(at.x * 10f) * 0x9E3779B1u ^ (uint)Mathf.RoundToInt(at.z * 10f)))));
 					LayPrefab(prefab, at, facing, Vector3.one);
-					// A crystal post's crystal in its cradle (2026-10-25, I6i-b), where its art exists.
+					// A crystal post's crystal in its cradle, where its art exists.
 					if (PostCrystal(prefab, at, facing, Vector3.one, seed, out GameObject crystal, out Vector3 crystalAt, out Vector3 crystalSize))
 					{
 						LayPrefab(crystal, crystalAt, facing, crystalSize);
@@ -1120,10 +1120,10 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What a way light laid on a cloud world gives off (2026-10-25, I6i), in the scene's frame, into <paramref name="into"/>: its kit
+		/// What a way light laid on a cloud world gives off, in the scene's frame, into <paramref name="into"/>: its kit
 		/// piece's emitters (StructurePieces.EmittersOf) where the prop stands, each seeded by its place as a site's are; a cold glow
 		/// takes its piece's own hue (rune, faerie), a crystal post's its crystal's hue (<see cref="PostCrystalKind"/>, laid in its cradle by
-		/// <see cref="PostCrystal"/>, 2026-10-25, I6i-b), flickering only where that crystal does, else pulsing. Nothing for a prefab that is not a kit piece. What lets the world's lamps light the islands at night
+		/// <see cref="PostCrystal"/>), flickering only where that crystal does, else pulsing. Nothing for a prefab that is not a kit piece. What lets the world's lamps light the islands at night
 		/// (SceneCloudWorld.Lights → SiteLightPool), which they could not while they were props alone.
 		/// </summary>
 		public static void LightEmitters(GameObject prefab, Vector3 position, Quaternion rotation, Vector3 scale, uint salt, List<SceneEmitter> into)
@@ -1150,13 +1150,13 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The crystal a cloud world's crystal posts carry (2026-10-25, I6i-b): a cloud world stands in no biome, so the one a post with
+		/// The crystal a cloud world's crystal posts carry: a cloud world stands in no biome, so the one a post with
 		/// no biome takes (BiomeTemplateArt.PostCrystal: the default cave crystals' heaviest glowing kind).
 		/// </summary>
 		public static FishMMO.Shared.Biomes.BiomeCaveCrystalKind PostCrystalKind => BiomeTemplateArt.PostCrystal(null);
 
 		/// <summary>
-		/// A way light's crystal (2026-10-25, I6i-b): where <paramref name="prefab"/> is a crystal post (a kit piece with a crystal
+		/// A way light's crystal: where <paramref name="prefab"/> is a crystal post (a kit piece with a crystal
 		/// socket) and the art of <see cref="PostCrystalKind"/> exists, the crystal to lay in its cradle, where and how large, its variant
 		/// hashed from <paramref name="salt"/> and the post's place as a site's are. False otherwise (nothing to lay).
 		/// </summary>
@@ -1189,7 +1189,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float EndLightBehind = 0.7f;
 
 		/// <summary>
-		/// Where a bridge end's light stands (2026-10-18, I6e): beside the landing behind the posts, to the right of the way out
+		/// Where a bridge end's light stands: beside the landing behind the posts, to the right of the way out
 		/// (else the left), on the island's own ground at least a metre and a half in from its outline and clear of every bridge
 		/// post already on the island (it faces the way out). False when neither side has the ground. Pure.
 		/// </summary>
@@ -1251,7 +1251,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			try
 			{
-				// The world body's own palette and lights (2026-10-18, I6e): a cloud world stands in no biome. Empty: the kit's.
+				// The world body's own palette and lights: a cloud world stands in no biome. Empty: the kit's.
 				CloudWorldStructures structures = request.Body != null ? request.Body.CloudWorldStructures : null;
 				PointOfInterestSkyTraffic.Build(scene, world.transform, world, request, tiles.WidthMetres, tiles.DepthMetres, ground, notes, structures?.Laid, structures);
 			}

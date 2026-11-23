@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Gorge crossings (2026-10-12: a gorge is not crossed on plank spans with nothing under them): a stone arch for a
+	/// Gorge crossings (a gorge is not crossed on plank spans with nothing under them): a stone arch for a
 	/// gorge a town keeps, a rope-and-plank bridge for a wild or a wide one. Each is one piece from rim to rim, laid by
 	/// PropsFeature when its crossing is a gorge's (TryGorgeCrossing) and stretched along z to the lips' distance, as a
 	/// bridge span is: across is x, along z, the deck's top at y = 0 at both ends, which land on the rims.
@@ -142,7 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 			float Deck(float z) => -sag * (1f - 4f * z * z / (length * length));
 
 			// The walk.
-			// The planks are the walk's floor (2026-10-16).
+			// The planks are the walk's floor.
 			using (d.Builds(DeckRoles))
 			{
 				if (d.Lod == 2)

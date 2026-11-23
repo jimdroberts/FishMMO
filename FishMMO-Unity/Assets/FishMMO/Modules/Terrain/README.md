@@ -12,7 +12,7 @@ presentation of the scene's baked data.
 | **Depends on** | World Simulation (the weather's moss and render profile); its tests also reference Water |
 | **Depended on by** | World Test Bed (the WorldSim harness drives the renderer's switches), World Design (its tests check generated content against the renderer's limits) |
 | **Remove together with** | World Test Bed, World Design, Naming (Naming's tests reference the World Test Bed) |
-| **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18 |
+| **Moved** | Out of the core |
 
 ## Folders
 

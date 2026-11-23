@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What lights a natural cave (2026-10-13: "enormous caves with lots of glowy rocks lining the walkable pathways …
+	/// What lights a natural cave ("enormous caves with lots of glowy rocks lining the walkable pathways …
 	/// Crystals, Luminous fungi, Glow-worm ceilings"): glowing crystal clusters and luminous fungus lining the ways a
 	/// player walks — across each great hall from every way into it to its middle, over the bridges and ramps, round a pit's
 	/// ledge, to the crossings — then what the system's character adds: crystal galleries, glowcap groves, glow down the
@@ -104,7 +104,7 @@ namespace FishMMO.Shared.WorldDesign
 						case CaveCharacter.Rift: share = 0.45f; break;
 						default: share = 0.4f; break;
 					}
-					// The cave biome's fungus weighs against the crystal (its Cave Glows, 2026-10-25): 1 leaves the share as it was.
+					// The cave biome's fungus weighs against the crystal (its Cave Glows): 1 leaves the share as it was.
 					float fungus = Colours().FungusWeight;
 					return fungus == 1f ? share : BiomeCaveInteriors.CrystalShare(share, fungus);
 				}
@@ -357,7 +357,7 @@ namespace FishMMO.Shared.WorldDesign
 			private const float GiantSkew = 2.5f;
 
 			/// <summary>
-			/// The odd giant among a cave's crystals (2026-10-20: "we want massive crystals"): a multiplier on a floor crystal's
+			/// The odd giant among a cave's crystals ("we want massive crystals"): a multiplier on a floor crystal's
 			/// size, 1 + (most − 1)·u^<see cref="GiantSkew"/> from a hash of where it stands (no draw is taken, so the dressing's
 			/// stream and every other piece stay where they were), cut back by 30% at a time to where it still clears the roof and,
 			/// for a crystal that collides, stays out of the walked lanes. 1 where none fits larger.
@@ -448,7 +448,7 @@ namespace FishMMO.Shared.WorldDesign
 				uint seed = PointOfInterestPlanner.Hash(system.Seed, Mathf.RoundToInt(local.x * 10f), Mathf.RoundToInt(local.z * 10f), 0xC7);
 				if (art.Flickers)
 				{
-					// A crystal that flickers (stormglass, 2026-10-18): a cold glow with the flicker, in its hue.
+					// A crystal that flickers (stormglass): a cold glow with the flicker, in its hue.
 					Emit(local, SceneEmitterKind.Glow, SceneGlow.WithFlicker(SceneGlow.WithCrystalHue(seed, art.EmitterHue), true), art.SuggestedReach);
 					return;
 				}
@@ -818,8 +818,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					chance = 0.1f;
 				}
-				// The cave biome's glow-worms (its Cave Glows, 2026-10-25): 1 the chance as it was. Where they hang on roots or wood
-				// (2026-10-26, I2n-c, decision 86 (e)), little of their own roof silk (the roof's mount ×1: as it was).
+				// The cave biome's glow-worms (its Cave Glows): 1 the chance as it was. Where they hang on roots or wood,
+				// little of their own roof silk (the roof's mount ×1: as it was).
 				chance *= Colours().WormChance * BiomeCaveWaters.RoofShare(Colours().WormMount);
 				foreach (CaveChamber c in system.Chambers)
 				{
@@ -885,7 +885,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return;
 				}
-				// In the cave biome's glow-worm hue (2026-10-26, I2n-c: the art's first, hue 0, unless it names one).
+				// In the cave biome's glow-worm hue (the art's first, hue 0, unless it names one).
 				if (!CaveArt.TryGlow(CaveGlowKind.GlowWorms, Colours().WormHue, variant, out CaveGlowArt art))
 				{
 					Missing.Add("cave glow art");

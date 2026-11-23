@@ -242,7 +242,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			 * would load it as empty and the next save would write the loss. */
 			AssertAlias("maxClients", "MaxClients");
 			/* A scene's own climate and biome map left the core settings for the climate's own
-			 * component (Phase 4, 2026-11-17); every world scene had them empty, and the one that did
+			 * component; every world scene had them empty, and the one that did
 			 * not (the WorldSim bed) was given the component with the same climate. */
 			LogAssert.IsNull(typeof(WorldSceneSettings).GetField("climate", BindingFlags.Instance | BindingFlags.NonPublic), "the core settings no longer hold a climate");
 			LogAssert.IsNull(typeof(WorldSceneSettings).GetField("biomeMap", BindingFlags.Instance | BindingFlags.NonPublic), "nor a biome map");

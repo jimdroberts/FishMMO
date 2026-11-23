@@ -12,7 +12,7 @@ namespace FishMMO.Shared.Biomes
 	/// biome does not list is never sited on it.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 (phase I5) each kind named its biomes itself (the point-of-interest catalogue's rows: a swamp kind
+	/// Formerly each kind named its biomes itself (the point-of-interest catalogue's rows: a swamp kind
 	/// "only in" the swamps, settlements weighted by how habitable the ground is, nothing built on the sea floor, by the biomes'
 	/// names). The biome art authoring writes each biome the weight those rows gave it for every kind, so nothing changes until a
 	/// template is edited.
@@ -25,16 +25,16 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How gladly the kind is sited on this biome's ground: 1 as anywhere, more to favour it, 0 never.")]
 		[Min(0f)] public float Weight;
 		/// <remarks>
-		/// Decision 39 (2026-10-18, the Crater round): a kind people live in or keep (a village, a shrine, a herb garden) is not
+		/// A kind people live in or keep (a village, a shrine, a herb garden) is not
 		/// sited on a world whose air is not breathable (thin or none, or of the wrong make-up such as a methane or acid sky:
-		/// BiomeAir.IsBreathable, decision 62), so a biome painted on an airless moon places only natural sites and relics there.
+		/// BiomeAir.IsBreathable), so a biome painted on an airless moon places only natural sites and relics there.
 		/// Written by the authoring from BiomeSiteAir.NeedsAirByDefault unless the biome's file says otherwise; off (every entry
-		/// before 2026-10-18) the kind is sited on every world.
+		/// formerly) the kind is sited on every world.
 		/// </remarks>
 		[Tooltip("Only sited where the world's air is breathable (Earth-like or thick, and not a methane, nitrogen, acid or molten-rock world): settlements, camps, kept shrines, living groves. Off: on every world, natural sites and relics.")]
 		public bool NeedsBreathableAir;
 		/// <remarks>
-		/// Decision 68 (2026-10-25, the Ice Shelf round): a kind that works open water (a fishing camp at a lead, a harbour) is not
+		/// A kind that works open water (a fishing camp at a lead, a harbour) is not
 		/// sited on a world with no liquid water on its surface (BiomeWorldConditions.HasLiquidWater, the world flag
 		/// BiomeWorldRequirement.LiquidWater), such as the raised frozen sea of an ice world. Off by default for every kind, so
 		/// nothing changes until a biome's file sets it (BiomeArtSpec.Entry.Water).
@@ -67,7 +67,7 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	/// <remarks>
 	/// The variant is the template's variant name (PointOfInterestTemplate.Variant, the part of its asset name after the kind:
-	/// "Village - Stone" → "Stone"; the size runs an asset is split into, "(Small)", share it). Until 2026-10-16 each template
+	/// "Village - Stone" → "Stone"; the size runs an asset is split into, "(Small)", share it). Formerly each template
 	/// named its biomes (stone villages in the arid and highland biomes, longhouses in the cold, yurts on the steppe); the
 	/// biome art authoring writes each biome the variants whose weight there differed from the variant's elsewhere weight.
 	/// </remarks>
@@ -119,7 +119,7 @@ namespace FishMMO.Shared.Biomes
 	/// every template of the style weighs that many times its variant weight here. A style not listed weighs 1.
 	/// </summary>
 	/// <remarks>
-	/// The coarse knob over <see cref="BiomeSiteVariant"/> (2026-10-16): "this country builds in stone" without naming every
+	/// The coarse knob over <see cref="BiomeSiteVariant"/>: "this country builds in stone" without naming every
 	/// kind's stone variant. The authoring writes none (every style at 1, as before); a biome's round may set its mix.
 	/// </remarks>
 	[Serializable]
@@ -158,7 +158,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// A template's weight in a biome from its variant weight and its style's (pure): the two multiplied, except that a variant the
-		/// biome names by weight (<paramref name="named"/>) keeps its weight under a style weighed 0 (2026-10-27). A style at 0 says the
+		/// biome names by weight (<paramref name="named"/>) keeps its weight under a style weighed 0. A style at 0 says the
 		/// country does not build that way; a named variant is the biome's own word for that one template, which the style's blanket
 		/// 0 must not silence (Alpine Meadow names MonsterDen "Bones" at 0.4 and weighs Earth 0, and every bone den is in earth).
 		/// </summary>
@@ -211,10 +211,10 @@ namespace FishMMO.Shared.Biomes
 	/// What does not depend on the biome stays the site's: a piece under water is always algae-filmed, half a battlefield
 	/// charred, and a template that forces a finish lays it whatever the biome says. Long-abandoned sites (ruins and the dead)
 	/// are older than their decay shows: where the biome's finish is moss, they are mossed at least 0.55 + 0.4 × decay
-	/// (2026-10-11: ruins looked freshly built).
+	/// (ruins looked freshly built).
 	/// </para>
 	/// <para>
-	/// Until 2026-10-16 (phase I5) the finish was read from keywords in the biome's name: algae in wet country (0.3 + 0.6 ×
+	/// Formerly the finish was read from keywords in the biome's name: algae in wet country (0.3 + 0.6 ×
 	/// decay), nothing in dry country, moss elsewhere (1 × decay in damp country, 0.5 × decay in the rest). The biome art
 	/// authoring writes each biome what its name gave, so nothing changes until a template is edited.
 	/// </para>
@@ -228,7 +228,7 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float Chance;
 		[Tooltip("The share added for each unit of a piece's decay (0 whole … 1 rubble): the more worn, the more finished.")]
 		[Range(0f, 1f)] public float ChancePerDecay;
-		[Tooltip("A coat the GPU draws over the biome's buildings where they stand (2026-10-25: lichen, rime, salt bloom, soot, a tide-mark…; BiomeStructureCoats). None draws them as before.")]
+		[Tooltip("A coat the GPU draws over the biome's buildings where they stand (lichen, rime, salt bloom, soot, a tide-mark…; BiomeStructureCoats). None draws them as before.")]
 		public BiomeStructureCoat Coat;
 		[Tooltip("The share of pieces the coat lies on (0..1), each piece by its position.")]
 		[Range(0f, 1f)] public float CoatCover;
@@ -284,7 +284,7 @@ namespace FishMMO.Shared.Biomes
 	/// One crop a biome's farmland grows (<see cref="BiomeTemplate.FieldCrops"/>): a detail prefab sown edge to edge in a crop
 	/// field, drawn against the biome's other crops by <see cref="Weight"/>.
 	/// </summary>
-	/// <remarks>Until 2026-10-16 every field in every biome grew wheat (Detail_GrassWheat); the authoring writes that crop.</remarks>
+	/// <remarks>Formerly every field in every biome grew wheat (Detail_GrassWheat); the authoring writes that crop.</remarks>
 	[Serializable]
 	public struct BiomeFieldCrop
 	{
@@ -294,7 +294,7 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float Weight;
 		[Tooltip("How its fields are laid on the ground: Flat (sown edge to edge), Lazy Bed (narrow sown ridges with bare trenches between), Ridge And Furrow (the open field's broad ridges), Paddy (flooded behind a bund), Terraced (benches stepped into a slope), Corn Hills (mounds on a grid), Baulatura (wide cambered beds between ditches), Marcita (a water meadow's beds with a rill along each crown) or Raised Beds (a garden's wattle-edged beds).")]
 		public BiomeFieldSurface Surface;
-		[Tooltip("How its terraced fields' steps are faced (2026-10-18): Drystone, Earth Bund (a grassed lip) or Grass Bank. A Flat field or a Paddy with a riser is terraced with it on slopes; a Terraced field with none is drystone.")]
+		[Tooltip("How its terraced fields' steps are faced: Drystone, Earth Bund (a grassed lip) or Grass Bank. A Flat field or a Paddy with a riser is terraced with it on slopes; a Terraced field with none is drystone.")]
 		public BiomeTerraceRiser Riser;
 		[Tooltip("Sow it in rows this many metres apart along the field (vines, tea, cabbages: 0 edge to edge, as a grain).")]
 		[Min(0f)] public float Rows;
@@ -324,7 +324,7 @@ namespace FishMMO.Shared.Biomes
 	public static class BiomeFieldCrops
 	{
 		/// <summary>
-		/// Whether a biome's fields sow nothing at all (decision 25, 2026-10-25), so its settlements lay no fields: only a list
+		/// Whether a biome's fields sow nothing at all, so its settlements lay no fields: only a list
 		/// authored so (<paramref name="authored"/>, the template's mark: a list never authored grows wheat) in which no entry
 		/// weighs anything, with no orchard planted instead. An entry with a weight but no prefab (its art missing) still counts
 		/// as sown: the fields are laid and left unsown, as before, rather than vanishing because a prefab was lost.
@@ -354,10 +354,10 @@ namespace FishMMO.Shared.Biomes
 	/// ditch). Append-only (stored by value).
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 (phase I5b) the moat shaper read it from the biome's climate envelope: a dry ditch where the envelope's
+	/// Formerly the moat shaper read it from the biome's climate envelope: a dry ditch where the envelope's
 	/// mean humidity is under −0.3, else water, frozen where its mean temperature is under −0.5 (<see cref="BiomeMoatWaters.FromClimate"/>).
 	/// The biome art authoring writes each biome what that rule gave it. A moat of molten rock (a volcanic stronghold's lava
-	/// ditch, <see cref="Lava"/>, 2026-10-25, phase I2r) is dug as a dry ditch and drawn as a lava ring along its floor by the client
+	/// ditch, <see cref="Lava"/>) is dug as a dry ditch and drawn as a lava ring along its floor by the client
 	/// (BiomeLavaChannels.MoatLines): no water, no hydrology. Append-only (serialised on the templates).
 	/// </remarks>
 	public enum BiomeMoatWater : byte
@@ -368,7 +368,7 @@ namespace FishMMO.Shared.Biomes
 		Dry = 1,
 		/// <summary>Water frozen over.</summary>
 		Frozen = 2,
-		/// <summary>Molten lava along the ditch's floor (decision 95, Volcanic Temple): dug dry, drawn molten (2026-10-25, phase I2r).</summary>
+		/// <summary>Molten lava along the ditch's floor (Volcanic Temple): dug dry, drawn molten.</summary>
 		Lava = 3,
 	}
 
@@ -381,7 +381,7 @@ namespace FishMMO.Shared.Biomes
 		public const float FrozenBelowTemperature = -0.5f;
 
 		/// <summary>
-		/// What the moat shaper decided from a biome's climate envelope until 2026-10-16: Dry where the mean humidity is under
+		/// What the moat shaper decided from a biome's climate envelope formerly: Dry where the mean humidity is under
 		/// <see cref="DryBelowHumidity"/>, else Frozen where the mean temperature is under <see cref="FrozenBelowTemperature"/>,
 		/// else Wet. Each biome's default (the spec) and the fallback for a template never authored with its own.
 		/// </summary>
@@ -400,9 +400,9 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	/// <remarks>
 	/// Every member's name is the kit piece that is laid (<see cref="BiomeWayLights.PieceQuery"/>). The first three are the
-	/// street lights the kit built before; the cave kit's lamps (3–6) light caves and mines (<see cref="BiomeCaveLight"/>,
-	/// 2026-10-16, I6c); 7–12 are the lights added with the per-biome content (I6c), each its own kit piece; 13 on are the
-	/// way and cave lights the biome suite's drafts name (2026-10-26). How a light is set (on the ground, on a wall, from a
+	/// street lights the kit built before; the cave kit's lamps (3–6) light caves and mines (<see cref="BiomeCaveLight"/>);
+	/// 7–12 are the lights added with the per-biome content, each its own kit piece; 13 on are the
+	/// way and cave lights the biome suite's drafts name. How a light is set (on the ground, on a wall, from a
 	/// roof) is <see cref="BiomeWayLights.MountOf"/>, its placement class <see cref="BiomeWayLights.ClassOf"/>, what it gives
 	/// off <see cref="BiomeWayLights.EmitterOf"/>.
 	/// </remarks>
@@ -434,7 +434,7 @@ namespace FishMMO.Shared.Biomes
 		RuneStone = 11,
 		/// <summary>A wrought-iron bracket from a wall with a lantern hung from its scrolled arm (piece HangingBracket).</summary>
 		HangingBracket = 12,
-		// The way and cave lights the biome suite's drafts name (2026-10-26, NEW-LIGHTS): each its own kit piece
+		// The way and cave lights the biome suite's drafts name: each its own kit piece
 		// (StructurePieces.WayLights.cs), its placement class, emitter and standing twin in BiomeWayLights.
 		/// <summary>A beacon on a tower top: an iron fire basket of logs on a stand, dark by day and kindled at dusk (a Pyre).</summary>
 		Beacon = 13,
@@ -593,7 +593,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// What shape of light a kind is, which decides where it can be laid (<see cref="BiomeWayLights.ClassOf"/>, 2026-10-26): a
+	/// What shape of light a kind is, which decides where it can be laid (<see cref="BiomeWayLights.ClassOf"/>): a
 	/// post, a wall light, a niche built out from a wall, a bowl or hearth on the ground, a hanging light, a tower's beacon.
 	/// Stored by value nowhere (read from the kind); append-only all the same.
 	/// </summary>
@@ -645,11 +645,11 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// How a biome lights one place in its caves and mines (<see cref="BiomeTemplate.CaveLights"/>, 2026-10-16, I6c): the light
+	/// How a biome lights one place in its caves and mines (<see cref="BiomeTemplate.CaveLights"/>): the light
 	/// laid there and, along a mine's drifts, the metres between lights. A place a biome does not list is not lit.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 the cave dressing decided it alone, the same in every biome (<see cref="BiomeCaveLights.Default"/>):
+	/// Formerly the cave dressing decided it alone, the same in every biome (<see cref="BiomeCaveLights.Default"/>):
 	/// lanterns on stands marking a cave's route and lighting its camps, torches in sconces along a mine's drifts every 14–20 m,
 	/// a torch on a pole in each stope, and hung lanterns (on a wall bracket where the roof is low) where a mine's ways meet.
 	/// The biome art authoring writes each biome that list.
@@ -681,14 +681,14 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>The cave-light rules that do not depend on a template asset.</summary>
 	public static class BiomeCaveLights
 	{
-		/// <summary>The mean metres between a mine drift's torches until 2026-10-16 (each gap 14–20 m).</summary>
+		/// <summary>The mean metres between a mine drift's torches formerly (each gap 14–20 m).</summary>
 		public const float DriftSpacing = 17f;
 
 		/// <summary>The least mean spacing along a drift, metres (a closer entry is read as this).</summary>
 		public const float MinDriftSpacing = 4f;
 
 		/// <summary>
-		/// What every biome lit its caves and mines with until 2026-10-16 (the cave dressing's own rule): a lantern on a stand
+		/// What every biome lit its caves and mines with formerly (the cave dressing's own rule): a lantern on a stand
 		/// on a cave's route and in its camps, torches in sconces along a mine's drifts every 14–20 m, a torch post in each
 		/// stope, hung lanterns where the mine's ways meet. A fresh list each call, in place order.
 		/// </summary>
@@ -719,7 +719,7 @@ namespace FishMMO.Shared.Biomes
 						light.Spacing = light.Spacing > 0f ? Mathf.Max(MinDriftSpacing, light.Spacing) : DriftSpacing;
 					}
 					// Where the dressing stands its lights on the floor (a route's marks, a camp's lamp, a stope's light), a suite
-					// light that is hung on a wall stands as its own twin (2026-10-26: a niche lamp's carved post, a tea torch on a pole).
+					// light that is hung on a wall stands as its own twin (a niche lamp's carved post, a tea torch on a pole).
 					if (StandsOnFloor(place) && BiomeWayLights.StandsInStead(light.Light))
 					{
 						light.Light = BiomeWayLights.PostFor(light.Light);
@@ -750,7 +750,7 @@ namespace FishMMO.Shared.Biomes
 	/// in turn, every <see cref="Spacing"/> metres along each street. A kind a biome does not list is not lit.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 (phase I5b) the props decided it by kind alone: a town's, city's, capital's and port's iron lanterns every
+	/// Formerly the props decided it by kind alone: a town's, city's, capital's and port's iron lanterns every
 	/// 13 m, a village's torches on poles every 20 m, nothing elsewhere (<see cref="BiomeWayLights.Default"/>). The biome art
 	/// authoring writes each biome that list. Lights stand only along the streets a settlement's layout lays.
 	/// </remarks>
@@ -781,14 +781,14 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>The way-light rules that do not depend on a template asset.</summary>
 	public static class BiomeWayLights
 	{
-		/// <summary>Metres between a town's iron lanterns, and between a village's torches (the props' spacing until 2026-10-16).</summary>
+		/// <summary>Metres between a town's iron lanterns, and between a village's torches (the props' spacing formerly).</summary>
 		public const float LanternSpacing = 13f, TorchSpacing = 20f;
 
 		/// <summary>The least spacing the props lay lights at, metres (a closer list entry is read as this).</summary>
 		public const float MinSpacing = 4f;
 
 		/// <summary>
-		/// What every biome lit its streets with until 2026-10-16 (the props' rule by kind): iron lanterns every
+		/// What every biome lit its streets with formerly (the props' rule by kind): iron lanterns every
 		/// <see cref="LanternSpacing"/> in towns, cities, capitals and ports, torches every <see cref="TorchSpacing"/> in villages.
 		/// A fresh list each call, in kind order.
 		/// </summary>
@@ -845,7 +845,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// Every kind's placement class, the emitter its piece gives off (the kit's pieces are held to it by the tests), and the
 		/// ground light laid in its stead where it cannot be hung (itself for a ground light), in kind order. The cold Glow
-		/// kinds are what an airless or unbreathable world is lit with (decisions 41/62, <see cref="BiomeGlowLights.Glows"/>).
+		/// kinds are what an airless or unbreathable world is lit with (<see cref="BiomeGlowLights.Glows"/>).
 		/// </summary>
 		private static readonly Row[] Rows =
 		{
@@ -941,7 +941,7 @@ namespace FishMMO.Shared.Biomes
 			new Row(BiomeWayLightClass.Niche, SceneEmitterKind.Lamp, BiomeWayLightKind.LanternStand), // CandleNiche
 		};
 
-		/// <summary>The first of the biome suite's own lights (2026-10-26): every kind from here on is the drafts'.</summary>
+		/// <summary>The first of the biome suite's own lights: every kind from here on is the drafts'.</summary>
 		public const BiomeWayLightKind FirstSuiteLight = BiomeWayLightKind.Beacon;
 
 		/// <summary>The number of kinds there are (the enum's members, 0 .. Count − 1).</summary>
@@ -972,14 +972,14 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// True for a suite light (2026-10-26) that cannot stand on a floor and has a standing twin the cave dressing lays in its
+		/// True for a suite light that cannot stand on a floor and has a standing twin the cave dressing lays in its
 		/// stead where it only stands lights on the floor (a route, a camp, a stope: <see cref="BiomeCaveLights.TryFor"/>). The
 		/// older wall and hanging kinds keep their old handling there (noted as unfit, not laid).
 		/// </summary>
 		public static bool StandsInStead(BiomeWayLightKind light) => light >= FirstSuiteLight && MountOf(light) != BiomeWayLightMount.Ground;
 
 		/// <summary>
-		/// The light that stands on the ground in a light's stead where it cannot be hung (2026-10-18, I6g: a street with no wall
+		/// The light that stands on the ground in a light's stead where it cannot be hung (a street with no wall
 		/// near a light's place): a wall torch's torch on a pole, a wall lantern's lantern post, a hanging bracket's lantern on a
 		/// crook post, the hanging lantern's lantern post; a suite light's own twin (a niche lamp's carved post, a paper lantern's
 		/// bamboo post…); a light that stands on the ground is its own.

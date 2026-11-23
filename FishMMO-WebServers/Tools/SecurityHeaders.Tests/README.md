@@ -36,9 +36,9 @@ checks connection permissions, not API health, certificates, or authenticated
 login/gameplay. A service-worker startup event does not prove offline cache installation.
 
 
-Verified on 2026-10-25 against the actual built WebGPU game client: Unity reached
+Verified against the actual built WebGPU game client: Unity reached
 `ready`, 70 resource responses included 60 Addressables responses, with zero CSP
 violations, JavaScript errors or HTTP error statuses. WebGPU adapter availability,
 cross-origin isolation and SharedArrayBuffer were confirmed. An injected untrusted
-inline-script control was blocked. See `Evidence/2026-10-25/game-client-csp.json`.
+inline-script control was blocked. See `Evidence/game-client-csp.json`.
 The API at localhost:8088 was offline, so live login/gameplay remains unverified.

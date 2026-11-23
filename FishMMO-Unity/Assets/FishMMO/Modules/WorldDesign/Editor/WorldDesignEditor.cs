@@ -4,7 +4,7 @@ using UnityEditor;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Plugs the World Design module into the core editor (Phase 4 of the core and modules plan, 2026-11-18): the Solar System
+	/// Plugs the World Design module into the core editor: the Solar System
 	/// and World Atlas pages on the dashboard (<see cref="DashboardFullPages"/>), the biome art generator's lock on the tool
 	/// buttons (<see cref="DashboardJobs"/>), and the generated art and planet surfaces the Addressables dashboard keeps out
 	/// of the committed groups (<see cref="AddressableGeneratedContent"/>), and the biome spec the weather content generator

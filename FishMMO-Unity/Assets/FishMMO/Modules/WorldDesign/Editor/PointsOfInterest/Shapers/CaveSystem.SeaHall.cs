@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// One vent on a sea hall's floor (2026-10-26, phase I2n-b, decision 83): stored with the cave and read by the cut (the chimneys'
+	/// One vent on a sea hall's floor: stored with the cave and read by the cut (the chimneys'
 	/// formations, the floor's heat) and by the client (the plumes, through the cave-life spots the dressing writes from these), so
 	/// one list says where every smoker is and nothing searches for them. System frame.
 	/// </summary>
@@ -59,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed partial class CaveSystem
 	{
 		/*
-		 * The sea hall (2026-10-26, phase I2n-b, decision 83: Subsurface Ocean Vent becomes an INTERIOR biome). Under an ice moon's
+		 * The sea hall (Subsurface Ocean Vent becomes an INTERIOR biome). Under an ice moon's
 		 * shell a warm sea fills a great dome of marine ice: its floor a field of smoking chimneys 25–60 m under the water, an air
 		 * pocket under its crown with a strand on one side (the Merehall ledge), reached only down a melt shaft from the ice above by a
 		 * stair wound round its wall (the Mere Stair), and a few flooded side passages to brine-pool grottoes that are only dived to.

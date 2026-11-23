@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Every biome is dressed (2026-10-10: "do not skip any of them — generate properly for each biome"):
+	/// Every biome is dressed ("do not skip any of them — generate properly for each biome"):
 	/// each spec entry carries at least three things of its own, the lifeless and alien ones included, and the five
 	/// biomes that once had nothing at all now have their ground.
 	/// </summary>
@@ -51,7 +51,7 @@ namespace FishMMO.UnitTests
 				string.Join(", ", names.GroupBy(n => n).Where(g => g.Count() > 1).Select(g => g.Key)));
 		}
 
-		/// <summary>Where each biome's entry is written: one file a biome (2026-10-15).</summary>
+		/// <summary>Where each biome's entry is written: one file a biome.</summary>
 		private const string SpecBiomeFolder = "Assets/FishMMO/Modules/WorldDesign/Editor/ProceduralArt/BiomeArtSpec";
 
 		/// <summary>

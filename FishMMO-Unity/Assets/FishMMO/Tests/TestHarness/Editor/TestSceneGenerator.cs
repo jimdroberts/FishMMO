@@ -124,7 +124,7 @@ namespace FishMMO.TestHarness.Editor
 
 		private const string ManifestPath = "Assets/FishMMO/Tests/TestHarness/Combat/CombatSimManifest.asset";
 
-		/// <summary>Where the roster comes from: every ability the test suite ships (2026-11-22: the Mock set is gone).</summary>
+		/// <summary>Where the roster comes from: every ability the test suite ships (the Mock set is gone).</summary>
 		private const string RosterFolder = "Assets/FishMMO/Modules/Abilities/Templates/Types";
 
 		/// <summary>What the roster's abilities are built from, cached beside them.</summary>

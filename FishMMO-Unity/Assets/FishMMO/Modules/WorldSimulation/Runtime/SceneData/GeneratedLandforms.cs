@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The sculpted landforms a scene was cut with (2026-10-18, phase I2g): every site the cut placed and carved into its ground
+	/// The sculpted landforms a scene was cut with: every site the cut placed and carved into its ground
 	/// (BiomeLandformSite: its entry, place, size and line) and the pads their tops offer points of interest, so a repaint paints
 	/// them again exactly (the heights it never touches) and the site planner can stand a terp village or a motte keep on them.
 	/// </summary>

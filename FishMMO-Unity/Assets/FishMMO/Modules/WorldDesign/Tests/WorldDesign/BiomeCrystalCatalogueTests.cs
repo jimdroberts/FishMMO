@@ -8,9 +8,9 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cave-crystal catalogue's kinds, habits and looks as the 83 biome drafts name them (2026-10-26, phase NEW-CRYSTALS,
-	/// decision 34): every draft's kind resolves to one kind (a kind two drafts share is one kind with each biome's own look,
-	/// decision 97), every habit a draft names to a habit that builds, the fantasy kinds glow and the real ones do not, and no
+	/// The cave-crystal catalogue's kinds, habits and looks as the 83 biome drafts name them:
+	/// every draft's kind resolves to one kind (a kind two drafts share is one kind with each biome's own look),
+	/// every habit a draft names to a habit that builds, the fantasy kinds glow and the real ones do not, and no
 	/// biome grows any of it until its round names it. The meshes themselves are BiomeCaveContentTests' (every habit, native).
 	/// </summary>
 	[TestFixture]
@@ -211,7 +211,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				glowing += m.Glows ? 1 : 0;
 			}
-			Assert.That(glowing, Is.EqualTo(81), "the three of 2026-10-16 and the drafts' 78");
+			Assert.That(glowing, Is.EqualTo(81), "the first three and the drafts' 78");
 			// Smokestone is fantasy but no light (its draft: "NOT a light").
 			Assert.That(BiomeCaveCrystals.Glows(BiomeCaveCrystalKind.Smokestone), Is.False);
 			Assert.That(All.Count(m => m.Flickers), Is.EqualTo(9), "stormglass and the drafts' twinkles, sparkles and darts");
@@ -251,7 +251,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					}
 				}
 			}
-			// A look of 0, or one the kind has not, is the kind's own art: the names of 2026-10-16 unchanged.
+			// A look of 0, or one the kind has not, is the kind's own art: the names unchanged.
 			Assert.That(CaveArt.MineralPrefabName(BiomeCaveCrystalKind.Obsidian, 1, 0), Is.EqualTo(CaveArt.MineralPrefabName(BiomeCaveCrystalKind.Obsidian, 1)));
 			Assert.That(CaveArt.MineralPrefabName(BiomeCaveCrystalKind.Amethyst, 2, 99), Is.EqualTo("Cave/Cave_Mineral_Amethyst_2"));
 			Assert.That(CaveArt.MineralPrefabName(BiomeCaveCrystalKind.Obsidian, 1, ProceduralArtCatalogue.CaveMineralLookFor(BiomeCaveCrystalKind.Obsidian, Asset("VolcanicTemple"))),

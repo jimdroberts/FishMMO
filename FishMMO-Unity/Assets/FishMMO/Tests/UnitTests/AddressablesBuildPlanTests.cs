@@ -11,7 +11,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The build planner on an in-memory project: which bundles each build has, and which implicit
-	/// dependencies two or more of them would copy. These are the rules the 2026-11-06 server build
+	/// dependencies two or more of them would copy. These are the rules the server build
 	/// broke (46 GB of textures copied into hundreds of bundles) without any check noticing.
 	/// </summary>
 	[TestFixture]

@@ -7,7 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveShaper
 	{
-		// ── The roof sealed under the ground as it now is (2026-10-27) ─────────────────
+		// ── The roof sealed under the ground as it now is ─────────────────
 
 		/// <summary>How far round an opening the cut made the ground is never raised, metres: its collar's ring frames it there (CaveSystem.Field).</summary>
 		public const float SealOpeningClear = 4f;

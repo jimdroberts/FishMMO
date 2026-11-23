@@ -2,7 +2,7 @@
 // hands out among the nearest fires and forges and moves on the shared motion clock. Each ember is born
 // at the fire's heart, rises on the hot air (a campfire's a few metres, a forge's less), drifts with the
 // wind, cools from yellow to a dull red and goes out. Nothing is simulated and nothing is stored.
-// A lava tube's molten lava (kind 5, 2026-10-20) throws its embers up off the whole width of its body, higher and
+// A lava tube's molten lava (kind 5) throws its embers up off the whole width of its body, higher and
 // swirling in the convection over it; its fumes (kind 6) are soft puffs of sulphur haze drifting under the roof, lit
 // orange from below and faded where they meet the rock.
 Shader "FishMMO/World/Site Embers"

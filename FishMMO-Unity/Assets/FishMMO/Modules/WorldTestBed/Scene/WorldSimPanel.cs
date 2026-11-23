@@ -563,7 +563,7 @@ namespace FishMMO.TestHarness.World
 				int cut = WorldSimController.ScenesOn(body).Count;
 				if (Controller.InCutScene && cut == 0)
 				{
-					// Nowhere to stand on it: no scene is cut there yet (2026-10-11).
+					// Nowhere to stand on it: no scene is cut there yet.
 					button.SetEnabled(false);
 					button.tooltip = $"No scene is cut on {body.ResolvedName} yet. Cut one from the World Atlas to stand there.";
 				}

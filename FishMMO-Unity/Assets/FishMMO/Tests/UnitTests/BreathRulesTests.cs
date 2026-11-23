@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Breath and drowning as specified (2026-10-05): a meter that drains under water and fills in about three
+	/// Breath and drowning as specified: a meter that drains under water and fills in about three
 	/// seconds out of it; a flat tenth of maximum health a second once it is gone; lava's 50 fire a second; fire races
 	/// immune to fire, aquatic races breathing water.
 	/// </summary>

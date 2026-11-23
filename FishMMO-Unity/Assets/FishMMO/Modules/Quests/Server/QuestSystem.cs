@@ -100,7 +100,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Sends a player who has just spawned the quests it loaded with (<see cref="QuestPersistenceParticipant"/>). Moved
-		/// from <c>CharacterSystem</c>'s login data with the quests (2026-11-17).
+		/// from <c>CharacterSystem</c>'s login data with the quests.
 		/// </summary>
 		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)
 		{

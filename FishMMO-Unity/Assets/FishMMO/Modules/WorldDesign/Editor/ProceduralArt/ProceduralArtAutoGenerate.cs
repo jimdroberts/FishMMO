@@ -18,7 +18,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// step per editor update behind a cancellable progress bar, like the world map bake.
 	/// </para>
 	/// <para>
-	/// <b>Wrappers too.</b> Since 2026-10-02 nothing generated is committed: the terrain layers,
+	/// <b>Wrappers too.</b> Nothing generated is committed: the terrain layers,
 	/// materials and prefabs are build output with path-derived IDs like the payload, so the automatic
 	/// pass builds missing ones, and rebuilds all of them when the generator changed
 	/// (<see cref="ProceduralArtMode.Full"/>; files whose bytes come out the same are not rewritten).

@@ -45,7 +45,7 @@ namespace FishMMO.UnitTests
 		/// <remarks>
 		/// A thousand-metre overworld scene, the size <c>FogOfWarDefaults.ChunkSize</c> was chosen for
 		/// (one chunk an eighth of a percent). It was StartScene A until the start scenes were removed
-		/// (2026-10-25); Belron 1 is the shipped scene of that size now.
+		///; Belron 1 is the shipped scene of that size now.
 		/// </remarks>
 		private const string SceneName = "Belron 1";
 
@@ -66,7 +66,7 @@ namespace FishMMO.UnitTests
 			 * ground nobody explored. */
 			typeof(ClientMapSystem).GetProperty("Fog").SetValue(null, null);
 
-			FogOfWarStore.DeleteAll(TestCharacterID);
+			MapNoteStore.DeleteAll(TestCharacterID);
 
 			if (characterHost != null)
 			{
@@ -222,21 +222,6 @@ namespace FishMMO.UnitTests
 
 		// ── Granted exploration (map items, triggers, quest rewards) ─
 
-		/// <summary>The pending debounced save, zero when nothing is outstanding.</summary>
-		private static double SaveDueTime()
-		{
-			return (double)typeof(ClientMapSystem)
-				.GetField("saveDueTime", BindingFlags.Static | BindingFlags.NonPublic)
-				.GetValue(null);
-		}
-
-		private static void ClearSaveDueTime()
-		{
-			typeof(ClientMapSystem)
-				.GetField("saveDueTime", BindingFlags.Static | BindingFlags.NonPublic)
-				.SetValue(null, 0.0);
-		}
-
 		[Test]
 		public void ExploreAround_GrantsGroundTheCharacterNeverWalked()
 		{
@@ -245,34 +230,28 @@ namespace FishMMO.UnitTests
 			ArmCharacter(centre);
 
 			LogAssert.IsTrue(ClientMapSystem.Fog.ExploredChunkCount == 0, "nothing is explored to begin with");
-			ClearSaveDueTime();
 
 			int revealed = ClientMapSystem.ExploreAround(centre, 300.0f);
 
 			LogAssert.IsTrue(revealed > 1, $"a three-hundred-metre map item must cover several chunks, but it covered {revealed}");
 			LogAssert.IsTrue(ClientMapSystem.Fog.ExploredChunkCount == revealed, "and the map must hold exactly those");
-			LogAssert.IsTrue(SaveDueTime() > 0.0, "granted exploration must be written out like walked exploration");
 		}
 
 		[Test]
 		public void ReusingAMapItem_OnGroundAlreadyKnown_WritesNothing()
 		{
-			/* Nothing new explored is not a change, and it must not dirty the file. Otherwise a
-			 * player standing on explored ground with a stack of map scrolls rewrites their whole
-			 * exploration file once per use for no reason. */
+			/* Nothing new explored is not a change: the grid stays clean and the readout does not move. */
 			Rect world = WorldRect();
 			Vector3 centre = new Vector3(world.center.x, 30.0f, world.center.y);
 			ArmCharacter(centre);
 
 			ClientMapSystem.ExploreAround(centre, 300.0f);
 			ClientMapSystem.Fog.ClearDirty();
-			ClearSaveDueTime();
 
 			int again = ClientMapSystem.ExploreAround(centre, 300.0f);
 
 			LogAssert.IsTrue(again == 0, $"the same ground again must explore nothing, but it reported {again}");
 			LogAssert.IsFalse(ClientMapSystem.Fog.IsDirty, "and must leave the map clean");
-			LogAssert.IsTrue(SaveDueTime() == 0.0, "and must not schedule a write");
 		}
 
 		[Test]
@@ -280,7 +259,6 @@ namespace FishMMO.UnitTests
 		{
 			Rect world = WorldRect();
 			ArmCharacter(new Vector3(world.center.x, 30.0f, world.center.y));
-			ClearSaveDueTime();
 
 			LogAssert.IsTrue(ClientMapSystem.ExploreChunk(0, 0), "the corner chunk had not been explored");
 			LogAssert.IsFalse(ClientMapSystem.ExploreChunk(0, 0), "and cannot be explored twice");
@@ -294,12 +272,10 @@ namespace FishMMO.UnitTests
 		{
 			Rect world = WorldRect();
 			ArmCharacter(new Vector3(world.center.x, 30.0f, world.center.y));
-			ClearSaveDueTime();
 
 			ClientMapSystem.ExploreEverything();
 
 			LogAssert.IsTrue(ClientMapSystem.Fog.ExploredFraction() >= 1.0f, "the whole scene reads as explored");
-			LogAssert.IsTrue(SaveDueTime() > 0.0, "and that is worth writing out");
 		}
 
 		[Test]
@@ -338,34 +314,6 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(UITKMap.FormatExplored(0, 0) == string.Empty, "no grid, no readout");
 		}
 
-		[Test]
-		public void ContinuousExploration_StillSaves_WithinTheCap()
-		{
-			/* The persistence defect: every new chunk pushed the debounced save back, so a player
-			 * who kept travelling never had their map written, and a web tab closed mid-journey
-			 * lost all of it. The debounce still coalesces, but never past the cap. */
-			MethodInfo schedule = typeof(ClientMapSystem).GetMethod("ScheduleSave", BindingFlags.Static | BindingFlags.NonPublic);
-			double debounce = (double)typeof(ClientMapSystem).GetField("SaveDebounce", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-			double cap = (double)typeof(ClientMapSystem).GetField("MaxSaveDelay", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-
-			ClientMapSystem.Flush();
-			ClearSaveDueTime();
-
-			const double start = 1000.0;
-			for (double now = start; now < start + (cap * 3.0); now += debounce * 0.5)
-			{
-				schedule.Invoke(null, new object[] { now });
-				LogAssert.IsTrue(SaveDueTime() <= start + cap,
-					$"a new chunk every {debounce * 0.5:F1}s must not push the save past {cap}s after the first, but it is due at +{SaveDueTime() - start:F1}s");
-			}
-
-			ClientMapSystem.Flush();
-			schedule.Invoke(null, new object[] { start + 500.0 });
-			LogAssert.IsTrue(SaveDueTime() == start + 500.0 + debounce,
-				"a flush starts the cap afresh, so the next change gets the ordinary debounce");
-			ClearSaveDueTime();
-			ClientMapSystem.Flush();
-		}
 
 		[Test]
 		public void TheReadout_ReportsWhateverTheFogSays()

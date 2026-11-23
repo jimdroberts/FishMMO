@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// A ground layer's glow (2026-10-25, phase I2r, decision 65 (a); <see cref="BiomeGroundGlow"/>): the C# twin of FishGroundGlow.hlsl,
+	/// A ground layer's glow (<see cref="BiomeGroundGlow"/>): the C# twin of FishGroundGlow.hlsl,
 	/// constant for constant. Presentation only: the client draws it on the terrain on the GPU and writes its mean into the lava's
 	/// molten mask; this side is what the tests pin.
 	/// </summary>
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.Weather
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// The glowing ground's share of the lava's molten mask (2026-10-25, phase I2r, decision 65 (a)): the hand-off between the client,
+	/// The glowing ground's share of the lava's molten mask: the hand-off between the client,
 	/// which knows which terrain layers glow (GroundGlowTable), and the water plugin's mask (LavaMask, which neither references), so the
 	/// lava's light pass and the heat shimmer light and boil over glowing crust as over the lava. Null (the default): no ground glows,
 	/// and the mask is the lava's alone, as before.

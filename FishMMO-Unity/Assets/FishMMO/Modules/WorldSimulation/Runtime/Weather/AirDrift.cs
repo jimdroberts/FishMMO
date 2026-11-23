@@ -10,7 +10,7 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why it is an integral (2026-10-15: "Clouds don't seem to be moving properly with the wind speed").</b> The field
+	/// <b>Why it is an integral ("Clouds don't seem to be moving properly with the wind speed").</b> The field
 	/// and the clouds were carried at a speed fixed for ever per latitude (4–12 m/s), because a varying speed times the
 	/// elapsed time had teleported the field: <c>d/dt (v·t)</c> picks up <c>t·dv/dt</c>. Holding the speed still cured the
 	/// teleport by uncoupling the sky from the wind, so a gale blew under crawling clouds and a calm under racing ones,
@@ -177,7 +177,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>
 		/// How many times a windmill's common sails have gone round by <paramref name="worldSeconds"/> in the scene's wind
 		/// (<see cref="SailRpm"/>, at most <paramref name="mostRpm"/>), from the epoch: a pure function of the world clock,
-		/// so every player sees the same sail at the same angle (2026-10-15: "It all needs to be deterministic"). The
+		/// so every player sees the same sail at the same angle ("It all needs to be deterministic"). The
 		/// scene's wind, not a storm's gusts over the mill. At <see cref="SailMostRpm"/> a runtime change of the wind carries
 		/// the turns over (<see cref="AirOffsetEntry.CarriedSails"/>); at any other most, its sum starts afresh at the change.
 		/// </summary>

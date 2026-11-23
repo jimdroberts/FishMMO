@@ -2,7 +2,7 @@
 // flocks, raptors, bats, rats, mice, squirrels, rabbits, lizards, shore crabs and frogs, beetles, and insect swarms
 // (midges, mosquitoes, flies, fireflies, bees, locusts), each group in its biome's look (AmbientLooks), and the caves'
 // creatures (AmbientCaveLife), lit underground only by the cave's own lights (FishUnderground, additional lights) and, the
-// light-makers among them (2026-10-20: millipedes, snails, click beetles, lanternfish, jellies, wisp moths, newts, ember mites,
+// light-makers among them (millipedes, snails, click beetles, lanternfish, jellies, wisp moths, newts, ember mites,
 // ice worms), by their own: a per-kind emission over the mesh's mask on the shared clock (AmbientGlow). Pass code and the vertex
 // contract are in FishAmbientLife.hlsl. Drawn only by AmbientLifeSystem: one Graphics.RenderMeshPrimitives and one runtime
 // material per kind, every animal read from its instance buffer by SV_InstanceID (no instancing variants, no property block);

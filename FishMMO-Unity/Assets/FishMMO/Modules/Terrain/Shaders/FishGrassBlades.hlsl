@@ -117,7 +117,7 @@ float4 _GrassParams7;   // wind calm with distance: x start (m), y end (m), z be
 // ── Unpacking (GrassMath.Unpack) ──────────────────────────────────────
 
 // GrassMath.UnpackColour: square-root 8:8:8, valid (the terrain's texture was read) where any colour bit is set: bit 31
-// is the type's sixth bit since 2026-10-27 (GrassMath.TypeTopShift).
+// is the type's sixth bit (GrassMath.TypeTopShift).
 float4 GrassUnpackColour(uint c)
 {
     float3 q = float3(c & 0xFFu, (c >> 8) & 0xFFu, (c >> 16) & 0xFFu) / 255.0;
@@ -315,7 +315,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     float swell = FishSurfaceNoise(root.xz / (lambda * 4.0) - way * time * 0.04);
     float gustBand = crest * lerp(0.35, 1.0, swell);
     float strength = _GrassParams2.w + speed * 0.7 + gust * 0.8;
-    /* A rigid type (a mineral blade: ice needles, salt quills; BiomeGrassType.Rigid, 2026-10-18) never sways: no bend, no flutter,
+    /* A rigid type (a mineral blade: ice needles, salt quills; BiomeGrassType.Rigid) never sways: no bend, no flutter,
      * no sheen, no combing by the wind. 1 for every other type. The world's air (none, thin, Earth-like) is already in
      * _GrassParams2 (GrassBladeRenderer.AirSway), so an airless world's blades stand still too. */
     float typeSway = 1.0 - saturate(GrassTypeRow(type, GRASS_ROW_MORE).z);
@@ -344,8 +344,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     float viewLay = _GrassParams7.w * smoothstep(0.35, 0.95, viewSteep);
     /* Which way: a smooth field over a few metres, turned toward the wind as it rises, so neighbouring blades and
      * whole clumps lie the same way and a lawn seen from above is combed in patches. Along each blade's own facing
-     * (outward from its clump's centre) every clump burst into a star round a dark middle: polka dots from above
-     * (render 2026-10-07). */
+     * (outward from its clump's centre) every clump burst into a star round a dark middle: polka dots from above. */
     float combAngle = (FishSurfaceNoise(root.xz / 3.0) * 0.7 + FishSurfaceNoise(root.xz / 1.1 + 31.7) * 0.3) * 12.566371;
     float2 comb = float2(cos(combAngle), sin(combAngle)) + dir * (0.4 + 1.5 * speed) * typeSway;
     comb = dot(comb, comb) > 1e-6 ? normalize(comb) : facing;
@@ -413,7 +412,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
     }
     // How wide this row of the blade shows across the view, in rendered pixels: its face-on share and the thickening.
     float acrossPixels = drawn * (faceOn + thicken) / max(1e-6, pixelMetres);
-    /* Under a rendered pixel (_GrassScreen.w; 2026-10-21 for MSAA at the base only, 2026-10-27 row by row and for a temporal
+    /* Under a rendered pixel (_GrassScreen.w; first for MSAA at the base only, now row by row and for a temporal
      * resolve too): drawn a pixel wide, its true width carried as coverage (MSAA's alpha to coverage, or the dither a
      * temporal resolve averages), so a swaying sliver and the last of a tapering tip fade by their share of the pixel
      * instead of flipping whole pixels between blade and background: the crest line's flicker and the tops' shimmer. At a
@@ -530,7 +529,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
      * ground colour map) carries only the biome's ground shift, so the blend below takes it the rest of the way to the
      * patch, and every part of the blade is shifted once; the very root stays the ground's own colour. The terrain's own colour, the type's shading and the season's browning stay, so a dry slope is still
      * straw and a wet hollow still green, and the planet and the patch move them (olive under a K star, plum under a red
-     * dwarf; a golden or silvered patch a tint of its meadow). A look that REPLACED the colour (2026-10-15, the first
+     * dwarf; a golden or silvered patch a tint of its meadow). A look that REPLACED the colour (the first
      * version) turned meadows into chunks of colour that ignored their climate. The common look of an Earth-like world
      * shifts nothing. */
     if (!isHead && look.valid)
@@ -631,7 +630,7 @@ GrassVertex GrassBuildAt(uint instanceID, float2 vertex, float back)
         colour = lerp(colour, dot(colour, lumWeights) * GRASS_CURED, cure);
     }
     colour = lerp(colour, rootGround, rootGroundAmount);
-    /* The burn (2026-10-25, I2t; FishBurn.hlsl, the compute's tone in the colour word's bits 24..26, GrassMath.BurnToneOf):
+    /* The burn (FishBurn.hlsl, the compute's tone in the colour word's bits 24..26, GrassMath.BurnToneOf):
      * stubble burnt charcoal, then the green flush's emerald rising from the base, then back to the blade's own colour. 0: the
      * blade as before. */
     uint burnBits = (blade.colour >> 24) & 7u;
@@ -956,7 +955,7 @@ float3 _LightDirection;
 float3 _LightPosition;
 
 #if defined(FISH_GRASS_PASS_SHADOW) && !defined(_CASTING_PUNCTUAL_LIGHT_SHADOW)
-// Per-cascade caster culling (2026-10-21), as the trees' and rocks' casters have (FishCasterCulling.hlsl): every blade was
+// Per-cascade caster culling, as the trees' and rocks' casters have (FishCasterCulling.hlsl): every blade was
 // drawn into every cascade, its curve built four times over. A blade is known by a sphere round its root standing taller
 // than the tallest blade, so nothing a cascade shows is ever dropped.
 #include "Assets/FishMMO/Shaders/FishCasterCulling.hlsl"

@@ -8,7 +8,7 @@ namespace FishMMO.Shared.Core
 	/// the chat shows.
 	/// </summary>
 	/// <remarks>
-	/// The core contract of the Social module's guild (Phase 3, 2026-11-16). Read-only: chat, the map, nameplates,
+	/// The core contract of the Social module's guild. Read-only: chat, the map, nameplates,
 	/// housing access, the harm rule and observer streaming ask "which guild?" and "same guild?", and none of them change
 	/// it. Joining, ranks, the roster window and the guild system are the module's (<c>IGuildMembership</c>). Without
 	/// the module no character has this, and every one of those reads finds no guild.

@@ -6,7 +6,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared.NameGeneration
 {
 	/// <summary>
-	/// Plugs the Naming module into the core (Phase 4 of the core and modules plan, 2026-11-18): the race registry follows the
+	/// Plugs the Naming module into the core: the race registry follows the
 	/// races the core loads (<see cref="RaceTemplate.RaceLoaded"/>), and the scene objects' names come from the generator
 	/// (<see cref="SceneObjectNames.Source"/>).
 	/// </summary>

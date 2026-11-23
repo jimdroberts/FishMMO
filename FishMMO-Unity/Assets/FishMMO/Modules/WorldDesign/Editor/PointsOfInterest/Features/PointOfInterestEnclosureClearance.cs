@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Clears the ground the sites enclose (2026-10-27, Moron 2: "stone fences/enclosures/farms? Trees, bushes, and other details
+	/// Clears the ground the sites enclose (Moron 2: "stone fences/enclosures/farms? Trees, bushes, and other details
 	/// spawn inside it"): every field, fold, farmstead and outlying holding a site lays is kept as a field or a yard is, its wild
 	/// growth taken off after every site is built and before the scatter's trees are baked into props.
 	/// </summary>

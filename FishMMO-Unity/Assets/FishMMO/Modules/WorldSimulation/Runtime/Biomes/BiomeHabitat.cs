@@ -5,7 +5,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The one rule for the <see cref="BiomeHabitat.Alien"/> bit (2026-10-16): ground that only forms under another world's air
+	/// The one rule for the <see cref="BiomeHabitat.Alien"/> bit: ground that only forms under another world's air
 	/// is alien ground, read live from the template's <see cref="BiomeTemplate.Atmosphere"/> and
 	/// <see cref="BiomeTemplate.Requires"/> rather than stored, so editing a biome's air moves its creatures with it.
 	/// </summary>
@@ -19,7 +19,7 @@ namespace FishMMO.Shared.Biomes
 	/// A test pins the rule against the old one for every biome asset.
 	/// </para>
 	/// <para>
-	/// The biome art authoring of 2026-10-16 (phase I4) wrote the bit onto the templates it authored; it is masked on every
+	/// The biome art authoring wrote the bit onto the templates it authored; it is masked on every
 	/// read (<see cref="BiomeTemplate.Habitat"/>), dropped by the next authoring and by OnValidate, and never trusted.
 	/// </para>
 	/// </remarks>
@@ -53,7 +53,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// True for a water biome: sea or fresh water and no land beside it. The water bits alone do not say it, since they
 		/// also name the creatures a land biome holds (a Forest is Forest | FreshWater for its streams' fish), and testing
-		/// them alone refused every forest (housing lots and Moron 2's gate, 2026-11-16).
+		/// them alone refused every forest (housing lots and Moron 2's gate).
 		/// </summary>
 		public static bool IsWater(BiomeHabitat habitat)
 		{

@@ -60,7 +60,7 @@ namespace FishMMO.Client
 		/// <summary>FishSeaLife.hlsl's <c>_Tint</c>: colour, and how much is drawn.</summary>
 		public Vector4 Tint;
 		/// <summary>
-		/// FishSeaLife.hlsl's <c>_Surface</c> (2026-10-25): x how much of the sea's swell it rides (1 afloat at the surface, 0 under it),
+		/// FishSeaLife.hlsl's <c>_Surface</c>: x how much of the sea's swell it rides (1 afloat at the surface, 0 under it),
 		/// y its own light's brightness now (AmbientGlow, 0 none), z its light's phase in cycles, w spare.
 		/// </summary>
 		public Vector4 Surface;
@@ -166,7 +166,7 @@ namespace FishMMO.Client
 			}
 			float area = cellMetres * cellMetres * 1e-6f;
 			// Enough candidates for the heaviest weight the kind has anywhere: its own preferred weight, or more where a biome
-			// gives it more (2026-10-16: each biome lists its sea life with a weight). A candidate past the expected count never
+			// gives it more (each biome lists its sea life with a weight). A candidate past the expected count never
 			// lives (its chance is nothing), so the extra ones change no group, only what is asked of the ground; and with every
 			// biome at the kind's preferred weight the count is what it always was.
 			float most = kind.GroupsPerKm2 * area * Mathf.Max(KindHomeWeight(kind), ground.HeaviestHome(kind));
@@ -224,7 +224,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// How much at home a kind is at a place by its own preferred weight (<see cref="KindHomeWeight"/>): the weight every
-		/// favourite biome had before the templates weighed their sea life (2026-10-16), and a template's never authored still.
+		/// favourite biome had before the templates weighed their sea life, and a template's never authored still.
 		/// </summary>
 		public static float HabitatWeight(SeaCreatureKind kind, bool preferred, float temperature) => HabitatWeight(kind, preferred, KindHomeWeight(kind), temperature);
 
@@ -233,7 +233,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// How much at home a kind is in a biome by its asset name (<see cref="PrefersByName"/>): the weight before the
-		/// templates named their sea life (2026-10-16).
+		/// templates named their sea life.
 		/// </summary>
 		public static float HabitatWeight(SeaCreatureKind kind, string biome, float temperature) => HabitatWeight(kind, PrefersByName(kind, biome), temperature);
 
@@ -246,7 +246,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Whether a kind names a biome (by its asset name) among the ones it <see cref="SeaCreatureKind.Prefers"/>: how a
-		/// kind's homes were found until the templates named their sea life (2026-10-16). Since then only the fallback for a
+		/// kind's homes were found until the templates named their sea life. Since then only the fallback for a
 		/// template never authored, and the list the spec table's sea life was written to equal.
 		/// </summary>
 		public static bool PrefersByName(SeaCreatureKind kind, string biome)
@@ -276,7 +276,7 @@ namespace FishMMO.Client
 			group = default;
 			float water = meanLevel - floor;
 			bool onFloor = OnFloor(kind);
-			// A floor dweller's band, and a near-floor swimmer's (2026-10-25), is where its home's FLOOR lies, at any depth.
+			// A floor dweller's band, and a near-floor swimmer's, is where its home's FLOOR lies, at any depth.
 			bool floorBand = onFloor || kind.NearFloor;
 			if (floorBand && (water < kind.Depth.x || water > kind.Depth.y))
 			{
@@ -349,14 +349,14 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		/// <summary>True for the kinds that live ON the sea floor (their home is a patch of it): Hover, Crawl, Lurk, and since 2026-10-25 Skip and Settle.</summary>
+		/// <summary>True for the kinds that live ON the sea floor (their home is a patch of it): Hover, Crawl, Lurk, Skip and Settle.</summary>
 		public static bool OnFloor(SeaCreatureKind kind)
 		{
 			return kind.Behaviour == SeaCreatureBehaviour.Hover || kind.Behaviour == SeaCreatureBehaviour.Crawl || kind.Behaviour == SeaCreatureBehaviour.Lurk
 				|| kind.Behaviour == SeaCreatureBehaviour.Skip || kind.Behaviour == SeaCreatureBehaviour.Settle;
 		}
 
-		// ── The open sea's rhythms (2026-10-25, I2p): pure functions of the shared clock ──
+		// ── The open sea's rhythms: pure functions of the shared clock ──
 
 		/// <summary>
 		/// How dark it is for a diel migrator at a clock hour, 0 (day) .. 1 (night): full night from 20:30 to 04:30, easing over the
@@ -487,7 +487,7 @@ namespace FishMMO.Client
 		/// The sea's surface now, world y, less what its waves' troughs need (SeaLifeSystem): the tide is on the
 		/// shared clock, so this is the same for every player at the same moment.
 		/// </param>
-		/// <param name="level">The sea's surface now (tide included), world y, for what lies at it or out of it (2026-10-25: floats, skippers, migrators); NaN: <paramref name="surface"/>.</param>
+		/// <param name="level">The sea's surface now (tide included), world y, for what lies at it or out of it (floats, skippers, migrators); NaN: <paramref name="surface"/>.</param>
 		/// <param name="night">How dark it is now, 0 .. 1 (<see cref="NightShare"/> of the shared clock's hour), for the diel migrators and the night-spreaders.</param>
 		public static void Evaluate(in SeaGroup group, SeaCreatureKind kind, double seconds, float surface, ISeaGround ground, float visible,
 			List<SeaInstance> into, float level = float.NaN, float night = 0f)
@@ -526,7 +526,7 @@ namespace FishMMO.Client
 			if (!OnFloor(kind) && ground.TryGround(centre.x, centre.z, out float floor)
 				&& !float.IsInfinity(floor))
 			{
-				// A near-floor swimmer follows the floor at its height over it (2026-10-25); any other is only kept off it.
+				// A near-floor swimmer follows the floor at its height over it; any other is only kept off it.
 				centre.y = kind.NearFloor
 					? floor + Mathf.Lerp(kind.FloorClearance.x, kind.FloorClearance.y, Unit(Mix(group.Seed ^ 0x4u))) + bob
 					: Mathf.Max(centre.y, floor + kind.FloorClearance.x + kind.Spread * 0.3f);

@@ -5,7 +5,7 @@ using FishNet.Managing;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// A module's piece of the client that lives as long as the client does (Phase 4 of the core and modules plan, 2026-11-18):
+	/// A module's piece of the client that lives as long as the client does:
 	/// the weather's mirror of the scene server's weather. The client makes one of each registered service when it starts,
 	/// ticks them every frame, clears them when the world is left or the scene server changes, and shuts them down with itself.
 	/// </summary>

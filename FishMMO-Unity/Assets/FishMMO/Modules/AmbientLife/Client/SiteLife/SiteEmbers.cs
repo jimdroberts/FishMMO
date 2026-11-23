@@ -11,7 +11,7 @@ namespace FishMMO.Client
 	/// The sites' fires near the camera (SceneSiteEmitters, baked by the cut): campfires, hearths, forges and torches. The
 	/// nearest <see cref="MaxSources"/> within <see cref="Reach"/> each burn with tongues of flame (FishSiteFlames.shader)
 	/// and throw up a stream of embers that rise, drift downwind, cool and go out (FishSiteEmbers.shader). Two draws of two
-	/// pre-built fields of quads for all of them. A lava tube's molten lava (<see cref="SceneEmitterKind.Magma"/>, 2026-10-20)
+	/// pre-built fields of quads for all of them. A lava tube's molten lava (<see cref="SceneEmitterKind.Magma"/>)
 	/// throws its embers up off the whole width of its body in the same field, and its fumes
 	/// (<see cref="SceneEmitterKind.Fumes"/>) drift there as soft puffs under the roof: no draw of their own.
 	/// </summary>
@@ -150,9 +150,9 @@ namespace FishMMO.Client
 			{
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
-				// With a lava tube's molten lava and the fumes under its roof (2026-10-20): its embers rise off the lava, its fumes
+				// With a lava tube's molten lava and the fumes under its roof: its embers rise off the lava, its fumes
 				// hang in the same field (kinds 5 and 6 of FishSiteEmbers.shader).
-				// And a way light's own fire (2026-10-26, ScenePyre): a beacon's, flaming only once it is kindled at dusk.
+				// And a way light's own fire (ScenePyre): a beacon's, flaming only once it is kindled at dusk.
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind == SceneEmitterKind.Fire || kind == SceneEmitterKind.Forge || kind == SceneEmitterKind.Hearth
 					|| kind == SceneEmitterKind.Torch || kind == SceneEmitterKind.Magma || kind == SceneEmitterKind.Fumes || kind == SceneEmitterKind.Pyre, MaxSources, near);
 			}
@@ -203,7 +203,7 @@ namespace FishMMO.Client
 				}
 				if (e.Kind == SceneEmitterKind.Pyre)
 				{
-					// A way light's own fire (2026-10-26, ScenePyre): a beacon's flames and sparks as a campfire's, once it is kindled
+					// A way light's own fire (ScenePyre): a beacon's flames and sparks as a campfire's, once it is kindled
 					// (dark by day, caught at its own moment of the dusk); a brimstone lamp's blue flame is its piece's own, no
 					// orange tongues or sparks. No weather on either (a keeper tends a beacon), no melted ring.
 					float kindled = ScenePyre.Blue(e.Seed) ? 0f : ScenePyre.Kindled(night, e.Seed);

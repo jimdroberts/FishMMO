@@ -9,7 +9,7 @@ using FishMMO.Client;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The client's own terrain heightmap draw (TerrainHeightmapSystem, 2026-10-28): the quadtree's layout, the patch mesh, and
+	/// The client's own terrain heightmap draw (TerrainHeightmapSystem): the quadtree's layout, the patch mesh, and
 	/// — over a whole synthetic scene of four tiles with a cliff, rolling hills and flat ground, built as the GPU builds it
 	/// (roughness, dilated level field, node bounds) — that the selection covers every point exactly once, that the geomorph
 	/// leaves no crack between any two drawn patches (same level or not, across tile seams too) at any camera, that no patch

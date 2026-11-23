@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase SCATTER-MODES of the biome suite (2026-10-26, decision 34): scatter modes on spawn rules (facing, lean, anchors, patterns,
+	/// Scatter modes on spawn rules (facing, lean, anchors, patterns,
 	/// power-law sizes). Off (the default on every rule, and every spec entry until a round names one) nothing changes: no mark, no
 	/// fingerprint, no weight, no mode words (so the GPU detail scatter and the client's tree renderer draw exactly what they drew). On,
 	/// each pure function is deterministic, and the words the GPU and the client read mirror the C# arithmetic.

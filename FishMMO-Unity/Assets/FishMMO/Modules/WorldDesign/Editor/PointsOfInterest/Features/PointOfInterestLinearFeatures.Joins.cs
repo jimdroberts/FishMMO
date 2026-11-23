@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Where a fence's or a wall's modules meet (2026-10-19: "fences aren't fully connecting in some cases"): every line of modules is
+	/// Where a fence's or a wall's modules meet ("fences aren't fully connecting in some cases"): every line of modules is
 	/// queued and laid only when its joints are resolved, so a run joins up wherever it is laid from.
 	/// </summary>
 	/// <remarks>

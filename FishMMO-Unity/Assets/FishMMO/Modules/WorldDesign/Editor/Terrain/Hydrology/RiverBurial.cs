@@ -9,7 +9,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// the ground and a fall's curtain lands on a hillside with no pool and no river out of it.
 	/// </summary>
 	/// <remarks>
-	/// Flo Monolith's cut of 2026-10-13 left the 70 m fall's plunge pool and the 100 m of river below it under a hillside
+	/// Flo Monolith's earlier cut left the 70 m fall's plunge pool and the 100 m of river below it under a hillside
 	/// 30–40 m deep, though its own hydrology put the water there and the carve, run again on those very lines over that
 	/// very ground, cuts them to the bed. Nothing in the cut after the carve was found to raise the ground that far. The
 	/// generator therefore measures this after every stage that writes the ground (<see cref="SceneGenerator"/>), so a cut
@@ -99,7 +99,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The stretches of every perennial river (falls left out) whose water stands over air: the ground under its line
 		/// more than <see cref="FloatingMetres"/> under its own bed, so its surface is drawn as a sheet over a hollow or a
-		/// gorge. The burial's opposite, measured after the same stages (2026-10-14: Flo Monolith's river 0 held 170 m over
+		/// gorge. The burial's opposite, measured after the same stages (Flo Monolith's river 0 held 170 m over
 		/// a gorge floor at 150 m for 60 m).
 		/// </summary>
 		public static List<Run> Floating(IReadOnlyList<RiverPath> rivers, Func<float, float, float> groundAt)
@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// It was any ground between 1.5 m and <see cref="BankHoldMetres"/> past a bank under the water: a plunge pool's bowl,
 		/// scoured wider than its channel and drawn to its rim (RiverShores), counted as 46 breached points on Flo Monolith,
-		/// none of them water over air (2026-10-15).
+		/// none of them water over air.
 		/// </remarks>
 		public static int Breaches(IReadOnlyList<RiverPath> rivers, Func<float, float, float> groundAt, List<string> worst = null, SceneWater water = null)
 		{

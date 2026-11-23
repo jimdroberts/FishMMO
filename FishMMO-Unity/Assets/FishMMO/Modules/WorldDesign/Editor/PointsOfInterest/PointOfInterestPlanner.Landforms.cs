@@ -9,7 +9,7 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		internal sealed partial class State
 		{
-			/// <summary>Per detector, the distance from every cell to the nearest place it finds, metres; worked out once (2026-10-27).</summary>
+			/// <summary>Per detector, the distance from every cell to the nearest place it finds, metres; worked out once.</summary>
 			private Dictionary<PointOfInterestDetector, float[]> detectedDistance;
 
 			/// <summary>

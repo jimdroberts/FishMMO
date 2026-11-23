@@ -9,7 +9,7 @@ using Random = System.Random;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Per-tile terrain layers (2026-10-27): a tile keeps only the layers it paints, every weight byte unchanged, and every reader
+	/// Per-tile terrain layers: a tile keeps only the layers it paints, every weight byte unchanged, and every reader
 	/// that turns a channel into a scene layer renames it (TerrainTileLayerMap). The index map a compacted tile bakes is the one
 	/// the whole-palette tile baked, slot for slot wherever a slot has weight; two tiles meeting at a seam with different layer
 	/// sets still agree on it; the grass's surface layers and the blend the terrain draws are unchanged. Pure: no Unity.
@@ -331,7 +331,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The cap is above every tile measured (2026-10-27, saved tiles: Moron 3 1_1 paints 65, Moron 2 3_3 62, Moron 1 2_4 43,
+		/// The cap is above every tile measured (saved tiles: Moron 3 1_1 paints 65, Moron 2 3_3 62, Moron 1 2_4 43,
 		/// Belron 1 17), with room; and the sizes the notes report are Unity's (512² RGBA32 with every mip, four layers a map).
 		/// </summary>
 		[Test]

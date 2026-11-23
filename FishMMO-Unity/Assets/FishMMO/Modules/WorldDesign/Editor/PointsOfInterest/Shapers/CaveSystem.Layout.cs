@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The planner for a cave system with a <see cref="CaveCharacter"/> (2026-10-13: "Layouts are pretty predictable and no
+	/// The planner for a cave system with a <see cref="CaveCharacter"/> ("Layouts are pretty predictable and no
 	/// massive features (enormous caves with lots of glowy rocks lining the walkable pathways, rock bridges leading over
 	/// crevices and to other deeper areas, etc)"): a graph, not a line.
 	/// </summary>
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 			return size <= 0 ? Mathf.Min(levels, 2) : levels;
 		}
 
-		// ── Depth (2026-10-21) ────────────────────────────────────
+		// ── Depth ────────────────────────────────────
 
 		/// <summary>The deepest a limestone or ice cave goes under its mouth, metres.</summary>
 		public const float MaxCaveDepth = 500f;
@@ -94,7 +94,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static float MaxDepthOf(CaveForm form) => form == CaveForm.LavaTube ? MaxLavaDepth : MaxCaveDepth;
 
 		/// <summary>
-		/// How deep a system goes under its mouth (2026-10-21: "randomness in depth up to 500m but also really small caves"): a
+		/// How deep a system goes under its mouth ("randomness in depth up to 500m but also really small caves"): a
 		/// log-logistic roll from the seed (heavy-tailed: most tens of metres, a rare few hundreds), its median by the site's size,
 		/// cut to <see cref="LeastDepth"/> .. <see cref="MaxDepthOf"/> without piling up at either end. Limestone and ice caves:
 		/// medians 22 / 45 / 80 m by size, about one in 65 / 24 / 10 past 300 m and one in 4 / 10 / 26 under 12 m (a pocket). Lava
@@ -103,7 +103,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static float DepthFor(CaveForm form, int size, int seed) => DepthFor(form, size, seed, LeastDepth, MaxCaveDepth);
 
 		/// <summary>
-		/// As <see cref="DepthFor(CaveForm, int, int)"/>, within a scene's own range (2026-10-21, the pre-cut prompt's cave depth,
+		/// As <see cref="DepthFor(CaveForm, int, int)"/>, within a scene's own range (the pre-cut prompt's cave depth,
 		/// PointOfInterestSettings.CaveDepthRange): the same distribution cut to the range, so its shape holds inside it. The
 		/// form's own bounds still hold (a lava tube's 5–120 m): a range wholly past them takes the form's nearest end.
 		/// </summary>
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How many levels a system of a depth goes down through (2026-10-21): about one every 35–60 m (a lava tube's stacked
+		/// How many levels a system of a depth goes down through: about one every 35–60 m (a lava tube's stacked
 		/// tubes every 18–32 m), the spacing its seed's; up to eight (four stacked tubes).
 		/// </summary>
 		public static int LevelsForDepth(CaveForm form, float depth, int seed)
@@ -298,7 +298,7 @@ namespace FishMMO.Shared.WorldDesign
 				/// <summary>The heading of a chasm split across it (degrees), or NaN: its branches keep off the chasm's line.</summary>
 				public float RiftYaw = float.NaN;
 				public bool Hall;
-				/// <summary>A landing partway down a chained descent (2026-10-21): a small room the next drop leaves from, no hub of a level's own.</summary>
+				/// <summary>A landing partway down a chained descent: a small room the next drop leaves from, no hub of a level's own.</summary>
 				public bool Landing;
 			}
 
@@ -335,9 +335,9 @@ namespace FishMMO.Shared.WorldDesign
 				this.levels = Mathf.Max(1, floors.Length);
 				this.budget = budget;
 				levelFloor = floors;
-				// A deeper system more chambers, a few more for each level (2026-10-21), to a cap that keeps its rock in budget.
+				// A deeper system more chambers, a few more for each level, to a cap that keeps its rock in budget.
 				maxChambers = Mathf.Min(MostChambers, (size >= 2 ? 34 : size == 1 ? 24 : 12) + Mathf.Max(0, this.levels - 2) * (size >= 2 ? 5 : size == 1 ? 4 : 3));
-				// More halls, and more of them to a system (2026-10-18: "Caves need even bigger hallows"): a halls cave has two
+				// More halls, and more of them to a system ("Caves need even bigger hallows"): a halls cave has two
 				// on its deepest level at the largest size and most often one higher up too; an abyss, a crystal cave and a rift
 				// one now and then.
 				CaveCharacter c = system.Character;
@@ -459,7 +459,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				frontier.Enqueue(first);
 				var descended = new bool[levels];
-				// The way down first, level under level (2026-10-21), so the budget reaches the bottom of a deep system before the
+				// The way down first, level under level, so the budget reaches the bottom of a deep system before the
 				// branches on its upper levels spend it; each level's hub then branches in turn (the queue goes round the levels).
 				Hub at = first;
 				for (int level = 0; level < levels - 1 && budget > 12f && system.Chambers.Count < maxChambers; level++)
@@ -586,7 +586,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Halls ──────────────────────────────────────────────
 
 			/// <summary>
-			/// An enormous hall at a passage's end (up to ~250 m across, its vault up to ~90 m high, 2026-10-18; ~160 m before):
+			/// An enormous hall at a passage's end (up to ~250 m across, its vault up to ~90 m high; ~160 m before):
 			/// a middle lobe entered at its edge, and lobes round it on terraces of their own, each joined to the middle by a
 			/// ramp; null where the rock over it will not hold one. Where the rock is too thin for the vault its breadth would
 			/// give it, the vault is let down to what the rock holds (no lower than <see cref="Walker.LowestVault"/> of its
@@ -962,7 +962,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// The way down from a hub to the level under it: one drop where it is no farther than <see cref="LegDrop"/>, else drops
-			/// chained through landings partway down (2026-10-21: levels 35–60 m apart in caves up to 500 m deep). Where a later drop
+			/// chained through landings partway down (levels 35–60 m apart in caves up to 500 m deep). Where a later drop
 			/// does not fit, the last landing is taken as the next level's way in (its branches walk on down to that level).
 			/// </summary>
 			private Hub Descend(Hub hub)
@@ -1336,7 +1336,7 @@ namespace FishMMO.Shared.WorldDesign
 				float ledge = rng.Range(2.2f, 3f);
 				float pitch = rng.Range(1.1f, 1.8f);
 				float radius = Mathf.Clamp(pitch / LedgeGrade + ledge + rng.Range(0.5f, 3f), 7f, size >= 2 ? 15f : 11f);
-				// The ledge starts level with the floor the way actually has at its end (2026-10-20): the smooth unions of its
+				// The ledge starts level with the floor the way actually has at its end: the smooth unions of its
 				// segments and the chamber it leaves let that floor down as much as a metre under the nodes' own, and a ledge
 				// started at the nodes' floor stood a metre-high step (52°) over the way's end.
 				float found = system.FloorBelow(new Vector3(end.Centre.x, end.Floor + 1.2f, end.Centre.z), 3f);
@@ -1380,7 +1380,7 @@ namespace FishMMO.Shared.WorldDesign
 					return null;
 				}
 				Add(on);
-				// Off the ledge's foot onto the way on, walked (2026-10-21): the smooth union of the pit's floor and the way's first
+				// Off the ledge's foot onto the way on, walked: the smooth union of the pit's floor and the way's first
 				// segment let the floor down half a metre under the ledge's end, a 47° step; such a pit is taken back out.
 				float line = radius - 0.5f * ledge, last = (floor - bottom) / pitch;
 				var walk = new List<Vector3>();

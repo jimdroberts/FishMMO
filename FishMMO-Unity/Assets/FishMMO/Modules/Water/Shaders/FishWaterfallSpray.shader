@@ -9,7 +9,7 @@ Shader "FishMMO/Water/Waterfall Spray"
     // Cheap from inside the cloud: what is in the eye's face is thinned or not drawn at all (NearFade), a quad nothing of
     // which can show is collapsed before it rasterizes, the light is worked out once a particle, and the mist's noise is
     // read from a lattice texture (Noise3). Standing in the spray, every puff and drop within a few metres covered the
-    // whole screen at the full per-pixel cost, and the frame rate collapsed (2026-10-12).
+    // whole screen at the full per-pixel cost, and the frame rate collapsed.
     Properties
     {
         _SprayColor("Spray colour", Color) = (0.95, 0.97, 1.0, 1)
@@ -77,7 +77,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                 float _MistSize;
                 float _SoftDistance;
                 half _Rainbow;
-                /* Each fall's own (InlandWaterRenderer, on its own copy of the material, 2026-10-28: on a property block it kept
+                /* Each fall's own (InlandWaterRenderer, on its own copy of the material: on a property block it kept
                  * the spray out of the SRP Batcher); all 0 on the shared material. The look of the water the fall pours from
                  * (ApplyFallLooks): _FallLookOn 0 (or water of the inland water's own look), the material's colours as
                  * before. Linear. */
@@ -182,7 +182,7 @@ Shader "FishMMO/Water/Waterfall Spray"
             /// <remarks>
             /// Standing in the spray, every puff within a few metres covered the whole screen and the cloud stacked a hundred
             /// deep, each layer at the full per-pixel cost, and puffs and drops at or behind the eye were still rasterized
-            /// to be clipped pixel by pixel (2026-10-12). Mist: gone within a metre and faded in by four, as the
+            /// to be clipped pixel by pixel. Mist: gone within a metre and faded in by four, as the
             /// fragment did (a puff the camera is in drew a flat grey sheet over the view); and once a puff's radius passes
             /// MIST_SHARE_FULL of half the screen's height, only a seeded (MIST_SHARE_FULL / share)² of them is kept, each
             /// thickened by as much (up to MIST_THIN_BOOST) so the cloud's cover holds: the near puffs fill a fixed amount
@@ -352,7 +352,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float3 tangentA = normalize(cross(normal, float3(0.0, 1.0, 0.0)) + float3(1e-4, 0.0, 0.0));
                     float3 tangentB = cross(normal, tangentA);
                     /* Most of a strike's water runs on down the rock; what splashes off leaves slowly, close to the face
-                     * and downward. Thrown out at up to 8 m/s for over a second it sprayed the terrain (2026-10-08). */
+                     * and downward. Thrown out at up to 8 m/s for over a second it sprayed the terrain. */
                     float speed = min(4.5, max(1.0, input.kind.y) * lerp(0.06, 0.18, r1));
                     float3 way = normalize(normal * 0.45 + float3(0.0, -0.45, 0.0) + (tangentA * (r2 - 0.5) + tangentB * (r3 - 0.5)) * 0.7);
                     float strikeLife = SnapLife(lerp(0.45, 0.9, s2));
@@ -380,7 +380,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                 {
                     /* Thrown up and out where the curtain lands: a crown of drops, hardest at the impact and softer toward
                      * the zone's edge, outward with a scatter, falling back under gravity and drag. Low and out, not up: at
-                     * up to 16 m/s the spray read as water shooting back up the fall (2026-10-07). */
+                     * up to 16 m/s the spray read as water shooting back up the fall. */
                     float out_ = saturate(length(input.impact));
                     float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
                     float3 away = float3(away2.x, 0.0, away2.y);
@@ -401,7 +401,7 @@ Shader "FishMMO/Water/Waterfall Spray"
                     float out_ = saturate(length(input.impact));
                     float2 away2 = dot(input.impact, input.impact) > 1e-6 ? normalize(input.impact) : float2(downstream.x, downstream.z);
                     float3 away = float3(away2.x, 0.0, away2.y);
-                    /* A cloud that hugs the landing and climbs up the curtain, higher for a taller fall (2026-10-08):
+                    /* A cloud that hugs the landing and climbs up the curtain, higher for a taller fall:
                      * it rises to about four tenths of the drop and spreads only a little past the impact. Spread by the
                      * drop as well, a 40 m fall's cloud fanned out across the whole cliff as scattered puffs. */
                     float rise = lerp(0.3, 1.0, r1) * (0.4 + 0.05 * drop) * lerp(1.1, 0.7, out_);

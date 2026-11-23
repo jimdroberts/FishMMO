@@ -35,7 +35,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Canyon walls</b> keep their shape, colliders and holes, and are dressed again in the rock the templates give each
-	/// of their cells (2026-10-16), from the cells and geology the cut kept beside the terrain (SceneCanyonWallCells); a
+	/// of their cells, from the cells and geology the cut kept beside the terrain (SceneCanyonWallCells); a
 	/// scene cut before then keeps its walls' rock and says a re-cut is needed.
 	/// </para>
 	/// </remarks>
@@ -114,7 +114,7 @@ namespace FishMMO.Shared.WorldDesign
 				 * fields the cut laid (PointOfInterestFieldCarve). The sites carve the ridges again below. */
 				PointOfInterestFieldCarve.Restore(scene, terrains, result.Notes);
 				CliffPlacer.Clear(scene);
-				// And the hot ground the cut dug first of all (2026-10-18, I2q): the field below reads the ground as the cut's did.
+				// And the hot ground the cut dug first of all: the field below reads the ground as the cut's did.
 				GeothermalGroundCarve.Restore(scene, terrains, result.Notes);
 				// The rivers and lakes the scene was cut with, marked on its ground as it stands now.
 				SceneWater water = SceneGenerator.LoadWater(request, plan, terrains, result.Notes);
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.WorldDesign
 						RiverFlowBake.Bake(hydrology, result.BiomeMap != null ? result.BiomeMap : entry.BiomeMap, result.Notes);
 					}
 				}
-				/* The plants floating on the still water again (2026-10-18, I2i), on the water as just saved (a LOCAL copy's: the
+				/* The plants floating on the still water again, on the water as just saved (a LOCAL copy's: the
 				 * committed hydrology it shares), each body's its shore biome's as the templates say now. */
 				FloatingPlants.Lay(scene, water,
 					AssetDatabase.LoadAssetAtPath<SceneHydrology>(SceneGenerator.HydrologyPath(SceneGenerator.TerrainFolder(entry.Body, entry.SceneName), entry.SceneName)),

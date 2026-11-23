@@ -100,24 +100,24 @@ namespace FishMMO.Shared.Biomes
 		public WeatherSubstance Emits;
 		[Tooltip("How hard it does, 0..1: a steady trickle at a tenth, a vent that never stops at one. An eruption multiplies it.")]
 		[Range(0f, 1f)] public float EmissionRate;
-		[Tooltip("When the ground steams (it emits a vapour such as Steam): how its hot ground divides among geysers, hot springs, fumaroles and mud pots (shares, divided by their sum). Read by the server, every client and the cut alike. Default: a quarter geysers, two fifths springs, the rest fumaroles, no mud pots, as every steaming biome was before 2026-10-18. Written by Author biome art; edits are kept.")]
+		[Tooltip("When the ground steams (it emits a vapour such as Steam): how its hot ground divides among geysers, hot springs, fumaroles and mud pots (shares, divided by their sum). Read by the server, every client and the cut alike. Default: a quarter geysers, two fifths springs, the rest fumaroles, no mud pots, as every steaming biome was formerly. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeGeothermalShares geothermal = BiomeGeothermalShares.Today;
-		[Tooltip("Where its vents stand (on the grids, along the scene's stored fissure or ridge lines, in zones on a terrace) and how their strength moves on the shared clock (steady, the moon's plume tide, the sun, Strombolian bursts, fountain episodes, the tidal kneading), with a cap on its plumes a scene. Default: the grid, steady, as every biome before 2026-10-25. Written by Author biome art; edits are kept.")]
+		[Tooltip("Where its vents stand (on the grids, along the scene's stored fissure or ridge lines, in zones on a terrace) and how their strength moves on the shared clock (steady, the moon's plume tide, the sun, Strombolian bursts, fountain episodes, the tidal kneading), with a cap on its plumes a scene. Default: the grid, steady, as every biome formerly. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeVents vents = BiomeVents.Today;
-		[Tooltip("How its ground burns on the shared clock (2026-10-25, I2t): None never; Occasional a spring burn in about one year in five (steppe); Annual the late dry season's veld fires (savanna); Brimstone blue sulphur flames at night, breathable worlds only. Drawn by the client only, no damage. Written by Author biome art; edits are kept.")]
+		[Tooltip("How its ground burns on the shared clock: None never; Occasional a spring burn in about one year in five (steppe); Annual the late dry season's veld fires (savanna); Brimstone blue sulphur flames at night, breathable worlds only. Drawn by the client only, no damage. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeBurnRegime burnRegime = BiomeBurnRegime.None;
 
 		[Header("How the ground wears")]
 		[Tooltip("How erosion, drainage and plateaus shape this biome's ground in a generated scene. Empty wears like temperate soil.")]
 		public TerrainProcessProfile TerrainProcess;
-		[Tooltip("The landforms sculpted into this biome's ground at the cut (2026-10-18): pingos, tells, craters, dune fields, creek networks, moraines… each a shape family with its density, sizes, conditions and the ground layer it paints, by name from the landform presets. Empty: the ground is carved as before. Written by Author biome art; edits are kept.")]
+		[Tooltip("The landforms sculpted into this biome's ground at the cut: pingos, tells, craters, dune fields, creek networks, moraines… each a shape family with its density, sizes, conditions and the ground layer it paints, by name from the landform presets. Empty: the ground is carved as before. Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeLandform> landforms = new List<BiomeLandform>();
 
 		/// <remarks>
 		/// <para>
 		/// What the biome's living things look like (BiomeLooks): its look class is the theme its grass, flowers, small plants,
 		/// fungi, stones and critters are coloured from, which the planet it lies on then moves (star, air, warmth); the rare
-		/// looks are its two touches of the fantastic, each a patch here and there. Until 2026-10-15 the class was read from
+		/// looks are its two touches of the fantastic, each a patch here and there. Formerly the class was read from
 		/// the biome's NAME by keywords (BiomeLooks.ClassOf); the biome art authoring now writes it from the spec table, whose
 		/// classes equal what the keywords gave every biome, and a template not authored yet falls back on its name with a
 		/// warning.
@@ -139,8 +139,8 @@ namespace FishMMO.Shared.Biomes
 		/// How each blade prefab this biome's rules grow (Detail_Grass…, Detail_Reeds…, Detail_Flowers…) looks as procedural
 		/// blades HERE: shape, heads, colours and how much of the ground's colour it takes (<see cref="BiomeGrassType"/>). The
 		/// blade renderer builds its per-scene type table from the entries of the biomes in the scene, so one prefab can look
-		/// different in two biomes. Filled by the biome art authoring with the look every biome's blades had before
-		/// 2026-10-15 (BiomeGrassDefaults); entries edited here are kept. A blade prefab with no entry draws with that old
+		/// different in two biomes. Filled by the biome art authoring with the look every biome's blades once had
+		/// (BiomeGrassDefaults); entries edited here are kept. A blade prefab with no entry draws with that old
 		/// look, with a warning.
 		/// </remarks>
 		[Header("Blade Grass, Flowers and Reeds")]
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private TerrainTextureLayer lakebedTextureLayer = new TerrainTextureLayer();
 
 		/// <remarks>
-		/// Decision 35 (b), 2026-10-18: up to <see cref="MaximumBedLayers"/> more beds, each painted under the waters it names by its
+		/// Up to <see cref="MaximumBedLayers"/> more beds, each painted under the waters it names by its
 		/// depth below THAT water's own surface (and in a river by its current): a lake's shelf, slope and deeps, a river's riffles,
 		/// pools and reefs (<see cref="BedTextureLayer"/>). What they leave under a river is the Riverbed layer's, under a lake or the
 		/// sea the Lakebed's. Empty for every biome until its round adds some (filled by the biome art authoring), so a scene is
@@ -214,7 +214,7 @@ namespace FishMMO.Shared.Biomes
 		/// the boulders in its rivers, the ledges of its falls and the stone a point of interest is shaped from. The planet's
 		/// geology is the input: where the rock under the scene is one the biome accepts, it is that rock, so a granite
 		/// country's grassland stands in granite and a desert's canyon in its sandstone; anywhere else it is the biome's own,
-		/// so a bog on a sandstone province is not walled in sandstone (2026-10-08). Ice stays ice.
+		/// so a bog on a sandstone province is not walled in sandstone. Ice stays ice.
 		/// </para>
 		/// <para>
 		/// Names are <c>RockTypes</c> names (Granite, Basalt, Sandstone…) or <c>Ice</c>. Filled by the biome art authoring
@@ -229,7 +229,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// The rock a cave carved in this biome is cut in, by the cave's form: its walls, roof and floor, and with them its
-		/// formations (dripstone, fallen blocks, spoil), which are the shell's own rock (2026-10-16). Until then the cave shaper
+		/// formations (dripstone, fallen blocks, spoil), which are the shell's own rock. Until then the cave shaper
 		/// decided the shell by form (basalt for a lava tube, glacier ice for an ice cave, the ground's own rock for every other
 		/// form) and the dressing gave the formations a rock of their own by form (limestone, basalt, quartzite, water ice),
 		/// whatever the shell was. The biome art authoring writes the shaper's rule here for every form
@@ -240,7 +240,7 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveShell> caveShells = new List<BiomeCaveShell>();
 
 		/// <remarks>
-		/// The crystals this biome's caves grow (<see cref="BiomeCaveCrystal"/>, 2026-10-16, I6c): the clusters in their chambers,
+		/// The crystals this biome's caves grow (<see cref="BiomeCaveCrystal"/>): the clusters in their chambers,
 		/// a kind drawn by weight for each, and, where a kind glows by itself (amberlight, wyrdstone, sunstone), the glow lining
 		/// their ways and the crystal on a crystal way-light post. Until then every cave and grotto grew selenite wherever it
 		/// was; the biome art authoring writes each biome that (its file may name its own). An ice cave's crystals are its ice and
@@ -250,8 +250,8 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveCrystal> caveCrystals = new List<BiomeCaveCrystal>();
 
 		/// <remarks>
-		/// The cave biome dressing the inside of this biome's caves of each form (<see cref="BiomeCaveInterior"/>, 2026-10-25, phase
-		/// I2n, decisions 37, 46, 51, 57): its formations, crystals, glow, lights, floor grounds, cover and animals; the mouth, the
+		/// The cave biome dressing the inside of this biome's caves of each form (<see cref="BiomeCaveInterior"/>, phase
+		/// I2n, 57): its formations, crystals, glow, lights, floor grounds, cover and animals; the mouth, the
 		/// shell's rock and every mine stay this biome's. A link holds where the cave's shell is one of the interior's
 		/// <see cref="CaveInteriorRocks"/>. Until then every cave was dressed from the biome it opened in.
 		/// </remarks>
@@ -264,30 +264,30 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeCaveFormation> caveFormations = new List<BiomeCaveFormation>();
 		[Tooltip("What lights this biome's caves of each form by itself: the glow crystals' hue (empty: drawn by chance), how much of the floor's glow is luminous fungus and how often glow-worms hang (1 the dressing's own). Written by Author biome art (ice caves ice-blue, lava tubes amber, neither with fungus or glow-worms; mines fungus only; the rest by chance with both); edits are kept.")]
 		[SerializeField] private List<BiomeCaveGlow> caveGlows = new List<BiomeCaveGlow>();
-		[Tooltip("How this biome's caves of each form stand in the water table (2026-10-25, I2n-c, decision 86): a natural cave opening on wet ground drowned in a share of systems, its galleries level at the water with floors up to the depth under it; a grotto's floors as deep under its pool. A form not listed is as before (grottos 1.5 m, every other cave dry). Written by Author biome art (none); edits are kept.")]
+		[Tooltip("How this biome's caves of each form stand in the water table: a natural cave opening on wet ground drowned in a share of systems, its galleries level at the water with floors up to the depth under it; a grotto's floors as deep under its pool. A form not listed is as before (grottos 1.5 m, every other cave dry). Written by Author biome art (none); edits are kept.")]
 		[SerializeField] private List<BiomeCaveFlood> caveFloods = new List<BiomeCaveFlood>();
-		[Tooltip("What hangs from this biome's caves' roofs by form (2026-10-25, I2n-c): glow-worm silk, roots through a thin roof in the dark and near a mouth, guano under the roosts, the roots' art and the root windows a system opens. A form not listed takes the dressing's own. Written by Author biome art (as the dressing chose by form); edits are kept.")]
+		[Tooltip("What hangs from this biome's caves' roofs by form: glow-worm silk, roots through a thin roof in the dark and near a mouth, guano under the roosts, the roots' art and the root windows a system opens. A form not listed takes the dressing's own. Written by Author biome art (as the dressing chose by form); edits are kept.")]
 		[SerializeField] private List<BiomeCaveHanging> caveHangings = new List<BiomeCaveHanging>();
-		[Tooltip("The tea ring this biome's cave water leaves on the walls by form (2026-10-25, I2n-c): its colour and strength, how far over the water the highest flood stood and how sharp its top edge is, over the host's rock. A form not listed has none. Written by Author biome art (none); edits are kept.")]
+		[Tooltip("The tea ring this biome's cave water leaves on the walls by form: its colour and strength, how far over the water the highest flood stood and how sharp its top edge is, over the host's rock. A form not listed has none. Written by Author biome art (none); edits are kept.")]
 		[SerializeField] private List<BiomeCaveStain> caveStains = new List<BiomeCaveStain>();
 
 		/// <remarks>
 		/// The part this biome plays for a scene's water and ice: the biome painted where a lake, a river, an estuary or a dry
-		/// lake bed lies, and the ground of the ice sheet (<see cref="BiomeWaterRole"/>). Until 2026-10-15 the cut found those
+		/// lake bed lies, and the ground of the ice sheet (<see cref="BiomeWaterRole"/>). Formerly the cut found those
 		/// biomes by their names; the biome art authoring writes each its role, and any biome given a role is used for it.
 		/// </remarks>
 		[Header("Water and Ice")]
 		[Tooltip("The part this biome plays for the scene's water and ice: Lake, Methane Lake, River, Estuary, Salt Flat (a dry lake bed) or Ice Sheet. None for a biome chosen by climate alone. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeWaterRole waterRole = BiomeWaterRole.None;
 		/// <remarks>
-		/// The colour and clarity of the biome's fresh water (<see cref="BiomeWaterLook"/>, 2026-10-16): the lakes, pools,
+		/// The colour and clarity of the biome's fresh water (<see cref="BiomeWaterLook"/>): the lakes, pools,
 		/// rivers, streams and moats whose shores lie in it take it (<see cref="BiomeWaterLooks"/>). Until then every body of
 		/// inland water took the inland water material's one look, which is this field's default and what the authoring writes.
 		/// </remarks>
 		[Tooltip("The colour and clarity of this biome's fresh water: the lakes, pools, rivers, streams and moats whose shores lie in it (peat-black in a bog, milky under a glacier). Colours as the inland water material's; absorption per metre. Written by Author biome art (the inland water's own look); edits are kept.")]
 		[SerializeField] private BiomeWaterLook waterLook = BiomeWaterLooks.Today;
 		/// <remarks>
-		/// The sea as a diver sees it off this biome's coast (<see cref="BiomeSeaLook"/>, 2026-10-18): the underwater pass blends
+		/// The sea as a diver sees it off this biome's coast (<see cref="BiomeSeaLook"/>): the underwater pass blends
 		/// the looks of the biomes within <see cref="BiomeSeaLooks.ReachMetres"/> of the eye (<see cref="BiomeSeaLooks.Coast"/>).
 		/// Until then every sea took its scene's one underwater look, which is this field's default and what the authoring
 		/// writes; a biome with that look leaves the sea its scene's own.
@@ -295,7 +295,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("The sea seen from under its surface off this biome's coast and over its own waters (peat-brown off a bog, milky off a glacier, clear over a reef): colour, visibility and murk as the underwater pass's. Blended along the coast out to 160 m; a biome with the default look leaves the sea its scene's own. Written by Author biome art (the default); edits are kept.")]
 		[SerializeField] private BiomeSeaLook seaLook = BiomeSeaLooks.Today;
 		/// <remarks>
-		/// What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>, 2026-10-19, phase I2m): the shore's rule
+		/// What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>): the shore's rule
 		/// (its lakebed takes the ground from the water line down, as every biome's did before), its own grounds at every depth (a
 		/// sea-floor biome, deep or on the shelf), or its own grounds down to the lowest tide (an estuary). Shore unless the biome's
 		/// file says otherwise, so nothing changes until a round sets it.
@@ -303,14 +303,14 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("What this biome paints under the sea: Shore (its Lakebed takes the ground from the water line down, as before), Ground (its main and detail layers at every depth, zoned by their depth bands, the Lakebed only under inland water: a sea-floor biome, deep or on the shelf) or To Low Water (its own grounds down to the lowest tide, the Lakebed below: an estuary). Written by Author biome art (Shore); edits are kept.")]
 		[SerializeField] private BiomeSeaFloor seaFloor = BiomeSeaFloor.Shore;
 		/// <remarks>
-		/// How strongly this biome's coast tides (2026-10-19, phase I2m, decision 45): a funnelled estuary's tide is several times the
+		/// How strongly this biome's coast tides: a funnelled estuary's tide is several times the
 		/// open coast's. A scene cut with this biome on its coast multiplies its sea's tide by the coast's mean strength
 		/// (BiomeSeaFloors.CoastStrength), never past BiomeSeaFloors.MaximumTideMetres. 1 (every biome's) leaves the sea as it was.
 		/// </remarks>
 		[Tooltip("How strongly this biome's coast tides: the scene sea's tide is multiplied by the coast's mean strength (1 as before; an estuary 4), the tide never moving the sea more than 4 m. Written by Author biome art (1); edits are kept.")]
 		[Range(0f, BiomeSeaFloors.MaximumTideStrength)] [SerializeField] private float tideStrength = 1f;
 		/// <remarks>
-		/// How deep this biome's underwater sites stand (2026-10-25, phase I2m, decision 36 (b)): metres below mean sea level, x the
+		/// How deep this biome's underwater sites stand: metres below mean sea level, x the
 		/// shallowest and y the deepest, for every underwater kind sited on its floor (a wreck, a drowned shrine, a monster's den) in
 		/// place of the kind's own band, which stops at 30–60 m: an abyss's wrecks lie at 6 000 m. (0, 0), every biome's, keeps
 		/// each kind's own band, as before.
@@ -318,7 +318,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Metres below mean sea level this biome's underwater sites (wrecks, drowned ruins and shrines, dens, crystal formations) stand between, in place of each kind's own band (which stops at 30-60 m). (0, 0): each kind's own, as before. Written by Author biome art ((0, 0)); edits are kept.")]
 		[SerializeField] private Vector2 underwaterSiteDepth = Vector2.zero;
 		/// <remarks>
-		/// What the biome's still fresh water carries on its surface (<see cref="BiomeFloatingPlant"/>, 2026-10-18, I2i): duckweed,
+		/// What the biome's still fresh water carries on its surface (<see cref="BiomeFloatingPlant"/>): duckweed,
 		/// water-lilies, water hyacinth, frogbit, laid by the cut as baked props on the lakes, ponds, moats and slack river pools
 		/// whose water lies in the biome, each patch's kind drawn by weight and how thickly by the water's depth, shelter and
 		/// distance from the shore (<see cref="BiomeFloatingPlants.Cover"/>). Until then no water carried anything, which is
@@ -327,7 +327,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("The plants this biome's still fresh water carries on its surface (duckweed carpets, water-lily pads with flowers, water hyacinth mats, frogbit), each with how often: on its lakes, ponds, moats and slack river pools. Empty: none. Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeFloatingPlant> floatingPlants = new List<BiomeFloatingPlant>();
 		/// <remarks>
-		/// What drifts on the biome's open sea (<see cref="BiomeSeaFloat"/>, 2026-10-25, I2p): sargassum windrows, by-the-wind sailors,
+		/// What drifts on the biome's open sea (<see cref="BiomeSeaFloat"/>): sargassum windrows, by-the-wind sailors,
 		/// barnacled drift logs, propagule rafts, a lost corkline, growlers, pumice rafts, pancake and brash ice, drawn by the client on
 		/// the GPU riding the sea's wave sum and carried downwind on the shared clock (SeaFloatSystem). Read at runtime from the
 		/// template under each 128 m cell of the sea. Until then no sea carried anything, which is this field's default (empty).
@@ -335,7 +335,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("What drifts on this biome's open sea (sargassum windrows, by-the-wind sailors, barnacled drift logs, propagule rafts, a lost corkline, growlers, pumice rafts, pancake or brash ice), each with how thickly (1 its natural density). Drawn by the client riding the sea's waves. Empty: none. Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeSeaFloat> seaFloats = new List<BiomeSeaFloat>();
 		/// <remarks>
-		/// How the biome's cold glows move (<see cref="BiomeGlowMode"/>, 2026-10-25, I6i): its way glows (glowjars, rune stones) and its
+		/// How the biome's cold glows move (<see cref="BiomeGlowMode"/>): its way glows (glowjars, rune stones) and its
 		/// glowing crystals (cave crystals, a crystal post's crystal) each by a mode on the shared clock (caustic, daily step, the sun's
 		/// height, the wet season, the wind, a breath, a crust's overturn, after sunset, the swell, the giant's field, the terminator, the
 		/// parent world's phase, the rain to come, a trail, the night's length, the night, the dark moon, one day in N, the tidal stress, the
@@ -345,7 +345,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How this biome's cold glows move: its Way glows (glowjars, rune stones) and its glowing Crystals (cave crystals, crystal posts), each by a mode on the shared clock, warm or cold. Empty: as before (way glows pulse, stormglass flickers, crystals shine steady). Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeGlowMode> glowModes = new List<BiomeGlowMode>();
 		/// <remarks>
-		/// The biome's lava-fountain episodes (<see cref="BiomeFountainEpisodes"/>, 2026-10-25, I6i, decision 93): the slot schedule its
+		/// The biome's lava-fountain episodes (<see cref="BiomeFountainEpisodes"/>): the slot schedule its
 		/// fissure fountains play on and its Episode glows follow. Empty (the default): no episodes.
 		/// </remarks>
 		[Tooltip("The biome's lava-fountain episodes: slot lengths (each dividing 10 000 s), the share of a slot a fountain plays, its ramps and jet heights. All zero: none. Written by Author biome art; edits are kept.")]
@@ -353,7 +353,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// What lives here besides what grows (2026-10-16): the country the ambient creatures read (<see cref="BiomeHabitat"/>:
+		/// What lives here besides what grows: the country the ambient creatures read (<see cref="BiomeHabitat"/>:
 		/// forest, wetland, coast, open sea, alien ground…; which birds, bats, small animals and insects belong is the
 		/// creatures' own business, from the country, the climate and the hour), and the sea creatures most at home in its
 		/// water (by the sea life's kind names: "Reef fish", "Sea turtle", "Crab", "Whale"…), which are that many times as
@@ -365,7 +365,7 @@ namespace FishMMO.Shared.Biomes
 		/// template is edited; a template never authored still reads its name, with a warning.
 		/// </para>
 		/// <para>
-		/// Alien ground is not stored (2026-10-16): it is the template's air, read live (<see cref="LiveHabitat"/>,
+		/// Alien ground is not stored: it is the template's air, read live (<see cref="LiveHabitat"/>,
 		/// <see cref="BiomeHabitats.Live"/>), so the habitat holds every other bit and an Alien bit set here is dropped.
 		/// The sea life is listed with its weight here: a kind listed is that many times as common in this biome's water,
 		/// whatever the climate there; one not listed lives as it does in any other water (its own elsewhere weight, by the
@@ -380,7 +380,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// Which vines (ivy, creeper, lianas) grow here and how thickly, by the place they grow on: a cave's mouth, ruined and
-		/// old walls, cliff crags and a waterfall's wet rock, and the trees. Until 2026-10-16 a table keyed by the biome's name
+		/// old walls, cliff crags and a waterfall's wet rock, and the trees. Formerly a table keyed by the biome's name
 		/// (VineBiomes); the biome art authoring writes that table's row here. No species: no vines.
 		/// </remarks>
 		[Header("Vines")]
@@ -390,7 +390,7 @@ namespace FishMMO.Shared.Biomes
 		/// <remarks>
 		/// The resources a gathering site in this biome draws its nodes from (the gathering catalogue's node names: "Iron Vein",
 		/// "Silverleaf Patch", "Glowcap Cluster"…); a site draws only those of its families offered here, or any of a family
-		/// when none of it is. Until 2026-10-16 every resource named its biomes itself (GatheringResourceCatalogue); the
+		/// when none of it is. Formerly every resource named its biomes itself (GatheringResourceCatalogue); the
 		/// biome art authoring writes each biome the ones that named it. The catalogue still defines the resources (Generate
 		/// Gathering Content makes their items, node templates and prefabs).
 		/// </remarks>
@@ -422,13 +422,13 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// The points of interest this biome hosts and how they are built here (2026-10-16, phase I5): the kinds sited on its
+		/// The points of interest this biome hosts and how they are built here: the kinds sited on its
 		/// ground (<see cref="BiomeSiteKind"/>; a kind not listed is never sited here), the weight each kind's template variants
 		/// take here (<see cref="BiomeSiteVariant"/>: a stone village in the hills, a longhouse in the cold; a variant not listed
 		/// keeps its weight elsewhere), the weight of whole structure styles (<see cref="BiomeSiteStyle"/>; a style not listed
 		/// weighs 1), how the weather finishes its buildings (<see cref="BiomeWeathering"/>), what its fields grow
-		/// (<see cref="BiomeFieldCrop"/>), what stands in a stronghold's moat (<see cref="BiomeMoatWater"/>, 2026-10-16, I5b) and
-		/// how its settlements light their streets (<see cref="BiomeWayLight"/>, I5b).
+		/// (<see cref="BiomeFieldCrop"/>), what stands in a stronghold's moat (<see cref="BiomeMoatWater"/>) and
+		/// how its settlements light their streets (<see cref="BiomeWayLight"/>).
 		/// </para>
 		/// <para>
 		/// Until then each of these was decided by the biome's name: the point-of-interest catalogue's rows and templates named
@@ -448,13 +448,13 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private BiomeWeathering weathering;
 		[Tooltip("The crops this biome's fields grow (detail prefabs, each with its weight). Written by Author biome art (wheat); edits are kept.")]
 		[SerializeField] private List<BiomeFieldCrop> fieldCrops = new List<BiomeFieldCrop>();
-		[Tooltip("The orchards this biome's fields are planted as (2026-10-18): a tree in a grid, drawn against the crops by its weight, with its spacing, what is sown under it and how its ground is laid. Empty: none. Written by Author biome art; edits are kept.")]
+		[Tooltip("The orchards this biome's fields are planted as: a tree in a grid, drawn against the crops by its weight, with its spacing, what is sown under it and how its ground is laid. Empty: none. Written by Author biome art; edits are kept.")]
 		[SerializeField] private List<BiomeOrchard> orchards = new List<BiomeOrchard>();
-		[Tooltip("How its settlements' fields are laid out (2026-10-18): kept near rivers and lakes (bottomland, metres) and set square to a centuriation grid (metres a side). Zero: anywhere, as drawn. Written by Author biome art; edits are kept.")]
+		[Tooltip("How its settlements' fields are laid out: kept near rivers and lakes (bottomland, metres) and set square to a centuriation grid (metres a side). Zero: anywhere, as drawn. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeFieldLayout fieldLayout;
-		[Tooltip("The flights of old, given-up terraces stepped into the slopes round its settlements (2026-10-18): how many, their risers, the slopes they are cut into and how tumbled. None by default. Written by Author biome art; edits are kept.")]
+		[Tooltip("The flights of old, given-up terraces stepped into the slopes round its settlements: how many, their risers, the slopes they are cut into and how tumbled. None by default. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeAbandonedTerraces abandonedTerraces = BiomeAbandonedTerraces.None;
-		[Tooltip("The detail ground layer painted along its water channels (2026-10-18; a wet margin), and how wide; −1 none. Painted by the repaint after the channels are laid. Written by Author biome art; edits are kept.")]
+		[Tooltip("The detail ground layer painted along its water channels (a wet margin), and how wide; −1 none. Painted by the repaint after the channels are laid. Written by Author biome art; edits are kept.")]
 		[SerializeField] private BiomeChannelMargin channelMargin = BiomeChannelMargin.None;
 		[Tooltip("What stands in a keep's, castle's or fortress's moat here: Wet (open water), Frozen (ice) or Dry (a dry ditch). Written by Author biome art (what the biome's climate gave the moat before); edits are kept.")]
 		[SerializeField] private BiomeMoatWater moatWater = BiomeMoatWater.Wet;
@@ -466,14 +466,14 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private BiomeBoardwalks boardwalks = BiomeBoardwalks.None;
 		[Tooltip("How this biome's raised roads, paths and trails are built: Planked (plank walk on piles, pole handrail), Passerella (oak planks on stub piles, one rail), LandingWalk (split planks on forked posts), Bohlensteg (paired planks on stakes, 0.6 m wide) or PoleWalk (two poles on forked stakes). A settlement's streets stay planked. Written by Author biome art (Planked); edits are kept.")]
 		[SerializeField] private BiomeBoardwalkStyle boardwalkStyle = BiomeBoardwalkStyle.Planked;
-		[Tooltip("How this biome's ways bridge its rivers (2026-10-26): Default (the kit's timber spans), Liana, CorbelledLaterite, WindAndRain (a covered gallery), Cantilever, GoblinsBridge (slabs on boulders) or SnowBridge, each over the spans it can take; a gorge keeps its stone arch or rope bridge. Written by Author biome art only when the biome's file names one; edits are kept.")]
+		[Tooltip("How this biome's ways bridge its rivers: Default (the kit's timber spans), Liana, CorbelledLaterite, WindAndRain (a covered gallery), Cantilever, GoblinsBridge (slabs on boulders) or SnowBridge, each over the spans it can take; a gorge keeps its stone arch or rope bridge. Written by Author biome art only when the biome's file names one; edits are kept.")]
 		[SerializeField] private BiomeCrossingStyle crossingStyle = BiomeCrossingStyle.Default;
-		[Tooltip("This biome's straight roads (2026-10-26): None (every way routed round the ground), Straight (dead-straight, cut and filled to grade, stairs at cliffs), Raised (on an embankment) or Cut (two sunk between sheer walls); Ruts wears them into ox-cart ruts. One network a scene, over the trunk ways between its settlements. Written by Author biome art only when the biome's file names one; edits are kept.")]
+		[Tooltip("This biome's straight roads: None (every way routed round the ground), Straight (dead-straight, cut and filled to grade, stairs at cliffs), Raised (on an embankment) or Cut (two sunk between sheer walls); Ruts wears them into ox-cart ruts. One network a scene, over the trunk ways between its settlements. Written by Author biome art only when the biome's file names one; edits are kept.")]
 		[SerializeField] private BiomeStraightRoads straightRoads = BiomeStraightRoads.None;
 
 		/// <remarks>
-		/// The long, narrow things this biome's country is divided and watered by (2026-10-18, phase I2f, decisions 23 and 29;
-		/// <see cref="BiomeLinearStyle"/>): hedges of its own bushes round its fields and along its lanes and wood edges, drystone,
+		/// The long, narrow things this biome's country is divided and watered by
+		/// (<see cref="BiomeLinearStyle"/>): hedges of its own bushes round its fields and along its lanes and wood edges, drystone,
 		/// mortared and earth-bank walls, fences of every kind, rows of trees, irrigation channels carried at a gentle fall from the
 		/// water to the fields, and the clearance rows of stones picked off them, each with where it goes and how it is built. Laid
 		/// by the cut as baked props (PointOfInterestLinearFeatures). Until then a field had the kit's post-and-rail fence and
@@ -485,9 +485,9 @@ namespace FishMMO.Shared.Biomes
 		[SerializeField] private List<BiomeLinearStyle> linearFeatures = new List<BiomeLinearStyle>();
 
 		/// <remarks>
-		/// What this biome's buildings are made of, per structure style and part (<see cref="BiomeStructurePalette"/>, 2026-10-16).
+		/// What this biome's buildings are made of, per structure style and part (<see cref="BiomeStructurePalette"/>).
 		/// Written by the biome art authoring with the kit's own materials (<see cref="BiomeStructurePalette.Kit"/>), which are
-		/// what every biome's buildings are built of today; the art generator builds a biome's own palette from phase I6.
+		/// what every biome's buildings are built of today; the art generator builds a biome's own palette.
 		/// </remarks>
 		[Header("Structures")]
 		[Tooltip("What this biome's buildings make each part of (walls, upper walls, thatched and shingled roofs, plinth, trim, door, floor, fences, paving), per structure style, with a tint and a surface variant. Written by Author biome art (the structure kit's own materials); edits are kept. The art generator does not build per-biome palettes yet: a palette differing from the kit's is noted at the cut and built in the kit's materials until it does.")]
@@ -497,7 +497,7 @@ namespace FishMMO.Shared.Biomes
 		/// For each value the biome art authoring writes that is not a texture slot or a spawn rule (those carry their own
 		/// marks), a fingerprint of what it last wrote: while the value still matches, nobody has changed it and the authoring
 		/// may write it again; once it differs it is somebody's edit and is kept. A field with no mark was never authored.
-		/// A list carries one mark per entry ("field/identity", <see cref="EntryMarks"/>, 2026-10-16) and its own field mark is
+		/// A list carries one mark per entry ("field/identity", <see cref="EntryMarks"/>) and its own field mark is
 		/// then <see cref="BiomeEntryMarks.PerEntry"/>.
 		/// </summary>
 		[SerializeField, HideInInspector] private List<AuthoredMark> authoredMarks = new List<AuthoredMark>();
@@ -568,7 +568,7 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>
 			/// The mark of the vines' four densities (caves, ruins, cliffs, trees), a value of its own since the species carry a
-			/// mark each (2026-10-16): not an entry key, so never read as one.
+			/// mark each: not an entry key, so never read as one.
 			/// </summary>
 			public const string VineDensities = nameof(vines) + ".densities";
 
@@ -584,43 +584,43 @@ namespace FishMMO.Shared.Biomes
 			/// <summary>The mark of one way of a ground layer's <see cref="TerrainTextureLayer.ways"/> (key BiomeLocalArt.WaySlot: <c>detail/2/road</c>).</summary>
 			public static string GroundWay(string waySlotKey) => "groundWays/" + waySlotKey;
 
-			/// <summary>The mark of one ground layer's <see cref="TerrainTextureLayer.glow"/> (2026-10-25, phase I2r; slot keys as BiomeLocalArt's).</summary>
+			/// <summary>The mark of one ground layer's <see cref="TerrainTextureLayer.glow"/> (slot keys as BiomeLocalArt's).</summary>
 			public static string GroundGlow(string slotKey) => "groundGlow/" + slotKey;
 
 			/// <summary>
-			/// The mark of one ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/> and its ranges, 2026-10-18;
+			/// The mark of one ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/> and its ranges;
 			/// slot keys as BiomeLocalArt's, a climate variant's override included: <c>variant/frozen/main</c>).
 			/// </summary>
 			public static string GroundClimate(string slotKey) => "groundClimate/" + slotKey;
 
-			/// <summary>The mark of one bed layer's bands (<see cref="BedTextureLayer"/>'s waters, depth and current, 2026-10-18), by its slot key (<c>bed/0</c>).</summary>
+			/// <summary>The mark of one bed layer's bands (<see cref="BedTextureLayer"/>'s waters, depth and current), by its slot key (<c>bed/0</c>).</summary>
 			public static string BedBands(string slotKey) => "bedBands/" + slotKey;
 
 			/// <summary>The mark of one climate variant the authoring added or keeps up to date (its envelope), by its key (<see cref="BiomeClimateVariant.Key"/>).</summary>
 			public static string ClimateVariant(string variantKey) => nameof(ClimateVariants) + "/" + variantKey;
 
-			/// <summary>The mark of the template's <see cref="BiomeTemplate.Description"/> (a spec column since 2026-10-18).</summary>
+			/// <summary>The mark of the template's <see cref="BiomeTemplate.Description"/> (a spec column).</summary>
 			public const string Description = nameof(BiomeTemplate.Description);
 
-			/// <summary>The mark of one part of the naming block (<see cref="BiomeTemplate.Naming"/>'s phonology: <c>naming/Onsets</c>…), a spec column since 2026-10-18.</summary>
+			/// <summary>The mark of one part of the naming block (<see cref="BiomeTemplate.Naming"/>'s phonology: <c>naming/Onsets</c>…), a spec column.</summary>
 			public static string NamingPart(string part) => "naming/" + part;
 
-			/// <summary>The mark of what the ground gives the air (<see cref="BiomeTemplate.Emits"/> and its rate), a spec column since 2026-10-18 (I2o).</summary>
+			/// <summary>The mark of what the ground gives the air (<see cref="BiomeTemplate.Emits"/> and its rate), a spec column.</summary>
 			public const string Emission = nameof(BiomeTemplate.Emits);
 
-			/// <summary>The mark of the loose ground the wind lifts (<see cref="BiomeTemplate.LooseGround"/>), a spec column since 2026-10-26 (CODE-TABLE CLEARANCE).</summary>
+			/// <summary>The mark of the loose ground the wind lifts (<see cref="BiomeTemplate.LooseGround"/>), a spec column.</summary>
 			public const string LooseGround = nameof(BiomeTemplate.LooseGround);
 
-			/// <summary>The mark of the terrain process profile the ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>), a spec column since 2026-10-26 (CODE-TABLE CLEARANCE).</summary>
+			/// <summary>The mark of the terrain process profile the ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>), a spec column.</summary>
 			public const string TerrainProcess = nameof(BiomeTemplate.TerrainProcess);
 
-			/// <summary>The mark of the hot ground's split among its kinds (<see cref="BiomeTemplate.Geothermal"/>), a spec column since 2026-10-18 (I2q).</summary>
+			/// <summary>The mark of the hot ground's split among its kinds (<see cref="BiomeTemplate.Geothermal"/>), a spec column.</summary>
 			public const string Geothermal = nameof(geothermal);
 
-			/// <summary>The mark of where the biome's vents stand and how they move (<see cref="BiomeTemplate.Vents"/>), a spec column since 2026-10-25 (I2q-b).</summary>
+			/// <summary>The mark of where the biome's vents stand and how they move (<see cref="BiomeTemplate.Vents"/>), a spec column.</summary>
 			public const string Vents = nameof(vents);
 
-			/// <summary>The mark of how the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>), a spec column since 2026-10-25 (I2t).</summary>
+			/// <summary>The mark of how the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>), a spec column.</summary>
 			public const string Burn = nameof(burnRegime);
 		}
 
@@ -639,7 +639,7 @@ namespace FishMMO.Shared.Biomes
 		public TerrainTextureLayer BarGravelTextureLayer => barGravelTextureLayer;
 		public TerrainTextureLayer LakebedTextureLayer => lakebedTextureLayer;
 
-		/// <summary>The biome's extra bed layers by depth (and current), at most <see cref="MaximumBedLayers"/> painted (decision 35, 2026-10-18).</summary>
+		/// <summary>The biome's extra bed layers by depth (and current), at most <see cref="MaximumBedLayers"/> painted.</summary>
 		public List<BedTextureLayer> BedTextureLayers => bedTextureLayers;
 
 		/// <summary>The biome's own rock (a rock type name, or Ice); null or empty when not authored.</summary>
@@ -705,7 +705,7 @@ namespace FishMMO.Shared.Biomes
 		}
 		/// <summary>
 		/// The country this biome offers ambient creatures as stored (<see cref="BiomeHabitat"/>), never with the Alien bit,
-		/// which is read live (<see cref="LiveHabitat"/>): one stored before 2026-10-16 is masked here, and setting it does
+		/// which is read live (<see cref="LiveHabitat"/>): one stored formerly is masked here, and setting it does
 		/// nothing. None when not authored, or authored as none.
 		/// </summary>
 		public BiomeHabitat Habitat
@@ -721,7 +721,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeHabitat LiveHabitat => BiomeHabitats.Live(habitat, Atmosphere, Requires);
 
 		/// <summary>
-		/// Drops an Alien bit the authoring stored before it was read live (2026-10-16); true when there was one. Every read
+		/// Drops an Alien bit the authoring stored before it was read live; true when there was one. Every read
 		/// masks it anyway; this only cleans the asset.
 		/// </summary>
 		public bool DropStoredAlien()
@@ -817,8 +817,8 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The colour and clarity of this biome's fresh water (<see cref="BiomeWaterLook"/>); read through <see cref="BiomeWaterLooks.Of"/>.</summary>
 		/// <summary>
-		/// How a steaming biome's hot ground divides among geysers, hot springs, fumaroles and mud pots (2026-10-18, phase I2q,
-		/// decision 47; GeothermalVents.KindOf). <see cref="BiomeGeothermalShares.Today"/> unless the biome's file says otherwise.
+		/// How a steaming biome's hot ground divides among geysers, hot springs, fumaroles and mud pots
+		/// (GeothermalVents.KindOf). <see cref="BiomeGeothermalShares.Today"/> unless the biome's file says otherwise.
 		/// </summary>
 		public BiomeGeothermalShares Geothermal
 		{
@@ -827,8 +827,8 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// Where this biome's vents stand and how their strength moves (2026-10-25, phase I2q-b, decisions 53, 66, 90, 93, 95;
-		/// GeothermalVents, VolcanicVents, VentTiming). <see cref="BiomeVents.Today"/> unless the biome's file says otherwise.
+		/// Where this biome's vents stand and how their strength moves
+		/// (GeothermalVents, VolcanicVents, VentTiming). <see cref="BiomeVents.Today"/> unless the biome's file says otherwise.
 		/// </summary>
 		public BiomeVents Vents
 		{
@@ -837,7 +837,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// How this biome's ground burns on the shared clock (2026-10-25, phase I2t, decisions 75/82/84; BurnMosaic, FishBurn.hlsl):
+		/// How this biome's ground burns on the shared clock (BurnMosaic, FishBurn.hlsl):
 		/// <see cref="BiomeBurnRegime.None"/> unless the biome's file says otherwise. Read live by the client (no re-cut).
 		/// </summary>
 		public BiomeBurnRegime BurnRegime
@@ -859,14 +859,14 @@ namespace FishMMO.Shared.Biomes
 			set => seaLook = value;
 		}
 
-		/// <summary>What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>, 2026-10-19, phase I2m): Shore unless its file says otherwise.</summary>
+		/// <summary>What the biome paints and grows under the sea (<see cref="BiomeSeaFloor"/>): Shore unless its file says otherwise.</summary>
 		public BiomeSeaFloor SeaFloor
 		{
 			get => seaFloor;
 			set => seaFloor = value;
 		}
 
-		/// <summary>How strongly this biome's coast tides (decision 45), 0 … <see cref="BiomeSeaFloors.MaximumTideStrength"/>; read through <see cref="BiomeSeaFloors.Strength"/>.</summary>
+		/// <summary>How strongly this biome's coast tides, 0 … <see cref="BiomeSeaFloors.MaximumTideStrength"/>; read through <see cref="BiomeSeaFloors.Strength"/>.</summary>
 		public float TideStrength
 		{
 			get => tideStrength;
@@ -912,21 +912,21 @@ namespace FishMMO.Shared.Biomes
 			set => boardwalks = value;
 		}
 
-		/// <summary>How this biome's raised routed ways are built (<see cref="BiomeBoardwalkStyle"/>, I2i-b); read through BiomeTemplateArt.BoardwalkStyle.</summary>
+		/// <summary>How this biome's raised routed ways are built (<see cref="BiomeBoardwalkStyle"/>); read through BiomeTemplateArt.BoardwalkStyle.</summary>
 		public BiomeBoardwalkStyle BoardwalkStyle
 		{
 			get => boardwalkStyle;
 			set => boardwalkStyle = value;
 		}
 
-		/// <summary>How this biome's ways bridge its rivers (<see cref="BiomeCrossingStyle"/>, I2l-b); read through BiomeTemplateArt.CrossingStyle.</summary>
+		/// <summary>How this biome's ways bridge its rivers (<see cref="BiomeCrossingStyle"/>); read through BiomeTemplateArt.CrossingStyle.</summary>
 		public BiomeCrossingStyle CrossingStyle
 		{
 			get => crossingStyle;
 			set => crossingStyle = value;
 		}
 
-		/// <summary>This biome's straight roads (<see cref="BiomeStraightRoads"/>, I2l-b); read through BiomeTemplateArt.StraightRoads.</summary>
+		/// <summary>This biome's straight roads (<see cref="BiomeStraightRoads"/>); read through BiomeTemplateArt.StraightRoads.</summary>
 		public BiomeStraightRoads StraightRoads
 		{
 			get => straightRoads;

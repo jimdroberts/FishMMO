@@ -9,7 +9,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.AbilityContent
 {
 	/// <summary>
-	/// The crowd-control, over-time, projectile-behaviour and defence half of the test ability suite (2026-11-22): Stunning
+	/// The crowd-control, over-time, projectile-behaviour and defence half of the test ability suite: Stunning
 	/// Blow, Freezing Bolt, Mesmerize, Ignite, Rejuvenate (and Self), Ricochet Shot, Forked Bolt, Chain Lightning, Shield
 	/// Block and Deflect, with their buffs, effects and premades.
 	/// </summary>
@@ -65,7 +65,8 @@ namespace FishMMO.AbilityContent
 
 		// Tuning, named once: descriptions, buffs and events read the same numbers.
 		private const float StunSeconds = 2f, FreezeSeconds = 3f, CharmSeconds = 12f;
-		private const int BurnPerSecond = 2, BurnSeconds = 6, RejuvenatePerSecond = 3, RejuvenateSeconds = 8;
+		// Ignite burns every 5 s for 30 s, Rejuvenate heals every 5 s for 45 s (were every second for 6 s and 8 s).
+		private const int BurnPerTick = 2, BurnSeconds = 30, BurnTickSeconds = 5, RejuvenatePerTick = 3, RejuvenateSeconds = 45, RejuvenateTickSeconds = 5;
 		private const int ChainLength = 4;
 		private const float ChainRadius = 6f;
 		private const float DeflectWindow = 0.4f, GuardArc = 150f;
@@ -198,22 +199,22 @@ namespace FishMMO.AbilityContent
 			mesmerized = Save(mesmerized, BuffFolder, "Mesmerized");
 
 			ResourceTickBuffTemplate burn = ScriptableObject.CreateInstance<ResourceTickBuffTemplate>();
-			burn.Description = $"Burning: {BurnPerSecond} fire damage a second.";
+			burn.Description = $"Burning: {BurnPerTick} fire damage every {BurnTickSeconds} seconds.";
 			burn.Duration = BurnSeconds;
-			burn.TickRate = 1f;
+			burn.TickRate = BurnTickSeconds;
 			burn.IsDebuff = true;
 			burn.MaxStacks = 3u;
 			burn.DamageAttribute = fireDamage;
-			burn.TickAttributes = new List<BuffAttributeTemplate> { new BuffAttributeTemplate { Template = health, Value = -BurnPerSecond } };
+			burn.TickAttributes = new List<BuffAttributeTemplate> { new BuffAttributeTemplate { Template = health, Value = -BurnPerTick } };
 			burn.FXPrefabReference = Reference(burning);
 			burn = Save(burn, BuffFolder, "Burning");
 
 			ResourceTickBuffTemplate rejuvenate = ScriptableObject.CreateInstance<ResourceTickBuffTemplate>();
-			rejuvenate.Description = $"Rejuvenation: {RejuvenatePerSecond} health a second.";
+			rejuvenate.Description = $"Rejuvenation: {RejuvenatePerTick} health every {RejuvenateTickSeconds} seconds.";
 			rejuvenate.Duration = RejuvenateSeconds;
-			rejuvenate.TickRate = 1f;
+			rejuvenate.TickRate = RejuvenateTickSeconds;
 			rejuvenate.MaxStacks = 1u;
-			rejuvenate.TickAttributes = new List<BuffAttributeTemplate> { new BuffAttributeTemplate { Template = health, Value = RejuvenatePerSecond } };
+			rejuvenate.TickAttributes = new List<BuffAttributeTemplate> { new BuffAttributeTemplate { Template = health, Value = RejuvenatePerTick } };
 			rejuvenate.FXPrefabReference = Reference(rejuvenation);
 			rejuvenate = Save(rejuvenate, BuffFolder, "Rejuvenation");
 
@@ -231,7 +232,7 @@ namespace FishMMO.AbilityContent
 				ev.TargetSelector = Hostiles(new EventTargetSelector { FallbackToInitiator = false });
 				ev.OnConditionsMetActions.Add(Damage(3, physicalDamage));
 			});
-			// The control as an effect (bases and effects, Jim 2026-11-22): bundled here, sold alone, craftable onto any base.
+			// The control as an effect (bases and effects): bundled here, sold alone, craftable onto any base.
 			AbilityOnHitEvent stunEffect = SaveEvent<AbilityOnHitEvent>(ControlEventFolder, "Stun", ev =>
 			{
 				ev.TargetSelector = Hostiles(new EventTargetSelector { FallbackToInitiator = false });
@@ -342,7 +343,7 @@ namespace FishMMO.AbilityContent
 			});
 			abilities.Add(SaveAbility(OverTimeAbilityFolder, "Ignite", a =>
 			{
-				a.Description = $"Sets the first foe it strikes alight: 2 fire damage, then {BurnPerSecond} fire damage a second for {BurnSeconds} seconds. Stacks up to three times.";
+				a.Description = $"Sets the first foe it strikes alight: 2 fire damage, then {BurnPerTick} fire damage every {BurnTickSeconds} seconds for {BurnSeconds} seconds. Stacks up to three times.";
 				a.AbilityObjectPrefab = igniteProjectile;
 				a.AbilitySpawnTarget = AbilitySpawnTarget.SpawnerWithCameraRotation;
 				a.Type = AbilityType.GroundedMagic;
@@ -380,7 +381,7 @@ namespace FishMMO.AbilityContent
 			});
 			abilities.Add(SaveAbility(OverTimeAbilityFolder, "Rejuvenate", a =>
 			{
-				a.Description = $"A mote of slow healing: the ally or friendly character it strikes regains {RejuvenatePerSecond} health a second for {RejuvenateSeconds} seconds. An enemy it strikes is spared.";
+				a.Description = $"A mote of slow healing: the ally or friendly character it strikes regains {RejuvenatePerTick} health every {RejuvenateTickSeconds} seconds for {RejuvenateSeconds} seconds. An enemy it strikes is spared.";
 				a.AbilityObjectPrefab = healProjectile;
 				a.AbilitySpawnTarget = AbilitySpawnTarget.SpawnerWithCameraRotation;
 				a.Type = AbilityType.GroundedMagic;
@@ -397,7 +398,7 @@ namespace FishMMO.AbilityContent
 			}));
 			abilities.Add(SaveAbility(OverTimeAbilityFolder, "Rejuvenate Self", a =>
 			{
-				a.Description = $"You regain {RejuvenatePerSecond} health a second for {RejuvenateSeconds} seconds.";
+				a.Description = $"You regain {RejuvenatePerTick} health every {RejuvenateTickSeconds} seconds for {RejuvenateSeconds} seconds.";
 				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
 				a.Type = AbilityType.GroundedMagic;
 				a.ActivationTime = 1.0f;

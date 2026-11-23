@@ -10,16 +10,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Scrubland</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Scrubland()
 		{
-			// The Sonoran desert scrub of the canal builders (biome round, approved 2026-10-25, authored 2026-10-26): green bajadas of
+			// The Sonoran desert scrub of the canal builders: green bajadas of
 			// rotted pink granite under banded mylonite fronts, many-armed saguaros among green-barked palo verdes, braided washes lined
 			// with ironwood, desert willow and mesquite bosques, white caliche benches at every terrace edge, evenly spaced creosote on
-			// the pale flats, black malpaís and one great maar. Two reaches by the climate bands (decision 29): the UPLAND (h ≥ −0.3,
+			// the pale flats, black malpaís and one great maar. Two reaches by the climate bands: the UPLAND (h ≥ −0.3,
 			// t < 0.8: saguaro–palo verde, grasses, canals, towns) and the LOWER COLORADO (the drier flats: creosote–white bursage, sand
 			// verbena); organ pipe and elephant tree only where it never frosts (t ≥ 0.75). The Sahel kit and the maquis it once grew
-			// (acacia stands, olive, cistus, thornbush, sagebrush, yucca, sandstone beds) are declined back to the catalogue (decision 77).
-			// LATER (I9 T1): every ground and object texture as Scrubland's own variant (Granite "Grus", Gneiss "Mylonite", Basalt
+			// (acacia stands, olive, cistus, thornbush, sagebrush, yucca, sandstone beds) are declined back to the catalogue.
+			// LATER: every ground and object texture as Scrubland's own variant (Granite "Grus", Gneiss "Mylonite", Basalt
 			// "Malpaís", Creosote, Ocotillo and Saguaro as its own looks); until then the grounds are its own recipes, the rest the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Pitahaya V(0.98, 0.45, 0.48) and Chubasco V(0.28, 0.35, 0.30).
+			// LATER (no spec column yet): rare looks Pitahaya V(0.98, 0.45, 0.48) and Chubasco V(0.28, 0.35, 0.30).
 			// LATER (the draft's LOWER reach is h < −0.3 OR t ≥ 0.8): its rules ride the dry band only; the hottest arm's species
 			// (organ pipe, elephant tree) carry their own temperature band.
 			return E("Scrubland", L(Ground.SoilBajadaLoam,
@@ -31,13 +31,13 @@ namespace FishMMO.Shared.WorldDesign
 					// the roadsides, chia.
 					SonoranUpland(Plants("FlowersGoldPoppy", 6f)),
 					SonoranUpland(Plants("FlowersLupine", 4f)), Plants("FlowersDesertMarigold", 2f), Plants("HerbChia", 1f),
-					// The matrix shrubs: bursage everywhere on the bajada, creosote evenly spaced (decision 77: its root zones keep the
+					// The matrix shrubs: bursage everywhere on the bajada, creosote evenly spaced (its root zones keep the
 					// others off), ocotillo.
 					SonoranUpland(Bush("Bursage", 8f)), Moded(Bush("Creosote", 0.6f), BiomeScatterMode.EvenSpacing(4f)), Bush("Ocotillo", 0.3f),
-					// The cacti: teddybear cholla, the fishhook barrel leaning to the sun (decision 77), the Engelmann pear.
+					// The cacti: teddybear cholla, the fishhook barrel leaning to the sun, the Engelmann pear.
 					Plants("ChollaTeddybear", 0.5f), Moded(Plants("CactusFishhook", 0.3f), BiomeScatterMode.LeanSunward(14f)), Plants("PadCactusEngelmann", 0.8f),
-					// The saguaro forest above the lowest flats, foothill palo verde and whitethorn. LATER (I9b P3): candelabra arms by age;
-					// the Warden saguaro is an AncientTree site (I7).
+					// The saguaro forest above the lowest flats, foothill palo verde and whitethorn. LATER: candelabra arms by age;
+					// the Warden saguaro is an AncientTree site.
 					Band(Trees(0.04f, 14f, 30f, "Saguaro"), -1f, 1f, -0.38f, 1f), SonoranUpland(Trees(0.03f, 10f, 30f, "PaloVerde")),
 					Trees(0.01f, 14f, 25f, "Whitethorn"),
 					// Saguaro skeletons standing for years, their fallen ribs within a few metres.
@@ -57,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 						Trees(0.01f, 14f, 25f, "Whitethorn"),
 						Blocks("Caliche benches", 0.02f, 16f, F(RegionalRocks.Caliche, "Bench", "Plate")),
 						Blocks("Caliche scree", 0.01f, 12f, F(RegionalRocks.Caliche, "Scree"))).Ways(road: Ground.FlagstoneCalicheSetts),
-					// d2: the grus slopes, the saguaro ground: young saguaros only under nurse trees (decision 77), palo verde, the
+					// d2: the grus slopes, the saguaro ground: young saguaros only under nurse trees, palo verde, the
 					// fishhook barrels and cholla of the south slopes, pincushions under the shrubs, the frost-free reach's organ pipe,
 					// spikemoss in the north-facing crevices, brittlebush, jojoba and ocotillo; rotted corestones and split boulders.
 					D(Ground.GravelGrusBajada, 64f, 2.5f, 12f, 38f,
@@ -93,7 +93,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("detail/1", "Boulders", "Formations: Sandstone beds")
 				.Ways(path: Ground.PathClearedTrail, road: Ground.PathCanalBank, cobbles: Ground.FlagstoneCalicheSetts)
 				.Bars(sand: Ground.SandWashBar, gravel: Ground.GravelWashCobble)
-				// Own rock caliche (its formations, approved Q4: a crust rock, not soluble-linked), accepting the bajadas' granite, the
+				// Own rock caliche (its formations, a crust rock, not soluble-linked), accepting the bajadas' granite, the
 				// mylonite fronts' gneiss, the malpaís basalt and the grottoes' limestone; sandstone, shale and conglomerate dropped.
 				.Accepts(RockTypes.Granite, RockTypes.Gneiss, RockTypes.Basalt, RockTypes.Limestone)
 				.CaveShell(CaveForm.Cave, "Granite").CaveShell(CaveForm.Grotto, "Limestone").CaveShell(CaveForm.Mine, "Gneiss")
@@ -105,10 +105,10 @@ namespace FishMMO.Shared.WorldDesign
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.AfterSunset, warm: true)
 				// The coalescing fans off the mountain fronts, the planed pediment below them, the braided benched washes, the black
 				// flows and one great maar; the oval courts' sunken pads; the platform mounds (Plains' carve, the walled caliche
-				// dressing its own: LATER (I7)).
+				// dressing its own: LATER).
 				.Landforms("Bajada", "Pediment", "BraidedWash", "Malpais", "Maar", "OvalCourt", "PlatformMound")
 				.Look(BiomeLookClass.Arid)
-				// LATER (I9 T13): the intaglios as ground paint on the lower reach's lag (≤ 2 a scene).
+				// LATER: the intaglios as ground paint on the lower reach's lag (≤ 2 a scene).
 				.Blades("GrassBushMuhly", t => AridBlade(t, "#6a6a4a", "#a8a080", 0.35f, width: 0.5f, clump: 0.5f, head: GrassBladeHead.Plume, headSize: 0.12f,
 					headShare: 0.7f, heads: new[] { "#c8a0a8" }))
 				.Blades("GrassThreeAwn", t => AridBlade(t, "#6a5a4a", "#c0a888", 0.4f, width: 0.6f, head: GrassBladeHead.Plume, headSize: 0.06f, headShare: 0.5f,
@@ -134,9 +134,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Blades("GrassLittleBarley", t => AridBlade(t, "#8a9a5a", "#d0b870", 0.3f, head: GrassBladeHead.SeedHead, headSize: 0.05f, headShare: 0.7f,
 					heads: new[] { "#d8b860" }))
 				// The lower flats' desert creatures as well as the scrub's (approved: Scrub | Desert).
-				// LATER (AMBIENT-LIFE): Gila woodpecker and gilded flicker at the saguaro holes, elf owl at dusk, cactus wren (football
+				// LATER: Gila woodpecker and gilded flicker at the saguaro holes, elf owl at dusk, cactus wren (football
 				// nests as cholla dressing), Gambel's quail coveys, roadrunner, Harris's hawks atop saguaros, white-winged doves, long-nosed
-				// bats, sphinx moths on the bloom night (N34), peccary herds, desert tortoise, Gila monster, desert iguana, tarantula and
+				// bats, sphinx moths on the bloom night, peccary herds, desert tortoise, Gila monster, desert iguana, tarantula and
 				// tarantula hawk, coyote; the NIGHT OF THE QUEEN's moth motes (client-only, a fixed day of the shared clock's year).
 				.Wildlife(BiomeHabitat.Scrub | BiomeHabitat.Desert)
 				// Desert mistletoe in a third of the legume trees' crowns; no vines on its walls, cliffs or cave mouths (Ivy never).
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Approved §7: the canal builders' villages, compounds, mounds and courts, many ruins, springs, shrines and camps; no castles,
 				// monasteries, crypts, barrows, ossuaries, graveyards, oases, mills, lumber camps, hunting lodges, overhangs, mesas, buttes,
 				// coasts or sunken kinds. The river and mountain detections stay.
-				// LATER (I7): the named pieces — courtyard groups of rectangular wattle houses in shallow pits, walled caliche compounds,
+				// LATER: the named pieces — courtyard groups of rectangular wattle houses in shallow pits, walled caliche compounds,
 				// compound mounds, the four-storey great house with its sun and moon ports, sunken oval courts, the great canal's weir and
 				// headgates, agave rock-pile fields, roasting pits, terraced fortified hills, shell workshops, saguaro harvest camps, trail
 				// shrines, the ground figures, ochre pits, melted compounds, the Warden saguaro, the cereus garden of the Night of the
@@ -200,7 +200,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Capital, 0.15f), (POIType.Keep, 1f), (POIType.Fortress, 0.6f), (POIType.TradingPost, 0.8f), (POIType.Waystation, 0.5f),
 					(POIType.Mine, 0.6f), (POIType.Quarry, 0.4f), (POIType.DungeonEntrance, 0.6f), (POIType.BossLair, 0.4f), (POIType.OreVein, 0.5f),
 					(POIType.CrystalFormation, 0.3f), (POIType.AncientTree, 1f), (POIType.HerbGrove, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.2f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.BurnedVillage, 0.6f),
@@ -251,7 +251,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Hermitage, "Stone", 1f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.3f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 0f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.DragonLair, "Hoard", 1.2f)
 				.Prefers(POIType.WreckedCaravan, "Last Camp", 1.4f)
@@ -263,12 +263,12 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Dry Athenaeum", 1.4f)
 				.Prefers(POIType.NomadCamp, "Black Tents", 1.4f)
 				.Prefers(POIType.CaravanHalt, "Well Camp", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				// Walled caliche compounds as the kit's stone villages (their walls the palette's puddled caliche), courtyard groups as its
 				// timber villages (rib wattle); nothing of the north (longhouses, yurts, palisades, caravanserais, barrows).
 				// Approved: Adobe 1.6, Earth 1.4, Hide 0.2, Stone and Timber 0. The kit has no adobe or earth templates for most kinds yet,
 				// so its stone and timber templates stand in (built of puddled caliche and rib wattle by the palette below) rather than
-				// leave the kinds without a template. LATER (I7): Earth-style templates of their own, then Stone and Timber at 0.
+				// leave the kinds without a template. LATER: Earth-style templates of their own, then Stone and Timber at 0.
 				.Favours(BiomeStructureStyle.Earth, 1.6f)
 				.Favours(BiomeStructureStyle.Stone, 1f)
 				.Favours(BiomeStructureStyle.Timber, 0.6f)
@@ -277,7 +277,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The palette: puddled caliche walls in coursed lifts, flat rib-and-mud roofs on mesquite vigas, caliche footings and setts,
 				// dark twisted mesquite posts, carrizo-mat doors, red-on-buff painted carving; the courtyard houses' rib wattle under low
 				// hipped brush-and-mud roofs at 30°; agave cord in place of iron, agave netting and strings of white shell.
-				// LATER (NEW-SURFACES): PuddledCaliche, RibMudRoof, MesquitePost, CarrizoMat, CompoundWall, RedOnBuff, AgaveCord, AgaveNet,
+				// LATER: PuddledCaliche, RibMudRoof, MesquitePost, CarrizoMat, CompoundWall, RedOnBuff, AgaveCord, AgaveNet,
 				// ShellStrand, RibWattle and BrushMudRoof as surfaces of their own; the kit's tinted materials stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Adobe, ScrubHex("#c8b494"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Adobe, ScrubHex("#c09a80"))
@@ -302,11 +302,11 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Cloth, BiomeStructureMaterial.Canvas, ScrubHex("#d8c8a0"))
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, ScrubHex("#f0e8dc"))
 				// Rainmelt: puddled-caliche wall tops rounded to domes, splash coving at the foot, mud fans, runnel flutes, a white
-				// caliche skin surviving on the caps (decision 77); no moss in this country.
+				// caliche skin surviving on the caps; no moss in this country.
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Rainmelt, 0.5f, 1f)
 				// Field crops: flood-irrigated maize, canal cotton and little barley in the canal basins, the field agaves on the bajada,
-				// kept near the rivers the great canal draws on. LATER (I2j-c J22): the CanalBasins (bunded basins off the stored channel
+				// kept near the rivers the great canal draws on. LATER: the CanalBasins (bunded basins off the stored channel
 				// lines) and RockPileField (cobble heaps with an agave at each foot, a roasting pit at the edge) field surfaces; flat fields
 				// and agave rows stand in.
 				.Crops(("Detail_GrassMaizeCanal", 0.5f), ("Detail_FlowersCottonCanal", 0.3f), ("Detail_GrassLittleBarley", 0.2f), ("Detail_AgaveHohokam", 0.4f))
@@ -316,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 				// clearance heaps.
 				.Lines(new Entry.Line("OcotilloFence"), new Entry.Line("RibFence"), new Entry.Line("GreatCanal"), new Entry.Line("ClearanceRow"))
 				// Tray fires on mesquite tripods along the streets and the trading posts', carrizo torches at the strongholds; trail shrines
-				// and camps unlit. LATER (I7a): sunshell crystal posts at the fallen-star scatters, ritual courts and cereus gardens.
+				// and camps unlit. LATER: sunshell crystal posts at the fallen-star scatters, ritual courts and cereus gardens.
 				.Lights(POIType.Village, BiomeWayLightKind.TrayFire, 16f)
 				.Lights(POIType.Town, BiomeWayLightKind.TrayFire, 16f)
 				.Lights(POIType.City, BiomeWayLightKind.TrayFire, 16f)
@@ -334,7 +334,7 @@ namespace FishMMO.Shared.WorldDesign
 				.ErodesAs("Arid");
 		}
 
-		/// <summary>A Scrubland rule kept to the upland reach (approved Q2: h ≥ −0.3 and t &lt; 0.8, the saguaro–palo verde country).</summary>
+		/// <summary>A Scrubland rule kept to the upland reach (h ≥ −0.3 and t &lt; 0.8, the saguaro–palo verde country).</summary>
 		private static Scatter SonoranUpland(Scatter rule) => Band(rule, -1f, 0.8f, -0.3f, 1f);
 
 		/// <summary>A Scrubland rule kept to the lower reach's dry band (h &lt; −0.3: the creosote–bursage flats).</summary>

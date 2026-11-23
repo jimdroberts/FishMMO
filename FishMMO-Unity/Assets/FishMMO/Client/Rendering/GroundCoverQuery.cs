@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// What the ground's procedural cover offers the rest of the client (Phase 4 of the core and modules plan, 2026-11-18): the
+	/// What the ground's procedural cover offers the rest of the client: the
 	/// grass cover at a point, for footsteps, the wind's beds and ambient life's foraging, and whether the grass or the detail
 	/// scatter is still being built, for the frame series and the perf probes. The Terrain module installs the sources; with
 	/// no Terrain module there is no cover, nothing is building, and every reader gets bare ground.

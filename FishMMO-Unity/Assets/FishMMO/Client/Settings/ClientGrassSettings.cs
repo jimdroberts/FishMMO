@@ -13,7 +13,7 @@ namespace FishMMO.Client
 	/// authored short (Cov Viaduct: 120 m). The GPU renderers (the blade grass and the detail scatter, on
 	/// the terrains <c>TerrainDetailInstancing</c> takes) generate and cull on the GPU and thin with
 	/// distance (full density near, a dithered fraction toward the edge), so they draw much further for
-	/// little cost. There is no CPU path (2026-10-27).</para>
+	/// little cost. There is no CPU path.</para>
 	///
 	/// <para><b>A performance control.</b> Resident instances, chunk builds and memory grow with the
 	/// square of the distance; the thinning bounds what is drawn, not what is kept.</para>
@@ -23,7 +23,7 @@ namespace FishMMO.Client
 		/// <summary>Grass distance a fresh install uses, in metres.</summary>
 		/// <remarks>
 		/// The blade grass covers the ground in full to 50 m and thins into the far field's ground colour beyond (its rings
-		/// run to 600 m for a player who sets it further). 500 m was tried as the default (2026-10-07) and judged excessive.
+		/// run to 600 m for a player who sets it further). 500 m was tried as the default and judged excessive.
 		/// </remarks>
 		public const float DefaultDistance = 200f;
 

@@ -1,4 +1,4 @@
-// The core world passes' compute (FishWorldPassesFeature, Phase 4 of the core and modules plan, 2026-11-17): the depth
+// The core world passes' compute (FishWorldPassesFeature): the depth
 // pyramid every occlusion test reads (FishDepthPyramid, FishHiZOcclusion.hlsl) and the WebGPU light table every lit pass
 // reads (AdditionalLightTable, FishLightTableGather.hlsl). They lived in the terrain's culling compute
 // (FishTerrainInstancing.compute) only so that one asset carried them; a game without the terrain keeps both.

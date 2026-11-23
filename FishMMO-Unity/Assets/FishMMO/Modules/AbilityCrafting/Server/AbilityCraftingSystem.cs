@@ -17,7 +17,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// events into a new ability, paid for in currency.
 	/// </summary>
 	/// <remarks>
-	/// The Ability Crafting module (Phase 3, 2026-11-17). This was a partial of <c>InteractableSystem</c>; it is its own
+	/// The Ability Crafting module. This was a partial of <c>InteractableSystem</c>; it is its own
 	/// system now, with its own request guard, so a game without crafting leaves the module out. Ability crafters placed
 	/// in the world stay in the core and their ECA action opens the window; abilities themselves (learning, the grant
 	/// funnel <c>AbilitySystem.TryGrantAbility</c>, prediction) are the core's.

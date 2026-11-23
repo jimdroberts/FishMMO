@@ -20,7 +20,7 @@ namespace FishMMO.Shared.Biomes
 	/// flag would let a designer tick "has oceans" on an airless rock at four AU and get a coastline.
 	/// </para>
 	/// <para>
-	/// <b>On the climate field's own absolute scale (2026-10-02).</b> The temperature here used to be
+	/// <b>On the climate field's own absolute scale.</b> The temperature here used to be
 	/// the orbit offsets' "how much colder than home", tested against −0.75 … +0.85, while the field
 	/// that paints the same world reads absolute temperature, 0 at freezing. The two disagreed by a
 	/// whole world: Galris, 210 K, read −0.53 here — liquid seas and an ice world at once — while
@@ -285,7 +285,7 @@ namespace FishMMO.Shared.Biomes
 		/// shell with nothing open on top of it.
 		/// </para>
 		/// <para>
-		/// Since both tests read the field's warmest ground (2026-10-02) <see cref="IsIceWorld"/> can
+		/// Since both tests read the field's warmest ground <see cref="IsIceWorld"/> can
 		/// no longer hold beside liquid water, so this is the same as <see cref="IsIceWorld"/>. It is
 		/// kept as the name the requirements read, so the rule "frozen THROUGH" stays stated where
 		/// it is used rather than resting on two thresholds happening to meet.

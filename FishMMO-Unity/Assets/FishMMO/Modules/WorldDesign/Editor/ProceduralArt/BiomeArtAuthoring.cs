@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// that does is a placeholder cube (<see cref="IsPlaceholderPrefab"/>). Dead rules are removed,
 	/// as are rules the spec has moved out of a slot (when nobody tuned them) and the rules an earlier
 	/// version switched off and kept (<see cref="DisabledMark"/>): kept, they were only dead weight in
-	/// every template (2026-10-11). A rule someone switched off themselves, with real prefabs, is
+	/// every template. A rule someone switched off themselves, with real prefabs, is
 	/// authored — its list is left alone.
 	/// </para>
 	/// <para>
@@ -77,7 +77,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// the generated folders — a committed asset assigned by hand, or LOCAL art through a sidecar.
 	/// </para>
 	/// <para>
-	/// <b>Everything the scene cut reads is on the template (2026-10-15).</b> Besides the ground layers and their rules,
+	/// <b>Everything the scene cut reads is on the template.</b> Besides the ground layers and their rules,
 	/// the tool fills the way grounds (Small Path, Road, Cobbles) and the river bars (Bar Sand, Bar Gravel) as it fills any
 	/// slot, from the spec's columns (<see cref="BiomeArtSpec.Entry.PathGround"/> …); and it writes the biome's rock (its own,
 	/// the geology rocks it accepts, each cliff layer's rock type) and what its points of interest grow (a herb grove's
@@ -89,7 +89,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// that old code with a warning where a template has not been authored.
 	/// </para>
 	/// <para>
-	/// <b>Lists are marked entry by entry (2026-10-16, I5b).</b> A list on the template (the rocks it accepts, its cave shells,
+	/// <b>Lists are marked entry by entry.</b> A list on the template (the rocks it accepts, its cave shells,
 	/// sea life, vine species, gathering resources, point-of-interest growth, site kinds, variants and styles, crops, palette
 	/// entries and street lights) carries a mark per entry, keyed by the entry's identity (<see cref="BiomeEntryMarks"/>,
 	/// <see cref="AuthorEntries{T}"/>): the spec's new entries reach a list somebody has edited, the tool's untouched entries
@@ -495,7 +495,7 @@ namespace FishMMO.Shared.WorldDesign
 				report.Lines.Add($"{biome.name} {key}: art under Assets/LOCAL moved to '{art.name}' and cleared on the template{(conflict != null ? " — " + conflict : string.Empty)}");
 			}
 
-			// A ground layer's own ways (2026-10-16) hold terrain layers of their own, under keys of their own.
+			// A ground layer's own ways hold terrain layers of their own, under keys of their own.
 			foreach ((string key, TerrainTextureLayer ground, string way) in WaysOf(biome))
 			{
 				TerrainLayer layer = BiomeLocalArt.WayGround(ground.ways, way);
@@ -568,7 +568,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <param name="handMadeTemplates">
 		/// The project's point-of-interest templates the catalogue does not write, as plain data (<see cref="HandMadeTemplates"/>):
-		/// a variant of theirs whose own biome list names this biome is added to its Site Variants (2026-10-16, I5b). Null for none.
+		/// a variant of theirs whose own biome list names this biome is added to its Site Variants. Null for none.
 		/// </param>
 		public static bool Author(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply,
 			IReadOnlyList<PointOfInterestTemplateSpec> handMadeTemplates = null)
@@ -704,7 +704,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Fill(who, "riverbed", biome.RiverbedTextureLayer, entry.Riverbed, null, source, report, apply);
 			}
-			/* What lives on a river's bed (decision 35, 2026-10-18): rules on the riverbed, painted under rivers since then (the lakebed
+			/* What lives on a river's bed: rules on the riverbed, painted under rivers since then (the lakebed
 			 * took every river before), grown by their depth below the river's own surface and by its current. And the extra beds by
 			 * depth (and current) under lakes, rivers and the sea. None for any biome until its round adds them. */
 			DisableDeadRules(who, "riverbed", biome.RiverbedTextureLayer, report, apply);
@@ -1154,7 +1154,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The rock each form of cave carved in the biome is cut in, its formations included (<see cref="BiomeTemplate.CaveShells"/>),
 		/// from the spec (<see cref="BiomeArtSpec.Entry.CaveShells"/>: every form with the shell the cave shaper gave it by form
 		/// alone before, Ground where that was the ground's own rock, unless the biome's file names its own). One mark for the
-		/// One mark per form (2026-10-16): a form's shell edited by hand is kept, one deleted by hand stays deleted (the form then
+		/// One mark per form: a form's shell edited by hand is kept, one deleted by hand stays deleted (the form then
 		/// keeps its old shell), and the others still follow the spec.
 		/// </summary>
 		private static void AuthorCaveShells(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
@@ -1180,7 +1180,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string Mark(BiomeWaterRole role) => role == BiomeWaterRole.None ? string.Empty : role.ToString();
 
 		/// <summary>
-		/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>, 2026-10-16, I2e) from the
+		/// The colour and clarity of the biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>) from the
 		/// spec (<see cref="BiomeArtSpec.Entry.WaterLook"/>: the inland water's own look, <see cref="BiomeWaterLooks.Today"/>,
 		/// unless the biome's file gives one). One value, marked by its signature; a look edited by hand is kept.
 		/// </summary>
@@ -1193,7 +1193,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The sea off the biome's coast as a diver sees it (<see cref="BiomeTemplate.SeaLook"/>, 2026-10-18, I2h) from the spec
+		/// The sea off the biome's coast as a diver sees it (<see cref="BiomeTemplate.SeaLook"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.SeaLook"/>: the underwater look every sea had, <see cref="BiomeSeaLooks.Today"/>, unless
 		/// the biome's file gives one). One value, marked by its signature; a look edited by hand is kept.
 		/// </summary>
@@ -1207,8 +1207,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// What the biome paints and grows under the sea, how strongly its coast tides and how deep its underwater sites stand
-		/// (<see cref="BiomeTemplate.SeaFloor"/>, <see cref="BiomeTemplate.TideStrength"/>, <see cref="BiomeTemplate.UnderwaterSiteDepth"/>;
-		/// 2026-10-25, phase I2m) from the spec (<see cref="BiomeArtSpec.Entry.UnderTheSea"/>, <see cref="BiomeArtSpec.Entry.Tides"/>,
+		/// (<see cref="BiomeTemplate.SeaFloor"/>, <see cref="BiomeTemplate.TideStrength"/>, <see cref="BiomeTemplate.UnderwaterSiteDepth"/>)
+		/// from the spec (<see cref="BiomeArtSpec.Entry.UnderTheSea"/>, <see cref="BiomeArtSpec.Entry.Tides"/>,
 		/// <see cref="BiomeArtSpec.Entry.SitesBetween"/>: Shore, 1 and (0, 0), every template's own, unless the biome's file says
 		/// otherwise). Three values, each marked by what it wrote; a value edited by hand is kept.
 		/// </summary>
@@ -1276,7 +1276,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The biome's look class (<see cref="BiomeTemplate.LookClass"/>) from the spec (<see cref="BiomeArtSpec.Entry.LookClass"/>),
-		/// which names for every biome the class its name gave before (2026-10-15). Unset on the template is a gap and is filled.
+		/// which names for every biome the class its name gave before. Unset on the template is a gap and is filled.
 		/// </summary>
 		private static void AuthorLooks(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
 		{
@@ -1296,7 +1296,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// (<see cref="BiomeArtSpec.Entry.LookOf"/>: the old look every biome had, <see cref="BiomeGrassDefaults"/>, ground
 		/// tint 0.85 included, then the biome's own tunings). One entry per prefab, each marked on its own: an entry somebody
 		/// edited is kept; a missing one is a gap and is added. An entry for a prefab the biome no longer grows is removed when
-		/// the tool wrote it and nobody has changed it since (2026-10-16); one made or edited by hand is always kept
+		/// the tool wrote it and nobody has changed it since; one made or edited by hand is always kept
 		/// (<see cref="PrunableGrassTypes"/>).
 		/// </summary>
 		private static void AuthorGrass(BiomeTemplate biome, BiomeArtSpec.Entry entry, IBiomeArtSource source, Report report, bool apply)
@@ -1417,12 +1417,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The country the biome offers ambient creatures (<see cref="BiomeTemplate.Habitat"/>) and the sea creatures at home in
 		/// its water with their weights (<see cref="BiomeTemplate.SeaLife"/>), from the spec (<see cref="BiomeArtSpec.Entry.Habitat"/>,
-		/// <see cref="BiomeArtSpec.Entry.SeaLife"/>: what the biome's name gave the client before, 2026-10-16, and each kind at
+		/// <see cref="BiomeArtSpec.Entry.SeaLife"/>: what the biome's name gave the client before, and each kind at
 		/// the weight it gave its favourites). None and an empty list are written and marked too, so one cleared by hand stays
 		/// cleared.
 		/// </summary>
 		/// <remarks>
-		/// Never the Alien bit (2026-10-16, I4b): the client reads alien ground live from the template's air. A template this
+		/// Never the Alien bit: the client reads alien ground live from the template's air. A template this
 		/// authoring wrote before then holds it in its habitat and in the habitat's mark; both are read without it (the habitat
 		/// masks it on every read), so a habitat the tool wrote and nobody touched stays the tool's to rewrite, and a hand edit
 		/// stays a hand edit; the stored bit and the old mark are cleaned as it goes.
@@ -1436,7 +1436,7 @@ namespace FishMMO.Shared.WorldDesign
 				if (biome.DropStoredAlien())
 				{
 					report.ValuesFilled++;
-					report.Lines.Add($"{biome.name} {BiomeTemplate.Authored.Habitat}: dropped its stored Alien bit (read live from the template's air since 2026-10-16)");
+					report.Lines.Add($"{biome.name} {BiomeTemplate.Authored.Habitat}: dropped its stored Alien bit (read live from the template's air)");
 				}
 				if (mark != null && mark != biome.AuthoredFingerprint(BiomeTemplate.Authored.Habitat))
 				{
@@ -1451,7 +1451,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A habitat mark as it reads without the Alien bit (the marks of 2026-10-16's I4 authoring named it: "Ice, Alien",
+		/// A habitat mark as it reads without the Alien bit (the marks the authoring wrote named it: "Ice, Alien",
 		/// "Alien"); any other mark, and no mark (null), unchanged.
 		/// </summary>
 		public static string HabitatMarkWithoutAlien(string mark)
@@ -1468,7 +1468,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// the vine table's row for its name, unless its file sets its own). No vines is written and marked too.
 		/// </summary>
 		/// <remarks>
-		/// Since 2026-10-16 (I5b) the four densities are one value (<see cref="BiomeTemplate.Authored.VineDensities"/>) and each
+		/// the four densities are one value (<see cref="BiomeTemplate.Authored.VineDensities"/>) and each
 		/// species an entry with its own mark (<see cref="BiomeEntryMarks"/>), so a species the spec adds reaches a biome whose
 		/// densities or other species were tuned by hand. A template authored before then carries one mark for the whole (the
 		/// vines' signature, which spells out what was written): its densities part becomes the densities' mark and its species
@@ -1526,7 +1526,7 @@ namespace FishMMO.Shared.WorldDesign
 			=> new BiomeVines { Species = new List<BiomeVineSpecies> { species } }.Signature().Substring("0,0,0,0|".Length);
 
 		/// <summary>
-		/// What an authoring before 2026-10-16 wrote into the vines, read back from its whole-value mark (the vines' signature):
+		/// What an authoring formerly wrote into the vines, read back from its whole-value mark (the vines' signature):
 		/// the species, each by identity and print, and the densities' part.
 		/// </summary>
 		public static List<(string Id, string Print)> VineSpeciesWritten(string signature, out string densities)
@@ -1556,7 +1556,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The points of interest the biome hosts and how they are built (2026-10-16, phase I5), from the spec: the kinds sited on
+		/// The points of interest the biome hosts and how they are built, from the spec: the kinds sited on
 		/// its ground (<see cref="BiomeArtSpec.Entry.SiteKinds"/>, the file's Sites and Hosts), its
 		/// template variants' and styles' weights (<see cref="BiomeArtSpec.Entry.SiteVariants"/>, <see cref="BiomeArtSpec.Entry.SiteStyles"/>),
 		/// its weathering (<see cref="BiomeArtSpec.Entry.Weathering"/>), its fields' crops (<see cref="BiomeArtSpec.Entry.FieldCrops"/>)
@@ -1592,7 +1592,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				crops.Add(new BiomeFieldCrop(prefab, weight, entry.FieldSurface(name), entry.FieldRiser(name), entry.FieldRows(name)));
 			}
-			/* An empty list now means "sow nothing" (decision 25, 2026-10-25: no fields laid at all), so a list emptied only because the
+			/* An empty list now means "sow nothing" (no fields laid at all), so a list emptied only because the
 			 * spec's crops' art is missing is not written: the template keeps what it has until the art is generated. */
 			if (crops.Count == 0 && entry.FieldCrops().Count > 0)
 			{
@@ -1613,20 +1613,20 @@ namespace FishMMO.Shared.WorldDesign
 			AuthorEntries(who, biome, BiomeTemplate.Authored.StructurePalette, surfaces, palette.Surfaces, SurfaceId, s => s.Signature(),
 				l => Mark(new BiomeStructurePalette { Surfaces = new List<BiomeStructureSurface>(l) }), report, apply);
 
-			// What stands in a stronghold's moat (2026-10-16, I5b): one value, written and marked like any other.
+			// What stands in a stronghold's moat: one value, written and marked like any other.
 			BiomeMoatWater moat = entry.MoatWater;
 			AuthorValue(who, biome, BiomeTemplate.Authored.MoatWater, biome.IsAuthored(BiomeTemplate.Authored.MoatWater) ? biome.MoatWater.ToString() : string.Empty,
 				moat.ToString(), false, () => biome.MoatWater = moat, $"moat water {moat}", report, apply);
 
-			// Which of its ways are raised boardwalks (2026-10-18, I2i): one value, None unless the biome's file raises some.
+			// Which of its ways are raised boardwalks: one value, None unless the biome's file raises some.
 			BiomeBoardwalks boardwalks = entry.Boardwalks;
 			AuthorValue(who, biome, BiomeTemplate.Authored.Boardwalks, biome.IsAuthored(BiomeTemplate.Authored.Boardwalks) ? biome.Boardwalks.ToString() : string.Empty,
 				boardwalks.ToString(), false, () => biome.Boardwalks = boardwalks, $"boardwalks {boardwalks}", report, apply);
-			// How they are built (2026-10-25, I2i-b): one value, Planked unless the biome's file names a style.
+			// How they are built: one value, Planked unless the biome's file names a style.
 			BiomeBoardwalkStyle boardwalkStyle = entry.BoardwalkStyle;
 			AuthorValue(who, biome, BiomeTemplate.Authored.BoardwalkStyle, biome.IsAuthored(BiomeTemplate.Authored.BoardwalkStyle) ? biome.BoardwalkStyle.ToString() : string.Empty,
 				boardwalkStyle.ToString(), false, () => biome.BoardwalkStyle = boardwalkStyle, $"boardwalk style {boardwalkStyle}", report, apply);
-			/* How its ways bridge its rivers and whether it lays straight roads (2026-10-26, I2l-b): one value each, marked only when the
+			/* How its ways bridge its rivers and whether it lays straight roads: one value each, marked only when the
 			 * biome's file sets one or the tool wrote one before, so a biome that names neither keeps its template untouched. */
 			BiomeCrossingStyle crossing = entry.CrossingStyle;
 			if (crossing != BiomeCrossingStyle.Default || biome.CrossingStyle != BiomeCrossingStyle.Default || biome.IsAuthored(BiomeTemplate.Authored.CrossingStyle))
@@ -1642,18 +1642,18 @@ namespace FishMMO.Shared.WorldDesign
 					straight.Signature(), false, () => biome.StraightRoads = straight, $"straight roads {straight}", report, apply);
 			}
 
-			/* No flame where no world it stands on has the air to burn one (decision 41, 2026-10-18): a biome whose template admits only
+			/* No flame where no world it stands on has the air to burn one: a biome whose template admits only
 			 * thin air or none is lit with the cold Glow lights in the same places; so is one whose Requires names a methane, cryogenic,
-			 * frozen-nitrogen, runaway-greenhouse or molten-rock world (decisions 62 and 65(h), 2026-10-25: BiomeAir.NeverBreathable);
+			 * frozen-nitrogen, runaway-greenhouse or molten-rock world (BiomeAir.NeverBreathable);
 			 * every other biome as before. */
 			bool glowOnly = BiomeAir.NeverBreathable(biome.Atmosphere, biome.Requires);
 
-			// How its settlements light their streets (I5b): one entry per kind.
+			// How its settlements light their streets: one entry per kind.
 			AuthorEntries(who, biome, BiomeTemplate.Authored.WayLights, biome.WayLights, entry.WayLights(glowOnly), l => l.Kind.ToString(), l => l.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 
-			// How its caves and mines are lit (2026-10-16, I6c): one entry per place, the cave dressing's old rule by default.
-			/* Decision 57's exception (2026-10-25, I2n): a template other biomes' caves are the inside of (the Lava Tube, found only under
+			// How its caves and mines are lit: one entry per place, the cave dressing's old rule by default.
+			/* Decision 57's exception: a template other biomes' caves are the inside of (the Lava Tube, found only under
 			 * thin air or none) keeps its fire cave lights, as the cave dressing lights a linked cave with the Glow kinds on a world whose
 			 * air will not burn them (BiomeCaveInteriors.ForAir). */
 			bool glowCaves = BiomeCaveInteriors.GlowCaveLights(glowOnly, entry.CaveInteriorRocks().Count > 0);
@@ -1668,7 +1668,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string CaveCrystalId(BiomeCaveCrystal crystal) => crystal.Kind.ToString();
 
 		/// <summary>
-		/// The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>, 2026-10-16, I6c) from the spec
+		/// The crystals the biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.CaveCrystals"/>: selenite, what every cave grew before, unless the biome's file names its
 		/// own). One mark per kind: a kind's weight edited by hand is kept, a kind deleted by hand stays deleted.
 		/// </summary>
@@ -1679,7 +1679,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The biome's caves' insides (2026-10-25, phase I2n, decisions 37, 46, 51, 57) from the spec: its links by form to the cave
+		/// The biome's caves' insides from the spec: its links by form to the cave
 		/// biomes that dress them (<see cref="BiomeTemplate.CaveInteriors"/>, the Cave, Ice Cave and Lava Tube by default), the shells
 		/// it is the inside of itself (<see cref="BiomeTemplate.CaveInteriorRocks"/>), and its caves' formations and glow by form
 		/// (<see cref="BiomeTemplate.CaveFormations"/>, <see cref="BiomeTemplate.CaveGlows"/>: what the cave dressing chose by form
@@ -1695,7 +1695,7 @@ namespace FishMMO.Shared.WorldDesign
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveGlows, biome.CaveGlows, entry.CaveGlows(), g => g.Form.ToString(), g => g.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
-			// 2026-10-25 (I2n-c, decision 86): the water table (none by default), what hangs from the roofs (the dressing's own by
+			// The water table (none by default), what hangs from the roofs (the dressing's own by
 			// form) and the tea ring on the walls (none by default), one mark per entry as above.
 			AuthorEntries(biome.name, biome, BiomeTemplate.Authored.CaveFloods, biome.CaveFloods, entry.CaveFloods(), f => f.Form.ToString(), f => f.ToString(),
 				l => Mark(AsList(l).ConvertAll(e => e.ToString())), report, apply);
@@ -1709,7 +1709,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string FloatingPlantId(BiomeFloatingPlant plant) => plant.Kind.ToString();
 
 		/// <summary>
-		/// The plants the biome's still water carries (<see cref="BiomeTemplate.FloatingPlants"/>, 2026-10-18, I2i) from the spec
+		/// The plants the biome's still water carries (<see cref="BiomeTemplate.FloatingPlants"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.FloatingPlants"/>: none, as no water carried anything before, unless the biome's file names
 		/// its own). One mark per kind: a kind's weight edited by hand is kept, a kind deleted by hand stays deleted.
 		/// </summary>
@@ -1723,7 +1723,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string SeaFloatId(BiomeSeaFloat f) => f.Kind.ToString();
 
 		/// <summary>
-		/// What drifts on the biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>, 2026-10-25, I2p) from the spec
+		/// What drifts on the biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.SeaFloats"/>: none, as no sea carried anything before, unless the biome's file names its own).
 		/// One mark per kind, as the floating plants: a weight edited by hand is kept, a kind deleted by hand stays deleted.
 		/// </summary>
@@ -1737,9 +1737,9 @@ namespace FishMMO.Shared.WorldDesign
 		public static string GlowModeId(BiomeGlowMode g) => g.Source.ToString();
 
 		/// <summary>
-		/// How the biome's cold glows move (<see cref="BiomeTemplate.GlowModes"/>, 2026-10-25, I6i) from the spec
+		/// How the biome's cold glows move (<see cref="BiomeTemplate.GlowModes"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.GlowModes"/>: none, every glow as before, unless the biome's file names its own), one mark per
-		/// source; and its lava-fountain episodes (<see cref="BiomeTemplate.FountainEpisodes"/>, decision 93; none unless named), one value
+		/// source; and its lava-fountain episodes (<see cref="BiomeTemplate.FountainEpisodes"/>; none unless named), one value
 		/// marked by its signature. Hand edits are kept.
 		/// </summary>
 		private static void AuthorGlowModes(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
@@ -1756,8 +1756,8 @@ namespace FishMMO.Shared.WorldDesign
 		public static string LinearFeatureId(BiomeLinearStyle style) => BiomeLinearFeatures.Id(style);
 
 		/// <summary>
-		/// The biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeTemplate.LinearFeatures"/>, 2026-10-18,
-		/// I2f) from the spec (<see cref="BiomeArtSpec.Entry.LinearFeatures"/>: none, as nothing was laid before, unless the biome's file
+		/// The biome's hedges, walls, fences, tree rows, channels and clearance rows (<see cref="BiomeTemplate.LinearFeatures"/>)
+		/// from the spec (<see cref="BiomeArtSpec.Entry.LinearFeatures"/>: none, as nothing was laid before, unless the biome's file
 		/// names its own), each species resolved to its generated prefab (one missing is reported and left out). One mark per kind, form
 		/// and place: an entry edited by hand is kept, one deleted by hand stays deleted.
 		/// </summary>
@@ -1779,7 +1779,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The biome's orchards, the layout of its fields, the old terraces round its settlements and the ground it paints along its
 		/// channels (<see cref="BiomeTemplate.Orchards"/>, <see cref="BiomeTemplate.FieldLayout"/>, <see cref="BiomeTemplate.AbandonedTerraces"/>,
-		/// <see cref="BiomeTemplate.ChannelMargin"/>, 2026-10-18, I2j-b) from the spec: none, anywhere, none and none unless the biome's
+		/// <see cref="BiomeTemplate.ChannelMargin"/>) from the spec: none, anywhere, none and none unless the biome's
 		/// file names its own, as fields were laid before. Orchards carry a mark per tree (an entry edited by hand is kept, one deleted
 		/// stays deleted); the other three a mark for the whole value.
 		/// </summary>
@@ -1813,7 +1813,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string LandformId(BiomeLandform form) => NameId(form.Kind);
 
 		/// <summary>
-		/// The landforms the cut carves into the biome's ground (<see cref="BiomeTemplate.Landforms"/>, 2026-10-18, I2g) from the spec
+		/// The landforms the cut carves into the biome's ground (<see cref="BiomeTemplate.Landforms"/>) from the spec
 		/// (<see cref="BiomeArtSpec.Entry.LandformList"/>: none, as no ground was sculpted before, unless the biome's file names its own).
 		/// One mark per name: an entry edited by hand is kept, one deleted by hand stays deleted. A name no preset answers that carves
 		/// nothing is reported as missing.
@@ -1943,7 +1943,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static string Mark(BiomeVines vines) => vines == null || vines.IsEmpty ? string.Empty : vines.Signature();
 
 		/// <summary>
-		/// The ways across each ground layer (<see cref="TerrainTextureLayer.ways"/>, decision 19, 2026-10-16): the path, road
+		/// The ways across each ground layer (<see cref="TerrainTextureLayer.ways"/>): the path, road
 		/// and cobble grounds the spec gives the main layer and each detail layer (<see cref="BiomeArtSpec.Layer.Ways"/>), each
 		/// way marked on its own (<see cref="BiomeTemplate.Authored.GroundWay"/>). Unset in the spec, a way stays empty — the
 		/// biome's own Small Path, Road or Cobbles, as every ground was before — and nothing is marked.
@@ -2014,7 +2014,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How each main and detail layer glows (<see cref="TerrainTextureLayer.glow"/>, 2026-10-25, phase I2r, decision 65 (a)) from the
+		/// How each main and detail layer glows (<see cref="TerrainTextureLayer.glow"/>) from the
 		/// spec's column (<see cref="BiomeArtSpec.Layer.Glows"/>), one mark per layer by its signature under the ways' rule: a detail slot
 		/// only while it holds the spec's ground; none is a decision (a glow the tool wrote and somebody cleared stays clear); a layer
 		/// with none set, none wanted and none written before is skipped (no mark). The scene's terrain arrays take it in place.
@@ -2067,7 +2067,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The climate variants the spec declares (<see cref="BiomeArtSpec.Entry.ClimateVariant"/>) and the ground overrides it gives
-		/// them (<see cref="BiomeArtSpec.Entry.ClimateGround"/>), decision 29, 2026-10-18. Nothing declared, nothing written: every
+		/// them (<see cref="BiomeArtSpec.Entry.ClimateGround"/>). Nothing declared, nothing written: every
 		/// template's variants stay exactly as they are.
 		/// </summary>
 		/// <remarks>
@@ -2205,13 +2205,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Each ground layer's climate band (<see cref="TerrainTextureLayer.useClimateBand"/>) from the spec (<see cref="BiomeArtSpec.Layer.Temp"/>,
-		/// <see cref="BiomeArtSpec.Layer.Humid"/>), decision 29, 2026-10-18: the main layer always, a detail slot or a climate variant's
+		/// <see cref="BiomeArtSpec.Layer.Humid"/>): the main layer always, a detail slot or a climate variant's
 		/// override while it holds the spec's ground (as their rules are). One mark per slot
 		/// (<see cref="BiomeTemplate.Authored.GroundClimate"/>); no band is a decision too (a band the tool wrote and somebody switched
 		/// off stays off). With no band in the spec and none on the layer nothing is written or marked: every layer paints as before.
 		/// </summary>
 		/// <summary>
-		/// The biome's extra bed layers by depth (decision 35 (b), 2026-10-18; <see cref="BiomeArtSpec.Entry.BedLayer"/>): each spec bed
+		/// The biome's extra bed layers by depth (<see cref="BiomeArtSpec.Entry.BedLayer"/>): each spec bed
 		/// fills slot <c>bed/i</c> (the template's list grown to it, at most <see cref="BiomeTemplate.MaximumBedLayers"/>) with its
 		/// ground as an empty slot is filled, adds its rules as a detail layer's are (only while the slot holds the spec's art), and
 		/// writes its bands (waters, depth, current) under one mark a slot (<see cref="BiomeTemplate.Authored.BedBands"/>): written
@@ -2284,7 +2284,7 @@ namespace FishMMO.Shared.WorldDesign
 			layer.useCurrentBand = spec.Current.HasValue;
 			layer.currentRange = spec.Current.HasValue ? new Vector2(Mathf.Max(0f, spec.Current.Value.x), Mathf.Max(0f, spec.Current.Value.y)) : Vector2.zero;
 			layer.currentFalloff = Mathf.Max(0f, spec.CurrentFalloff);
-			// And the landform zone band (2026-10-26, GROUND-BANDS, decision 87): off unless the spec names a part.
+			// And the landform zone band: off unless the spec names a part.
 			layer.landformBand = spec.Zone;
 		}
 
@@ -2346,7 +2346,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Spec(BiomeLocalArt.DetailSlot(i), biome.DetailTextureLayers != null && i < biome.DetailTextureLayers.Count ? biome.DetailTextureLayers[i] : null, entry.Details[i]);
 			}
-			/* Cliffs carry an air band only (decision 44, 2026-10-18: one biome's grey and rust scarps); their climate fields stay at
+			/* Cliffs carry an air band only (one biome's grey and rust scarps); their climate fields stay at
 			 * the defaults the write leaves them at. A cliff spec without one, on a cliff without one, writes and marks nothing. */
 			for (int i = 0; i < entry.Cliffs.Length; i++)
 			{
@@ -2391,33 +2391,33 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Writes a spec layer's climate band onto a template layer (off, ranges open, when the spec has none).</summary>
 		public static void WriteClimateBand(TerrainTextureLayer layer, BiomeArtSpec.Layer spec)
 		{
-			// The air band rides with the climate's (decision 44): the same slot, the same mark.
+			// The air band rides with the climate's: the same slot, the same mark.
 			layer.airBand = spec != null ? spec.AirBand : BiomeAtmosphereRequirement.None;
 			layer.useClimateBand = spec != null && spec.HasClimateBand;
 			layer.temperatureRange = spec?.Temperature ?? new Vector2(-1f, 1f);
 			layer.humidityRange = spec?.Humidity ?? new Vector2(-1f, 1f);
 			layer.temperatureFalloff = spec != null ? spec.TemperatureFalloff : BiomeClimateBand.DefaultFalloff;
 			layer.humidityFalloff = spec != null ? spec.HumidityFalloff : BiomeClimateBand.DefaultFalloff;
-			// And the heat band (2026-10-18, I2q), riding the same mark.
+			// And the heat band, riding the same mark.
 			layer.useHeatBand = spec != null && spec.HeatBand.HasValue;
 			layer.heatRange = spec?.HeatBand ?? new Vector2(0f, 1f);
 			layer.heatFalloff = spec != null && spec.HeatBand.HasValue ? spec.HeatFalloff : BiomeHeatBand.DefaultFalloff;
-			// And the underground band (2026-10-25, I2n): the open land, the caves, or both.
+			// And the underground band: the open land, the caves, or both.
 			layer.underground = spec != null ? spec.UndergroundBand : BiomeUnderground.Both;
-			// And the sea depth band (2026-10-25, I2m, decisions 38/45): metres or tides below mean sea level.
+			// And the sea depth band: metres or tides below mean sea level.
 			layer.useSeaDepthBand = spec != null && spec.SeaDepth.HasValue;
 			layer.seaDepthRange = spec?.SeaDepth ?? new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
 			layer.seaDepthFalloff = spec != null && spec.SeaDepth.HasValue ? spec.SeaDepthFalloff : BiomeSeaFloors.DefaultDepthFalloff;
 			layer.seaDepthInTides = spec != null && spec.SeaDepth.HasValue && spec.SeaDepthInTides;
-			// And the landform zone band (2026-10-25, I2g-b, decision 55): off unless the spec names a part.
+			// And the landform zone band: off unless the spec names a part.
 			layer.landformBand = spec != null ? spec.ZoneBand : default;
-			// And the world band (2026-10-25, decision 68): every world unless the spec names flags.
+			// And the world band: every world unless the spec names flags.
 			layer.worldBand = spec != null ? spec.WorldBand : default;
-			// And the lava band (2026-10-25, I2r, decision 65 (b)): metres above the scene's lava surface.
+			// And the lava band: metres above the scene's lava surface.
 			layer.useLavaBand = spec != null && spec.LavaBand.HasValue;
 			layer.lavaRange = spec?.LavaBand ?? new Vector2(-BiomeSeaFloors.OpenDepth, BiomeSeaFloors.OpenDepth);
 			layer.lavaFalloff = spec != null && spec.LavaBand.HasValue ? spec.LavaFalloff : BiomeSeaFloors.DefaultDepthFalloff;
-			// And the ground bands (2026-10-26, GROUND-BANDS): facing, fall-line stretch, sites, shared-clock window; all off without the spec's.
+			// And the ground bands: facing, fall-line stretch, sites, shared-clock window; all off without the spec's.
 			layer.facingBand = spec != null ? spec.FacingBand : default;
 			layer.fallLineStretch = spec != null && spec.FallLineStretch > 1f ? spec.FallLineStretch : 0f;
 			layer.siteBand = spec != null ? spec.SiteBand : default;
@@ -2438,7 +2438,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's sea depth band after it ("|s" shallowest, deepest, falloff and m or t, 2026-10-25, I2m), the
+		/// A climate mark with a layer's sea depth band after it ("|s" shallowest, deepest, falloff and m or t), the
 		/// climate part "t-|h-" when it has none; unchanged without a band, so every mark written before depth bands existed reads the same.
 		/// </summary>
 		private static string WithSeaDepth(string mark, Vector2? depth, float falloff, bool tides)
@@ -2452,7 +2452,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's underground band after it ("|u" and the band, 2026-10-25, I2n), the climate part "t-|h-" when it
+		/// A climate mark with a layer's underground band after it ("|u" and the band), the climate part "t-|h-" when it
 		/// has none; unchanged for Both, so every mark written before the band existed reads the same.
 		/// </summary>
 		private static string WithUnderground(string mark, BiomeUnderground band)
@@ -2465,7 +2465,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's air band after it ("|a" and the mask, decision 44), the climate part "t-|h-" when it has
+		/// A climate mark with a layer's air band after it ("|a" and the mask), the climate part "t-|h-" when it has
 		/// none; unchanged without an air band, so every mark written before air bands existed reads the same.
 		/// </summary>
 		private static string WithAir(string climate, BiomeAtmosphereRequirement air)
@@ -2493,7 +2493,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's landform zone band after it ("|z" and the band's signature, 2026-10-25, I2g-b, decision 55), the
+		/// A climate mark with a layer's landform zone band after it ("|z" and the band's signature), the
 		/// climate part "t-|h-" when it has none; unchanged with the band off, so every mark written before the band existed reads the same.
 		/// </summary>
 		private static string WithZone(string mark, BiomeLandformBand band)
@@ -2506,7 +2506,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's lava band after it ("|v" lowest, highest, falloff, 2026-10-25, I2r), "t-|h-" first when it has none;
+		/// A climate mark with a layer's lava band after it ("|v" lowest, highest, falloff), "t-|h-" first when it has none;
 		/// unchanged without a band, so every mark written before lava bands existed reads the same.
 		/// </summary>
 		private static string WithLava(string mark, Vector2? band, float falloff)
@@ -2520,7 +2520,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's ground bands after it (2026-10-26, GROUND-BANDS): "|f" its facing band, "|l" its fall-line stretch,
+		/// A climate mark with a layer's ground bands after it: "|f" its facing band, "|l" its fall-line stretch,
 		/// "|n" its site band, "|k" its shared-clock window, each only when set, "t-|h-" first when the mark has nothing else; unchanged with
 		/// none set, so every mark written before these bands existed reads the same.
 		/// </summary>
@@ -2546,7 +2546,7 @@ namespace FishMMO.Shared.WorldDesign
 			return bands.Length == 0 ? mark : (mark.Length > 0 ? mark : "t-|h-") + bands;
 		}
 
-		/// <summary>A climate mark with a layer's world band after it ("|w" requires/forbids, decision 68), "t-|h-" first when it has none; unchanged with the band off.</summary>
+		/// <summary>A climate mark with a layer's world band after it ("|w" requires/forbids), "t-|h-" first when it has none; unchanged with the band off.</summary>
 		private static string WithWorld(string mark, BiomeWorldBand band)
 		{
 			if (!band.On)
@@ -2557,7 +2557,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A climate mark with a layer's heat band after it ("|q" low, high, falloff, 2026-10-18, I2q), the climate part "t-|h-" when it
+		/// A climate mark with a layer's heat band after it ("|q" low, high, falloff), the climate part "t-|h-" when it
 		/// has none; unchanged without a heat band, so every mark written before heat bands existed reads the same.
 		/// </summary>
 		private static string WithHeat(string mark, Vector2? heat, float falloff)
@@ -2579,7 +2579,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The template's Description from the spec's column (<see cref="BiomeArtSpec.Entry.Describe"/>, decision 23): one whole value,
+		/// The template's Description from the spec's column (<see cref="BiomeArtSpec.Entry.Describe"/>): one whole value,
 		/// marked by its text. No column, nothing written. A description never authored is the one the template was made with, and
 		/// a round that writes the column means to replace it, so it is written over once; after that, a hand edit is kept.
 		/// </summary>
@@ -2596,7 +2596,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// What the ground gives the air (<see cref="BiomeTemplate.Emits"/>, <see cref="BiomeTemplate.EmissionRate"/>) from the spec's
-		/// column (<see cref="BiomeArtSpec.Entry.Emits"/>, 2026-10-18, I2o): one whole value, marked "substance@rate" ("none" for
+		/// column (<see cref="BiomeArtSpec.Entry.Emits"/>): one whole value, marked "substance@rate" ("none" for
 		/// nothing), under the description's rule (the weather content generator's first writing is written over once, a hand edit
 		/// kept after). No column, nothing written. A substance the project lacks is reported missing and nothing is written.
 		/// </summary>
@@ -2613,7 +2613,7 @@ namespace FishMMO.Shared.WorldDesign
 				target = SubstanceNamed(substance);
 				if (target == null && apply)
 				{
-					/* A shipped substance the project lacks is made now (2026-10-18, I2q): Steam was added to the weather content
+					/* A shipped substance the project lacks is made now: Steam was added to the weather content
 					 * generator's table after the substances were first created, so no geyser basin had any sites. */
 					target = WeatherContentGenerator.EnsureShipped(substance);
 				}
@@ -2635,7 +2635,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The loose ground the wind lifts (<see cref="BiomeTemplate.LooseGround"/>) from the spec's column
-		/// (<see cref="BiomeArtSpec.Entry.LooseGround"/>, 2026-10-26, phase CODE-TABLE CLEARANCE: the weather content generator's
+		/// (<see cref="BiomeArtSpec.Entry.LooseGround"/>: the weather content generator's
 		/// table by the biome's name moved into the files), under the emission's rule: the template's original (what that
 		/// generator seeded, so the same value) is written over once, a hand edit kept after. No column, nothing written.
 		/// </summary>
@@ -2668,7 +2668,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The terrain process profile the biome's ground wears as (<see cref="BiomeTemplate.TerrainProcess"/>) from the spec's
-		/// column (<see cref="BiomeArtSpec.Entry.TerrainProcessName"/>, 2026-10-26, phase CODE-TABLE CLEARANCE: the terrain process
+		/// column (<see cref="BiomeArtSpec.Entry.TerrainProcessName"/>: the terrain process
 		/// table's assignments by the biome's name moved into the files), marked by the profile's name under the emission's rule
 		/// (the template's original, what "Apply terrain process profiles" assigned, so the same profile, is written over once; a
 		/// hand edit kept after). A profile asset the project lacks is reported, not made: that tool creates the profiles.
@@ -2692,7 +2692,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How the biome's hot ground divides among geysers, hot springs, fumaroles and mud pots (<see cref="BiomeTemplate.Geothermal"/>)
-		/// from the spec's column (<see cref="BiomeArtSpec.Entry.Geothermal"/>, 2026-10-18, I2q): one whole value marked by its
+		/// from the spec's column (<see cref="BiomeArtSpec.Entry.Geothermal"/>): one whole value marked by its
 		/// signature, under the emission's rule (the template's original, today's split, is written over once; a hand edit kept
 		/// after). No column, nothing written: every template keeps today's split unmarked.
 		/// </summary>
@@ -2709,7 +2709,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Where the biome's vents stand and how they move (<see cref="BiomeTemplate.Vents"/>) from the spec's column
-		/// (<see cref="BiomeArtSpec.Entry.Vents"/>, 2026-10-25, I2q-b): one whole value marked by its signature, under the geothermal
+		/// (<see cref="BiomeArtSpec.Entry.Vents"/>): one whole value marked by its signature, under the geothermal
 		/// split's rule (today's, the grid and steady, written over once; a hand edit kept after). No column, nothing written.
 		/// </summary>
 		private static void AuthorVents(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
@@ -2724,8 +2724,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>) from the spec's column (<see cref="BiomeArtSpec.Entry.Burns"/>,
-		/// 2026-10-25, I2t): one whole value marked by its name, under the vents' rule (the template's original, None, written over once; a
+		/// How the biome's ground burns (<see cref="BiomeTemplate.BurnRegime"/>) from the spec's column (<see cref="BiomeArtSpec.Entry.Burns"/>):
+		/// one whole value marked by its name, under the vents' rule (the template's original, None, written over once; a
 		/// hand edit kept after). No column, nothing written: every template keeps None unmarked.
 		/// </summary>
 		private static void AuthorBurn(BiomeTemplate biome, BiomeArtSpec.Entry entry, Report report, bool apply)
@@ -2760,7 +2760,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The parts of the naming block the spec's column rewrites (<see cref="BiomeArtSpec.Entry.Names"/>, decision 23): each part
+		/// The parts of the naming block the spec's column rewrites (<see cref="BiomeArtSpec.Entry.Names"/>): each part
 		/// a whole value with its own mark (<see cref="BiomeTemplate.Authored.NamingPart"/>), under the description's rule (written
 		/// over once, a hand edit kept after). A part left unset is not touched.
 		/// </summary>
@@ -2932,10 +2932,10 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Writes one template LIST from the spec under the per-entry contract (<see cref="BiomeEntryMarks"/>, 2026-10-16, I5b):
+		/// Writes one template LIST from the spec under the per-entry contract (<see cref="BiomeEntryMarks"/>):
 		/// the spec's entries the list lacks are added (unless the tool wrote one and somebody deleted it), the tool's untouched
 		/// entries are brought up to the spec's (or removed when the spec dropped them), and entries edited or made by hand are
-		/// kept. A list still holding one mark for the whole of it (2026-10-15/16 authoring) is converted first. The field's own
+		/// kept. A list still holding one mark for the whole of it (an older authoring) is converted first. The field's own
 		/// mark becomes <see cref="BiomeEntryMarks.PerEntry"/>: the list is authored, so empty is a decision.
 		/// </summary>
 		/// <param name="list">The template's list (written in place when <paramref name="apply"/>).</param>
@@ -3143,7 +3143,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				text.Append("|D").Append(Q(rule.depthRange.x)).Append(',').Append(Q(rule.depthRange.y));
 			}
-			// A bed rule's waters and current (decision 35, 2026-10-18): only when set, so every rule marked before still hashes to its mark.
+			// A bed rule's waters and current: only when set, so every rule marked before still hashes to its mark.
 			if (rule.waters != BiomeBedWaters.Default)
 			{
 				text.Append("|W").Append((int)rule.waters);
@@ -3163,37 +3163,37 @@ namespace FishMMO.Shared.WorldDesign
 					.Append(',').Append(QBound(rule.humidityRange.x)).Append(',').Append(QBound(rule.humidityRange.y))
 					.Append(',').Append(Q(rule.humidityFalloff));
 			}
-			// The world gate (decision 41, 2026-10-18) likewise: only a rule that has one hashes it, so every mark made before still holds.
+			// The world gate likewise: only a rule that has one hashes it, so every mark made before still holds.
 			if (!rule.worldGate.IsOpen)
 			{
 				text.Append("|G").Append(rule.worldGate.Signature());
 			}
-			// The heat band (2026-10-18, I2q) likewise: keyed on its switch, so every mark made before still holds.
+			// The heat band likewise: keyed on its switch, so every mark made before still holds.
 			if (rule.useHeatBand)
 			{
 				text.Append("|Q").Append(Q(rule.heatRange.x)).Append(',').Append(Q(rule.heatRange.y)).Append(',').Append(Q(rule.heatFalloff));
 			}
-			// The landform zone band (2026-10-25, I2g-b, decision 55) likewise: only a rule whose band is on hashes it.
+			// The landform zone band likewise: only a rule whose band is on hashes it.
 			if (rule.landformBand.On)
 			{
 				text.Append("|Z").Append(rule.landformBand.Signature());
 			}
-			// Talus size grading (2026-10-25, I2u) likewise: only a graded rule hashes it.
+			// Talus size grading likewise: only a graded rule hashes it.
 			if (rule.talusGrading)
 			{
 				text.Append("|T");
 			}
-			// Scatter modes (2026-10-26, SCATTER-MODES) likewise: only a rule with one hashes it.
+			// Scatter modes likewise: only a rule with one hashes it.
 			if (!rule.scatterMode.IsOff)
 			{
 				text.Append("|M").Append(rule.scatterMode.Signature());
 			}
-			// The facing band (2026-10-26, GROUND-BANDS) likewise: only a faced rule hashes it.
+			// The facing band likewise: only a faced rule hashes it.
 			if (rule.facingBand.On)
 			{
 				text.Append("|F").Append(rule.facingBand.Signature());
 			}
-			// The size skew (2026-10-20) likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
+			// The size skew likewise: only a rule leaned off even hashes it, so every mark made before still holds (0, an
 			// asset saved before the field, is even too).
 			if (rule.scaleSkew > 0f && rule.scaleSkew != 1f)
 			{
@@ -3344,19 +3344,19 @@ namespace FishMMO.Shared.WorldDesign
 				temperatureFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.TemperatureFalloff) : 0.1f,
 				humidityRange = s.Humidity ?? new Vector2(-1f, 1f),
 				humidityFalloff = s.Temperature.HasValue || s.Humidity.HasValue ? Mathf.Clamp01(s.HumidityFalloff) : 0.1f,
-				// Open (the default) for every rule without one: the rule is exactly what it was (decision 41, 2026-10-18).
+				// Open (the default) for every rule without one: the rule is exactly what it was.
 				worldGate = s.World,
-				// No heat band leaves the band's fields at their defaults (2026-10-18, I2q).
+				// No heat band leaves the band's fields at their defaults.
 				useHeatBand = s.Heat.HasValue,
 				heatRange = s.Heat ?? new Vector2(0f, 1f),
 				heatFalloff = s.Heat.HasValue ? Mathf.Clamp01(s.HeatFalloff) : BiomeHeatBand.DefaultFalloff,
-				// Off unless the spec names a part (2026-10-25, I2g-b, decision 55).
+				// Off unless the spec names a part.
 				landformBand = s.Zone,
-				// Off unless the spec grades it (2026-10-25, I2u, decision 79 (d)).
+				// Off unless the spec grades it.
 				talusGrading = s.Graded,
-				// All off unless the spec names a mode (2026-10-26, SCATTER-MODES).
+				// All off unless the spec names a mode.
 				scatterMode = s.Mode,
-				// Off unless the spec faces it (2026-10-26, GROUND-BANDS, decision 71).
+				// Off unless the spec faces it.
 				facingBand = s.Facing,
 			});
 			rule.SpecFingerprint = Fingerprint(rule);

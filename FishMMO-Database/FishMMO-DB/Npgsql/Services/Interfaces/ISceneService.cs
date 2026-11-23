@@ -32,7 +32,7 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 	/// <see cref="DequeueAsync"/> and <see cref="FetchWithAgesAsync"/>.
 	/// Both enqueues are retry-safe: each takes a request key once, and a retry after a reply lost past the
 	/// commit answers with the row its first attempt wrote rather than queueing a second load. The uncapped
-	/// EnqueueAsync they replaced (open-world routing in 2026-08, the dungeon finder in 2026-08) had no caller
+	/// EnqueueAsync they replaced (open-world routing and the dungeon finder) had no caller
 	/// left and was removed (issue #267): it inserted a row per attempt and per request, without a cap.
 	/// </para>
 	/// </remarks>

@@ -8,7 +8,7 @@ namespace FishMMO.Shared.Biomes
 	/// AmbientHabitat, which a test keeps equal: the client reads the template's value as its own.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 the client read a biome's country from keywords in its name (AmbientGating.HabitatOf: "forest",
+	/// Formerly the client read a biome's country from keywords in its name (AmbientGating.HabitatOf: "forest",
 	/// "marsh", "coast"…), and called ground under another world's air alien as well. The biome art authoring now writes that
 	/// reading onto every template from the spec table, so a biome's animals are its template's to decide. Stored by number:
 	/// never renumber a member. <see cref="Alien"/> alone is never stored: it is read live from the template's air

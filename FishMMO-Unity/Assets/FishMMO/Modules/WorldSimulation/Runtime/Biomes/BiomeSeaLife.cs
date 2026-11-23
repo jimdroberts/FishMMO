@@ -10,7 +10,7 @@ namespace FishMMO.Shared.Biomes
 	/// reef). A kind a biome does not list lives there as in any other water: by its own elsewhere weight and the climate.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 (phase I4) each kind named its favourite biomes and one weight for all of them (the client's
+	/// Formerly each kind named its favourite biomes and one weight for all of them (the client's
 	/// SeaCreatureKind.Prefers and PreferWeight); I4 moved the names onto the templates, and I4b the weight with them, so each
 	/// biome says how much each of its creatures belongs. The biome art authoring writes, for each kind a biome hosts, the
 	/// weight the kind had for its favourites, so nothing changes until a template is edited.

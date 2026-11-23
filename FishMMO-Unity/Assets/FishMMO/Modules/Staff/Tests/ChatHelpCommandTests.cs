@@ -91,7 +91,7 @@ namespace FishMMO.UnitTests
 				core.AddRange(Registering(folder));
 			}
 			// The core's own: chat and the character system's /leaveinstance etc. GM, admin and dungeon commands are the Staff and
-			// Matchmaking modules' since Phase 3, which is why this floor is 2 and not the 4 it was.
+			// Matchmaking modules', which is why this floor is 2 and not the 4 it was.
 			LogAssert.IsTrue(core.Count >= 2, $"expected the registering systems under the core folders, found {core.Count}");
 			core.AddRange(Registering(ModulesDirectory));
 			return string.Join("\n", core);

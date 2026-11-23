@@ -10,7 +10,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// The lighthouses' lanterns at night (<see cref="SceneEmitterKind.Beacon"/>, baked by the cut): a fire behind polished
 	/// bronze mirrors that the keeper's clockwork turns, throwing beams that sweep the sea and the shore round it, and a
-	/// flash that dazzles when a beam passes over the eye (2026-10-20, "Light houses don't have a light that circles around
+	/// flash that dazzles when a beam passes over the eye ("Light houses don't have a light that circles around
 	/// in the dark?"). One draw of a pre-built mesh of cones and glare quads that FishLighthouseBeams.shader hands out among
 	/// the nearest <see cref="MaxBeacons"/>.
 	/// </summary>

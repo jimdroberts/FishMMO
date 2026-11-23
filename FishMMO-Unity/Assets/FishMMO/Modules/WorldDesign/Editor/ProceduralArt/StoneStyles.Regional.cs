@@ -5,8 +5,8 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The stones of each biome's own crust rock (<see cref="RegionalRocks.Crust"/>, 2026-10-25): boulders, small rocks and
-	/// pebbles of the rock's own habit, so a biome that lays its rock lays its own stones (decision 6 of the biome suite).
+	/// The stones of each biome's own crust rock (<see cref="RegionalRocks.Crust"/>): boulders, small rocks and
+	/// pebbles of the rock's own habit, so a biome that lays its rock lays its own stones.
 	/// </summary>
 	public static partial class StoneStyles
 	{
@@ -216,7 +216,7 @@ namespace FishMMO.Shared.WorldDesign
 			yield return Habit("Radiolarite", "Ribbon chert: conchoidal splintered blocks.", StoneHabit.Glassy, 0.62f, 0.24f, 2.05f, 0.38f, 0.32f, 2);
 			yield return Habit("Carstone", "Iron-pan greensand: boxwork-pitted lumps and round doggers.", StoneHabit.Pitted, 0.7f, 0.4f, 1.8f, 0.6f, 0.86f, 0);
 			yield return Habit("SulcusIce", "Coarse crystalline ice: angular glassy shards.", StoneHabit.Glassy, 0.66f, 0.34f, 2.3f, 0.55f, 0.55f, 2);
-			// Then the named sets the drafts ask for beyond each rock's own (2026-10-26, StoneStyles.Named.cs).
+			// Then the named sets the drafts ask for beyond each rock's own (StoneStyles.Named.cs).
 			foreach (StoneSet set in NamedSets())
 			{
 				yield return set;

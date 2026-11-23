@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	/// <remarks>
 	/// A template gets its runtime ID when the Addressables load registers it (<c>CachedScriptableObject.AddToCache</c>).
 	/// One the attribute databases list but no group holds keeps ID 0, so <c>CharacterAttribute</c>'s constructor finds
-	/// no template and every character that carries it throws in <c>Awake</c>: on 2026-11-17 the new "Pet Slots"
+	/// no template and every character that carries it throws in <c>Awake</c>: the new "Pet Slots"
 	/// attribute had no entry, and every NPC spawn and every player login on the scene server failed at 90% loading.
 	/// </remarks>
 	[TestFixture]

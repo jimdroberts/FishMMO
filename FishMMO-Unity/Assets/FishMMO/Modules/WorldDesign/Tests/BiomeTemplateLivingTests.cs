@@ -12,11 +12,11 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I4 of the biome suite (2026-10-16): the ambient creatures' country, the sea life's favourite waters, the vines,
+	/// The ambient creatures' country, the sea life's favourite waters, the vines,
 	/// the gathering resources and a herb grove's herbs moved off the biome's NAME onto the biome template. Every spec column
 	/// the authoring copies onto the templates is what the name gave before, for every biome asset, so authoring changes
-	/// nothing; the code that places them reads the template and names a biome only in its logged fallback. With it, I3b: the
-	/// authoring prunes the grass entries it wrote for blades a biome no longer grows, and nothing else. And I4b (2026-10-16):
+	/// nothing; the code that places them reads the template and names a biome only in its logged fallback. With it: the
+	/// authoring prunes the grass entries it wrote for blades a biome no longer grows, and nothing else. And I4b:
 	/// the Alien bit is read live from the template's air, the sea life carries a weight per biome, and a point of interest
 	/// paints its own biome's prototype of a plant.
 	/// </summary>
@@ -57,7 +57,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The marks I4's authoring wrote with the Alien bit read without it, so a habitat the tool wrote and nobody touched is
+		/// The marks the authoring wrote with the Alien bit read without it, so a habitat the tool wrote and nobody touched is
 		/// still the tool's (and one edited by hand still a hand edit); no other mark changes.
 		/// </summary>
 		[Test]
@@ -153,7 +153,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				var old = new List<string>();
 				foreach (GatheringResource resource in GatheringResourceCatalogue.All)
 				{
-					// GatheringResourceCatalogue.GrowsIn before 2026-10-16, copied literally.
+					// GatheringResourceCatalogue.GrowsIn formerly, copied literally.
 					if (resource.Biomes.Length == 0 || resource.Biomes.Any(b => string.Equals(b, asset.Name, StringComparison.OrdinalIgnoreCase)))
 					{
 						old.Add(resource.Node);
@@ -179,7 +179,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		/// <summary>PointOfInterestHerbGrove.HerbsFor before 2026-10-16, copied literally: the oracle for the spec's grove herbs.</summary>
+		/// <summary>PointOfInterestHerbGrove.HerbsFor formerly, copied literally: the oracle for the spec's grove herbs.</summary>
 		private static List<string> OldHerbsFor(string biome)
 		{
 			var herbs = new List<string>();
@@ -212,7 +212,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.HerbsOf(new string[0]), Is.EqualTo(OldHerbsFor(null)), "no biome: common herbs");
 		}
 
-		// ── I3b: grass entries the authoring wrote ────────────────────
+		// ── Grass entries the authoring wrote ────────────────────
 
 		/// <summary>
 		/// The authoring prunes an entry only when the biome no longer grows its prefab and the entry still holds the mark the
@@ -246,7 +246,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtAuthoring.PrunableGrassTypes(new List<(string, string)>(), p => null, grown), Is.Empty);
 		}
 
-		// ── I4b: a point of interest's own prototypes ─────────────────
+		// ── A point of interest's own prototypes ─────────────────
 
 		/// <summary>
 		/// A site reuses a tile's prototype of a plant only when it is recorded for the site's own biome (a rule's or an earlier

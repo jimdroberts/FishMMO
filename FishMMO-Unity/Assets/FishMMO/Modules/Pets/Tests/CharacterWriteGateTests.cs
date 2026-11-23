@@ -475,7 +475,7 @@ namespace FishMMO.UnitTests
 		#endregion
 
 		/* The item gate's two pins (AllowsUnclaimedItemWrite and its every use) moved with the inventory system to the Items
-		 * module's ItemWriteGateTests (2026-11-20). */
+		 * module's ItemWriteGateTests. */
 
 		#region The database services
 
@@ -527,7 +527,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void PermanentBuffs_AreNeitherSavedNorRestored()
 		{
-			/* The rule and the conversion are the Buffs module's controller's since 2026-11-20 (BuffController.Core.cs);
+			/* The rule and the conversion are the Buffs module's controller's (BuffController.Core.cs);
 			 * the core save reaches them through IBuffPersistence, for a player and for each pet. */
 			string controller = CodeOnly(ReadSource(BuffCorePath));
 			string rule = MethodBody(controller, "public static bool IsPersistedBuff(BaseBuffTemplate template)", "public void CaptureBuffs(");

@@ -49,7 +49,7 @@ namespace FishMMO.Water
 		/// The least the margin runs past a bank, metres, whatever the component says: more than one of the terrain's ground
 		/// samples (about 2.1 m), because the carve holds the ground a sample wide along the water's edge at the water
 		/// (WaterCarver), and a margin short of it left that strip at the water's level with no water drawn over it: a dark
-		/// band between the river and its banks (2026-10-13).
+		/// band between the river and its banks.
 		/// </summary>
 		public const float MinBankMarginMetres = 2.6f;
 
@@ -469,7 +469,7 @@ namespace FishMMO.Water
 		/// A lake is drawn before the rivers and keeps every pixel it claims (the draw-once stencil), and its surface is
 		/// its mask grown by a 4 m cell. Where a lake lies beside a river it does not drain into or from (a pond along
 		/// a ponded stretch, a lake a river passes), those cells covered the channel in square patches of lake water
-		/// with none of the river's depth, flow or colour (2026-10-08). A river that starts or ends in the lake is
+		/// with none of the river's depth, flow or colour. A river that starts or ends in the lake is
 		/// left to it, as at every mouth: its rows run on into the lake fading, and the lake keeps its pixels.
 		/// </remarks>
 		private static byte ChannelClaim(float outside)
@@ -622,7 +622,7 @@ namespace FishMMO.Water
 				float half = halves[r];
 				/* The water out to where the cut ground meets it on each side (RiverShores): a plunge pool's bowl is scoured wider
 				 * than its channel, and unevenly, and drawn to the width alone its surface ended in a straight edge over ground a
-				 * metre and more under it (2026-10-13). */
+				 * metre and more under it. */
 				float shoreLeft = row.ShoreLeft, shoreRight = row.ShoreRight;
 				// Drawn in toward the line on the inside of a tight bend, each side by its own share (the uv keeps the true offset).
 				float leftScale = Mathf.Clamp01(leftReach[r] / Mathf.Max(1e-4f, half + shoreLeft)), rightScale = Mathf.Clamp01(rightReach[r] / Mathf.Max(1e-4f, half + shoreRight));
@@ -741,7 +741,7 @@ namespace FishMMO.Water
 		/// string of capsules, so its last point leaves a round end cap of the mouth's half width cut into the ground past
 		/// it. Its ribbon stopped square at that point. The river it joins covers the cap only where it is at least as wide
 		/// as the mouth, and the mouth flares to 2.2 widths (SceneWater.Flare): a tributary near the joined river's size
-		/// left the cap's two lobes beyond that river's banks under no water at all, a dry bed at the T (2026-10-12;
+		/// left the cap's two lobes beyond that river's banks under no water at all, a dry bed at the T (
 		/// Flo Monolith's river 1 into river 0: a 15.9 m mouth into a 7.2 m river, 18 m² of bed bare).
 		/// </para>
 		/// <para>
@@ -836,7 +836,7 @@ namespace FishMMO.Water
 		/// </summary>
 		/// <remarks>
 		/// A row's frame is square to its line's heading, taken from the rows either side; where the line doubles back (Flo
-		/// Monolith's river 0 turned 146° in one point, 2026-10-12) that heading points across the river, the rows either
+		/// Monolith's river 0 turned 146° in one point) that heading points across the river, the rows either
 		/// side run backwards against it, and the quads between them twist over. Taking the row out joins its neighbours
 		/// directly, as the generator now cuts such a bend off (RiverShaping.EaseBends); this keeps a line from anywhere else
 		/// safe too. A row on top of the one before it is left out as well.

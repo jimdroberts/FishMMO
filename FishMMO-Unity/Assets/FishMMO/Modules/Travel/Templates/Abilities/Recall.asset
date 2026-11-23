@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11222f2e61021b74dab28957b1bece4e, type: 3}
+  m_Name: Recall
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityTemplate
+  icon:
+    m_AssetGUID: e27156be4a7e189027255b0f5f73fe78
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: After 5 seconds of casting, returns you to the location you marked, wherever it is. It can be cast in combat, but any damage you take breaks the cast.
+  ActivationTime: 5
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 120
+  Modifiers: []
+  Price: 0
+  ActivationConditions:
+  - rid: 4295713287863009288
+  AbilityObjectPrefab: {fileID: 0}
+  AbilitySpawnTarget: 0
+  RequiresTarget: 0
+  InterruptedByDamage: 1
+  AdditionalEventSlots: 0
+  HitCount: 1
+  StrikesCharactersOnly: 0
+  Type: 4
+  ChargeStages: 0
+  Guard:
+    ReducePercent: 75
+    ArcDegrees: 150
+    CostResource: {fileID: 0}
+    CostPerHit: 5
+    CostPerDamage: 0.5
+  PulseSeconds: 0
+  IntentOverride: 0
+  OnTickEvents: []
+  OnHitEvents:
+  - {fileID: 11400000, guid: 2279599e85c38d4729375ab9830611ce, type: 2}
+  OnPreSpawnEvents: []
+  OnSpawnEvents: []
+  OnDestroyEvents: []
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713287863009288
+      type: {class: HasResourceCondition, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        TargetSelector:
+          rid: -2
+        Combine: 0
+        Invert: 0
+        Template: {fileID: 11400000, guid: f627a40e6b3ef5349b3c735f0bfd60c7, type: 2}
+        RequiredAmount: 20

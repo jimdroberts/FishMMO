@@ -10,17 +10,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Lake</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Lake()
 		{
-			// The great clear lakes of the Alpine foreland (biome round, approved 2026-10-18, authored 2026-10-26): green-glass water over a
+			// The great clear lakes of the Alpine foreland: green-glass water over a
 			// pale wave-cut shelf that drops at the halde into blue-black depth; furrow-stones crusted blue-green, quillwort lawns and
 			// pondweed forests under the water, lake-balls rolling on the sand; on the strand a wave-washed shoreweed turf with the lake's
 			// own sky-blue forget-me-not; dark lake-bulrush standing far out; grey-green molasse cliffs honeycombed at the waterline. Its
 			// people are the pile-folk: bark-roofed houses on oak pile fields over the shallows, plank causeways, pile breakwaters, square-
 			// sail barges, logboats, wattle fish-garths, island minsters. Fantasy: the lake keeps what it drowned (dim lit pile-towns,
 			// nixie stairs, a hand rising from the mere, the lake wyrm), kept rare. Lake grows no trees: the shore biomes plant the banks.
-			// Where it shows: the bed (shelf, halde, deeps by depth below the lake's own level, decision 35) and the wave-washed strand.
-			// LATER (I9 T1): every ground and object texture as Lake's own variant of its recipe (decision 12); until then the grounds
+			// Where it shows: the bed (shelf, halde, deeps by depth below the lake's own level) and the wave-washed strand.
+			// LATER: every ground and object texture as Lake's own variant of its recipe; until then the grounds
 			// are Lake's own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Kingfisher + Nixdeep.
+			// LATER (no spec column yet): rare looks Kingfisher + Nixdeep.
 			return E("Lake", L(Ground.PebblesStrandShingle,
 					// The strand: wave-sorted shingle with shoreweed on its low edge, the strand turf, the lake's drift litter, skimming
 					// stones and furrow-stones, the odd molasse chunk, purple-willow scrub on its top edge.
@@ -38,11 +38,11 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.MolasseLedge, 64f, 4f, 22f, 90f, Stones(SmallRocks("Molasse"), 3f),
 						Outcrops("Molasse ledges", 0.01f, 24f, F(RegionalRocks.Molasse, "Ledges"), 60f),
 						Outcrops("Molasse tafoni", 0.004f, 40f, F(RegionalRocks.Molasse, "Tafoni"), 60f)),
-					// d3: the cold lakes' ice-push ramparts (temperature band, decision 29): shoved gravel, scrub on the top edge.
+					// d3: the cold lakes' ice-push ramparts (temperature band): shoved gravel, scrub on the top edge.
 					D(Ground.GravelPushRampart, 40f, 3f, 2f, 18f, Bush("LakeWillowScrub", 0.4f), Stones(Pebbles("Strand"), 4f))
 						.Temp(-1f, -0.2f)),
 				C(Ground.MolasseTafoniCliff, 40f), Ground.LimestoneFurrowShelf, Ground.SandDeltaGlacialFlour)
-				// The shelf (0-3 m below the lake's own level, decision 35): the bulrush stands, lobelia, quillwort lawns, willow moss on the
+				// The shelf (0-3 m below the lake's own level): the bulrush stands, lobelia, quillwort lawns, willow moss on the
 				// cobbles, lake-balls, sponges, the furrow-stones, water horsetail, the drowned pile-fields, sunk logs, the lone erratic.
 				.Under(In(BiomeBedWaters.Lake, Sea("LakeBulrush", 8f, 0.3f, 2.5f, 160, 20f)), In(BiomeBedWaters.Lake, Sea("WaterLobelia", 6f, 0.2f, 1.5f, 160, 20f)),
 					In(BiomeBedWaters.Lake, Sea("Quillwort", 14f, 1f, 3f, 200, 25f)), In(BiomeBedWaters.Lake, Sea("WillowMoss", 4f, 0.3f, 3f, 160, 25f)),
@@ -67,8 +67,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("detail/1", "Driftwood", Pebbles("Grey"), SmallRocks("Grey"))
 				.Ways(path: Ground.PathStrandTrod, road: Ground.GravelTowpath, cobbles: Ground.FlagstoneBollenstein)
 				.Bars(sand: Ground.SandDeltaFlourBar, gravel: Ground.GravelErraticBar)
-				// Own rock molasse (ledges, tafoni; approved Q2), accepting the limestone walls and the gneiss of the glacial basins.
-				// LATER (I9): Molasse's tafoni honeycomb as Lake's own look.
+				// Own rock molasse (ledges, tafoni), accepting the limestone walls and the gneiss of the glacial basins.
+				// LATER: Molasse's tafoni honeycomb as Lake's own look.
 				.Accepts(RockTypes.Limestone, RockTypes.Gneiss)
 				.CaveShell(CaveForm.Cave, "Molasse").CaveShell(CaveForm.Grotto, "Limestone").CaveShell(CaveForm.Mine, "Limestone")
 				.CaveShell(CaveForm.SeaCave, "Molasse").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
@@ -78,13 +78,13 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Aquatic)
 				.Water(BiomeWaterRole.Lake)
 				.Wildlife(BiomeHabitat.FreshWater)
-				// LATER (SEA-LIFE N11 / AMBIENT-LIFE): great crested grebes, loons, gull colonies on the erratics, whitefish rises at dusk,
+				// LATER: great crested grebes, loons, gull colonies on the erratics, whitefish rises at dusk,
 				// pike in the pondweed; the lake wyrm's V-wake and the nixies on their stair (fantasy, rare).
 				.GrowsVines(0.4f, 0.6f, 0.25f, 0f, ("Bittersweet", 1f))
 				.NoCrops()
 				.Herbs("Detail_FlowersStrand", "Detail_GrassShoreweed", "Detail_HorsetailWater")
 				.Moat(BiomeMoatWater.Wet)
-				// Pile-town lanes and the plank Steg causeways are boardwalks over the water (decision 27).
+				// Pile-town lanes and the plank Steg causeways are boardwalks over the water.
 				.RaisesBoardwalks(BiomeBoardwalks.Paths | BiomeBoardwalks.Streets)
 				.Blades("GrassShoreweed", t => { WoodsBlade(t, "#3e5a2e", "#6a8a44", 0.3f, density: 1.2f, stiffness: 1.2f, width: 0.8f, clump: 0.6f); t.Wade = 1f; })
 				.Blades("GrassNeedleSpike", t => { WoodsBlade(t, "#4a6a34", "#7a9a4a", 0.35f, density: 1.4f, width: 0.4f); t.Wade = 1f; })
@@ -116,11 +116,11 @@ namespace FishMMO.Shared.WorldDesign
 					about: "Alemannic: the Alpine foreland's clear lakes (Ueber-, Lind-, Hall-, Mond-, Atter-, Zell-; -see, -au, -horn, -wil, -egg)")
 				// The pile-folk's sites: pile-towns and fish-garths over the shallows, yards and a port, island minsters, shrines and
 				// charnel houses, hermitages in the molasse caves, the mere hand, a harbour light, the lake wyrm's den, and under the water the
-				// drowned pile-field, ruins, sunk barges and (rare) a sunk city (approved Q4, Q7: all kept rare). The shore biomes build
+				// drowned pile-field, ruins, sunk barges and (rare) a sunk city (all kept rare). The shore biomes build
 				// villages and towns; the mines, quarries and camps of the land zeroed.
-				// LATER (I21/I22): over-water pile placement with a Steg causeway for StiltVillage/FishingCamp, and the Sunken* kinds under the
-				// lake's own level; Placed sites weigh 0 in water-role biomes until then. LATER (I7): the named pieces — pile house, pile-town,
-				// Steg causeway, Laedine barge and logboats (I17 lake traffic), fish-garth, net racks, whitefish smokehouse, water-door
+				// LATER: over-water pile placement with a Steg causeway for StiltVillage/FishingCamp, and the Sunken* kinds under the
+				// lake's own level; Placed sites weigh 0 in water-role biomes until then. LATER: the named pieces — pile house, pile-town,
+				// Steg causeway, Laedine barge and logboats (lake traffic), fish-garth, net racks, whitefish smokehouse, water-door
 				// boathouse, island minster, painted-skull charnel house, ice-cross shrine (cold, Frozen), nixie stair, mere hand; the variants
 				// "Lake piles", "Garth", "Island", "Painted skulls", "Pile field". The kit's variants stand in.
 				.Sites((POIType.Spring, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f), (POIType.Lake, 1f),
@@ -130,14 +130,14 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Shrine, 0.6f), (POIType.Ossuary, 0.3f), (POIType.Hermitage, 0.4f), (POIType.Statue, 0.15f), (POIType.Lighthouse, 0.15f),
 					(POIType.MonsterDen, 0.3f), (POIType.DrownedVillage, 1f), (POIType.SunkenRuins, 0.5f), (POIType.SunkenShip, 0.8f),
 					(POIType.SunkenCity, 0.05f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.Crannog, 1.2f), (POIType.LadyOfTheLake, 1f), (POIType.NymphPool, 0.8f), (POIType.LakeMonsterLair, 1f))
 				.Favours(BiomeStructureStyle.Timber, 2f)
 				.Favours(BiomeStructureStyle.Stone, 0.4f)
 				.Favours(BiomeStructureStyle.Earth, 0.2f)
 				// The palette: lake-chalk daub, silvered split fir, bark roofs, black waterlogged oak piles, molasse ashlar, bulrush matting,
 				// lake-blue doors and banners.
-				// LATER (NEW-SURFACES U8): the Bark roof surface (red-brown fir/elm bark slabs weighted with ridge poles) and lake-chalk daub;
+				// LATER: the Bark roof surface (red-brown fir/elm bark slabs weighted with ridge poles) and lake-chalk daub;
 				// riven shingle in the bark's colour stands in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, SeaHex("#dcd8c8"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Timber, SeaHex("#8a8680"))
@@ -161,7 +161,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Cloth, BiomeStructureMaterial.Canvas, SeaHex("#8a6a4a"))
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, SeaHex("#3a6a8a"))
 				// Cressets on the pile heads double as the night torch-fishing light; the harbour's hanging lanterns; the drowned sites' cold
-				// lamps (a dim green Glow, decision 28); the minsters' lantern posts. The shore biomes light the towns.
+				// lamps (a dim green Glow); the minsters' lantern posts. The shore biomes light the towns.
 				.Unlit(POIType.Village).Unlit(POIType.Town).Unlit(POIType.City).Unlit(POIType.Capital)
 				.Lights(POIType.StiltVillage, BiomeWayLightKind.Cresset, 14f)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.Cresset, 14f)

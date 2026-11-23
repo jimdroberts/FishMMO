@@ -134,7 +134,7 @@ namespace FishMMO.UnitTests
 		/// </remarks>
 		/// <summary>
 		/// The attribute list keeps room for several rows. The footer was the one part of the sheet allowed to shrink to
-		/// nothing, and on a 16:9 screen it was left two rows tall: "barely visible" (11-16).
+		/// nothing, and on a 16:9 screen it was left two rows tall: "barely visible".
 		/// </summary>
 		[UnityTest]
 		public IEnumerator TheAttributeListShowsSeveralRows()

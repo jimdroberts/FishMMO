@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public IReadOnlyDictionary<POIType, float> Kinds;
 		/// <summary>
-		/// How deep this biome's underwater sites stand under the sea, metres (its template's UnderwaterSiteDepth, 2026-10-25, phase
+		/// How deep this biome's underwater sites stand under the sea, metres (its template's UnderwaterSiteDepth, phase
 		/// I2m): (0, 0), the default, each kind's own band (<see cref="PointOfInterestKindRule.MinDepth"/> … MaxDepth).
 		/// </summary>
 		public Vector2 UnderwaterDepth;
@@ -146,7 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float Multiplier = 1f;
 		public List<PointOfInterestKindOverride> Overrides = new List<PointOfInterestKindOverride>();
 
-		/// <summary>A scene's settings; null is Normal density with no capital (2026-10-10).</summary>
+		/// <summary>A scene's settings; null is Normal density with no capital.</summary>
 		public static PointOfInterestPlanSettings From(PointOfInterestSettings settings)
 		{
 			if (settings == null)

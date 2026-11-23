@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2f-b of the biome suite (2026-10-26): the later drafts' linear styles and forms on the I2f model. Named styles as data
+	/// The later drafts' linear styles and forms on the model. Named styles as data
 	/// (BiomeLinearStyles), marker lines, windbreaks, a frontier's barrier with its ditch, breaches and forts, a hand rope, the bisse's,
 	/// roggia's, great canal's and qanat gallery's channel rules. Nothing is laid until a biome names a style, so no scene changes
 	/// (BiomeLinearFeatureTests.Defaults_NoBiomeNamesALinearFeature).
@@ -44,7 +44,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(BiomeLinearFeatures.KindOf(form), Is.EqualTo(kind), form.ToString());
 				Assert.That(BiomeLinearFeatures.DefaultHeight(form), Is.GreaterThan(0f), form.ToString());
 			}
-			// The I2f forms keep their values and their own numbers.
+			// The forms keep their values and their own numbers.
 			Assert.That((int)BiomeLinearForm.Wild, Is.EqualTo(2));
 			Assert.That((int)BiomeLinearForm.UprightSlabs, Is.EqualTo(13));
 			Assert.That((int)BiomeLinearForm.Turfed, Is.EqualTo(51));
@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					Assert.That(BiomeLinearFeatures.AllowsForm(channel, place), Is.EqualTo(place == BiomeLinearPlace.FieldEdges), $"{channel} at {place}");
 				}
-				// Every I2f form is allowed where it was.
+				// Every form is allowed where it was.
 				foreach (BiomeLinearForm old in new[] { BiomeLinearForm.Laid, BiomeLinearForm.Drystone, BiomeLinearForm.Rail, BiomeLinearForm.Filare, BiomeLinearForm.EarthDitch, BiomeLinearForm.Heaped })
 				{
 					if (place <= BiomeLinearPlace.TerraceEdges)

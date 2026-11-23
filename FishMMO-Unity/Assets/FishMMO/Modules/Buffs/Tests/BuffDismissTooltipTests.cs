@@ -452,7 +452,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(handler.Contains("ConnectionCharacters.TryGetValue(conn"),
 				"the buff must be looked for on the SENDER's own character, never a named one");
 			LogAssert.IsTrue(handler.Contains("buffController.TryDismissByPlayer(msg.TemplateID)"),
-				"the handler asks the character's own controller (the Buffs module's since 2026-11-20)");
+				"the handler asks the character's own controller (the Buffs module's)");
 
 			string dismiss = MethodBody("Assets/FishMMO/Modules/Buffs/Runtime/Buff/BuffController.Core.cs",
 				"public bool TryDismissByPlayer(int templateID)", "public static bool IsPersistedBuff(");

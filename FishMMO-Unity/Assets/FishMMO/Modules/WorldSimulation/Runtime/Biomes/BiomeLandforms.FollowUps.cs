@@ -7,8 +7,8 @@ namespace FishMMO.Shared.Biomes
 	public static partial class BiomeLandforms
 	{
 		/// <summary>
-		/// Raises every closed low of a spill fill only <paramref name="share"/> of the way from its floor to its spill (2026-10-26,
-		/// phase I2g-f: a Cayley plain's fill to three tenths of its crater's rim): the lows are the lattice nodes the flood raised,
+		/// Raises every closed low of a spill fill only <paramref name="share"/> of the way from its floor to its spill (
+		/// A Cayley plain's fill to three tenths of its crater's rim): the lows are the lattice nodes the flood raised,
 		/// joined 4-way; each low's level is its lowest node plus that share of its rise to the spill, never under a node's own
 		/// ground (pure but for the arrays).
 		/// </summary>
@@ -60,7 +60,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The landform follow-ups' shapes (2026-10-26, phase I2g-f): a halo crater's dark parabola, a rille's roofed stretches, a
+		/// The landform follow-ups' shapes: a halo crater's dark parabola, a rille's roofed stretches, a
 		/// chaos raft's tilted top, a pancake dome's radial grooves, an arachnoid's web of radial fractures.
 		/// </summary>
 		/// <remarks>
@@ -70,7 +70,7 @@ namespace FishMMO.Shared.Biomes
 		public sealed partial class Shape
 		{
 			/// <summary>
-			/// A halo crater's dark parabola (decision 89): in the site's axis frame (its axis the wind's), the ground inside a
+			/// A halo crater's dark parabola: in the site's axis frame (its axis the wind's), the ground inside a
 			/// parabola whose vertex stands 1.4 radii upwind of the centre and whose arms open down the axis, out to its
 			/// <see cref="BiomeLandform.RayReach"/> radii (2 when unset), densest near the crater; not the crater itself.
 			/// </summary>

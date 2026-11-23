@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Death is a full reset. These pin the three parts of that rule which were not true before
-	/// the 2026-09-06 death audit.
+	/// the death audit.
 	/// </summary>
 	/// <remarks>
 	/// <para>

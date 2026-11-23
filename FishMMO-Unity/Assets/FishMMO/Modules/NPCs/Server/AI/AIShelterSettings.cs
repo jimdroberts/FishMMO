@@ -9,7 +9,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Off by default, deliberately (Q15).</b> Every existing archetype in the project gets this
+	/// <b>Off by default, deliberately.</b> Every existing archetype in the project gets this
 	/// struct at its defaults, and at its defaults it does nothing at all. Weather arrives across a
 	/// whole region at once, so a default of "on" would have every NPC on the continent abandon its
 	/// post the first time a front came through — patrols leaving their routes, merchants leaving

@@ -15,7 +15,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.PointsOfInterest
 {
 	/// <summary>
-	/// Pins the gameplay half of generated points of interest (2026-10-10): the gathering catalogue, the NPC role
+	/// Pins the gameplay half of generated points of interest: the gathering catalogue, the NPC role
 	/// table, the recommended features per kind, and each feature built on a scene fixture — a waypoint with a SceneId and
 	/// the site's unlock index, spawners tagged EditorOnly, a region named after the site, a dormant portal.
 	/// </summary>
@@ -100,7 +100,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			}
 			foreach (GatheringFamily family in System.Enum.GetValues(typeof(GatheringFamily)))
 			{
-				// Bone (2026-10-25, decision 25) is a family no site gathers yet and no row stocks.
+				// Bone is a family no site gathers yet and no row stocks.
 				if (family == GatheringFamily.Bone)
 				{
 					continue;
@@ -146,7 +146,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			PointOfInterestNpcEntry orcs = table.Find("orc", "Humanoid", PointOfInterestNpcRole.MonsterPack);
 			Assert.IsNotNull(orcs);
 			Assert.AreEqual("orc", orcs.Race, "the orcs' own row wins over the raiders");
-			// 2026-11-22: every role answers. Any other race's camp gets raiders copied for it; a town its own guards and folk.
+			// every role answers. Any other race's camp gets raiders copied for it; a town its own guards and folk.
 			PointOfInterestNpcEntry goblins = table.Find("goblin", "Humanoid", PointOfInterestNpcRole.MonsterPack);
 			Assert.IsNotNull(goblins, "a goblin camp's pack");
 			Assert.IsTrue(goblins.CloneForRace, "raiders copied for the goblins");
@@ -213,7 +213,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			Assert.IsInstanceOf<BossSpawnerFeature>(lair.Last(), "the boss comes after the packs it waits on");
 
 			Assert.IsTrue(PointOfInterestFeatureDefaults.For(POIType.Portal, 1).Any(f => f is PortalFeature));
-			// 2026-10-11: a dungeon's entrance can be inside a cave: a large cave's great cavern holds one; a small cave, a
+			// a dungeon's entrance can be inside a cave: a large cave's great cavern holds one; a small cave, a
 			// grotto or a mine none.
 			foreach (POIType cave in new[] { POIType.Cave, POIType.IceCave, POIType.LavaTube })
 			{
@@ -259,6 +259,33 @@ namespace FishMMO.UnitTests.PointsOfInterest
 
 			new WaypointFeature().Build(context);
 			Assert.AreEqual(1, context.Root.GetComponentsInChildren<Waypoint>(true).Length, "one waypoint per site");
+		}
+
+		[Test]
+		public void GateStone_IsAWaypointOfTheGateStoneKind_AndTakesTheSiteIndex()
+		{
+			PointOfInterestSiteContext context = Site(POIType.StoneCircle);
+			new GateStoneFeature().Build(context);
+
+			Waypoint stone = context.Root.GetComponentInChildren<Waypoint>(true);
+			Assert.IsNotNull(stone, string.Join("\n", context.Notes));
+			Assert.AreEqual(FishMMO.Shared.Core.WaypointKind.GateStone, stone.Kind);
+			Assert.AreEqual(3, stone.WaypointIndex);
+			Assert.IsTrue(stone.GetComponent<NetworkObject>().IsSceneObject, "a generated scene NetworkObject must carry a SceneId");
+
+			new WaypointFeature().Build(context);
+			Assert.AreEqual(1, context.Root.GetComponentsInChildren<Waypoint>(true).Length, "a site has a waypoint or a Gate Stone, not both");
+		}
+
+		[Test]
+		public void GateStones_AreTheOldStoneSitesDefault()
+		{
+			foreach (POIType kind in new[] { POIType.StoneCircle, POIType.LeyNexus, POIType.Henge, POIType.ElfWaystone, POIType.RuneStone })
+			{
+				Assert.AreEqual(1, PointOfInterestFeatureDefaults.For(kind, 1).Count(f => f is GateStoneFeature), kind.ToString());
+			}
+			Assert.IsFalse(PointOfInterestFeatureDefaults.For(POIType.Village, 1).Any(f => f is GateStoneFeature), "a village has a waypoint");
+			Assert.IsTrue(PointOfInterestFeatureDefaults.NeedsUnlockIndex(PointOfInterestFeatureDefaults.For(POIType.StoneCircle, 0)), "a Gate Stone needs the site's index");
 		}
 
 		[Test]
@@ -355,7 +382,7 @@ namespace FishMMO.UnitTests.PointsOfInterest
 		[Test]
 		public void ACryptsDoor_IsMadeADungeonEntrance_AndTheSiteIsMarkedOne()
 		{
-			// 2026-10-20: a crypt's open door over its stair stood as scenery, no entrance, no mark.
+			// a crypt's open door over its stair stood as scenery, no entrance, no mark.
 			PointOfInterestSiteContext context = Site(POIType.Crypt);
 			ScenePointOfInterest point = context.Root.gameObject.AddComponent<ScenePointOfInterest>();
 			point.Apply(context.Record);

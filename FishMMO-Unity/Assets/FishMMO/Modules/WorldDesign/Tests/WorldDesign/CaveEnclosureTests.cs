@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A cave's columns (CaveEnclosure, 2026-10-21: "Lighting in cave seems off ... seems to be based on distance", Moron 2's
+	/// A cave's columns (CaveEnclosure: "Lighting in cave seems off ... seems to be based on distance", Moron 2's
 	/// lava tube, a hall under a hillside that falls away lit grey at its far end): the air deep in every cave reads as in it,
 	/// however thin the rock over it; the hillside over it, and the ground before its mouths, never does (past a trace). On the same
 	/// synthetic escarpment as CaveWallClosureTests.
@@ -174,7 +174,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(deepNodes, Is.GreaterThan(200));
 			Assert.That(lit, Is.Zero, "the air deep in a cave reads as in it");
 			// A trace only, at a mouth's edge, where its collar's rock comes up to the ground and the closure has barely begun
-			// to rise (2026-10-21: 67 of 427k points, the most 0.03).
+			// to rise (67 of 427k points, the most 0.03).
 			Assert.That(worstGround, Is.LessThan(0.05f), "the hillside over a cave never reads as in it, past a trace at a mouth's edge");
 		}
 	}

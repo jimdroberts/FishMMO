@@ -282,7 +282,7 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// The groups in reach come and go as the camera moves (a near group steps past its distance, a box past the frustum's
 		/// edge), and each that comes takes budget from the farthest. With one limit for all, the farthest drawn group was in one
-		/// frame and out the next while its birds stood in plain view, every one of them together (2026-11-11, measured in the
+		/// frame and out the next while its birds stood in plain view, every one of them together (measured in the
 		/// browser: a finch flock of 28 lost its draw for single frames as the camera swept, never with the budget lifted). A
 		/// group drawn now stays drawn until the load grows by a quarter of the budget, and one refused comes back only once it
 		/// fits inside it, so a few groups' coming and going no longer moves the edge.
@@ -742,7 +742,7 @@ namespace FishMMO.Client
 				sb.Append(", air ").Append((coldest * 33.1f).ToString("0.0")).Append("..").Append((warmest * 33.1f).ToString("0.0")).Append(" °C");
 			}
 			sb.Append(", ").Append(barren).Append(" under barren ground; bats ").Append(AmbientCaveLife.BatHours(conditions).Out.ToString("0.00")).Append(" out");
-			// The light-makers (2026-10-20): how many of the drawn animals near here give off a light of their own.
+			// The light-makers: how many of the drawn animals near here give off a light of their own.
 			int lit = 0;
 			for (int k = 0; k < Kinds.Length; k++)
 			{
@@ -1546,7 +1546,7 @@ namespace FishMMO.Client
 
 		private static float nextDebugLog;
 
-		// ── Draw path trial (2026-11-10) ───────────────────────────────────
+		// ── Draw path trial ───────────────────────────────────
 		//
 		// In the browser every critter kind blinked out for a frame or two and back, all its animals together, while terrain, trees,
 		// grass and the weather's particles (drawn through RenderMesh and RenderMeshIndirect) never did; only this system and sea life

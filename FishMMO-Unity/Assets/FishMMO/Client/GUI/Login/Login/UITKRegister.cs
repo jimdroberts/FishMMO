@@ -758,7 +758,7 @@ namespace FishMMO.Client
 			replyGuard.Clear();
 
 			// Said plainly as a one-time confirmation: players read "verification code" right after registering as two-factor
-			// sign-in, which they may just have turned off (2026-11-22).
+			// sign-in, which they may just have turned off.
 			const string prompt = "Confirm your new account: enter the 6-digit code we just sent you, by email, by text message, " +
 				"or as a direct message from our Discord bot once you are in our Discord server. Any one of them works.\n\n" +
 				"This is needed only once. It is not two-factor sign-in.";

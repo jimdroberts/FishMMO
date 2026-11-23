@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The rockfall's client draw mirrors the shared rockfall (split from RockfallTests, Phase 4, 2026-11-17).
+	/// The rockfall's client draw mirrors the shared rockfall (split from RockfallTests).
 	/// </summary>
 	[TestFixture]
 	public class RockfallFieldTests

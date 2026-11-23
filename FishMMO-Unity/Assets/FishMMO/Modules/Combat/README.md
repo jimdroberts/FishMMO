@@ -9,9 +9,9 @@ bind point, resurrect offers and their acceptance), and the client's combat text
 | **Module id** | `combat` (`CombatModule`) |
 | **Assemblies** | `FishMMO.Combat`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
 | **Depends on** | The core (the damage contract and its static events, the damage and resistance templates, the combat and death messages, the predicted combat events, the character parts, the character system's `ICharacterDeathHost`) |
-| **Depended on by** | Abilities, NPCs & AI, Pets and Wildlife by reference (since they left the core, 2026-11-20), and through Abilities every module that depends on it. Buffs, items and the world still reach damage through the core's `ICharacterDamageController`; without the module they find no controller and nothing is hurt |
+| **Depended on by** | Abilities, NPCs & AI, Pets and Wildlife by reference (since they left the core), and through Abilities every module that depends on it. Buffs, items and the world still reach damage through the core's `ICharacterDamageController`; without the module they find no controller and nothing is hurt |
 | **Remove together with** | Abilities, and every module that depends on it |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

@@ -63,6 +63,11 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 80b76979c58865a08846e9cce9ea8f4d, type: 2}
   - {fileID: 11400000, guid: ac19979833e0b6a59b82ae0d28aefe0d, type: 2}
   - {fileID: 11400000, guid: f198ef3b01e722c3b9a19732c64e29c2, type: 2}
+  - {fileID: 11400000, guid: ba91638b9cfb29834a46e441b0ec2340, type: 2}
+  - {fileID: 11400000, guid: 01cdf73800719b054be3d87a27107db9, type: 2}
+  - {fileID: 11400000, guid: a2dc6ee920a6aaee5a224071a4270176, type: 2}
+  - {fileID: 11400000, guid: b6de7ade1b29f034fbf44a945173a021, type: 2}
+  - {fileID: 11400000, guid: a946b40112848aa38b799cc7160b1d41, type: 2}
   AbilityEvents:
   - {fileID: 11400000, guid: d00db1805f33b104b8b2198459b0a45d, type: 2}
   - {fileID: 11400000, guid: b1b0ada2796be4c4ca8c95734c884fc2, type: 2}

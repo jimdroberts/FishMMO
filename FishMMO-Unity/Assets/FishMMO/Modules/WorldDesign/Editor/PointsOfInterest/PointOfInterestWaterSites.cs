@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Where sites stand IN fresh water (decision 35, 2026-10-18, phase I2l "lakes and rivers as places"): the pure geometry of an
+	/// Where sites stand IN fresh water ("lakes and rivers as places"): the pure geometry of an
 	/// in-stream site moored in a river's current (a ship mill, a salmon lift-net, a toll keep on its rock), a quay straddling a
 	/// river's bank (a river staple), a pile site over a lake's shallows with its causeway to the strand, and a sunken site's
 	/// depth below a lake's own level.
@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// before. Sunken kinds that say <c>InLakes</c> are sited under a lake by its own depth (PointOfInterestPlanner.Placement);
 	/// the in-stream, bank-straddling and over-shallows modes are answered here and are switched on in the planner together with
 	/// the pieces their sites are built from (the ship mill's hulls and wheel, the lift-net stage, the pile house and its Steg:
-	/// the Lake and River rounds' signature pieces, I7), since a land building set on a river's current is worse than none.
+	/// the Lake and River biomes' signature pieces), since a land building set on a river's current is worse than none.
 	/// </para>
 	/// <para>
 	/// Every answer is a pure function of the river's line and the ground and water functions it is given, so a re-cut sites the
@@ -45,7 +45,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The in-stream spot at point <paramref name="k"/> of a river, on one side of its line (decision 35 (g)): moored
+		/// The in-stream spot at point <paramref name="k"/> of a river, on one side of its line: moored
 		/// <paramref name="bankMetres"/> off the bank (never past the middle), where the channel is at least
 		/// <paramref name="minDepth"/> deep and the current at least <paramref name="minSpeed"/> (a ship mill wants 1.5 m and 0.8 m/s:
 		/// a wheel needs the stream, its hulls the draught), on a steady reach (a run; never a riffle, rapid or fall). False where
@@ -104,7 +104,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The bank-straddling spot at point <paramref name="k"/> of a river on one side (decision 35 (g), a river staple's quay and
+		/// The bank-straddling spot at point <paramref name="k"/> of a river on one side (a river staple's quay and
 		/// crane): centred on the water's edge so its quay wall runs along the bank with half its footprint over the water, facing
 		/// across the river. False on a fall-adjacent or narrow reach (a staple wants a river ships use: 12 m and wider).
 		/// </summary>
@@ -139,7 +139,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How deep a point lies below the water a sunken site stands in (decision 35 (d)): below the lake's own level where a lake
+		/// How deep a point lies below the water a sunken site stands in: below the lake's own level where a lake
 		/// covers it, else below the sea's; NaN where neither does (no lake there and no sea).
 		/// </summary>
 		public static float SunkenDepth(float ground, float lakeLevel, bool hasSea, float seaLevel)

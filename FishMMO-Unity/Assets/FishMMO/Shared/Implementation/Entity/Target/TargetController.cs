@@ -200,7 +200,7 @@ namespace FishMMO.Shared
 				return false;
 			}
 
-			/* One press does what the pointer says (Jim, 11-16: pressing the key with a pin held must pin the new target at
+			/* One press does what the pointer says (pressing the key with a pin held must pin the new target at
 			 * once, not release and wait for a second press):
 			 *   - on another character that can be pinned: the pin MOVES there;
 			 *   - on the pinned character itself, on nothing, or on scenery: the pin is RELEASED.

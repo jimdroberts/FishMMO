@@ -18,10 +18,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Cave)
 				.Wildlife(BiomeHabitat.Wetland)
 				.Moat(BiomeMoatWater.Wet)
-				// 2026-10-25 (decision 86, phase I2n-c): the inside of the swamps' caves cut in the soluble rocks (the Cave's set), so
+				// The inside of the swamps' caves cut in the soluble rocks (the Cave's set), so
 				// a link to it never holds in granite or sandstone.
 				.InteriorRocks(BiomeCaveInteriors.SolubleRocks)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its vines, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 1f),
 					(POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -36,13 +36,13 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Quarry, 1f), (POIType.Lighthouse, 1f), (POIType.SmugglersCove, 1f), (POIType.PirateCove, 1f), (POIType.SunkenShip, 1f),
 					(POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
 					(POIType.OreVein, 1f), (POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1.2f))
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.TrollBridge, "Mossed Span", 1.4f)
 				.Prefers(POIType.HauntedManor, "Burned Grange", 1.3f)
 				.Prefers(POIType.ManorHouse, "Timber Manor", 1.4f)
 				.Prefers(POIType.WarbandCamp, "Black Host", 1.2f)
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.2f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Prefers(POIType.Village, "Timber", 0.4f)
 				.Prefers(POIType.Tower, "Wizard", 1.2f)
 				.GrowsVines(1f, 0.8f, 0.3f, 0.1f, ("Liana", 0.6f), ("Ivy", 0.4f))

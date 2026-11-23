@@ -215,7 +215,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(increment.AmountValue is ConstantValue one && one.Amount == 1, "by one per kill");
 
 			/* Who runs it: every player, as the credited killer. The damage controller is the Combat module's character part
-			 * since 2026-11-20, so a player's kill triggers are its PlayerCombatTriggers asset's, no longer each race prefab's
+			 *, so a player's kill triggers are its PlayerCombatTriggers asset's, no longer each race prefab's
 			 * (read as text: this module does not reference the Combat module). */
 			const string playerTriggersPath = "Assets/FishMMO/Modules/Combat/Templates/PlayerCombatTriggers.asset";
 			if (!ProjectFiles.Exists(Path.Combine(Directory.GetCurrentDirectory(), playerTriggersPath)))

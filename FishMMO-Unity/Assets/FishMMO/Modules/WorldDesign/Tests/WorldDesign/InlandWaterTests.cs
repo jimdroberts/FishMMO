@@ -230,7 +230,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A lake is drawn first and keeps the pixels it claims, and its surface is its mask grown by a 4 m cell. Beside a
 		/// river it neither drains into nor from (a pond along a ponded stretch), those cells laid square patches of lake
-		/// water over the channel (2026-10-08). It gives the channel up, along the bank's own line; at a mouth it
+		/// water over the channel. It gives the channel up, along the bank's own line; at a mouth it
 		/// keeps it, as before.
 		/// </summary>
 		[Test]
@@ -301,7 +301,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// A tributary ends on the centre line of the river it joins, and the carver cuts its channel with a round end of
 		/// its mouth's half width past that point. Its ribbon stopped square at the point, so where its mouth was wider than
 		/// the river it joins (mouths flare to 2.2 widths) the end's lobes past that river's banks were bed under no water:
-		/// a dry patch at the T (2026-10-12). It runs on over the round end, whole and at its mouth's level.
+		/// a dry patch at the T. It runs on over the round end, whole and at its mouth's level.
 		/// </summary>
 		[Test]
 		public void ATributarysWaterCoversTheRoundEndOfItsChannel()

@@ -1,0 +1,44 @@
+{
+    "name": "FishMMO.Mounts.Tests",
+    "rootNamespace": "FishMMO.UnitTests",
+    "references": [
+        "FishMMO.Core",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "FishMMO.Shared",
+        "FishMMO.Client",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Mounts",
+        "FishMMO.Mounts.Editor",
+        "FishMMO.Buffs",
+        "FishMMO.Abilities",
+        "FishMMO.Commerce",
+        "FishMMO.Wildlife",
+        "FishMMO.NPCs",
+        "FishMMO.WorldDesign.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "FishMMO-Logger.dll",
+        "FishMMO-SharedUtility.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "!UNITY_SERVER"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

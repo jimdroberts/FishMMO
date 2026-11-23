@@ -1964,7 +1964,7 @@ namespace FishMMO.Client
 			}
 			tooltip.Open(content, icon.Root);
 
-			/* Time Left counts down while the pointer rests on the icon (2026-11-21), from the received entry as the fill
+			/* Time Left counts down while the pointer rests on the icon, from the received entry as the fill
 			 * does; four times a second, only while this icon still owns the tooltip. */
 			iconHoverRefresh?.Pause();
 			iconHoverRefresh = icon.Root.schedule.Execute(() =>
@@ -2022,7 +2022,7 @@ namespace FishMMO.Client
 		#endregion
 
 		/// <summary>
-		/// Left-clicking a member's row pins them to the target frame (Jim, 2026-11-21), as clicking a pet's row does.
+		/// Left-clicking a member's row pins them to the target frame, as clicking a pet's row does.
 		/// </summary>
 		/// <remarks>
 		/// A pin follows a character the client has spawned, so only a member streamed to this client can be pinned: one in

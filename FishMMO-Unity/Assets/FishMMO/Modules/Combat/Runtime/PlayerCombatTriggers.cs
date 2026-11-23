@@ -5,7 +5,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The combat triggers every player's <see cref="CharacterDamageController"/> runs (the Combat module, 2026-11-20): what
+	/// The combat triggers every player's <see cref="CharacterDamageController"/> runs (the Combat module): what
 	/// each race prefab authored on its controller before the controller became a part the character adds at wake. Today the
 	/// achievement counters: damage dealt, healing done, monsters killed.
 	/// </summary>

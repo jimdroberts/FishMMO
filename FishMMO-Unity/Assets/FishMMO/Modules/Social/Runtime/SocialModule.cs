@@ -11,7 +11,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Social module: friends, party and guild (moved 2026-11-16). See the module's README.
+	/// The Social module: friends, party and guild . See the module's README.
 	/// </summary>
 	public sealed class SocialModule : GameModule
 	{

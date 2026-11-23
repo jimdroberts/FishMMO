@@ -4,11 +4,11 @@ namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
 	/// What a ground is made of, read from its layer's name: x living (grass, moss, heath), y lichen and coral, z mineral (rock,
-	/// sand, soil, ash), as a terrain layer's makeup stores it. Core (Phase 4 of the core and modules plan, 2026-11-18) so the
+	/// sand, soil, ash), as a terrain layer's makeup stores it. Core so the
 	/// baked terrain arrays read it without the World Simulation module; BiomeLooks.GroundShareOf forwards here.
 	/// </summary>
 	/// <remarks>
-	/// A FALLBACK only, since 2026-10-15: each generated ground declares its makeup and the terrain array bake carries it per
+	/// A FALLBACK only,: each generated ground declares its makeup and the terrain array bake carries it per
 	/// layer. A layer read by its name here is one whose set was baked before that, or hand-made art nobody gave a makeup.
 	/// A frost or snow is mostly white whatever the world's ground (a frost on a rust world is still white), lava none (it
 	/// glows its own colour).

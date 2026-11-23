@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cave and mine kit (2026-10-13): the glow art's meshes are sound at every level and sit on their mount as the
+	/// The cave and mine kit: the glow art's meshes are sound at every level and sit on their mount as the
 	/// placer is told (CaveArt), its files are listed where the generator looks, its lights carry hues SiteLightPool knows;
 	/// the ladders and ropes stack at one even pitch; the lanterns give off their lamps.
 	/// </summary>

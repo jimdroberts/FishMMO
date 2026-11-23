@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The Pets module's client wiring (2026-11-20): a pet's nameplate names its owner ("&lt;Name's pet&gt;"). Moved out of the
+	/// The Pets module's client wiring: a pet's nameplate names its owner ("&lt;Name's pet&gt;"). Moved out of the
 	/// core Client.
 	/// </summary>
 	public static class PetsClient

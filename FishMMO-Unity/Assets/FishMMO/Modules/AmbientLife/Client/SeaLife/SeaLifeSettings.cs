@@ -23,11 +23,11 @@ namespace FishMMO.Client
 		/// <summary>A crab, walking the sea floor.</summary>
 		Crab,
 		/// <summary>
-		/// An eel (2026-10-25, phase I2m, decision 40): a long round body with one ribbon fin along its back and belly, the whole of it
+		/// An eel: a long round body with one ribbon fin along its back and belly, the whole of it
 		/// rippling as it swims (FishSeaLife.hlsl mode 6): morays, cusk-eels, the deep's ooze-wyrms.
 		/// </summary>
 		Eel,
-		/// <summary>An ocean sunfish (2026-10-25, I2p): a tall disc of a body cut off behind, sculling on its tall dorsal and anal fins (mode 7).</summary>
+		/// <summary>An ocean sunfish: a tall disc of a body cut off behind, sculling on its tall dorsal and anal fins (mode 7).</summary>
 		Mola,
 		/// <summary>A billfish: a marlin's or sailfish's spear of a bill, a tall dorsal sail and a deep-forked tail (fish mode).</summary>
 		Billfish,
@@ -55,13 +55,13 @@ namespace FishMMO.Client
 		/// <summary>Walking slow small loops on the sea floor.</summary>
 		Crawl,
 		/// <summary>
-		/// Lying in a den on the sea floor with its head out, now and then darting a few lengths out and back (2026-10-25, decision 40):
+		/// Lying in a den on the sea floor with its head out, now and then darting a few lengths out and back:
 		/// a moray in its crevice. When each one darts is a pure function of the shared clock (SeaLifePlacement.LurkAt).
 		/// </summary>
 		Lurk,
 		/// <summary>
 		/// A school near the surface whose members now and then burst out and glide 20–60 m on their wings a metre over the waves
-		/// (2026-10-25, I2p: flying fish), each on its own schedule of the shared clock (SeaLifePlacement.GlideAt).
+		/// (flying fish), each on its own schedule of the shared clock (SeaLifePlacement.GlideAt).
 		/// </summary>
 		Glide,
 		/// <summary>Afloat at the surface, riding the swell and drifting with it: a man-o'-war's float (the shader adds the sea's wave sum).</summary>
@@ -115,13 +115,13 @@ namespace FishMMO.Client
 		[Min(0f)] public float MinWater = 4f;
 		[Tooltip("Metres above the sea floor it keeps (Hover: the height band it hovers in, min..max).")]
 		public Vector2 FloorClearance = new Vector2(1.5f, 3f);
-		[Tooltip("Swimmers (School, Cruise, Drift): read Depth as the band its home's sea floor must lie in, as Hover, Crawl and Lurk do, and swim the Floor Clearance band above that floor, following it (2026-10-25: a grenadier over the abyssal plain at 4 000 m). Off: Depth is the band below the surface it swims in, as before.")]
+		[Tooltip("Swimmers (School, Cruise, Drift): read Depth as the band its home's sea floor must lie in, as Hover, Crawl and Lurk do, and swim the Floor Clearance band above that floor, following it (a grenadier over the abyssal plain at 4 000 m). Off: Depth is the band below the surface it swims in, as before.")]
 		public bool NearFloor;
 		[Tooltip("The water's temperature it lives in, -1 coldest .. 1 hottest (the scene's climate at the place).")]
 		public Vector2 Temperature = new Vector2(-1f, 1f);
-		[Tooltip("Biomes (asset names) where it is most at home, as it was decided before 2026-10-16: since then each biome template lists its own sea life with a weight (Sea Life, written by Author biome art from the same lists), and this is read only for a template never authored.")]
+		[Tooltip("Biomes (asset names) where it is most at home, as it was decided formerly: since then each biome template lists its own sea life with a weight (Sea Life, written by Author biome art from the same lists), and this is read only for a template never authored.")]
 		public string[] Prefers = new string[0];
-		[Tooltip("The weight it had in every biome it preferred, as it was decided before 2026-10-16: since then each biome template gives the kinds it lists their own weight (Author biome art writes this one; the biome art spec keeps a copy), and this is read only for a template never authored.")]
+		[Tooltip("The weight it had in every biome it preferred, as it was decided formerly: since then each biome template gives the kinds it lists their own weight (Author biome art writes this one; the biome art spec keeps a copy), and this is read only for a template never authored.")]
 		[Min(1f)] public float PreferWeight = 3f;
 		[Tooltip("In any biome whose template does not list it among its sea life, its density is multiplied by this and thinned off its temperature band (0: it lives only where a biome lists it).")]
 		[Range(0f, 1f)] public float ElsewhereWeight = 1f;
@@ -136,7 +136,7 @@ namespace FishMMO.Client
 		[Tooltip("Casts shadows on the sea floor (big animals).")]
 		public bool CastShadows;
 
-		[Header("Open sea (2026-10-25)")]
+		[Header("Open sea")]
 		[Tooltip("Boil episodes: now and then, on its own schedule of the shared clock, the school rushes up under the surface, tightens and thrashes (tuna on baitfish).")]
 		public bool Boils;
 		[Tooltip("By day the school keeps tight, by night it spreads out four times as wide (scalloped hammerheads hunting alone after dark).")]
@@ -148,7 +148,7 @@ namespace FishMMO.Client
 		[Tooltip("Glide: how high over the surface it flies at the top of the glide, metres, min..max.")]
 		public Vector2 GlideHeight = new Vector2(0.5f, 1.5f);
 
-		[Header("Its own light (2026-10-25)")]
+		[Header("Its own light")]
 		[Tooltip("How its light comes and goes on the shared clock (the ambient creatures' rhythms: AmbientGlow).")]
 		public AmbientGlowPattern GlowPattern = AmbientGlowPattern.Pulse;
 		[Tooltip("Its light's colour (sRGB).")]
@@ -192,7 +192,7 @@ namespace FishMMO.Client
 		[Tooltip("Which defaults these settings were written against (Upgrade); leave it be.")]
 		public int Version;
 
-		/// <summary>The defaults' revision: 2 (2026-10-06) is the denser sea drawn to what the water lets anyone see.</summary>
+		/// <summary>The defaults' revision: 2 is the denser sea drawn to what the water lets anyone see.</summary>
 		public const int CurrentVersion = 2;
 
 		/// <summary>
@@ -201,7 +201,7 @@ namespace FishMMO.Client
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Version 2: as many fish as a diver sees (2026-10-06: "fish are way too rare still").</b> The densities
+		/// <b>Version 2: as many fish as a diver sees ("fish are way too rare still").</b> The densities
 		/// were per square kilometre of sea, and the sea is seen through some 22 m of water: about 0.002 km² at a time,
 		/// so 150 schools to the km² put a fifth of one in view. They are now four to twelve times that. They were
 		/// drawn and placed out to 140 m, which nobody under water can see; drawn to 70 m, the denser sea costs about

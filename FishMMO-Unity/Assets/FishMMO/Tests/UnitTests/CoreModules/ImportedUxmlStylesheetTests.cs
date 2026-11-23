@@ -14,8 +14,8 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	/// <remarks>
 	/// A UXML imported while a stylesheet it names is somewhere else (moved into a module and back) is cached without that
-	/// sheet, and nothing re-imports it when the sheet returns: the source is unchanged. On 2026-11-21 UITarget.uxml and
-	/// UIParty.uxml shipped without UIBuffContainer.uss, so the target and party frames drew no buff icons and each icon's
+	/// sheet, and nothing re-imports it when the sheet returns: the source is unchanged. UITarget.uxml and
+	/// UIParty.uxml once shipped without UIBuffContainer.uss, so the target and party frames drew no buff icons and each icon's
 	/// hover area stretched across the row. The source paths were all valid (ModuleUxmlReferenceTests passed); only the
 	/// import was wrong. The fix is a reimport of the named file (Assets → Reimport).
 	/// </remarks>

@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How the steps of a terraced field are faced (<see cref="BiomeFieldCrop.Riser"/>, 2026-10-18, phase I2j-b, decisions 29 and 31).
+	/// How the steps of a terraced field are faced (<see cref="BiomeFieldCrop.Riser"/>).
 	/// Stored by number: append only.
 	/// </summary>
 	public enum BiomeTerraceRiser : byte
@@ -26,7 +26,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The benches of a terraced field (pure; 2026-10-18, phase I2j-b, decision 29): how high a step stands on a slope, how wide a
+	/// The benches of a terraced field (pure): how high a step stands on a slope, how wide a
 	/// bench is, the cut-and-fill profile that turns the hillside into level benches, and where on a bench the crop is sown.
 	/// </summary>
 	/// <remarks>

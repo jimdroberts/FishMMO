@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const string ColdCogWreck = "=Shipwreck#0", ColdLongshipWreck = "=Shipwreck#1";
 
 		/// <summary>
-		/// The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the templates of the Cold pack's kinds (21; the tidal island abbey is
+		/// The fantasy set: the templates of the Cold pack's kinds (21; the tidal island abbey is
 		/// the Shapes agent's). The frozen north (the frost giants' steading, the frozen army, the dragon in the ice, the lich's spire, the
 		/// ice court), the coast (the cliff castle, the smugglers' and wreckers' works, the siren's rock, the longship landing, the kraken's
 		/// wrecks) and the waters (the merfolk's reef halls, the kraken's grounds, the lady's mere, the nymph's pool, the lake monster's lair).

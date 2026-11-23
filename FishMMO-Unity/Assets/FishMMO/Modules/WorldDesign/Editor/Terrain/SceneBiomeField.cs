@@ -186,7 +186,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool cryogenic = condensate == FishMMO.Shared.Weather.Condensate.Methane || condensate == FishMMO.Shared.Weather.Condensate.Nitrogen;
 				lakeBiome = (cryogenic ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.MethaneLake) : null) ?? BiomeTemplateArt.WaterBiome(BiomeWaterRole.Lake);
 			}
-			// The biomes that play these parts by their templates' Water Role (found by name until 2026-10-15).
+			// The biomes that play these parts by their templates' Water Role (found by name formerly).
 			BiomeTemplate riverBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.River) : null;
 			BiomeTemplate estuaryBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.Estuary) : null;
 			BiomeTemplate saltFlatBiome = water != null ? BiomeTemplateArt.WaterBiome(BiomeWaterRole.SaltFlat) : null;
@@ -194,7 +194,7 @@ namespace FishMMO.Shared.WorldDesign
 			SceneBiomeOverrides.Substitution overrides = request.BiomeOverrides != null ? request.BiomeOverrides.Resolve() : null;
 			float liquidLevel = 0f;
 			SurfaceLiquid liquid = overrides != null ? SurfaceLiquids.For(system, request.Body, out liquidLevel) : SurfaceLiquid.None;
-			/* The open ice shelf and its fast ice (decision 68, I2s) take the biome holding the Ice Shelf role, whatever the climate
+			/* The open ice shelf and its fast ice take the biome holding the Ice Shelf role, whatever the climate
 			 * picks there, as the lake roles do; the climate pick itself never offers it off an ice world. Nothing without a holder. */
 			BiomeTemplate shelfBiome = BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceShelf);
 			SceneAltitude shelf = shelfBiome != null ? new SceneAltitude(request) : default;
@@ -420,7 +420,7 @@ namespace FishMMO.Shared.WorldDesign
 				ids[i] = cells[i] != None ? BiomeRegistry.IDOf(Biomes[cells[i]]) : 0;
 			}
 			map.Set(Width, Height, ids, Origin, Size, groundAltitudes, verticalScale);
-			/* And the sea surface's coastal look (2026-10-18, I2k, BiomeSeaCoast) from these biomes' sea looks, with the grid on every
+			/* And the sea surface's coastal look (BiomeSeaCoast) from these biomes' sea looks, with the grid on every
 			 * cut and repaint: none at all while every biome's look is today's, when the sea draws exactly as before. */
 			var looks = new Dictionary<int, BiomeSeaLook?>();
 			foreach (BiomeTemplate biome in Biomes)

@@ -42,7 +42,7 @@ float4 FishMistGroundAt(float2 xz, out bool covered)
     return float4(g.x + _FishMistGroundBase, g.yzw);
 }
 
-// The live caves' columns round the camera (CaveEnclosureMap, 2026-10-21): per column of the world's FISH_CAVE_CELL grid,
+// The live caves' columns round the camera (CaveEnclosureMap): per column of the world's FISH_CAVE_CELL grid,
 // r its floor and g its roof (world y: the rock's inner faces' lowest and highest), b how shut in from the daylight it is,
 // a 1 where it holds cave rock. Read texel by texel, no sampler. xy the window's first column, z its columns across, w 1
 // when any cave's columns are in it.
@@ -107,10 +107,10 @@ half FishUnderground(float3 positionWS)
     bool covered;
     float4 ground = FishMistGroundAt(positionWS.xz, covered);
     half under = covered && _FishMistGroundRect.w < 1.5 ? (half)smoothstep(6.0, 20.0, ground.x - positionWS.y) : 0.0h;
-    // In a cave's air however thin the rock over it (2026-10-21): a hall under a hillside that falls away took the sky and,
+    // In a cave's air however thin the rock over it: a hall under a hillside that falls away took the sky and,
     // past the shadow distance, the sun on its far walls.
     under = max(under, FishCaveEnclosed(positionWS));
-    // Under an opening in a cave's roof (2026-10-20, FishSkylights.hlsl): the share of the sky it lets in is not underground.
+    // Under an opening in a cave's roof (FishSkylights.hlsl): the share of the sky it lets in is not underground.
     if (under > 0.0h && _FishSkylightCount > 0.5)
     {
         under *= (half)(1.0 - FishSkylightSky(positionWS));

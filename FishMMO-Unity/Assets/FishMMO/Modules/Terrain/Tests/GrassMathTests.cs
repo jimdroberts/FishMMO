@@ -259,14 +259,14 @@ namespace FishMMO.UnitTests
 			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(1f, 0f, 1f), shift, ground, 0f, 0f), "no strength");
 			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 0f, 1f), shift, ground, 0.7f, 0f),
 				"mineral ground under an ordinary air (_FishFloraGround.a = 0)");
-			// Lichen keeps its own texture's colour: the looks' lichen colours are the scatter's, not the ground's (2026-10-15).
+			// Lichen keeps its own texture's colour: the looks' lichen colours are the scatter's, not the ground's.
 			LogAssert.AreEqual(albedo, GrassMath.FloraGround(albedo, new Vector3(0f, 1f, 0f), shift, ground, 0.7f, 0.75f), "lichen ground");
 		}
 
 		[Test]
 		public void FloraGround_ShiftsLivingGround_AndRecoloursOnlyTheMineral()
 		{
-			// Living ground keeps the colour its climate gave it and is moved by the look's shift (2026-10-15: a look that
+			// Living ground keeps the colour its climate gave it and is moved by the look's shift (a look that
 			// replaced it turned meadows into chunks of colour that ignored the ground's dry and lush).
 			var turf = new Vector3(0.1f, 0.2f, 0.05f);
 			var shift = new Vector3(1.2f, 0.9f, 0.7f);

@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 		public bool NeutralPlayersOnly;
 
 		/// <summary>
-		/// With <see cref="ApplyToNeutral"/>: a neutral target passes unless it is wildlife or someone else's pet (2026-11-21,
+		/// With <see cref="ApplyToNeutral"/>: a neutral target passes unless it is wildlife or someone else's pet (
 		/// heals reach neutral NPCs such as townsfolk and guards, still never a wolf mid-fight or a stranger's companion). Your
 		/// own pets, and your party's and guild's, read as allies and are not affected.
 		/// </summary>
@@ -47,8 +47,8 @@ namespace FishMMO.Shared
 		public bool NeutralExcludesWildlifeAndPets;
 
 		/// <summary>
-		/// A pet passes only for its own side: its owner, or the owner's other pets (Jim, 2026-11-21: "players that summon pets
-		/// should be required to handle their own pet maintenance"). Applies at every standing, so a party or guild member's pet,
+		/// A pet passes only for its own side: its owner, or the owner's other pets (players who summon pets
+		/// handle their own pet maintenance). Applies at every standing, so a party or guild member's pet,
 		/// an ally, is not healed by anyone but its owner either.
 		/// </summary>
 		[Tooltip("A pet passes only when it is the initiator's own (or the initiator's owner's): nobody else maintains a pet.")]

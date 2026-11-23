@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// A star's light is the colour of its black body, seen by an eye adapted to it (2026-10-15: "We want realistic/accurate
+	/// A star's light is the colour of its black body, seen by an eye adapted to it ("We want realistic/accurate
 	/// lighting for our celestial bodies"; Galris's snow read peach under Soluris, its temperature applied twice).
 	/// </summary>
 	public class StarLightTests

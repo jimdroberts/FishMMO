@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public abstract class ItemContainer : CharacterPart, IItemContainer
 	{
-		/* A part, not a NetworkBehaviour (2026-11-20, the Items module): the character adds it as it wakes, so the module's
+		/* A part, not a NetworkBehaviour (the Items module): the character adds it as it wakes, so the module's
 		 * removal leaves the player prefabs whole. Unity's Awake still sizes the container, before the character hands it
 		 * over, as it did on the prefab. */
 		protected void Awake()

@@ -92,14 +92,14 @@ namespace FishMMO.Shared
 		 * with N is everything around steady state. The client waits for `_interpolation` goals
 		 * before it moves, and again whenever the queue runs dry — up to 2N ticks standing still
 		 * at every restart. When goals pile up after jitter it drops to the newest and snaps — a
-		 * jump of everything skipped, N times larger. And until 2026-09-02 the first packet after a
+		 * jump of everything skipped, N times larger. And formerly the first packet after a
 		 * reliable settle was played as ONE tick of motion whatever the observer's interval (see
 		 * NetworkBehaviour.SendObserversRpc), an N× lurch at every stop-and-go. Those three, at
-		 * intervals of 4 and 8, are what the live "NPCs teleporting or rubber banding" reports of
-		 * 2026-09-01/02 were describing.
+		 * intervals of 4 and 8, are what the live "NPCs teleporting or rubber banding" reports
+		 * were describing.
 		 *
-		 * History: 20/1, 40/3, 80/6 originally; 40/1, 80/2, 140/4 on 2026-09-01; the far band
-		 * capped at 2 on 2026-09-02. Bandwidth in the far field is the visibility budget's job
+		 * History: 20/1, 40/3, 80/6 originally; 40/1, 80/2, 140/4; the far band
+		 * capped at 2. Bandwidth in the far field is the visibility budget's job
 		 * (ObserverStreamingPolicy.VisibilityBudget), not this table's. intervalScale remains the
 		 * crowd lever, under the same ceiling. */
 		private Band[] bands =

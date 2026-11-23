@@ -169,7 +169,7 @@ namespace FishMMO.Shared
 
 		[Header("Swimming")]
 		/// <summary>
-		/// Whether this character swims at all. Every player does (2026-10-05: swimming becomes a profession later,
+		/// Whether this character swims at all. Every player does (swimming becomes a profession later,
 		/// a skill on top of it, never a gate in front of it).
 		/// </summary>
 		public bool CanSwim = true;
@@ -215,6 +215,31 @@ namespace FishMMO.Shared
 		/// Lazily resolved when <see cref="Character"/> is first set.
 		/// </summary>
 		private ICharacterAnimationController cachedAnimationController;
+
+		/// <summary>
+		/// Cached mount (the Mounts module's controller; null without the module or on an NPC). Lazily resolved like the rest.
+		/// </summary>
+		private ICharacterMount cachedMount;
+
+		/// <summary>Tests only: a mount for a motor with no character (MountMotorTests drive a bare motor).</summary>
+		internal ICharacterMount MountOverride { get; set; }
+
+		/// <summary>The mount this controller asks: the character's, or the test's.</summary>
+		private ICharacterMount MountSource => MountOverride ?? cachedMount;
+
+		// The mount ridden this tick (issue #109): read from the buff state (reconciled) at the start of every input and motor
+		// step, so the server, the owner and each replay drive the same motion. See RefreshMount.
+		private bool mounted;
+		private MountMotion mountMotion;
+		// The rider's own steepest walkable slope, kept while a mount (a llama) lends its own. NaN until first read.
+		private float ownMaxStableSlope = float.NaN;
+
+		/// <summary>True while the character rides a mount this tick.</summary>
+		public bool IsMounted => mounted;
+
+		/// <summary>True while a flying mount is off stable ground: it flies (<see cref="UpdateMountFlight"/>).</summary>
+		public bool IsMountFlying => mounted && mountMotion.Flies && !isSwimming && !climb.IsClimbing && !isFlying &&
+			!Motor.GroundingStatus.IsStableOnGround;
 
 		/// <summary>
 		/// Tracks which <see cref="Character"/> reference the cached components belong to.
@@ -553,7 +578,7 @@ namespace FishMMO.Shared
 		/// used to, on every reconcile, which made the next tick force
 		/// <c>LastMovementIterationFoundAnyGround</c> true and overwrite the value the reconcile had
 		/// just restored from the server, so an airborne owner could snap to ground where the server
-		/// did not, be corrected, and repeat. That was an open item from the 2026-08-28 audit and it
+		/// did not, be corrected, and repeat. That was an open item from the audit and it
 		/// is closed.
 		/// </para>
 		/// </summary>
@@ -590,7 +615,55 @@ namespace FishMMO.Shared
 			cachedAbilityController = null;
 			cachedAttributeController = null;
 			cachedAnimationController = null;
+			cachedMount = null;
 			lastCachedCharacter = null;
+		}
+
+		/// <summary>
+		/// Reads the mount this character rides now (<see cref="ICharacterMount"/>), and lends the motor a mount's steeper
+		/// walkable slope. Called at the start of each input step and each motor update: both read only the buff state, which is
+		/// reconciled, so every peer that simulates this character agrees.
+		/// </summary>
+		private void RefreshMount()
+		{
+			EnsureCached();
+			if (cachedMount == null && Character != null)
+			{
+				// A part may register after the first tick cached the others (parts attach at spawn): asked again until found.
+				Character.TryGet(out cachedMount);
+			}
+			ICharacterMount source = MountSource;
+			mounted = source != null && source.TryGetMotion(out mountMotion);
+			if (!mounted)
+			{
+				mountMotion = default;
+			}
+			if (Motor == null)
+			{
+				return;
+			}
+			if (float.IsNaN(ownMaxStableSlope))
+			{
+				ownMaxStableSlope = Motor.MaxStableSlopeAngle;
+			}
+			float slope = mounted && mountMotion.MaxSlopeDegrees > 0f ? mountMotion.MaxSlopeDegrees : ownMaxStableSlope;
+			if (Motor.MaxStableSlopeAngle != slope)
+			{
+				Motor.MaxStableSlopeAngle = slope;
+			}
+		}
+
+		/// <summary>Gets a rider off (swimming or taking hold of a climbable dismounts, issue #109): inside the motor step.</summary>
+		private void DismountForMovement()
+		{
+			ICharacterMount source = MountSource;
+			if (mounted && source != null)
+			{
+				source.Dismount();
+				mounted = false;
+				mountMotion = default;
+				RefreshMount();
+			}
 		}
 
 		/// <summary>
@@ -606,12 +679,14 @@ namespace FishMMO.Shared
 				Character.TryGet(out cachedAbilityController);
 				Character.TryGet(out cachedAttributeController);
 				Character.TryGet(out cachedAnimationController);
+				Character.TryGet(out cachedMount);
 			}
 			else
 			{
 				cachedAbilityController = null;
 				cachedAttributeController = null;
 				cachedAnimationController = null;
+				cachedMount = null;
 			}
 		}
 
@@ -883,6 +958,8 @@ namespace FishMMO.Shared
 				return;
 			}
 			controlsSuppressedThisTick = false;
+			RefreshMount();
+			bool mountFlies = mounted && mountMotion.Flies;
 
 			switch (CurrentCharacterState)
 			{
@@ -910,8 +987,9 @@ namespace FishMMO.Shared
 
 						// Crouching input. In flight crouch sinks instead (the reconciled flag decides, so both peers agree).
 						bool crouchHeld = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Crouch);
-						crouchInputDown = crouchHeld && !isFlying;
-						descendInputDown = crouchHeld && isFlying;
+						// A rider does not crouch; on a flying mount Crouch descends (issue #109).
+						crouchInputDown = crouchHeld && !isFlying && !mounted;
+						descendInputDown = crouchHeld && (isFlying || mountFlies);
 
 						// Sprinting input
 						sprintInputDown = inputs.MoveFlags.IsFlagged(KCCMoveFlags.Sprint);
@@ -955,6 +1033,8 @@ namespace FishMMO.Shared
 				Motor.LastMovementIterationFoundAnyGround = true;
 				hasDoneInitialGroundProbe = true;
 			}
+			// The mount, and the slope it walks up, before the motor solves the ground this tick.
+			RefreshMount();
 			// In flight there is no water to swim in and nothing to take hold of.
 			if (isFlying)
 			{
@@ -977,7 +1057,7 @@ namespace FishMMO.Shared
 		{
 			Vector3 feet = Motor.TransientPosition;
 			// The water the feet stand in or over, not the highest over the place: a lava tube's river on the level over a cave's
-			// stream is another place's (2026-10-21).
+			// stream is another place's.
 			water = WaterQuery.Sample(Motor.gameObject.scene, feet.x, feet.y, feet.z, WaterTick);
 			float submersion = water.Present ? (water.Surface - feet.y) / Mathf.Max(0.1f, FullCapsuleHeight) : 0f;
 			if (!isSwimming)
@@ -996,6 +1076,8 @@ namespace FishMMO.Shared
 
 		private void EnterSwimming()
 		{
+			// Deep water takes a rider off its mount (issue #109): the mount was never more than what it looks like.
+			DismountForMovement();
 			isSwimming = true;
 			jumpRequested = false;
 			Motor.SetGroundSolvingActivation(false);
@@ -1077,6 +1159,8 @@ namespace FishMMO.Shared
 
 		private void EnterClimbing(int index, ClimbPhase phase, float deltaTime)
 		{
+			// Taking hold of a ladder or a rope gets a rider off its mount first (issue #109).
+			DismountForMovement();
 			if (isSwimming)
 			{
 				// Out of the water by the ladder: a swimmer reaching one takes hold of it.
@@ -1389,6 +1473,13 @@ namespace FishMMO.Shared
 							break;
 						}
 
+						// A flying mount off stable ground flies (issue #109); on the ground it walks like any other mount.
+						if (IsMountFlying && motionTicks == 0)
+						{
+							UpdateMountFlight(ref currentVelocity, deltaTime);
+							break;
+						}
+
 						// An ability rush drives the character instead of its input (BeginMotion).
 						if (motionTicks > 0)
 						{
@@ -1460,7 +1551,7 @@ namespace FishMMO.Shared
 		/// state on both peers.
 		/// </summary>
 		/// <remarks>
-		/// Two ticks, not one (2026-11-21, "Short Charge stops on slopes"): crossing sloped ground the capsule meets triangle
+		/// Two ticks, not one ("Short Charge stops on slopes"): crossing sloped ground the capsule meets triangle
 		/// edges whose contact normal is steeper than either face, the motor rates that one hit unstable and projects the
 		/// velocity on it, and the next tick it is back on stable ground at full speed. A single slowed tick ended the rush
 		/// there. A wall or a body slows it every tick, so it still stops, one tick later.
@@ -1527,7 +1618,8 @@ namespace FishMMO.Shared
 				}
 			}
 
-			float targetSpeed = ResolveGroundSpeed(isCrouching, sprinting, moveInputMagnitude, cachedAttributeController);
+			float targetSpeed = ResolveGroundSpeed(isCrouching, sprinting, moveInputMagnitude, cachedAttributeController,
+				mounted ? mountMotion.GroundSpeedMultiplier : 1f);
 
 			Vector3 targetMovementVelocity = reorientedInput * targetSpeed;
 
@@ -1568,23 +1660,28 @@ namespace FishMMO.Shared
 		/// Attribute source for this character, or <c>null</c> for a character with no attribute
 		/// controller (nothing can scale the base speeds in that case).
 		/// </param>
+		/// <param name="mountMultiplier">
+		/// The ridden mount's <see cref="MountMotion.GroundSpeedMultiplier"/> (issue #109), 1 on foot. It multiplies with Move
+		/// Speed, under the same cap.
+		/// </param>
 		internal float ResolveGroundSpeed(
 			bool isCrouching,
 			bool isSprinting,
 			float moveInputMagnitude,
-			ICharacterAttributeController attributes)
+			ICharacterAttributeController attributes,
+			float mountMultiplier = 1f)
 		{
 			if (isCrouching)
 			{
 				return Constants.Character.CrouchSpeed;
 			}
 
-			float moveSpeedMultiplier = 1f;
+			float moveSpeedMultiplier = mountMultiplier > 0f ? mountMultiplier : 1f;
 			if (MoveSpeedTemplate != null &&
 				attributes != null &&
 				attributes.TryGetAttribute(MoveSpeedTemplate, out CharacterAttribute moveSpeedModifier))
 			{
-				moveSpeedMultiplier = moveSpeedModifier.FinalValueAsPct;
+				moveSpeedMultiplier *= moveSpeedModifier.FinalValueAsPct;
 			}
 
 			float targetSpeed = Constants.Character.RunSpeed * moveSpeedMultiplier;
@@ -1712,6 +1809,71 @@ namespace FishMMO.Shared
 			}
 			float speed = FlySpeed * (sprintInputDown ? FlySprintMultiplier : 1f);
 			currentVelocity = Vector3.Lerp(currentVelocity, direction * speed, 1f - Mathf.Exp(-FlySharpness * deltaTime));
+		}
+
+		/// <summary>
+		/// A flying mount's velocity (issue #109: flight costs stamina): toward the camera's way in full 3D,
+		/// held Jump climbing and Crouch descending, sprint faster at twice the cost. Unlike game-master flight it collides with
+		/// everything, and touching stable ground lands it (the motor's own ground probe, so no state of its own).
+		/// </summary>
+		/// <remarks>
+		/// Every tick of flight costs <see cref="MountMotion.FlightStaminaPerSecond"/> stamina. With none left the mount GLIDES:
+		/// it can no longer climb, sinks at <see cref="MountMotion.GlideSinkSpeed"/> and keeps
+		/// <see cref="MountMotion.GlideSpeedShare"/> of its speed going forward, until it lands and the stamina comes back. The
+		/// cost is paid in the motor on both peers, like sprinting's.
+		/// </remarks>
+		private void UpdateMountFlight(ref Vector3 currentVelocity, float deltaTime)
+		{
+			TickJumpRequestTimer(deltaTime);
+			jumpRequested = false;
+			timeSinceLastAbleToJump = float.MaxValue;
+
+			bool sprinting = sprintInputDown;
+			float cost = Mathf.Max(0f, mountMotion.FlightStaminaPerSecond) * deltaTime * (sprinting ? 2f : 1f);
+			bool powered = cost <= 0f || HasStamina(cost);
+			if (powered && cost > 0f)
+			{
+				SpendStamina(cost);
+			}
+			Vector3 target = MountFlightTarget(mountMotion, swimMoveVector, ascendInputDown, descendInputDown, sprinting, powered);
+			currentVelocity = Vector3.Lerp(currentVelocity, target, 1f - Mathf.Exp(-FlySharpness * deltaTime));
+		}
+
+		/// <summary>
+		/// The velocity a flying mount steers toward (pure, so it is tested on its own): <paramref name="look"/> is the move input
+		/// turned the camera's way in 3D; Jump held climbs and Crouch held descends. Unpowered (out of stamina) it glides: level
+		/// steering only, at a share of the speed, sinking.
+		/// </summary>
+		internal static Vector3 MountFlightTarget(in MountMotion motion, Vector3 look, bool ascend, bool descend, bool sprint, bool powered)
+		{
+			float speed = Mathf.Max(0f, motion.FlySpeed);
+			if (!powered)
+			{
+				Vector3 level = new Vector3(look.x, 0f, look.z);
+				if (level.sqrMagnitude > 1f)
+				{
+					level.Normalize();
+				}
+				Vector3 glide = level * (speed * Mathf.Clamp01(motion.GlideSpeedShare));
+				glide.y = -Mathf.Max(0.5f, motion.GlideSinkSpeed) * (descend ? 2f : 1f);
+				return glide;
+			}
+			Vector3 direction = look;
+			if (ascend)
+			{
+				direction += Vector3.up;
+			}
+			if (descend)
+			{
+				direction += Vector3.down;
+			}
+			if (direction.sqrMagnitude > 1f)
+			{
+				direction.Normalize();
+			}
+			float sprintMultiplier = sprint && motion.FlySprintMultiplier > 0f ? motion.FlySprintMultiplier : 1f;
+			// The same exploit ceiling the ground speed has, three stock sprints.
+			return direction * Mathf.Min(speed * sprintMultiplier, Constants.Character.SprintSpeed * 3f);
 		}
 
 		/// <summary>
@@ -1895,8 +2057,17 @@ namespace FishMMO.Shared
 					{
 						jumpSpeed *= jumpSpeedModifier.FinalValueAsPct;
 					}
+					if (mounted)
+					{
+						// A mount jumps its own height (a frog's 2.5×), and a leaper adds its leap along the steering (issue #109).
+						jumpSpeed *= mountMotion.JumpSpeedMultiplier;
+					}
 					currentVelocity += (jumpDirection * jumpSpeed) - Vector3.Project(currentVelocity, Motor.CharacterUp);
 					currentVelocity += (moveInputVector * JumpScalableForwardSpeed);
+					if (mounted && mountMotion.LeapSpeed > 0f)
+					{
+						currentVelocity += Vector3.ClampMagnitude(moveInputVector, 1f) * mountMotion.LeapSpeed;
+					}
 
 					// Consume stamina when jumping
 					SpendStamina(Constants.Character.JumpStaminaCost);
@@ -1987,7 +2158,7 @@ namespace FishMMO.Shared
 						{
 							cachedAnimationController.SetCrouching(isCrouching);
 							// In flight the motor solves no ground, but the figure stands as on the ground rather than falls.
-							cachedAnimationController.SetGrounded(isFlying || Motor.GroundingStatus.FoundAnyGround);
+							cachedAnimationController.SetGrounded(isFlying || IsMountFlying || Motor.GroundingStatus.FoundAnyGround);
 
 							// Set speed parameter for locomotion blend tree
 							float speed = 0f;

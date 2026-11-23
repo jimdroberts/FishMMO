@@ -17,7 +17,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Hotkeys module (2026-11-20): the bar on the player's entity, the hotkey system's handlers, its writes through the
+	/// The Hotkeys module: the bar on the player's entity, the hotkey system's handlers, its writes through the
 	/// ownership gate, the departing bar written by the save participant, the forget cleanup reached through the ability
 	/// system's event, and the wiring that lets the folder be removed (a label-adopted system, a label-placed bar, the bar
 	/// actions added through <c>ModuleInputActions</c>). Moved from CharacterCoreTests, AbilityForgetTests,

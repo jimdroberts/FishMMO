@@ -10,7 +10,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Dungeon entrances (2026-10-18: "boring and misaligned"): the door is set at its face's foot, square to the face, the
+	/// Dungeon entrances ("boring and misaligned"): the door is set at its face's foot, square to the face, the
 	/// ground cut to a level forecourt once and only once, its interaction box in its doorway, its doorway open into its
 	/// passage, and its way coming in head-on.
 	/// </summary>
@@ -248,7 +248,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── Marked as entrances (2026-10-20) ──────────────────────
+		// ── Marked as entrances ──────────────────────
 
 		private static IEnumerable<PointOfInterestFeature> Flat(IEnumerable<PointOfInterestFeature> features)
 		{

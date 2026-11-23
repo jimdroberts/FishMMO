@@ -6,7 +6,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Water stacked over one place (2026-10-21, Moron 2: "Weird swimming bug ... Seems like the cave water is generating incorrect
+	/// Water stacked over one place (Moron 2: "Weird swimming bug ... Seems like the cave water is generating incorrect
 	/// colliders for swimming depth or something?"): a cave's stream at 491 m with a lava tube's river crossing over it on the level
 	/// 177 m above, and a lake on the hill over both. The height a swimmer, a footstep or a camera stands at decides which water is
 	/// its own: the highest whose floor lies under it. Asked with no height, the highest over the place answers, as before.

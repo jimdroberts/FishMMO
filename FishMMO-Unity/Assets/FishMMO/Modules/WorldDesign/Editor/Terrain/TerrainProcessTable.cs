@@ -104,7 +104,7 @@ namespace FishMMO.Shared.WorldDesign
 				1f, 0f, 1f, 32f, 2f, 0.5f, 2f, 1f, 0f, 0f, 0.4f),
 			new Profile("Seabed", "Under the sea: no rain and no runoff, only slow slumping; the hydrology passes leave it alone.",
 				0f, 0.3f, 0f, 30f, 2f, 0.3f, 4f, 1f, 0f, 0f),
-			// The Desert round (2026-10-26, decision 43): the sand sea's own profile, Arid's with the dunes at full sand, fewer flat-lying
+			// The Desert biome: the sand sea's own profile, Arid's with the dunes at full sand, fewer flat-lying
 			// benches and rarer storms, slopes at sand's angle of repose.
 			new Profile("Erg", "A sand sea: deep loose sand worked by the wind into dunes at their angle of repose, few benches or mesas, storms rare and violent.",
 				1.4f, 0.05f, 1.6f, 34f, 0.3f, 0.4f, 0.9f, 0f, 0.1f, 0.3f, 1f),
@@ -112,8 +112,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Which profile each biome wears: every biome file that names one (<see cref="BiomeArtSpec.Entry.ErodesAs"/>), in the
-		/// spec's order. Until 2026-10-26 this was a table by exact biome asset name; phase CODE-TABLE CLEARANCE moved each row into
-		/// its biome's file (decision 1), and the biome art authoring writes it onto the template too (marked), so this button
+		/// spec's order. Formerly this was a table by exact biome asset name; a later pass moved each row into
+		/// its biome's file, and the biome art authoring writes it onto the template too (marked), so this button
 		/// and the authoring assign the same profile.
 		/// </summary>
 		public static (string Biome, string Profile)[] Assignments

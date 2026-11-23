@@ -10,16 +10,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Beach</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Beach()
 		{
-			// The amber strand of the south-east Baltic (Curonian and Vistula spits; biome round, approved 2026-10-18, authored 2026-10-26):
+			// The amber strand of the south-east Baltic (Curonian and Vistula spits):
 			// a wide pale quartz strand that squeaks underfoot, a foredune of marram and blue lyme grass, behind it the grey dune of
 			// hair-grass, reindeer lichen and crowberry under wind-flagged pines, wandering dunes burying old forests, a black wrack line
 			// that glints with amber after the autumn storms, blue-earth clay at the scarps' foot. One culture (the amber-strand folk) with
 			// two vegetation bands: the cool grey dune (t <= 0.45) and the warm sea-oats and sea-grape strand (t >= 0.45, coconut palms
-			// from t >= 0.65). The ground bands below read the tide (decision 45): swash and beachrock between the tides, the wrack
+			// from t >= 0.65). The ground bands below read the tide: swash and beachrock between the tides, the wrack
 			// line at the high-water mark, the dunes above it.
-			// LATER (I9 T1): every ground and object texture as Beach's own variant of its recipe (decision 12); until then the grounds
+			// LATER: every ground and object texture as Beach's own variant of its recipe; until then the grounds
 			// are its own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Seaglass (milky jade) + Nacre (pearl pink).
+			// LATER (no spec column yet): rare looks Seaglass (milky jade) + Nacre (pearl pink).
 			return E("Beach", L(Ground.SandSinging,
 					// The foredune and the upper strand: marram and lyme grass cool, sea-oats warm, strand flowers and runners, sea
 					// sandwort, cockles on the wrack, silver drift logs, pink erratics, a windshorn willow or hedge of sea grape.
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 					Band(Bush("DuneWillow", 0.2f), -1f, 0.45f), Band(Bush("SeaGrape", 0.3f), 0.45f, 1f),
 					Logs("Drift logs", 0.02f, 15f, Wood("Driftwood_Silver"), 20f),
 					Stones(SmallRocks("Beachrock"), 1f),
-					// Pink rapakivi erratics on the upper strand (a few with pecked cup-marks; LATER I7: the cup-marked boulder).
+					// Pink rapakivi erratics on the upper strand (a few with pecked cup-marks; LATER: the cup-marked boulder).
 					Outcrops("Erratics", 0.15f, 60f, F(RockTypes.Granite, "Corestone"), 20f)),
 				Ds(
 					// d0: the swash — wet glassy sand between the tides: swash-line arcs, foam, shell litter, lugworm casts cool and ghost-crab
@@ -68,7 +68,7 @@ namespace FishMMO.Shared.WorldDesign
 				C(Ground.CliffBlueEarth, 36f), Ground.SandSwashBar, Ground.SandBeachStream)
 				// The shallows off the beach: cockles and olive shells, eelgrass drifting in the surge, the warm band's sand dollars.
 				.Under(Sea("ShellsCockle", 2f, 0f, 1.5f, 96), Sea("EelgrassDrift", 3f, 0.3f, 3f, 96), Band(Sea("SandDollarStrand", 0.6f, 1f, 4f, 96), 0.45f, 1f))
-				// The surf's beds by depth below the water's own surface (decision 35): troughs of megaripples, then offshore sand-silt.
+				// The surf's beds by depth below the water's own surface: troughs of megaripples, then offshore sand-silt.
 				.BedLayer(Ground.SandTrough, BiomeBedWaters.Sea, 1.5f, 4f, 0f, 0f, Sea("EelgrassDrift", 3f, 0.3f, 4f, 96))
 				.BedLayer(Ground.SiltOffshore, BiomeBedWaters.Sea, 4f, 0f, 0f, 0f)
 				// The generic dune and shore kit this round retired for its own: dune and tall grass, wrack, driftwood, shells, starfish,
@@ -78,20 +78,20 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("lakebed", "Seagrass", "Shells", "Starfish")
 				.Ways(path: Ground.PathDuneTrod, road: Ground.GravelShellRoad, cobbles: Ground.FlagstoneErraticCobbles)
 				.Bars(sand: Ground.SandGarnetBar, gravel: Ground.GravelFlintShingle)
-				// Own rock beachrock (its benches, pavements and slabs; approved Q2), the pink granite and grey gneiss as erratics only.
-				// LATER (I9): Granite's pink rapakivi and Gneiss's grey erratic looks as Beach's own.
+				// Own rock beachrock (its benches, pavements and slabs), the pink granite and grey gneiss as erratics only.
+				// LATER: Granite's pink rapakivi and Gneiss's grey erratic looks as Beach's own.
 				.Accepts(RockTypes.Granite, RockTypes.Gneiss)
 				.CaveShell(CaveForm.Cave, "Beachrock").CaveShell(CaveForm.Grotto, "Beachrock").CaveShell(CaveForm.SeaCave, "Beachrock")
 				.CaveShell(CaveForm.Mine, "Ground").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
 				.Crystals((BiomeCaveCrystalKind.Aragonite, 0.6f), (BiomeCaveCrystalKind.Pearlspar, 0.4f))
 				// The pearlspar's cold glow pulses, in its caves and on its crystal posts.
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse)
-				// The foredune along the shore, wandering parabolic dunes (slip face landward) and blowout hollows (approved Q3).
+				// The foredune along the shore, wandering parabolic dunes (slip face landward) and blowout hollows.
 				.Landforms("Foredune", "ParabolicDune", "Blowout")
 				.Lines(new Entry.Line("SandFence"))
 				.Look(BiomeLookClass.Coastal)
 				.Wildlife(BiomeHabitat.Coast)
-				// LATER (SEA-LIFE N13/N14 + AMBIENT-LIFE): grey seals hauled out on the bars 0.6 (a new kind); sanderling flocks running
+				// LATER: grey seals hauled out on the bars 0.6 (a new kind); sanderling flocks running
 				// with the swash, oystercatchers, tern and gull colonies, cormorants and herons in the dune pines, dune elk at dawn
 				// (cool), ghost crabs and turtle tracks (warm), foam-horses at storm dusk. The kit's flatfish stand in as baitfish.
 				.HomeTo(("Crab", 2f), ("Baitfish", 2f), ("Jellyfish", 0.8f), ("Jacks", 0.3f))
@@ -102,7 +102,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Moat(BiomeMoatWater.Wet)
 				// The dune lagoons and beach streams: a clear green over tea-brown sand.
 				.WaterTint(new BiomeWaterLook(SeaHex("#5a8a72"), SeaHex("#123a3a"), new Vector3(0.42f, 0.10f, 0.08f), 0.3f, SeaHex("#a89a78"), SeaHex("#f2f0e8")))
-				// Surf-churned sandy green. LATER (I2k column): the same tint feeds the coastal surface look.
+				// Surf-churned sandy green. LATER: the same tint feeds the coastal surface look.
 				.SeaTint(new BiomeSeaLook(new Color(0.12f, 0.34f, 0.30f), 9f, 1.3f))
 				.Describe("Pale amber strand — singing sand, marram dunes that wander, and a wrack line that glints with amber")
 				.Names(onsets: new[] { "Nid", "Juod", "Pree", "Kur", "Gint", "Sam", "Pal", "Rus", "Lab" },
@@ -127,9 +127,9 @@ namespace FishMMO.Shared.WorldDesign
 					},
 					about: "Baltic: the Curonian and Vistula spits' amber strand (Nid, Juod, Kur, Gint; -kranta, -kopa, -keim, -ninken, -gale, -upe)")
 				// The amber-strand folk: villages, fishing camps with their amber fisheries, beacons, grave-board yards, buried villages,
-				// the gallows dune, amber pits, cup-stone shrines and (rare) the sea-queen's amber palace in the surf (approved Q6). The
+				// the gallows dune, amber pits, cup-stone shrines and (rare) the sea-queen's amber palace in the surf. The
 				// rocky coasts' quarries, the woods' lumber camps, bog shrines, stilt villages and witch huts zeroed.
-				// LATER (I7): the named pieces — the strand cottage, the weathervane boat (+ sea lane, harbour and Dockyard "Slipway"), the
+				// LATER: the named pieces — the strand cottage, the weathervane boat (+ sea lane, harbour and Dockyard "Slipway"), the
 				// amber fishery, the strand gallows, the grave-board yard, sand fences, the sand-swallowed village, the fire beacon, the
 				// upturned-boat hut, flatfish racks, the amber pit, the cup-stone shrine and the amber palace shards. The kit's variants
 				// stand in.
@@ -148,7 +148,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SunkenRuins, 0.3f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
 					(POIType.OreVein, 1f), (POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1f), (POIType.Dockyard, 0.5f),
 					(POIType.Windmill, 0.2f), (POIType.Watermill, 0.6f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f),
 					(POIType.SignalBeacon, 1f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.BurnedVillage, 0.6f),
@@ -157,9 +157,9 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.TidalIslandAbbey, 1f), (POIType.CliffCastle, 1.2f), (POIType.SmugglersTunnel, 1f), (POIType.WreckersBeacon, 1f),
 					(POIType.SirenRock, 1f), (POIType.SeaWitchGrotto, 0.8f), (POIType.LongshipLanding, 1.2f), (POIType.KrakenWreck, 0.8f))
 				.Prefers(POIType.FishingCamp, "Shore", 0.5f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Favours(BiomeStructureStyle.Timber, 2f)
 				.Favours(BiomeStructureStyle.Hide, 0.5f)
 				.Favours(BiomeStructureStyle.Stone, 0.4f)
@@ -167,7 +167,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The palette: fish-oil ochre plank walls with sea-green gable boards and shutters under weathered grey reed, silver pine
 				// shingles, tarred pine net sheds, erratic cobble plinths; strand-reeve towers of galletted erratics with brick quoins;
 				// tan-bark sails, amber-and-sea-green banners; sand-clay daub.
-				// LATER (NEW-SURFACES U1/U4): StrandBoard, StrandReed, the flint-galletted erratic and the brick quoins as surfaces of their
+				// LATER: StrandBoard, StrandReed, the flint-galletted erratic and the brick quoins as surfaces of their
 				// own, the weathervane-board fretwork; tinted kit materials stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Timber, SeaHex("#8a4a26"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Timber, SeaHex("#3e7a6e"))
@@ -187,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Cloth, BiomeStructureMaterial.Canvas, SeaHex("#8a4a2a"))
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, SeaHex("#d88a20"))
 				// Amber lamps on the villages' driftwood posts, hanging lanterns on the net poles, braziers at the harbours and beacons.
-				// LATER (I7a): lights at non-town sites are laid once I7a places them; the entries are the template's already.
+				// LATER: lights at non-town sites are laid once a later pass places them; the entries are the template's already.
 				.Lights(POIType.Village, BiomeWayLightKind.AmberLamp, 15f)
 				.Lights(POIType.Town, BiomeWayLightKind.AmberLamp, 15f)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.HangingLantern, 14f)

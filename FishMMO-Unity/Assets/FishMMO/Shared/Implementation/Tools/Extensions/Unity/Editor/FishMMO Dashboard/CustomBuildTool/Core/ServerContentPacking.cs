@@ -20,7 +20,7 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 	/// textures. Removing them here, and not only from the explicit groups, matters because packing
 	/// has already copied every implicit dependency into each bundle that reaches it: look-array
 	/// textures whose materials sat in a client-only group were copied into hundreds of server scene
-	/// bundles (about 46 GB of a 49 GB server build on 2026-11-06).
+	/// bundles (about 46 GB of a 49 GB server build).
 	/// </para>
 	/// <para>
 	/// Kept: meshes (colliders, PropColliderStreamer), TerrainData with the control maps stored

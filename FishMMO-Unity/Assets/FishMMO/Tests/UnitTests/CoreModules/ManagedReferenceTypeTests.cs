@@ -14,7 +14,7 @@ namespace FishMMO.UnitTests
 	/// <remarks>
 	/// ECA actions and conditions are stored by class, namespace and ASSEMBLY. Moving one into a module's assembly without
 	/// <c>[MovedFrom(true, sourceNamespace: "FishMMO.Shared", sourceAssembly: "FishMMO.Shared")]</c> leaves every asset that
-	/// used it holding a reference Unity cannot resolve: the trigger silently loses that step (2026-11-21, second-wave moves).
+	/// used it holding a reference Unity cannot resolve: the trigger silently loses that step (second-wave moves).
 	/// With every module installed nothing may be unresolved; a module's own assets are allowed to go unresolved only in a
 	/// build without that module.
 	/// </remarks>

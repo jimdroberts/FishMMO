@@ -15,7 +15,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2o (decisions 39, 41, 44; 2026-10-18): the world gate on spawn rules, air bands on ground layers, the "needs breathable
+	/// The world gate on spawn rules, air bands on ground layers, the "needs breathable
 	/// air" flag on point-of-interest kinds, blade sway by the world's air and rigid blades, Glow-only lights for biomes found only
 	/// under thin air or none, and the code-table clean-ups. Pure: no Unity object is made (templates and terrain layers are
 	/// native), so what needs one is read from the assets' YAML or the sources.
@@ -84,7 +84,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			return m.Success ? (BiomeWorldRequirement)int.Parse(m.Groups[1].Value) : BiomeWorldRequirement.None;
 		}
 
-		// ── The world gate (decision 41) ─────────────────────────────
+		// ── The world gate ─────────────────────────────
 
 		[Test]
 		public void DefaultGate_IsOpen_AndAdmitsEveryWorld()
@@ -221,9 +221,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(entry.Cliffs.Length, Is.LessThanOrEqualTo(1), entry.Biome);
 					Assert.That(entry.Cliffs.All(c => c.AirBand == BiomeAtmosphereRequirement.None), Is.True, entry.Biome);
 				}
-				// Crater's file clears its old volcanic ash (decision 39); the geyser basin's writes its Steam (I2q, decision 47); the vent
-				// rounds' new substances (I2q-b, decisions 53/62/66/85/89/93); the weather content generator's other emitting rows moved
-				// into their files (2026-10-26, CODE-TABLE CLEARANCE); no other names one.
+				// Crater's file clears its old volcanic ash; the geyser basin's writes its Steam; the vent
+				// rounds' new substances; the weather content generator's other emitting rows moved
+				// into their files; no other names one.
 				Assert.That(entry.Emission.HasValue, Is.EqualTo(entry.Biome == "Crater" || entry.Biome == "Geyser Basin" || EmitsNew.Contains(entry.Biome)
 					|| EmitsMoved.Contains(entry.Biome)), entry.Biome);
 			}
@@ -240,7 +240,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(Regex.IsMatch(pair.Value, @"worldGate:\s*\n\s*air: [1-9]"), Is.False, pair.Key);
 					Assert.That(Regex.IsMatch(pair.Value, @"airBand: [1-9]"), Is.False, pair.Key);
 				}
-				// Author biome art has run since I2o (2026-10-25): the flag is on the lived-in kinds the spec flags and on no other.
+				// Author biome art has run: the flag is on the lived-in kinds the spec flags and on no other.
 				foreach (Match flagged in Regex.Matches(pair.Value, @"- Kind: (\d+)\s*\n\s*Weight: [^\n]*\n\s*NeedsBreathableAir: 1"))
 				{
 					var kind = (POIType)int.Parse(flagged.Groups[1].Value);
@@ -249,7 +249,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── Air bands on ground layers (decision 44) ─────────────────
+		// ── Air bands on ground layers ─────────────────
 
 		[Test]
 		public void AirBands_AdmitTheirAirs_NoBandAdmitsAll_AndAMainHandsOverToTheFirstBandedDetail()
@@ -292,7 +292,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var layer = new TerrainTextureLayer { useClimateBand = true, temperatureRange = new Vector2(-0.5f, 1f) };
 			string climateOnly = BiomeArtAuthoring.ClimateMark(layer);
-			Assert.That(climateOnly, Is.EqualTo("t-5000,10000,1000|h-"), "the I2j-a mark, as it was");
+			Assert.That(climateOnly, Is.EqualTo("t-5000,10000,1000|h-"), "the mark, as it was");
 			layer.airBand = BiomeAtmosphereRequirement.Thin;
 			Assert.That(BiomeArtAuthoring.ClimateMark(layer), Is.EqualTo(climateOnly + "|a2"));
 			var airOnly = new TerrainTextureLayer { airBand = BiomeAtmosphereRequirement.Airless };
@@ -317,7 +317,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(Code(WorldFolder + "/ProceduralArt/BiomeArtAuthoring.cs"), Does.Contain("Spec(BiomeLocalArt.SlotCliff + i,"));
 		}
 
-		// ── Points of interest that need breathable air (decision 39) ─
+		// ── Points of interest that need breathable air ─
 
 		[Test]
 		public void BreathableAir_IsEarthlikeOrThick_AndTheGateZeroesOnlyFlaggedKindsThere()
@@ -326,7 +326,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Thin), Is.False);
 			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Standard), Is.True);
 			Assert.That(BiomeAir.IsDenseEnough(AtmosphereKind.Thick), Is.True);
-			// Decision 62 (2026-10-25, I2o-b): the air's MAKE-UP as well as its density.
+			// The air's MAKE-UP as well as its density.
 			Assert.That(BiomeAir.IsBreathable(BiomeWorldConditions.Earthlike), Is.True);
 			Assert.That(BiomeAir.IsBreathable(World(AtmosphereKind.Thick)), Is.True, "thick water-cloud air");
 			Assert.That(BiomeAir.IsBreathable(World(AtmosphereKind.Thin)), Is.False);
@@ -352,7 +352,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Thick, BiomeWorldRequirement.RunawayGreenhouse), Is.True);
 			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Any, BiomeWorldRequirement.SurfaceWater), Is.False);
 			Assert.That(BiomeAir.NeverBreathable(BiomeAtmosphereRequirement.Airless | BiomeAtmosphereRequirement.Thin, BiomeWorldRequirement.None), Is.True);
-			// Decision 68: liquid water on site kinds, off by default, marks unchanged without it.
+			// Liquid water on site kinds, off by default, marks unchanged without it.
 			var lead = new BiomeSiteKind(POIType.FishingCamp, 1f, true, true);
 			Assert.That(lead.ToString(), Is.EqualTo("FishingCamp×1×air×water"));
 			Assert.That(BiomeSiteAir.WeightOn(lead, true, false), Is.EqualTo(0f));
@@ -441,7 +441,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The gate's choice for today's scenes (2026-10-18, re-pinned 2026-10-26 on a fixture once the re-cut scenes no longer held the
+		/// The gate's choice for today's scenes (re-pinned on a fixture once the re-cut scenes no longer held the
 		/// sites to lose): each scene's sites as cut before the gate, weighed as the cut weighs them (the spec's default air flag per
 		/// kind, <see cref="BiomeSiteAir.WeightOn(in BiomeSiteKind, bool, bool)"/> under <see cref="BiomeAir.IsBreathable"/> of the
 		/// scene's body). The two on Moron (Earth-like air) lose no site; the three on thin or airless worlds lose only their lived-in
@@ -468,7 +468,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				AtmosphereKind air = BodyAir(body);
 				// Every scene's body today is a water-cloud world (Moron Earth-like; Belron thin; Galris, Ithaewyn airless), so the air's
-				// make-up (decision 62) changes no scene: the density decides, through the one breathability answer the cut asks.
+				// make-up changes no scene: the density decides, through the one breathability answer the cut asks.
 				bool breathable = BiomeAir.IsBreathable(World(air));
 				Assert.That(breathable, Is.EqualTo(BiomeAir.IsDenseEnough(air)), scene);
 				var entry = new BiomeArtSpec.Entry { Biome = scene };
@@ -504,7 +504,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The cut obeys the gate (2026-10-26): every world scene cut on this machine (scenes are cut output, not in the repository; a
+		/// The cut obeys the gate: every world scene cut on this machine (scenes are cut output, not in the repository; a
 		/// scene not cut here is skipped) holds no site whose kind needs breathable air when its body's air is too thin to breathe.
 		/// </summary>
 		[Test]
@@ -544,7 +544,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── No flame under thin air or none (decision 41) ────────────
+		// ── No flame under thin air or none ────────────
 
 		[Test]
 		public void GlowLights_TakeEveryFlamesPlace_OnlyForBiomesFoundUnderThinAirOrNone()
@@ -566,7 +566,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(cave.Single(l => l.Place == BiomeCaveLightPlace.Route).Light, Is.EqualTo(BiomeWayLightKind.CrystalPost), "as both drafts mark routes");
 			foreach (BiomeWayLightKind kind in (BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind)))
 			{
-				// The I6c/I6g glows; the suite's cold lights (2026-10-26) glow by their emitter (WayLightSuiteTests).
+				// The I6c/I6g glows; the suite's cold lights glow by their emitter (WayLightSuiteTests).
 				Assert.That(BiomeGlowLights.Glows(kind), Is.EqualTo(kind == BiomeWayLightKind.Glowjar || kind == BiomeWayLightKind.CrystalPost || kind == BiomeWayLightKind.RuneStone
 					|| kind >= BiomeWayLights.FirstSuiteLight && BiomeWayLights.EmitterOf(kind) == FishMMO.Shared.SceneEmitterKind.Glow));
 			}
@@ -578,7 +578,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			var thinOnly = yaml.Where(p => BiomeAir.OnlyThinAir(AtmosphereOf(p.Value))).Select(p => p.Key).OrderBy(n => n, StringComparer.Ordinal).ToList();
 			Assert.That(thinOnly, Is.EqualTo(new[] { "Cryovolcanic Plain", "Dust Sea", "Ice Geyser Field", "Impact Basin", "Lava Tube", "Nitrogen Ice Field",
 				"Radiation Plain", "Regolith Plain", "Rille" }));
-			/* Decisions 62 and 65(h) (2026-10-25, I2o-b): the Glow-only rule also takes every template whose Requires names an
+			/* Decisions 62 and 65(h): the Glow-only rule also takes every template whose Requires names an
 			 * unbreathable world (BiomeAir.NeverBreathable): five more than the nine (Nitrogen Ice Field was already thin-only). */
 			var neverBreathable = yaml.Where(p => BiomeAir.NeverBreathable(AtmosphereOf(p.Value), RequiresOf(p.Value))).Select(p => p.Key)
 				.OrderBy(n => n, StringComparer.Ordinal).ToList();
@@ -600,9 +600,9 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(entry.CaveLights(true).All(l => BiomeGlowLights.Glows(l.Light)), Is.True, entry.Biome);
 				}
 			}
-			/* Decision 57 (2026-10-25, I2n): of the nine, the one other biomes' caves are the inside of (the Lava Tube) keeps its FIRE
+			/* Decision 57: of the nine, the one other biomes' caves are the inside of (the Lava Tube) keeps its FIRE
 			 * cave lights (the dressing lights a linked cave with Glow where the world's air will not burn them); its way lights stay
-			 * Glow. The other eight are Glow for both, as I2o authored them. */
+			 * Glow. The other eight are Glow for both as before. */
 			var glowCaves = thinOnly.Where(n => BiomeCaveInteriors.GlowCaveLights(true, BiomeArtSpec.For(n).CaveInteriorRocks().Count > 0)).ToList();
 			Assert.That(glowCaves, Is.EqualTo(new[] { "Cryovolcanic Plain", "Dust Sea", "Ice Geyser Field", "Impact Basin", "Methane Lake",
 				"Molten Surface", "Nitrogen Ice Field", "Radiation Plain", "Regolith Plain", "Rille", "Runaway Greenhouse Plain", "Sulphuric Cloud Deck",
@@ -616,7 +616,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(authoring, Does.Contain("biome.CaveLights, entry.CaveLights(glowCaves)"));
 		}
 
-		// ── Blades: sway by the world's air, rigid blades (decision 41) ─
+		// ── Blades: sway by the world's air, rigid blades ─
 
 		[Test]
 		public void BladeSway_FollowsTheWorldsAir_AndRigidBladesNeverSway()
@@ -656,14 +656,14 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(pass + shader, Does.Not.Contain("FishIndirectInstancing.hlsl"));
 		}
 
-		// ── Code-table clean-ups (decisions 39, 44) ──────────────────
+		// ── Code-table clean-ups ──────────────────
 
 		[Test]
 		public void CodeTables_CraterAndDustSea_LeaveTheNameTablesAndTheirOldRows()
 		{
 			string weather = Code(WorldFolder + "/WeatherContentGenerator.cs");
 			Assert.That(weather, Does.Not.Contain("{ \"Crater\","), "the weather content generator's volcanic Crater row is gone");
-			// The generator's ground table itself left for the files (2026-10-26, CODE-TABLE CLEARANCE): it seeds from the spec.
+			// The generator's ground table itself left for the files: it seeds from the spec.
 			Assert.That(weather, Does.Not.Contain("Emitting(\"Volcanic Ash\", 0.15f)"));
 			Assert.That(weather, Does.Contain("BiomeGroundLookup lookup = BiomeGround;"), "it reads the ground through the module's lookup");
 			Assert.That(Code(WorldFolder + "/WorldDesignEditor.cs"), Does.Contain("BiomeArtSpec.Entry entry = BiomeArtSpec.For(biomeName);"), "which is the spec");
@@ -681,7 +681,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				"the spec's naming column wins over the table");
 
 			Assert.That(PointOfInterestTemplateSpecs.Arid, Does.Not.Contain("Dust Sea"));
-			// Wasteland left it too (2026-10-25, decision 96).
+			// Wasteland left it too.
 			Assert.That(PointOfInterestTemplateSpecs.Arid, Is.EqualTo(new[] { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland" }));
 		}
 	}

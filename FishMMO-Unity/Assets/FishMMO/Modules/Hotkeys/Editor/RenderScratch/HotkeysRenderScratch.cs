@@ -5,7 +5,7 @@ namespace FishMMO.RenderScratch
 {
 	/// <summary>
 	/// The Hotkeys module's part of the panel render rig: the hotkey bar in the interface scaling render and the HUD
-	/// overlap probe, where it always stood (after the debuff strip, before the cast bar). Moved with the module, 2026-11-20.
+	/// overlap probe, where it always stood (after the debuff strip, before the cast bar). Moved with the module.
 	/// </summary>
 	public static class HotkeysRenderScratch
 	{

@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 	/// <para>
 	/// Read from the prefab YAML rather than from the component defaults on purpose. The serialized
 	/// value is what ships; a code default that disagrees with it changes nothing for a player, and
-	/// that exact gap is how the 2026-09-01 retune reached the code and not the prefabs.
+	/// that exact gap is how the retune reached the code and not the prefabs.
 	/// </para>
 	/// </remarks>
 	public class NetworkTransformLodBufferTests
@@ -153,7 +153,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// The cap's own bands and the engaged overflow are the SECOND throttle table, applied to
-		/// every character beyond the 24th a viewer sees, and it is the table both 2026-09-01/02
+		/// every character beyond the 24th a viewer sees, and it is the table both earlier
 		/// retunes of the prefab bands missed: it still handed out 4- and 8-tick intervals against
 		/// a 2-goal buffer. Everything the policy can hand an observer must obey the same ceiling.
 		/// </summary>

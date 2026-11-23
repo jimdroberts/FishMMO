@@ -7,14 +7,14 @@ namespace FishMMO.UnitTests
 	public partial class BiomeProceduralArtTests
 	{
 		/// <summary>
-		/// I2j-b (2026-10-18): one authoring run marks a template's orchards (none), field layout (anywhere), old terraces (none) and
+		/// One authoring run marks a template's orchards (none), field layout (anywhere), old terraces (none) and
 		/// channel margin (none) as the tool's, a second changes nothing, and hand edits to each are kept. Unity-only (it makes a
 		/// BiomeTemplate).
 		/// </summary>
 		[Test]
 		public void Authoring_WritesNoOrchardsLayoutOldTerracesOrMargin_OnceAndKeepsHandEdits()
 		{
-			// The Valley (unauthored): no orchards, layout, old terraces or margin (the Hills round, 2026-10-26, gave Hills all but the margin).
+			// The Valley (unauthored): no orchards, layout, old terraces or margin (gave Hills all but the margin).
 			BiomeTemplate hills = MakeBiome("Valley");
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			var source = new FakeSource(created);

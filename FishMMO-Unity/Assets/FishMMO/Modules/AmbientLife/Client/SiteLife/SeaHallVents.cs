@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// A sea hall's vents and ice near the camera (2026-10-26, phase I2n-b, decision 83): its smokers' plumes, the smoke ceiling they
+	/// A sea hall's vents and ice near the camera: its smokers' plumes, the smoke ceiling they
 	/// spread into, the flange mirrors, the white smokers' carbon-dioxide beads, the brinicles growing and snapping from its dome's roof
 	/// and its brine pools' mirrors (<see cref="SceneSeaHallVents"/>; FishSeaHallVents.shader). The hall is the cut's: its Hall, Pool,
 	/// Smoker and Brine cave-life spots (every client loads them, PointOfInterestCaveDressing.SeaHall.cs writes them from the hall's stored

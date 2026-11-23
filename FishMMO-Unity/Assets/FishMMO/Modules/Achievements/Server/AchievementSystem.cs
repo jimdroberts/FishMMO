@@ -82,7 +82,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Sends a player who has just spawned the achievements it loaded with (<see cref="AchievementPersistence"/>). Moved
-		/// from <c>CharacterSystem</c>'s login data with the module (2026-11-20). Sent as one batch: the client applies it
+		/// from <c>CharacterSystem</c>'s login data with the module. Sent as one batch: the client applies it
 		/// without announcing completions.
 		/// </summary>
 		private void CharacterSystem_OnSpawnCharacter(NetworkConnection conn, IPlayerCharacter character, Scene scene)

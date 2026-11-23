@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// An ice cave's own ice (2026-10-20, caves livened): frozen waterfalls down its walls and drops, icicle curtains along its
+	/// An ice cave's own ice (caves livened): frozen waterfalls down its walls and drops, icicle curtains along its
 	/// roof's edges, frozen pools level on its floors and hoarfrost feathering the walls near them. Glow art like the rest of the
 	/// kit (<see cref="CaveGlowKind.IceFall"/>, <see cref="CaveGlowKind.IcicleCurtain"/>, <see cref="CaveGlowKind.FrozenPool"/>,
 	/// <see cref="CaveGlowKind.Hoarfrost"/>): the glow ramp's u is how bright and how deep the ice glows, faintly blue in the
@@ -473,7 +473,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static CaveGlowHue[] iceHues, rimeHues;
 
 		/// <summary>
-		/// An ice cave's ice (2026-10-20, caves livened): Clear, the blue-white of ice near a mouth; Glacial, the deep blue of old
+		/// An ice cave's ice (caves livened): Clear, the blue-white of ice near a mouth; Glacial, the deep blue of old
 		/// ice far in. Glassy, faintly glowing in the dark as the cave's glow-ice does; a blue light where the placer gives one.
 		/// Built when first asked (no static initialiser, so the families' table may read it in any order).
 		/// </summary>

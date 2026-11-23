@@ -12,7 +12,7 @@ in a build.
 | **Depends on** | World Simulation, Water, Naming, Map (its point-of-interest map preview and map tests draw with the map), World Interactables (its gathering content generator); its tests and harness also reference Terrain and the World Test Bed |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18 |
+| **Moved** | Out of the core |
 
 ## Folders
 
@@ -71,7 +71,7 @@ machine by this module's generator. A project without the module must commit tha
 ## Templates
 
 The point-of-interest templates and the NPC table are this module's content: `Templates/PointsOfInterest` (moved from
-`Assets/FishMMO/Modules/WorldSimulation/Templates/World/PointsOfInterest`, 2026-11-18, GUIDs kept).
+`Assets/FishMMO/Modules/WorldSimulation/Templates/World/PointsOfInterest`, GUIDs kept).
 
 ## Serialized data
 
@@ -82,7 +82,7 @@ templates were rewritten from `FishMMO.Shared.Tools.Editor` to `FishMMO.WorldDes
 ## Tests across modules
 
 A test assembly may not reference two optional modules: removing either would break it. Tests that ran the generator and
-then read its output on the client were split at the baked data between them (2026-11-18): this module's half checks
+then read its output on the client were split at the baked data between them: this module's half checks
 what the generator stores; the Ambient Life module's half reads hand-made or template data.
 
 ## Editing generated props by hand

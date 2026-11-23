@@ -5,7 +5,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// A terrain's painted holes (<see cref="TerrainData.GetHoles"/>) as the detail renderers read them: the blade grass
 	/// (folded into its water line, <see cref="GrassTerrain.Freeboard"/>), the GPU detail scatter (a mask slice beside its
-	/// heights; every mesh kind since the CPU chunk renderer went, 2026-10-27). Unity's own detail drawing is off on every
+	/// heights; every mesh kind since the CPU chunk renderer went). Unity's own detail drawing is off on every
 	/// terrain they drive, so nothing else keeps a plant out of a cave mouth: the detail layers under a hole still hold
 	/// whatever the biome scatter painted before the hole was cut, and the 2 m density texels and scatter blocks reach
 	/// past the hole's edge even where they do not.
@@ -37,7 +37,7 @@ namespace FishMMO.Client
 		public readonly float CellMetres;
 
 		/// <summary>
-		/// How far past a hole's edge no plant roots, metres (2026-10-27, Moron 2: "the ground details don't overlap the hole
+		/// How far past a hole's edge no plant roots, metres (Moron 2: "the ground details don't overlap the hole
 		/// itself"): the 2 m density texels and scatter blocks spread what the cells beside an opening hold up to its edge, and a
 		/// blade, a bush or a scattered stone rooted on that edge leans or spreads out over the opening. The cut clears the detail
 		/// cells round every cave opening wider still (PointOfInterestCaveOpeningClearance.DetailMargin); this is the plants' own

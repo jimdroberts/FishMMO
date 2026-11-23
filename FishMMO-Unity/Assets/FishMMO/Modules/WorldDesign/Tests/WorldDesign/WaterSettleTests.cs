@@ -206,7 +206,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// Ground beside two rivers is held for whichever needs it higher. A wide river's levee falling away 9 m out asks less of
 		/// a sample than a narrow river 3 m from it whose water stands lower: kept as the highest water and its distance, the
 		/// carve took the wide river's and left the narrow one's water a metre over the hollow beside it (Flo Monolith,
-		/// 2026-10-15, a rapid over a scour hole below a fall's pool).
+		/// a rapid over a scour hole below a fall's pool).
 		/// </summary>
 		[Test]
 		public void GroundBetweenTwoRiversIsHeldForWhicheverNeedsItHigher()

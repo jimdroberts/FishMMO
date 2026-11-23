@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bd708e51cafd34ff886b5f135027047, type: 3}
+  m_Name: Giant Frog
+  m_EditorClassIdentifier: FishMMO.Mounts::FishMMO.Shared.MountBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Riding a giant frog: slow on its feet, but one leap clears a wall and the field beyond it. Casting, a hit, deep water, a ladder or a roof overhead gets you off; click it off to dismount.'
+  icon:
+    m_AssetGUID: 76a00d5d3670f0d1654448bde019a460
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 0
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 1
+  GroundSpeedMultiplier: 1.2
+  JumpHeightMultiplier: 2.5
+  LeapSpeed: 6
+  MaxSlopeDegrees: 0
+  Flies: 0
+  FlySpeed: 15
+  FlySprintMultiplier: 2
+  FlightStaminaPerSecond: 3
+  GlideSinkSpeed: 3
+  GlideSpeedShare: 0.6
+  Body:
+    Length: 1.15
+    Depth: 0.55
+    Width: 0.95
+    LegLength: 0.36
+    LegThickness: 0.17
+    NeckLength: 0.06
+    NeckRaise: 5
+    HeadLength: 0.55
+    HeadSize: 0.5
+    EarSize: 0
+    Horns: 0
+    HornSize: 0
+    TailLength: 0
+    TailRaise: 0
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.32, g: 0.52, b: 0.2, a: 1}
+    Belly: {r: 0.82, g: 0.84, b: 0.55, a: 1}
+    Accent: {r: 0.18, g: 0.28, b: 0.1, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  SaddleBack: 0.05
+  GaitRunSpeed: 7.2000003

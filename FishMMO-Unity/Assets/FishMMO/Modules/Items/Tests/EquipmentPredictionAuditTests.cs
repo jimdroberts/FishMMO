@@ -16,9 +16,9 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The predicted equipment's audit pins (the combat audit of 2026-08-30 and its follow-ups, the observer synchronisation
+	/// The predicted equipment's audit pins (the combat audit and its follow-ups, the observer synchronisation
 	/// proofs, the prediction audit regressions), moved out of the core prediction fixtures with the controller (the Items
-	/// module, 2026-11-20). The core fixtures keep the attribute, buff, cooldown and motor halves.
+	/// module). The core fixtures keep the attribute, buff, cooldown and motor halves.
 	/// </summary>
 	[TestFixture]
 	public class EquipmentPredictionAuditTests
@@ -44,7 +44,7 @@ namespace FishMMO.UnitTests
 			gameObjects.Clear();
 		}
 
-		#region The spawn payload (combat audit 2026-08-30 F2; prediction audit regressions)
+		#region The spawn payload (combat audit F2; prediction audit regressions)
 
 		/// <summary>
 		/// Reading an OBSERVER-shaped equipment payload must not run the item's attribute apply;

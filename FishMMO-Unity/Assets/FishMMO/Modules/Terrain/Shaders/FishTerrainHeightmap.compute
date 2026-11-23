@@ -1,4 +1,4 @@
-// FishMMO: the client's own draw of the terrain heightmaps (TerrainHeightmapSystem, 2026-10-28); the shared numbers and the
+// FishMMO: the client's own draw of the terrain heightmaps (TerrainHeightmapSystem); the shared numbers and the
 // geomorph are FishTerrainHeightmap.hlsl.
 //
 // ONCE A SCENE (TerrainHeightmapField.Build, again when a tile's data changes):

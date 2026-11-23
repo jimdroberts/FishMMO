@@ -281,8 +281,8 @@ namespace FishMMO.Shared.Celestial
 		/// ridged field's own 0..1 units.
 		/// </summary>
 		/// <remarks>
-		/// Measured over 50,000 Fibonacci points at the mountain frequency (the moisture harness,
-		/// 2026-10-02): the full five-octave ridged field minus its first two octaves averages
+		/// Measured over 50,000 Fibonacci points at the mountain frequency (the moisture harness):
+		/// the full five-octave ridged field minus its first two octaves averages
 		/// 0.1212. Adding it back keeps the coarse ground at the real ground's mean height, so the
 		/// coarse coastline lies on the real one rather than seaward of every mountainous coast —
 		/// without it 6.9% of an Earth-like globe changed between land and sea.

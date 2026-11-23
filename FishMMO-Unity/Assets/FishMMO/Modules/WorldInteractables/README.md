@@ -12,7 +12,7 @@ detail.
 | **Depends on** | The core (the interactable base and its ECA triggers, the interaction request, items and the inventory grant, attributes, factions of the character); Buffs (shrines and other interactables apply buffs); Abilities (the lore panel names ability rewards; the grant itself goes through the core's `AbilityGrants`) |
 | **Depended on by** | World Design (it generates gathering node content) |
 | **Remove together with** | World Design |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

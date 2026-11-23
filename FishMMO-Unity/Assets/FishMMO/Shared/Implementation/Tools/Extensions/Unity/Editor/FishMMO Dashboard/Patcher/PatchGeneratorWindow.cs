@@ -1102,7 +1102,7 @@ namespace FishMMO.Shared.Patcher
 		/// Files at or above this size (either side) are encoded one at a time.
 		/// </summary>
 		/// <remarks>
-		/// A level-22 delta of a 300 MB bundle peaks near 3 GB of memory (measured 2026-11-12).
+		/// A level-22 delta of a 300 MB bundle peaks near 3 GB of memory .
 		/// Small files run one per core; large ones take turns, across every patch being built at
 		/// once, so building several patches in parallel cannot multiply the peak.
 		/// </remarks>

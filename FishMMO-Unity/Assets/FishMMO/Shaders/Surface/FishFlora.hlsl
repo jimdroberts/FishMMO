@@ -164,7 +164,7 @@ FishFloraLook FishFloraLookOf(uint biome, uint variant)
 // shift of the biome's looks averaged by weight (palette row 6, BiomeLooks.Variant.Shift), the same for the whole biome
 // and weighed bilinearly over the biome grid's four nearest texels, so it changes only as smoothly as the biomes do. The
 // ground takes no patch's look: the twelve looks are the grass's and the plants' (FishFloraAt), and laid on the ground
-// they painted its own textures in six-metre blotches of russet, green and blue (2026-10-15: "a bunch of different
+// they painted its own textures in six-metre blotches of russet, green and blue ("a bunch of different
 // colored textures of the same thing"). White (no shift) while the looks are not published.
 float3 FishFloraGroundShiftAt(float2 xz)
 {
@@ -194,7 +194,7 @@ float3 FishFloraGroundShiftAt(float2 xz)
 
 // How living things grow at xz, as a multiplier on their own size: a smooth swell of about ±spread over some ten metres
 // (two octaves of value noise), CONTINUOUS, so nothing steps where one patch meets the next. Shape never comes from a
-// patch's look: per-patch heights stood whole patches of grass a different height from their neighbours (2026-10-15).
+// patch's look: per-patch heights stood whole patches of grass a different height from their neighbours.
 // 1 when nothing is published.
 float FishFloraSwell(float2 xz, float spread, uint salt)
 {
@@ -216,7 +216,7 @@ float FishFloraGrowth(float2 xz, float spread, uint salt)
 FishFloraLook FishFloraAt(float2 xz, float patchMetres, uint salt)
 {
 	// One return: FXC's optimiser overflows its stack when an early return of the whole struct is inlined under a
-	// caller's branches (the terrain's four-layer blend did, 2026-10-15).
+	// caller's branches (the terrain's four-layer blend did).
 	FishFloraLook look = (FishFloraLook)0;
 	look.valid = false;
 	look.height = 1.0; look.width = 1.0; look.bend = 1.0; look.bloomSize = 1.0;

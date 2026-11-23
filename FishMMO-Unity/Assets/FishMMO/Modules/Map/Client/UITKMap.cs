@@ -54,6 +54,9 @@ namespace FishMMO.Client
 		/// <summary>Name of the panel's title label.</summary>
 		private const string TITLE_NAME = "header-title";
 
+		/// <summary>The header dropdown choosing which entered scene the map shows.</summary>
+		private const string SCENE_SELECT_NAME = "map-scene-select";
+
 		/// <summary>Name of the panel's subtitle label.</summary>
 		private const string SUBTITLE_NAME = "header-subtitle";
 
@@ -178,6 +181,9 @@ namespace FishMMO.Client
 		/// <summary>Whether a waypoint is selected in the side bar.</summary>
 		private bool hasSelectedWaypoint;
 
+		/// <summary>Whether a Gate spell waits for this map to choose its Gate Stone (<see cref="GateStoneChoice"/>).</summary>
+		private bool gateMode;
+
 		/// <summary>The selected waypoint's index within the current scene.</summary>
 		private int selectedWaypointIndex;
 
@@ -195,6 +201,13 @@ namespace FishMMO.Client
 
 		/// <summary>Label naming the scene.</summary>
 		private Label titleLabel;
+
+		/// <summary>The scene dropdown, and the scene behind each of its choices, in order.</summary>
+		private DropdownField sceneSelect;
+		private readonly List<string> sceneChoiceScenes = new List<string>();
+
+		/// <summary>The scene the view was last laid out for, to tell a switch from a refresh.</summary>
+		private string shownSceneName;
 
 		/// <summary>Label describing the scene.</summary>
 		private Label subtitleLabel;
@@ -299,7 +312,7 @@ namespace FishMMO.Client
 			};
 			mapView.style.flexGrow = 1.0f;
 			mapView.MapTextureIsViewAligned = false;
-			mapView.MapTextureNorthDegrees = ClientMapSystem.Definition != null ? ClientMapSystem.Definition.NorthOffsetDegrees : 0.0f;
+			mapView.MapTextureNorthDegrees = ClientMapSystem.Viewed.Definition != null ? ClientMapSystem.Viewed.Definition.NorthOffsetDegrees : 0.0f;
 			mapView.OnMapScrolled += MapView_OnScrolled;
 			mapView.OnMapClicked += MapView_OnClicked;
 			mapView.RegisterCallback<PointerDownEvent>(MapView_OnPointerDown);
@@ -313,6 +326,11 @@ namespace FishMMO.Client
 			host.Add(compass);
 
 			titleLabel = root.Q<Label>(TITLE_NAME);
+			sceneSelect = root.Q<DropdownField>(SCENE_SELECT_NAME);
+			if (sceneSelect != null)
+			{
+				sceneSelect.RegisterValueChangedCallback(OnSceneSelected);
+			}
 			subtitleLabel = root.Q<Label>(SUBTITLE_NAME);
 			cursorLabel = root.Q<Label>(CURSOR_LABEL_NAME);
 			exploredLabel = root.Q<Label>(EXPLORED_LABEL_NAME);
@@ -365,7 +383,7 @@ namespace FishMMO.Client
 			waypointHint = root.Q<Label>(WAYPOINT_HINT_NAME);
 			if (waypointTravelButton != null)
 			{
-				waypointTravelButton.clicked += RequestFastTravel;
+				waypointTravelButton.clicked += OnWaypointButtonClicked;
 			}
 
 			BuildFilterToggles();
@@ -379,6 +397,10 @@ namespace FishMMO.Client
 			ClientMapSystem.OnSceneMapChanged += MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
 			ClientMapSystem.OnNotesChanged += MapSystem_OnNotesChanged;
+			ClientMapSystem.OnViewedSceneChanged -= MapSystem_OnViewedSceneChanged;
+			ClientMapSystem.OnViewedSceneChanged += MapSystem_OnViewedSceneChanged;
+			ClientMapSystem.OnVisitedScenesChanged -= MapSystem_OnVisitedScenesChanged;
+			ClientMapSystem.OnVisitedScenesChanged += MapSystem_OnVisitedScenesChanged;
 
 			/* Static events on the controller interface, so they can be subscribed before any
 			 * character exists and survive the character being replaced. Unsubscribed in
@@ -393,6 +415,12 @@ namespace FishMMO.Client
 			IWaypointController.OnWaypointMapRequested -= Waypoint_OnMapRequested;
 			IWaypointController.OnWaypointMapRequested += Waypoint_OnMapRequested;
 
+			// The Gate spell's choice of a Gate Stone (issue #241): the Travel module begins and ends it through the core seam.
+			GateStoneChoice.OnBegan -= GateStoneChoice_OnBegan;
+			GateStoneChoice.OnBegan += GateStoneChoice_OnBegan;
+			GateStoneChoice.OnEnded -= GateStoneChoice_OnEnded;
+			GateStoneChoice.OnEnded += GateStoneChoice_OnEnded;
+
 			ApplySceneToView();
 			RefreshWaypointPanel();
 		}
@@ -404,10 +432,14 @@ namespace FishMMO.Client
 		{
 			ClientMapSystem.OnSceneMapChanged -= MapSystem_OnSceneChanged;
 			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
+			ClientMapSystem.OnViewedSceneChanged -= MapSystem_OnViewedSceneChanged;
+			ClientMapSystem.OnVisitedScenesChanged -= MapSystem_OnVisitedScenesChanged;
 			IWaypointController.OnWaypointUnlocked -= Waypoint_OnUnlocked;
 			IWaypointController.OnWaypointTravelled -= Waypoint_OnTravelled;
 			IWaypointController.OnWaypointTravelRefused -= Waypoint_OnTravelRefused;
 			IWaypointController.OnWaypointMapRequested -= Waypoint_OnMapRequested;
+			GateStoneChoice.OnBegan -= GateStoneChoice_OnBegan;
+			GateStoneChoice.OnEnded -= GateStoneChoice_OnEnded;
 			base.OnDestroying();
 		}
 
@@ -441,6 +473,8 @@ namespace FishMMO.Client
 			 * reopened somewhere else is disorienting: the first thing anybody does with a world
 			 * map is look for themselves on it, and a remembered pan means doing that by hand
 			 * every single time. */
+			// Every open starts on the scene the character stands in; the dropdown picks another.
+			ClientMapSystem.ViewScene(null);
 			CenterOnCharacter();
 			nextMarkerRefreshTime = 0.0;
 			RefreshNotes();
@@ -472,6 +506,12 @@ namespace FishMMO.Client
 			if (!Visible)
 			{
 				panning = false;
+				// Closing the map while a Gate waits for its stone gives the Gate up (issue #241).
+				if (gateMode)
+				{
+					gateMode = false;
+					GateStoneChoice.Cancel();
+				}
 			}
 		}
 
@@ -492,7 +532,12 @@ namespace FishMMO.Client
 			}
 			nextMarkerRefreshTime = now + MarkerRefreshInterval;
 
-			if (travelPending && now >= travelPendingUntil)
+			if (gateMode)
+			{
+				// The countdown in the hint.
+				RefreshWaypointPanel();
+			}
+			else if (travelPending && now >= travelPendingUntil)
 			{
 				// The server's answer never came. Hand the button back rather than leave it dead.
 				travelPending = false;
@@ -525,23 +570,25 @@ namespace FishMMO.Client
 				return;
 			}
 
-			Rect rect = ClientMapSystem.MapRect;
+			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			shownSceneName = view.SceneName;
+			Rect rect = view.MapRect;
 
-			mapView.MapTexture = ClientMapSystem.MapImage;
+			mapView.MapTexture = view.MapImage;
 			mapView.MapTextureRect = rect;
 			mapView.MapTextureIsViewAligned = false;
-			mapView.MapTextureNorthDegrees = ClientMapSystem.Definition != null ? ClientMapSystem.Definition.NorthOffsetDegrees : 0.0f;
-			mapView.Fog = ClientMapSystem.Fog;
+			mapView.MapTextureNorthDegrees = view.Definition != null ? view.Definition.NorthOffsetDegrees : 0.0f;
+			mapView.Fog = view.Fog;
 
-			WorldMapDefinition definition = ClientMapSystem.Definition;
+			WorldMapDefinition definition = view.Definition;
 			mapView.MapTint = definition != null ? definition.MapTint : Color.white;
 			mapView.MapBackground = definition != null ? definition.MapBackground : new Color(0.02f, 0.04f, 0.06f, 1.0f);
 
 			if (titleLabel != null)
 			{
-				titleLabel.text = string.IsNullOrEmpty(ClientMapSystem.SceneDisplayName)
+				titleLabel.text = string.IsNullOrEmpty(view.DisplayName)
 					? "WORLD MAP"
-					: ClientMapSystem.SceneDisplayName.ToUpperInvariant();
+					: view.DisplayName.ToUpperInvariant();
 			}
 
 			if (subtitleLabel != null)
@@ -561,6 +608,7 @@ namespace FishMMO.Client
 			ClampCenter();
 			ApplyView();
 			RefreshNotes();
+			RebuildSceneChoices();
 		}
 
 		/// <summary>
@@ -572,17 +620,19 @@ namespace FishMMO.Client
 			if (compass != null)
 			{
 				// North where the map is looking: near a pole it turns across a scene. The character's scene is the one shown.
-				UnityEngine.SceneManagement.Scene scene = Character != null && Character.Transform != null
+				// Another scene is not loaded here, so it has no settings to read north from: the map's own north is drawn.
+				UnityEngine.SceneManagement.Scene scene = ClientMapSystem.Viewed.IsCurrent && Character != null && Character.Transform != null
 					? Character.Transform.gameObject.scene
 					: default;
 				compass.SetNorth(mapView.View.WorldToViewAngle(TrueNorth.BearingAt(scene, center)));
 			}
-			mapView.Fog = ClientMapSystem.Fog;
+			ClientMapSystem.SceneView shown = ClientMapSystem.Viewed;
+			mapView.Fog = shown.Fog;
 
-			if (mapView.MapTexture != ClientMapSystem.MapImage)
+			if (mapView.MapTexture != shown.MapImage)
 			{
 				// The baked image loads asynchronously and can arrive after the panel is open.
-				mapView.MapTexture = ClientMapSystem.MapImage;
+				mapView.MapTexture = shown.MapImage;
 			}
 
 			if (zoomSlider != null && !Mathf.Approximately(zoomSlider.value, zoom))
@@ -602,15 +652,27 @@ namespace FishMMO.Client
 		/// </summary>
 		private void RefreshMarkers()
 		{
-			ClientMapSystem.Filter.Collect(markerBuffer, Character, true, ClientMapSystem.Fog);
-			MapContent.AppendNotes(markerBuffer, ClientMapSystem.Notes, true);
-			Rect mapRect = ClientMapSystem.MapRect;
+			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			if (view.IsCurrent)
+			{
+				// Live markers (the character, the party, NPCs) exist only in the scene the character stands in.
+				ClientMapSystem.Filter.Collect(markerBuffer, Character, true, view.Fog);
+			}
+			else
+			{
+				markerBuffer.Clear();
+			}
+			if (view.Notes != null)
+			{
+				MapContent.AppendNotes(markerBuffer, view.Notes, true);
+			}
+			Rect mapRect = view.MapRect;
 			int labelTier = MapContent.LabelTierForZoom(zoom, Mathf.Max(mapRect.width, mapRect.height) * 0.5f);
-			MapContent.AppendPointsOfInterest(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.Definition,
-				ClientMapSystem.Fog, true, labelTier);
+			MapContent.AppendPointsOfInterest(markerBuffer, view.Details, view.Definition,
+				view.Fog, true, labelTier);
 			IWaypointController waypointController = null;
 			Character?.TryGet(out waypointController);
-			MapContent.AppendWaypoints(markerBuffer, ClientMapSystem.SceneDetails, ClientMapSystem.SceneName, waypointController, true);
+			MapContent.AppendWaypoints(markerBuffer, view.Details, view.SceneName, waypointController, true);
 
 			for (int i = markerBuffer.Count - 1; i >= 0; --i)
 			{
@@ -654,7 +716,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			FogOfWarMap fog = ClientMapSystem.Fog;
+			FogOfWarMap fog = ClientMapSystem.Viewed.Fog;
 			if (fog == null)
 			{
 				shownExploredChunks = -1;
@@ -718,7 +780,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private static float MaximumZoom()
 		{
-			Rect rect = ClientMapSystem.MapRect;
+			Rect rect = ClientMapSystem.Viewed.MapRect;
 			float extent = Mathf.Max(rect.width, rect.height) * 0.5f;
 			if (extent <= 0.0f)
 			{
@@ -738,7 +800,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void ClampCenter()
 		{
-			Rect rect = ClientMapSystem.MapRect;
+			Rect rect = ClientMapSystem.Viewed.MapRect;
 			if (rect.width <= 0.0f || rect.height <= 0.0f)
 			{
 				return;
@@ -761,13 +823,14 @@ namespace FishMMO.Client
 		/// </summary>
 		private void CenterOnCharacter()
 		{
-			if (Character != null && Character.Transform != null)
+			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			if (view.IsCurrent && Character != null && Character.Transform != null)
 			{
 				center = Character.Transform.position;
 			}
 			else
 			{
-				Rect rect = ClientMapSystem.MapRect;
+				Rect rect = view.MapRect;
 				center = new Vector3(rect.center.x, 0.0f, rect.center.y);
 			}
 
@@ -826,6 +889,12 @@ namespace FishMMO.Client
 			if (marker.HasValue && marker.Value.IsWaypoint)
 			{
 				SelectWaypoint(marker.Value.WaypointIndex);
+				return;
+			}
+
+			if (!ClientMapSystem.Viewed.IsCurrent)
+			{
+				SetNoteHint("Notes can be pinned only to the scene you are in.");
 				return;
 			}
 
@@ -935,8 +1004,8 @@ namespace FishMMO.Client
 			if (regionLabel != null)
 			{
 				regionLabel.text = MapContent.ResolveLocationName(
-					ClientMapSystem.Definition,
-					ClientMapSystem.Fog,
+					ClientMapSystem.Viewed.Definition,
+					ClientMapSystem.Viewed.Fog,
 					string.Empty,
 					world);
 			}
@@ -1102,9 +1171,10 @@ namespace FishMMO.Client
 		/// <param name="noteID">The note's identifier.</param>
 		private void SelectNote(long noteID)
 		{
-			for (int i = 0; i < ClientMapSystem.Notes.Count; ++i)
+			IReadOnlyList<MapNote> shownNotes = ClientMapSystem.Viewed.Notes;
+			for (int i = 0; shownNotes != null && i < shownNotes.Count; ++i)
 			{
-				MapNote note = ClientMapSystem.Notes[i];
+				MapNote note = shownNotes[i];
 				if (note.ID != noteID)
 				{
 					continue;
@@ -1137,7 +1207,8 @@ namespace FishMMO.Client
 
 			noteList.Clear();
 
-			IReadOnlyList<MapNote> notes = ClientMapSystem.Notes;
+			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			IReadOnlyList<MapNote> notes = view.Notes ?? (IReadOnlyList<MapNote>)System.Array.Empty<MapNote>();
 			for (int i = 0; i < notes.Count; ++i)
 			{
 				MapNote note = notes[i];
@@ -1179,6 +1250,8 @@ namespace FishMMO.Client
 				remove.AddToClassList("fish-button");
 				remove.AddToClassList("fish-button--danger");
 				remove.AddToClassList("map-note-row__button");
+				// Another scene's notes are shown, not edited: they are kept for the scene the character stands in.
+				remove.style.display = view.IsCurrent ? DisplayStyle.Flex : DisplayStyle.None;
 				row.Add(remove);
 
 				noteList.Add(row);
@@ -1194,10 +1267,14 @@ namespace FishMMO.Client
 		{
 			if (noteAddButton != null)
 			{
-				noteAddButton.SetEnabled(hasPendingNotePosition);
+				noteAddButton.SetEnabled(hasPendingNotePosition && ClientMapSystem.Viewed.IsCurrent);
 			}
 
-			if (hasPendingNotePosition)
+			if (!ClientMapSystem.Viewed.IsCurrent)
+			{
+				SetNoteHint("Notes can be pinned only to the scene you are in.");
+			}
+			else if (hasPendingNotePosition)
 			{
 				SetNoteHint($"Pin at {Mathf.RoundToInt(pendingNotePosition.x)}, {Mathf.RoundToInt(pendingNotePosition.z)} — {ClientMapSystem.Notes.Count}/{Cartography.NoteCapacity} used.");
 			}
@@ -1272,7 +1349,7 @@ namespace FishMMO.Client
 		private static bool TryGetWaypointDetails(int waypointIndex, out SceneWaypointDetails details)
 		{
 			details = null;
-			WorldSceneDetails scene = ClientMapSystem.SceneDetails;
+			WorldSceneDetails scene = ClientMapSystem.Viewed.Details;
 			return scene != null && scene.Waypoints != null && scene.Waypoints.TryGetValue(waypointIndex, out details) && details != null;
 		}
 
@@ -1286,7 +1363,7 @@ namespace FishMMO.Client
 		/// </remarks>
 		private void RequestFastTravel()
 		{
-			if (!hasSelectedWaypoint || travelPending || Character == null)
+			if (!hasSelectedWaypoint || travelPending || Character == null || !ClientMapSystem.Viewed.IsCurrent)
 			{
 				return;
 			}
@@ -1346,15 +1423,25 @@ namespace FishMMO.Client
 				waypointDescriptionLabel.text = description ?? string.Empty;
 				waypointDescriptionLabel.style.display = string.IsNullOrEmpty(description) ? DisplayStyle.None : DisplayStyle.Flex;
 			}
+			bool viewingCurrent = ClientMapSystem.Viewed.IsCurrent;
+			if (gateMode || (known && details.IsGateStone))
+			{
+				RefreshGatePanel(known, details);
+				return;
+			}
 			if (waypointTravelButton != null)
 			{
-				waypointTravelButton.SetEnabled(known && !travelPending && travelOriginSatisfied);
+				waypointTravelButton.SetEnabled(known && viewingCurrent && !travelPending && travelOriginSatisfied);
 				waypointTravelButton.text = travelPending ? "TRAVELLING…" : "FAST TRAVEL";
 			}
 
 			if (travelPending)
 			{
 				SetWaypointHint("Waiting for the server…");
+			}
+			else if (known && !viewingCurrent)
+			{
+				SetWaypointHint("Fast travel works only within the scene you are in.");
 			}
 			else if (known && !travelOriginSatisfied)
 			{
@@ -1367,6 +1454,91 @@ namespace FishMMO.Client
 			else
 			{
 				SetWaypointHint("Click a discovered waypoint on the map to select it.");
+			}
+		}
+
+		/// <summary>
+		/// The waypoint section for a Gate Stone, and for anything while a Gate waits for its stone (issue #241): in gate mode
+		/// the button opens the gate to the selected stone, in any scene the dropdown shows; otherwise a stone is only described,
+		/// since it is never a fast-travel point.
+		/// </summary>
+		private void RefreshGatePanel(bool known, SceneWaypointDetails details)
+		{
+			bool isStone = known && details.IsGateStone;
+			bool discovered = isStone && Character != null && Character.TryGet(out IWaypointController controller) &&
+				controller.IsUnlocked(ClientMapSystem.Viewed.SceneName, selectedWaypointIndex);
+			if (waypointTravelButton != null)
+			{
+				waypointTravelButton.SetEnabled(gateMode && discovered);
+				waypointTravelButton.text = gateMode ? "OPEN GATE" : "GATE STONE";
+			}
+			string left = $"{Mathf.CeilToInt(GateStoneChoice.RemainingSeconds)} s left.";
+			if (!gateMode)
+			{
+				SetWaypointHint("A Gate Stone. Cast Gate to open a portal to it; it is not a fast-travel point.");
+			}
+			else if (!known)
+			{
+				SetWaypointHint($"Choose a Gate Stone you have discovered, in any land you have visited. {left}");
+			}
+			else if (!isStone)
+			{
+				SetWaypointHint($"Gate opens only to a Gate Stone. {left}");
+			}
+			else if (!discovered)
+			{
+				SetWaypointHint($"You have not discovered this Gate Stone. {left}");
+			}
+			else
+			{
+				SetWaypointHint($"Open a gate to {details.Name} in front of you. {left}");
+			}
+		}
+
+		/// <summary>The waypoint section's button: fast travel, or in gate mode the Gate's choice.</summary>
+		private void OnWaypointButtonClicked()
+		{
+			if (!gateMode)
+			{
+				RequestFastTravel();
+				return;
+			}
+			if (!hasSelectedWaypoint || !TryGetWaypointDetails(selectedWaypointIndex, out SceneWaypointDetails details) || !details.IsGateStone)
+			{
+				return;
+			}
+			ClientUIAudio.Play(FastTravelClickSound);
+			// The server answers by ending gate mode (opened) or with a toast (refused; the wait goes on).
+			GateStoneChoice.Choose(ClientMapSystem.Viewed.SceneName, selectedWaypointIndex);
+		}
+
+		/// <summary>A Gate waits for its stone: the map opens on the scene the character stands in, in gate mode.</summary>
+		private void GateStoneChoice_OnBegan()
+		{
+			gateMode = true;
+			hasSelectedWaypoint = false;
+			ShowSelectedWaypoint();
+			if (!Visible)
+			{
+				Show();
+			}
+			RefreshWaypointPanel();
+		}
+
+		/// <summary>The wait ended: gate mode ends and the map it opened closes.</summary>
+		private void GateStoneChoice_OnEnded()
+		{
+			if (!gateMode)
+			{
+				return;
+			}
+			gateMode = false;
+			hasSelectedWaypoint = false;
+			ShowSelectedWaypoint();
+			RefreshWaypointPanel();
+			if (Visible)
+			{
+				Hide();
 			}
 		}
 
@@ -1511,11 +1683,115 @@ namespace FishMMO.Client
 				case WaypointTravelRefusalReason.ConditionsNotMet: return "You do not meet the requirements to travel here.";
 				case WaypointTravelRefusalReason.TooSoon: return "You travelled a moment ago. Try again shortly.";
 				case WaypointTravelRefusalReason.NotNearWaypoint: return "You must be at a discovered waypoint to fast travel.";
+				case WaypointTravelRefusalReason.NotATravelPoint: return "A Gate Stone is not a fast-travel point. Cast Gate to open a portal to it.";
 				default: return "Fast travel was refused.";
 			}
 		}
 
 		#endregion
+
+		/// <summary>
+		/// The viewed scene changed (the dropdown, or the map reset to the character's scene), or something it shows arrived
+		/// (its image, the server's fog for it).
+		/// </summary>
+		private void MapSystem_OnViewedSceneChanged()
+		{
+			if (mapView == null)
+			{
+				return;
+			}
+			if (string.Equals(ClientMapSystem.Viewed.SceneName, shownSceneName, StringComparison.Ordinal))
+			{
+				// The same scene with more to show: redraw without moving the view.
+				ApplyView();
+				RefreshExplored();
+				nextMarkerRefreshTime = 0.0;
+				return;
+			}
+			hasPendingNotePosition = false;
+			hasSelectedWaypoint = false;
+			ShowSelectedWaypoint();
+			ApplySceneToView();
+			CenterOnCharacter();
+			RefreshExplored();
+			nextMarkerRefreshTime = 0.0;
+			RefreshWaypointPanel();
+		}
+
+		private void MapSystem_OnVisitedScenesChanged()
+		{
+			RebuildSceneChoices();
+		}
+
+		/// <summary>The dropdown picked a scene.</summary>
+		private void OnSceneSelected(ChangeEvent<string> evt)
+		{
+			if (sceneSelect == null)
+			{
+				return;
+			}
+			int index = sceneSelect.index;
+			if (index >= 0 && index < sceneChoiceScenes.Count)
+			{
+				ClientMapSystem.ViewScene(sceneChoiceScenes[index]);
+			}
+		}
+
+		/// <summary>
+		/// Fills the dropdown with every scene the account has entered — the character's own first — and selects the shown one.
+		/// </summary>
+		private void RebuildSceneChoices()
+		{
+			if (sceneSelect == null)
+			{
+				return;
+			}
+
+			sceneChoiceScenes.Clear();
+			var labels = new List<string>();
+			string current = ClientMapSystem.SceneName;
+			if (!string.IsNullOrEmpty(current))
+			{
+				sceneChoiceScenes.Add(current);
+				labels.Add(MapSceneChoices.Label(SceneDisplayNameFor(current), isCurrent: true));
+			}
+
+			var others = new List<(string Scene, string Label)>();
+			IReadOnlyList<ClientMapSystem.VisitedScene> visited = ClientMapSystem.VisitedScenes;
+			for (int i = 0; i < visited.Count; ++i)
+			{
+				string scene = visited[i].SceneName;
+				if (!string.Equals(scene, current, StringComparison.Ordinal) && MapSceneChoices.IsListable(scene, ClientMapSystem.DetailsCache))
+				{
+					others.Add((scene, SceneDisplayNameFor(scene)));
+				}
+			}
+			others.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
+			foreach ((string scene, string label) in others)
+			{
+				sceneChoiceScenes.Add(scene);
+				labels.Add(MapSceneChoices.Label(label, isCurrent: false));
+			}
+			MapSceneChoices.Disambiguate(labels, sceneChoiceScenes);
+
+			sceneSelect.choices = labels;
+			int shown = sceneChoiceScenes.IndexOf(ClientMapSystem.Viewed.SceneName);
+			if (shown >= 0)
+			{
+				sceneSelect.SetValueWithoutNotify(labels[shown]);
+			}
+			// One entry is nothing to choose between.
+			sceneSelect.style.display = labels.Count > 1 ? DisplayStyle.Flex : DisplayStyle.None;
+		}
+
+		/// <summary>A scene's player-facing name: its map definition's, else its scene name.</summary>
+		private static string SceneDisplayNameFor(string sceneName)
+		{
+			WorldSceneDetails details = null;
+			ClientMapSystem.DetailsCache?.Scenes?.TryGetValue(sceneName, out details);
+			WorldMapDefinition definition = details != null ? details.MapDefinition : null;
+			return definition != null && !string.IsNullOrEmpty(definition.ResolvedDisplayName) ? definition.ResolvedDisplayName : sceneName;
+		}
 
 		/// <summary>
 		/// Rebuilds the note list when it changes.

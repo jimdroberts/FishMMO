@@ -10,7 +10,7 @@ the staff plot commands. [Server/README.md](Server/README.md) documents the hous
 | **Depends on** | The core (plots, items, currency) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17 |
+| **Moved** | Out of the core |
 
 ## Folders
 

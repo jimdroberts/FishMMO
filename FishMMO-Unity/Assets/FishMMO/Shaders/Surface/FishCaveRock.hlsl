@@ -1,7 +1,7 @@
 #ifndef FISHMMO_CAVE_ROCK_INCLUDED
 #define FISHMMO_CAVE_ROCK_INCLUDED
 
-// FishMMO: the cave's own "terrain paint" (2026-10-20: "add something to caves and mines that adds more realism and detail
+// FishMMO: the cave's own "terrain paint" ("add something to caves and mines that adds more realism and detail
 // similar to the way we have grass on the surface"). FishMMO/Weather Lit's forward pass on a material with the keyword
 // _FISH_CAVE_ROCK (CaveRockMaterials: the shell rock's material cloned per look, a sub-asset of the scene's caves asset).
 // The cave mesher writes each vertex's habitat (CaveHabitat): COLOR = (wet, daylight, sediment, trodden) and TEXCOORD3 =
@@ -91,7 +91,7 @@ void FishCaveRockSurface(float3 positionWS, half3 geomNormalWS, half4 habitat, h
         smoothness = lerp(smoothness, max(smoothness, 0.6h), runs * crust);
     }
 
-    // ── The tea ring (2026-10-25, I2n-c "drowned galleries"): every flood's stain up the walls to the highest one's sharp line ──
+    // ── The tea ring ("drowned galleries"): every flood's stain up the walls to the highest one's sharp line ──
     // _FishCaveFlood: x the cave water's level (world y), y the highest flood over it, z the top edge's fade, w 1 on (CaveRockLayers.
     // WithStain; BiomeCaveWaters.RingAt is the same curve without the line's wander). Off on every cave rock without one.
     UNITY_BRANCH

@@ -10,23 +10,23 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Ocean</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Ocean()
 		{
-			// The shelf edge and the continental slope of the Bay of Biscay (biome round, approved 2026-10-25, authored 2026-10-26):
+			// The shelf edge and the continental slope of the Bay of Biscay:
 			// green upwelling water where the shelf falls away, slicks marching across the swell, gannets and whales over the edge;
 			// below, Nephrops mud, shell sand at the break, Lophelia coral mounds with bubblegum coral on their crests, pockmark
 			// fields, honey sandstone ledges and mudstone scarps; in the cold band (t < −0.3) sponge-spicule grounds and old iceberg
 			// plough marks. Its people the medieval Basque and Cantabrian whalers and deep-line fishermen; its fantasy Herensuge's
 			// bones down the slope, the lamiak's grotto, Itsasgizon, Gaueko's black whaleboat in the night fog, the galerna-stone.
-			// Painted and grown under the sea (decision 38/69). The draft's depths are Earth metres; the scene's floor lies at Earth
+			// Painted and grown under the sea. The draft's depths are Earth metres; the scene's floor lies at Earth
 			// depth × the scene's vertical scale (Arthis 0.3575), and the bands below are SCENE metres (200 m Earth → 72 m).
-			// LATER (I9 T1): every ground and object texture as Ocean's own variant (decision 12); until then its own recipes.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Whalelamp (whale-oil amber) + Lamiamilk (milk-jade).
+			// LATER: every ground and object texture as Ocean's own variant; until then its own recipes.
+			// LATER (no spec column yet): rare looks Whalelamp (whale-oil amber) + Lamiamilk (milk-jade).
 			BiomeLandform mounds = BiomeLandformPresets.Named("CoralMounds");
 			mounds.Depth = new Vector2(72f, 430f);
 			BiomeLandform ploughs = BiomeLandformPresets.Named("PloughMarks");
 			ploughs.Depth = new Vector2(72f, 180f);
 			return E("Ocean", L(Ground.MudNephrops,
 					// Nephrops ground: burrow craters thinning out down the slope, phosphorescent sea pens, Lophelia on the mound tops.
-					// LATER (I7): the whalers' lost gear (tangled longlines, a broken harpoon, a sunk cask) round the wrecks.
+					// LATER: the whalers' lost gear (tangled longlines, a broken harpoon, a sunk cask) round the wrecks.
 					Undersea("NephropsBurrow", 6f, 0f, 286f), Undersea("PhosphorPen", 1.5f, 0f, 0f),
 					OnLandform(Undersea("Lophelia", 3f, 72f, 430f), BiomeLandformPart.Top, "CoralMounds"),
 					UnderseaStones(SmallRocks("Mudstone"), 0.5f, 0f, 0f)),
@@ -67,34 +67,34 @@ namespace FishMMO.Shared.WorldDesign
 					"BrittleStar", Pebbles("Grey"), SmallRocks("Grey"))
 				.Ways(path: Ground.PebblesCoralGrit, road: Ground.FlagstoneGaltzada, cobbles: Ground.PebblesArriBiribil)
 				.Bars(sand: Ground.SandCoralGrit, gravel: Ground.GravelSandstoneChip)
-				// Own rock mudstone (its formations; approved Q2), accepting the Igueldo sandstone and the banks' granite.
-				// LATER (I9): Sandstone's Igueldo, Granite's Bank and Limestone's Urgonian looks as Ocean's own.
+				// Own rock mudstone (its formations), accepting the Igueldo sandstone and the banks' granite.
+				// LATER: Sandstone's Igueldo, Granite's Bank and Limestone's Urgonian looks as Ocean's own.
 				.Accepts(RockTypes.Sandstone, RockTypes.Granite)
 				.CaveShell(CaveForm.Cave, "Limestone").CaveShell(CaveForm.Grotto, "Limestone").CaveShell(CaveForm.SeaCave, "Sandstone")
 				.CaveShell(CaveForm.Mine, "Mudstone").CaveShell(CaveForm.IceCave, "Granite").CaveShell(CaveForm.LavaTube, "Basalt")
 				.Crystals((BiomeCaveCrystalKind.Siderite, 0.6f), (BiomeCaveCrystalKind.GalernaStone, 0.3f))
-				// The galerna-stone's warm glow brightens as the wind rises (decisions 64/69), in its caves and on its crystal posts.
+				// The galerna-stone's warm glow brightens as the wind rises, in its caves and on its crystal posts.
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Wind, warm: true)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Wind, warm: true)
 				// Lophelia mounds along the slope's contour (72–430 m in the scene), pockmark fields, and plough marks where the sea is
-				// cold (approved Q3).
+				// cold.
 				.Landforms(mounds, BiomeLandformPresets.Named("Pockmarks"), ploughs)
 				// Lost cork-float strings everywhere; wave-rounded growlers only on the coldest seas (their own gate, ≤ 5 °C).
 				.FloatsAtSea((BiomeSeaFloatKind.Corkline, 0.3f), (BiomeSeaFloatKind.Growler, 1f))
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				// LATER (SEA-LIFE N12/N13 + kinds on I2p's shapes): lanternfish 3 (DielMigrate, photophore glow), Biscay anchovy as its own
+				// LATER (kinds on the shapes): lanternfish 3 (DielMigrate, photophore glow), Biscay anchovy as its own
 				// baitfish, hake 2 and besugo 1.5 (the kit's jacks stand in at their sum), right whale 1.2 and humpback 0.8 (the kit's
 				// whale at their sum), Risso's dolphin 0.8, Cuvier's beaked whale 0.3, thresher 0.3 and porbeagle 0.4 (the kit's shark),
 				// the mauve stinger 1 (the kit's jellyfish), northern bottlenose whale 0.3, Itsasgizon 0.05; on the floor blackbelly
 				// rosefish 1, orange roughy 0.8, Norway lobster 1, squat lobster 1.
-				// LATER (AMBIENT-LIFE): gannets plunging over bait, fulmars, kittiwakes (cold band) on I2p's offshore gate; the Boil cast.
+				// LATER: gannets plunging over bait, fulmars, kittiwakes (cold band) on the offshore gate; the Boil cast.
 				.HomeTo(("Baitfish", 3f), ("Jacks", 3.5f), ("Whale", 2f), ("Shark", 0.7f), ("Jellyfish", 1f))
 				.NoVines()
 				.NoCrops()
 				.Herbs()
 				.Moat(BiomeMoatWater.Wet)
-				// Shelf-edge slate-teal, upwelled. LATER (I2k column): surface colour #173f52 (cold band #22423e); LATER (WATER C16):
+				// Shelf-edge slate-teal, upwelled. LATER: surface colour #173f52 (cold band #22423e); LATER (WATER C16):
 				// internal-wave slicks, the shelf-break foam front, the spring coccolith bloom.
 				.SeaTint(new BiomeSeaLook(new Color(0.02f, 0.15f, 0.22f), 30f, 0.8f))
 				.Describe("The slope sea where the shelf falls away — green upwelling water, slicks across the swell, whales and gannets over "
@@ -121,24 +121,24 @@ namespace FishMMO.Shared.WorldDesign
 					},
 					about: "Basque and Cantabrian: the whalers' slope sea (Itsas, Ur, Ibar; -eta, -aga, -ola, -tza, -ondo, -arri)")
 				// The wrecks of naos and pinazas over the mounds, the longlines and whale tows adrift, Herensuge's bones, the lamiak's
-				// grotto, Itsasgizon's hold, the galerna-stone garden and a drowned ermita on a bank crest (approved Q8/Q9: all, rare);
+				// grotto, Itsasgizon's hold, the galerna-stone garden and a drowned ermita on a bank crest (all, rare);
 				// Island kept, every land detection, Bay, Headland and Gorge zeroed (canyons are Underwater Canyon's).
-				// LATER (I7): the named pieces — the nao and pinaza wrecks with their barricas, try-pot and harpoons, Herensuge's
+				// LATER: the named pieces — the nao and pinaza wrecks with their barricas, try-pot and harpoons, Herensuge's
 				// seven-headed skeleton (≤1 a scene), the lamien leizea with its combs and spindles, the ermita's hilarri stelae, the
 				// besuguera longline (boardable) and the whale tow with its txalupas; the sea lanes' pinaza 1.4, txalupa 1.0 (near a
-				// pod), nao vizcaína 0.8 and zabra 0.6 (I13), Gaueko's phantom whaleboat one fog night a lunar cycle (I14), the whale
+				// pod), nao vizcaína 0.8 and zabra 0.6, Gaueko's phantom whaleboat one fog night a lunar cycle, the whale
 				// chase. The kit's debris wreck and the sunken sites' pieces stand in; the adrift kinds lay nothing until then.
 				.Sites((POIType.Island, 1f), (POIType.SunkenShip, 1.2f), (POIType.SunkenRuins, 0.1f), (POIType.SunkenShrine, 0.2f),
 					(POIType.SeaMonsterDen, 0.15f), (POIType.SeaCrystalFormation, 0.1f), (POIType.SunkenMonument, 0.12f),
 					(POIType.Longline, 0.4f), (POIType.WhaleTow, 0.25f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.KrakenWreck, 0.6f), (POIType.KrakenGrounds, 1f))
 				.Prefers(POIType.SunkenShip, "Debris", 1f)
 				.Favours(BiomeStructureStyle.Timber, 1.6f)
 				.Favours(BiomeStructureStyle.Stone, 0.6f)
 				// The palette: Biscay oak carvel planks with tarred seams and a red-ochre wale, oak-bark tanned sails, the cofradía's
 				// white pennant, bloom iron; honey Igueldo sandstone with carved rope mouldings, mudstone plinths, galtzada setts.
-				// LATER (NEW-SURFACES U1/U3/U4): clay tile roofs (Shingle stands in), esparto, baleen and bloom iron as surfaces.
+				// LATER: clay tile roofs (Shingle stands in), esparto, baleen and bloom iron as surfaces.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Timber, SeaHex("#5a4632"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Trim, BiomeStructureMaterial.Timber, SeaHex("#8a3a22"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Sandstone, SeaHex("#b8a888"))
@@ -153,7 +153,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, SeaHex("#e8e4dc"))
 				// No settlement stands in this sea: streets unlit. The adrift sites burn kriseilu whale-oil lamps on their staffs; the
 				// sunken sites and the caves' routes crystal posts holding galerna-stone.
-				// LATER (I7a): lights at non-town sites are laid once I7a places them; the entries are the template's already.
+				// LATER: lights at non-town sites are laid once a later pass places them; the entries are the template's already.
 				.Unlit(POIType.Village).Unlit(POIType.Town).Unlit(POIType.City).Unlit(POIType.Capital).Unlit(POIType.Port)
 				.Lights(POIType.Longline, BiomeWayLightKind.Kriseilu, 200f)
 				.Lights(POIType.WhaleTow, BiomeWayLightKind.Kriseilu, 200f)
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.Route, BiomeWayLightKind.CrystalPost, 22f)
 				.Gathers("Lophelia Coral", "Bubblegum Coral", "Baleen Plate", "Siderite Spar", "Galerna-stone", "Lamia Comb")
 				// Coldreef: white Lophelia sprigs on high edges, salmon polyp dots, squat-lobster flecks, a grey silt mantle, manganese
-				// stain on iron. LATER (I7): its surface half (salt-bleached oak, tar runs, whale-oil grime) on the adrift pieces.
+				// stain on iron. LATER: its surface half (salt-bleached oak, tar runs, whale-oil grime) on the adrift pieces.
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Coldreef, 0.9f, 1f)
 				.ErodesAs("Seabed");

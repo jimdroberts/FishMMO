@@ -28,7 +28,7 @@ namespace FishMMO.Client
 	/// procedural-instancing variants are drawn only in play mode, and TerrainGpuRenderer warms its collection only in a
 	/// player (in the editor ShaderVariantCollection.WarmUp compiles synchronously: a 5.7 s first frame). Every edit to a
 	/// shader or an include they share threw their compiled variants away, and the next Play spent 20 s compiling them
-	/// behind placeholders (StartupTimeline, 2026-10-08).
+	/// behind placeholders (StartupTimeline).
 	/// </para>
 	/// <para>
 	/// <b>Which variants.</b> A variant is the material's keywords AND the ones URP turns on as it draws (shadow cascades,
@@ -42,7 +42,7 @@ namespace FishMMO.Client
 	/// <b>Forgetting.</b> The list used to only grow: every shadow, cookie, fog and occlusion combination a quality
 	/// setting ever drew stayed in it, and each was compiled again after every shader edit, into a shader cache that grew
 	/// with it. A variant no Play has drawn in the last <see cref="KeepPlays"/> is dropped, and so is one whose shader is
-	/// gone or no longer declares one of its keywords (2026-10-10). One still in use is learned again the next time it is
+	/// gone or no longer declares one of its keywords. One still in use is learned again the next time it is
 	/// drawn.
 	/// </para>
 	/// <para>
@@ -242,7 +242,7 @@ namespace FishMMO.Client
 			{
 				// Unloaded before the file goes: deleting the asset left the collection loaded, still holding the managed
 				// wrapper made here, and the next Play's domain reload stranded that wrapper. The next save unloaded the
-				// object and resolved the dead handle: a native crash as Play ended (2026-10-13, Editor-prev.log).
+				// object and resolved the dead handle: a native crash as Play ended (Editor-prev.log).
 				serialized?.Dispose();
 				if (collection != null)
 				{
@@ -422,7 +422,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// URP's main-light shadow keywords, by group: which of each a frame draws with is the sky's to say (which light leads,
 		/// whether any is bright enough to cast at dusk or by night, the tier's cascades), not the material's. A Play sees some
-		/// of them; the rest compiled the first time the evening came (2026-10-18).
+		/// of them; the rest compiled the first time the evening came.
 		/// </summary>
 		private static readonly string[][] ShadowStates =
 		{
@@ -506,7 +506,7 @@ namespace FishMMO.Client
 				string lightMode = shader.FindPassTagValue(p, new ShaderTagId("LightMode")).name;
 				/* A shader drawn by pass index (a render graph blit, a procedural draw: the clouds, the sky, the fogs, URP's
 				 * post) is recorded as PassType.Normal, which no LightMode maps to: its passes were never queued, so every
-				 * one of them compiled in Play (2026-10-18). Which of its passes a frame draws is the code's choice, so all. */
+				 * one of them compiled in Play. Which of its passes a frame draws is the code's choice, so all. */
 				if (passType == PassType.Normal || (FishMMO.Shared.WorldDesign.ShaderPassTypes.Of(lightMode) ?? PassType.Meta) == passType)
 				{
 					queue.Enqueue(new Request(material, p));

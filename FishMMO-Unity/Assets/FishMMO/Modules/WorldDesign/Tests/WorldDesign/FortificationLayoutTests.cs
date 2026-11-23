@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The fortification contract as the layout keeps it (2026-10-19: "palisades aren't properly configured and aligned", "the stairs
+	/// The fortification contract as the layout keeps it ("palisades aren't properly configured and aligned", "the stairs
 	/// don't fit", "stairs are missing platforms at the top", "guard tower interiors are not always enterable"): every walled template
 	/// laid over many seeds and sizes on irregular outlines, its curtain's modules meeting at shared joints with their corners closed,
 	/// its gates and towers in line with the curtain (−z out, ±x along it), a walked curtain ending on its towers' sides instead of

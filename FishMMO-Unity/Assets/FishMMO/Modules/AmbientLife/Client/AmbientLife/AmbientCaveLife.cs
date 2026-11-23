@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The caves' animals (2026-10-18: "Caves need critters, bats, lizards, etc."): bat colonies hanging wing-wrapped from the
+	/// The caves' animals ("Caves need critters, bats, lizards, etc."): bat colonies hanging wing-wrapped from the
 	/// high roofs, circling their chambers at dusk and streaming out of the mouth into the night; crickets, spiders and geckos on
 	/// the walls and floors; rats in from the mouth; salamanders on the wet rock and olms in the pools; moths in the twilight
 	/// and fungus gnats glowing under the glow-worm roofs.
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The habitat at a cave-life spot (2026-10-25, phase I2n): a linked cave's spot carries its interior biome
+		/// The habitat at a cave-life spot: a linked cave's spot carries its interior biome
 		/// (<see cref="SceneCaveLifeSpot.Biome"/>), whose habitat replaces the land's over it but for its Barren bit, which stays the
 		/// land's (the land over a cave is its air and water; BiomeCaveInteriors.LinkedHabitat). A spot of none, or of a biome this
 		/// client does not hold, keeps the land's.
@@ -124,7 +124,7 @@ namespace FishMMO.Client
 				return land;
 			}
 			AmbientHabitat own = AmbientGating.HabitatOfTemplate(inside);
-			// A sea hall keeps its interior's habitat whole (2026-10-26, I2n-b, decision 83 Q7: not the airless ice's Barren bit).
+			// A sea hall keeps its interior's habitat whole (not the airless ice's Barren bit).
 			return own == AmbientHabitat.None ? land
 				: (AmbientHabitat)BiomeCaveInteriors.LinkedHabitat((BiomeCaveForm)spot.Form, (int)land, (int)own, (int)AmbientHabitat.Barren);
 		}

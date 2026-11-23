@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// Run after everything that paints details (the scatter, then the sites), from the scene's biome map. A prototype whose
 	/// biome is nowhere within a block of where it is painted, in more than <see cref="TerrainDetailLayerBudget.MisplacedShare"/>
-	/// of its blocks, is another rule's map in this rule's prototype — what 2026-10-27's carpet of holly over Moron 2's
+	/// of its blocks, is another rule's map in this rule's prototype — what the carpet of holly over Moron 2's
 	/// woodland was (Woodland's pasture grass written into the Forest's bush, layer 560 stored as 48).
 	/// </remarks>
 	public static class TerrainDetailLayerCheck

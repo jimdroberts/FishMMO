@@ -21,7 +21,7 @@ namespace FishMMO.Client
 	/// skirt, the paint — runs in the shaders; nothing is read back. The heights are NOT copied from
 	/// <see cref="TerrainData.heightmapTexture"/>: Unity fills that render texture lazily, at the terrain's first draw, so
 	/// a copy at scene load (this builds at the start of a frame) took uninitialised memory — traced ground 1–2 km in
-	/// the air, the skirt thrown into the sky (2026-10-08). The layers' art is the scene's
+	/// the air, the skirt thrown into the sky. The layers' art is the scene's
 	/// <see cref="TerrainArraySet"/> — the arrays and per-layer tiling, tint and surface the terrain itself is drawn
 	/// with (TerrainArrayBinder) — published under their own global names, the numbers as a layer table
 	/// (<see cref="TerrainLayerTable"/>, <c>_FishGroundLayerTable</c>).

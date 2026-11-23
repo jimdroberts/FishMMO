@@ -10,7 +10,7 @@ matches: queues, ready checks, scoring, ratings, results, and their windows.
 | **Depends on** | The core. It reads parties through the core contracts (`IPartyController`, `IPartySystem`) that Social implements, and compiles without Social. |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17. These were partials of `InteractableSystem`; they are their own system now. |
+| **Moved** | Out of the core. These were partials of `InteractableSystem`; they are their own system now. |
 
 ## Folders
 

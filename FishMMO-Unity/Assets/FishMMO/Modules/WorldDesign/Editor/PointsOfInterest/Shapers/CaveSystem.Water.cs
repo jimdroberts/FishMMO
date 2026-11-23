@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// How a system's first mouth is opened when it is not come to over the ground before it (2026-10-18: "Caves should be
+	/// How a system's first mouth is opened when it is not come to over the ground before it ("Caves should be
 	/// able to appear behind waterfalls and under water"): <see cref="CaveSystem.Plan"/> takes it.
 	/// </summary>
 	public struct CaveOpening
@@ -59,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A cave mouth behind a waterfall (2026-10-18): set in the fall's headwall under its lip, behind the curtain, its floor a
+	/// A cave mouth behind a waterfall: set in the fall's headwall under its lip, behind the curtain, its floor a
 	/// shelf's height over the plunge pool, and the shelf: a level walkway along the foot of the basin's wall from the mouth,
 	/// beside the pool, to the dry bank where the way to it ends. Found on the fall's own carved ground, deterministically, by
 	/// the planner (where to site the cave) and by the shaper (to plan and grade it) alike.

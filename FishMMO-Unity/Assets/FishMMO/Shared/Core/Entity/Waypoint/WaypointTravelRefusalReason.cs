@@ -48,5 +48,11 @@ namespace FishMMO.Shared.Core
 		/// traveller is, not about the destination. Appended, so the wire values above are stable.
 		/// </summary>
 		NotNearWaypoint = 9,
+
+		/// <summary>
+		/// The waypoint is a Gate Stone (<see cref="WaypointKind.GateStone"/>): the Gate spell's destination, never a fast-travel
+		/// point (issue #241). Appended.
+		/// </summary>
+		NotATravelPoint = 10,
 	}
 }

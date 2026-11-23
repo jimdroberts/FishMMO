@@ -15,7 +15,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Everything generated is the generator's.</b> This class used to keep a committed JSON ledger
 	/// of the wrappers' hashes, so that a wrapper replaced by hand under a generated name was
-	/// kept rather than overwritten. Since 2026-10-02 nothing generated is committed: wrappers are build
+	/// kept rather than overwritten. Nothing generated is committed: wrappers are build
 	/// output, regenerated on every machine with path-derived GUIDs, so a hand edit to one would live
 	/// on one machine only and vanish at the next regeneration anyway. The rule is now simply that
 	/// every file under <see cref="ProceduralArtPayload.GeneratedRoots"/> is the generator's to rewrite
@@ -40,7 +40,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Applied to every generated asset, so they can be found in the Project window with <c>l:FishMMOProceduralArt</c>.</summary>
 		public const string Label = "FishMMOProceduralArt";
 
-		/// <summary>Where the committed wrapper ledger lived until 2026-10-02. Meaningless now; removed by the generator.</summary>
+		/// <summary>Where the committed wrapper ledger lived formerly. Meaningless now; removed by the generator.</summary>
 		public const string LegacyPath = ProceduralArtCatalogue.Root + "/ProceduralArtLedger.json";
 
 		/// <summary>True for every generated file: payload, wrappers and built terrain layers. Always the generator's to rewrite.</summary>

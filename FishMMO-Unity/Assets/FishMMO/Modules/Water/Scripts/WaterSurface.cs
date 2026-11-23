@@ -175,7 +175,7 @@ namespace FishMMO.Water
 		public Color UnderwaterTint = new Color(0.05f, 0.28f, 0.36f);
 		[Tooltip("Roughly how far a diver can see, in metres.")]
 		[Range(1f, 200f)] public float UnderwaterVisibility = 22f;
-		[Tooltip("How fast the daylight dims on its way down to the sea floor, per metre (2026-10-25: exp(-this x depth) of the sun and " +
+		[Tooltip("How fast the daylight dims on its way down to the sea floor, per metre (exp(-this x depth) of the sun and " +
 			"the sky on the ground, plants and stone under the sea, their own glow untouched). Written by the scene cut from the sea " +
 			"looks of the scene's sea-floor biomes (an abyss is lightless at 200 m); 0, every other scene's, leaves the light as it was.")]
 		[Min(0f)] public float FloorDaylightExtinction;
@@ -252,7 +252,7 @@ namespace FishMMO.Water
 		private MeshRenderer underwaterRenderer;
 		private Material underwaterMaterial;
 		private Mesh underwaterMesh;
-		/// <summary>The sea's look at the eye by the coast round it (2026-10-18), and the pass's own murk it falls back to.</summary>
+		/// <summary>The sea's look at the eye by the coast round it, and the pass's own murk it falls back to.</summary>
 		private readonly WaterSeaLook seaLook = new WaterSeaLook();
 		private float underwaterMurk = 1f;
 		private bool underwaterMurkSet;
@@ -1477,7 +1477,7 @@ namespace FishMMO.Water
 			{
 				lavaTerrainCheckFrame = frame;
 				LavaMask.Terrains(gameObject.scene, lavaTerrains);
-				// Or the glowing ground changed (2026-10-25, I2r: GroundGlowMask).
+				// Or the glowing ground changed (GroundGlowMask).
 				if (lavaMask == null || levelMoved || lavaTerrains.Count != lavaMask.TerrainCount
 					|| lavaMask.GlowVersion != FishMMO.Shared.Weather.GroundGlowMask.Version)
 				{
@@ -1613,7 +1613,7 @@ namespace FishMMO.Water
 			}
 
 			/* Off a coast whose biomes give the sea a look of their own (a bog's peat-brown, a glacier's milk), the water round
-			 * the eye takes it, blended along the coast (WaterSeaLook, BiomeSeaLooks, 2026-10-18); everywhere else, and in every
+			 * the eye takes it, blended along the coast (WaterSeaLook, BiomeSeaLooks); everywhere else, and in every
 			 * scene until a biome is given one, the scene's own settings exactly as before. */
 			if (seaLook.TryAt(gameObject.scene, camera.transform.position,
 				new FishMMO.Shared.Biomes.BiomeSeaLook(UnderwaterTint, UnderwaterVisibility, underwaterMurk), out FishMMO.Shared.Biomes.BiomeSeaLook coast))
@@ -1643,7 +1643,7 @@ namespace FishMMO.Water
 		private static readonly int SeaCoastTexelId = Shader.PropertyToID("_FishSeaCoastTexel");
 
 		/// <summary>
-		/// The coast's look on the sea's surface (2026-10-18, I2k): the scene's baked coastal look (BiomeSeaCoast, WaterSeaLook) for
+		/// The coast's look on the sea's surface: the scene's baked coastal look (BiomeSeaCoast, WaterSeaLook) for
 		/// the ocean and its breakers (FishWaterShading.hlsl FishSeaCoastLook), which tint the climate's colours by it near a coast
 		/// with a look of its own; the rectangle's zw 0 where the scene has none, when the shader reads no texture and the sea draws
 		/// exactly as it always did.

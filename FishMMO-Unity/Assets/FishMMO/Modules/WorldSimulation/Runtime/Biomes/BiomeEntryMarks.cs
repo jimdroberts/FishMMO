@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The biome art authoring's marks for the entries of a template LIST (2026-10-16, phase I5b): one mark per entry, keyed by
+	/// The biome art authoring's marks for the entries of a template LIST: one mark per entry, keyed by
 	/// the entry's identity (a point-of-interest kind, a kind's variant, a prefab, a resource's name…), so a list a developer
 	/// has edited still takes the entries a later spec adds, while each entry somebody edited, made or deleted stays as left.
 	/// Pure: the authoring reads and writes the marks on the template (BiomeTemplate.EntryMarks / SetEntryMarks).

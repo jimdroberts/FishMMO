@@ -8,7 +8,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The openings in caves' roofs up to the sky round the camera (<see cref="SceneEmitterKind.Skylight"/>, baked by the cut;
-	/// 2026-10-20, caves livened): what lets the day into a cave under one. The nearest <see cref="MaxNear"/> are handed to every
+	/// caves livened): what lets the day into a cave under one. The nearest <see cref="MaxNear"/> are handed to every
 	/// lit surface (<c>_FishSkylights</c>, FishSkylights.hlsl), so under an opening the sky's share comes back and the sun's
 	/// beam is kept (the shadow map drawing it); the camera's own ambient eases off under one (<see cref="OpenAt"/>, for
 	/// SkySystem); and the shaft of sunlit air with dust turning in it is drawn as one mesh of prisms and mote quads that

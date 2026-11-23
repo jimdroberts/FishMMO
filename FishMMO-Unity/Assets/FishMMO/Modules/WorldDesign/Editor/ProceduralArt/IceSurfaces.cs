@@ -71,15 +71,15 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SeaIce = "IceSea";
 		/// <summary>Basal ice: blue-grey ice banded with silt and studded with stones.</summary>
 		public const string BasalDebris = "IceBasalDebris";
-		/// <summary>Ammonia-water ice of a cryovolcano's flows: cream-grey, bubbly, half translucent (2026-10-25).</summary>
+		/// <summary>Ammonia-water ice of a cryovolcano's flows: cream-grey, bubbly, half translucent.</summary>
 		public const string AmmoniaHydrate = "IceAmmoniaHydrate";
-		/// <summary>Marine ice accreted under an ice shell: blue-black, veined by brine channels, soot-stained (2026-10-25).</summary>
+		/// <summary>Marine ice accreted under an ice shell: blue-black, veined by brine channels, soot-stained.</summary>
 		public const string Accreted = "IceAccreted";
-		/// <summary>The coarse blue-green crystalline ice of a geyser moon's stripes (2026-10-25).</summary>
+		/// <summary>The coarse blue-green crystalline ice of a geyser moon's stripes.</summary>
 		public const string StripeBlue = "IceStripeBlue";
-		/// <summary>Permanent ice banded by a thousand summers' dust layers (2026-10-25).</summary>
+		/// <summary>Permanent ice banded by a thousand summers' dust layers.</summary>
 		public const string Stratified = "IceStratified";
-		/// <summary>A cave's ice scalloped by moving air into shallow dished hollows (2026-10-25).</summary>
+		/// <summary>A cave's ice scalloped by moving air into shallow dished hollows.</summary>
 		public const string Scalloped = "IceScalloped";
 
 		private static Color H(string hex) => SurfaceCatalogue.Hex(hex);
@@ -193,7 +193,7 @@ namespace FishMMO.Shared.WorldDesign
 				Occlusion = 0.7f,
 				NormalScale = 1f,
 			},
-			// ── The biome suite's ice dresses (2026-10-25) ──
+			// ── The biome suite's ice dresses ──
 			new SurfaceRecipe
 			{
 				Name = AmmoniaHydrate,

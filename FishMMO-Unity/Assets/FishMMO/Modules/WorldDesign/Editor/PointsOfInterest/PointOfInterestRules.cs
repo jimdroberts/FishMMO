@@ -83,7 +83,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The weight every row gives a biome by its asset name (<see cref="PointOfInterestKindRule.BiomeWeight"/>), for the kinds
 		/// it gives more than 0, in <see cref="POIType"/> order: what the biome art authoring writes onto a biome template's
 		/// SiteKinds (BiomeArtSpec.Entry.SiteKinds), and what a template never authored with them falls back on at the cut
-		/// (BiomeTemplateArt.SiteKinds). The planner itself reads only the template's (2026-10-16).
+		/// (BiomeTemplateArt.SiteKinds). The planner itself reads only the template's.
 		/// </summary>
 		public List<(POIType Kind, float Weight)> KindWeightsFor(string biomeName)
 		{
@@ -154,9 +154,9 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── The defaults ─────────────────────────────────────────────
 		//
-		// The biome names below were the kinds' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring wrote, onto each
+		// The biome names below were the kinds' DEFAULT biomes: the biome art authoring wrote, onto each
 		// biome template, the weight these rows give it for every kind (KindWeightsFor), and the cut sites kinds by the
-		// template's list alone. Since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) every biome's spec file carries that
+		// template's list alone. Now every biome's spec file carries that
 		// answer itself (BiomeArtSpec.Entry.Sites), so the names here are only the cut's fallback for a template never authored
 		// (BiomeTemplateArt.SiteKinds): changing one changes nothing a template holds. Change a biome's kinds in its file.
 
@@ -173,14 +173,14 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] Woods = { "Forest", "Woodland", "Taiga", "Jungle", "Bamboo Forest", "Forest Ruins", "Jungle Ruins", "Jungle Temple" };
 		private static readonly string[] Volcanic = { "Volcanic", "Volcanic Cave", "Volcanic Temple", "Geyser Basin", "Sulphur Flats", "Lava Tube" };
 
-		/* Biome families (2026-10-25, the POI biome audit): the ground a kind belongs to, so a kind is named onto its families and
+		/* Biome families (the POI biome audit): the ground a kind belongs to, so a kind is named onto its families and
 		 * weighs 0 elsewhere instead of standing on every biome at 1. The lists above keep the biomes they always named. */
 		private static readonly string[] Sea = { "Ocean", "Deep Ocean", "Coastal Water", "Abyss", "Abyssal Plain", "Seamount", "Underwater Canyon", "Coral Reef" };
 		private static readonly string[] Temperate = { "Forest", "Woodland", "Taiga", "Forest Ruins" };
 		private static readonly string[] Jungle = { "Jungle", "Jungle Ruins", "Jungle Temple" };
 		private static readonly string[] Grass = { "Plains", "Grassland", "Farmland", "Valley", "Hills", "Alpine Meadow" };
 		private static readonly string[] Steppe = { "Steppe", "Savanna", "Scrubland" };
-		// Wasteland left the arid family (2026-10-25, decision 96): a war-wasted land on waterless worlds is not a desert, and the arid
+		// Wasteland left the arid family: a war-wasted land on waterless worlds is not a desert, and the arid
 		// kinds must not default in there; its own kinds (the blight's) are named by its file (BiomeArtSpec.Entry.Hosts).
 		private static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland" };
 		private static readonly string[] Highland = { "Alpine", "Mountain Slope", "Scree", "Rocky Terrain", "Hills", "Alpine Meadow" };
@@ -215,13 +215,13 @@ namespace FishMMO.Shared.WorldDesign
 			("Castle", 1f), ("Fortress", 1f), ("Marble Palace", 1f), ("Mangrove", 0.2f), ("Swamp", 0.15f), ("Alpine", 0.2f),
 		};
 
-		/* The peoples who build and keep towns. Fey and giants were in this list, and the first real cut (Flo Monolith,
-		 * 2026-10-10) gave the capital to glimmerlings and a castle to wisps; they keep their groves, rings and lairs. */
+		/* The peoples who build and keep towns. Fey and giants were in this list, and the first real cut (Flo Monolith)
+		 * gave the capital to glimmerlings and a castle to wisps; they keep their groves, rings and lairs. */
 		private static readonly string[] Civil = { "Humanoid", "Beastfolk" };
 		private static readonly string[] Monster = { "Beast", "Undead", "Aberration", "Elemental", "Outsider", "Construct", "Draconic", "Plant", "Giant" };
 		private static readonly string[] Outlaw = { "Humanoid", "Beastfolk", "Giant" };
 		/// <summary>
-		/// Who else holds a keep or a tower besides the settled peoples (2026-10-27, the fantasy wave): giants and the undead, with
+		/// Who else holds a keep or a tower besides the settled peoples: giants and the undead, with
 		/// the outlaws' humanoids and beastfolk already in <see cref="Civil"/>.
 		/// </summary>
 		private static readonly string[] KeepHolders = { "Giant", "Undead" };
@@ -300,7 +300,7 @@ namespace FishMMO.Shared.WorldDesign
 				 * biomes whose TEMPLATE hosts the kind (the planner's Clusters reads PointOfInterestBiome.WeightOf), as every placed kind
 				 * (LavaTube among them) is sited by it, so a round that hosts Volcano, ObsidianField, FumaroleField, TidalRift or LavaTube
 				 * on its own biome (BiomeArtSpec.Entry.Hosts) finds its sites there with no edit here; the names below are only what the
-				 * authoring writes onto a template its file does not override (2026-10-25, phase NEW-POI-KINDS: decisions 90, 95 and
+				 * authoring writes onto a template its file does not override (95 and
 				 * Rille's Q9 defer to the template so). */
 				Detected(POIType.Volcano, PointOfInterestDetector.BiomeClusterHighest, 1, 2000f).Only("Volcanic").Area(500000f),
 				Detected(POIType.LavaLake, PointOfInterestDetector.BiomeClusterLowest, 2, 1000f).Only("Molten Surface").Area(50000f),
@@ -320,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 				Settled(Placed(POIType.Town, 0.08f, 0, 2, 1500f).Footprint(70f, 100f, 15f)),
 				Settled(Placed(POIType.Village, 0.25f, 1, 5, 900f).Footprint(40f, 60f, 16f)),
 				Settled(Placed(POIType.Port, 0.1f, 0, 2, 1500f).Footprint(50f, 80f, 14f)).Coast(120f).OpenWater(),
-				// The fantasy wave (2026-10-27): keeps everywhere, garrisoned in the settled lands and held by orcs, bandits, the undead or a
+				// The fantasy set: keeps everywhere, garrisoned in the settled lands and held by orcs, bandits, the undead or a
 				// dark sorcerer in the wild (their templates' holders and race lists choose: PointOfInterestTemplateSpecs.Fantasy.Keeps.cs).
 				Settled(Placed(POIType.Keep, 0.10f, 0, 3, 1200f).Footprint(25f, 35f, 20f)).Races(KeepHolders),
 				Settled(Placed(POIType.Castle, 0.04f, 0, 1, 2000f).Footprint(45f, 65f, 18f)),
@@ -397,10 +397,10 @@ namespace FishMMO.Shared.WorldDesign
 				Wild(Placed(POIType.Mine, 0.08f, 0, 2, 900f).Footprint(12f, 18f, 30f)).Hard(0.55f, true),
 				Wild(Placed(POIType.Quarry, 0.06f, 0, 1, 1200f).Footprint(20f, 30f, 28f)).Hard(0.55f),
 				Wild(Placed(POIType.Lighthouse, 0.05f, 0, 1, 2000f).Footprint(6f, 9f, 25f)).Coast(60f).Altitude(3f, PointOfInterestKindRule.Unbounded),
-				// A shipwright's yard is where ships are wanted: on a low shore near a town (2026-10-12: "Harbours should
+				// A shipwright's yard is where ships are wanted: on a low shore near a town ("Harbours should
 				// probably have towns to go with them").
 				Settled(Placed(POIType.Dockyard, 0.05f, 0, 1, 1500f).Footprint(26f, 34f, 12f)).Coast(50f).OpenWater().NearSettlement(700f).Altitude(0.5f, 8f),
-				// Mills (2026-10-14): a post mill on a rise open to the wind near the village it grinds for; a watermill and a
+				// Mills: a post mill on a rise open to the wind near the village it grinds for; a watermill and a
 				// sawmill on a river's bank, the sawmill in the woods it cuts.
 				Settled(Placed(POIType.Windmill, 0.12f, 0, 4, 700f).Footprint(16f, 22f, 10f)).NearSettlement(900f).OnExposedGround()
 					.Weigh(0f, "Alpine", "Mountain Slope", "Tundra", "Taiga", "Forest", "Forest Ruins", "Jungle", "Bamboo Forest", "Mangrove", "Swamp",
@@ -416,7 +416,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.SunkenShip, 0.08f, 0, 2, 800f).Footprint(14f, 20f, 30f).Sea(5f, 40f),
 				Placed(POIType.SunkenRuins, 0.05f, 0, 1, 1200f).Footprint(20f, 35f, 25f).Sea(4f, 30f).Races("Aquatic"),
 				Placed(POIType.SunkenCity, 0.02f, 0, 1, 3000f).Footprint(60f, 90f, 20f).Sea(8f, 60f).Races("Aquatic"),
-				/* The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): hosted by no biome until its round names them
+				/* The sea floor's own sites: hosted by no biome until its round names them
 				 * (BiomeArtSpec.Entry.Hosts), so no scene gains one on a re-plan; any depth below 6 m (the biome's own band,
 				 * BiomeTemplate.UnderwaterSiteDepth, narrows it: an abyss's at 6 000 m). */
 				Placed(POIType.SunkenShrine, 0.05f, 0, 2, 900f).Footprint(8f, 14f, 30f).Sea(6f, PointOfInterestKindRule.Unbounded).Only(),
@@ -424,7 +424,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.SeaCrystalFormation, 0.05f, 0, 2, 800f).Footprint(6f, 10f, 40f).Sea(10f, PointOfInterestKindRule.Unbounded).Only(),
 				Placed(POIType.SunkenMonument, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 30f).Sea(6f, PointOfInterestKindRule.Unbounded).Only(),
 				Placed(POIType.SunkenStatue, 0.05f, 0, 2, 800f).Footprint(5f, 8f, 30f).Sea(4f, PointOfInterestKindRule.Unbounded).Only(),
-				/* Adrift on the open sea (2026-10-25, I2p): surface sites over at least 50 m of water and 1 km from any shore, hosted by no
+				/* Adrift on the open sea: surface sites over at least 50 m of water and 1 km from any shore, hosted by no
 				 * biome until a round names them (BiomeArtSpec.Entry.Hosts). Slope 90: the floor's slope 50 m down is not theirs. */
 				Placed(POIType.AdriftDerelict, 0.02f, 0, 1, 2500f).Footprint(14f, 20f, 90f).Adrift(50f, 1000f).Only(),
 				Placed(POIType.WhaleFall, 0.02f, 0, 1, 2000f).Footprint(10f, 16f, 90f).Adrift(50f, 1000f).Only(),
@@ -432,23 +432,23 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.Longline, 0.03f, 0, 2, 1500f).Footprint(20f, 40f, 90f).Adrift(50f, 1000f).Only(),
 				Placed(POIType.WhaleTow, 0.01f, 0, 1, 3000f).Footprint(16f, 24f, 90f).Adrift(50f, 1000f).Only(),
 
-				/* ── Placed: the biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS) ──
+				/* ── Placed: the biomes' own kinds ──
 				 * Hosted by NO biome until a round names one (BiomeArtSpec.Entry.Hosts), so no scene gains a site on a re-plan. Each
 				 * stands on the ground its round describes as near as today's rules can say it; the landform-pad detectors (a cinder
-				 * cone on its CinderCone carve, a kipuka on its KipukaGrove patch, a crater on its pad: decision 72) wait for I7's pads. */
-				// Underwater Canyon (decision 92): the lip where the floor drops away (slope 90: it is the drop), a cave in the wall.
+				 * cone on its CinderCone carve, a kipuka on its KipukaGrove patch, a crater on its pad: decision 72) wait for the later pads. */
+				// Underwater Canyon: the lip where the floor drops away (slope 90: it is the drop), a cave in the wall.
 				Placed(POIType.TrenchEdge, 0.03f, 0, 1, 1500f).Footprint(10f, 20f, 90f).Sea(50f, PointOfInterestKindRule.Unbounded).Only(),
 				Placed(POIType.SeaCavern, 0.04f, 0, 2, 800f).Footprint(6f, 12f, 30f).Sea(10f, PointOfInterestKindRule.Unbounded).Hard(0.3f, true).Only(),
-				// Volcanic (decision 93): a cone on a rise, an island of old ground, a sled course down a slope, lava over a ledge (low).
+				// Volcanic: a cone on a rise, an island of old ground, a sled course down a slope, lava over a ledge (low).
 				Placed(POIType.CinderCone, 0.06f, 0, 3, 600f).Footprint(15f, 30f, 30f).OnExposedGround().Only(),
 				Placed(POIType.Kipuka, 0.06f, 0, 2, 600f).Footprint(20f, 40f, 15f).Only(),
 				Placed(POIType.HoluaSlide, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 25f).Only(),
 				Placed(POIType.LavaFall, 0.02f, 0, 1, 1500f).Footprint(6f, 12f, 30f).Hard(0.3f, true).Only(),
-				// Volcanic Temple (decision 95): the smiths' relics, the phoenix's pyre on the highest rim, a sanctuary in a tube mouth.
+				// Volcanic Temple: the smiths' relics, the phoenix's pyre on the highest rim, a sanctuary in a tube mouth.
 				Placed(POIType.AncientForge, 0.02f, 0, 1, 2500f).Footprint(15f, 25f, 20f).AwayFromSettlements(600f).Only(),
 				Placed(POIType.PhoenixNest, 0.02f, 0, 1, 3000f).Footprint(8f, 12f, 30f).OnExposedGround().AwayFromSettlements(600f).Only(),
 				Placed(POIType.LavaCaveTemple, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 30f).Hard(0.3f, true).Only(),
-				// Swamp Ruins (decision 87) and Swamp Temple (decision 88): by the black water, a tower on a mound, a broken bridge's
+				// Swamp Ruins and Swamp Temple: by the black water, a tower on a mound, a broken bridge's
 				// abutment on a bank, the drowned wood, the frogs' mound, a reed isle (static until platform riding), the marsh's works.
 				Placed(POIType.MireGate, 0.05f, 0, 1, 1200f).Footprint(10f, 16f, 14f).NearWater(40f).Only(),
 				Placed(POIType.SunkenPlaza, 0.05f, 0, 1, 1200f).Footprint(15f, 25f, 10f).NearWater(40f).Only(),
@@ -462,7 +462,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.FowlersHide, 0.06f, 0, 2, 600f).Footprint(5f, 8f, 18f).NearWater(30f).Only(),
 				Placed(POIType.EelWeir, 0.05f, 0, 1, 900f).Footprint(6f, 12f, 14f).OnRiverBank().Only(),
 				Placed(POIType.BrickKiln, 0.05f, 0, 1, 900f).Footprint(10f, 14f, 14f).NearSettlement(900f).Only(),
-				// Wasteland (decision 96).
+				// Wasteland.
 				Placed(POIType.BlightedCrater, 0.02f, 0, 1, 3000f).Footprint(20f, 35f, 20f).Only(),
 				Placed(POIType.Chapel, 0.1f, 0, 2, 800f).Footprint(8f, 14f, 16f).Only(),
 				Placed(POIType.HolyWell, 0.08f, 0, 2, 700f).Footprint(5f, 9f, 18f).Only(),
@@ -470,10 +470,10 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.DeadForest, 0.04f, 0, 1, 1500f).Footprint(40f, 80f, 25f).Only(),
 				Placed(POIType.WarEngineGraveyard, 0.02f, 0, 1, 2000f).Footprint(25f, 40f, 14f).Only(),
 				// Abyssal Plain (its Q4): a whale's carcass on the FLOOR at 200 m and deeper (WhaleFall above is the one adrift); its
-				// three stages by seed, its blackened halo and Abyss's Leviathan variant come with I7's pieces and the site paint.
+				// three stages by seed, its blackened halo and Abyss's Leviathan variant come with the later pieces and the site paint.
 				Placed(POIType.SunkenWhaleFall, 0.02f, 0, 1, 2000f).Footprint(10f, 16f, 30f).Sea(200f, PointOfInterestKindRule.Unbounded).Only(),
-				// Subsurface Ocean Vent (decision 83): a sea hall's melt shaft, sunk through the ice shell on its open, near-flat ground
-				// (2026-10-26, phase I2n-b: no face needed, CaveSystem.SeaHall.cs); hosted only where a template names it, and carved only
+				// Subsurface Ocean Vent: a sea hall's melt shaft, sunk through the ice shell on its open, near-flat ground
+				// (no face needed, CaveSystem.SeaHall.cs); hosted only where a template names it, and carved only
 				// where its host links the hall to its sea on that sea's world (CaveShaper.Plan).
 				Placed(POIType.SeaHall, 0.03f, 0, 1, 1500f).Footprint(8f, 14f, 15f).Hard(0f).Only()
 					.Weigh(0.4f, "Ice Shelf").Weigh(0.6f, "Tidal Fracture").Weigh(0.5f, "Ice Geyser Field").Weigh(0.3f, "Cryovolcanic Plain"),
@@ -485,7 +485,7 @@ namespace FishMMO.Shared.WorldDesign
 				Wild(Placed(POIType.HerbGrove, 0.08f, 0, 2, 700f).Footprint(8f, 12f, 20f)).Weigh(1.5f, Woods).Weigh(1.2f, Swamp),
 			};
 
-			// The fantasy wave (2026-10-27, PointOfInterestRules.Fantasy*.cs): hosted only where a biome's .Sites names it.
+			// The fantasy set (PointOfInterestRules.Fantasy*.cs): hosted only where a biome's .Sites names it.
 			d.AddRange(FantasyRows());
 
 			// The dead and the sacred are not built on sea-floor biomes nor on the ice of a glacier's heart.

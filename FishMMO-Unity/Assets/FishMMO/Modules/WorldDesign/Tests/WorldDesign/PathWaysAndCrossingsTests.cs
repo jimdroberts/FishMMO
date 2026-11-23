@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2l-b (2026-10-26): crossing styles chosen per biome, the straight-road way class with its raised and cut profiles and the
+	/// Crossing styles chosen per biome, the straight-road way class with its raised and cut profiles and the
 	/// royal road's ruts, cut stairs, and ways jogging at strike-slip traces. Pure (no Unity native calls), so purerun runs them.
 	/// </summary>
 	[TestFixture]
@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void NoBiomeNamesAStyleOrStraightRoads_SoNothingChanges()
 		{
 			Assert.That(BiomeArtSpec.Entries.Length, Is.EqualTo(83));
-			// An authored round names its own (legacy equality only): Scree's goblins' bridges, 2026-10-26.
+			// An authored round names its own (legacy equality only): Scree's goblins' bridges.
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome)))
 			{
 				Assert.That(entry.CrossingStyle, Is.EqualTo(BiomeCrossingStyle.Default), entry.Biome);

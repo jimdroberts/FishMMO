@@ -12,7 +12,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I5b of the biome suite (2026-10-16): template LISTS carry an authoring mark per entry (BiomeEntryMarks), so a list
+	/// Template LISTS carry an authoring mark per entry (BiomeEntryMarks), so a list
 	/// edited by hand still takes the entries a later spec adds while every entry edited, made or deleted by hand stays as
 	/// left; a list holding the old whole-list mark converts; hand-made point-of-interest templates that name a biome reach its
 	/// site variants; and a biome's moat water and street lights moved onto the template with exactly what the code decided.
@@ -67,7 +67,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// An entry edited by hand and one made by hand are kept whatever the spec says; the rest of the list still follows the
-		/// spec, and a new spec entry still arrives: one hand edit no longer freezes the list (the I5 whole-list mark did).
+		/// spec, and a new spec entry still arrives: one hand edit no longer freezes the list (the whole-list mark did).
 		/// </summary>
 		[Test]
 		public void Merge_KeepsHandEditsAndHandMadeEntries_AndStillTakesNewOnes()
@@ -347,7 +347,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeArtSpec.For("Forest").MoatWater, Is.EqualTo(BiomeMoatWater.Wet));
 		}
 
-		// The moat shaper's code before 2026-10-16 (MoatShaper.AddWater), literally.
+		// The moat shaper's code formerly (MoatShaper.AddWater), literally.
 		private static BiomeMoatWater OldMoat(float minHumidity, float maxHumidity, float minTemperature, float maxTemperature)
 		{
 			if (0.5f * (minHumidity + maxHumidity) < -0.3f)

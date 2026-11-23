@@ -21,7 +21,7 @@ namespace FishMMO.UnitTests
 		// ── The old rule, as the shader ran it ────────────────────────────────
 
 		/// <summary>
-		/// FishTopLayers before 2026-10-16: every control map sampled bilinearly at the pixel (texel-centred, clamped), every
+		/// FishTopLayers formerly: every control map sampled bilinearly at the pixel (texel-centred, clamped), every
 		/// layer weighed in index order (a strictly greater weight moves a layer up), the fifth subtracted, normalised;
 		/// nothing left draws layer 0.
 		/// </summary>

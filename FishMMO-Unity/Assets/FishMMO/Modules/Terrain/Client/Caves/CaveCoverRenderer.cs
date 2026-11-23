@@ -11,7 +11,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The GPU side of the cave cover (2026-10-20): per camera, the CPU lists the cave pieces (32 m cubes of a cave's rock
+	/// The GPU side of the cave cover: per camera, the CPU lists the cave pieces (32 m cubes of a cave's rock
 	/// surface) within the cover's reach that the camera can see, nearest first; FishCaveCover.compute walks each piece's
 	/// triangles straight from the mesh's own GPU buffers and appends the instances into per-(type, level) slots; and one
 	/// <see cref="Graphics.RenderMeshIndirect"/> per slot draws them from the cover art's one mesh through FishMMO/Cave Cover.

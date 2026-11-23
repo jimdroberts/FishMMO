@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The blade grass's caps after the detail layers stopped wrapping at 256 (2026-10-27): 128 blade types a scene
+	/// The blade grass's caps after the detail layers stopped wrapping at 256: 128 blade types a scene
 	/// (GrassMath.MaxTypes, the record's seventh type bit in a sixth word) and 64 channels a terrain (GrassTerrain.MaxChannels,
 	/// the generate kernel's GRASS_WIDEST variant, asked for only by a terrain past 32). A record of type 0..63 is bit for bit
 	/// what it was, its sixth word 0; the terrain row keeps every older field where it was.
@@ -19,7 +19,7 @@ namespace FishMMO.UnitTests
 		private const string BladesPath = "Assets/FishMMO/Modules/Terrain/Shaders/FishGrassBlades.hlsl";
 
 		/// <summary>
-		/// Measured 2026-10-27 over the saved tiles after the 256-layer fix's re-cut (painted blade prototypes keyed as
+		/// Measured over the saved tiles after the 256-layer fix's re-cut (painted blade prototypes keyed as
 		/// GrassBladeSystem.SelectBlades keys them: prefab, the biome's look, the rule's tints): scene types and the busiest
 		/// tile's channels.
 		/// </summary>

@@ -56,7 +56,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The defaults added since the material was first made, each given to an existing material once: 1, height
-		/// blending (2026-10-11), now that every layer with art has a height in its mask (TerrainSurfaceDerivation).
+		/// blending, now that every layer with art has a height in its mask (TerrainSurfaceDerivation).
 		/// </summary>
 		public const int SurfaceDefaults = 1;
 
@@ -270,7 +270,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// resolves by name only.
 		/// </summary>
 		/// <remarks>
-		/// Where every tile carries the same list (a scene cut before 2026-10-27, or a hand-made one), that list is the scene's,
+		/// Where every tile carries the same list (a scene cut by an older generator, or a hand-made one), that list is the scene's,
 		/// as it always was: a removal or a reorder is followed. Where the tiles carry their own (the cut gave each only the
 		/// layers it paints, <see cref="TerrainTileLayerSync.Compact"/>, or a tool added a layer to some tiles), the provenance is
 		/// the scene's numbering and is never shrunk or reordered from one tile: it keeps every layer it names, in order, and

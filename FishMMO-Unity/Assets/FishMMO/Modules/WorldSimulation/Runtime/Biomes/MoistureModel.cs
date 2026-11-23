@@ -262,7 +262,7 @@ namespace FishMMO.Shared.Biomes
 		/// </para>
 		/// <para>
 		/// Measured on the Earth-like reference (seed 1, 100,000 Fibonacci points, the moisture
-		/// harness, 2026-10-02), land humidity after the temperature curves: 5th percentile −0.51,
+		/// harness), land humidity after the temperature curves: 5th percentile −0.51,
 		/// quartiles −0.17 / +0.11 / +0.50, 95th +0.91 — where before it was −0.06 … +0.15, a curve.
 		/// 0.7 clipped the wettest 7% of land at +1; 0.6 leaves the top of the scale to the wettest
 		/// windward tropical coasts. Re-measure if the walk changes.

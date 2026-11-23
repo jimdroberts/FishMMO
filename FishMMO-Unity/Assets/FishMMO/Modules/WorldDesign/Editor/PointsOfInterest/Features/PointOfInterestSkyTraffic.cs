@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A cloud world's sky traffic (2026-10-14: "flying ships"): a timber landing stage at each of its docks, lanes through
+	/// A cloud world's sky traffic ("flying ships"): a timber landing stage at each of its docks, lanes through
 	/// the air between them and out past the scene's edge, and the skiffs and sky-cogs that ply them, moved by
 	/// <see cref="FloatingBoats"/> from the synced tick on the server and every client alike, solid, with a deck a player
 	/// can ride, exactly as the sea's ships are (<see cref="PointOfInterestSeaTraffic"/>).
@@ -46,8 +46,8 @@ namespace FishMMO.Shared.WorldDesign
 		private const float SecondShipLift = 34f;
 
 		/// <remarks>
-		/// <paramref name="palette"/>: the structure palette the airships and landing stages are laid in (2026-10-16): a cloud
-		/// world's own, from its world body (it stands in no biome; CloudWorldStructures, 2026-10-18), null for the kit's own
+		/// <paramref name="palette"/>: the structure palette the airships and landing stages are laid in: a cloud
+		/// world's own, from its world body (it stands in no biome; CloudWorldStructures), null for the kit's own
 		/// materials. <paramref name="structures"/>: the body's settings, for the light beside each stage's landward end.
 		/// </remarks>
 		public static void Build(Scene scene, Transform root, SceneCloudWorld world, SceneGenerationRequest request, float width, float depth,
@@ -206,7 +206,7 @@ namespace FishMMO.Shared.WorldDesign
 			var prototypeOf = new Dictionary<GameObject, int>();
 			int missing = 0, lights = 0, unlit = 0;
 			int stagesLaid = 0;
-			// What the stages' lights give off (2026-10-25, I6i), kept on the record for the client's site lights.
+			// What the stages' lights give off, kept on the record for the client's site lights.
 			var stageLights = new List<SceneEmitter>();
 			void Add(GameObject prefab, Vector3 at, Quaternion rotation, Vector3? scale = null)
 			{
@@ -235,7 +235,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Add(prefab, dock.Position - outward * (StructurePieces.SkyDockLength * 0.5f), Quaternion.LookRotation(outward, Vector3.up));
 				stagesLaid++;
-				// The light beside its landward end, where the world body names one (2026-10-18, I6e).
+				// The light beside its landward end, where the world body names one.
 				if (lightQuery != null)
 				{
 					if (StageLight(dock, outward, world, ground, out Vector3 at))
@@ -244,7 +244,7 @@ namespace FishMMO.Shared.WorldDesign
 						if (light != null)
 						{
 							Add(light, at, Quaternion.LookRotation(outward, Vector3.up));
-							// A crystal post's crystal in its cradle (2026-10-25, I6i-b), where its art exists.
+							// A crystal post's crystal in its cradle, where its art exists.
 							if (CloudWorldCut.PostCrystal(light, at, Quaternion.LookRotation(outward, Vector3.up), Vector3.one, (uint)StableHash($"light:{at.x:0}:{at.z:0}"),
 								out GameObject crystal, out Vector3 crystalAt, out Vector3 crystalSize))
 							{
@@ -293,7 +293,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float StageLightInland = 1f, StageLightAside = 0.8f;
 
 		/// <summary>
-		/// Where a landing stage's light stands (2026-10-18, I6e): beside its landward end on the side away from its mast (+x of
+		/// Where a landing stage's light stands: beside its landward end on the side away from its mast (+x of
 		/// the stage), a metre inland of the end, on its island's ground (the record's island the dock is on). False off the island.
 		/// </summary>
 		public static bool StageLight(SceneCloudWorld.Dock dock, Vector3 outward, SceneCloudWorld world, Func<float, float, float> ground, out Vector3 at)

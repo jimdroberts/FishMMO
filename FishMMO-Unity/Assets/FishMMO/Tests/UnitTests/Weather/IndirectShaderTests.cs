@@ -26,7 +26,7 @@ namespace FishMMO.UnitTests
 	public class IndirectShaderTests
 	{
 		private const string Shaders = "Assets/Prefabs/Client/Weather/Shaders/";
-		/// <summary>The core shader folder (Phase 4, 2026-11-17): the instancing and LOD fade includes moved there.</summary>
+		/// <summary>The core shader folder: the instancing and LOD fade includes moved there.</summary>
 		private const string CoreShaders = "Assets/FishMMO/Shaders/";
 		private const string Include = CoreShaders + "FishIndirectInstancing.hlsl";
 		private const string LodFade = CoreShaders + "FishLodFade.hlsl";

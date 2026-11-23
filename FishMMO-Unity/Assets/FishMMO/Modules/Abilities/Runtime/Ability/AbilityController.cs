@@ -386,7 +386,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The character is set: fills the speed attributes from the module's settings (each prefab authored them on its own
-		/// controller before the controller became a part, 2026-11-21).
+		/// controller before the controller became a part).
 		/// </summary>
 		public override void InitializeOnce()
 		{
@@ -419,7 +419,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// "a lesser fire elemental" and "Simulated Player" shipped with no spawner assigned. Every cast then threw in
-		/// AbilityObject.SimulatedSpawnerPose (1,438 NullReferenceExceptions on the live scene server, 11-16): the pet fired
+		/// AbilityObject.SimulatedSpawnerPose (1,438 NullReferenceExceptions on the live scene server): the pet fired
 		/// once and stalled, and nothing it cast ever spawned. A missing reference is reported, never fatal.
 		/// </remarks>
 		private void ResolveAbilitySpawner()
@@ -437,7 +437,7 @@ namespace FishMMO.Shared
 					break;
 				}
 			}
-			/* Since the parts conversion (11-21) this controller is attached in code, not on the prefab, so nothing assigns
+			/* Since the parts conversion this controller is attached in code, not on the prefab, so nothing assigns
 			 * AbilitySpawner and the "AbilitySpawnPoint" child IS the normal source: found, it is silent. Only a prefab with no
 			 * such child is an authoring gap (casts then leave from the character's root). */
 			AbilitySpawner = found != null ? found : transform;

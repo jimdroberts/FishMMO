@@ -55,7 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float RocksPer100Metres = 70f;
 		/// <summary>
 		/// Hard ceiling on rocks per scene, whatever its cliff length. 20 000 cut Baoakraal Hyena-den's cliffs short (it
-		/// placed exactly that many, 2026-10-08); rocks are baked prop data now, not scene objects, so the ceiling is the
+		/// placed exactly that many); rocks are baked prop data now, not scene objects, so the ceiling is the
 		/// collision and draw cost of about 57 km of cliff at the per-length rate.
 		/// </summary>
 		public int MaxRocks = 40000;
@@ -877,7 +877,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Backdrops ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// The sheer walls behind the clutter (2026-10-08: "larger variants as background ... the height
+		/// The sheer walls behind the clutter ("larger variants as background ... the height
 		/// scale based on the height of the cliff itself ... sheer realistic cliff faces"). Walked along every foot
 		/// line before the footing: at each step the scarp nearest the band's height there
 		/// (<see cref="CliffRocks.FaceShapes"/>), scaled to 85–100 % of it (0.75–1.3 in height, so its beds stay
@@ -1198,9 +1198,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// A rock is sited by its centre, but a cliff section is tens of metres across: one centred just outside a cave's
-		/// keep-out or a way's clearance stood over the mouth or across the path (2026-10-11). The scene side used to drop
+		/// keep-out or a way's clearance stood over the mouth or across the path. The scene side used to drop
 		/// such rocks once the plan was made, but by then the rocks seated after them stood on their tops, and those stayed
-		/// up in the air where the rock under them went (2026-10-21: blocks and ice fill 5–15 m over the slope beside cave
+		/// up in the air where the rock under them went (blocks and ice fill 5–15 m over the slope beside cave
 		/// mouths). So the test is the planner's, made as each rock is seated, before it joins the top raster or the index.
 		/// </remarks>
 		public static bool CoversExcluded(in PlacedCliffRock rock, Bounds seating, Func<float, float, bool> excluded)
@@ -1596,7 +1596,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// It was written up·cos θ − down·sin θ, leaning uphill: a mirror of the real slope, 2θ off it, so every talus rock
-		/// was rested on a slope that was not there and stood on end on the cone it lay on (2026-10-08; measured on
+		/// was rested on a slope that was not there and stood on end on the cone it lay on (measured on
 		/// Flo Monolith's re-cut: centre of mass 2.5× the lowest it can rest, 41° between the two normals on the planner's
 		/// own test cliff). Its tests built the slope normal the same wrong way, so they agreed with it.
 		/// </remarks>
@@ -1615,7 +1615,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// It used to keep the best of 24 random orientations. For the round boulders that came first that was close
 		/// enough; for cliff sections, which are blocks with broad flat faces, the best of 24 was almost never face
 		/// down, so 8–12 m blocks stood on an edge or a corner over the talus, looking poised in the air
-		/// (2026-10-08). Now the lowest rest is searched for and snapped flat onto its hull face (<see cref="RestingFace"/>);
+		///. Now the lowest rest is searched for and snapped flat onto its hull face (<see cref="RestingFace"/>);
 		/// random orientations remain only for an empty mesh.
 		/// </remarks>
 		public static Matrix4x4 StablePose(MeshBuilder mesh, Vector3 com, Vector3 s, Vector3 down, float slopeDegrees, DeterministicRNG rng)
@@ -2062,7 +2062,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Seats a section by how much of it shows. A section is a wall standing out of the hill, its back and foot in
 		/// the ground: buried along the slope normal as a boulder is (a third to a half of its thickness, more for the
 		/// footing's base rule), an upright section on a steep face went in until its front was flush with the
-		/// ground — three quarters of it underground, the face a flat cut patch (Flo Monolith, 2026-10-08).
+		/// ground — three quarters of it underground, the face a flat cut patch (Flo Monolith).
 		/// Instead it slides out of the hill along the fall line, re-dropped at every step, until 30–45 % of its
 		/// surface is underground; then every section is lowered (never pushed into the face) while its flat
 		/// underside shows over falling ground.
@@ -2087,7 +2087,7 @@ namespace FishMMO.Shared.WorldDesign
 			rock.Position = new Vector3(start.x, 0f, start.z) + outward * hi;
 			Sink(run, m, c, w, ref rock);
 			/* Every section, not only the footing: slid out of a convex brow, a face or fill block's flat floor hung
-			 * over the falling ground and the block looked poised in the air (2026-10-08). Lowered (never pushed
+			 * over the falling ground and the block looked poised in the air. Lowered (never pushed
 			 * into the face) until no underside shows; one that has to go past SectionMostHidden is refused by Fit. */
 			{
 				float under = Underside(run, m, in rock, height);

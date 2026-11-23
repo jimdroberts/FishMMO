@@ -7,7 +7,7 @@ using Unity.Profiling;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Which GPU renderer draws a terrain detail prototype (2026-10-27, when the CPU chunk renderer was removed): the blade
+	/// Which GPU renderer draws a terrain detail prototype (when the CPU chunk renderer was removed): the blade
 	/// grass (<see cref="GrassBladeSystem"/>) takes the prefixes of <see cref="GrassBladeSettings.PrototypePrefixes"/>, the
 	/// GPU detail scatter (<see cref="DetailScatterSystem"/>) every other mesh prototype; nothing else draws a detail. A
 	/// prototype neither can take (a texture detail, an empty slot) is <see cref="Route.None"/>: an error at the cut and in
@@ -64,7 +64,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Which of a terrain's detail prototypes are painted anywhere on it (<see cref="TerrainData.GetSupportedLayers(int,int,int,int)"/>:
-		/// a layer any detail patch holds). Cuts before 2026-10-27 listed the whole scene's prototypes on every tile; only these are read.
+		/// a layer any detail patch holds). Cuts formerly listed the whole scene's prototypes on every tile; only these are read.
 		/// </summary>
 		public static bool[] Painted(TerrainData data)
 		{
@@ -91,7 +91,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>GPU only (2026-10-27).</b> This was the CPU chunk renderer: it built ~32 m chunks of instances on the main thread
+	/// <b>GPU only.</b> This was the CPU chunk renderer: it built ~32 m chunks of instances on the main thread
 	/// (TerrainDetailField, TerrainDetailModel) and drew every prototype the GPU renderers did not take. It is gone; what is
 	/// left is the driver both GPU renderers wait on: a terrain they may draw is one taken here.
 	/// </para>

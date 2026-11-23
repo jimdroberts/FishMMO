@@ -6,7 +6,7 @@ using FishMMO.Shared.Biomes;
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// The colour and clarity of each lake's and river's water by the biome of its shores (2026-10-16, phase I2e): the
+	/// The colour and clarity of each lake's and river's water by the biome of its shores: the
 	/// template's <see cref="BiomeTemplate.WaterLook"/>, read live, handed to each surface on its own copy of the material.
 	/// </summary>
 	/// <remarks>
@@ -161,7 +161,7 @@ namespace FishMMO.Water
 			{
 				return fallback;
 			}
-			// A body given its own biome's look (2026-10-25, I2n-c: a cave's water, its interior's) takes it, its shores unread.
+			// A body given its own biome's look (a cave's water, its interior's) takes it, its shores unread.
 			if (shore.Own != 0 && BiomeRegistry.TryGetByID(shore.Own, out BiomeTemplate own) && own != null)
 			{
 				return BiomeWaterLooks.Of(own) ?? fallback;
@@ -301,7 +301,7 @@ namespace FishMMO.Water
 			own.SetFloat(LookOnId, 1f);
 		}
 
-		// ── The falls (2026-10-18, phase I2h) ─────────────────────────
+		// ── The falls ─────────────────────────
 
 		private static readonly int FallLookOnId = Shader.PropertyToID("_FallLookOn");
 		private static readonly int FallWaterId = Shader.PropertyToID("_FallWater");
@@ -471,7 +471,7 @@ namespace FishMMO.Water
 			{
 				int at = slot * LookVectors;
 				lookVectors[at] = C(look.Shallow, look.Turbidity);
-				// Deep's w carries the melt (2026-10-25, I2q-b; FishInlandWater.hlsl InlandLookAt).
+				// Deep's w carries the melt (FishInlandWater.hlsl InlandLookAt).
 				lookVectors[at + 1] = C(look.Deep, look.Melt ? 1f : 0f);
 				lookVectors[at + 2] = new Vector4(look.Absorption.x, look.Absorption.y, look.Absorption.z, 0f);
 				lookVectors[at + 3] = C(look.Silt, 0f);

@@ -50,7 +50,7 @@ bool FishCasterCulled()
 #endif
 }
 
-/// FishCasterCulled for a caster known by a world-space sphere (2026-10-21: the grass blades, drawn from a buffer of roots
+/// FishCasterCulled for a caster known by a world-space sphere (the grass blades, drawn from a buffer of roots
 /// with no instance matrix): the same rule.
 bool FishCasterCulledAt(float3 centreWS, float radius)
 {

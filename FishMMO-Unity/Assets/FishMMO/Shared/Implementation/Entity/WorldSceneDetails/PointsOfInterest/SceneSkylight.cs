@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// An opening in a cave's roof up to the sky (2026-10-20, caves livened; <see cref="SceneEmitterKind.Skylight"/>): where its
+	/// An opening in a cave's roof up to the sky (caves livened; <see cref="SceneEmitterKind.Skylight"/>): where its
 	/// emitter stands and how its seed carries the opening's height over it, and the two measures every presenter of it agrees
 	/// on — how much of the sky a point under it sees (<see cref="SkyShare"/>) and whether the sun falls on it through the
 	/// opening (<see cref="InBeam"/>). One definition read by the client's skylight presenter (CaveSkylights: the shaft, the

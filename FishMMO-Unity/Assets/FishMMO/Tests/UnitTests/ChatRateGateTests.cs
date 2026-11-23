@@ -10,7 +10,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The chat rate gate (hot-path audit L2): the per-sender bucket is charged at the door, and the incoming queue's cap
-	/// drops rather than kicks. The cross-server pump's tests are the Chat module's (ChatPumpTests, split 2026-11-20).
+	/// drops rather than kicks. The cross-server pump's tests are the Chat module's (ChatPumpTests).
 	/// </summary>
 	[TestFixture]
 	public class ChatRateGateTests

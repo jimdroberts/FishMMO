@@ -3,7 +3,7 @@ using FishNet.Broadcast;
 
 namespace FishMMO.Shared
 {
-	// Moved from the core InteractableBroadcasts.cs with the World Interactables module (2026-11-20).
+	// Moved from the core InteractableBroadcasts.cs with the World Interactables module.
 
 	/// <summary>
 	/// Server → Client broadcast to start a dialogue session.

@@ -9,10 +9,10 @@ documents the achievement system; the templates and tiers are documented with th
 |---|---|
 | **Module id** | `achievements` (`AchievementModule`) |
 | **Assemblies** | `FishMMO.Achievements`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
-| **Depends on** | The core (the accomplishment signal, `TemplateOf` references to its templates); Abilities (abilities and ability events granted as tier rewards); Buffs (buffs granted as tier rewards). Its templates (`AchievementTemplate`, `AchievementTier`, `AchievementCategory`) are the module's since 2026-11-20, in `Runtime/Template` and `Templates/` |
+| **Depends on** | The core (the accomplishment signal, `TemplateOf` references to its templates); Abilities (abilities and ability events granted as tier rewards); Buffs (buffs granted as tier rewards). Its templates (`AchievementTemplate`, `AchievementTier`, `AchievementCategory`) are the module's, in `Runtime/Template` and `Templates/` |
 | **Depended on by** | World Design (the points of interest's discovery achievements). Everything else that counts an achievement (Social, Matchmaking, Pets, merchants, lore) holds it as a core `CachedScriptableObject` and records through the core's `Accomplishments` |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

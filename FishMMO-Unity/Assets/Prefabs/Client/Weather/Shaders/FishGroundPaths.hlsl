@@ -132,7 +132,7 @@ float FishPathTrackness(float surface) { return saturate(1.0 - surface * 3.0); }
 /// <summary>
 /// The path's edge moved by its fraying: a lost way wanders and breaks; a kept one wanders less, but never runs ruler
 /// straight. Floored at wear 1 to about a third of a metre either way (and more on a wide street), where it had been
-/// a sixth: every town street was a band cut to its plan with a knife (2026-10-13: "they are 100% opacity").
+/// a sixth: every town street was a band cut to its plan with a knife ("they are 100% opacity").
 /// </summary>
 float FishPathFrayedEdge(FishPathSample p, float2 xz)
 {

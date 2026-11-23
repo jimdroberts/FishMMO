@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What gathers round lived-in buildings and camps (2026-10-11: points of interest looked dated): woodpiles, carts,
+	/// What gathers round lived-in buildings and camps (points of interest looked dated): woodpiles, carts,
 	/// hay, a washing line, lanterns, signposts, benches, water butts; and at a camp, a cooking tripod, a drying rack and a
 	/// weapon rack. Tagged "clutter" with where it belongs ("town", "camp"); PropsFeature leans it against the buildings.
 	/// </summary>

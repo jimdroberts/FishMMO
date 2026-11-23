@@ -1,7 +1,7 @@
 #ifndef FISHMMO_MOSS_INCLUDED
 #define FISHMMO_MOSS_INCLUDED
 
-// FishMMO: moss on what it really grows on (2026-10-12: "a moss layer that can be applied to objects", built into
+// FishMMO: moss on what it really grows on ("a moss layer that can be applied to objects", built into
 // the world lit shader). FishMMO/Weather Lit's forward pass and its indirect twin's, on a material whose _FishMoss
 // (UnityPerMaterial, 0..1, default 0) is above zero: the art generator sets it on rock types, cliff and cave rock, and
 // the structure kit's stone and timber (BiomeArtGenerator). A material at 0 pays one uniform branch and nothing else.

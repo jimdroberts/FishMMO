@@ -302,7 +302,7 @@ replicated — it is recomputed locally via the dependency graph in `ApplyChildr
 
 Delta serialization uses a 7-bit byte bitmask — only changed fields are transmitted, typically 3-4 bytes instead of 28.
 
-> **Lifecycle note (defensive guard, 2025 audit):**
+> **Lifecycle note (defensive guard, from an audit):**
 > `regenTickInterval` is computed in `OnStartNetwork` from `TimeManager.TickDelta` and is also explicitly cleared by `ResetState`. The `Regenerate()` path early-returns when `regenTickInterval == 0`, so a reset instance cannot tick at a stale rate before the next `OnStartNetwork` re-initialization. This guards object-pool / re-spawn reuse paths.
 
 > **EditMode / unit-test note:**
@@ -575,7 +575,7 @@ CharacterAttribute/
 ├── CharacterAttribute.cs                  # Runtime attribute instance (value layers, formula propagation)
 ├── CharacterResourceAttribute.cs          # Depletable resource (HP/MP/Stamina) with CurrentValue
 ├── CharacterAttributeController.cs        # Per-entity controller (CharacterBehaviour, ICharacterAttributeController, IPredictableController Order=95)
-│   (CharacterDamageController.cs, the damage, heal and kill logic, is the Combat module's character part since 2026-11-20:
+│   (CharacterDamageController.cs, the damage, heal and kill logic, is the Combat module's character part:
 │    Modules/Combat/Runtime, with CombatEventCoalescer.cs)
 ├── CharacterAttributeResourceState.cs     # Snapshot struct for resource reconciliation [UseGlobalCustomSerializer]
 ├── CharacterAttributeResourceStateSerializer.cs # Regular + delta serializer; [RuntimeInitializeOnLoadMethod(BeforeSceneLoad)] registers the delta delegates

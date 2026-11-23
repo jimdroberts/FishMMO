@@ -453,7 +453,7 @@ namespace FishMMO.Shared.WorldDesign
 			fineDetail = request.FineDetail;
 			frozenSeas = request.FrozenSeas;
 			iceSheet = new IceSheetSurface(body != null ? SolarSystemProfile.Resolve(body) : null, body, frozenSeas);
-			/* Where the sheet meets a cold sea it runs out over it (decision 68, I2s): measured from the ground before any
+			/* Where the sheet meets a cold sea it runs out over it: measured from the ground before any
 			 * shelf, once per request; null on every world and scene that does not opt in or has no such coast. */
 			iceShelf = null;
 			iceShelf = IceShelfReach.For(request, this);

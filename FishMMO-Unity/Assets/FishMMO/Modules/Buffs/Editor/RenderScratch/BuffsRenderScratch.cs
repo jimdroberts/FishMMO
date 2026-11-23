@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace FishMMO.RenderScratch
 {
-	/// <summary>The Buffs module's part of the panel render rig (2026-11-20): the buff and debuff strips in the HUD probes, and the buff tooltip page.</summary>
+	/// <summary>The Buffs module's part of the panel render rig: the buff and debuff strips in the HUD probes, and the buff tooltip page.</summary>
 	public static class BuffsRenderScratch
 	{
 		/// <summary>The strips' layouts.</summary>

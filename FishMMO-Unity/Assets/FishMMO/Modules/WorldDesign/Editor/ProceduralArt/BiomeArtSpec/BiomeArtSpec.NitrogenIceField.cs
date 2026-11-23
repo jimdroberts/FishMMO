@@ -22,10 +22,10 @@ namespace FishMMO.Shared.WorldDesign
 				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
 				.Wildlife(BiomeHabitat.None)
 				.Moat(BiomeMoatWater.Frozen)
-				// Triton's geysers (2026-10-25, I2q-b, decision 66): dark plume soot, at most four plumes a scene, waking with the sun.
+				// Triton's geysers: dark plume soot, at most four plumes a scene, waking with the sun.
 				.Emits("Plume Soot", 0.04f)
 				.Vents(BiomeVentLayout.Grid, BiomeVentTiming.Solar, 4)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 0.2f), (POIType.Shrine, 0.2f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 0.2f),
 					(POIType.Monument, 0.5f), (POIType.Wreck, 0.2f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -38,7 +38,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Quarry, 0.2f), (POIType.Lighthouse, 0.2f), (POIType.SmugglersCove, 0.2f), (POIType.PirateCove, 0.2f),
 					(POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 0.2f),
 					(POIType.BossLair, 0.2f), (POIType.OreVein, 0.6f), (POIType.CrystalFormation, 0.6f), (POIType.HerbGrove, 0.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.ElderMonolith, 0.6f), (POIType.WaygateRing, 0.3f))
 				.Gathers("Voidstone Cluster")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)

@@ -25,12 +25,12 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Why no sea.</b> The sea lays the clouds and the fogs over itself from what those passes publish, with no fade
 	/// underground: a sea cave's sea in view would lose them. So no piece in view may come down to the sea's top. A cave's
-	/// lakes, rivers and falls (a grotto's pool, its streams and pools, 2026-10-20) fade what they lay over themselves as the
+	/// lakes, rivers and falls (a grotto's pool, its streams and pools) fade what they lay over themselves as the
 	/// passes do underground (FishWaterFog.hlsl's FISH_WATER_OPEN_AIR), to nothing deep in: they never unseal a view. Lava is
 	/// not water here: opaque, it is covered through its depth as the rock is.
 	/// </para>
 	/// <para>
-	/// <b>Not the light shafts.</b> Their composite fades by FishOpenAir as the clouds' does (2026-10-21; before, a cave's far
+	/// <b>Not the light shafts.</b> Their composite fades by FishOpenAir as the clouds' does (before, a cave's far
 	/// walls glowed toward the sun), but they are drawn as before (FishCloudsFeature), with the clouds' buffer standing in,
 	/// which the gather reads only at the sky, of which a sealed view has none.
 	/// </para>

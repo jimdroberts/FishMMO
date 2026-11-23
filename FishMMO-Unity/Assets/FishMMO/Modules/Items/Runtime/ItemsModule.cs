@@ -11,7 +11,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Items module (2026-11-20): what a player does with items. The inventory, bank and equipment containers on the
+	/// The Items module: what a player does with items. The inventory, bank and equipment containers on the
 	/// player (equipment predicted on the character's replicate), the scene server's inventory system (every move, split,
 	/// equip, grant and exchange, and the item writes), and the inventory, bank and equipment windows.
 	/// </summary>

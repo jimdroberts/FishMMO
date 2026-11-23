@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A house's fenced yard the layout laid (2026-10-19: "some houses should have fences around them with gates to the roads"): the
+	/// A house's fenced yard the layout laid ("some houses should have fences around them with gates to the roads"): the
 	/// house as laid (set back behind its front garden), and the fence's runs round its garden and the plot behind it.
 	/// </summary>
 	public sealed class PointOfInterestLayoutYard
@@ -51,7 +51,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float EdgeBandShare = 0.65f;
 
 		/// <summary>
-		/// The share of the houses that may keep a yard that do, by town plan (2026-10-19): a village's crofts half fenced (its green's a
+		/// The share of the houses that may keep a yard that do, by town plan: a village's crofts half fenced (its green's a
 		/// little more), a market town's burgage plots a third, a hill town's terraces and a port's or city's packed streets few (their
 		/// streets keep no plot, so in practice none), a bailey's none.
 		/// </summary>
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly List<(Vector2 A, Vector2 B)> yardSides = new List<(Vector2, Vector2)>();
 
 			/// <summary>
-			/// The fenced yards (2026-10-19), after every house is laid: a share of the houses whose slot may keep one (by the town plan, on
+			/// The fenced yards, after every house is laid: a share of the houses whose slot may keep one (by the town plan, on
 			/// the request's own hash stream; none backed onto a curtain) get one round the plot behind them (its burgage plot or croft,
 			/// else the free ground there, claimed). A fronted yard sets the house back a few metres, the front garden fenced along the
 			/// street with the gate before the door, the sides fenced back past the house round the plot and the plot's end; a side running
@@ -359,7 +359,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The edge pieces (2026-10-19, <see cref="PointOfInterestSlotRole.Edge"/>), the largest first: each in the band from
+			/// The edge pieces (<see cref="PointOfInterestSlotRole.Edge"/>), the largest first: each in the band from
 			/// <see cref="EdgeBandShare"/> of the boundary's inner reach out to it, its long side along the boundary where it fits so,
 			/// else turned; on the bearings round from its own draw, as far out as it fits (a croft behind a house will do, as a barn or a
 			/// kiln stands in one). With no room in the band, anywhere free as the scatter is thrown. Every draw is the request's own hash

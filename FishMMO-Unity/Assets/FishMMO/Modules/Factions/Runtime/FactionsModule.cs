@@ -7,7 +7,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Factions module (Phase 2): reputation with factions, the alliances it implies, and the aggression toggle.
+	/// The Factions module: reputation with factions, the alliances it implies, and the aggression toggle.
 	/// </summary>
 	/// <remarks>
 	/// <para>Here: <see cref="FactionController"/> (a character part implementing the core <c>IFactionController</c> and this

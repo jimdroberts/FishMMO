@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Water in the caves (<see cref="CaveStreams"/>, CaveSystem.Streams.cs, CaveStreamWater; 2026-10-20, caves livened:
+	/// Water in the caves (<see cref="CaveStreams"/>, CaveSystem.Streams.cs, CaveStreamWater, caves livened:
 	/// "underground streams & waterfalls & pools"): which systems hold water (never a molten lava tube; an ice cave's frozen);
 	/// the plan is the same each time and after storage; streams run downhill beside their ways, fed by springs falling out of
 	/// the walls; falls drop far enough to be drawn as falls; every body lies in the bed the field cut for it, under the floor

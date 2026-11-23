@@ -66,11 +66,10 @@ Two properties of that lifecycle are load-bearing for scene transfers and easy t
 - Batched session lease refresh on an independent timer (`sessionLeaseRefreshRate`, default 20s), one statement for the whole resident population
 - Pending-flush retry queue for saves and releases that could not be enqueued or failed at the database, with linear backoff and a bounded attempt count
 - Periodic out-of-bounds check with respawn point teleportation for characters outside scene boundaries
-- Teleport flow: teleporter validation, scene unload, immortality, position/scene update, instance flag removal, save-then-release with reconnect through world routing
-- Transfer watchdog: a connection whose character has been handed off is force-disconnected after `TransferDisconnectGrace` (15s) if the client never reports its scene unload, so a crashed or modified client cannot idle on a server that no longer holds its character
+- Transfers: one hand-off for the teleporter, bind respawn, channel switch, leaving an instance and travel spells (save-then-release, then disconnect; reconnect through world routing), exposed to shared code as `CharacterTransfer.Host`
 - Residency watchdog: a connection that authenticated but still has no character after `CharacterResidencyTimeout` (60s) is disconnected with `ServerError`, bounding every load path that can fail without delivering its own disconnect
 - Scene-handshake watchdog: a character parked in `WaitingSceneLoadCharacters` that never acknowledges its scene within the scene-load watchdog (120 s without a progress heartbeat, `SceneLoadStallTimeoutSeconds`; 900 s at most, `SceneLoadMaxSeconds`) is disconnected with `SceneHandshakeTimedOut`, so its session claim is released instead of being held for the life of the socket
-- Death/respawn (the Combat module's combat system since 2026-11-20; this system lends the world's part through `ICharacterDeathHost`): player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene follows the same ordering as the teleporter path, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
+- Death/respawn (the Combat module's combat system; this system lends the world's part through `ICharacterDeathHost`): player marked `IsDead`, death dialog shown on client. Player chooses Respawn (teleport to bind + revive) or waits for Resurrect (revive at corpse location). A respawn into a different scene is the same hand-off as every other transfer, so `OnDisconnect` subscribers see the scene being left rather than the one being entered. Reconnect-while-dead re-shows the death dialog. NPC despawn with corpse decay timer; pet killed event with immediate despawn
 - Connection disconnect cleanup: waiting-scene-load character pool return with session release, spawned character mapping removal with save-then-despawn
 - Graceful deinitialize: main-thread DTO snapshot of all characters, async persist all, release all sessions (spawned + waiting-to-load)
 - A dead owner's pet is never captured as out (`IsPetOut`): death dismisses the pet, but the pet system's kill handler runs after this one, which finalises a combat-logout body killed while its owner was away — and used to save it with its pet still out
@@ -114,7 +113,7 @@ This is an integrated module within FishMMO. It is included as part of the serve
 4. Verify that `SceneServerAuthenticator` exists in the scene for authentication event subscription.
 5. Verify that `ICharacterService` and all sub-entity services are registered in `Database.ServiceRegistry`.
 6. Adjust inspector parameters (`saveRate`, `sessionLeaseRefreshRate`, `outOfBoundsCheckRate`, `maxMainThreadActionsPerFrame`) as needed.
-7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, the instance, target and buff-dismiss requests), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnResurrected` for the cloud world), and periodic callbacks for save, session lease refresh, pending-flush retry, transfer watchdog, out-of-bounds checks, and the request guard sweep. The death, respawn and resurrect handlers are the Combat module's combat system's (2026-11-20).
+7. On initialize, `CharacterSystem` registers the authenticator callback, broadcast handlers (`ClientValidatedSceneBroadcast`, `ClientScenesUnloadedBroadcast`, the instance, target and buff-dismiss requests), scene manager events, connection state events, character events (`IPlayerCharacter.OnTeleport`, `ICharacterDamageController.OnResurrected` for the cloud world), and periodic callbacks for save, session lease refresh, pending-flush retry, out-of-bounds checks, and the request guard sweep. The death, respawn and resurrect handlers are the Combat module's combat system's.
 8. On deinitialize, it unregisters all event handlers, snapshots and persists all character data, drains the pending-flush retry queue, and releases all claimed sessions.
 
 ## Configuration
@@ -136,8 +135,6 @@ This is an integrated module within FishMMO. It is included as part of the serve
 | `ValidatedSceneBroadcastCooldownSeconds` | 2.0 | Minimum seconds between validated-scene broadcasts per connection |
 | `PendingFlushRetryIntervalSeconds` | 3.0 | Interval between pending save/release retry passes |
 | `MaxPendingFlushAttempts` | 12 | Attempts before abandoning a pending flush (spans past the 2-minute lease, after which the claim frees itself) |
-| `TransferDisconnectGrace` | 15s | Grace period for a handed-off client to disconnect on its own before the watchdog forces it |
-| `TransferDisconnectSweepIntervalSeconds` | 5.0 | Interval between transfer watchdog sweeps |
 | `CharacterResidencyTimeout` | 60s | How long an authenticated connection may go without a character before the residency watchdog disconnects it |
 | `CharacterResidencySweepIntervalSeconds` | 10.0 | Interval between residency watchdog sweeps |
 | `SceneLoadStallTimeoutSeconds` / `SceneLoadMaxSeconds` (cfg) | 120 s / 900 s | How long a character in `WaitingSceneLoadCharacters` may go without a load-progress heartbeat, and the absolute cap on acknowledging its scene load |
@@ -233,8 +230,8 @@ character *through* the ordinary disconnect pipeline need it — `SceneChannelSy
 dungeon finder both do — and so does `KickRequestSystem`: an operator kick is a removal, not a
 departure, and lingering there keeps the kicked character's body in the world holding its session
 claim, which makes a kick the opposite of a remedy for a character that is stuck.
-`IPlayerCharacter_OnTeleport` and the cross-scene bind-point respawn instead release the
-character themselves before disconnecting, so they never reach the linger check. A transfer
+Every hand-off (`HandOffToScene`: teleporter, bind-point respawn, channel switch, leaving an instance, travel
+spells) releases the character itself before disconnecting and also suppresses the linger, so it never lingers. A transfer
 that lingered would leave the body and its session claim on the source server while the client
 arrived at the destination, which could then not claim the character and would kick it on every
 retry until the linger expired.
@@ -383,37 +380,45 @@ This is deliberately decoupled from `saveRate`, so a claim's liveness never depe
 3. Checks character position against `WorldSceneDetails.Boundaries`.
 4. If out of bounds: selects a random respawn position and teleports the character.
 
-### Teleport Flow
+### Transfers (one hand-off)
 
-`IPlayerCharacter_OnTeleport(character)`:
+Every route that sends a character to a place in another scene — the scene teleporter, the bind-point respawn,
+the channel switch, leaving an instance, and the travel spells — goes through one routine,
+`HandOffToScene(conn, character, TransferDestination)` in `CharacterSystem.Transfer.cs`. There used to be four
+hand-written copies, each clearing different bookkeeping; `TravelSpellTests.OnlyTheTransferHelper_ReleasesACharacterForAHandOff`
+keeps a fifth from growing back.
 
-1. Validates character exists and `IsTeleporting`.
-2. Resolves current scene from `WorldSceneDetailsCache`.
-3. Validates teleporter exists in scene details. A refusal goes through `CancelTeleport(character, reason, playerText, severity)`, which clears `TeleporterName` and sends the owner a `ToastBroadcast` — the refusal used to be logged server-side only, leaving the player standing on a teleporter with no explanation.
-4. Tells connection to unload current world scene.
-5. Sets character immortal.
-6. Fires `OnDisconnect` early (requires current scene context).
-7. Updates `SceneName` and position/rotation to teleporter destination.
-8. Removes instance and loaded flags.
-9. Calls `RemoveCharacterConnectionMapping` with `skipOnDisconnect: true` — triggers save-then-release, forcing reconnect through world routing.
-10. Arms the transfer watchdog via `ArmTransferDisconnect(owner)`.
+1. Fires `OnDisconnect` while the character still names the scene it is leaving (party, guild, chat and the
+   scene's population reason about that scene).
+2. Sets the character immortal.
+3. Rebinds `SceneName`, `SceneHandle` (the destination's scene row ID — its channel — or 0 for any) and the pose.
+4. Removes the instance and loaded flags. Leaving an instance by any route also clears `InstanceID`,
+   `InstanceSceneName`, `InstanceSceneHandle`, sets `LastWorldPosition/Rotation` to the destination, and calls
+   `NoteDeliberateInstanceExit` so an emptied instance is reclaimed on the next pulse.
+5. `RemoveCharacterConnectionMapping(conn, skipOnDisconnect: true)` — save-then-release.
+6. `SuppressCombatLingerOnDisconnect(conn)`, then `conn.Disconnect(false)`; the client's reconnect goes to the
+   world server, which routes it by the rebound row.
 
-Nothing in this flow disconnects the client directly. The transfer depends on the client
-reporting its scene unload (`ClientScenesUnloadedBroadcast`), which is what sends it back to
-the world server. Two safeguards keep that from becoming a hang:
+**Deferred hand-offs.** The release despawns the character at once. The scene teleporter fires from a physics
+trigger and a travel spell takes effect inside the character's ability tick, so those queue the hand-off on the
+main-thread queue (`DeferHandOff`); the character is made immortal at once and refused any other transfer until it
+runs, and a character that has meanwhile left by another route is left alone. The respawn, leave-instance and
+channel-switch routes run from broadcast handlers and hand off directly.
 
-- `OnClientScenesUnloadedBroadcastReceived` checks for a loaded character **before**
-  consulting its rate limiter. A client unloads scenes on the way in as well as on the way
-  out, so stamping the limiter on the benign entry-time broadcast would swallow a teleport
-  broadcast arriving within the next five seconds — which teleporters placed near a spawn
-  point hit every time.
-- `OnPeriodicTransferDisconnectSweep` force-disconnects any armed connection still present
-  after `TransferDisconnectGrace`, skipping connections that have since acquired a character
-  (FishNet recycles ClientIds).
+**The shared seam.** `CharacterSystem` installs itself as `CharacterTransfer.Host` (`ICharacterTransferHost`, core):
+`Transfer(character, destination)` (a local move when `CharacterTransfer.IsLocalMove` says the destination is in the
+scene instance the character stands in, otherwise a deferred hand-off) and `TransferToBindPoint(character)` (the
+respawn's own move, with the cloud-world landing rule). Neither gates combat; callers decide.
+
+`IPlayerCharacter_OnTeleport(character)` validates the teleporter (a refusal goes through `CancelTeleport`, which
+clears `TeleporterName` and toasts the owner), moves locally when the destination is the current scene (no combat
+gate), refuses a cross-scene trip in combat, and otherwise defers the hand-off. It no longer asks
+the client to unload the scene by name (with stacked channels the name may resolve to another instance) and wait for
+the client's report, so the transfer watchdog that covered that wait is gone.
 
 ### Death/Respawn Flow
 
-A death is the Combat module's (2026-11-20): its combat system handles the kill, the respawn at the bind point and
+A death is the Combat module's: its combat system handles the kill, the respawn at the bind point and
 resurrect offers, and the client's death dialog; see the [Combat module's README](../../../../../Modules/Combat/README.md).
 This system lends it what a death touches that is the world's, through `ICharacterDeathHost`
 (`CharacterSystem.DeathHost.cs`): an instance's lives and resurrection ban (`ApplyInstanceDeathRules`,
@@ -437,7 +442,7 @@ disconnect.
 
 `OnRemoteConnectionStopped(conn)`:
 
-1. Removes the transfer watchdog entry, the residency and scene-handshake deadlines, and scene-unload and validated-scene rate-limit tracking for the connection.
+1. Removes the residency and scene-handshake deadlines, and scene-unload and validated-scene rate-limit tracking for the connection.
 2. Removes auth callback rate-limit tracking for the account.
 3. Consumes any `SuppressCombatLingerOnDisconnect` marker for the connection.
 4. Calls `RemoveCharacterConnectionMapping(conn, allowCombatLinger: <not a server-initiated disconnect>)`.
@@ -936,7 +941,7 @@ login after deploying still restores whatever stale rows it had.
 
 ## Death, respawn and resurrect
 
-The kill handler, the respawn and the resurrect offers are the Combat module's since 2026-11-20 (its README carries their
+The kill handler, the respawn and the resurrect offers are the Combat module's (its README carries their
 rules: the death flag first, no revive or move from the kill handler, recorded and expiring offers).
 
 ### Reconnecting while dead

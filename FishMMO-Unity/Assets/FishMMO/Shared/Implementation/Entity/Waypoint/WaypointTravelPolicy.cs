@@ -108,7 +108,8 @@ namespace FishMMO.Shared
 			}
 			foreach (KeyValuePair<int, SceneWaypointDetails> entry in details.Waypoints)
 			{
-				if (entry.Value != null &&
+				// A Gate Stone is not a travel origin (issue #241).
+				if (entry.Value != null && !entry.Value.IsGateStone &&
 					controller.IsUnlocked(sceneName, entry.Key) &&
 					IsWithinRange(traveller, entry.Value.Position))
 				{

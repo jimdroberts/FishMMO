@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.Caves
 {
 	/// <summary>
-	/// The run-time cave cover (2026-10-20): its hashes are fixed functions of position (the same cover on every client, still as
+	/// The run-time cave cover: its hashes are fixed functions of position (the same cover on every client, still as
 	/// the camera moves), its density arithmetic grows each type where its habitat says and nowhere else, the distance rings keep
 	/// the far cover a subset of the near, the type table and its art agree in order, and the cut's species lookup gives each form
 	/// of cave its own cover and the dressing's glow colours. FishCaveCover.compute mirrors CaveCoverMath: these pin both.

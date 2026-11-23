@@ -390,7 +390,7 @@ CharacterAttributeController (Order=95) → Regenerates resources
 AbilityController (Order=100)  → Activates abilities, checks cooldowns + resources
 ```
 
-### Rules the 2026-11-14 audit added
+### Rules the audit added
 
 Each closes a case where owner and server could count differently, or where a client's word was taken on trust.
 The rules below are the record of it; `PredictionAuditFixTests` states each one as a test.

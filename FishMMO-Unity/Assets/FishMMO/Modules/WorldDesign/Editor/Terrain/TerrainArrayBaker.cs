@@ -36,9 +36,9 @@ namespace FishMMO.Shared.WorldDesign
 		/// y lichen, z mineral, w 1 where a slot had one, all 0 where none did (the runtime reads that layer's name).
 		/// </summary>
 		public readonly List<Vector4> Makeup = new List<Vector4>();
-		/// <summary>Each layer's packed glow from the biome slots that paint with it (<see cref="TerrainArraySet.LayerGlow"/>, 2026-10-25, I2r): zero for none.</summary>
+		/// <summary>Each layer's packed glow from the biome slots that paint with it (<see cref="TerrainArraySet.LayerGlow"/>): zero for none.</summary>
 		public readonly List<Vector4> Glow = new List<Vector4>();
-		/// <summary>Each layer's packed shared-clock window (<see cref="TerrainArraySet.LayerClock"/>, 2026-10-26, GROUND-BANDS): zero for none.</summary>
+		/// <summary>Each layer's packed shared-clock window (<see cref="TerrainArraySet.LayerClock"/>): zero for none.</summary>
 		public readonly List<Vector4> Clock = new List<Vector4>();
 		/// <summary>Beside <see cref="Clock"/>: x the floor, y the layer its share goes to (<see cref="TerrainArraySet.LayerClockShare"/>).</summary>
 		public readonly List<Vector4> ClockShare = new List<Vector4>();
@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How each layer follows the shared clock (2026-10-26, phase GROUND-BANDS): the clock of the first biome slot using it that has one
+		/// How each layer follows the shared clock: the clock of the first biome slot using it that has one
 		/// (<see cref="TerrainTextureLayer.clock"/>, the uses in the makeup's order), and the layer that takes its share outside its window —
 		/// the layer that biome's main slot paints with (−1 when the clocked slot is the main itself, or the main is not on the scene: the
 		/// other layers there take it). Not part of the content hash, as the glow: written in place.
@@ -290,7 +290,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a layer glows (2026-10-25, phase I2r, decision 65 (a)): the packed glow of the first biome slot using it that has one
+		/// How a layer glows: the packed glow of the first biome slot using it that has one
 		/// (<see cref="TerrainTextureLayer.glow"/>, the uses in the makeup's order); zero when none does. Not part of the content hash,
 		/// as the makeup: a set whose only change is its glow is updated in place.
 		/// </summary>
@@ -535,7 +535,7 @@ namespace FishMMO.Shared.WorldDesign
 					AssetDatabase.SaveAssetIfDirty(existing);
 					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground makeup only)");
 				}
-				// And how they glow (2026-10-25, I2r): also in place, no rebake.
+				// And how they glow: also in place, no rebake.
 				if (!SameMakeup(existing.LayerGlow, plan.Glow))
 				{
 					existing.LayerGlow = PaddedMakeup(plan.Glow);
@@ -543,7 +543,7 @@ namespace FishMMO.Shared.WorldDesign
 					AssetDatabase.SaveAssetIfDirty(existing);
 					report.Written.Add($"{TerrainArraySet.BakedAssetPath(plan.SceneName)} (ground glow only)");
 				}
-				// And how they follow the shared clock (2026-10-26, GROUND-BANDS): also in place, no rebake.
+				// And how they follow the shared clock: also in place, no rebake.
 				// A scene with no clocked layer, baked before the clock existed, is left as it is (nothing to draw differently).
 				if ((AnyClock(plan.Clock) || AnyClock(existing.LayerClock))
 					&& (!SameMakeup(existing.LayerClock, plan.Clock) || !SameMakeup(existing.LayerClockShare, plan.ClockShare)))

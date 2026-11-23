@@ -6,12 +6,12 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The crystals a biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>, 2026-10-16, phase I6c): the mineral deposits
+	/// The crystals a biome's caves grow (<see cref="BiomeTemplate.CaveCrystals"/>): the mineral deposits
 	/// in their chambers and, for the kinds that glow, what lines their ways. Append-only (stored by value); each kind is drawn
 	/// in its own habit and material by the biome art generator (ProceduralArtCatalogue.CaveMinerals).
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 every cave and grotto grew selenite (blades of gypsum) wherever it was, each cluster with a cave light of
+	/// Formerly every cave and grotto grew selenite (blades of gypsum) wherever it was, each cluster with a cave light of
 	/// a hue drawn by chance; that is every biome's default. An ice cave's crystals are its own ice (its shell's, as its
 	/// formations are) and a lava tube grows none, whatever this list holds.
 	/// </remarks>
@@ -38,9 +38,9 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Sunstone (fantasy, volcanic): tabular blades of orange-gold crystal alight like embers, out of scoria.</summary>
 		Sunstone = 9,
 
-		// 2026-10-26 (NEW-CRYSTALS, decision 34): every kind the 83 biome drafts name, appended in the drafts' order. No biome
+		// Every kind the 83 biome drafts name, appended in the drafts' order. No biome
 		// grows one until its round names it (every template still grows selenite), so nothing a cut lays changes. A kind
-		// two drafts share (decision 97: Aragonite, Sal Ammoniac; also Vivianite, Dogtooth, Thenardite, Pyrite) is ONE kind,
+		// two drafts share (Aragonite, Sal Ammoniac; also Vivianite, Dogtooth, Thenardite, Pyrite) is ONE kind,
 		// each biome's own look of it a BiomeCaveCrystal.Look; the fantasy kinds glow (Glows), the real ones do not.
 		/// <summary>Phillipsite: colourless-white zeolite prism sprays and cruciform twins on red clay (AbyssalPlain).</summary>
 		Phillipsite = 10,
@@ -415,7 +415,7 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>The cave-crystal rules that do not depend on a template asset.</summary>
 	public static class BiomeCaveCrystals
 	{
-		/// <summary>What every biome's caves grew until 2026-10-16: selenite alone. A fresh list each call.</summary>
+		/// <summary>What every biome's caves grew formerly: selenite alone. A fresh list each call.</summary>
 		public static List<BiomeCaveCrystal> Default() => new List<BiomeCaveCrystal> { new BiomeCaveCrystal(BiomeCaveCrystalKind.Selenite, 1f) };
 
 		/// <summary>
@@ -425,7 +425,7 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		public static bool Glows(BiomeCaveCrystalKind kind) => glowing[(byte)kind];
 
-		/// <summary>The kinds that glow (the first three since 2026-10-16, the drafts' fantasy kinds since 2026-10-26), as a table by value.</summary>
+		/// <summary>The kinds that glow (the first three, the drafts' fantasy kinds), as a table by value.</summary>
 		private static readonly bool[] glowing = GlowTable(
 			BiomeCaveCrystalKind.Amberlight, BiomeCaveCrystalKind.Wyrdstone, BiomeCaveCrystalKind.Sunstone,
 			BiomeCaveCrystalKind.Lodeheart, BiomeCaveCrystalKind.Hadalite, BiomeCaveCrystalKind.Starfrost, BiomeCaveCrystalKind.Stormglass,

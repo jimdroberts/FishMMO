@@ -25,7 +25,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// width; the leaves hang on the canes, not on a crown shell.
 		/// </summary>
 		Whip,
-		/// <summary>A low mat hugging the ground, stems lying out near level from the foot (creeping juniper, dwarf willow, bearberry; decision 25).</summary>
+		/// <summary>A low mat hugging the ground, stems lying out near level from the foot (creeping juniper, dwarf willow, bearberry).</summary>
 		Prostrate,
 	}
 

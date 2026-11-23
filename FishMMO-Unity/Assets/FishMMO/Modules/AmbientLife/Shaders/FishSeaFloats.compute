@@ -1,4 +1,4 @@
-// The floats on the open sea (SeaFloatSystem, FishMMO.Client/World/SeaFloats, 2026-10-25, phase I2p): sargassum windrows,
+// The floats on the open sea (SeaFloatSystem, FishMMO.Client/World/SeaFloats): sargassum windrows,
 // by-the-wind sailors, barnacled drift logs, propagule rafts, corklines, growlers, pumice, pancake and brash ice, expanded every
 // frame from the camera's cells into instances on each kind's lattice and drawn by FishMMO/Sea Floats with
 // Graphics.RenderMeshIndirect, one command per kind's slot.

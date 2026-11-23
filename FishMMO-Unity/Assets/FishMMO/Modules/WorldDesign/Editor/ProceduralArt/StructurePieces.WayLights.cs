@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The way and cave lights the biome suite's drafts name (2026-10-26, NEW-LIGHTS): beacons kindled at dusk, oil lamps in
+	/// The way and cave lights the biome suite's drafts name: beacons kindled at dusk, oil lamps in
 	/// niches, lanterns on posts, fire bowls and hearths, torches and the cold glows of the airless worlds, each its own kit
 	/// piece named by its <see cref="BiomeWayLightKind"/> (laid by id only, so no template query draws one), two variants,
 	/// in the medieval and fantasy register of the drafts. What shape each is (post, wall light, niche, bowl, beacon), what it
@@ -133,7 +133,7 @@ namespace FishMMO.Shared.WorldDesign
 			blue = kind == BiomeWayLightKind.BrimLamp || kind == BiomeWayLightKind.BrimLampPost;
 		}
 
-		/// <summary>The tint of a suite light's cold glow (2026-10-26), or null for a piece that is not one.</summary>
+		/// <summary>The tint of a suite light's cold glow, or null for a piece that is not one.</summary>
 		private static SceneGlowHue? SuiteGlowHueOf(string pieceId)
 		{
 			switch (pieceId)

@@ -19,11 +19,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Wildlife(BiomeHabitat.Sea)
 				.HomeTo("Whale")
 				.Moat(BiomeMoatWater.Wet)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Gorge, 1f), (POIType.Island, 1f), (POIType.Bay, 1f),
 					(POIType.Headland, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.KrakenWreck, 0.6f), (POIType.KrakenGrounds, 1f))
 				.Gathers("Manganese Nodules", "Glass Sponge")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)

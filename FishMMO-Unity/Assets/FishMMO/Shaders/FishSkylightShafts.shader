@@ -1,4 +1,4 @@
-// The daylight falling through openings in caves' roofs (CaveSkylights draws them, 2026-10-20, caves livened): a pre-built
+// The daylight falling through openings in caves' roofs (CaveSkylights draws them, caves livened): a pre-built
 // mesh of closed prisms and mote quads that the vertex shader hands out among the nearest openings. Each prism is the
 // shaft of sunlit air under an opening — the opening's disc carried down along the sun's direction to the floor — drawn by
 // its far faces only (told from the near ones by the ray's own crossing, whatever the winding), with the light it scatters worked out along the eye's ray through it exactly (the ray against the slanted

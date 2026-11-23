@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The country bridges the biome drafts name (2026-10-26, phase I2l-b; Biomes.BiomeCrossingStyle, decisions 49, 52, 59, 61, 78, 79):
+	/// The country bridges the biome drafts name (Biomes.BiomeCrossingStyle):
 	/// the liana bridge, the corbelled laterite bridge, the covered wind-and-rain bridge, the cantilever bridge, the Goblins' Bridge and
 	/// the snow bridge. Each is laid by a Bridge template of its style (PointOfInterestTemplateSpecs.Works, by id) as the kit's timber
 	/// span is: along z, the walking surface's top at y = 0 where it meets the next module or the bank, across x, stretched along z to the
@@ -69,7 +69,7 @@ namespace FishMMO.Shared.WorldDesign
 			snow.ModuleLength = SnowBridgeLength;
 		}
 
-		// ── The liana bridge (Jungle, decision 52) ────────────────────
+		// ── The liana bridge (Jungle) ────────────────────
 
 		/// <summary>
 		/// A liana bridge: cross sticks lashed onto two foot cables hung tree to tree in a curve (a twenty-eighth of the span down in
@@ -174,7 +174,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── The corbelled laterite bridge (Jungle Temple, decision 59) ─
+		// ── The corbelled laterite bridge (Jungle Temple) ─
 
 		/// <summary>
 		/// A module of corbelled laterite bridge: a block pier at the module's −z end, from the bed up to the deck, whose faces step out
@@ -254,7 +254,7 @@ namespace FishMMO.Shared.WorldDesign
 			return StructureShapes.Prism(outline, y0, y1, material, key).Transform(Matrix4x4.TRS(new Vector3(0f, 0f, zCentre), Quaternion.Euler(-90f, 0f, 0f), Vector3.one));
 		}
 
-		// ── The covered wind-and-rain bridge (Karst, decision 61) ─────
+		// ── The covered wind-and-rain bridge (Karst) ─────
 
 		/// <summary>
 		/// A module of covered wind-and-rain bridge: a fieldstone pier with cutwaters at the module's −z end, two courses of stacked
@@ -369,7 +369,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── The cantilever bridge (Rocky Terrain, decision 78) ────────
+		// ── The cantilever bridge (Rocky Terrain) ────────
 
 		/// <summary>
 		/// A cantilever bridge: on each bank a crib (a fieldstone seat with logs laid crosswise on it), courses of beams on the crib each
@@ -460,7 +460,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── The Goblins' Bridge (Scree, decision 79) ──────────────────
+		// ── The Goblins' Bridge (Scree) ──────────────────
 
 		/// <summary>
 		/// A module of the Goblins' Bridge: one great rough slab, its top worn level enough to walk (a few centimetres of lean), laid
@@ -505,7 +505,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── The snow bridge (Glacier, decision 49) ───────────────────
+		// ── The snow bridge (Glacier) ───────────────────
 
 		/// <summary>
 		/// A snow bridge: wind-packed snow lying over a narrow channel, its walked top a low hump (a quarter of a metre up in the

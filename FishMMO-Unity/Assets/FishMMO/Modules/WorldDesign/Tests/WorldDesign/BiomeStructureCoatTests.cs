@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2g-c of the biome suite (2026-10-25): the structure COATS every biome draft's new finish asked for, drawn on the GPU
+	/// The structure COATS every biome draft's new finish asked for, drawn on the GPU
 	/// (BiomeStructureCoats → FloraPaletteMap's _FishCoatTable → FishStructureCoat.hlsl). A weathering with no coat writes the same mark,
 	/// a row of zeros and a table switched off, so every building draws as before.
 	/// </summary>
@@ -36,7 +36,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			("Ocean", "Coldreef"), ("Permanent Ice", "Pristine"), ("Radiation Plain", "Sputtered"), ("Regolith Plain", "Sunsplit"),
 			("Salt Flat", "Dewfluted"), ("Rocky Coast", "Saltscoured"), ("Savanna", "Termitecast"), ("Rille", "Riftstepped"),
 			("Scrubland", "Rainmelt"), ("Rocky Terrain", "Sunfrost"), ("Scree", "Stoneshot"), ("Seamount", "Currentgrown"), ("Snow", "Snowladen"),
-			// I2g-e: the drafts of decisions 82–96.
+			// The drafts of decisions 82–96.
 			("Steppe", "Burandrift"), ("Sulphur Flats", "Fumed"), ("Sulphuric Cloud Deck", "Acidbitten"), ("Swamp Cave", "Teastain"),
 			("Swamp Ruins", "Sinkline"), ("Swamp Temple", "Mistmould"), ("Runaway Greenhouse Plain", "Kilnbaked"), ("Tholin Plain", "Hazefall"),
 			("Tidal Fracture", "Sheared"), ("Underwater Canyon", "Flowscoured"), ("Volcanic", "Cinderdusted"), ("Volcanic Cave", "Heatspall"),
@@ -171,7 +171,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		/// <summary>The coats that read a term of texels 8.zw / 9 or the local water (I2g-e); every other row leaves them zero.</summary>
+		/// <summary>The coats that read a term of texels 8.zw / 9 or the local water; every other row leaves them zero.</summary>
 		private static readonly BiomeStructureCoat[] LaterTerms =
 		{
 			BiomeStructureCoat.Waxed, BiomeStructureCoat.Riftstepped, BiomeStructureCoat.Currentgrown, BiomeStructureCoat.Burandrift,
@@ -268,7 +268,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Is.GreaterThan(pass.LastIndexOf("#endif", include, StringComparison.Ordinal)), "the include stands under the indirect twin's #if");
 			Assert.That(pass.IndexOf("FishStructureCoat(", StringComparison.Ordinal), Is.GreaterThan(pass.IndexOf("FishStructureWeather(inputData", StringComparison.Ordinal)),
 				"the coat lies over the weathering");
-			// The later terms (I2g-e) are read, each behind its own zero test, so an old row draws as before.
+			// The later terms are read, each behind its own zero test, so an old row draws as before.
 			foreach (string term in new[] { "t7.y > 1.5", "t8.z", "t8.w > 0.0", "t9.x > 0.0", "t9.z != 0.0", "t9.w > 0.0", "_FishSeason.x" })
 			{
 				Assert.That(coat, Does.Contain(term), term);

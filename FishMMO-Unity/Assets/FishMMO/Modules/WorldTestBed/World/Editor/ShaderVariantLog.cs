@@ -14,7 +14,7 @@ namespace FishMMO.TestHarness.World.Editor
 	/// Build diagnostics: with FISHMMO_SHADER_VARIANT_LOG=&lt;file&gt;, every variant of the indirect twins that reaches FishMMO's
 	/// stripper ("in", after URP's) and every one that leaves it ("out") is appended to the file, one tab-separated line each:
 	/// stage, shader, pass, shader stage, platform, sorted keywords. The shader compile-cost variant inventory
-	/// (measured 2026-11-03) was read from it. Off (the default) it does nothing.
+	///  was read from it. Off (the default) it does nothing.
 	/// </summary>
 	public abstract class ShaderVariantLog : IPreprocessShaders
 	{

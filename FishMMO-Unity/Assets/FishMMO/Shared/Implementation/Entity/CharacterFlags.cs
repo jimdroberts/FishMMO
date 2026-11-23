@@ -85,13 +85,13 @@
 		/// <summary>
 		/// Character is invisible (an Invisibility buff, a <see cref="StateBuffTemplate"/>): NPCs do not see it in their enemy
 		/// sweeps, though one it strikes still answers. How it looks (the model faded, the nameplate hidden) is the buff's
-		/// effect (<see cref="FXConcealment"/>) on every client. Appended (2026-11-22): the flags are a bit index.
+		/// effect (<see cref="FXConcealment"/>) on every client. Appended: the flags are a bit index.
 		/// </summary>
 		IsInvisible,
 		/// <summary>
 		/// Character sees invisible characters (a See Invisible buff, a <see cref="StateBuffTemplate"/>): an NPC with it finds
 		/// <see cref="IsInvisible"/> characters in its sweeps; a player's client draws them (<see cref="ConcealmentView"/>).
-		/// Never reveals <c>/gm invis</c>, which is observer culling, not this flag. Appended (2026-11-22).
+		/// Never reveals <c>/gm invis</c>, which is observer culling, not this flag. Appended.
 		/// </summary>
 		SeesInvisible,
 	}

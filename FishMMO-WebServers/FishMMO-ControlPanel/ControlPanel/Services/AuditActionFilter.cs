@@ -24,7 +24,7 @@ namespace FishMMO.ControlPanel.Services
 	/// endpoint added tomorrow with no audit code in it is still recorded.
 	/// </para>
 	/// <para>
-	/// <b>Reads are recorded too (2026-09-14).</b> Every Game Master and Admin action is tracked,
+	/// <b>Reads are recorded too.</b> Every Game Master and Admin action is tracked,
 	/// with no exception, and looking at a player's account, tickets or chat is an action. A read
 	/// with no <see cref="AuditedAttribute"/> is recorded under <c>view.&lt;controller&gt;.&lt;action&gt;</c>
 	/// with its query string as the details, so what was searched for is part of the record.
@@ -36,7 +36,7 @@ namespace FishMMO.ControlPanel.Services
 	/// something is the more interesting record.
 	/// </para>
 	/// <para>
-	/// <b>Automatic refreshes are not recorded (2026-09-14, the owner's decision "skip
+	/// <b>Automatic refreshes are not recorded (the owner's decision "skip
 	/// auto-refreshes").</b> The first load of a page and every refresh somebody asked for — a
 	/// Refresh button, a filter change, a page click, the re-read after an action — are recorded.
 	/// A page re-reading itself on a timer is not: the browser marks those requests with

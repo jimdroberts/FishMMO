@@ -12,8 +12,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// The climate's extension of the core's <see cref="WorldSceneSettings"/> (Phase 4 of the core and modules plan,
-	/// 2026-11-17). These were members of the component and are the same reads: <c>settings.Climate()</c> is what
+	/// The climate's extension of the core's <see cref="WorldSceneSettings"/>.
+	/// These were members of the component and are the same reads: <c>settings.Climate()</c> is what
 	/// <c>settings.Climate</c> was, from the scene's atlas entry, then its own <see cref="WorldSceneClimate"/>, then its body.
 	/// </para>
 	/// <para>
@@ -363,7 +363,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Anchored on the world it stands on (2026-10-15).</b> A hand-made scene used to take its temperature from its
+		/// <b>Anchored on the world it stands on.</b> A hand-made scene used to take its temperature from its
 		/// climate asset's Earth-referenced sea level (+26 °C) less a lapse over its NORMALISED height, then add its body's
 		/// offset from the home world — so on a cool world a hand-made scene read about 8 K warmer than ground cut from the
 		/// same latitude, and a 600 m terrain cooled by 29 K from shore to summit. It now reads its body's climate table at

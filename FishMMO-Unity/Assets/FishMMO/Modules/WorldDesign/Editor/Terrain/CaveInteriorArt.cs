@@ -9,7 +9,7 @@ using UnityEditor;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The two biomes a cave answers to (2026-10-25, phase I2n "caves have a biome", decisions 37, 46, 51, 57): its HOST, the biome
+	/// The two biomes a cave answers to ("caves have a biome"): its HOST, the biome
 	/// it opens in, whose are its mouth, its shell's rock and every mine; and, where the host links the cave's form to a cave biome
 	/// whose rocks the shell is cut in, its INTERIOR, whose template dresses the inside (formations, crystals, glow, lights, floor
 	/// grounds, cover, animals, gathering).
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The cave-interior readers and the one resolver of a cave's interior (<see cref="CaveBiome"/>, 2026-10-25, I2n). Every reader
+	/// The cave-interior readers and the one resolver of a cave's interior (<see cref="CaveBiome"/>). Every reader
 	/// takes the template's field; a template never authored with it (no mark, an empty list) takes its spec's and warns once a
 	/// session (<see cref="BiomeTemplateArt.Fallback"/>), as the other template readers do.
 	/// </summary>
@@ -57,7 +57,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>What lights a biome's caves of a form by itself (BiomeTemplateArt.CaveGlow).</summary>
 		public static BiomeCaveGlow Glow(BiomeTemplate biome, CaveForm form) => BiomeTemplateArt.CaveGlow(biome, form);
 
-		// ── Drowned galleries (2026-10-25, phase I2n-c, decision 86) ──
+		// ── Drowned galleries ──
 
 		/// <summary>How a biome's caves of a form stand in the water table (BiomeTemplateArt.CaveFloods), or false for as before.</summary>
 		public static bool Flood(BiomeTemplate biome, CaveForm form, out BiomeCaveFlood flood)
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 			=> BiomeCaveWaters.TryStain(BiomeTemplateArt.CaveStains(biome), (BiomeCaveForm)form, out stain);
 
 		/// <summary>
-		/// The biome whose water look a cave's water takes (its hydrology bodies' LookBiome, decision 86 (b)): the linked interior's,
+		/// The biome whose water look a cave's water takes (its hydrology bodies' LookBiome): the linked interior's,
 		/// where its look is its own (<see cref="BiomeCaveWaters.LookBiome"/>); 0 (by the shores, as before) otherwise.
 		/// </summary>
 		public static int LookBiome(in CaveBiome caves)
@@ -123,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveBiome Of(BiomeTemplate host, CaveForm form, string shell) => Of(host, form, shell, null);
 
 		/// <summary>
-		/// <see cref="Of(BiomeTemplate, CaveForm, string)"/> on a world (2026-10-26, phase I2n-b, decision 83): a form whose link is gated
+		/// <see cref="Of(BiomeTemplate, CaveForm, string)"/> on a world: a form whose link is gated
 		/// by its interior's world (<see cref="BiomeCaveInteriors.GatedByWorld"/>: a sea hall) holds only where the world meets the
 		/// interior's Requires (with no world given, the home world). Every other form as before.
 		/// </summary>
@@ -175,7 +175,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Whether a host's sea halls hold on a world (2026-10-26, phase I2n-b, decision 83): it links the form to an interior whose world
+		/// Whether a host's sea halls hold on a world: it links the form to an interior whose world
 		/// gate the world meets (a frozen-through, cryovolcanic one for the Subsurface Ocean Vent), in the host's shell for the form.
 		/// </summary>
 		public static bool SeaHallsHold(BiomeTemplate host, in BiomeWorldConditions world)
@@ -203,8 +203,8 @@ namespace FishMMO.Shared.WorldDesign
 		// ── What the inside takes ─────────────────────────────────────
 
 		/// <summary>
-		/// The crystals a cave grows: its interior's, with the host's glowing ones as accents at half their weight (decision 51,
-		/// <see cref="BiomeCaveInteriors.WithHostAccents"/>); the host's own where not linked.
+		/// The crystals a cave grows: its interior's, with the host's glowing ones as accents at half their weight
+		/// (<see cref="BiomeCaveInteriors.WithHostAccents"/>); the host's own where not linked.
 		/// </summary>
 		public static IReadOnlyList<BiomeCaveCrystal> Crystals(in CaveBiome caves)
 		{
@@ -217,8 +217,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How a place in a cave is lit: a linked cave by its interior's Cave Lights, else by its host's, either under the world's air
-		/// (the cold Glow kinds where it will not burn a flame, decision 51, <see cref="BiomeCaveInteriors.ForAir"/>). Since decision 62
-		/// (2026-10-25) a host's own lights take the same fallback: a biome of any air painted on an airless or methane world has
+		/// (the cold Glow kinds where it will not burn a flame, <see cref="BiomeCaveInteriors.ForAir"/>). Now
+		/// a host's own lights take the same fallback: a biome of any air painted on an airless or methane world has
 		/// fire cave lights authored for its Earth-like worlds. On breathable air every light is exactly as authored.
 		/// </summary>
 		public static bool CaveLight(in CaveBiome caves, BiomeCaveLightPlace place, bool breathable, out BiomeCaveLight light)
@@ -245,19 +245,19 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Whether the world a scene is cut on has air a flame burns in (BiomeAir.IsBreathable: Standard or Thick, decision 39's rule,
-		/// and not a methane, nitrogen, acid or molten-rock world, decision 62); true without a body (the home world).
+		/// Whether the world a scene is cut on has air a flame burns in (BiomeAir.IsBreathable: Standard or Thick, the rule,
+		/// and not a methane, nitrogen, acid or molten-rock world); true without a body (the home world).
 		/// </summary>
 		public static bool Breathable(SceneGenerationRequest request) => BiomeAir.IsBreathable(World(request));
 
-		// ── Site variants and the palette (decision 51) ───────────────
+		// ── Site variants and the palette ───────────────
 
 		/// <summary>
 		/// The template weights a cave site's pick uses: its host's (BiomeTemplateArt.SiteVariantWeights) where not linked or where
 		/// either template's variants are unauthored; where linked, the two lists merged
 		/// (<see cref="BiomeCaveInteriors.MergedVariantWeight"/>: the host's entry, else the interior's, at ×0.4 where the host names
 		/// its own for the kind), times the host's style weight (a variant either names keeps its weight under a style weighed 0,
-		/// BiomeSiteStyle.Apply, 2026-10-27). Not <paramref name="styled"/>: every style at 1 (the stage's second pick).
+		/// BiomeSiteStyle.Apply). Not <paramref name="styled"/>: every style at 1 (the stage's second pick).
 		/// </summary>
 		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(in CaveBiome caves, bool styled = true)
 		{
@@ -282,7 +282,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Whether a cave site's template is the interior's naming (the host names no weight for its variant, the interior does): its
-		/// pieces then take the interior's structure palette (decision 51).
+		/// pieces then take the interior's structure palette.
 		/// </summary>
 		public static bool InteriorNamed(in CaveBiome caves, PointOfInterestTemplate template)
 		{

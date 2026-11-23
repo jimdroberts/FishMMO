@@ -54,7 +54,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <item><b>Willow</b> (grey willow, <i>Salix cinerea</i>): a many-stemmed goblet of narrow grey-green leaves
 		/// 3.5 m tall on wet ground; dwarfed on tundra; deciduous.</item>
 		/// </list>
-		/// Added by the vegetation expansion (2026-10-10), so every biome's shrub layer has its real species:
+		/// Added by the vegetation expansion, so every biome's shrub layer has its real species:
 		/// <list type="bullet">
 		/// <item><b>Heather</b> (ling, <i>Calluna vulgaris</i>): the moorland and bog's dwarf shrub, a wiry cushion half a
 		/// metre tall under purple flower spikes.</item>
@@ -130,7 +130,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#5a4a3a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.4f, LeafA = H("#5a7a48"), LeafB = H("#7a9460"),
 				Shell = 0.45f, Fullness = 3.4f, BareBase = 0.18f, Irregularity = 0.2f, Deciduous = true },
 
-			// ── Vegetation expansion (2026-10-10) ──
+			// ── Vegetation expansion ──
 			new BushSpecies { Name = "Heather", Habit = BushHabit.Cushion, Height = 0.5f, Width = 0.9f, Stems = 10, StemRadius = 0.008f, Branches = 3,
 				Bark = H("#5a4a3a"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.15f, LeafA = H("#3a4a2a"), LeafB = H("#4e5e34"),
 				Shell = 0.35f, Fullness = 4.2f, BareBase = 0f, Irregularity = 0.18f,
@@ -182,7 +182,7 @@ namespace FishMMO.Shared.WorldDesign
 			new BushSpecies { Name = "Palmetto", Habit = BushHabit.Mound, Height = 1.5f, Width = 2.5f, Stems = 14, StemRadius = 0.012f, Branches = 0,
 				Bark = H("#6a6a48"), LeafCell = FoliageCell.Blade, LeafSize = 0.55f, LeafA = H("#3e6a34"), LeafB = H("#52804a"),
 				Shell = 0.3f, Fullness = 5f, BareBase = 0.05f, Irregularity = 0.2f, FanLeaves = true },
-			// ── Tundra (biome round, 2026-10-26): the knee-high arctic shrubs (decision 25's Prostrate habit for the mats) ──
+			// ── Tundra: the knee-high arctic shrubs (the Prostrate habit for the mats) ──
 			new BushSpecies { Name = "ArcticWillow", Habit = BushHabit.Prostrate, Height = 0.16f, Width = 1.4f, Stems = 7, StemRadius = 0.008f, Branches = 3,
 				Bark = H("#5a4a3a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.1f, LeafA = H("#4a6a3a"), LeafB = H("#6a8a4a"),
 				Shell = 0.3f, Fullness = 2.6f, BareBase = 0f, Irregularity = 0.25f, Deciduous = true,
@@ -199,13 +199,13 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#4a3a2e"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.1f, LeafA = H("#3a4a2e"), LeafB = H("#4a5a34"),
 				Shell = 0.35f, Fullness = 4.2f, BareBase = 0.02f, Irregularity = 0.2f,
 				Flowers = new[] { H("#a03a90"), H("#b04aa0") }, FlowerShare = 0.35f, FlowerSize = 0.03f },
-			// ── Glacier (biome round, 2026-10-26) ── Caragana jubata, "camel's tail": shaggy grey-white spine-sheathed stems on the outer
-			// moraines. LATER (I9b): a Shaggy habit (persistent sheaths along each stem); Whip canes stand in.
+			// ── Glacier ── Caragana jubata, "camel's tail": shaggy grey-white spine-sheathed stems on the outer
+			// moraines. LATER: a Shaggy habit (persistent sheaths along each stem); Whip canes stand in.
 			new BushSpecies { Name = "CaraganaJubata", Habit = BushHabit.Whip, Height = 1.2f, Width = 0.9f, Stems = 16, StemRadius = 0.02f, Branches = 0,
 				Bark = H("#c8c0b0"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.12f, LeafA = H("#6a8a5a"), LeafB = H("#7a9a6a"),
 				Shell = 0f, Fullness = 1.2f, BareBase = 0.05f, Irregularity = 0.1f, Open = true,
 				Flowers = new[] { H("#f0d0d8") }, FlowerShare = 0.1f, FlowerSize = 0.04f },
-			// ── Forest (biome round, 2026-10-26) ── The closed canopy's sparse evergreen-led understorey.
+			// ── Forest ── The closed canopy's sparse evergreen-led understorey.
 			// Forest holly grown up tree-form under the beech, glossy and dark, berries scarlet.
 			new BushSpecies { Name = "HollyForest", Habit = BushHabit.Upright, Height = 6.5f, Width = 3.5f, Stems = 5, StemRadius = 0.08f, Branches = 5,
 				Bark = H("#6a6a5a"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.55f, LeafA = H("#142e14"), LeafB = H("#1e3e1a"),
@@ -226,7 +226,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#3e5a2e"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.2f, LeafA = H("#2e4a22"), LeafB = H("#3a5a28"),
 				Shell = 0.35f, Fullness = 4f, BareBase = 0f, Irregularity = 0.2f,
 				Flowers = new[] { H("#c02020") }, FlowerShare = 0.03f, FlowerSize = 0.03f },
-			// ── Woodland (biome round, 2026-10-26) ── The managed wood's coppice, thickets and hedges. LATER (I9b P27): true cut stools;
+			// ── Woodland ── The managed wood's coppice, thickets and hedges. LATER: true cut stools;
 			// a just-cut stool stands in as a low spread of short shoots.
 			// Coppiced hazel: a vase of straight rods, catkins in spring.
 			new BushSpecies { Name = "HazelCoppice", Habit = BushHabit.Vase, Height = 5f, Width = 4f, Stems = 16, StemRadius = 0.03f, Branches = 2,
@@ -271,8 +271,8 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#7a6a58"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.45f, LeafA = H("#5a7040"), LeafB = H("#7a8a5a"),
 				Shell = 0.45f, Fullness = 3.4f, BareBase = 0.2f, Irregularity = 0.2f, Deciduous = true,
 				Flowers = new[] { H("#f2eee0"), H("#c02818") }, FlowerShare = 0.15f, FlowerSize = 0.1f },
-			// ── Alpine Meadow (biome round, 2026-10-26) ── The knieholz: the high pastures' dwarf mugo pine, broader and darker than
-			// Alpine's (its own species until I9's per-biome variants). The Carpathian rhododendron's crimson cushions on the north
+			// ── Alpine Meadow ── The knieholz: the high pastures' dwarf mugo pine, broader and darker than
+			// Alpine's (its own species until the later per-biome variants). The Carpathian rhododendron's crimson cushions on the north
 			// faces, and the upright Silesian willow by the streams (Tundra's willow is prostrate).
 			new BushSpecies { Name = "Knieholz", Habit = BushHabit.Spreading, Height = 2.2f, Width = 4.5f, Stems = 10, StemRadius = 0.07f, Branches = 3,
 				Bark = H("#3a2e26"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.55f, LeafA = H("#1e3a22"), LeafB = H("#34522e"),
@@ -285,7 +285,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#7a3a2a"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.3f, LeafA = H("#4a6a34"), LeafB = H("#5e7e40"),
 				Shell = 0.45f, Fullness = 3.4f, BareBase = 0.15f, Irregularity = 0.2f, Deciduous = true,
 				Flowers = new[] { H("#d8d8c8") }, FlowerShare = 0.1f, FlowerSize = 0.03f },
-			// ── Mountain Slope (biome round, 2026-10-26) ── Tree hypericum with its gold cups in the glades, wild coffee in the warm
+			// ── Mountain Slope ── Tree hypericum with its gold cups in the glades, wild coffee in the warm
 			// forest, the frost-moor's silver alchemilla mounds, and gesho, the mead's bittering shrub of the hedges.
 			new BushSpecies { Name = "TreeHypericum", Habit = BushHabit.Vase, Height = 4.5f, Width = 3.2f, Stems = 6, StemRadius = 0.05f, Branches = 4,
 				Bark = H("#8a5a3a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.4f, LeafA = H("#3a5a26"), LeafB = H("#5a7a32"),
@@ -302,15 +302,15 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#5a4a3a"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.4f, LeafA = H("#22401e"), LeafB = H("#34562a"),
 				Shell = 0.4f, Fullness = 3.8f, BareBase = 0.1f, Irregularity = 0.25f,
 				Flowers = new[] { H("#a82a22") }, FlowerShare = 0.05f, FlowerSize = 0.03f },
-			// ── Scree (biome round, 2026-10-26) ── Jindallae azalea: slender grey-brown twigs, magenta-pink flowers on the warm cones.
+			// ── Scree ── Jindallae azalea: slender grey-brown twigs, magenta-pink flowers on the warm cones.
 			new BushSpecies { Name = "Jindallae", Habit = BushHabit.Upright, Height = 1.5f, Width = 1.2f, Stems = 8, StemRadius = 0.015f, Branches = 3,
 				Bark = H("#7a6a5a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#4a6a2a"), LeafB = H("#5a7a34"),
 				Shell = 0.4f, Fullness = 3.8f, BareBase = 0.08f, Irregularity = 0.25f, Deciduous = true,
 				Flowers = new[] { H("#c83a9a"), H("#d85aaa") }, FlowerShare = 0.4f, FlowerSize = 0.05f },
 
-			// ── Scrubland (biome round, 2026-10-26) ── The Sonoran desert scrub's matrix shrubs (bursage on the bajadas, white bursage on
+			// ── Scrubland ── The Sonoran desert scrub's matrix shrubs (bursage on the bajadas, white bursage on
 			// the creosote flats), the brittlebush of the hot slopes, jojoba, the washes' fairy duster and chuparosa, and quailbush on the
-			// canal banks. LATER (I9): Creosote and Ocotillo as Scrubland's own textured variants (the catalogue's stand in).
+			// canal banks. LATER: Creosote and Ocotillo as Scrubland's own textured variants (the catalogue's stand in).
 			new BushSpecies { Name = "Bursage", Habit = BushHabit.Mound, Height = 0.55f, Width = 0.8f, Stems = 10, StemRadius = 0.008f, Branches = 3,
 				Bark = H("#6a6050"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#7a8a6a"), LeafB = H("#94a080"),
 				Shell = 0.3f, Fullness = 3.6f, BareBase = 0.06f, Irregularity = 0.25f },
@@ -337,7 +337,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#8a8070"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.3f, LeafA = H("#94a0a0"), LeafB = H("#aab4b2"),
 				Shell = 0.35f, Fullness = 3.6f, BareBase = 0.06f, Irregularity = 0.25f },
 
-			// ── Jungle + Bamboo Forest (biome rounds, 2026-10-26) ── The rainforest's understorey and the bamboo hills' shade shrubs.
+			// ── Jungle + Bamboo Forest ── The rainforest's understorey and the bamboo hills' shade shrubs.
 			// Dracaena (the boundary peace plant): ringed grey canes tufted with strap leaves, cream panicles.
 			new BushSpecies { Name = "Dracaena", Habit = BushHabit.Upright, Height = 4f, Width = 1.8f, Stems = 8, StemRadius = 0.04f, Branches = 4,
 				Bark = H("#8a8070"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.9f, LeafA = H("#3a6a2a"), LeafB = H("#5a8a3a"),
@@ -394,7 +394,7 @@ namespace FishMMO.Shared.WorldDesign
 				Shell = 0.4f, Fullness = 4.2f, BareBase = 0f, Irregularity = 0.1f,
 				Flowers = new[] { H("#f6f2e4") }, FlowerShare = 0.05f, FlowerSize = 0.03f },
 
-			// ── Savanna (biome round, 2026-10-26) ── The veld's thickets: sickle bush with its two-tone lantern catkins, the raisin bush of
+			// ── Savanna ── The veld's thickets: sickle bush with its two-tone lantern catkins, the raisin bush of
 			// the termite islands, and red bushwillow on the granite edges.
 			new BushSpecies { Name = "SickleBush", Habit = BushHabit.Spreading, Height = 2.5f, Width = 2.5f, Stems = 7, StemRadius = 0.03f, Branches = 4,
 				Bark = H("#5a4a3a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.3f, LeafA = H("#5a6a30"), LeafB = H("#6a7a3a"),
@@ -408,7 +408,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#6a5e50"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.45f, LeafA = H("#5a7a2e"), LeafB = H("#a8602a"),
 				Shell = 0.45f, Fullness = 3.2f, BareBase = 0.2f, Irregularity = 0.25f, Deciduous = true,
 				Flowers = new[] { H("#b08a5a") }, FlowerShare = 0.2f, FlowerSize = 0.07f },
-			// ── Grassland (biome round, 2026-10-26) ── The forest-steppe scrub on the loess slopes, kurgans and grove edges.
+			// ── Grassland ── The forest-steppe scrub on the loess slopes, kurgans and grove edges.
 			// Dwarf almond (Prunus tenella): suckering, narrow leaves, pink spring blossom.
 			new BushSpecies { Name = "DwarfAlmond", Habit = BushHabit.Spreading, Height = 1.2f, Width = 1.6f, Stems = 14, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#5a3a2e"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#3e6a2a"), LeafB = H("#5a7a34"),
@@ -435,7 +435,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#5a4e44"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.6f, LeafA = H("#3e6a2a"), LeafB = H("#5a8034"),
 				Shell = 0.45f, Fullness = 3.4f, BareBase = 0.35f, Irregularity = 0.2f, Deciduous = true,
 				Flowers = new[] { H("#c03028") }, FlowerShare = 0.2f, FlowerSize = 0.05f },
-			// ── Plains (biome round, 2026-10-26) ── Shrubs only in the draws, the sand and the breaks.
+			// ── Plains ── Shrubs only in the draws, the sand and the breaks.
 			// Sand plum: a suckering thicket of red twigs, white spring blossom, red-orange plums.
 			new BushSpecies { Name = "SandPlum", Habit = BushHabit.Mound, Height = 1.8f, Width = 3f, Stems = 14, StemRadius = 0.015f, Branches = 3,
 				Bark = H("#7a3a2a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.3f, LeafA = H("#3e6a2a"), LeafB = H("#4e7a32"),
@@ -469,7 +469,7 @@ namespace FishMMO.Shared.WorldDesign
 			new BushSpecies { Name = "SandbarWillow", Habit = BushHabit.Upright, Height = 3f, Width = 2f, Stems = 14, StemRadius = 0.015f, Branches = 2,
 				Bark = H("#8a6a4a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.3f, LeafA = H("#7a8a6a"), LeafB = H("#8a9a7a"),
 				Shell = 0.4f, Fullness = 3.2f, BareBase = 0.15f, Irregularity = 0.2f, Deciduous = true },
-			// ── Steppe (biome round, 2026-10-26) ── The salt tree on the sor rims and river terraces, Atraphaxis on the grit.
+			// ── Steppe ── The salt tree on the sor rims and river terraces, Atraphaxis on the grit.
 			new BushSpecies { Name = "SaltTree", Habit = BushHabit.Arching, Height = 1.6f, Width = 2f, Stems = 8, StemRadius = 0.015f, Branches = 2,
 				Bark = H("#7a7068"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#a8b0a0"), LeafB = H("#c0c8b8"),
 				Shell = 0.45f, Fullness = 3f, BareBase = 0.08f, Irregularity = 0.25f, Deciduous = true,
@@ -478,7 +478,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#7a4a3a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.15f, LeafA = H("#8a9a7a"), LeafB = H("#9aa88a"),
 				Shell = 0.35f, Fullness = 3f, BareBase = 0.05f, Irregularity = 0.2f, Deciduous = true, Open = true,
 				Flowers = new[] { H("#f0d0d8") }, FlowerShare = 0.45f, FlowerSize = 0.02f },
-			// ── Estuary (biome round, 2026-10-26) ── The saltings' two shrubs: sea purslane along the creek rims, shrubby sea-blite in the warm reach.
+			// ── Estuary ── The saltings' two shrubs: sea purslane along the creek rims, shrubby sea-blite in the warm reach.
 			// Sea purslane (Halimione): a mealy silver-grey mound along every creek edge.
 			new BushSpecies { Name = "SeaPurslane", Habit = BushHabit.Mound, Height = 0.5f, Width = 1.2f, Stems = 10, StemRadius = 0.01f, Branches = 3,
 				Bark = H("#8a8a7a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.12f, LeafA = H("#8a9a88"), LeafB = H("#b4c0b0"),
@@ -487,7 +487,7 @@ namespace FishMMO.Shared.WorldDesign
 			new BushSpecies { Name = "ShrubbySeablite", Habit = BushHabit.Mound, Height = 1f, Width = 1.2f, Stems = 10, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#6a6a5a"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.15f, LeafA = H("#3a5a4a"), LeafB = H("#4a6a58"),
 				Shell = 0.5f, Fullness = 4f, BareBase = 0f, Irregularity = 0.25f },
-			// ── Desert (biome round, 2026-10-26) ── Arta's leafless jointed switches over its nebkha with red bristly fruit balls, markh's
+			// ── Desert ── Arta's leafless jointed switches over its nebkha with red bristly fruit balls, markh's
 			// rush-like green rope stems, and the toothbrush tree's drooping fleshy-leaved sprays with pink-red berries at the wells.
 			new BushSpecies { Name = "Arta", Habit = BushHabit.Whip, Height = 2f, Width = 2f, Stems = 12, StemRadius = 0.012f, Branches = 0,
 				Bark = H("#8a8a72"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.12f, LeafA = H("#8a9a7a"), LeafB = H("#9aa888"),
@@ -502,7 +502,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#8a8070"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.35f, LeafA = H("#7a9a5a"), LeafB = H("#8aaa68"),
 				Shell = 0.45f, Fullness = 2.6f, BareBase = 0.1f, Irregularity = 0.3f, Open = true,
 				Flowers = new[] { H("#c84a5a") }, FlowerShare = 0.2f, FlowerSize = 0.04f },
-			// ── Badlands (biome round, 2026-10-26) ── Geven, the plateau's spiny tragacanth cushion; Christ's thorn of the field hedges with
+			// ── Badlands ── Geven, the plateau's spiny tragacanth cushion; Christ's thorn of the field hedges with
 			// its coin-like winged fruit; the copper briar's copper-scarlet roses by the ruins and hans.
 			new BushSpecies { Name = "Tragacanth", Habit = BushHabit.Cushion, Height = 0.5f, Width = 0.9f, Stems = 20, StemRadius = 0.008f, Branches = 3,
 				Bark = H("#7a7262"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.15f, LeafA = H("#8a9a80"), LeafB = H("#9aa890"),
@@ -517,9 +517,9 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#7a4a30"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.25f, LeafA = H("#4a6a34"), LeafB = H("#5a7a3e"),
 				Shell = 0.45f, Fullness = 3.8f, BareBase = 0.05f, Irregularity = 0.25f, Deciduous = true,
 				Flowers = new[] { H("#d8501a"), H("#f0c020") }, FlowerShare = 0.35f, FlowerSize = 0.06f },
-			// ── Salt Flat (biome round, 2026-10-26) ── Saltwort's glaucous succulent mounds going wine-red with pink-buff winged fruit, the
+			// ── Salt Flat ── Saltwort's glaucous succulent mounds going wine-red with pink-buff winged fruit, the
 			// grey thorny caper of the lava rim, and the myrrh's few spiny stems under sparse trifoliate leaves (mostly bare).
-			// LATER (I9 P11): the myrrh's PaperPeel bark (bushes take a bark colour, not a family).
+			// LATER: the myrrh's PaperPeel bark (bushes take a bark colour, not a family).
 			new BushSpecies { Name = "Salsola", Habit = BushHabit.Mound, Height = 0.8f, Width = 1.2f, Stems = 10, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#7a6a5a"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.18f, LeafA = H("#7a8a72"), LeafB = H("#8a3a3a"),
 				Shell = 0.35f, Fullness = 3.6f, BareBase = 0.05f, Irregularity = 0.25f,
@@ -530,7 +530,7 @@ namespace FishMMO.Shared.WorldDesign
 			new BushSpecies { Name = "Commiphora", Habit = BushHabit.Spreading, Height = 3f, Width = 3f, Stems = 3, StemRadius = 0.06f, Branches = 4,
 				Bark = H("#8a8a6a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#5a6a3a"), LeafB = H("#6a7a44"),
 				Shell = 0.3f, Fullness = 1.4f, BareBase = 0.2f, Irregularity = 0.35f, Deciduous = true, Open = true },
-			// ── Beach (biome round, 2026-10-26): the dune willow, burnet rose and crowberry of the cool grey dune; the warm strand's sea grape ──
+			// ── Beach: the dune willow, burnet rose and crowberry of the cool grey dune; the warm strand's sea grape ──
 			new BushSpecies { Name = "DuneWillow", Habit = BushHabit.Prostrate, Height = 0.5f, Width = 2f, Stems = 7, StemRadius = 0.01f, Branches = 3,
 				Bark = H("#6a3a2a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.12f, LeafA = H("#a8b0a0"), LeafB = H("#c8d0c0"),
 				Shell = 0.3f, Fullness = 2.5f, BareBase = 0f, Irregularity = 0.25f, Deciduous = true },
@@ -542,12 +542,12 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#3a2a22"), LeafCell = FoliageCell.BushNeedle, LeafSize = 0.1f, LeafA = H("#2a3a22"), LeafB = H("#3a4a2a"),
 				Shell = 0.3f, Fullness = 2.2f, BareBase = 0f, Irregularity = 0.2f,
 				Flowers = new[] { H("#1a1418") }, FlowerShare = 0.1f, FlowerSize = 0.02f },
-			// LATER (I9b): the sea grape's red-veined old leaves and its grape clusters; the round leathery leaf stands in.
+			// LATER: the sea grape's red-veined old leaves and its grape clusters; the round leathery leaf stands in.
 			new BushSpecies { Name = "SeaGrape", Habit = BushHabit.Spreading, Height = 2.5f, Width = 4f, Stems = 7, StemRadius = 0.04f, Branches = 4,
 				Bark = H("#6a5a46"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.4f, LeafA = H("#5a7a3a"), LeafB = H("#a83a2a"),
 				Shell = 0.3f, Fullness = 4.3f, BareBase = 0.06f, Irregularity = 0.22f,
 				Flowers = new[] { H("#6a2a4a") }, FlowerShare = 0.04f, FlowerSize = 0.1f },
-			// ── Hills (biome round, 2026-10-26) ── The hills' scrub on the fells and abandoned terraces.
+			// ── Hills ── The hills' scrub on the fells and abandoned terraces.
 			// Tree-heath (Erica arborea), the briar: an upright needle-leaved bush under white honey flowers. LATER (budget):
 			// its 3.5 m height; the juniper's in-budget proportions (3 m) stand in. Spanish broom on the ocotillo's whip proportions.
 			new BushSpecies { Name = "TreeHeath", Habit = BushHabit.Upright, Height = 3f, Width = 1.5f, Stems = 8, StemRadius = 0.04f, Branches = 5,
@@ -582,7 +582,7 @@ namespace FishMMO.Shared.WorldDesign
 			new BushSpecies { Name = "WildFig", Habit = BushHabit.Mound, Height = 4f, Width = 5f, Stems = 5, StemRadius = 0.06f, Branches = 4,
 				Bark = H("#8a8478"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.7f, LeafA = H("#3a6a2a"), LeafB = H("#5a8034"),
 				Shell = 0.4f, Fullness = 4f, BareBase = 0.05f, Irregularity = 0.2f, Deciduous = true },
-			// ── Wetlands (biome round, 2026-10-26) ── The warm reach's thorn scrub of the levees: Syrian mesquite and the Christ's-thorn sidr.
+			// ── Wetlands ── The warm reach's thorn scrub of the levees: Syrian mesquite and the Christ's-thorn sidr.
 			// Syrian mesquite (Prosopis farcta): a spiny low mound of bipinnate leaves with curled pods.
 			new BushSpecies { Name = "Prosopis", Habit = BushHabit.Mound, Height = 0.8f, Width = 1.4f, Stems = 10, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#6a5a40"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.15f, LeafA = H("#6a8a5a"), LeafB = H("#7a9a68"),
@@ -592,7 +592,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#7a6a56"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.5f, LeafA = H("#4a6a34"), LeafB = H("#5e8040"),
 				Shell = 0.4f, Fullness = 3.2f, BareBase = 0.2f, Irregularity = 0.25f,
 				Flowers = new[] { H("#d88a2a") }, FlowerShare = 0.05f, FlowerSize = 0.03f },
-			// ── Mangrove (biome round, 2026-10-26) ── The landward fringe's shrubs: sea hibiscus, pemphis on the rag, lumnitzera on the rims.
+			// ── Mangrove ── The landward fringe's shrubs: sea hibiscus, pemphis on the rag, lumnitzera on the rims.
 			// Sea hibiscus (Talipariti tiliaceum): a spreading thicket of heart leaves, yellow cups with a maroon eye.
 			new BushSpecies { Name = "SeaHibiscus", Habit = BushHabit.Vase, Height = 5f, Width = 6f, Stems = 6, StemRadius = 0.05f, Branches = 4,
 				Bark = H("#7a6a52"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.5f, LeafA = H("#3a6a2a"), LeafB = H("#5a8a38"),
@@ -608,7 +608,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#6a5a46"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.3f, LeafA = H("#5a8a2a"), LeafB = H("#6a9a34"),
 				Shell = 0.4f, Fullness = 3.4f, BareBase = 0.15f, Irregularity = 0.25f,
 				Flowers = new[] { H("#f6f4ee") }, FlowerShare = 0.06f, FlowerSize = 0.04f },
-			// ── Lake and River (biome round, 2026-10-26) ── Purple-willow scrub on the lake's gravel strand-top, and the dewberry trailing over the river's bars.
+			// ── Lake and River ── Purple-willow scrub on the lake's gravel strand-top, and the dewberry trailing over the river's bars.
 			new BushSpecies { Name = "LakeWillowScrub", Habit = BushHabit.Upright, Height = 1.2f, Width = 1.5f, Stems = 12, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#6a2a4a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.16f, LeafA = H("#6a8a7a"), LeafB = H("#7a9a8a"),
 				Shell = 0.4f, Fullness = 3f, BareBase = 0.1f, Irregularity = 0.25f, Deciduous = true },
@@ -616,7 +616,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#5a3a4a"), LeafCell = FoliageCell.BushBroad, LeafSize = 0.28f, LeafA = H("#4a6a3a"), LeafB = H("#5e7e46"),
 				Shell = 0.4f, Fullness = 2.6f, BareBase = 0.05f, Irregularity = 0.3f, Deciduous = true,
 				Flowers = new[] { H("#4a5a8a") }, FlowerShare = 0.12f, FlowerSize = 0.03f },
-			// ── Rocky Terrain (biome round, 2026-10-26) ── Teresken (winterfat) in the gravel, the Pamir rose along the streams, the Bukhara almond on the warm sun-slopes.
+			// ── Rocky Terrain ── Teresken (winterfat) in the gravel, the Pamir rose along the streams, the Bukhara almond on the warm sun-slopes.
 			new BushSpecies { Name = "Teresken", Habit = BushHabit.Mound, Height = 0.5f, Width = 0.75f, Stems = 20, StemRadius = 0.012f, Branches = 3,
 				Bark = H("#b8b0a0"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.14f, LeafA = H("#a8a898"), LeafB = H("#c0c0b0"),
 				Shell = 0.35f, Fullness = 3.6f, BareBase = 0.1f, Irregularity = 0.25f,
@@ -629,7 +629,7 @@ namespace FishMMO.Shared.WorldDesign
 				Bark = H("#6a625a"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#6a7a4a"), LeafB = H("#7a8a58"),
 				Shell = 0.4f, Fullness = 2.6f, BareBase = 0.2f, Irregularity = 0.3f, Deciduous = true,
 				Flowers = new[] { H("#f0c0c8") }, FlowerShare = 0.15f, FlowerSize = 0.04f },
-			// ── Geyser Basin (biome round, 2026-10-26) ── The woolly willow of the gullies and halos, the tea-leaf willow of the banks.
+			// ── Geyser Basin ── The woolly willow of the gullies and halos, the tea-leaf willow of the banks.
 			new BushSpecies { Name = "WoollyWillow", Habit = BushHabit.Spreading, Height = 0.9f, Width = 1.4f, Stems = 10, StemRadius = 0.015f, Branches = 3,
 				Bark = H("#6a5a48"), LeafCell = FoliageCell.BushSmall, LeafSize = 0.2f, LeafA = H("#a8b0a0"), LeafB = H("#c8ccc0"),
 				Shell = 0.4f, Fullness = 3.4f, BareBase = 0.1f, Irregularity = 0.3f, Deciduous = true,

@@ -206,8 +206,8 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Rocks_AreClosedOutwardFacingDeterministic_AndWithinBudget()
 		{
-			// Every stone material's own boulders (StoneMeshes, decision 6 of the biome suite), which replaced the shared RockMeshes
-			// shapes; rewritten for decision 22 (2026-10-26, I6f) to prove each closed: every welded edge used once each way.
+			// Every stone material's own boulders (StoneMeshes), which replaced the shared RockMeshes
+			// shapes; rewritten for decision 22 to prove each closed: every welded edge used once each way.
 			int[] levels = ProceduralArtCatalogue.BoulderResolution;
 			foreach (RockMaterialSpec material in ProceduralArtCatalogue.AllRockMaterials)
 			{
@@ -510,7 +510,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_FillsEmptySlotsAndRules_ThenChangesNothingTheSecondTime()
 		{
-			// The Valley (unauthored): its main ground is still the generic grass (the Grassland round, 2026-10-26, gave Grassland its own).
+			// The Valley (unauthored): its main ground is still the generic grass (gave Grassland its own).
 			BiomeTemplate biome = MakeBiome("Valley");
 			// A flat colour swatch counts as empty; the tool fills over it without erasing it.
 			biome.MainTextureLayer.albedoTexture = MakeTexture("BiomeTexture_Valley_80CC66");
@@ -542,7 +542,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The template carries everything the cut reads for ground, rock, ways and growth (2026-10-15): one run fills the
+		/// The template carries everything the cut reads for ground, rock, ways and growth: one run fills the
 		/// way and river-bar slots with the spec's grounds, the rock values, each cliff's rock and the point-of-interest
 		/// growth, with what the cut computed from the spec before; a second run changes nothing; a hand edit is kept.
 		/// </summary>
@@ -595,14 +595,14 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The template carries its living looks too (2026-10-15): one run writes the look class the spec names, a look for
+		/// The template carries its living looks too: one run writes the look class the spec names, a look for
 		/// every blade prefab the biome grows (the old look, ground tint 0.85) and every generated slot's ground makeup; a
 		/// second run changes nothing; a hand-edited class, blade look or makeup is kept.
 		/// </summary>
 		[Test]
 		public void Authoring_WritesLooksBladesAndMakeup_OnceAndKeepsHandEdits()
 		{
-			// The Valley (unauthored): no blade tunings of its own (the Plains round, 2026-10-26, tuned every Plains blade).
+			// The Valley (unauthored): no blade tunings of its own (tuned every Plains blade).
 			BiomeTemplate biome = MakeBiome("Valley");
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			var source = new FakeSource(created);
@@ -640,7 +640,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The template carries its water role (2026-10-15) and its caves' shells (2026-10-16): one run writes the role the
+		/// The template carries its water role and its caves' shells: one run writes the role the
 		/// biome's name played and every cave form's old shell (Ground where it was the ground's rock); a second run changes
 		/// nothing; a role cleared by hand and a hand-picked shell are kept, and the cut reads them. A template never authored
 		/// still cuts its caves as before.
@@ -687,7 +687,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// I5 (2026-10-16): the template carries the points of interest it hosts, its template variants' weights, its weathering,
+		/// The template carries the points of interest it hosts, its template variants' weights, its weathering,
 		/// its crops and its structure palette. One run writes what the biome's name (and the kit) gave, which the cut then reads
 		/// exactly as it read the name; a second changes nothing; values edited or cleared by hand are kept. A template never
 		/// authored still reads its name.
@@ -710,7 +710,7 @@ namespace FishMMO.UnitTests
 
 			var first = new BiomeArtAuthoring.Report();
 			Assert.IsTrue(BiomeArtAuthoring.Author(desert, entry, source, first, true));
-			// Authored: its file's own (the desert's round and the fantasy wave give it its own weights since), off the template.
+			// Authored: its file's own (the desert's round and the fantasy set give it its own weights since), off the template.
 			var byFile = new Dictionary<FishMMO.Shared.NameGeneration.POIType, float>();
 			foreach (BiomeSiteKind k in entry.SiteKinds())
 			{
@@ -749,10 +749,10 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// I5b (2026-10-16): lists are marked entry by entry. One run writes the moat water and street lights the code decided,
+		/// Lists are marked entry by entry. One run writes the moat water and street lights the code decided,
 		/// adopts a hand-made point-of-interest template naming the biome, and marks every list per entry; a hand-edited kind
 		/// is kept, a hand-deleted kind and light stay deleted, a hand-set moat is kept, and a variant added later still reaches
-		/// the hand-edited variant list. A list carrying I5's one mark for the whole of it converts.
+		/// the hand-edited variant list. A list carrying the one mark for the whole of it converts.
 		/// </summary>
 		[Test]
 		public void Authoring_MarksListsPerEntry_WritesMoatAndLights_AndAdoptsHandMadeTemplates()
@@ -805,7 +805,7 @@ namespace FishMMO.UnitTests
 			Assert.That(BiomeTemplateArt.WayLight(desert, FishMMO.Shared.NameGeneration.POIType.Village, out _), Is.False, "a deleted light came back");
 			Assert.That(BiomeTemplateArt.MoatWater(desert), Is.EqualTo(BiomeMoatWater.Wet), "a hand-set moat was overwritten");
 
-			// I5's one mark for the whole list, untouched since: converted to a mark per entry, the list as it was.
+			// The one mark for the whole list, untouched since: converted to a mark per entry, the list as it was.
 			BiomeTemplate plains = MakeBiome("Plains");
 			BiomeArtAuthoring.Author(plains, BiomeArtSpec.For("Plains"), source, new BiomeArtAuthoring.Report(), true);
 			var kinds = new List<BiomeSiteKind>(plains.SiteKinds);
@@ -820,7 +820,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// I4b (2026-10-16): a site paints its own biome's prototype of a plant on a real tile: it reuses the tile's prototype
+		/// A site paints its own biome's prototype of a plant on a real tile: it reuses the tile's prototype
 		/// recorded for its biome, adds (and records) its own beside another biome's, copying it, with a seed of its own; a
 		/// second site of the same biome reuses that one.
 		/// </summary>
@@ -865,7 +865,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// I3b (2026-10-16): the authoring removes the Grass Types entries it wrote, untouched since, for blades the biome no
+		/// The authoring removes the Grass Types entries it wrote, untouched since, for blades the biome no
 		/// longer grows; hand-made and hand-edited entries stay.
 		/// </summary>
 		[Test]
@@ -1041,7 +1041,7 @@ namespace FishMMO.UnitTests
 			/* Biomes authored before carpets hold Grassland's grass exactly as the old Grass helper
 			 * wrote it, with no fingerprint. One untouched: it must become the spec's carpet in place,
 			 * GUID and all. One whose density somebody changed: it must be left exactly as it is. */
-			// The Valley (unauthored) still grows the generic lush grass the old helper wrote (the Grassland round, 2026-10-26, has its own).
+			// The Valley (unauthored) still grows the generic lush grass the old helper wrote (has its own).
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			BiomeArtSpec.Scatter grass = entry.Main.Scatter.Find(s => s.Name == "GrassLush");
 			Assume.That(grass, Is.Not.Null);
@@ -1367,17 +1367,17 @@ namespace FishMMO.UnitTests
 			}
 
 			Assert.That(Cover("Taiga", "Trees: Spruce"), Is.GreaterThanOrEqualTo(0.7f));
-			// The Forest round (2026-10-26): its own beech, veteran oak and lime in a closed vault.
+			// The Forest biome: its own beech, veteran oak and lime in a closed vault.
 			Assert.That(Cover("Forest", "Trees: BeechForest, OakForest, Lime"), Is.GreaterThanOrEqualTo(0.7f));
 			Assert.That(Cover("Taiga", "Trees: Pine, Larch"), Is.GreaterThanOrEqualTo(0.7f), "larch joins the pine's woods rather than competing with a stand rule of its own");
 			Assert.That(BiomeArtSpec.For("Forest").Retired, Has.Member(("main", "Trees: Oak, Birch")), "the rule beech joined is retired under its old name");
 			Assert.That(BiomeArtSpec.For("Alpine Meadow").Retired, Has.Member(("main", "Trees: Spruce")));
-			// The Jungle round (2026-10-26): the mixed rainforest canopy, crowns closing.
+			// The Jungle biome: the mixed rainforest canopy, crowns closing.
 			Assert.That(Cover("Jungle", "Trees: ForestCanopy, AfricanMahogany, Kola"), Is.GreaterThanOrEqualTo(0.8f));
-			// The Woodland round (2026-10-26): wood-pasture veterans on the turf, the coppice standards in their own stands.
+			// The Woodland biome: wood-pasture veterans on the turf, the coppice standards in their own stands.
 			Assert.That(Cover("Woodland", "Trees: OakWoodland, CrabApple"), Is.InRange(0.35f, 0.7f));
 			Assert.That(Cover("Woodland", "Trees: OakWoodland, SweetChestnut, FieldMaple, BirchWoodland"), Is.InRange(0.35f, 0.7f));
-			// The Grassland and Plains rounds (2026-10-26): the puszta's Turkey-oak islands, the prairie's bur-oak openings.
+			// The Grassland and Plains biomes: the puszta's Turkey-oak islands, the prairie's bur-oak openings.
 			Assert.That(Cover("Grassland", "Trees: TurkeyOak"), Is.LessThanOrEqualTo(0.2f));
 			Assert.That(Cover("Plains", "Trees: BurOak"), Is.LessThanOrEqualTo(0.1f));
 
@@ -1395,7 +1395,7 @@ namespace FishMMO.UnitTests
 			Assert.That(taiga.TrueForAll(m => m == taiga[0]), Is.True, "the taiga's spruce, pine and birch should cut one stand field");
 			Assert.That(BiomeArtSpec.For("Valley").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == taiga[0]),
 				"a valley's copses should be the hearts of the taiga's woods");
-			// The Grassland round (approved 2026-10-16): its Turkey-oak islands on a 600 m low-frequency field of their own.
+			// The Grassland round : its Turkey-oak islands on a 600 m low-frequency field of their own.
 			Assert.That(BiomeArtSpec.For("Grassland").Rules(), Has.Some.Matches<(BiomeArtSpec.Layer, BiomeArtSpec.Scatter)>(r => r.Item2.ForestMetres == 600f));
 		}
 
@@ -1444,7 +1444,7 @@ namespace FishMMO.UnitTests
 					}
 				}
 			}
-			// The Grassland round (2026-10-26): its brome sward is the continuous turf now.
+			// The Grassland biome: its brome sward is the continuous turf now.
 			BiomeArtSpec.Scatter grassland = BiomeArtSpec.For("Grassland").Main.Scatter.Find(s => s.Name == "GrassBrome");
 			BiomeArtSpec.Scatter highDesert = BiomeArtSpec.For("High Desert").Main.Scatter.Find(s => s.Name == "GrassTuft");
 			Assert.That(grassland.CarpetCoverage, Is.GreaterThan(0.8f), "grassland should read as continuous turf");

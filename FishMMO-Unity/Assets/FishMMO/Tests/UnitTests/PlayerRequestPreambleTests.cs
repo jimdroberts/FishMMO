@@ -309,7 +309,7 @@ namespace FishMMO.UnitTests
 				callSites += guarded;
 			}
 
-			/* Every player-request handler is a module's since 2026-11-20 (the last core ones, the ability forget and the
+			/* Every player-request handler is a module's (the last core ones, the ability forget and the
 			 * pet commands, left with the Abilities and Pets modules), so the floor counts what the sweep reads in the
 			 * installed modules: one guarded call is enough to show the sweep is not vacuous. */
 			LogAssert.IsTrue(callSites >= 1,

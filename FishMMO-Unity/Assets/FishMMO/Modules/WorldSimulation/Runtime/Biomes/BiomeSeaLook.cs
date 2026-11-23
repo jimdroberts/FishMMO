@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The sea as a diver sees it off a biome's coast (<see cref="BiomeTemplate.SeaLook"/>, 2026-10-18, phase I2h): the
+	/// The sea as a diver sees it off a biome's coast (<see cref="BiomeTemplate.SeaLook"/>): the
 	/// underwater pass's own terms (FishMMO/Water/Underwater, WaterSurface's Underwater settings): the water's colour, how far
 	/// one sees through it and how murky it is for that. Peat-brown water running off a bog coast, a mangrove's tannin, a
 	/// glacier coast milky with rock flour, a reef's clear turquoise.
@@ -15,7 +15,7 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>
 	/// <para>
 	/// The colour is as WaterSurface's Underwater Tint holds it (gamma); the visibility in metres and the murk as the pass's
-	/// Visibility and Murk (its extinction is murk ÷ visibility per metre). Until 2026-10-18 every sea took the one set of values
+	/// Visibility and Murk (its extinction is murk ÷ visibility per metre). Formerly every sea took the one set of values
 	/// every scene's WaterSurface carries; every biome's look is authored from exactly those (<see cref="BiomeSeaLooks.Today"/>),
 	/// and a biome whose look is that one says nothing about the sea, which keeps its scene's own (<see cref="BiomeSeaLooks.Coast"/>):
 	/// nothing changes until a biome's round gives it its own.
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The sea's look along a coast (2026-10-18, phase I2h): which biomes' sea looks reach the water at a point, and how they
+	/// The sea's look along a coast: which biomes' sea looks reach the water at a point, and how they
 	/// blend with each other and with the scene's own sea. Pure: the underwater pass (WaterSurface) asks it at the eye.
 	/// </summary>
 	/// <remarks>
@@ -107,7 +107,7 @@ namespace FishMMO.Shared.Biomes
 	public static class BiomeSeaLooks
 	{
 		/// <summary>
-		/// The underwater look every sea had until 2026-10-18: WaterSurface's Underwater Tint (0.05, 0.28, 0.36) and Visibility
+		/// The underwater look every sea had formerly: WaterSurface's Underwater Tint (0.05, 0.28, 0.36) and Visibility
 		/// 22 m, and the underwater pass's Murk 1 (FishWaterVolume.shader; the surface never sets it). Every biome's default and
 		/// what the authoring writes for each (a test holds it equal to WaterSurface and the shader).
 		/// </summary>

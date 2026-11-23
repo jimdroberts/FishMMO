@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 27 of the biome suite (2026-10-18, phase I2i): plants floating on still fresh water (duckweed, water-lilies, water
+	/// Decision 27 of the biome suite: plants floating on still fresh water (duckweed, water-lilies, water
 	/// hyacinth, frogbit), boardwalks raised along a biome's ways and between its houses, and flooded paddy fields behind earth
 	/// bunds. Every default is exactly what was cut before: no biome floats anything, raises any way or floods any field.
 	/// </summary>
@@ -482,7 +482,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(span, Is.Not.Null);
 			Assert.That(bent, Is.Not.Null);
 			// Appended, so no earlier piece moved in the table; only the families appended after them (dungeon entrances, the linear
-			// features of 2026-10-18, then the town's other buildings of 2026-10-19, after the last linear piece) follow them.
+			// features, then the town's other buildings, after the last linear piece) follow them.
 			int at = -1, lastLinear = -1;
 			for (int i = 0; i < all.Count; i++)
 			{

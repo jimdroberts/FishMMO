@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The kinds of small, dense cover the run-time cave cover scatters on a carved cave's rock (2026-10-20): the cave's
+	/// The kinds of small, dense cover the run-time cave cover scatters on a carved cave's rock: the cave's
 	/// equivalent of the surface's blade grass and detail scatter. Their order is the order of the art's submeshes
 	/// (<see cref="CaveCoverTypes.SubmeshOf"/>) and of the bits of a cave's mask (<see cref="CaveCoverSite"/>): append only.
 	/// </summary>

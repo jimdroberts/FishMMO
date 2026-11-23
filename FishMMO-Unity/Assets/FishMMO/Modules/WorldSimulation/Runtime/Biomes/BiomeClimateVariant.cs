@@ -32,7 +32,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// <b>Painted since 2026-10-18</b> (decision 29: "ClimateVariants' TextureLayerOverrides actually apply"; read nowhere
+		/// <b>Painted</b> ("ClimateVariants' TextureLayerOverrides actually apply"; read nowhere
 		/// before). One entry per GROUND slot of the biome, in order: the first stands in for the main layer, the second for
 		/// detail 0, the third for detail 1, and so on; an entry with no art keeps the biome's own layer there, so a variant that
 		/// swaps only the main ground lists one. The scene's splat painter adds each override with art to the scene's layers and,

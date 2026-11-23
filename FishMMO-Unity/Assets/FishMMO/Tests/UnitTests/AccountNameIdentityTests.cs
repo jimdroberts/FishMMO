@@ -33,32 +33,32 @@ namespace FishMMO.UnitTests
 		private const int AwaitTimeoutMs = 5000;
 		private const string TotpSecret = "JBSWY3DPEHPK3PXP";
 
-		[TestCase("JIM")]
-		[TestCase("Jim")]
-		[TestCase("jIm")]
+		[TestCase("ALICE")]
+		[TestCase("Alice")]
+		[TestCase("aLIce")]
 		public async Task AnySpellingOfTheName_SignsIn_AsTheStoredName(string typed)
 		{
 			using AuthTestHarness h = new AuthTestHarness();
-			h.Store.SeedAccount("jim", "right-password");
+			h.Store.SeedAccount("alice", "right-password");
 
 			ClientAuthenticationResult result = await h.Client.AttemptLogin(typed, "right-password", AwaitTimeoutMs);
 
-			LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, result, $"'{typed}' signs in to the account 'jim'");
-			LogAssert.AreEqual("jim", h.Store.GetLastTokenAccountName("jim"),
+			LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, result, $"'{typed}' signs in to the account 'alice'");
+			LogAssert.AreEqual("alice", h.Store.GetLastTokenAccountName("alice"),
 				"and the token is issued for the account row's name, which the token table references");
 		}
 
-		[TestCase("jim@example.test")]
-		[TestCase("Jim@Example.TEST")]
+		[TestCase("alice@example.test")]
+		[TestCase("Alice@Example.TEST")]
 		public async Task TheEmailAddress_SignsIn_AsTheStoredName(string typed)
 		{
 			using AuthTestHarness h = new AuthTestHarness();
-			h.Store.SeedAccount("jim", "right-password", email: "jim@example.test");
+			h.Store.SeedAccount("alice", "right-password", email: "alice@example.test");
 
 			ClientAuthenticationResult result = await h.Client.AttemptLogin(typed, "right-password", AwaitTimeoutMs);
 
 			LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, result, $"'{typed}' signs in to the account it belongs to");
-			LogAssert.AreEqual("jim", h.Store.GetLastTokenAccountName("jim"),
+			LogAssert.AreEqual("alice", h.Store.GetLastTokenAccountName("alice"),
 				"issued as the account's name, not the email the player typed");
 		}
 
@@ -67,28 +67,28 @@ namespace FishMMO.UnitTests
 		{
 			// The control: email sign-in works because the proof is right, not because it is skipped.
 			using AuthTestHarness h = new AuthTestHarness();
-			h.Store.SeedAccount("jim", "right-password", email: "jim@example.test");
+			h.Store.SeedAccount("alice", "right-password", email: "alice@example.test");
 
-			ClientAuthenticationResult result = await h.Client.AttemptLogin("jim@example.test", "wrong-password", AwaitTimeoutMs);
+			ClientAuthenticationResult result = await h.Client.AttemptLogin("alice@example.test", "wrong-password", AwaitTimeoutMs);
 
 			LogAssert.AreEqual(ClientAuthenticationResult.InvalidUsernameOrPassword, result, "a wrong password is refused by email too");
-			LogAssert.IsNull(h.Store.GetLastTokenHash("jim"), "and no token is issued");
+			LogAssert.IsNull(h.Store.GetLastTokenHash("alice"), "and no token is issued");
 		}
 
 		[Test]
 		public async Task ACapitalisedSignIn_WithTwoFactor_IsIssuedTheStoredName()
 		{
 			using AuthTestHarness h = new AuthTestHarness();
-			h.Store.SeedAccount("jim", "right-password", totpEnabled: true, totpSecret: TotpSecret);
+			h.Store.SeedAccount("alice", "right-password", totpEnabled: true, totpSecret: TotpSecret);
 
-			ClientAuthenticationResult first = await h.Client.AttemptLogin("JIM", "right-password", AwaitTimeoutMs);
+			ClientAuthenticationResult first = await h.Client.AttemptLogin("ALICE", "right-password", AwaitTimeoutMs);
 			LogAssert.AreEqual(ClientAuthenticationResult.TwoFactorRequired, first, "fixture: the account is challenged for its second factor");
 
 			string code = new Totp(Base32Encoding.ToBytes(TotpSecret)).ComputeTotp();
 			ClientAuthenticationResult answer = await h.Client.SubmitTwoFactorCode(code, AwaitTimeoutMs);
 
 			LogAssert.AreEqual(ClientAuthenticationResult.LoginSuccess, answer, "the code completes the sign-in");
-			LogAssert.AreEqual("jim", h.Store.GetLastTokenAccountName("jim"),
+			LogAssert.AreEqual("alice", h.Store.GetLastTokenAccountName("alice"),
 				"the token the two-factor step issues carries the stored name too");
 		}
 

@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>
 	/// The sea floor's detail meshes: kelp and seaweed, brain and table corals, sea fans,
 	/// sponges, anemones, urchins, starfish, shells and a vent's tube worms; and since the vegetation expansion
-	/// (2026-10-10) mussel, oyster and vent-clam beds, barnacled stones, sea lettuce, sand dollars, sea cucumbers,
+	/// mussel, oyster and vent-clam beds, barnacled stones, sea lettuce, sand dollars, sea cucumbers,
 	/// brittle stars, sea pens, crinoids, glass sponges, cold-water and soft corals, giant clams, xenophyophores and
 	/// microbial mats (with the mat's land cousin, a cave's slime mould). Built like every other detail
 	/// (<see cref="VegetationMeshes"/>): one sub-mesh, vertex colours for the hue, the foliage atlas's
@@ -707,7 +707,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ── Beds, crusts and sheets (2026-10-10) ──────────────────────
+		// ── Beds, crusts and sheets ──────────────────────
 
 		/// <summary>A profile turned about the up axis at the origin (<see cref="PlantParts.Lathe"/>), then set in place by <paramref name="place"/>.</summary>
 		/// <remarks>Every placement here is a rotation and a positive scale, so the faces still turn the way the lathe turned them.</remarks>

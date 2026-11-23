@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// GPU-only: a render-texture array has no copy in system memory and nothing to upload. A Texture2DArray did both, at
 	/// every rebuild (a terrain taken on): tens of MB allocated, staged through Vulkan upload buffers and freed again a few
 	/// frames later, once per terrain through the first half-minute of play, each a 50–130 ms hitch (StartupTimeline,
-	/// 2026-10-13: VKUploadBuffer.Allocate and LargeAllocation.Free in every one). Where a format cannot be a render texture,
+	/// VKUploadBuffer.Allocate and LargeAllocation.Free in every one). Where a format cannot be a render texture,
 	/// a Texture2DArray whose system-memory copy is dropped at once.
 	/// </remarks>
 	public static class TerrainAtlasArrays

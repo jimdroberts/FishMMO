@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveSystem
 	{
-		// ── Root windows (2026-10-25, phase I2n-c "drowned galleries", decision 86 (f)) ──
+		// ── Root windows ("drowned galleries") ──
 
 		/*
 		 * A small opening up through a thin roof under a wooded, wet host: where the swamp's trees stand on no more than a few metres

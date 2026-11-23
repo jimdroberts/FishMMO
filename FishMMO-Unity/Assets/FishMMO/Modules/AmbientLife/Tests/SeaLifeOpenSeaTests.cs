@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The open sea's life (2026-10-25, phase I2p): gliding flying fish, men-o'-war afloat on the swell, mudskippers on the bare mud,
+	/// The open sea's life: gliding flying fish, men-o'-war afloat on the swell, mudskippers on the bare mud,
 	/// upside-down jellies on the sand, lanternfish rising at night, a milling trevally column, boiling tuna, creature light and the
 	/// seabirds that live only far out at sea. All pure functions of the shared clock; the defaults hold none of it.
 	/// </summary>

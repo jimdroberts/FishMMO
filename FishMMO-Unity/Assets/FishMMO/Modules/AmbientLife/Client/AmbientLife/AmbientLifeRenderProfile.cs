@@ -7,7 +7,7 @@ namespace FishMMO.Client
 	/// The client's ambient life look: sea life and what floats on the sea, the land's small animals, motes in the air, falling leaves, and the life of the world's sites (embers, flames, lighthouse beams, cave drips and water life, vents, rockfalls).
 	/// </summary>
 	/// <remarks>
-	/// Client-only; loaded with the client's static assets. Ambient life's own profile (Phase 4 of the core and modules plan, 2026-11-17): these settings were part of <see cref="WeatherRenderProfile"/>, and the asset was split field for field.
+	/// Client-only; loaded with the client's static assets. Ambient life's own profile: these settings were part of <see cref="WeatherRenderProfile"/>, and the asset was split field for field.
 	/// </remarks>
 	[CreateAssetMenu(fileName = "Ambient Life Render Profile", menuName = "FishMMO/World/Ambient Life Render Profile", order = 21)]
 	public class AmbientLifeRenderProfile : CachedScriptableObject<AmbientLifeRenderProfile>, ICachedObject
@@ -42,13 +42,13 @@ namespace FishMMO.Client
 		public Shader LighthouseBeamsShader;
 		[Tooltip("FishMMO/World/Cave Drips: the drops falling from the caves' roofs, their spatter and the rings on their puddles near the camera (CaveDripField). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader CaveDripsShader;
-		[Tooltip("FishMMO/World/Cave Water Life: the marsh-gas beads rising in the caves' still water and the leeches swimming in it near the camera (CaveWaterLife, 2026-10-26). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		[Tooltip("FishMMO/World/Cave Water Life: the marsh-gas beads rising in the caves' still water and the leeches swimming in it near the camera (CaveWaterLife). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader CaveWaterLifeShader;
-		[Tooltip("FishMMO/World/Sea Hall Vents: a sea hall's smoker plumes, smoke ceiling, flange mirrors, carbon-dioxide beads, brinicles and brine mirrors near the camera (SeaHallVents, 2026-10-26). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		[Tooltip("FishMMO/World/Sea Hall Vents: a sea hall's smoker plumes, smoke ceiling, flange mirrors, carbon-dioxide beads, brinicles and brine mirrors near the camera (SeaHallVents). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader SeaHallVentsShader;
-		[Tooltip("FishMMO/World/Rockfall Stones: the stones falling down the scene's stored chutes and the Strombolian bombs (RockfallField, 2026-10-25, I2u). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		[Tooltip("FishMMO/World/Rockfall Stones: the stones falling down the scene's stored chutes and the Strombolian bombs (RockfallField). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader RockfallStonesShader;
-		[Tooltip("FishMMO/World/Rockfall Marks: the chutes' fresh scars, the breathing taluses' rime, mist and steam, and the falls' dust (RockfallField, I2u). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
+		[Tooltip("FishMMO/World/Rockfall Marks: the chutes' fresh scars, the breathing taluses' rime, mist and steam, and the falls' dust (RockfallField). Referenced here so a client build includes it; empty, it is found by name, which only works in the editor.")]
 		public Shader RockfallMarksShader;
 
 		[Header("Falling leaves")]

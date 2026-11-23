@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Realism first</b> (2026-10-12: "Realism is the goal"). Vines grow where a vine can: up from the ground, over
+	/// <b>Realism first</b> ("Realism is the goal"). Vines grow where a vine can: up from the ground, over
 	/// edges and down from them, on faces that stand up (a mat on a slope is ground cover, a spill), never across a doorway
 	/// or a window, never floating in front of a face that leans back. Lengths, widths and which piece are each drawn from
 	/// what is there (a curtain as long as the drop under it, a mat as tall as the clear face), then varied, so no two
@@ -59,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Clear headroom kept under a curtain over a cave's way in when it does not close the opening, metres.</summary>
 		public const float Headroom = 2.15f;
 
-		/// <summary>The share of a damp biome's natural caves whose whole opening is curtained (2026-10-12: "occasionally curtain cave entrances"), at a cave density of 1.</summary>
+		/// <summary>The share of a damp biome's natural caves whose whole opening is curtained ("occasionally curtain cave entrances"), at a cave density of 1.</summary>
 		public const float CurtainedShare = 0.28f;
 
 		/// <summary>A 0..1 hash of a place and a salt: the same answer for the same place on every run.</summary>

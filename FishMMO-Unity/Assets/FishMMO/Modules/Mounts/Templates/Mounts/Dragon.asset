@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bd708e51cafd34ff886b5f135027047, type: 3}
+  m_Name: Dragon
+  m_EditorClassIdentifier: FishMMO.Mounts::FishMMO.Shared.MountBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Riding a dragon: jump to take off, hold jump to climb, crouch to descend. Flight costs stamina; spent, it glides down. Casting, a hit, deep water, a ladder or a roof overhead gets you off; click it off to dismount.'
+  icon:
+    m_AssetGUID: 5579178f792a71b4d2a00a774363bdbe
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 0
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 1
+  GroundSpeedMultiplier: 1.4
+  JumpHeightMultiplier: 1.2
+  LeapSpeed: 0
+  MaxSlopeDegrees: 0
+  Flies: 1
+  FlySpeed: 15
+  FlySprintMultiplier: 2
+  FlightStaminaPerSecond: 3
+  GlideSinkSpeed: 3
+  GlideSpeedShare: 0.6
+  Body:
+    Length: 2.4
+    Depth: 0.8
+    Width: 0.72
+    LegLength: 0.95
+    LegThickness: 0.15
+    NeckLength: 1.1
+    NeckRaise: 45
+    HeadLength: 0.72
+    HeadSize: 0.3
+    EarSize: 0.15
+    Horns: 4
+    HornSize: 0.38
+    TailLength: 2
+    TailRaise: 5
+    WingSpan: 6
+    HoverHeight: 0
+    Back: {r: 0.5, g: 0.12, b: 0.1, a: 1}
+    Belly: {r: 0.85, g: 0.6, b: 0.35, a: 1}
+    Accent: {r: 0.15, g: 0.1, b: 0.1, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  SaddleBack: 0.05
+  GaitRunSpeed: 8.4

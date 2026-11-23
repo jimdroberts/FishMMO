@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Registered at editor load. Without this module no layer is registered and the generator plans no lots at all
-	/// (2026-11-21, second-wave moves: PlotFoundation and the plot actions left core; the generator must not reference the
+	/// (second-wave moves: PlotFoundation and the plot actions left core; the generator must not reference the
 	/// module).
 	/// </remarks>
 	[InitializeOnLoad]

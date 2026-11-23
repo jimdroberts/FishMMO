@@ -38,7 +38,7 @@ namespace FishMMO.Auth.Implementation
 		/// Invariant, never the current culture: under a Turkish culture <c>"I".ToLower()</c> is a
 		/// dotless ı. Usernames are ASCII letters, digits and underscores, so for them this changes
 		/// only A–Z. Account lookups are case-insensitive on the server regardless; this makes the
-		/// wire form one spelling, so "Jim", "JIM" and "jim" are the same sign-in.
+		/// wire form one spelling, so "Alice", "ALICE" and "alice" are the same sign-in.
 		/// </remarks>
 		/// <param name="identifier">A username or email address.</param>
 		/// <returns>The normalised identifier, or the input when it is null or empty.</returns>

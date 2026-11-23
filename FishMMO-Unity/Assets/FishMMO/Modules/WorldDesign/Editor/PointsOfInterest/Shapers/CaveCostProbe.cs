@@ -14,7 +14,7 @@ using Debug = UnityEngine.Debug;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What a generated scene's caves cost (2026-10-20, measured before any cave optimisation is built): their rock meshes'
+	/// What a generated scene's caves cost (measured before any cave optimisation is built): their rock meshes'
 	/// size and memory, what their colliders cost to cook and hold, what physics queries cost against them as they are and
 	/// against thinner stand-ins, and, from the middle of every chamber, how much of the rock a camera would draw.
 	/// </summary>
@@ -431,7 +431,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				Transform visual = rock.Find(CliffPlacer.VisualName);
 				CaveVisibility vis = visual != null ? visual.GetComponent<CaveVisibility>() : null;
-				// The render pieces (the colliders shared them until 2026-10-20; since, they have positions-only meshes of their own).
+				// The render pieces (the colliders shared them formerly; since, they have positions-only meshes of their own).
 				MeshFilter[] filters = (visual != null ? visual : rock).GetComponentsInChildren<MeshFilter>(true);
 				var data = new CaveData { SiteId = shape.SiteId, System = system, Meshes = filters.Select(f => f.sharedMesh).ToArray(), Mouth = new bool[filters.Length] };
 				for (int i = 0; i < filters.Length && vis != null; i++)

@@ -1,4 +1,4 @@
-// FALLING STONE (2026-10-25, phase I2u; decisions 79, 95): the stones of the falls down the scene's stored chutes and the glowing
+// FALLING STONE: the stones of the falls down the scene's stored chutes and the glowing
 // Strombolian bombs, thrown on their arcs, landing, the sciara's rolling on down its chute and cooling. One pre-built field of
 // low-poly stones (RockfallField: ROCK_MAX_FALLS × ROCK_STONES_PER_FALL stone slots, then ROCK_MAX_BOMBS bomb slots) that the
 // vertex shader places from each fall's and bomb's few numbers on the shared clock (FishRockfall.hlsl); an empty slot collapses to a

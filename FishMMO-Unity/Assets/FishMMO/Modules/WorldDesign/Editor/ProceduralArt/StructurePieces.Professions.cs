@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A trade a shop-house is let to (2026-10-19: "Did we get a carpenter, tailor, leatherworker, fletcher ... and other profession
+	/// A trade a shop-house is let to ("Did we get a carpenter, tailor, leatherworker, fletcher ... and other profession
 	/// archetypes?"): what its hanging sign shows, what lies on its stall-board and how its shop is furnished.
 	/// </summary>
 	/// <remarks>Append-only: the value is the variant of <c>TradeSign</c>, <c>StallGoods</c> and <c>TradeShelf</c>.</remarks>
@@ -38,7 +38,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The trades a shop-house is let to (2026-10-19): their hanging signs, their wares on the stall-board and on the shop's
+	/// The trades a shop-house is let to: their hanging signs, their wares on the stall-board and on the shop's
 	/// shelves, and the furniture of their workshops behind. A medieval street showed its trades by the sign hung from an iron
 	/// bracket over the door and by what was laid out on the board folded down from the shop window; the work was done in the
 	/// room behind, where the customer came in. PointOfInterestTrades chooses each shop-house's trade and lays its sign and its
@@ -1050,7 +1050,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The shapes the trades share (2026-10-19): an emblem's strokes and rings in a sign's plane, a bench's frame, and the
+		/// The shapes the trades share: an emblem's strokes and rings in a sign's plane, a bench's frame, and the
 		/// wares laid out on a stall-board or a shelf. A nested class so its many small names stay out of the kit's own.
 		/// </summary>
 		private static class Wares

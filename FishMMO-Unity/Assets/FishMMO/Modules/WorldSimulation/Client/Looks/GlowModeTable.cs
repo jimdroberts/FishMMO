@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// How the scene's cold glows move, biome by biome (2026-10-25, I6i; <see cref="BiomeTemplate.GlowModes"/>): a small table the
+	/// How the scene's cold glows move, biome by biome (<see cref="BiomeTemplate.GlowModes"/>): a small table the
 	/// GPU reads under each glowing part and crystal (FishGlowModes.hlsl), and the site lights read under each glow's light
 	/// (<see cref="TryAt"/>), from the same flora grid (FloraPaletteMap's: each texel its biome's row) so a light and the stone that
 	/// casts it read the same entry.
@@ -22,14 +22,14 @@ namespace FishMMO.Client
 	/// </para>
 	/// <para>Built with the flora map (its rows, its grid), by FloraPaletteMap.Build; client only.</para>
 	/// <para>
-	/// Its stored places (2026-10-25, I6i-b; <see cref="SceneGlowPlaces"/>, <see cref="Place"/>): the scene's landform lines a TRAIL
+	/// Its stored places (<see cref="SceneGlowPlaces"/>, <see cref="Place"/>): the scene's landform lines a TRAIL
 	/// or KNEADING glow reads (<c>_FishGlowLines</c>, <c>_FishGlowLineData</c>), its fountain vents an EPISODE glow plays
 	/// (<c>_FishGlowVents</c>: x, z, seed's high half + 65536·schedule, seed's low half) and the discs that keep a light and its stone
 	/// on one biome's row across a grid edge (<c>_FishGlowAnchors</c>: x, z, radius, row; rebuilt as the scene's lights come and go,
 	/// <see cref="Refresh"/>); <c>_FishGlowPlaceInfo</c> = (lines, vents, anchors, caves), all 0 where nothing is stored.
 	/// </para>
 	/// <para>
-	/// Its linked caves (2026-10-26, phase I2n-c, decision 86 (h); <see cref="SceneGlowCaves"/>): each loaded cave whose inside is an
+	/// Its linked caves (<see cref="SceneGlowCaves"/>): each loaded cave whose inside is an
 	/// interior biome (its cave-life spots carry it) is a box of its air (<c>_FishGlowCaves</c>, two float4 a cave), and every glow
 	/// inside reads the INTERIOR's row (the interior's flora row where it paints the surface too, else a row of its own after the
 	/// flora's), so a cave's crystals and glow-worms move by its interior's mode. Boxes only where the interior names a mode; none on
@@ -99,7 +99,7 @@ namespace FishMMO.Client
 		public static void Build(IReadOnlyList<BiomeTemplate> rowBiomes, byte[] indices, int width, int height, Vector4 gridRect, IReadOnlyList<BiomeGlowMode> world)
 		{
 			int count = Mathf.Min(rowBiomes != null ? rowBiomes.Count : 0, Rows);
-			// Room for the linked caves' interiors after the flora's rows (2026-10-26, I2n-c; AddCaveRows).
+			// Room for the linked caves' interiors after the flora's rows (AddCaveRows).
 			entries = new BiomeGlowMode[Rows, 2];
 			named = new bool[Rows, 2];
 			floraRows = count;
@@ -149,7 +149,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The linked caves' boxes and their interiors' rows (2026-10-26, I2n-c), again whenever the loaded caves change
+		/// The linked caves' boxes and their interiors' rows, again whenever the loaded caves change
 		/// (SceneCaveLife.Version) or the table is rebuilt: each box reads the row of its interior where the interior names a mode for
 		/// either source (its flora row if it paints the surface too, else one after the flora's; past <see cref="Rows"/> none); boxes
 		/// whose interior names none are dropped. True when it gathered again. The table turns on for a cave's mode alone.
@@ -255,7 +255,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The scene's stored places the moved glows read (2026-10-25, I6i-b; after <see cref="Build"/>): its landform lines (the map's
+		/// The scene's stored places the moved glows read (after <see cref="Build"/>): its landform lines (the map's
 		/// <see cref="SceneBiomeMap.GlowLines"/>, else its vent lines) of the biomes whose glows TRAIL or KNEAD, and its fountain vents
 		/// (VolcanicVents' Episode vents) where a biome's glows follow the EPISODE. Nothing where no biome names those modes, or nothing
 		/// is stored: those glows read their fixed bearing, smooth field and 500 m cell, as before.
@@ -312,7 +312,7 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			// The linked caves first (2026-10-26, I2n-c): a cave's interior may turn the table on.
+			// The linked caves first: a cave's interior may turn the table on.
 			if (AddCaveRows())
 			{
 				PackPlaces();
@@ -447,7 +447,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The row (biome) a glow at a world position reads, as FishGlowModes.hlsl reads it: the first linked cave's box holding it (its
-		/// interior's row, 2026-10-26), else the first disc holding it (a site or a light by a biome edge, <see cref="Refresh"/>), else
+		/// interior's row), else the first disc holding it (a site or a light by a biome edge, <see cref="Refresh"/>), else
 		/// the flora grid's texel, unjittered.
 		/// </summary>
 		public static int RowAt(Vector3 position)

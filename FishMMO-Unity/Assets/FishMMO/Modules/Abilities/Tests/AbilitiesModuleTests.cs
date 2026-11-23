@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Abilities module (2026-11-20): the module declares itself, the scene server adopts its system by label, the core
+	/// The Abilities module: the module declares itself, the scene server adopts its system by label, the core
 	/// character save reaches abilities only through <see cref="IAbilityPersistence"/>, and the core's grant and equip seams
 	/// are installed by the module.
 	/// </summary>

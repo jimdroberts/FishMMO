@@ -243,7 +243,7 @@ namespace FishMMO.UnitTests
 		/// was dead-reckoned from a one-shot payload and riders sank through it.
 		/// </para>
 		/// <para>
-		/// No scene ships a platform since the start scenes were removed (2026-10-25). The scan still
+		/// No scene ships a platform since the start scenes were removed. The scan still
 		/// runs over every scene — the "off for everything else" half binds every current scene, and
 		/// the next platform is held to the other — and the scan's platform half is proven on
 		/// <see cref="PlatformFixture"/>, the last shipped <c>MovingPlatform</c>, both ways.
@@ -330,7 +330,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The last shipped <c>MovingPlatform</c> (StartScene A, removed 2026-10-25) trimmed to what the scan
+		/// The last shipped <c>MovingPlatform</c> (StartScene A) trimmed to what the scan
 		/// reads, beside a networked prop (a region or spawner) with the given forwarding flags.
 		/// </summary>
 		private static string PlatformFixture(string platformGuid, string networkObjectGuid, int platformFlag, int propFlag)

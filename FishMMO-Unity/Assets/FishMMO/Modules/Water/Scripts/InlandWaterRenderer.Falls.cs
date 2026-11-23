@@ -282,7 +282,7 @@ namespace FishMMO.Water
 		/// <para>
 		/// The river's mean speed over a plunge basin is its discharge over the whole basin's section: over Flo Monolith's
 		/// tallest falls a 30 m wide, 6.5 m deep scour, a centimetre a second. Drawn at that, the pool and its tail were
-		/// dead still water from the landing to the pool's lip, its ripples standing where they lay (2026-10-13).
+		/// dead still water from the landing to the pool's lip, its ripples standing where they lay.
 		/// </para>
 		/// <para>
 		/// That is not how water crosses a plunge pool. The curtain drives down into it, turns on the floor and wells back
@@ -661,7 +661,7 @@ namespace FishMMO.Water
 		/// <summary>
 		/// Sorting orders above every water surface (InlandWaterRenderer.Add numbers lakes and rivers 0, 1, 2…): Unity sorts
 		/// transparent renderers by sorting order before their render queue, so at order 0 the falls and their spray were
-		/// drawn first and every river surface, the plunge pool among them, painted over the splash (2026-10-07).
+		/// drawn first and every river surface, the plunge pool among them, painted over the splash.
 		/// </summary>
 		private const int CurtainSortingOrder = 30000, SpraySortingOrder = 30001;
 

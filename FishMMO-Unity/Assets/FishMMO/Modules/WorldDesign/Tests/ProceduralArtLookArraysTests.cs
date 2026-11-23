@@ -9,7 +9,7 @@ using Layout = FishMMO.Shared.WorldDesign.ProceduralArtLookArrays.Layout;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The look arrays the art generator writes (2026-10-28, ProceduralArtLookArrays): the props' surface maps as Texture2DArray
+	/// The look arrays the art generator writes (ProceduralArtLookArrays): the props' surface maps as Texture2DArray
 	/// flipbooks, the materials naming slices. Pure parts — the sets, their chunks and grids, every map's one slice, the names the
 	/// importer reads, the wrapper check's array slots — and source pins on the generator, importer and payload.
 	/// </summary>

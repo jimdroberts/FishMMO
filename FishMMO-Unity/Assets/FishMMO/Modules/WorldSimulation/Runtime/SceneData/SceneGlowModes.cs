@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// How a cold glow's brightness moves (2026-10-25, I6i; decisions 33, 40, 43, 46, 53, 56–59, 61, 64, 65, 68–76, 81, 83, 86,
+	/// How a cold glow's brightness moves (76, 81, 83, 86,
 	/// 89, 90, 92, 93, 95): each a pure function of the shared clock (and, where named, of the sky's and the weather's state, which
 	/// are themselves pure functions of the world clock). APPEND-ONLY: the values are stored in biome templates and the GPU's
 	/// glow table. <see cref="Default"/> is what every glow did before: a way glow pulses (<see cref="SceneGlow.Pulse"/>), a
@@ -17,57 +17,57 @@ namespace FishMMO.Shared
 		Default = 0,
 		/// <summary>The soft two-beat pulse (<see cref="SceneGlow.Pulse"/>).</summary>
 		Pulse = 1,
-		/// <summary>The stormglass's crackling flicker (<see cref="SceneGlow.Flicker"/>, decision 33).</summary>
+		/// <summary>The stormglass's crackling flicker (<see cref="SceneGlow.Flicker"/>).</summary>
 		Flicker = 2,
-		/// <summary>Steady, at the brightness it was made for (decision 70).</summary>
+		/// <summary>Steady, at the brightness it was made for.</summary>
 		Still = 3,
-		/// <summary>A quick rippling shimmer, as sunlight through moving water (decision 40).</summary>
+		/// <summary>A quick rippling shimmer, as sunlight through moving water.</summary>
 		Caustic = 4,
-		/// <summary>One notch brighter each day of a count of <c>Every</c> days, then back to the first (decision 56).</summary>
+		/// <summary>One notch brighter each day of a count of <c>Every</c> days, then back to the first.</summary>
 		Step = 5,
-		/// <summary>Follows the real sun's height: brightest at noon, dim at night (decision 57). Carries its own daylight.</summary>
+		/// <summary>Follows the real sun's height: brightest at noon, dim at night. Carries its own daylight.</summary>
 		Sun = 6,
-		/// <summary>Follows the wet half of the year (decision 59).</summary>
+		/// <summary>Follows the wet half of the year.</summary>
 		Season = 7,
-		/// <summary>Follows the wind's strength (decisions 64, 69).</summary>
+		/// <summary>Follows the wind's strength.</summary>
 		Wind = 8,
-		/// <summary>A deep eight-second breath, fuller while the dawn mist is up (decision 61).</summary>
+		/// <summary>A deep eight-second breath, fuller while the dawn mist is up.</summary>
 		Breath = 9,
-		/// <summary>A lava crust's overturn: a sudden flare, then the crust cooling dark (decision 65).</summary>
+		/// <summary>A lava crust's overturn: a sudden flare, then the crust cooling dark.</summary>
 		Overturn = 10,
-		/// <summary>Brightest as the sun sets, fading through the night toward dawn, dark by day (decision 58). Carries its own daylight.</summary>
+		/// <summary>Brightest as the sun sets, fading through the night toward dawn, dark by day. Carries its own daylight.</summary>
 		AfterSunset = 11,
-		/// <summary>Rises and falls with the sea's swell running before the prevailing wind (decision 68).</summary>
+		/// <summary>Rises and falls with the sea's swell running before the prevailing wind.</summary>
 		Swell = 12,
-		/// <summary>Brightens twice in every turn of the giant's magnetic field over the moon (decision 71).</summary>
+		/// <summary>Brightens twice in every turn of the giant's magnetic field over the moon.</summary>
 		Field = 13,
-		/// <summary>Lit only while the sun is on the horizon: sunrise and sunset (decision 72). Carries its own daylight.</summary>
+		/// <summary>Lit only while the sun is on the horizon: sunrise and sunset. Carries its own daylight.</summary>
 		Terminator = 14,
-		/// <summary>Follows the phase of the parent world in the sky (decision 72).</summary>
+		/// <summary>Follows the phase of the parent world in the sky.</summary>
 		Volvalight = 15,
-		/// <summary>Follows the rain the weather will bring in the next six hours (decision 75).</summary>
+		/// <summary>Follows the rain the weather will bring in the next six hours.</summary>
 		Rain = 16,
-		/// <summary>A point of light creeping along the nearest stored landform line (decision 76; along a fixed bearing where a scene stores none).</summary>
+		/// <summary>A point of light creeping along the nearest stored landform line (along a fixed bearing where a scene stores none).</summary>
 		Trail = 17,
-		/// <summary>Follows how long the night is: brightest in the polar night (decision 81).</summary>
+		/// <summary>Follows how long the night is: brightest in the polar night.</summary>
 		NightLength = 18,
-		/// <summary>The inverse of <see cref="Sun"/>: brightest at midnight (decision 83). Carries its own daylight.</summary>
+		/// <summary>The inverse of <see cref="Sun"/>: brightest at midnight. Carries its own daylight.</summary>
 		Night = 19,
-		/// <summary>Open only on dark-moon nights (decision 86).</summary>
+		/// <summary>Open only on dark-moon nights.</summary>
 		Eyelid = 20,
-		/// <summary>Lit one day in <c>Every</c> (decision 89).</summary>
+		/// <summary>Lit one day in <c>Every</c>.</summary>
 		DayCount = 21,
-		/// <summary>A crack's tidal tension, the stress rotating through each orbit, phased by the nearest stored crack's bearing (decision 90; a smooth field where none is stored).</summary>
+		/// <summary>A crack's tidal tension, the stress rotating through each orbit, phased by the nearest stored crack's bearing (a smooth field where none is stored).</summary>
 		Kneading = 22,
-		/// <summary>Brighter as the fog thickens (decision 74).</summary>
+		/// <summary>Brighter as the fog thickens.</summary>
 		Fog = 23,
-		/// <summary>Follows the plume tide of the moon's orbit (decision 53, <c>_FishPlumeTide</c>).</summary>
+		/// <summary>Follows the plume tide of the moon's orbit (<c>_FishPlumeTide</c>).</summary>
 		PlumeTide = 24,
-		/// <summary>Glows through the sea floor's turbidity episodes (decision 92, <see cref="Weather.TurbidityEpisodes"/>).</summary>
+		/// <summary>Glows through the sea floor's turbidity episodes (<see cref="Weather.TurbidityEpisodes"/>).</summary>
 		Tremor = 25,
-		/// <summary>Follows the nearest stored fountain vent's episodes (decision 93, <see cref="Biomes.BiomeFountainEpisodes"/>; its 500 m cell's where none is stored).</summary>
+		/// <summary>Follows the nearest stored fountain vent's episodes (<see cref="Biomes.BiomeFountainEpisodes"/>; its 500 m cell's where none is stored).</summary>
 		Episode = 26,
-		/// <summary>Flares with the scene's Strombolian vent's bursts (decision 95, <see cref="Weather.VentBursts"/>, <c>_FishVentBurst</c>).</summary>
+		/// <summary>Flares with the scene's Strombolian vent's bursts (<see cref="Weather.VentBursts"/>, <c>_FishVentBurst</c>).</summary>
 		Burst = 27,
 	}
 
@@ -135,7 +135,7 @@ namespace FishMMO.Shared
 		public Vector4 C => new Vector4(Wet, Wind, Rain, Fog);
 		public Vector4 D => new Vector4(Sea, Turbidity, WayX, WayZ);
 
-		/// <summary>The tidal stress's rotating axis, <c>_FishTidalStress</c> (decision 90): (cos 2φ, sin 2φ, 0, 0), φ the orbit's turn.</summary>
+		/// <summary>The tidal stress's rotating axis, <c>_FishTidalStress</c>: (cos 2φ, sin 2φ, 0, 0), φ the orbit's turn.</summary>
 		public Vector4 TidalStress
 		{
 			get
@@ -188,7 +188,7 @@ namespace FishMMO.Shared
 		/// <summary>The tremor's tremble, cycles a second, and its phase over the ground.</summary>
 		public const float TrembleHz = 6.1f, TrembleX = 0.21f, TrembleZ = 0.15f;
 
-		/// <summary>The warm tint (decisions 43, 46, 69): firelight's colour, its luminance 1 (a warm glow is as bright as a cold one).</summary>
+		/// <summary>The warm tint: firelight's colour, its luminance 1 (a warm glow is as bright as a cold one).</summary>
 		public static readonly Vector3 WarmTint = new Vector3(1.4756f, 0.9149f, 0.4427f);
 
 		/// <summary>The luminance weights (Rec. 709) the warm tint keeps.</summary>
@@ -224,7 +224,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// As <see cref="Value(SceneGlowMode, int, in Biomes.BiomeFountainEpisodes, float, float, float, in SceneGlowSky)"/>, for a glow
-		/// whose stored surroundings are <paramref name="place"/> (2026-10-25, I6i-b; <see cref="SceneGlowPlaces.At"/>): a TRAIL creeps
+		/// whose stored surroundings are <paramref name="place"/> (<see cref="SceneGlowPlaces.At"/>): a TRAIL creeps
 		/// along its nearest stored line, a KNEADING reads that line's bearing, an EPISODE plays its nearest fountain vent's episodes.
 		/// <see cref="SceneGlowPlace.None"/> is the overload above to the bit.
 		/// </summary>
@@ -293,7 +293,7 @@ namespace FishMMO.Shared
 					return 0.25f + 0.75f * Smooth(sky.Rain * 2f);
 				case SceneGlowMode.Trail:
 				{
-					// Along the nearest stored line (I6i-b), else along a fixed bearing (a scene that stores none).
+					// Along the nearest stored line, else along a fixed bearing (a scene that stores none).
 					float along = place.OnLine ? place.Along : x * TrailX + z * TrailZ;
 					float p = Fraction(TrailHz * t - Fraction(along / TrailMetres)) - 0.5f;
 					return 0.15f + 0.85f * (float)Math.Exp(-(p * TrailWidth) * (p * TrailWidth));
@@ -311,7 +311,7 @@ namespace FishMMO.Shared
 				case SceneGlowMode.Kneading:
 				{
 					Vector4 axis = sky.TidalStress;
-					// The nearest stored crack's bearing (I6i-b), else the smooth field's.
+					// The nearest stored crack's bearing, else the smooth field's.
 					float cos2, sin2;
 					if (place.OnLine)
 					{
@@ -337,7 +337,7 @@ namespace FishMMO.Shared
 					return 0.06f + 0.94f * Clamp01(sky.Turbidity) * tremble;
 				}
 				case SceneGlowMode.Episode:
-					// The nearest stored fountain vent's own episodes (I6i-b), else the glow's cell's.
+					// The nearest stored fountain vent's own episodes, else the glow's cell's.
 					return 0.12f + 0.88f * (place.AtVent ? Biomes.BiomeFountainEpisodes.At(in place.VentEpisodes, seconds, place.VentSeed)
 						: Biomes.BiomeFountainEpisodes.GlowAt(in episodes, seconds, x, z));
 				case SceneGlowMode.Burst:
@@ -367,7 +367,7 @@ namespace FishMMO.Shared
 			return intensity * Value(in entry, seconds, at, in sky, place) * shows;
 		}
 
-		/// <summary>A colour warmed (decisions 43, 46, 69): its luminance in firelight's colour, or the colour itself when not warm.</summary>
+		/// <summary>A colour warmed: its luminance in firelight's colour, or the colour itself when not warm.</summary>
 		public static Color Warmed(Color colour, bool warm)
 		{
 			if (!warm)
@@ -393,7 +393,7 @@ namespace FishMMO.Shared
 			return Clamp01(1f - Math.Abs(off) / DawnWidth) * Smooth(Math.Min(night, day) / 0.02f);
 		}
 
-		/// <summary>The after-sunset glow (decision 58): 1 soon after sunset, fading toward 0.15 at dawn, dark by day.</summary>
+		/// <summary>The after-sunset glow: 1 soon after sunset, fading toward 0.15 at dawn, dark by day.</summary>
 		public static float AfterSunset(in SceneGlowSky sky)
 		{
 			float night = Clamp01(sky.NightShare);
@@ -412,7 +412,7 @@ namespace FishMMO.Shared
 
 		// ── The sky's numbers, pure in the world clock (the client reads the celestial model for their inputs) ──
 
-		/// <summary>The fallback period of the plume tide, the kneading and the field when a body has no orbit or host, hours (decision 53).</summary>
+		/// <summary>The fallback period of the plume tide, the kneading and the field when a body has no orbit or host, hours.</summary>
 		public const double FallbackOrbitHours = 33.0, FallbackFieldHours = 10.0;
 
 		/// <summary>Local days since the epoch: the solar days run less the local time (it turns at local midnight), modulo <see cref="DayWrap"/>.</summary>
@@ -443,10 +443,10 @@ namespace FishMMO.Shared
 			return (float)(turn - Math.Floor(turn));
 		}
 
-		/// <summary>The plume tide (decision 53): 0.3 at pericentre, 1 at apocentre (half a turn), by the orbit's turn.</summary>
+		/// <summary>The plume tide: 0.3 at pericentre, 1 at apocentre (half a turn), by the orbit's turn.</summary>
 		public static float PlumeTideOf(float orbitTurn) => 0.3f + 0.7f * (0.5f - 0.5f * Cos(orbitTurn));
 
-		/// <summary>The wet half-year (decision 59): the local summer (the season's sine, hemisphere by latitude), 0..1.</summary>
+		/// <summary>The wet half-year: the local summer (the season's sine, hemisphere by latitude), 0..1.</summary>
 		public static float WetOf(float season01, float latitudeDegrees)
 		{
 			float summer = (float)Math.Sin(Turn * season01 - 0.5f * Mathf.PI) * (latitudeDegrees < 0f ? -1f : 1f);
@@ -466,7 +466,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The mean over [seconds, seconds + window] of the line through whole knots (<see cref="KnotLerp"/>): continuous in time, and
-		/// the same whatever was asked before. What "the rain of the next six hours" is (decision 75).
+		/// the same whatever was asked before. What "the rain of the next six hours" is.
 		/// </summary>
 		public static float KnotMean(double seconds, double knotSeconds, double windowSeconds, Func<long, float> at)
 		{

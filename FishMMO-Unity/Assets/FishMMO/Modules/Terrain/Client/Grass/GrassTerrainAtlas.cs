@@ -21,8 +21,8 @@ namespace FishMMO.Client
 	public sealed class GrassTerrainAtlas : IDisposable
 	{
 		/// <summary>Uints per terrain in the table (FishGrassBlades.compute GRASS_TERRAIN_UINTS; GrassLoadTerrain reads it).</summary>
-		/// <remarks>25 until the 16-channel terrains (2026-10-10): channels 8..15 and the first density slice were appended
-		/// (25..33) so every older field kept its place. 50 for the 32-channel terrains (2026-10-27): channels 16..31 at
+		/// <remarks>25 until the 16-channel terrains: channels 8..15 and the first density slice were appended
+		/// (25..33) so every older field kept its place. 50 for the 32-channel terrains: channels 16..31 at
 		/// 34..49, read only by the wide kernels. 82 for the 64-channel terrains (later that day): channels 32..63 at 50..81,
 		/// read only by the widest kernel (<see cref="ChannelUint"/>).</remarks>
 		public const int TerrainUints = 82;

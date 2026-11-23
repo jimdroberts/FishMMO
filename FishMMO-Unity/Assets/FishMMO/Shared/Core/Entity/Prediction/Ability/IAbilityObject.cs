@@ -6,7 +6,7 @@ namespace FishMMO.Shared.Core
 {
 	/// <summary>
 	/// What the core's generic ECA pieces (<c>PlayFXAction</c>, <c>TargetSelector</c>) read of a live ability object, the
-	/// Abilities module's spell (2026-11-20): where it is, which scene it lives in, and whether this peer resolves its hits.
+	/// Abilities module's spell: where it is, which scene it lives in, and whether this peer resolves its hits.
 	/// </summary>
 	public interface IAbilityObject
 	{

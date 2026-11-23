@@ -214,7 +214,7 @@ namespace FishMMO.UnitTests
 			Assert.That(whips, Is.GreaterThan(0), "no whip shrub in the catalogue");
 		}
 		
-		/// <summary>The design's shrub list (vegetation expansion, 2026-10-10) is in the catalogue under its names: the spec table refers to them by name.</summary>
+		/// <summary>The design's shrub list (vegetation expansion) is in the catalogue under its names: the spec table refers to them by name.</summary>
 		[Test]
 		public void TheExpansionsShrubs_AreAllInTheCatalogue()
 		{

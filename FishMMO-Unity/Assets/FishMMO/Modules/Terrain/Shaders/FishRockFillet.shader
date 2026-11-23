@@ -19,7 +19,7 @@ Shader "FishMMO/Rock Fillet"
         [HideInInspector] _FishWeatherAmount("Weather on this surface", Range(0.0, 1.0)) = 1.0
         [HideInInspector] _FishVisible("Visible", Range(0.0, 1.0)) = 1.0
         _FishMoss("Moss on this surface", Range(0.0, 1.0)) = 0.0
-        // FishMMO edit (2026-10-28): a rock whose maps are look array slices (ProceduralArtLookArrays; FishRockFilletPass.hlsl).
+        // FishMMO edit: a rock whose maps are look array slices (ProceduralArtLookArrays; FishRockFilletPass.hlsl).
         [HideInInspector][NoScaleOffset] _FishLookColour("Look albedo and emission", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset] _FishLookNormal("Look normals", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset] _FishLookMask("Look gloss and occlusion", 2DArray) = "" {}

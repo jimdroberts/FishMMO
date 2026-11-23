@@ -29,7 +29,7 @@ namespace FishMMO.UnitTests
 	/// parents, and <see cref="TargetOrdering.ContainsBody"/> collapses the duplicates.
 	/// </para>
 	/// <para>
-	/// The 2026-08-29 combat audit established that resolution as the single shared implementation
+	/// The combat audit established that resolution as the single shared implementation
 	/// and converted the ability and selector paths to it. Three overlap consumers were missed:
 	/// <c>ApplyThreatAction</c>, <c>BaseAIState.SweepForEnemies</c> and
 	/// <c>HealerAttackingState</c>'s ally scan. The behavioural tests below pin the resolution
@@ -179,7 +179,7 @@ namespace FishMMO.UnitTests
 
 				LogAssert.IsTrue(text.Contains("TargetOrdering.ResolveHitKey"),
 					$"{sources[i]} consumes a raw overlap buffer and must resolve its hits through " +
-					"TargetOrdering.ResolveHitKey, the shared implementation the 2026-08-29 combat " +
+					"TargetOrdering.ResolveHitKey, the shared implementation the combat " +
 					"audit established.");
 			}
 		}

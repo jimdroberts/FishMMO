@@ -106,7 +106,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Stones: boulders, small rocks and pebbles, each material with shapes of its own (2026-10-16, decision 6 of the
+	/// Stones: boulders, small rocks and pebbles, each material with shapes of its own (decision 6 of the
 	/// biome suite: "distinct mesh shapes per stone material"). Before this, every material's boulders, rocks and
 	/// pebbles were one shared mesh per slot with only the texture changed (<see cref="RockMeshes"/>).
 	/// </summary>

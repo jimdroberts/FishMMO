@@ -14,7 +14,7 @@ namespace FishMMO.Shared.NameGeneration
 	/// names work before the content tool has written anything, and a kind appended to
 	/// <see cref="POIType"/> without content still names as itself rather than failing. The same tables
 	/// are what <c>PlaceNamingContentTool.WriteGrammarDefaults</c> copies into the asset, where designers
-	/// then own them (2026-10-10: patterns live in the grammar asset, modelled on title templates).
+	/// then own them (patterns live in the grammar asset, modelled on title templates).
 	/// </para>
 	/// <para>
 	/// Type words for kinds whose name already carries a qualifier ("Sunken Temple", "Hunting Lodge")
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.NameGeneration
 		/// </summary>
 		/// <remarks>
 		/// A planet river runs through many scenes and biomes, and every scene must call it the same thing
-		/// (2026-10-10: rivers named planet-wide from the body seed and the PlanetRiver). Its falls,
+		/// (rivers named planet-wide from the body seed and the PlanetRiver). Its falls,
 		/// rapids and mouth take the same treatment so that, given the river's seeds, they share its root:
 		/// "River Tamar", "Tamar Falls", "Mouth of the Tamar". Lakes follow so a lake reads like the water
 		/// that feeds it. The root comes from the shared water phonology and adjectives from the generic
@@ -182,7 +182,7 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.BarnacleLog] = new[] { "Barnacle Log", "Drift Log", "Gooseneck Raft", "Weed Raft", "Drift Timber", "Sea Log" },
 			[POIType.Longline] = new[] { "Longline", "Float Line", "Buoy Line", "Lost Line", "Drift Line", "Hook Line" },
 			[POIType.WhaleTow] = new[] { "Whale Tow", "Whaler's Prize", "Towed Carcass", "Whaler's Haul", "Flensing Tow", "Prize Whale" },
-			// The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS).
+			// The biomes' own kinds.
 			[POIType.TrenchEdge] = new[] { "Brink", "Deep Edge", "Trench Lip", "Drop", "Rim", "Verge" },
 			[POIType.SeaCavern] = new[] { "Sea Cavern", "Drowned Cave", "Deep Grotto", "Wall Cave", "Sea Hollow", "Undercave" },
 			[POIType.CinderCone] = new[] { "Cinder Cone", "Cone", "Ash Hill", "Cinder Mount", "Scoria Hill", "Black Cone" },
@@ -226,12 +226,12 @@ namespace FishMMO.Shared.NameGeneration
 			[POIType.ImpactBasin] = new[] { "Basin", "Crater", "Ring", "Strike", "Scar", "Impact" },
 			[POIType.TidalRift] = new[] { "Rift", "Fracture", "Linea", "Chasm", "Rent", "Fissure" },
 
-			// The hot ground's own sites (2026-10-27).
+			// The hot ground's own sites.
 			[POIType.Geyser] = new[] { "Geyser", "Spout", "Gusher", "Fountain", "Steam Spout", "Geysir" },
 			[POIType.MudPot] = new[] { "Mud Pot", "Paint Pot", "Mud Cauldron", "Mudspring", "Boiling Mud", "Mud Volcano" },
 			[POIType.Fumarole] = new[] { "Fumarole", "Steam Vent", "Steam Hole", "Reek", "Blower", "Hissing Vent" },
 			[POIType.SulphurPool] = new[] { "Sulphur Pool", "Brimstone Pool", "Yellow Pool", "Sulphur Pot", "Brimstone Pit", "Sulphur Spring" },
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			[POIType.DragonLair] = new[] { "Lair", "Hoard", "Wyrmhold", "Wyrm's Den", "Roost", "Delve", "Dragonhold" },
 			[POIType.TrollBridge] = new[] { "Bridge", "Span", "Crossing", "Toll Bridge", "Troll Span", "Old Bridge" },
 			[POIType.GiantsSteading] = new[] { "Steading", "Hall", "Hold", "Garth", "Giants' Hall", "Great Hall" },
@@ -413,7 +413,7 @@ namespace FishMMO.Shared.NameGeneration
 
 		/// <summary>
 		/// The sound of rivers, lakes and falls. Planet-wide rivers cross biomes, so their names cannot come
-		/// from any one biome's phonology (2026-10-10: rivers named planet-wide from the body seed and
+		/// from any one biome's phonology (rivers named planet-wide from the body seed and
 		/// planet river); one shared, old-sounding phonology gives every world's water a family resemblance.
 		/// Onsets end in a consonant and codas start with a vowel so roots fuse without smoothing.
 		/// </summary>
@@ -485,7 +485,7 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.MethaneLake, POIType.ImpactBasin, POIType.TidalRift, POIType.WispHollow,
 			POIType.TrenchEdge, POIType.SeaCavern, POIType.Kipuka, POIType.LavaFall, POIType.DrownedForest, POIType.FloatingIsland,
 			POIType.DeadForest, POIType.SeaHall, POIType.Geyser, POIType.MudPot, POIType.Fumarole, POIType.SulphurPool,
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			POIType.Cenote,
 		};
 		/// <summary>Natural kinds whose plain type word takes an adjective well ("The Black Gorge").</summary>
@@ -502,7 +502,7 @@ namespace FishMMO.Shared.NameGeneration
 			POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.RitualSite, POIType.Monastery, POIType.FeyRing,
 			POIType.LeyNexus, POIType.FallenStar, POIType.CorruptedGrove, POIType.Portal, POIType.BogShrine,
 			POIType.SunkenTemple, POIType.LavaCaveTemple, POIType.FrogShrine, POIType.Chapel, POIType.HolyWell,
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			POIType.WaygateRing, POIType.DruidGrove, POIType.DryadOak, POIType.JaguarTemple, POIType.Henge, POIType.HangingMonastery, POIType.PrayerFlagPass, POIType.AuroraShrine, POIType.SwampCathedral, POIType.TidalIslandAbbey, POIType.FireTemple, POIType.LadyOfTheLake, POIType.NymphPool,
 		};
 		private static readonly POIType[] PlainSacred = { POIType.Shrine, POIType.Temple, POIType.StoneCircle, POIType.Monastery, POIType.Portal, POIType.LeyNexus, POIType.Chapel, POIType.HolyWell };
@@ -516,12 +516,12 @@ namespace FishMMO.Shared.NameGeneration
 		private static readonly POIType[] Coves = { POIType.SmugglersCove, POIType.PirateCove, POIType.SmugglersTunnel, POIType.WreckersBeacon, POIType.SeaWitchGrotto };
 		private static readonly POIType[] Wrecks = { POIType.Wreck, POIType.SunkenShip, POIType.FrozenShipwreck, POIType.KrakenWreck };
 		private static readonly POIType[] SeaFloorSites = { POIType.SunkenShrine, POIType.SeaMonsterDen, POIType.SeaCrystalFormation, POIType.SunkenMonument, POIType.SunkenStatue, POIType.SunkenWhaleFall, POIType.MerfolkVillage, POIType.KrakenGrounds };
-		/// <summary>Relics of the biome rounds (2026-10-25) named as the sea floor's are: "{Type} of {Root}", "{Root} {Type}", "The {Adjective} {Type}".</summary>
+		/// <summary>Relics of the biome rounds named as the sea floor's are: "{Type} of {Root}", "{Root} {Type}", "The {Adjective} {Type}".</summary>
 		private static readonly POIType[] Relics =
 		{
 			POIType.HoluaSlide, POIType.AncientForge, POIType.PhoenixNest, POIType.MireGate, POIType.SunkenPlaza, POIType.ShatteredBridge,
 			POIType.SealedVault, POIType.WarEngineGraveyard,
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			POIType.BuriedHoard, POIType.AmbushSite, POIType.WreckedCaravan, POIType.AncientWall, POIType.SpellScar, POIType.PlanarRift, POIType.TitansBones, POIType.GolemGraveyard, POIType.LostLibrary, POIType.StepPyramid, POIType.LostCity, POIType.IdolVault, POIType.Pyramid, POIType.SandBuriedTemple, POIType.DjinnPrison, POIType.BeastBoneyard, POIType.CliffPalace, POIType.DreadRoad, POIType.DwarvenGate, POIType.DragonInTheIce, POIType.MammothGraveyard, POIType.IcePalace, POIType.AshBuriedCity,
 		};
 		private static readonly POIType[] AdriftSites = { POIType.AdriftDerelict, POIType.WhaleFall, POIType.BarnacleLog, POIType.Longline, POIType.WhaleTow };
@@ -703,15 +703,15 @@ namespace FishMMO.Shared.NameGeneration
 			P("Drowned {City}", 20, POIType.SunkenCity),
 			P("Sunken {City}", 15, POIType.SunkenCity),
 			P("{Type} of {RacePlural}", 5, POIType.SunkenCity),
-			// The sea floor's own sites (2026-10-25).
+			// The sea floor's own sites.
 			P("{Type} of {Root}", 15, SeaFloorSites),
 			P("{Root} {Type}", 15, SeaFloorSites),
 			P("The {Adjective} {Type}", 10, SeaFloorSites),
-			// Adrift on the open sea (2026-10-25).
+			// Adrift on the open sea.
 			P("{Type} of {Root}", 15, AdriftSites),
 			P("{Root} {Type}", 15, AdriftSites),
 			P("The {Adjective} {Type}", 10, AdriftSites),
-			// The biome rounds' relics (2026-10-25).
+			// The biomes' relics.
 			P("{Type} of {Root}", 15, Relics),
 			P("{Root} {Type}", 15, Relics),
 			P("The {Adjective} {Type}", 10, Relics),

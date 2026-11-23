@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// the texels: those arrays cost about a quarter on the web, and desktop builds are unchanged.
 	/// </para>
 	/// <para>
-	/// <b>Max Size is per slice for a flipbook array.</b> Measured on Unity 6000.4 (an empty project, 2026-11-07): a
+	/// <b>Max Size is per slice for a flipbook array.</b> Measured on Unity 6000.4 (an empty project): a
 	/// 3×1 flipbook of 128-pixel cells imported with a WebGL Max Size of 256 stayed 128 a slice, and at 64 became 64 a
 	/// slice, every cell in its own place. So the override is half the cell, whatever the grid's width; a limit on the
 	/// whole sheet would have cut cells apart on a grid that is not a power of two wide (9 cells of 1024 = 9216).

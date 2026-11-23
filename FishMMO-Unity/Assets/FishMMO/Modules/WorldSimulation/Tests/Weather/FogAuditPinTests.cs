@@ -4,7 +4,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The fog and cloud audit of 2026-10-09, pinned: the defects its renders found, each checked against a copy
+	/// The fog and cloud audit, pinned: the defects its renders found, each checked against a copy
 	/// of the source with the defect put back, so a pin that stops checking anything fails too.
 	/// </summary>
 	/// <remarks>
@@ -52,7 +52,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void EveryRayComingUpIntoABaseFindsIt()
 		{
-			// The grain over a raining storm's base (2026-10-09): the haze tapers to nothing just under the base, so the
+			// The grain over a raining storm's base: the haze tapers to nothing just under the base, so the
 			// sample before it was haze on one texel and clear air on the next, by the phase — and only the first kind
 			// found the base; the second walked into the cloud with the haze's stride from wherever its step landed.
 			// Raw frames in Flo Monolith's storm: 4.8 % of the base's brightness changed from frame to frame, 1.9 % after
@@ -83,7 +83,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void NearCloudIsWalkedFiner()
 		{
-			// Near Step Scale (2026-10-09): the cloud within a few kilometres walked at a finer step, eased back smoothly
+			// Near Step Scale: the cloud within a few kilometres walked at a finer step, eased back smoothly
 			// to Step Scale beyond — the grain on a storm's base 1.2 % → 0.9 % of its brightness at the bed's 180x clock
 			// for about half a millisecond at 1440p, where refining the whole sky cost the same for almost nothing more.
 			string volume = SourceScanPins.ReadCode(Shaders + "FishCloudVolume.hlsl");
@@ -93,7 +93,7 @@ namespace FishMMO.UnitTests.Weather
 					: "the near cloud is not walked at its own step, eased back with distance",
 				SourceScanPins.Replace("cloudStepBase *= lerp(nearStep, 1.0, smoothstep(_FishCloudNearStep.y, _FishCloudNearStep.y + _FishCloudNearStep.z, travelled));", ""),
 				"one step scale for the whole sky");
-			// 2026-10-21 (frame-budget pass): the whole march went 0.5 -> 0.75 and the near cloud 0.35 -> 0.5 with
+			// frame-budget pass: the whole march went 0.5 -> 0.75 and the near cloud 0.35 -> 0.5 with
 			// the near band 4 km -> 2 km, about 1.9-2.5 ms with the edges kept. What is pinned is the relation: near
 			// cloud is walked finer than the rest of the sky.
 			string asset = SourceScanPins.ReadSource("Assets/FishMMO/Modules/WorldSimulation/Settings/Weather Render Profile.asset");
@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests.Weather
 		public void TheCloudsMarchToTheirOwnDistanceNotTheCamerasFarPlane()
 		{
 			// The far tail and the far band's last slice began at the camera's far plane, which the scene backdrop raises
-			// to 20 km: what the clouds cost and looked like changed with a setting about the horizon ring (2026-10-09).
+			// to 20 km: what the clouds cost and looked like changed with a setting about the horizon ring.
 			string feature = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishCloudsFeature.cs");
 			SourceScanPins.HoldsAndFires("full march", feature,
 				code => code.Contains("material.SetVector(FarTailId, new Vector4(Mathf.Max(1000f, sky.CloudFullMarchMetres)")
@@ -226,8 +226,8 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void TheFallbackFogShadersReachABuild()
 		{
-			// The fog passes' settings stand in the weather render profile, drawn by the renderers' module passes host (Phase 4,
-			// 2026-11-18), so the profile is what carries their shaders into a build.
+			// The fog passes' settings stand in the weather render profile, drawn by the renderers' module passes host,
+			// so the profile is what carries their shaders into a build.
 			string profile = SourceScanPins.ReadSource("Assets/FishMMO/Modules/WorldSimulation/Settings/Weather Render Profile.asset");
 			LogAssert.IsTrue(profile.Contains("FogShader: {fileID: 4800000, guid: 0dbb995e33d6cf2ff938338521db28c1, type: 3}"),
 				"the height fog references its shader (Hidden/FishMMO/Weather/HeightFog)");
@@ -235,7 +235,7 @@ namespace FishMMO.UnitTests.Weather
 				"the froxel volume references its compositing shader");
 			string height = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishHeightFogFeature.cs");
 			SourceScanPins.HoldsAndFires("height fog shader", height,
-				// The name fallback goes through ShaderLookup (Shader.Find that also finds shaders loaded from bundles) since 2026-11-18; the reference comes first as before.
+				// The name fallback goes through ShaderLookup (Shader.Find that also finds shaders loaded from bundles); the reference comes first as before.
 				code => code.Contains("FogShader != null ? FogShader : ShaderLookup.Find(ShaderName)") ? null : "the height fog does not use its referenced shader",
 				SourceScanPins.Replace("FogShader != null ? FogShader : ShaderLookup.Find(ShaderName)", "ShaderLookup.Find(ShaderName)"),
 				"found by name alone");

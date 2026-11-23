@@ -13,7 +13,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Why.</b> The props (structures, rocks, ice, the cave glow art) wear one material per texture set and tint: ~30 in view at
 	/// Moron 2, each one draw's worth of Unity's material set-up outside the SRP Batcher (StdRender.ApplyShader, ~6-7 µs a switch,
-	/// 2026-10-27 RenderDoc attribution). Materials that differ only in their slices and a few scalars share ONE family material
+	/// RenderDoc attribution). Materials that differ only in their slices and a few scalars share ONE family material
 	/// instead: the scalars and slices sit in a small table texture, and each vertex of the merged meshes names its look (uv3.x),
 	/// so a family draws as one material whatever it wears.
 	/// </para>

@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// The cold glow of faerie, rune and crystal light (2026-10-18, I6g; <see cref="SceneEmitterKind.Glow"/>): its tint, its
+	/// The cold glow of faerie, rune and crystal light (<see cref="SceneEmitterKind.Glow"/>): its tint, its
 	/// soft slow pulse and when it shows. One definition read by the client's site lights (SiteLightPool) and, constant for
 	/// constant, by the glowing parts of the pieces that give it off (FishStructureWeathering.hlsl FishStructureGlowLight),
 	/// so a rune stone's runes brighten and dim with the light they cast.
@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 	/// is full day and night, as a buried lamp is.
 	/// </para>
 	/// <para>
-	/// <b>Flicker</b> (2026-10-18, decision 33: stormglass, a crystal full of cloud with threads of lightning in it). A glow
+	/// <b>Flicker</b> (stormglass, a crystal full of cloud with threads of lightning in it). A glow
 	/// whose seed carries <see cref="FlickerBit"/> crackles instead of breathing (<see cref="Flicker"/>): a low steady glow
 	/// with bright, uneven flashes, the same pure function of the shared clock and the place, so the crystal on a post and the
 	/// light it casts flash together while the next post's flash at their own moments. Its parts' material flickers by the

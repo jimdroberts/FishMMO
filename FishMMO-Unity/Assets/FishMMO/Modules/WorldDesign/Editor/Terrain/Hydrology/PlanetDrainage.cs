@@ -128,7 +128,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// What the drainage was worked out from, for the log: the biomes registered (count, and a hash of each one's key and
 		/// how it keeps its hollows), and hashes of the ground, the rain and the karst. The editor and a batch run once
-		/// drained Flo Monolith's planet differently from the same assets (141 rivers against 139; 2026-10-14); comparing two
+		/// drained Flo Monolith's planet differently from the same assets (141 rivers against 139); comparing two
 		/// of these says which input differed.
 		/// </summary>
 		private static string Fingerprint(float[] height, float[] rain, float[] keeping, bool[] sink)
@@ -179,7 +179,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A record of one build, in the editor and in batch alike: what it found, and every object it was worked out from as
 		/// it stood IN MEMORY (each serialised, with whether it had unsaved changes), so two builds that disagree can be
 		/// compared field by field. An editor session once drained Flo Monolith's planet differently from every batch run on
-		/// the same files and code (141 rivers against 139, 2026-10-14) and nothing then recorded what it had in memory.
+		/// the same files and code (141 rivers against 139) and nothing then recorded what it had in memory.
 		/// </summary>
 		private static void WriteRecord(WorldBody body, SolarSystemProfile system, string found, string blocks)
 		{

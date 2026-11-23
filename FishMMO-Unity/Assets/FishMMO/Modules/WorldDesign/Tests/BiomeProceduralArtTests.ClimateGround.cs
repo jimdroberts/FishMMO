@@ -7,8 +7,8 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Decision 29 (2026-10-18): ground layers' climate bands and climate variants' ground overrides, written by the authoring
-	/// from the spec and painted by the palette; decision 23: the description and naming columns. Unity-only: templates and
+	/// Ground layers' climate bands and climate variants' ground overrides, written by the authoring
+	/// from the spec and painted by the palette: the description and naming columns. Unity-only: templates and
 	/// terrain layers are native objects (the pure parts are BiomeClimateGroundTests).
 	/// </summary>
 	public partial class BiomeProceduralArtTests
@@ -16,7 +16,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesClimateBandsAndVariantGrounds_OnceAndKeepsHandEdits()
 		{
-			// The Valley (unauthored): no bands or climate grounds of its own (the Plains round, 2026-10-26, authored both).
+			// The Valley (unauthored): no bands or climate grounds of its own (authored both).
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			BiomeArtSpec.Layer main = entry.Main, grass = entry.Details[0];
 			try
@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Authoring_WritesDescriptionAndNaming_OverTheOriginalOnce_ThenKeepsHandEdits()
 		{
-			// The Valley (unauthored): no description or naming column (the Hills round, 2026-10-26, rewrote both).
+			// The Valley (unauthored): no description or naming column (rewrote both).
 			BiomeArtSpec.Entry entry = BiomeArtSpec.For("Valley");
 			try
 			{

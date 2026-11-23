@@ -22,7 +22,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// The core chat intake: receives every line a player sends, rate-gates, sanitises and queues it, runs slash commands
 	/// (with /help and the command audit), applies the stored mute and the flood mute, and sends system messages.
 	/// Conversation (the channels, cross-server delivery, persistence and the chat window) is the Chat module's
-	/// <c>ChatChannelSystem</c>, reached through <see cref="IChatLineHandler"/> (split 2026-11-20).
+	/// <c>ChatChannelSystem</c>, reached through <see cref="IChatLineHandler"/> .
 	/// Game logic and broadcasts run on the main thread; the command audit's database writes run on the async worker.
 	/// </summary>
 	[CreateAssetMenu(fileName = "ChatSystem", menuName = "FishMMO/Server/SceneServer/Chat System", order = 1)]
@@ -516,7 +516,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			/* What is left is conversation: a channel word ("/w", "/g", …) or plain text. Routing it to its channel,
-			 * the duplicate filter, delivery across servers and persistence are the Chat module's (2026-11-20); without
+			 * the duplicate filter, delivery across servers and persistence are the Chat module's; without
 			 * that module there is no conversation, and the line goes nowhere. Commands, the mutes and system messages
 			 * above are the core's. */
 			ResolveChatLineHandler()?.HandleChatLine(conn, sender, msg, cmd, receivedTicks, maxMessageLength);

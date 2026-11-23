@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Boats on lakes and rivers (decision 35 (e)/(j), 2026-10-18): which waters carry traffic and how fast it goes, as pure
+	/// Boats on lakes and rivers: which waters carry traffic and how fast it goes, as pure
 	/// functions of the river's line and the shared clock, for the inland lanes the sea's traffic machinery will ply.
 	/// </summary>
 	/// <remarks>
@@ -18,7 +18,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// (<see cref="LakeCarries"/>) between its shore landings. A river lane's water is its own surface (falling with the river),
 	/// so its points carry the river's height; there is no tide. What is left for that pass: a ONE-WAY lane mode in FloatingBoats (a
 	/// log raft drifts down and is hidden at the scene's edge, never drifting back up), the inland hulls (Lädine, Oberländer barge,
-	/// log raft, Nachen: the Lake and River rounds' pieces) and the stage hook beside the sea's.
+	/// log raft, Nachen: the Lake and River biomes' pieces) and the stage hook beside the sea's.
 	/// </para>
 	/// <para>
 	/// <b>Speeds from the river.</b> A raft drifts at the current, which changes along the river, and the shared-clock rule wants

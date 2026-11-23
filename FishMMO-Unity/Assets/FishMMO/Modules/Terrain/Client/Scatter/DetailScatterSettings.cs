@@ -6,7 +6,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// The GPU detail scatter (<see cref="DetailScatterSystem"/>): how the mesh details it generates on the GPU every frame
 	/// around each camera thin with distance, and the bushes' fixed reach. Every mesh detail the blade grass does not draw is
-	/// scattered (<see cref="TerrainDetailRouting"/>; 2026-10-27, when the CPU chunk renderer was removed, the prefix list that
+	/// scattered (<see cref="TerrainDetailRouting"/>, when the CPU chunk renderer was removed, the prefix list that
 	/// chose ground cover went with it). On the Weather Render Profile ("GPU detail scatter"); read every frame, so changes
 	/// apply while playing.
 	/// </summary>
@@ -28,7 +28,7 @@ namespace FishMMO.Client
 		public const int MaxLevels = 3;
 
 		/// <summary>
-		/// The most meshes a scattered type cycles per instance (2026-10-26, decision 22 of the biome suite): its root mesh plus
+		/// The most meshes a scattered type cycles per instance: its root mesh plus
 		/// bare-MeshFilter children <c>Variant1</c>, <c>Variant2</c> (<see cref="VariantChildPrefix"/>; the art generator's
 		/// ProceduralArtCatalogue.DetailVariantChild: the two must match). A type with one level only (never a bush) may have
 		/// them; its variants take the slots a bush's levels would, so the slot layout is unchanged.
@@ -38,7 +38,7 @@ namespace FishMMO.Client
 		/// <summary>The name of a detail prefab's variant child, before its index from 1 (<see cref="MaxVariants"/>).</summary>
 		public const string VariantChildPrefix = "Variant";
 
-		[Tooltip("Off: no mesh detail is drawn (there is no CPU path since 2026-10-27; an A/B of the scatter's cost). The dashboard's A/B button overrides it per play session.")]
+		[Tooltip("Off: no mesh detail is drawn (there is no CPU path; an A/B of the scatter's cost). The dashboard's A/B button overrides it per play session.")]
 		public bool Enabled = true;
 
 		[Header("Distance")]

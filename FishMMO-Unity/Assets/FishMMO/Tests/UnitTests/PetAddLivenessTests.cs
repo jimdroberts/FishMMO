@@ -5,7 +5,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A pet announcement binds the live pet, never a pooled copy still registered under its ID (2026-11-17).
+	/// A pet announcement binds the live pet, never a pooled copy still registered under its ID.
 	/// </summary>
 	/// <remarks>
 	/// Clients unregister scene objects on destroy, not on despawn, and the server keeps a re-spawned pet's ID. After any
@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// A pet dropped from its owner's view and sent again arrives as a new client object with no announcement; the list
-		/// and the panel follow it (2026-11-18: panel frozen at full while the pinned target frame showed 65%).
+		/// and the panel follow it (panel frozen at full while the pinned target frame showed 65%).
 		/// </summary>
 		[Test]
 		public void ARespawnedPet_ReplacesTheListedObject_AndThePanelRebinds()

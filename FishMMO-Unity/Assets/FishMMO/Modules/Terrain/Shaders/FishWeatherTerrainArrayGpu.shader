@@ -1,5 +1,5 @@
-// FishMMO/Weather Terrain Array GPU — the client's own draw of FishMMO/Weather Terrain Array's tiles (TerrainHeightmapSystem,
-// 2026-10-28): per-tile indirect draws of geomorphed patches, sampling the tiles' existing textures
+// FishMMO/Weather Terrain Array GPU — the client's own draw of FishMMO/Weather Terrain Array's tiles (TerrainHeightmapSystem):
+// per-tile indirect draws of geomorphed patches, sampling the tiles' existing textures
 // (FishTerrainHeightmap.compute / .hlsl), with the same passes and the same pixel shader as the tiles' own material
 // (FishWeatherTerrainArrayInput.hlsl / Passes.hlsl, compiled with FISH_TERRAIN_GPU). Unity's terrain keeps the tiles'
 // collision, the editor, the cut and the server; the client sets drawHeightmap off on the tiles it draws, in play only.

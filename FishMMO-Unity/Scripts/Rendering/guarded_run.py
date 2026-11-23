@@ -69,7 +69,7 @@ def alive(pid):
 
 def reap(pids, grace=20):
     """Waits for signalled processes that left the group to go; SIGKILLs any still there after the grace. An editor busy in
-    an executeMethod ignored SIGTERM and ran on for 12 minutes after its xvfb-run parent went (2026-11-06)."""
+    an executeMethod ignored SIGTERM and ran on for 12 minutes after its xvfb-run parent went."""
     deadline = time.monotonic() + grace
     while any(alive(p) for p in pids) and time.monotonic() < deadline:
         time.sleep(0.5)

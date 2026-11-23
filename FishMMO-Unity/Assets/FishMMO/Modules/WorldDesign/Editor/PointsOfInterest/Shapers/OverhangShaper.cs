@@ -10,9 +10,9 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>How an overhang or arch site is built (<see cref="OverhangShaper"/>).</summary>
 	public enum OverhangBuild : byte
 	{
-		/// <summary>Retired (2026-10-14): a stretched boulder slab over an alcove. Stored plans of it say "re-cut".</summary>
+		/// <summary>Retired: a stretched boulder slab over an alcove. Stored plans of it say "re-cut".</summary>
 		Slab = 0,
-		/// <summary>Retired (2026-10-14): the 2026-10-10 leaning wall.</summary>
+		/// <summary>Retired: the leaning wall.</summary>
 		Section = 1,
 		/// <summary>The <c>Arch</c> cliff section as a fin standing out of the face, pierced through its middle.</summary>
 		Arch = 2,

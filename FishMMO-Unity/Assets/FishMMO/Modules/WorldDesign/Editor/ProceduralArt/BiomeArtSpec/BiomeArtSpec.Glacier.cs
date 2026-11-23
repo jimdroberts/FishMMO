@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Glacier</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Glacier()
 		{
-			// A flowing valley glacier (biome round, approved 2026-10-18, authored 2026-10-26), the glacier heads of a Kashmir-like
+			// A flowing valley glacier, the glacier heads of a Kashmir-like
 			// range (700–1300): blue-white ice pours between dark greenstone nunataks, breaks over icefalls into leaning séracs,
 			// is barred by ogives, slashed by crevasse fields and striped with medial moraines; meltwater runs into moulins,
 			// cryoconite holes pock the bare ice, the tongue goes black under rubble where glacier mice roll, and it ends in an ice
@@ -18,15 +18,15 @@ namespace FishMMO.Shared.WorldDesign
 			// snowmelt primulas and rhubarb, copper-barked bhojpatra birches up to the snout in the warm reach. Its people are
 			// pilgrims, shepherds and temple-keepers (trefoil temples, nāga tanks, sarais, dhoks dug into the moraines, wand lines
 			// across the ice); its fantasy the nāgas under the tarns, a waxing ice-pillar shrine, the pishacha in winter, the
-			// gold-digging ants of the outwash and the nāgamani serpent-jewels (invented names; no worship shown, decision 97).
+			// gold-digging ants of the outwash and the nāgamani serpent-jewels (invented names; no worship shown).
 			// Alpine keeps the dolomite, red snow and sun-cups; Ice Sheet the sastrugi plateau; Tundra the polygons and gneiss.
-			// LATER (I9): every ground and object texture as the Glacier's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Mapstone V(0.22, 0.95, 0.78) + Meltglow V(0.48, 0.48, 0.98).
-			// LATER (CODE-TABLE CLEARANCE Q13): Atmosphere 15 → 14 (drop Airless) in its selection row.
-			// LATER (I2g-f A13): a true flow field (chevron crevasses, ogives bent by the flow, medial moraines from confluences); the
+			// LATER: every ground and object texture as the Glacier's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Mapstone V(0.22, 0.95, 0.78) + Meltglow V(0.48, 0.48, 0.98).
+			// LATER: Atmosphere 15 → 14 (drop Airless) in its selection row.
+			// LATER: a true flow field (chevron crevasses, ogives bent by the flow, medial moraines from confluences); the
 			// presets carve along the cut's smoothed downslope until then.
 			const BiomeAtmosphereRequirement thin = BiomeAtmosphereRequirement.Thin | BiomeAtmosphereRequirement.Airless;
-			// Every plant rule is world-gated to breathable air (decision 41, approved Q7).
+			// Every plant rule is world-gated to breathable air.
 			Scatter Live(Scatter rule) => OnWorlds(rule, BiomeAtmosphereRequirement.Living);
 			return E("Glacier", L(Ground.IceAblation,
 					// The bare ice's cryoconite holes (dust on thin worlds too), the odd glacier mouse inside the medial stripes, the
@@ -47,7 +47,7 @@ namespace FishMMO.Shared.WorldDesign
 					// d1: the icefall (18–40°), its séracs in ranks on the steep steps (the crevasse fields paint it too).
 					D(Ground.IceIcefall, 48f, 3f, 18f, 40f, With(Seracs(0.03f, 18f, "Tower", "Block", "Leaning"), s => s.Slope = new Vector2(18f, 40f))),
 					// d2: glacier-polished greenstone slabs on the steep ground, dhoop on the ledges, bergenia at the cliff foot.
-					// LATER (GROUND-BANDS): map lichen above the trimline only (a trimline band); everywhere on the slabs until then.
+					// LATER: map lichen above the trimline only (a trimline band); everywhere on the slabs until then.
 					D(Ground.RockGreenstonePolished, 48f, 3f, 28f, 90f, Live(Plants("LichenMap", 2f, 160, 70f)),
 						Live(Band(Plants("HerbDhoop", 0.3f), -0.5f, 1f)), Live(Moded(Plants("BergeniaStone", 1f), BiomeScatterMode.CliffFoot())),
 						Blocks("Whalebacks", 0.015f, 20f, F(RegionalRocks.Greenstone, "Whaleback", "Plucked"))),
@@ -65,7 +65,7 @@ namespace FishMMO.Shared.WorldDesign
 						Plants("DebrisGlacier", 3f, 128), Outcrops("Dirt cones", 0.01f, 24f, F(RockTypes.WaterIce, "DirtCone"), 15f))
 						.Temp(-0.05f, 1f).Air(BiomeAtmosphereRequirement.Living).Ways(path: Ground.PathRubbleTrod, road: Ground.PathRubbleTrod),
 					// d5: the raw forefield below the terminal moraine (t ≥ −0.2), its pioneers, striated pebbles, rare bhojpatra stands in
-					// the warm reach (t ≥ 0.05). LATER (SCATTER-MODES): the melt sedge and primulas within a few metres of the meltwater
+					// the warm reach (t ≥ 0.05). LATER: the melt sedge and primulas within a few metres of the meltwater
 					// (a near-water anchor); a sparse scatter over the forefield until then.
 					D(Ground.SiltForefield, 56f, 2f, 0f, 18f, Live(Grass("GrassTrisetum", 6f)), Live(Band(Grass("GrassMeltSedge", 2f), -0.4f, 1f, -0.4f, 1f)),
 						Live(Band(Plants("FlowersRiverBeauty", 2f, 180), -0.4f, 1f)), Live(Band(Plants("FlowersSnowmeltPrimula", 1f, 180), -0.3f, 1f)),
@@ -93,7 +93,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Ice)
 				// Approved: nunatak crag life (Mountain); fresh water stays off (frozen and silty).
 				.Wildlife(BiomeHabitat.Ice | BiomeHabitat.Mountain)
-				// LATER (AMBIENT-LIFE N20): ice worms surfacing at dusk, glacier fleas, snowcock, ibex, griffon vultures, accentors, the
+				// LATER: ice worms surfacing at dusk, glacier fleas, snowcock, ibex, griffon vultures, accentors, the
 				// rare brown bear; the two white doves of the ice-pillar cave, a nāga coil under a tarn at dusk, pishacha on the winter
 				// ice, gold-digging ants on the outwash.
 				// Supraglacial azure: clear meltwater over blue ice, cryoconite silt.
@@ -105,9 +105,9 @@ namespace FishMMO.Shared.WorldDesign
 				.NoVines()
 				// Snow bridges over the torrents.
 				.Crosses(BiomeCrossingStyle.SnowBridge)
-				// The glacier bundle (approved Q2): crevasse fields, moulins fed by supraglacial channels, lateral, medial and terminal
+				// The glacier bundle: crevasse fields, moulins fed by supraglacial channels, lateral, medial and terminal
 				// moraines with kettle ponds, ogives below the icefalls, the snout portal the river is born from.
-				// LATER (I7 I34): the moulin's terrain hole and MoulinThroat piece; LATER (I2n-e F24): the snout portal's meltwater stream.
+				// LATER: the moulin's terrain hole and MoulinThroat piece; LATER: the snout portal's meltwater stream.
 				.Landforms(BiomeLandformPresets.Named("CrevasseField"), BiomeLandformPresets.Named("Moulin"), BiomeLandformPresets.Named("SupraglacialChannels"),
 					BiomeLandformPresets.Named("LateralMoraine").Painted(4, BiomeLandformPart.Whole), BiomeLandformPresets.Named("MedialMoraine"),
 					BiomeLandformPresets.Named("TerminalMoraine"), BiomeLandformPresets.Named("KettlePonds"), BiomeLandformPresets.Named("Ogives"),
@@ -138,7 +138,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.FallenStar, 0.3f), (POIType.HuntingLodge, 0.3f), (POIType.Grotto, 0.3f), (POIType.Cave, 0.3f), (POIType.Mine, 0.3f),
 					(POIType.Ossuary, 0.2f), (POIType.Battlefield, 0.2f), (POIType.Portal, 0.2f), (POIType.BanditCamp, 0.2f), (POIType.Graveyard, 0.1f),
 					(POIType.Village, 0.1f), (POIType.Keep, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.8f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -180,7 +180,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Graveyard, "Railed", 1f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 0f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -197,8 +197,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.PetrifiedBattle, "Frozen Field", 1.4f)
 				.Prefers(POIType.Commandery, "Preceptory", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.2f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): the Glacier's signature pieces — the trefoil temple with its two-tier pyramidal stone roof, the nāga tank,
+				// (the fantasy set's variants end here)
+				// LATER: the Glacier's signature pieces — the trefoil temple with its two-tier pyramidal stone roof, the nāga tank,
 				// the waxing ice-pillar cave (≤ 1 a scene, moon clock), the glacier-mouth shrine, the sarai, the dhok dug into a moraine,
 				// the ladder bridge, the ice quarry and cellar, the bhoj cell, the taq house, the deepstambha, the nāga tarn, the demon
 				// bones, the pishacha den and the ant-gold workings (approved); until then the kit's variants below stand in.
@@ -211,8 +211,8 @@ namespace FishMMO.Shared.WorldDesign
 				// earth over birch bark at 35°, deodar lattice, carved deodar doors, greenstone drystone, limestone carving, brass and
 				// iron, oatmeal pattu, saffron pennants. Timber (houses): timber-laced greenstone ground floors, dhajji lattice upper
 				// walls. Hide (shepherds): fieldstone dug into the moraine. Iron (mines): fieldstone and iron.
-				// LATER (NEW-SURFACES / I9): BhojEarth, TimberLaced, Dhajji, Pattu, TempleSlab and the saffron pennant as the Glacier's own
-				// surfaces; LATER (I7/I6h I28): the two-tier pyramidal stone temple roof. The kit's materials tinted stand in.
+				// LATER: BhojEarth, TimberLaced, Dhajji, Pattu, TempleSlab and the saffron pennant as the Glacier's own
+				// surfaces; LATER: the two-tier pyramidal stone temple roof. The kit's materials tinted stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Stone, NivalHex("#8e8a80"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Roof, BiomeStructureMaterial.Stone, NivalHex("#8e8a80"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.ShingleRoof, BiomeStructureMaterial.Earth, NivalHex("#6a5a48"), pitch: BiomeRoofPitch.Pitch35)
@@ -251,8 +251,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Lights(POIType.Waystation, BiomeWayLightKind.Brazier, 18f)
 				.Lights(POIType.Temple, BiomeWayLightKind.LanternStand, 16f)
 				.Lights(POIType.Shrine, BiomeWayLightKind.LanternStand, 16f)
-				// The passes and the pilgrim road are natural kinds, sited on the thin worlds too, where no flame burns (decision 41): a cold
-				// crystal post marks them. LATER (I7a): the draft's fire-basket cressets on the breathable worlds, once way lights swap by
+				// The passes and the pilgrim road are natural kinds, sited on the thin worlds too, where no flame burns: a cold
+				// crystal post marks them. LATER: the draft's fire-basket cressets on the breathable worlds, once way lights swap by
 				// the world's air.
 				.Lights(POIType.Pass, BiomeWayLightKind.CrystalPost, 30f)
 				.Lights(POIType.AncientRoad, BiomeWayLightKind.CrystalPost, 30f)

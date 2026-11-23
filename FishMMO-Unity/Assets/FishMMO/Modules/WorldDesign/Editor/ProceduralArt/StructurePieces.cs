@@ -25,12 +25,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>At most 1500: tents, palisades, shrines, statues.</summary>
 		Medium,
 		/// <summary>
-		/// At most 3500: houses, towers, keeps (3000 until the houses were built 1.4× larger, 2026-10-13: a longer wall
+		/// At most 3500: houses, towers, keeps (3000 until the houses were built 1.4× larger: a longer wall
 		/// carries more of the frame's close studding and more window openings).
 		/// </summary>
 		Building,
 		/// <summary>
-		/// At most 6500 (appended 2026-10-19: "Keeps are single story… you can't get to the top of a keep to look out?"): a
+		/// At most 6500 (appended: "Keeps are single story… you can't get to the top of a keep to look out?"): a
 		/// fortification walked through from its door to its battlements, floor over floor with the stairs between them — a keep,
 		/// a gatehouse, a great tower.
 		/// </summary>
@@ -45,13 +45,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>At deck level: y = 0 is the walking surface (piers, bridge spans); piles and trestles reach down.</summary>
 		Deck,
 		/// <summary>
-		/// Hung from above (2026-10-13, the cave and mine kit): y = 0 is the fixing point on a roof, a beam or a shaft's lip,
+		/// Hung from above (the cave and mine kit): y = 0 is the fixing point on a roof, a beam or a shaft's lip,
 		/// and the piece hangs down −y from it (a climbing rope, a lantern on its chain).
 		/// </summary>
 		Roof,
 	}
 
-	/// <summary>A material treatment every piece is generated in: the same meshes, other textures (2026-10-10: tint variants via material, not new meshes).</summary>
+	/// <summary>A material treatment every piece is generated in: the same meshes, other textures (tint variants via material, not new meshes).</summary>
 	/// <remarks>Append-only: names are in generated prefab paths.</remarks>
 	public enum StructureFinish
 	{
@@ -214,7 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Named places on the piece, in its own frame (<see cref="StructurePieces.MarksOf"/>, 2026-10-19): where something laid with it
+		/// Named places on the piece, in its own frame (<see cref="StructurePieces.MarksOf"/>): where something laid with it
 		/// goes, such as a shop's trade sign on its bracket or the goods on its stall-board, so one building can serve many trades.
 		/// </summary>
 		public readonly List<StructureMark> Marks = new List<StructureMark>();
@@ -255,7 +255,7 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly int GenerationSeed;
 
 		/// <summary>
-		/// The pitch this build lays its roofs at when not their kit one (StructureRoofs, 2026-10-18, I6e for houses, I6h for every
+		/// The pitch this build lays its roofs at when not their kit one (StructureRoofs, I6e for houses, I6h for every
 		/// roofed piece): a roof variant a palette asked for. Null builds the kit's own roofs.
 		/// </summary>
 		public readonly StructureRoofPitch? RoofPitch;
@@ -313,7 +313,7 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly List<BiomeStructureRole[]> hints = new List<BiomeStructureRole[]>();
 
 		/// <summary>
-		/// Builds what follows as the palette roles named, in preference (2026-10-16, I6a): every solid added until the scope is
+		/// Builds what follows as the palette roles named, in preference: every solid added until the scope is
 		/// disposed plays the first of them whose kit material is its own (BiomeStructurePalette.KitMaterial for the piece's
 		/// style), else the default for its material (StructureParts.Resolve). So a house's walls are built under
 		/// <c>Builds(Wall, GroundFloor, LogWall, Turf)</c>: plaster walls are its Wall, a stone ground floor its GroundFloor,
@@ -361,7 +361,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The structure kit's pieces (2026-10-10: a procedural structure kit for generated points of interest, any piece
+	/// The structure kit's pieces (a procedural structure kit for generated points of interest, any piece
 	/// replaceable by a LOCAL or hand-made prefab), their names and paths, and the builders that turn one into meshes.
 	/// </summary>
 	/// <remarks>
@@ -407,26 +407,26 @@ namespace FishMMO.Shared.WorldDesign
 			"market", "dock", "bridge", "rubble", "monument", "military", "water", "underwater",
 			"church", "temple", "tavern", "smithy", "stable", "notice", "farm", "clutter", "town", "light", "door", "furniture", "bed", "table", "chair", "chest", "shelf", "hearth", "bar", "pew", "lectern", "sarcophagus", "stall", "step", "portcullis", "wallstair", "mine", "torch", "boat", "ship", "wreck", "shipyard", "gorge", "arch", "rope", "climb", "lantern", "cave", "airship", "sky", "skydock",
 			"mill", "windmill", "watermill", "sawmill", "lumber", "granary", "dovecote", "apiary", "kiln", "tannery",
-			// Boardwalks (2026-10-18): laid along ways by PathBoardwalks, never drawn by a template's query.
+			// Boardwalks: laid along ways by PathBoardwalks, never drawn by a template's query.
 			"boardwalk",
-			// Dungeon entrances (2026-10-18): laid by id, never drawn by a template's query.
+			// Dungeon entrances: laid by id, never drawn by a template's query.
 			"dungeon",
-			// Linear features (2026-10-18, I2f): hedges, walls, fences, gates, clearance rows and channels, laid along lines by
+			// Linear features: hedges, walls, fences, gates, clearance rows and channels, laid along lines by
 			// PointOfInterestLinearFeatures, never drawn by a template's query.
 			"linear",
-			// The town's other buildings (2026-10-19), one line per part of the kit (StructurePieces.Arcane/Military/Farm/Trades/Civic.cs).
+			// The town's other buildings, one line per part of the kit (StructurePieces.Arcane/Military/Farm/Trades/Civic.cs).
 			"wizard", "arcane", "library", "bookcase", "desk", "alchemy",
 			"barracks", "archery", "training", "bunk", "armour", "cornertower",
 			"barn", "haystack", "stooks", "scarecrow", "pigsty", "henhouse", "sacks", "farmstead",
 			"healer", "bakery", "workshop", "dyeworks", "pottery", "brewery", "workbench", "herbs",
 			"guildhall", "shop", "warehouse", "pillory", "marketcross", "fountain",
-			// The trades a shop-house is let to, and the professions' own houses (2026-10-19, StructurePieces.Professions.cs, Landmarks.cs).
+			// The trades a shop-house is let to, and the professions' own houses (StructurePieces.Professions.cs, Landmarks.cs).
 			"tradesign", "tailor", "leather", "fletcher", "cobbler", "jeweller", "chandler", "cartographer", "scribe", "bank", "observatory", "telescope", "excavation",
-			// The cathedral and what stands round a settlement's edges (2026-10-19, StructurePieces.Outskirts.cs): laid by id, each its own tag, so no older query draws one.
+			// The cathedral and what stands round a settlement's edges (StructurePieces.Outskirts.cs): laid by id, each its own tag, so no older query draws one.
 			"cathedral", "lychgate", "gallows", "waysidecross", "maypole", "shepherd", "sheepfold", "bothy",
-			// A capital's palace (2026-10-19, StructurePieces.Palace.cs): laid by id, each its own tag, so no older query draws one.
+			// A capital's palace (StructurePieces.Palace.cs): laid by id, each its own tag, so no older query draws one.
 			"palace", "throne", "garden",
-			// The country bridges of the crossing styles (2026-10-26, StructurePieces.Crossings.cs): laid by id, their own tag, so no "bridge" query draws one.
+			// The country bridges of the crossing styles (StructurePieces.Crossings.cs): laid by id, their own tag, so no "bridge" query draws one.
 			"crossing",
 		};
 
@@ -455,35 +455,35 @@ namespace FishMMO.Shared.WorldDesign
 					AddRuins(list);
 					// Last, so adding them changed no earlier piece's place in the table.
 					AddAirships(list);
-					// The mills and rural works (2026-10-14), after everything else for the same reason.
+					// The mills and rural works, after everything else for the same reason.
 					AddMills(list);
-					// Boardwalks (2026-10-18, I2i), last again.
+					// Boardwalks, last again.
 					AddBoardwalk(list);
-					// Dungeon entrances (2026-10-18), last again.
+					// Dungeon entrances, last again.
 					AddDungeon(list);
-					// Linear features (2026-10-18, I2f), last again.
+					// Linear features, last again.
 					AddLinear(list);
-					// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"), last again:
+					// The town's other buildings ("more structure types for towns, villages, and cities"), last again:
 					// the wizard's tower and the library, the garrison's, the farm's, the trades' and the town's own.
 					AddArcane(list);
 					AddMilitary(list);
 					AddFarm(list);
 					AddTrades(list);
 					AddCivic(list);
-					// The trades a shop-house is let to, and the professions' own houses (2026-10-19), last again.
+					// The trades a shop-house is let to, and the professions' own houses, last again.
 					AddProfessions(list);
 					AddLandmarks(list);
 					AddOutskirts(list);
 					AddPalace(list);
-					// The corner tower (2026-10-19, StructurePieces.Towers.cs), last again.
+					// The corner tower (StructurePieces.Towers.cs), last again.
 					AddTowers(list);
-					// What others left in the caves and mines (2026-10-20, StructurePieces.CaveStory.cs), last again.
+					// What others left in the caves and mines (StructurePieces.CaveStory.cs), last again.
 					AddCaveStory(list);
-					// The biome suite's way and cave lights (2026-10-26, StructurePieces.WayLights.cs), last again.
+					// The biome suite's way and cave lights (StructurePieces.WayLights.cs), last again.
 					AddWayLights(list);
-					// The country bridges of the crossing styles (2026-10-26, I2l-b, StructurePieces.Crossings.cs), last again.
+					// The country bridges of the crossing styles (StructurePieces.Crossings.cs), last again.
 					AddCrossings(list);
-					// The fantasy wave's new pieces (2026-10-27, StructurePieces.Fantasy*.cs), last again.
+					// The fantasy set's new pieces (StructurePieces.Fantasy*.cs), last again.
 					AddFantasyKeeps(list);
 					AddFantasyRealm(list);
 					AddFantasyGreen(list);
@@ -650,7 +650,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Where a variant with its roof at a pitch gives off smoke, fire or light (null: the kit's roof, <see cref="EmittersOf(StructurePiece, int)"/>):
 		/// a chimney stands clear of the roof it is built through, so its smoke rises from a flat roof's stack lower than a
-		/// thatched one's (2026-10-18, I6e). Built once.
+		/// thatched one's. Built once.
 		/// </summary>
 		public static IReadOnlyList<(Vector3 at, SceneEmitterKind kind)> EmittersOf(StructurePiece piece, int variant, StructureRoofPitch? roof)
 		{
@@ -839,7 +839,7 @@ namespace FishMMO.Shared.WorldDesign
 		Lodging,
 		/// <summary>A mill's ground floor, where the meal comes down: sacks in crates and barrels, a chest, the miller's table and tally shelf.</summary>
 		Mill,
-		// Appended 2026-10-19 (the town's other buildings).
+		// Appended (the town's other buildings).
 		/// <summary>A wizard's study: a writing desk, bookcases, an alchemist's bench, a scrying focus, a chest and a bed.</summary>
 		Study,
 		/// <summary>A library's hall: bookcases round the walls, reading tables and a lectern in the middle, desks.</summary>
@@ -858,7 +858,7 @@ namespace FishMMO.Shared.WorldDesign
 		Storehouse,
 		/// <summary>A shop behind its stall-board: a counter, shelves of wares, crates and barrels.</summary>
 		Shop,
-		// Appended 2026-10-19: a shop-house let to a trade is furnished as that trade's (PointOfInterestTrades), and the professions' own houses.
+		// Appended: a shop-house let to a trade is furnished as that trade's (PointOfInterestTrades), and the professions' own houses.
 		/// <summary>A tailor's: a cutting table, a dressed form, bolts of cloth on shelves.</summary>
 		Tailor,
 		/// <summary>A leatherworker's: a stitching bench, hides on racks, saddles and harness hung up.</summary>
@@ -881,7 +881,7 @@ namespace FishMMO.Shared.WorldDesign
 		Observatory,
 		/// <summary>A guild's or a town's council chamber: long tables with benches, chests of charters, a lectern, a hearth (no beds, unlike a lord's hall).</summary>
 		Guildhall,
-		// Appended 2026-10-19: a capital's palace (StructurePieces.Palace.cs).
+		// Appended: a capital's palace (StructurePieces.Palace.cs).
 		/// <summary>
 		/// A palace's throne room: the throne on a dais across the room's back (StructurePieces.ThroneDaisDepth deep,
 		/// ThroneDaisRise up), braziers and the guard's armour beside it, the court's benches down the side walls facing the

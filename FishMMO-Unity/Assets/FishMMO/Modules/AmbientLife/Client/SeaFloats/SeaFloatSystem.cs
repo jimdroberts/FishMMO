@@ -25,7 +25,7 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// What drifts on the open sea (2026-10-25, phase I2p, decision 42): sargassum windrows, by-the-wind sailors, barnacled drift
+	/// What drifts on the open sea: sargassum windrows, by-the-wind sailors, barnacled drift
 	/// logs, propagule rafts, corklines, growlers, pumice rafts, pancake and brash ice — client only and purely visual, on the GPU.
 	/// </summary>
 	/// <remarks>
@@ -43,7 +43,7 @@ namespace FishMMO.Client
 	/// (<see cref="BiomeSeaFloats"/>). Nothing is integrated, nothing is on the wire.
 	/// </para>
 	/// <para>
-	/// <b>Nothing by default.</b> No template lists a float until a biome round does: no job, no dispatch, no draw, no buffer.
+	/// <b>Nothing by default.</b> No template lists a float until a biome's spec does: no job, no dispatch, no draw, no buffer.
 	/// Where compute shaders are missing (WebGL2) nothing is drawn.
 	/// </para>
 	/// </remarks>
@@ -282,7 +282,7 @@ namespace FishMMO.Client
 			float reach = Mathf.Min(settings.DrawDistance, BiomeSeaFloats.MaxDrawMetres);
 			if (!Gather(map, eye, reach, drift, seconds))
 			{
-				// The fast path: nothing in reach floats anything (every scene until a biome round names its floats).
+				// The fast path: nothing in reach floats anything (every scene until a biome's spec names its floats).
 				Report(main, "idle: no biome round the camera floats anything on its sea");
 				return;
 			}

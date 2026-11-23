@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Grassland</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Grassland()
 		{
-			// The Pannonian–Pontic puszta and meadow-steppe (biome round, approved 2026-10-16, authored 2026-10-26): an ocean of tall
+			// The Pannonian–Pontic puszta and meadow-steppe: an ocean of tall
 			// bronze-and-gold beard-grass and brome over a stoneless black earth, violet sage and yellow inula drifts, crimson steppe
 			// peonies on the kurgans, white soda pans glittering round milky alkali lakes, blown-sand puszta of blue fescue, buff loess
 			// bluffs cut by sunken lanes and riddled with bee-eater holes; lone wild pears, Turkey-oak islands and white poplars the
@@ -18,10 +18,10 @@ namespace FishMMO.Shared.WorldDesign
 			// wells against the sky, wayside inns, horse mills, wagon forts, brick churches, cellar rows dug into the loess. Its
 			// fantasy is the sky's: the noon mirage, the great golden falcon, horse-skull poles, the stone figures on the mounds.
 			// Plains keeps the prairie, Steppe the arid feather-grass and yurts, Woodland the chalk and hedges.
-			// LATER (I9): every ground and object texture as Grassland's own variant of its recipe (decision 12); until then the
+			// LATER: every ground and object texture as Grassland's own variant of its recipe; until then the
 			// grounds below are its own recipes and the stones, barks and leaves the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Emberleaf (steppe fire: scarlet beard-grass) + Arcane (the mirage's
-			// lilac-silver shimmer at the noon heat) (BiomeTemplate.rareLookA/B, decision 25).
+			// LATER (no spec column yet): rare looks Emberleaf (steppe fire: scarlet beard-grass) + Arcane (the mirage's
+			// lilac-silver shimmer at the noon heat) (BiomeTemplate.rareLookA/B).
 			return E("Grassland", L(Ground.GrassPusztaSward,
 					// The meadow-steppe sward: brome under goldbeard drifts and red beard-grass, the Pannonian forbs through it.
 					Grass("GrassBrome", 30f), Grass("GrassGoldbeard", 6f), Grass("GrassRedBeard", 8f),
@@ -57,8 +57,8 @@ namespace FishMMO.Shared.WorldDesign
 						Stand(Was(0.3f, 8f), 14f, W(0.12f, 0.5f, open: 0.15f), "WhitePoplar"))
 						.Ways(path: Ground.PathSandTrackPuszta, road: Ground.PathSandTrackPuszta),
 					// d3: szik soda pans in the hollows (≤ 3°, low ground): alkali grass, statice and sea wormwood round them, the cut
-					// thatching reed and the ditches' white willows at the lake fringe. LATER (GROUND-BANDS): a ring band at the pan's
-					// edge (the crust itself bare); thin on the whole layer until then. LATER (SCATTER-MODES): a near-water anchor for the
+					// thatching reed and the ditches' white willows at the lake fringe. LATER: a ring band at the pan's
+					// edge (the crust itself bare); thin on the whole layer until then. LATER: a near-water anchor for the
 					// reed (within 15 m of a lake or soda pond) and the willow (12 m); the hollows' pans stand in.
 					With(D(Ground.SaltCrustSzik, 112f, 3.5f, 0f, 3f, Grass("GrassAlkali", 8f, 160), Plants("FlowersSzik", 5f, 180), Plants("ArtemisiaSalt", 4f),
 						Plants("ReedsThatch", 3f), Trees(0.004f, 12f, 8f, "WhiteWillow")), l => l.Height = new Vector2(0f, 0.5f)),
@@ -93,7 +93,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Arid)
 				// Approved: the soda lakes' and ditches' storks, avocets, frogs and dragonflies.
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): great bustard, white stork on the chimney and pole nests, suslik sentries at the spoil, bee-eaters
+				// LATER: great bustard, white stork on the chimney and pole nests, suslik sentries at the spoil, bee-eaters
 				// at the loess walls, skylark, roller and hoopoe, saker falcon, quail; the grey longhorn and racka herds; the Turul at dawn.
 				// Approved: wet moats, milky soda water (turbid jade-grey, white-crusted margins) in its lakes, ponds and moats.
 				.Moat(BiomeMoatWater.Wet)
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SunkenShip, 0.5f), (POIType.SunkenRuins, 0.5f), (POIType.SunkenCity, 0.3f), (POIType.DungeonEntrance, 0.8f), (POIType.BossLair, 0.6f),
 					(POIType.OreVein, 0.3f), (POIType.CrystalFormation, 0.3f), (POIType.AncientTree, 0.5f), (POIType.HerbGrove, 0.9f), (POIType.Dockyard, 0.2f),
 					(POIType.Windmill, 1.4f), (POIType.Watermill, 0.4f), (POIType.WitchHut, 0.2f), (POIType.CorruptedGrove, 0.1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.4f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HauntedManor, 1f), (POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f),
 					(POIType.WreckedCaravan, 0.6f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 0.8f),
@@ -212,22 +212,22 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Timber", 1f)
 				.Prefers(POIType.Tower, "Stone", 0.6f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Grassland's signature pieces — the sweep well (THE skyline signature, at every farmstead, inn and corral),
+				// (the fantasy set's variants end here)
+				// LATER: Grassland's signature pieces — the sweep well (THE skyline signature, at every farmstead, inn and corral),
 				// the tanya farmstead (long whitewashed house, reed hip roof, carved porch, blue footing, stork on the chimney), the
 				// csárda inn, the horse mill, the reed-and-shingle post mill, the herders' conical reed hut and reed corral, the wagon
 				// fort, the kunhalom with Cuman stone figures and carved grave posts, the loess cellar row, the brick rotunda church and
 				// its timber belfry, the ring-fort, the Turul shrine, the horse-skull pole, and the noon mirage (approved); until then
 				// the kit's variants below stand in, the palette giving them adobe, whitewash, reed and brick.
-				// LATER (I7): the herders' reed-hut camp ("Herders"); hide tents stand in.
-				// LATER (I7): the wagon fort; a palisaded camp stands in.
-				// LATER (I7): the kunhalom ("Kunhalom") and the stone figures ("Stone baba"); the ringed barrow and the standing statue stand in.
-				// LATER (I7): carved grave posts ("Kopjafa"); the earthen graveyard stands in.
-				// LATER (I7): the horse mill; the post mill stands in for both.
-				// LATER (I7): the clay and brick pit ("Clay pit"); the cut-stone quarry stands in.
-				// LATER (I7): the horse-skull pole ("Táltos"); the bone-fire stands in.
+				// LATER: the herders' reed-hut camp ("Herders"); hide tents stand in.
+				// LATER: the wagon fort; a palisaded camp stands in.
+				// LATER: the kunhalom ("Kunhalom") and the stone figures ("Stone baba"); the ringed barrow and the standing statue stand in.
+				// LATER: carved grave posts ("Kopjafa"); the earthen graveyard stands in.
+				// LATER: the horse mill; the post mill stands in for both.
+				// LATER: the clay and brick pit ("Clay pit"); the cut-stone quarry stands in.
+				// LATER: the horse-skull pole ("Táltos"); the bone-fire stands in.
 				.Favours(BiomeStructureStyle.Earth, 1.4f)
 				.Favours(BiomeStructureStyle.Timber, 1f)
 				.Favours(BiomeStructureStyle.Stone, 0.9f)
@@ -235,7 +235,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0.1f)
 				// The palette: whitewashed adobe under steep reed hip roofs with an indigo footing, carved dark porch posts, blue-green
 				// doors, reed wattle fences, beaten-clay floors; brick towns and churches under shingle with cream limestone dressings.
-				// LATER (NEW-SURFACES U2): a FiredBrick surface (red-orange brick, stretcher and diaper bonds) for the towns' walls,
+				// LATER: a FiredBrick surface (red-orange brick, stretcher and diaper bonds) for the towns' walls,
 				// plinths and paving; tinted adobe stands in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Adobe, OpenHex("#f2f0e8"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Plaster, OpenHex("#eeece4"))

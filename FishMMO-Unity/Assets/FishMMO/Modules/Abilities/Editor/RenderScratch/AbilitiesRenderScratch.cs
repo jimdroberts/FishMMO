@@ -9,7 +9,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.RenderScratch
 {
 	/// <summary>
-	/// The Abilities module's part of the render rig (2026-11-20): the cast bar in the interface scaling render and the HUD
+	/// The Abilities module's part of the render rig: the cast bar in the interface scaling render and the HUD
 	/// overlap probe, and the ability tooltips in the tooltip gallery. Moved out of the core rig with the module.
 	/// </summary>
 	public static class AbilitiesRenderScratch

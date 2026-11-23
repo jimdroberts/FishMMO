@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// <b>On the tile's own object</b>, beside its <see cref="Terrain"/>, so it follows the tile whatever terrain data the tile is
 	/// given (a client or server build swaps in a copy). Written by the cut (TerrainTileLayerSync.Compact), refreshed whenever
 	/// the scene's layers are brought in line (TerrainArraySetup.SyncProvenance) and by a client build. A tile without one, or
-	/// whose map no longer fits its alphamaps, reads channel as scene layer: every scene cut before 2026-10-27.
+	/// whose map no longer fits its alphamaps, reads channel as scene layer: every scene cut by an older generator.
 	/// </para>
 	/// <para>
 	/// <b>In the editor the binder's provenance decides</b> (<see cref="EditorResolve"/>): it names every layer the arrays hold, so

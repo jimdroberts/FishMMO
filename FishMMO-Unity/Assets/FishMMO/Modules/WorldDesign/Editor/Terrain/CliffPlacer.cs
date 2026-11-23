@@ -331,7 +331,7 @@ namespace FishMMO.Shared.WorldDesign
 			Lap("plan and seating");
 			/* A rock whose footprint as seated covers a site, a cave's mouth or a way is refused by the planner as it is
 			 * seated (CliffRockPlacement.CoversExcluded), never dropped from the plan here: the rocks seated after it may
-			 * stand on its top, and they were left in the air where it went (2026-10-21). */
+			 * stand on its top, and they were left in the air where it went. */
 			if (plan.Stats.KeptOut > 0)
 			{
 				report.Notes.Add($"Cliffs: {plan.Stats.KeptOut} rock(s) left out where they would have stood over a site, a cave's mouth or a way.");

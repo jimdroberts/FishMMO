@@ -85,7 +85,7 @@ static void s_on_dgram(void*, wt_connection_id_t, const uint8_t*, int32_t) {}
 
 /* Poll-thread controls, set by the client thread between phases. */
 static std::atomic<bool> stop_polling{false};
-static std::atomic<int> poll_gap_ms{0};      /* >0: lag the poll thread (phase 2) */
+static std::atomic<int> poll_gap_ms{0};      /* >0: lag the poll thread */
 static std::atomic<bool> kicks_on{false};    /* server-initiated disconnects of live ids */
 static std::atomic<long> polls{0}, kicks{0};
 

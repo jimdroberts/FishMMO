@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// What lives on and in the caves' still water near the camera (2026-10-26, phase I2n-c; decision 86 (i) and its leeches, decision
+	/// What lives on and in the caves' still water near the camera (decision 86 (i) and its leeches, decision
 	/// 97): marsh-gas beads rising from the drowned muck and ringing out on the surface, and leeches swimming in it toward whoever wades
 	/// in (<see cref="SceneCaveWater"/>; FishCaveWaterLife.shader). The pools are the cut's cave-life Pool spots (every client loads
 	/// them); how thickly a pool beads and how many leeches swim in it is the cave biome's (its Cave Floods' Bubbles and Leeches for the
@@ -21,7 +21,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Shared and per viewer.</b> The beads and the leeches' circuits are pure functions of the shared motion clock; only how far a
 	/// pool's leeches have turned toward a wader is this client's own (its pull, eased in over seconds while someone stands in the pool
-	/// and out after: <see cref="SceneCaveWater.Attract"/>), as decision 97 allows a viewer-reactive effect.
+	/// and out after: <see cref="SceneCaveWater.Attract"/>) a viewer-reactive effect.
 	/// </para>
 	/// <para>
 	/// <b>Cost.</b> Nothing at all on a scene where no cave biome names beads or leeches (every scene until a round authors them): one

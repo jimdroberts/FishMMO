@@ -51,7 +51,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A heap of fragments: talus at the foot of an outcrop.</summary>
 		Scree,
 
-		// ── Mineral, ice and alien formations (2026-10-10), built by CrystalFormations ──
+		// ── Mineral, ice and alien formations, built by CrystalFormations ──
 
 		/// <summary>Crystals grown from a common matrix, in the shape's <see cref="FormationShape.Habit"/>: selenite blades, sulphur needles, pyrite cubes, ice prisms, halite pinnacles.</summary>
 		CrystalCluster,
@@ -392,7 +392,7 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		/// <summary>
 		/// Seeded variants of every shape, so a field of boulders does not repeat: every rock's before the biome suite's, and
-		/// the most any rock has (each rock's own count: <see cref="RockVariantCounts"/>, 2026-10-26).
+		/// the most any rock has (each rock's own count: <see cref="RockVariantCounts"/>).
 		/// </summary>
 		public const int VariantCount = 4;
 
@@ -483,7 +483,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Tor", FormationKind.Tor, 2.6f, 3.0f, 3),
 				S("Perched", FormationKind.Perched, 2.6f, 2.3f),
 				S("Split", FormationKind.Split, 2.2f, 1.5f),
-				// The biome suite's shapes (2026-10-25): an inselberg's sheet-jointed dome, a glacier-smoothed whaleback, a castle kopje, a balanced stack, an exfoliation spall.
+				// The biome suite's shapes: an inselberg's sheet-jointed dome, a glacier-smoothed whaleback, a castle kopje, a balanced stack, an exfoliation spall.
 				S("Bornhardt", FormationKind.Boulder, 8.0f, 4.0f, exponent: 2.2f),
 				S("Whaleback", FormationKind.Boulder, 4.0f, 1.6f, elongation: 2.2f, exponent: 2.4f),
 				S("Matopo", FormationKind.Tor, 3.0f, 4.5f, 3),
@@ -524,7 +524,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Lava dribble spires: drips of a cooling tube's roof, piled up from its floor.
 				S("Dribble", FormationKind.Stalagmite, 0.8f, 1.6f, 3),
 				S("Ventifact", FormationKind.Ventifact, 1.0f, 0.55f),
-				// The biome suite's shapes (2026-10-25): thermal-fatigue halves, a kipuka knob, an impact's shatter cone, a lava bank's driblet cairn.
+				// The biome suite's shapes: thermal-fatigue halves, a kipuka knob, an impact's shatter cone, a lava bank's driblet cairn.
 				S("Split", FormationKind.Split, 2.0f, 1.2f),
 				S("Knob", FormationKind.Knob, 4.0f, 3.0f),
 				S("ShatterCone", FormationKind.Pinnacle, 1.0f, 1.4f),
@@ -553,7 +553,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Block", FormationKind.Faceted, 1.8f, 1.3f),
 				S("Platy", FormationKind.SlabStack, 2.2f, 1.0f, 4),
 				S("Talus", FormationKind.Scree, 2.6f, 1.0f, 14),
-				// The biome suite's shapes (2026-10-25): a folding-screen column wall, a seat rock, a standing stone.
+				// The biome suite's shapes: a folding-screen column wall, a seat rock, a standing stone.
 				S("Byobu", FormationKind.Standing, 3.0f, 3.0f),
 				S("Iwakura", FormationKind.Faceted, 3.0f, 2.4f),
 				S("Tateishi", FormationKind.Standing, 1.2f, 2.6f),
@@ -580,7 +580,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Chunk", FormationKind.Faceted, 1.4f, 1.0f),
 				S("Shard", FormationKind.Faceted, 1.6f, 0.55f, elongation: 1.5f),
 				S("Scree", FormationKind.Scree, 2.0f, 0.8f, 12),
-				// A blocky glass ridge outcrop (2026-10-25).
+				// A blocky glass ridge outcrop.
 				S("Ridge", FormationKind.Faceted, 12f, 4.0f, elongation: 2.4f),
 			},
 			// Black glass with faint grey flow banding; glossy.
@@ -627,7 +627,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Chimney", FormationKind.Chimney, 2.0f, 4.5f),
 				S("Tafoni", FormationKind.Boulder, 2.0f, 1.5f),
-				// The biome suite's shapes (2026-10-25): a capped hoodoo, a chimney cone, a rib, a citadel spur, a spall.
+				// The biome suite's shapes: a capped hoodoo, a chimney cone, a rib, a citadel spur, a spall.
 				S("Capped", FormationKind.Pedestal, 2.0f, 2.6f, 4),
 				S("Cone", FormationKind.Chimney, 3.0f, 4.0f),
 				S("Rib", FormationKind.Ledges, 4.0f, 1.6f, 4),
@@ -661,7 +661,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Pedestal", FormationKind.Pedestal, 2.2f, 2.6f, 6),
 				// A cannonball concretion: grains cemented round a nucleus, harder than the sandstone that weathered from it.
 				S("Concretion", FormationKind.Boulder, 1.6f, 1.4f, elongation: 0.72f, exponent: 2f),
-				// The biome suite's shapes (2026-10-25): a dome, a fin, a cross-bedded block, a yardang, a rock-pool gour.
+				// The biome suite's shapes: a dome, a fin, a cross-bedded block, a yardang, a rock-pool gour.
 				S("Dome", FormationKind.Boulder, 6.0f, 3.0f, exponent: 2.2f),
 				S("Fin", FormationKind.Boulder, 4.0f, 2.4f, elongation: 2.6f),
 				S("CrossBedded", FormationKind.Bedded, 2.6f, 1.6f, 6, dip: 20f),
@@ -696,7 +696,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Stalagmite", FormationKind.Stalagmite, 1.2f, 2.6f, 3, dress: "Sinter"),
 				S("Flowstone", FormationKind.Flowstone, 3.0f, 1.6f, dress: "Sinter"),
 				S("Gours", FormationKind.Terrace, 3.6f, 0.5f, 5, dress: "Sinter"),
-				// The biome suite's shapes (2026-10-25): a karst blade, a tower, a sea-notched rock, a scholar's stone, cave shelfstone.
+				// The biome suite's shapes: a karst blade, a tower, a sea-notched rock, a scholar's stone, cave shelfstone.
 				S("Blade", FormationKind.Standing, 2.0f, 4.0f),
 				S("Tower", FormationKind.Pinnacle, 3.0f, 8.0f),
 				S("Notch", FormationKind.Pedestal, 3.0f, 2.4f, 3),
@@ -747,7 +747,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Boulder", FormationKind.Boulder, 1.8f, 1.3f),
 				S("Block", FormationKind.Boulder, 2.2f, 1.4f, exponent: 3.6f),
-				// The biome suite's shapes (2026-10-25): a pebble-studded hoodoo, a flock of rounded stones, a ceppo ledge.
+				// The biome suite's shapes: a pebble-studded hoodoo, a flock of rounded stones, a ceppo ledge.
 				S("Crone", FormationKind.Pedestal, 2.4f, 4.0f, 4),
 				S("StoneSheep", FormationKind.Boulder, 1.1f, 0.8f, exponent: 2.4f),
 				S("CeppoLedge", FormationKind.Ledges, 3.0f, 1.8f, 4),
@@ -802,7 +802,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Stack", FormationKind.SlabStack, 2.0f, 0.8f, 5),
 				S("Upright", FormationKind.Standing, 1.3f, 2.0f),
 				S("Scree", FormationKind.Scree, 2.2f, 0.84f, 28),
-				// The biome suite's shapes (2026-10-25): a cleavage fin, a talus cone.
+				// The biome suite's shapes: a cleavage fin, a talus cone.
 				S("CleavageFin", FormationKind.Standing, 1.6f, 2.4f),
 				S("TalusCone", FormationKind.Scree, 3.2f, 1.4f, 30),
 			},
@@ -852,7 +852,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				S("Boulder", FormationKind.Boulder, 1.9f, 1.4f),
 				S("Block", FormationKind.Boulder, 2.2f, 1.5f, exponent: 3.6f),
-				// The biome suite's shapes (2026-10-25): a frost-shattered block field, a slab heaved on end.
+				// The biome suite's shapes: a frost-shattered block field, a slab heaved on end.
 				S("Felsenmeer", FormationKind.Scree, 3.0f, 0.9f, 14),
 				S("FrostJacked", FormationKind.Standing, 0.9f, 1.4f),
 			},
@@ -906,7 +906,7 @@ namespace FishMMO.Shared.WorldDesign
 				speckles: Hexes("#c49a8a"), speckleCount: 800, speckleSize: 0.0025f),
 		};
 
-		// ── Mineral, ice and alien formations (2026-10-10) ───────────
+		// ── Mineral, ice and alien formations ───────────
 		//
 		// Rocks that are made only as scattered formations, never as cliffs (FormationsOnly): evaporites and vent
 		// precipitates, volcanic clinker, impact rocks, a dead moon's lag, a termite's clay, and snow and ice. Each is
@@ -954,7 +954,7 @@ namespace FishMMO.Shared.WorldDesign
 			Shapes = new[]
 			{
 				S("Crystal", FormationKind.CrystalCluster, 1.4f, 1.3f, 9, habit: CrystalHabit.Bladed),
-				// Interlocking selenite beams of a crystal hall (2026-10-25).
+				// Interlocking selenite beams of a crystal hall.
 				S("Beam", FormationKind.CrystalCluster, 2.2f, 1.8f, 7, habit: CrystalHabit.Bladed),
 			},
 			// Milky selenite: pearly white with faint fibrous striations along the blades.
@@ -980,7 +980,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Crystals", FormationKind.CrystalCluster, 0.9f, 0.6f, 26, habit: CrystalHabit.Acicular),
 				// A fumarole's cone, 1–3 m, crusted in sulphur round its throat.
 				S("Cone", FormationKind.Cone, 2.4f, 1.4f),
-				// The biome suite's shapes (2026-10-25): a molten-sulphur flow lobe, rimstone microterraces, a hollow crust blister, a bipyramid druse.
+				// The biome suite's shapes: a molten-sulphur flow lobe, rimstone microterraces, a hollow crust blister, a bipyramid druse.
 				S("Flow", FormationKind.Lobe, 3.0f, 0.6f),
 				S("Terrace", FormationKind.Terrace, 3.0f, 0.6f, 5),
 				S("Blister", FormationKind.Boulder, 1.2f, 0.6f, exponent: 2.2f),
@@ -1008,7 +1008,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Yellowstone's geyser cones, 1–4 m.
 				S("Cone", FormationKind.Cone, 2.2f, 1.6f),
 				S("Terrace", FormationKind.Terrace, 4.0f, 1.1f, 5),
-				// The biome suite's shapes (2026-10-25): a low sinter shield, a beaded pool rim.
+				// The biome suite's shapes: a low sinter shield, a beaded pool rim.
 				S("Shield", FormationKind.Lobe, 10f, 1.6f),
 				S("PoolRim", FormationKind.CraterRim, 5.0f, 0.5f),
 			},
@@ -1060,7 +1060,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Boulder", FormationKind.Boulder, 1.8f, 1.2f),
 				// A crater 2–40 m: the rim crest about a twenty-fifth of its diameter high, ejecta blocks on it.
 				S("CraterRim", FormationKind.CraterRim, 14f, 1.1f, 7),
-				// The biome suite's shapes (2026-10-25): a house-sized rim block, a polygonally cracked melt plate.
+				// The biome suite's shapes: a house-sized rim block, a polygonally cracked melt plate.
 				S("HouseBlock", FormationKind.Faceted, 10f, 7.0f),
 				S("CoolingPlate", FormationKind.SlabStack, 5.0f, 0.8f, 3),
 			},
@@ -1106,7 +1106,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// East Pacific Rise smokers: 3–15 m, three flanges.
 				S("Smoker", FormationKind.Cone, 2.6f, 9.0f, 3),
-				// The biome suite's shapes (2026-10-25): a great smoker's pillar, a beehive, a toppled stump.
+				// The biome suite's shapes: a great smoker's pillar, a beehive, a toppled stump.
 				S("Pillar", FormationKind.Cone, 4.0f, 30f, 5),
 				S("Beehive", FormationKind.Cone, 1.0f, 1.2f),
 				S("Toppled", FormationKind.Boulder, 3.0f, 2.0f, elongation: 2f, exponent: 2.6f),
@@ -1152,7 +1152,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// Callisto's knobs, a frost cap on each.
 				S("FrostKnob", FormationKind.Knob, 6.0f, 8.0f, cap: IceSurfaces.BubblyWhite),
-				// A knoblet, frost-capped as its parent (2026-10-25).
+				// A knoblet, frost-capped as its parent.
 				S("Knoblet", FormationKind.Knob, 1.5f, 1.8f, cap: IceSurfaces.BubblyWhite),
 			},
 			// Dark sputtered lag, brown-black with a few paler grains.
@@ -1202,7 +1202,7 @@ namespace FishMMO.Shared.WorldDesign
 				S("Penitentes", FormationKind.Penitentes, 4.5f, 3.0f, 9),
 				// The rim of a sublimation pit in nitrogen ice, as a crater rim without ejecta.
 				S("PitRim", FormationKind.CraterRim, 10f, 0.8f),
-				// The biome suite's shapes (2026-10-25): a cornice's overhanging lip, a snow mushroom, a drift tail, wave dunes.
+				// The biome suite's shapes: a cornice's overhanging lip, a snow mushroom, a drift tail, wave dunes.
 				S("Cornice", FormationKind.Sastrugi, 8.0f, 1.5f, 1, elongation: 3f),
 				S("SnowMushroom", FormationKind.Pedestal, 2.4f, 2.4f, 3),
 				S("DriftTail", FormationKind.Sastrugi, 6.0f, 0.8f, 1, colliderless: true),
@@ -1239,12 +1239,12 @@ namespace FishMMO.Shared.WorldDesign
 				S("DirtCone", FormationKind.Knob, 2.6f, 1.8f, dress: "Conglomerate"),
 				// Sea ice pressed into a ridge on a frozen-through shelf or an ice moon's lineae.
 				S("Ridge", FormationKind.RubbleRidge, 12f, 1.8f, 120, dress: IceSurfaces.SeaIce),
-				// An ice cave's floor formations (2026-10-25): a column, a frozen fall, frozen blocks, ice candles.
+				// An ice cave's floor formations: a column, a frozen fall, frozen blocks, ice candles.
 				S("Column", FormationKind.Stalagmite, 1.2f, 4.0f, 1),
 				S("Icefall", FormationKind.Flowstone, 4.0f, 3.0f),
 				S("FrozenBlocks", FormationKind.Scree, 3.0f, 1.0f, 10),
 				S("Candles", FormationKind.Stalagmite, 0.6f, 1.4f, 5),
-				// Permanent ice's dust-banded towers and blocks, and an ice cave's air-scalloped ice (2026-10-25).
+				// Permanent ice's dust-banded towers and blocks, and an ice cave's air-scalloped ice.
 				S("IceTower", FormationKind.Pinnacle, 3.0f, 8.0f, dress: IceSurfaces.Stratified),
 				S("StrataBlock", FormationKind.Bedded, 2.4f, 1.6f, 4, dress: IceSurfaces.Stratified),
 				S("Scalloped", FormationKind.Boulder, 2.0f, 1.4f, dress: IceSurfaces.Scalloped),
@@ -1257,7 +1257,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The rocks of the crust: the first sixteen (igneous, then sedimentary, then metamorphic), then each biome's own
-		/// (<see cref="RegionalRocks.Crust"/>, appended 2026-10-25). Every one can be a cliff.
+		/// (<see cref="RegionalRocks.Crust"/>, appended). Every one can be a cliff.
 		/// </summary>
 		public static readonly RockType[] Crust = Concat(new[]
 		{

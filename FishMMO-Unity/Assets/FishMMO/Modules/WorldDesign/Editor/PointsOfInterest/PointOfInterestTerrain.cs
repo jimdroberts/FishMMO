@@ -158,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float MaxDigMetres = 2.5f;
 
 		/// <summary>
-		/// Digs a laid building's room out of the hillside (2026-10-15: "House/building interiors aren't always fully
+		/// Digs a laid building's room out of the hillside ("House/building interiors aren't always fully
 		/// walkable"): the ground under the room and its walls lowered to just under its floor, and out past them banked back
 		/// up to the natural ground at <see cref="EmbankmentSlope"/>. A building is seated no higher than its centre's ground
 		/// (PropsFeature.SeatHeight), so on a slope the template's pad left part-flat the uphill ground rose through its floor
@@ -246,7 +246,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// back from it) until it meets the hillside; past that the ground is the ground. Held to the cone everywhere, a
 		/// pad at a clifftop filled whatever lay below the cliff within the reach to a 31° slope: the shrine above Flo
 		/// Monolith's 70 m fall, 96 m from its gorge, filled the gorge, its plunge pool and a hundred metres of the river
-		/// below it 36 m deep, and the fall landed on a grassy hillside with no pool and no river out of it (2026-10-13;
+		/// below it 36 m deep, and the fall landed on a grassy hillside with no pool and no river out of it (
 		/// found by the cut's river-burial check, which named the paint stage the pads are laid in).
 		/// </para>
 		/// <para>
@@ -261,7 +261,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Whether a scene position is water or its bank. A bank ends before it: handed back to the natural ground over
 		/// <see cref="BankHandoverMetres"/> and <see cref="WaterSetbackMetres"/> more, short of the water. A town's pad 66 m
 		/// from Flo Monolith's river, above it on ground falling gentler than the bank's slope, banked on down the hillside
-		/// and over the river, filling its channel above its water (2026-10-13). Null for none.
+		/// and over the river, filling its channel above its water. Null for none.
 		/// </param>
 		public static float[] BankReach(Func<float, float, float> groundAt, Vector3 centre, float radius, float blend, float height,
 			Func<float, float, bool> wet = null)
@@ -410,8 +410,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// A pad used to ease into the ground over a fixed 8–15 m, so a big pad on a slope stood in a circular cliff or sat in a
-		/// circular trench as tall as the slope's fall across it (the rings around towns on the Flo Monolith probe map,
-		/// 2026-10-10). The cone meets the ground wherever the ground is within its slope, so a pad on gentle ground changes
+		/// circular trench as tall as the slope's fall across it (the rings around towns on the Flo Monolith probe map).
+		/// The cone meets the ground wherever the ground is within its slope, so a pad on gentle ground changes
 		/// nothing past its rim and one on a steep hillside gets a bank as wide as it needs.
 		/// </remarks>
 		public static float PadHeight(float distance, float ground, float radius, float blend, float height)

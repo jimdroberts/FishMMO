@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 	/// (<see cref="WeatherVolume.Contains"/>, and so <c>RegionGeometry.ContainsPoint</c>) rather than
 	/// a physics trigger, which matters because triggers poll in <c>OnPostPhysicsSimulation</c>,
 	/// outside the replicate, are not rolled back, and re-fire their Enter/Exit on every replay
-	/// (N12). So the owner can work out the same answer the server will, and a replay of the same
+	///. So the owner can work out the same answer the server will, and a replay of the same
 	/// tick gives the same answer again.
 	/// </para>
 	/// <para>
@@ -40,7 +40,7 @@ namespace FishMMO.Shared
 	/// <para>
 	/// <b>No new field in the input.</b> Nothing is sent up from the client; the whole step is
 	/// derived from the tick, the character's own position and the timeline both sides already have
-	/// (N12). What does ride the reconcile is the levels, because they are timers — see
+	///. What does ride the reconcile is the levels, because they are timers — see
 	/// <see cref="CharacterReconcileData.Exposure"/>.
 	/// </para>
 	/// </remarks>
@@ -190,7 +190,7 @@ namespace FishMMO.Shared
 		/// <inheritdoc />
 		public void PopulateInput(ref CharacterReplicateData input)
 		{
-			// Nothing. The step needs no client input — see the class remarks (N12).
+			// Nothing. The step needs no client input — see the class remarks.
 		}
 
 		/// <inheritdoc />

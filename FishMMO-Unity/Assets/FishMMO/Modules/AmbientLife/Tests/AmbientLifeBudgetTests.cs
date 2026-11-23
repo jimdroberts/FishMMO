@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests.Weather
 	/// <summary>
 	/// The ambient life budget: groups are taken nearest first and charged only the members that will draw inside the camera's
 	/// view, and a group drawn last frame may run past the budget by a share of it while a newcomer must fit inside it.
-	/// Measured in the browser (2026-11-11): charged their whole head count (groups behind the camera, members past their
+	/// Measured in the browser: charged their whole head count (groups behind the camera, members past their
 	/// distance), the budget ran out with a third of it on screen, and with one limit for every group the farthest flock lost
 	/// its draw for single frames as the camera swept, every bird of it together.
 	/// </summary>

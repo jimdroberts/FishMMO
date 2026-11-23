@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// A second way into a site the world map draws as its own entry (2026-10-20): another mouth of a cave, the dungeon gate in
+	/// A second way into a site the world map draws as its own entry: another mouth of a cave, the dungeon gate in
 	/// a large cave's great cavern. Its tier and discovery are the site's.
 	/// </summary>
 	[Serializable]
@@ -52,7 +52,7 @@ namespace FishMMO.Shared
 		/// <summary>The race's naming key, when the site has one.</summary>
 		public string Race;
 		/// <summary>
-		/// The site is a dungeon's way in (a crypt or a barrow over its stair, 2026-10-20): its own entry is drawn as a dungeon
+		/// The site is a dungeon's way in (a crypt or a barrow over its stair): its own entry is drawn as a dungeon
 		/// entrance, whatever its kind, so every dungeon reads as one on the map and under its filter.
 		/// </summary>
 		public bool HoldsDungeon;
@@ -125,7 +125,7 @@ namespace FishMMO.Shared
 		}
 
 #if UNITY_EDITOR
-		/// <summary>How high the marker line rises above the site, metres, with the label at its top (2026-10-10).</summary>
+		/// <summary>How high the marker line rises above the site, metres, with the label at its top.</summary>
 		private const float MarkerHeight = 20f;
 
 		private static GUIStyle labelStyle;

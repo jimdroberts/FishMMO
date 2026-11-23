@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The biome suite's way and cave lights (2026-10-26, NEW-LIGHTS): the kinds appended to <see cref="BiomeWayLightKind"/>, their
+	/// The biome suite's way and cave lights: the kinds appended to <see cref="BiomeWayLightKind"/>, their
 	/// table (placement class, emitter, standing twin), their kit pieces, the beacon's own fire kindled at dusk (ScenePyre), the
 	/// beacons laid on lookouts, and that nothing changes where no biome names one.
 	/// </summary>
@@ -134,7 +134,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			Assert.That(StructurePieces.GlowHueOf(nameof(BiomeWayLightKind.Lurelight)), Is.EqualTo(SceneGlowHue.Blue));
 			Assert.That(StructurePieces.GlowHueOf(nameof(BiomeWayLightKind.SunLens)), Is.EqualTo(SceneGlowHue.Amber));
-			// The I6g hues are untouched.
+			// The hues are untouched.
 			Assert.That(StructurePieces.GlowHueOf("RuneStone"), Is.EqualTo(SceneGlowHue.Rune));
 			Assert.That(StructurePieces.GlowHueOf("Glowjar"), Is.EqualTo(SceneGlowHue.Faerie));
 			Assert.That(StructurePieces.GlowHueOf(StructurePieces.CrystalPostId), Is.Null);

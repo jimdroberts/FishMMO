@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 35 of the biome suite (2026-10-18, phase I2l "lakes and rivers as places"): bed rules under a lake or a river measure
+	/// Decision 35 of the biome suite ("lakes and rivers as places"): bed rules under a lake or a river measure
 	/// their depth below THAT water's surface; up to three extra bed layers a biome chosen by depth (and a river's current); the
 	/// riverbed painted under rivers and the lakebed under lakes and the sea (the riverbed was never painted while a lakebed
 	/// existed); aquatic plants stream with a river's current; crossings choose ford, bridge or rope ferry and a bridge belongs to the

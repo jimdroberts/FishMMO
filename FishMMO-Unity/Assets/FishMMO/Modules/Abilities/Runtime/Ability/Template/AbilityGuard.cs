@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Reduces, never negates</b> (Jim, 2026-11-22): <see cref="ReducePercent"/> of a frontal hit is blocked and the rest
+	/// <b>Reduces, never negates</b>: <see cref="ReducePercent"/> of a frontal hit is blocked and the rest
 	/// lands. Damage with no attacker position behind it (a damage-over-time tick, the weather) is never blocked, and nor is
 	/// anything from outside <see cref="ArcDegrees"/>.
 	/// </para>

@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// The non-generic base of every <see cref="CachedScriptableObject{T}"/>: what core content declares a reference as when
-	/// the template it names belongs to a module (2026-11-20, the core and modules split). A race's starting abilities, an
+	/// the template it names belongs to a module (the core and modules split). A race's starting abilities, an
 	/// NPC's ability list, a spawner's extra abilities are all module templates the core cannot name; the field is typed on
 	/// this, and <see cref="TemplateOfAttribute"/> keeps the inspector to the right kind. The asset stores the referenced
 	/// object's GUID, so widening a field's type to this keeps every reference it held.
@@ -22,7 +22,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The cached template with <paramref name="id"/>, of whatever type: for core code holding a module template's ID it
-		/// cannot name the type of (a world item's achievement, 2026-11-20).
+		/// cannot name the type of (a world item's achievement).
 		/// </summary>
 		public static bool TryGetByID(int id, out CachedScriptableObject template)
 		{

@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 			public int Dripped, Puddled;
 
 			/// <summary>
-			/// Drips from the roof (2026-10-20, caves livened; PointOfInterestCaveDressing.Drips.cs): the stalactites and flowstone the
+			/// Drips from the roof (caves livened; PointOfInterestCaveDressing.Drips.cs): the stalactites and flowstone the
 			/// passes before laid, and the wet patches of the roof (<see cref="CaveHabitat"/>), drip into puddles of their own where the
 			/// floor under them holds water, else onto the wet rock or the stalagmite they have built (<see cref="CaveDrips"/>). Each
 			/// drip is one emitter (<see cref="SceneEmitterKind.Drip"/>): the client's drops, rings and sound read it. On its own
@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Where a cave drips (2026-10-20, caves livened: "drips from the roof … and the puddles they fall in"): the drip sources and the
+	/// Where a cave drips (caves livened: "drips from the roof … and the puddles they fall in"): the drip sources and the
 	/// puddles under them, laid from the system's field and its habitat.
 	/// </summary>
 	/// <remarks>

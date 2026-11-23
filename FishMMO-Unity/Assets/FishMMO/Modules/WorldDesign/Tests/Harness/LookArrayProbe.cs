@@ -11,7 +11,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.TestHarness.World.Editor
 {
 	/// <summary>
-	/// The look arrays' headless check (ProceduralArtLookArrays, 2026-10-28): that the importer reads a flipbook's cells in the
+	/// The look arrays' headless check (ProceduralArtLookArrays): that the importer reads a flipbook's cells in the
 	/// order the generator writes them, a generation of the art the arrays changed, and what was written — each array's layers,
 	/// size, format, mips and GPU bytes, and the single maps' bytes they replace.
 	/// </summary>

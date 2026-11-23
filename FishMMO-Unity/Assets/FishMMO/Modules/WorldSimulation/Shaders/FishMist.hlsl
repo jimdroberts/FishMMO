@@ -211,7 +211,7 @@ float FishMistDensity(float3 at, float above, float potential, float footprint)
 /// A mist's drops throw most of what they scatter almost straight on (g about 0.8). Drawn with the whole of
 /// that as extinction plus a g = 0.8 lobe, a mist took the light of the sky and trees behind it out of the ray
 /// and gave back, away from the sun, a twentieth of the beam: lit from behind the eye it lay over the land as
-/// a dark veil, darker than the sky it stood against (audit 2026-10-09: 57 % of the pixels it touched went
+/// a dark veil, darker than the sky it stood against (audit: 57 % of the pixels it touched went
 /// darker). Lit as the fog layer is did not help — its turned light comes from the fog above the point, and a
 /// mist forms where there is none.
 /// </para>

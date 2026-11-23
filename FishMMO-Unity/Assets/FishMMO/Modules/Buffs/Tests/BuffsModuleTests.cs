@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Buffs module (2026-11-20): the module declares itself, its controller is the core's buff seams, the core reaches
+	/// The Buffs module: the module declares itself, its controller is the core's buff seams, the core reaches
 	/// buffs only through them, its mitigation is installed into the core's hook, and its strips are the world GUI's panels.
 	/// </summary>
 	[TestFixture]

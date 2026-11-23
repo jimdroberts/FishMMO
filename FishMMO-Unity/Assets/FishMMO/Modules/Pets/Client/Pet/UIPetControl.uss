@@ -150,7 +150,7 @@
     /*
         No side margins: the row's space-between makes the gap. Unity's default button keeps 4 units each side, and two
         46% buttons plus those came to 192.6 units in a 192-unit row, so every command wrapped onto its own line and the
-        panel stood 426 units tall (11-16).
+        panel stood 426 units tall.
     */
     margin-left: 0;
     margin-right: 0;
@@ -219,7 +219,7 @@
 /*
     The arrows are an ASCII less-than turned to point up or down, not the triangle characters U+25B2 and U+25BC:
     the game font has no glyph for those, the browser has no system font to fall back on, and the buttons drew
-    empty (11-16). The editor did fall back, which is why it looked right there.
+    empty. The editor did fall back, which is why it looked right there.
 */
 .pet-priority__up {
     justify-content: center;

@@ -12,7 +12,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>Split from ClientFrameGarbageTests (Phase 4 of the core and modules plan, 2026-11-18): the World Simulation module's half.</summary>
+	/// <summary>Split from ClientFrameGarbageTests: the World Simulation module's half.</summary>
 	public class WeatherFrameGarbageTests
 	{
 		[Test]

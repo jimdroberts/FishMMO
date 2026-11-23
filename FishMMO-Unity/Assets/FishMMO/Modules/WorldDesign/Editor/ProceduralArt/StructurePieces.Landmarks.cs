@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19): the professions' own houses — the counting house, the astronomer's observatory and its great telescope, the excavators' dig.
+	/// The town's other buildings: the professions' own houses — the counting house, the astronomer's observatory and its great telescope, the excavators' dig.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -500,7 +500,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A door's dressed surround on a wall's face (<paramref name="foot"/>: the threshold's middle on the face, the street at −z):
-		/// jambs and a lintel, and over it a carved star of rune-light (2026-10-19, the astronomer's mark) that glows at night.
+		/// jambs and a lintel, and over it a carved star of rune-light (the astronomer's mark) that glows at night.
 		/// </summary>
 		private static void DoorSurround(StructureDraft d, Vector3 foot, float width, float height, int key)
 		{

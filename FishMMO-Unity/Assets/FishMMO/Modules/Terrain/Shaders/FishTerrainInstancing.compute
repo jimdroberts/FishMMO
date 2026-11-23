@@ -25,7 +25,7 @@
 // fade band (where it is in two different levels).
 //
 // The depth pyramid's and the WebGPU light table's kernels, which lived here, are core (Assets/FishMMO/Shaders/
-// FishWorldPasses.compute, Phase 4 2026-11-17); the culling still reads the pyramid (FishHiZOcclusion.hlsl).
+// FishWorldPasses.compute); the culling still reads the pyramid (FishHiZOcclusion.hlsl).
 //
 // Portable to Vulkan, D3D11/12, Metal and WebGPU: no wave intrinsics; atomics only on a
 // RWByteAddressBuffer and on groupshared counters (appends are counted per thread group); no readbacks.

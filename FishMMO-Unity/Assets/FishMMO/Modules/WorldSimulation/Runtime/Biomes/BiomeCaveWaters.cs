@@ -6,8 +6,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How a cave biome's caves of one form stand in the water table (<see cref="BiomeTemplate.CaveFloods"/>, 2026-10-25, phase
-	/// I2n-c "drowned galleries", decision 86 (a)): a natural cave whose mouth opens on wet ground is DROWNED in that share of
+	/// How a cave biome's caves of one form stand in the water table (<see cref="BiomeTemplate.CaveFloods"/>, phase
+	/// I2n-c "drowned galleries"): a natural cave whose mouth opens on wet ground is DROWNED in that share of
 	/// systems, its galleries laid level at the water table with their floors up to <see cref="Depth"/> under the water, as a
 	/// grotto's floors have always lain under its pool. A grotto is awash by its form; its entry sets only how deep.
 	/// </summary>
@@ -48,19 +48,19 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>Append only; the ordinal is stored in template assets.</remarks>
 	public enum BiomeCaveRootArt : byte
 	{
-		/// <summary>The hanging roots and tap roots every cave took until 2026-10-25: down to a dry floor, or a tangle over a way.</summary>
+		/// <summary>The hanging roots and tap roots every cave took formerly: down to a dry floor, or a tangle over a way.</summary>
 		Hanging = 0,
 		/// <summary>
-		/// Water roots (decision 86 (d)): curtains of dark alder and willow roots with red root-hair tassels trailing in the water,
+		/// Water roots: curtains of dark alder and willow roots with red root-hair tassels trailing in the water,
 		/// hung over the cave's water first, and tap roots ending at the water's surface where the floor is flooded.
 		/// </summary>
 		WaterRoots = 1,
 	}
 
 	/// <summary>
-	/// What hangs from a cave biome's caves' roofs, by form (<see cref="BiomeTemplate.CaveHangings"/>, 2026-10-25, phase I2n-c,
-	/// decision 86 (d)): the cave dressing's own per-form lookups until then (CaveHanging.For, CaveFungusPlan.RootsNearMouth),
-	/// authored as they were, with the root art and the root windows (decision 86 (f)) on top.
+	/// What hangs from a cave biome's caves' roofs, by form (<see cref="BiomeTemplate.CaveHangings"/>):
+	/// the cave dressing's own per-form lookups until then (CaveHanging.For, CaveFungusPlan.RootsNearMouth),
+	/// authored as they were, with the root art and the root windows on top.
 	/// </summary>
 	[Serializable]
 	public struct BiomeCaveHanging
@@ -110,8 +110,8 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The tea ring a cave biome's water leaves on its caves' walls, by form (<see cref="BiomeTemplate.CaveStains"/>, 2026-10-25,
-	/// phase I2n-c, decision 86 (g)): from the cave's water up to the highest flood, a band of the water's stain with a sharp top
+	/// The tea ring a cave biome's water leaves on its caves' walls, by form (<see cref="BiomeTemplate.CaveStains"/>):
+	/// from the cave's water up to the highest flood, a band of the water's stain with a sharp top
 	/// edge, drawn over the HOST's rock by the cave rock shader (FishCaveRock.hlsl). None until a template names one.
 	/// </summary>
 	[Serializable]
@@ -141,11 +141,11 @@ namespace FishMMO.Shared.Biomes
 		private static string F(float v) => v.ToString("R", CultureInfo.InvariantCulture);
 	}
 
-	/// <summary>Where a cave biome's glow-worm colonies hang (<see cref="BiomeCaveGlow.WormMount"/>, decision 86 (e)).</summary>
+	/// <summary>Where a cave biome's glow-worm colonies hang (<see cref="BiomeCaveGlow.WormMount"/>).</summary>
 	/// <remarks>Append only; the ordinal is stored in template assets.</remarks>
 	public enum BiomeCaveWormMount : byte
 	{
-		/// <summary>From the high roofs of the halls and over the chasms (every cave's until 2026-10-25).</summary>
+		/// <summary>From the high roofs of the halls and over the chasms (every cave's formerly).</summary>
 		Roof = 0,
 		/// <summary>Threaded along the roots hanging through the roof, with little roof silk of their own.</summary>
 		Roots = 1,
@@ -153,20 +153,20 @@ namespace FishMMO.Shared.Biomes
 		Wood = 2,
 	}
 
-	/// <summary>The drowned galleries' rules that do not depend on a template asset (pure, 2026-10-25, phase I2n-c).</summary>
+	/// <summary>The drowned galleries' rules that do not depend on a template asset (pure).</summary>
 	public static class BiomeCaveWaters
 	{
 		// ── The water table (a) ───────────────────────────────────────
 
 		/// <summary>How far under a drowned cave's mouth floor its water stands, metres: the threshold stays dry, the gallery wades.</summary>
 		public const float MouthDrop = 0.3f;
-		/// <summary>The least air a drowned gallery keeps between its water and its roof, metres (decision 86).</summary>
+		/// <summary>The least air a drowned gallery keeps between its water and its roof, metres.</summary>
 		public const float AirGap = 0.6f;
 		/// <summary>The headroom a cave's narrowest bore keeps over its flat floor, metres (CaveSystem.MinBore's 2.3 m).</summary>
 		public const float Headroom = 2.3f;
 		/// <summary>The deepest a drowned floor may lie, metres: the headroom less the air gap.</summary>
 		public const float MaxDepth = Headroom - AirGap;
-		/// <summary>How far before a mouth water makes its host's ground wet, metres (decision 86: host water within 60 m).</summary>
+		/// <summary>How far before a mouth water makes its host's ground wet, metres (host water within 60 m).</summary>
 		public const float WetReach = 60f;
 
 		/// <summary>The entry a list gives a form (its first), or false.</summary>
@@ -200,7 +200,7 @@ namespace FishMMO.Shared.Biomes
 		public static bool Drowns(in BiomeCaveFlood flood, bool wet, float roll) => wet && flood.Depth > 0f && roll < Mathf.Clamp01(flood.Share);
 
 		/// <summary>
-		/// Whether a host's ground before a cave is wet (decision 86): water within <see cref="WetReach"/> of the mouth, or a land whose
+		/// Whether a host's ground before a cave is wet: water within <see cref="WetReach"/> of the mouth, or a land whose
 		/// habitat is a wetland's.
 		/// </summary>
 		public static bool WetHost(bool waterNear, BiomeHabitat hostHabitat) => waterNear || (hostHabitat & BiomeHabitat.Wetland) != 0;
@@ -246,7 +246,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>The trees per 100 m² a host's land must hold, as CaveHanging.Wooded's share, for a root window to open under it.</summary>
 		public const float RootWindowWoods = 0.25f;
-		/// <summary>The most rock and soil over a root window's vault, metres (decision 86 (f): a roof of 4 m or less).</summary>
+		/// <summary>The most rock and soil over a root window's vault, metres (a roof of 4 m or less).</summary>
 		public const float RootWindowCover = 4f;
 		/// <summary>A root window's opening radius, metres, at least and at most: 2–4.8 m across, under a skylight's least (2.5 m radius).</summary>
 		public const float RootWindowMinRadius = 1f, RootWindowMaxRadius = 2.4f;
@@ -295,7 +295,7 @@ namespace FishMMO.Shared.Biomes
 
 		// ── Glow-worms (e) ────────────────────────────────────────────
 
-		/// <summary>The share of its own roof colonies a cave keeps where its glow-worms hang on roots or wood (decision 86: "little roof silk").</summary>
+		/// <summary>The share of its own roof colonies a cave keeps where its glow-worms hang on roots or wood ("little roof silk").</summary>
 		public const float RootMountRoofShare = 0.25f;
 
 		/// <summary>How a mount weighs a cave's roof colonies' chance (1 as it was, the roof's).</summary>
@@ -317,7 +317,7 @@ namespace FishMMO.Shared.Biomes
 		public const float PeatLipOrganic = 0.9f;
 
 		/// <summary>
-		/// How much of a root window's peat lip a point shows, 0..1 (decision 86 (f): "a peat lip"): full on the throat's rock between the
+		/// How much of a root window's peat lip a point shows, 0..1 ("a peat lip"): full on the throat's rock between the
 		/// vault (<paramref name="vault"/>, less <see cref="PeatLipDrop"/>) and the opening (<paramref name="top"/>) out to its radius,
 		/// fading over <see cref="PeatLipReach"/> beyond (<paramref name="fromAxis"/> the point's distance from the throat's axis).
 		/// </summary>

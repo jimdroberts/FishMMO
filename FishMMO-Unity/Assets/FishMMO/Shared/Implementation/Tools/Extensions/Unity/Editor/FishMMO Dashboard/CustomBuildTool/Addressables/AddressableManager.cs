@@ -207,7 +207,7 @@ namespace FishMMO.Shared.CustomBuildTool.Addressables
 				if (result.AssetBundleBuildResults != null && result.AssetBundleBuildResults.Count > 0)
 				{
 					// One line per group. Listing every entry of a bundle's group for every bundle grows with
-					// bundles x entries: 740 PackSeparately bundles wrote 558,405 lines on 2026-11-06, each one a
+					// bundles x entries: 740 PackSeparately bundles wrote 558,405 lines, each one a
 					// console entry the editor keeps in memory, and the editor was later killed for memory.
 					var perGroup = new SortedDictionary<string, (int bundles, long bytes)>(StringComparer.Ordinal);
 					foreach (var bundleResult in result.AssetBundleBuildResults)

@@ -40,7 +40,7 @@ namespace FishMMO.Shared
 	/// </remarks>
 	public static class BuffDamageMitigation
 	{
-		/// <summary>Installs this as the core's <see cref="DamageMitigation"/> (2026-11-20: buffs are the Buffs module's).</summary>
+		/// <summary>Installs this as the core's <see cref="DamageMitigation"/> (buffs are the Buffs module's).</summary>
 		[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
 #if UNITY_EDITOR
 		[UnityEditor.InitializeOnLoadMethod]

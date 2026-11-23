@@ -35,7 +35,7 @@ namespace FishMMO.Client
 	/// the boiling air.
 	/// </para>
 	/// <para>
-	/// <b>Cave lava</b> (2026-10-20): over a lava tube's molten lava the air boils day and night; the nearest few lava lights'
+	/// <b>Cave lava</b>: over a lava tube's molten lava the air boils day and night; the nearest few lava lights'
 	/// balls of hot air (CaveLavaHeat) add the jitter of the path a ray runs through each, so the far wall of a lava river's
 	/// tube wavers while the floor at your feet hardly moves.
 	/// </para>
@@ -100,7 +100,7 @@ namespace FishMMO.Client
 		[Range(2f, 60f)] public float LavaReach = 25f;
 
 		[Header("Cave lava")]
-		[Tooltip("The boiling air over a lava tube's molten lava (2026-10-20; CaveLavaHeat's balls of hot air over its lava lights): " +
+		[Tooltip("The boiling air over a lava tube's molten lava (CaveLavaHeat's balls of hot air over its lava lights): " +
 			"the jitter a ray gets crossing one ball's whole width, milliradians rms. A screen pixel at 1080p is about one.")]
 		[Range(0f, 8f)] public float CaveLavaJitter = 2.5f;
 

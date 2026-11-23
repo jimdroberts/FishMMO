@@ -117,7 +117,7 @@ namespace FishMMO.Client
 		[Tooltip("Cloud shadows on the ground: the volume marched from the sun into a cookie.")]
 		public bool CloudShadows = true;
 		[Header("Volumetric clouds")]
-		[Tooltip("Share of the screen the clouds are marched at, across, before the steadying rebuilds them (at four times this, every pixel re-marched once in sixteen frames). The rays are the cost: at 2560x1440 on an RTX 4070 SUPER, 0.2 cost 10.7 ms over open land and 0.0625 about 2 ms (ScenePerfProbe, 2026-10-07); shipped skies march about one pixel in 256 a frame.")]
+		[Tooltip("Share of the screen the clouds are marched at, across, before the steadying rebuilds them (at four times this, every pixel re-marched once in sixteen frames). The rays are the cost: at 2560x1440 on an RTX 4070 SUPER, 0.2 cost 10.7 ms over open land and 0.0625 about 2 ms (ScenePerfProbe); shipped skies march about one pixel in 256 a frame.")]
 		[Range(0.04f, 1f)] public float CloudResolution = 0.07f;
 		[Tooltip("The march's quality: 32 walks the cloud at its finest steps, fewer lengthens them in proportion (24 by a third, 16 twice), and the step length is what the march's cost follows.")]
 		[Range(8, 160)] public int CloudSteps = 24;
@@ -142,7 +142,7 @@ namespace FishMMO.Client
 		[Tooltip("Light shafts through the clouds, and around a body during an eclipse.")]
 		public bool GodRays = true;
 
-		[Tooltip("Deep snow lifts the terrain it lies on. High Fidelity only (Q10).")]
+		[Tooltip("Deep snow lifts the terrain it lies on. High Fidelity only.")]
 		public bool TerrainSnowDisplacement = false;
 
 		// Balanced's CloudDetail was 0.6. The erosion's average is now kept at any setting, so 0.6 only
@@ -170,7 +170,7 @@ namespace FishMMO.Client
 		[Range(1, 12)] public int LightSteps = 6;
 		[Tooltip("How far the clouds are drawn, in metres. They dissolve over the last quarter of it, and the haze is full by four fifths of it, so the sky ends in the colour of the horizon and not on an edge.")]
 		[Min(1000f)] public float MaxDistance = 44000f;
-		[Tooltip("How far a cloud ray is marched in full, in metres; past it the far tail's few steps reach the end of the ray, and the far band's last slice ends here. It was the camera's far plane, which the scene backdrop raises to 20 km to draw the horizon ring: now the clouds keep their own distance whatever the camera's. Measured in Flo Monolith (2026-10-09, 1440p): 13 km against 20 km saves about 1 ms in a fair sky, and the horizon's thinnest cloud between 13 and 20 km thins a little, with a few sparkles on far edges (13 km was chosen for the frames). Never nearer than 1 km past the far band's second slice.")]
+		[Tooltip("How far a cloud ray is marched in full, in metres; past it the far tail's few steps reach the end of the ray, and the far band's last slice ends here. It was the camera's far plane, which the scene backdrop raises to 20 km to draw the horizon ring: now the clouds keep their own distance whatever the camera's. Measured in Flo Monolith (1440p): 13 km against 20 km saves about 1 ms in a fair sky, and the horizon's thinnest cloud between 13 and 20 km thins a little, with a few sparkles on far edges (13 km was chosen for the frames). Never nearer than 1 km past the far band's second slice.")]
 		[Min(1000f)] public float FullMarchMetres = 13000f;
 		[Tooltip("Draw the clouds past the far band's start from an imposter: a panorama round the camera, marched a band of rows a frame with the same march and light as the clouds near by, and read by direction every frame — so turning the camera costs nothing and only the near band is marched live. Off: the far band marches its slices on the screen as before.")]
 		public bool FarImposter = true;
@@ -188,7 +188,7 @@ namespace FishMMO.Client
 		[Range(1, 4)] public int NearMarchEvery = 1;
 		[Tooltip("Steps a ray may take past Full March Metres, each as long as it must be to reach the end of the ray (0: no limit). The march costs as long as its longest rays, and in a storm those are the low ones that cross a hundred kilometres of deck toward the horizon; past the far plane a cloud is a few pixels of haze, and this keeps the horizon clouded without paying for it.")]
 		[Range(0, 64)] public int FarTailSteps = 24;
-		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it (2026-10-07).")]
+		[Tooltip("Where the far band begins, in metres from the camera (0: one band). Cloud past it is marched a quarter of the screen a frame and carried on between from the frame before: two thirds of a fair sky's cost was past ten kilometres, where a cloud barely moves on the screen. The far clouds are a little softer for it.")]
 		[Min(0f)] public float FarBandMetres = 5000f;
 		[Tooltip("How much the last frame is kept when the clouds are steadied.")]
 		[Range(0f, 0.98f)] public float TemporalBlend = 0.9f;
@@ -325,7 +325,7 @@ namespace FishMMO.Client
 		public bool RayJitter = true;
 		[Tooltip("Multiplies the march's step (the near step, 18–90 m, and every step grown from it: through a band's empty air, up to six times, and deep inside cloud). The limits on how far a step may climb through a thin layer and how much light it may take out of a dense cloud still apply. Under 1 is finer and slower. Grain or banding that shrinks with it is undersampling along the ray.")]
 		[Range(0.25f, 4f)] public float StepScale = 1f;
-		[Tooltip("Step Scale for cloud near the camera, eased back to Step Scale beyond Near Step Distance (0: the same as Step Scale everywhere). Near cloud is where the march's grain is big enough to see; refining the whole sky cost about 1.3 ms at 1440p for nothing visible far off. Under a raining storm, 0.35 near against 0.5 took the base's grain from 1.3 % to 0.8 % of its brightness at the World Sim bed's 180x clock (2026-10-09).")]
+		[Tooltip("Step Scale for cloud near the camera, eased back to Step Scale beyond Near Step Distance (0: the same as Step Scale everywhere). Near cloud is where the march's grain is big enough to see; refining the whole sky cost about 1.3 ms at 1440p for nothing visible far off. Under a raining storm, 0.35 near against 0.5 took the base's grain from 1.3 % to 0.8 % of its brightness at the World Sim bed's 180x clock.")]
 		[Range(0f, 4f)] public float NearStepScale = 0f;
 		[Tooltip("How far along the ray (m) the cloud is walked at Near Step Scale; it eases to Step Scale over as far again.")]
 		[Range(500f, 20000f)] public float NearStepDistance = 4000f;
@@ -368,7 +368,7 @@ namespace FishMMO.Client
 		[Tooltip("How strong the ground's light on the clouds' bases is (1: what the ground's albedo sends back of the sun and sky on it).")]
 		[Range(0f, 2f)] public float GroundBounce = 1f;
 
-		[Header("Fixes under trial (2026-09-29 audit) — each on as shipped; off brings back the old behaviour")]
+		[Header("Fixes under trial — each on as shipped; off brings back the old behaviour")]
 		[Tooltip("Give neighbouring places inside a march texel far-apart ray phases (their Bayer values). Off: the old bit-reversed order, which gave neighbouring places nearly the same phase, so each pixel was steadied from samples of about one phase and the step error ramped across every texel — the scale pattern four pixels across.")]
 		public bool DecorrelatedRayPhase = true;
 		[Tooltip("Integrate the extinction and the light linearly between consecutive samples (the trapezoid). Off: each sample's extinction held over its whole step, so where in the step the sample fell (the ray jitter) shifted the whole cloud along the ray by up to half a step — the main source of the grain. Measured on the march's twin: a lit cumulus face's grain 0.024 → 0.011, a thin sheet's 0.012 → 0.003, no bias.")]
@@ -505,7 +505,7 @@ namespace FishMMO.Client
 		[Min(0.1f)] public float DeepSnowHours = 4f;
 
 		[Header("Render features (drawn by the renderers' Fish Module Passes)")]
-		[Tooltip("The volumetric clouds, their steadying and the god rays (moved off the renderers, Phase 4, 2026-11-18).")]
+		[Tooltip("The volumetric clouds, their steadying and the god rays (moved off the renderers).")]
 		public FishCloudsFeature CloudsFeature = new FishCloudsFeature();
 		[Tooltip("The fog's layer where the cloud march does not draw it.")]
 		public FishHeightFogFeature HeightFog = new FishHeightFogFeature();

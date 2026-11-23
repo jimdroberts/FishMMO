@@ -78,7 +78,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// How far under the water's surface the ground a sample wide along a river's edge is held, metres (WaterCarver): the
 		/// terrain between samples is a plane, and a bank sample at bank height beside the channel tilted it up into the water.
 		/// Never flush: ground within a few centimetres of the water over a sample's width is the water's plane, and the
-		/// terrain's triangles stood through it in straight-edged facets along the shore (2026-10-13, a pond's arm on Flo
+		/// terrain's triangles stood through it in straight-edged facets along the shore (a pond's arm on Flo
 		/// Monolith). A little under, the water stands over it and its shore lies on the levee's face past it.
 		/// </summary>
 		public float EdgeShelfMetres = 0.05f;
@@ -89,7 +89,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// drawn water's margin past its banks (InlandWaterRenderer.MinBankMarginMetres, 2.6 m), so the water's edge always
 		/// lies on ground that holds it. The carve adds a sample's diagonal and a half: the terrain between samples is
 		/// their plane, and a top one sample wide sank under the water toward the next sample out, already on the back
-		/// slope, and the water ran out through it (2026-10-13 coverage map).
+		/// slope, and the water ran out through it (coverage map).
 		/// </summary>
 		public float LeveeCrestMetres = 2.6f;
 		/// <summary>The steepest a cut bank stands, degrees.</summary>
@@ -379,7 +379,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// corner of the planet's line is offset past its own centre into a loop, and Untangle cuts the loop out at its
 		/// crossing and leaves a hairpin. Flo Monolith's river 0 turned back on itself by 146° at its junction with river 1,
 		/// and by 139° near the coast between straight legs 40 m long: the shape of a line offset past its corners
-		/// (2026-10-12: "Fix the river issues"). <see cref="EaseBends"/> takes out whatever tight bend is left.
+		/// ("Fix the river issues"). <see cref="EaseBends"/> takes out whatever tight bend is left.
 		/// </remarks>
 		public static void SnapToFloor(List<float> x, List<float> z, Func<float, float, float> ground, float[] hold, float reach, float penalty, float smoothMetres,
 			float minBendRadius = 0f)
@@ -520,7 +520,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// It was θ·R against the chords' mean length: alike for a gentle turn on even chords, but long chords let any turn
 		/// through, and a cut-off that merged chords could leave a 175° reversal between a 39 m and a 30 m chord standing as
-		/// a gentle bend (Flo Monolith's river 0 ran 39 m down its own channel and back, 2026-10-15). Toward a reversal
+		/// a gentle bend (Flo Monolith's river 0 ran 39 m down its own channel and back). Toward a reversal
 		/// tan(θ/2) grows without bound, so no chord is long enough.
 		/// </remarks>
 		public static float BendExcess(float turn, float la, float lb, float radius)
@@ -557,7 +557,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </para>
 		/// <para>
 		/// Hairpins came out of the snaps, the meanders and Untangle's cuts (a loop cut at its neck joins two strands running
-		/// opposite ways): Flo Monolith's river 0 turned back on itself by 146°, 139° and 86° (2026-10-12). A line that
+		/// opposite ways): Flo Monolith's river 0 turned back on itself by 146°, 139° and 86°. A line that
 		/// doubles back has a channel whose inside bank lies across its own water, and a ribbon whose quads twist over.
 		/// </para>
 		/// </remarks>
@@ -729,7 +729,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The ease is measured along the line as it lay before the move. It was measured as the points were moved, from each
 		/// point to its already moved neighbour, so the first step counted the whole move as distance along: the ease fell
 		/// away within a few points, the last ones were pulled apart, and Flo Monolith's river 1 ended in segments of 7, 11,
-		/// 21 and 40 m where its others are 2 m (2026-10-12). Eased over three times the move, no point is carried past
+		/// 21 and 40 m where its others are 2 m. Eased over three times the move, no point is carried past
 		/// its neighbour, so the line cannot fold; resampled, its last rows stand at the river's own spacing.
 		/// </remarks>
 		public static int EndOnto(List<float> x, List<float> z, ref float[] discharge, ref float[] area, float toX, float toZ, float spacing)
@@ -1097,7 +1097,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// rather than sliding down a smooth hillside. <see cref="RiverSettings.StepShare"/> of the drop is taken within
 		/// <see cref="RiverSettings.StepRunMetres"/> below the lip, however tall the fall, the rest down to the old foot as
 		/// before. (It was a sixth of the drop if longer: a 49 m fall became an 80° chute 8 m long, the water left the lip
-		/// far slower than it needed to clear it, and the sheet lay on the chute like a curled quad: Flo Monolith, 2026-10-06.) The surface is only ever lowered, so the carve cuts a gorge below the step, as a fall
+		/// far slower than it needed to clear it, and the sheet lay on the chute like a curled quad: Flo Monolith.) The surface is only ever lowered, so the carve cuts a gorge below the step, as a fall
 		/// eating back into its ledge leaves. Then the reaches are named again: only the step falls; below it the water
 		/// pools and runs on as rapids.
 		/// </summary>

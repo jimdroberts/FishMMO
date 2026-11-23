@@ -54,7 +54,7 @@ namespace FishMMO.Shared
 	{
 		// The whole-body mixer's inputs.
 		private const int Idle = 0, Walk = 1, Run = 2, JumpUp = 3, MidAir = 4, Fall = 5, CrouchIdle = 6, CrouchWalk = 7,
-			Tread = 8, Surface = 9, Under = 10, Climb = 11, SitGround = 12, SitSeat = 13, Rolling = 14, Dying = 15, Inputs = 16;
+			Tread = 8, Surface = 9, Under = 10, Climb = 11, SitGround = 12, SitSeat = 13, Rolling = 14, Dying = 15, Ride = 16, Inputs = 17;
 		// The arms layer's inputs.
 		private const int PunchRight = 0, PunchLeft = 1, CastArms = 2, BlockArms = 3, DeflectArms = 4, ArmInputs = 5;
 
@@ -134,6 +134,9 @@ namespace FishMMO.Shared
 		private float pendingSpeed;
 
 		private bool sitting;
+		// Astride a mount (issue #109): the Ride clip, the hips set on the saddle (SetRiding).
+		private bool riding;
+		private float saddleHeight;
 		private bool onSeat;
 		private float seatHeight;
 		private float seatBack;
@@ -163,6 +166,12 @@ namespace FishMMO.Shared
 
 		/// <summary>The model's height standing at rest, metres.</summary>
 		public float RestHeight => restHeight;
+
+		/// <summary>True while it sits astride a mount (<see cref="SetRiding"/>).</summary>
+		public bool IsRiding => riding;
+
+		/// <summary>The hip joint's height in the ride clip, metres, on this model (the set's, scaled to the model's height).</summary>
+		public float KeyedRideHipHeight => set.RideHipHeight * (set.KeyedHeight > 0f ? restHeight / set.KeyedHeight : 1f);
 
 		/// <summary>The seat height its seated clip fits, metres, on this model (the set's, scaled to the model's height).</summary>
 		public float KeyedSeatHeight => set.SeatHeight * (set.KeyedHeight > 0f ? restHeight / set.KeyedHeight : 1f);
@@ -266,6 +275,7 @@ namespace FishMMO.Shared
 			Connect(SitSeat, set.SitSeat != null ? set.SitSeat : stand, set.SitSeat != null);
 			Connect(Rolling, set.Roll != null ? set.Roll : crouch, set.Roll != null);
 			Connect(Dying, set.Death != null ? set.Death : stand, set.Death != null);
+			Connect(Ride, set.Ride != null ? set.Ride : set.SitSeat != null ? set.SitSeat : stand, set.Ride != null);
 			// Stepped by hand: the shared stride, the height climbed, the one-shots.
 			clips[Walk].SetSpeed(0d);
 			clips[Run].SetSpeed(0d);
@@ -451,6 +461,21 @@ namespace FishMMO.Shared
 			armsTime = -1f;
 		}
 
+		/// <summary>
+		/// Sits astride a mount, its hip joints <paramref name="hipHeight"/> metres over the capsule's feet (the saddle), or gets
+		/// off. Footfalls stop while riding; the figure keeps riding in the air (a flying mount, a frog's leap).
+		/// </summary>
+		public void SetRiding(bool ride, float hipHeight)
+		{
+			riding = ride;
+			saddleHeight = Mathf.Max(0f, hipHeight);
+			if (ride)
+			{
+				sitting = false;
+				armsTime = -1f;
+			}
+		}
+
 		/// <summary>Gets up again (at the sit's pace, from wherever the sit has got to).</summary>
 		public void StandUp()
 		{
@@ -498,7 +523,8 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
-			bool slow = dead || sitting || weights[SitGround] + weights[SitSeat] + weights[Dying] > 0.02f;
+			bool slow = dead || sitting || weights[SitGround] + weights[SitSeat] + weights[Dying] > 0.02f ||
+				riding != (weights[Ride] > 0.5f);
 			float follow = 1f - Mathf.Exp(-(slow ? SlowRate : BlendRate) * deltaTime);
 			if (dead && deathTime < Length(Dying))
 			{
@@ -610,7 +636,12 @@ namespace FishMMO.Shared
 
 		private void Locomote(Vector3 velocity, float flat, float stroke, float deltaTime)
 		{
-			if (sitting)
+			if (riding)
+			{
+				// The mount does the walking: the rider sits its stride whatever the ground or the air.
+				targets[Ride] = 1f;
+			}
+			else if (sitting)
 			{
 				targets[onSeat ? SitSeat : SitGround] = 1f;
 			}
@@ -769,7 +800,12 @@ namespace FishMMO.Shared
 			float ease = 1f - Mathf.Exp(-GroundRate * deltaTime);
 			Transform parent = shown.parent;
 			float baseY = Feet.y;
-			if (sitting && onSeat)
+			if (riding && !dead)
+			{
+				// On the saddle: the ride clip's hips raised to it, quickly enough to ride a frog's leap.
+				lift = Mathf.Lerp(lift, saddleHeight - KeyedRideHipHeight, 1f - Mathf.Exp(-GroundRate * deltaTime));
+			}
+			else if (sitting && onSeat)
 			{
 				lift = Mathf.Lerp(lift, seatHeight - KeyedSeatHeight, 1f - Mathf.Exp(-SlowRate * deltaTime));
 			}
@@ -873,7 +909,7 @@ namespace FishMMO.Shared
 				// Too far off to be heard: nothing is raised (nor any ray cast for it), but the stride is kept counting.
 				pendingLand = pendingRung = false;
 				pendingSwim = null;
-				footfalls.Stride(speed * deltaTime, sitting || swimming || climbing || !grounded ? 0f : speed, restHeight);
+				footfalls.Stride(speed * deltaTime, riding || sitting || swimming || climbing || !grounded ? 0f : speed, restHeight);
 				return;
 			}
 			if (pendingSwim.HasValue)
@@ -895,7 +931,7 @@ namespace FishMMO.Shared
 				RaiseOnGround(FootfallKind.Land, at, pendingSpeed, 0);
 				return;
 			}
-			if (sitting || swimming || climbing || !grounded)
+			if (riding || sitting || swimming || climbing || !grounded)
 			{
 				return;
 			}

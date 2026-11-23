@@ -1,0 +1,349 @@
+using System;
+using System.Reflection;
+using FishMMO.Shared;
+using FishMMO.Shared.Core;
+using NUnit.Framework;
+using UnityEngine;
+using FishNet.Serializing;
+using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
+using FishMMO.Server.Implementation.World.SceneServer.AI;
+
+namespace FishMMO.UnitTests
+{
+	/// <summary>
+	/// Regressions for the fixes applied after the combat/prediction audit.
+	/// </summary>
+	/// <remarks>
+	/// Every defect pinned here was silent: an action that ran nowhere, a cap spent on the shooter
+	/// itself, an observer applying bonuses it had already been sent, an order that held only while
+	/// a sort happened to be stable. None produced an error or a log line, and three of them were
+	/// inert only because of an unrelated accident elsewhere — which is the state a fix has to be
+	/// pinned out of, because the accident is what moves next.
+	/// </remarks>
+	[TestFixture]
+	public class CombatAudit2FixTests
+	{
+		private const BindingFlags Any =
+			BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+		#region F1 — an area effect resolves its object from every ability event shape.
+
+		/// <summary>
+		/// The shared resolver reads all three ability event payloads, not only the collision one.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// <c>AbilityApplyAreaAction</c> tested <see cref="AbilityCollisionEventData"/> and nothing
+		/// else, so an area blast authored on <c>OnSpawn</c> or <c>OnTick</c> returned having done
+		/// nothing, on every peer. That is precisely the failure an earlier fix to the same action
+		/// believed it had removed — it corrected the PEER gate (a tick-domain test that suppressed
+		/// the server too) and left the PAYLOAD gate that was the other half of the same bug, with a
+		/// comment asserting the case now worked.
+		/// </para>
+		/// <para>
+		/// Latent today: the asset census finds zero authored <c>Ability*Action</c> assets. It goes
+		/// live the moment anyone authors one.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void AbilityObjectResolution_AcceptsSpawnTickAndCollisionPayloads()
+		{
+			GameObject host = new GameObject("ResolveFrom_Object");
+			try
+			{
+				AbilityObject abilityObject = host.AddComponent<AbilityObject>();
+
+				LogAssert.IsFalse(AbilityObject.TryResolveFrom(null, out _),
+					"A null event resolves nothing rather than throwing.");
+
+				LogAssert.IsFalse(AbilityObject.TryResolveFrom(new EventData(null), out _),
+					"An event carrying no ability payload resolves nothing.");
+
+				EventData spawn = new EventData(null);
+				spawn.Add(new AbilitySpawnEventData(
+					initiator: null, ability: null, abilitySpawner: null, targetInfo: default,
+					seed: 0, initialAbilityObject: abilityObject,
+					currentAbilityObjectID: null, spawnedAbilityObjects: null));
+				LogAssert.IsTrue(AbilityObject.TryResolveFrom(spawn, out AbilityObject fromSpawn),
+					"OnSpawn must resolve. An area effect wired here used to run on no peer at all.");
+				LogAssert.AreSame(abilityObject, fromSpawn, "...to the object that spawned.");
+
+				EventData tick = new EventData(null);
+				tick.Add(new AbilityTickEventData(null, 1f / 30f, abilityObject));
+				LogAssert.IsTrue(AbilityObject.TryResolveFrom(tick, out AbilityObject fromTick),
+					"OnTick must resolve, so a lingering field can reapply its effect each tick.");
+				LogAssert.AreSame(abilityObject, fromTick, "...to the ticking object.");
+
+				EventData hit = new EventData(null);
+				hit.Add(new AbilityCollisionEventData(null, null, abilityObject, Vector3.zero, Vector3.up, null));
+				LogAssert.IsTrue(AbilityObject.TryResolveFrom(hit, out AbilityObject fromHit),
+					"OnHit must resolve — the one shape that always worked.");
+				LogAssert.AreSame(abilityObject, fromHit, "...to the object that hit.");
+			}
+			finally
+			{
+				UnityEngine.Object.DestroyImmediate(host);
+			}
+		}
+
+		/// <summary>
+		/// Both physics actions resolve through the one helper, so they cannot disagree again.
+		/// </summary>
+		/// <remarks>
+		/// The two actions answer the same question — "which ability object am I acting for?" — and
+		/// having answered it separately is how one of them ended up accepting three payloads while
+		/// the other accepted one. Asserted structurally because the divergence is what matters, not
+		/// either implementation.
+		/// </remarks>
+		[Test]
+		public void BothPhysicsActions_ShareOneAbilityObjectResolver()
+		{
+			foreach (Type action in new[] { typeof(AbilityApplyAreaAction), typeof(AbilityApplyHitscanAction) })
+			{
+				LogAssert.IsNull(action.GetMethod("TryGetAbilityObject", Any),
+					$"{action.Name} must not carry a private copy of the resolver. Two copies is how " +
+					"the two actions came to accept different sets of event payloads.");
+			}
+
+			LogAssert.IsNotNull(typeof(AbilityObject).GetMethod("TryResolveFrom", Any),
+				"AbilityObject.TryResolveFrom is the shared implementation both actions use.");
+		}
+
+		#endregion
+
+		#region F2 — the observer spawn payload equips without applying bonuses.
+
+		#endregion
+
+		#region F3 — the shooter is excluded before the cap is charged, not after.
+
+		/// <summary>
+		/// <c>RaycastNearest</c> takes the transform to exclude, so a projectile's own collider
+		/// cannot consume a slot of <c>MaxHits</c>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The hitscan action skipped its own collider AFTER the query returned, by which point the
+		/// cap had already been spent on it — so <c>MaxHits = 1</c> with <c>BlockedByScenery</c> on
+		/// produced a shot that hit nothing at all. The query has always applied
+		/// <c>charactersOnly</c> before the cap for exactly this reason; the exclusion now sits
+		/// beside it.
+		/// </para>
+		/// <para>
+		/// Masked in the shipped content by two unrelated accidents — the authored ability prefabs
+		/// centre a convex collider on the transform origin, and <c>m_QueriesHitBackfaces</c> is off,
+		/// so a ray starting inside does not report it. An offset collider or a collider on a child
+		/// visual removes both. Pinned on the signature because a physics scene is not available in
+		/// edit mode.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void RaycastNearest_TakesAnExclusionThatIsAppliedInsideTheCap()
+		{
+			MethodInfo raycast = typeof(LagCompensatedQuery).GetMethod("RaycastNearest", Any);
+			LogAssert.IsNotNull(raycast, "RaycastNearest must exist.");
+
+			ParameterInfo[] parameters = raycast.GetParameters();
+			ParameterInfo ignoreRoot = Array.Find(parameters, p => p.Name == "ignoreRoot");
+			LogAssert.IsNotNull(ignoreRoot,
+				"RaycastNearest must accept the transform to exclude. Filtering it out in the CALLER " +
+				"leaves the cap already charged for it, which is a shot that hits nothing at MaxHits 1.");
+			LogAssert.AreEqual(typeof(Transform), ignoreRoot.ParameterType, "...as a Transform.");
+			LogAssert.IsTrue(ignoreRoot.IsOptional,
+				"Optional, so the callers that have nothing to exclude are unchanged.");
+
+			MethodInfo gather = typeof(LagCompensatedQuery).GetMethod("GatherAlongRay", Any);
+			LogAssert.IsNotNull(gather, "GatherAlongRay must exist.");
+			LogAssert.IsNotNull(Array.Find(gather.GetParameters(), p => p.Name == "ignoreRoot"),
+				"...and the exclusion must reach the loop that charges the cap, not stop at the " +
+				"public entry point.");
+		}
+
+		#endregion
+
+		#region F4 — the ray comparator is a total order.
+
+		/// <summary>
+		/// <c>SortRaycastHits</c> orders by distance, then identity, then buffer position — total,
+		/// rather than relying on the sort being stable.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The residual case is two colliders on ONE body sharing a name and a millimetre, which has
+		/// no cross-peer agreed key and cannot be given one — buffer position is the broadphase's
+		/// order and differs between peers. What the tiebreak buys is that the outcome no longer
+		/// depends on the insertion sort staying an insertion sort: swapping in <c>Array.Sort</c>
+		/// would otherwise have made an already-arbitrary case vary run to run as well.
+		/// </para>
+		/// <para>
+		/// Exercised through the public entry point on a hit set the comparator can actually
+		/// separate, so the ordering property is asserted rather than the comparator's shape.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void SortRaycastHits_OrdersByDistance_AndIsTotal()
+		{
+			MethodInfo compare = typeof(TargetOrdering).GetMethod("CompareKeys", Any);
+			LogAssert.IsNotNull(compare, "CompareKeys must exist.");
+			LogAssert.AreEqual(10, compare.GetParameters().Length,
+				"CompareKeys must carry a buffer-position key for each side (5 keys x 2) so the order " +
+				"is total. Without it two entries the identity keys cannot separate compare EQUAL, " +
+				"and the result is whatever order the sort happened to leave them in.");
+
+			// Distances are the part a physics-free test can drive: RaycastHit.distance is settable.
+			RaycastHit[] hits = new RaycastHit[4];
+			hits[0].distance = 9f;
+			hits[1].distance = 1f;
+			hits[2].distance = 5f;
+			hits[3].distance = 3f;
+
+			TargetOrdering.SortRaycastHits(hits, 4);
+
+			LogAssert.AreEqual(1f, hits[0].distance, "Nearest first — a ray is a sequence.");
+			LogAssert.AreEqual(3f, hits[1].distance, "...then the next along it.");
+			LogAssert.AreEqual(5f, hits[2].distance, "...and the next.");
+			LogAssert.AreEqual(9f, hits[3].distance, "...furthest last.");
+		}
+
+		/// <summary>
+		/// Sorting an already-sorted set changes nothing, at any length the key buffers have to grow
+		/// through.
+		/// </summary>
+		/// <remarks>
+		/// The parallel key arrays are grown by doubling and are shared statics, so a mismatch
+		/// between the arrays and the hit count would corrupt an unrelated later query rather than
+		/// this one. Walking past the 32-entry starting size is what exercises that.
+		/// </remarks>
+		[Test]
+		public void SortRaycastHits_IsIdempotent_AcrossABufferGrowth()
+		{
+			const int count = 70;
+			RaycastHit[] hits = new RaycastHit[count];
+			for (int i = 0; i < count; ++i)
+			{
+				hits[i].distance = count - i;
+			}
+
+			TargetOrdering.SortRaycastHits(hits, count);
+			for (int i = 1; i < count; ++i)
+			{
+				LogAssert.IsTrue(hits[i - 1].distance <= hits[i].distance,
+					$"Entry {i} is out of order after the first sort; the key buffers did not grow " +
+					"in step with the hit count.");
+			}
+
+			TargetOrdering.SortRaycastHits(hits, count);
+			for (int i = 1; i < count; ++i)
+			{
+				LogAssert.IsTrue(hits[i - 1].distance <= hits[i].distance,
+					$"Entry {i} moved on a second sort of an already-sorted set — the comparator is " +
+					"not a consistent order.");
+			}
+		}
+
+		#endregion
+
+		#region F5 — one character's delta-chain break cannot silence another's.
+
+		/// <summary>
+		/// The reconcile delta serializers keep no state of their own.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// F5 was about a static on the delta reader: it is registered against the type, sees every
+		/// character's reconciles and receives only a reader and a baseline, so it has no identity to
+		/// attribute a lost state update to. Its boolean latch coupled unrelated characters, and the
+		/// fix was a counting throttle.
+		/// </para>
+		/// <para>
+		/// On FishNet's delta prediction there is nothing left to report from there: loss detection
+		/// moved into FishNet, per <c>NetworkBehaviour</c> (the full-reconcile id in its header), and
+		/// a delta it cannot use is discarded there. The lesson F5 taught still holds and is what this
+		/// pins: a static on a shared serializer cannot know whose state it is reading, so these
+		/// serializers must not carry mutable static state at all.
+		/// </para>
+		/// </remarks>
+		[Test]
+		public void ReconcileDeltaSerializers_KeepNoStaticState()
+		{
+			foreach (Type serializer in new[] { typeof(CharacterReconcileDataDeltaSerializer), typeof(KCCPlatformReconcileDataDeltaSerializer) })
+			{
+				foreach (FieldInfo field in serializer.GetFields(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+				{
+					LogAssert.IsTrue(field.IsLiteral || field.IsInitOnly,
+						$"{serializer.Name}.{field.Name} is mutable static state on a serializer shared by every " +
+						"character. Loss detection is FishNet's, per behaviour; see the remarks.");
+				}
+			}
+		}
+
+		#endregion
+
+		#region F6 — one grow-on-full helper, so a saturated sweep is reported.
+
+		/// <summary>
+		/// <c>AbilityObjectSweep</c> grows its buffers through <c>TargetOrdering</c> rather than a
+		/// private copy of the same loop.
+		/// </summary>
+		/// <remarks>
+		/// The copy was behaviourally identical — the same doubling against the same 256 ceiling —
+		/// and that was the problem: it was identical except for the one thing the shared helper also
+		/// does, which is report a saturated query once per session. A sweep that filled its buffer
+		/// truncated in broadphase order and said nothing, while every other spatial query in the
+		/// project said so.
+		/// </remarks>
+		[Test]
+		public void AbilityObjectSweep_UsesTheSharedBufferGrowth()
+		{
+			LogAssert.IsNull(typeof(AbilityObjectSweep).GetField("MaximumBufferSize", Any),
+				"The private ceiling must be gone; TargetOrdering.MaximumQueryBufferSize is the one " +
+				"the shared helper enforces, and a second constant is a second thing to keep in step.");
+
+			// The shared helper is grow-only and stops at the shared ceiling — the properties the
+			// sweep now inherits rather than reimplements.
+			Collider[] buffer = null;
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref buffer, 0),
+				"A null buffer is allocated on first use.");
+			int allocated = buffer.Length;
+
+			LogAssert.IsFalse(TargetOrdering.TryGrowQueryBuffer(ref buffer, allocated - 1),
+				"A query that did not fill the buffer needs no growth and no re-query.");
+			LogAssert.AreEqual(allocated, buffer.Length,
+				"...and the buffer must not shrink back: growth is one-way, or every cast undoes the " +
+				"previous one's growth.");
+
+			LogAssert.IsTrue(TargetOrdering.TryGrowQueryBuffer(ref buffer, allocated),
+				"A full buffer says nothing about what it discarded, so it must grow and re-query.");
+			LogAssert.IsTrue(buffer.Length > allocated, "...by actually growing.");
+		}
+
+		#endregion
+
+		#region F9 — the AI heal choice is reproducible.
+
+		/// <summary>
+		/// A healer picking between equally hurt allies breaks the tie on network identity.
+		/// </summary>
+		/// <remarks>
+		/// A group at full health is the common case for a healer scan, not a corner one, so a strict
+		/// health comparison alone made the choice depend on overlap order — which is not
+		/// reproducible between two runs of the same fight. Server-side, so this buys repeatability
+		/// rather than cross-peer agreement; a heal that lands on a different ally each time a
+		/// scenario is replayed is not debuggable.
+		/// </remarks>
+		[Test]
+		public void HealTargetSelection_BreaksTiesOnIdentity()
+		{
+			MethodInfo identityKey = typeof(HealerAttackingState).GetMethod("IdentityKey", Any);
+			LogAssert.IsNotNull(identityKey,
+				"The healer must have a stable key to break a health tie with, or equally hurt " +
+				"allies are chosen between by broadphase order.");
+
+			LogAssert.AreEqual(int.MaxValue, identityKey.Invoke(null, new object[] { null }),
+				"An unspawned or absent candidate must sort LAST, so it can never win a tie against " +
+				"a real ally.");
+		}
+
+		#endregion
+	}
+}

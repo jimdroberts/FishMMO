@@ -55,11 +55,11 @@ half4 _FishCaveCrust;
 half4 _FishCaveGlow;
 half4 _FishCaveGuano;
 half4 _FishCaveParams;
-// FishMMO edit (2026-10-25, I2n-c): the tea ring at a cave's water line: x the water's level (world y), y the highest flood over it
+// FishMMO edit: the tea ring at a cave's water line: x the water's level (world y), y the highest flood over it
 // (m), z the top edge's fade (m), w 1 on; and its colour (a strength). w 0 (the default) on every cave rock without one.
 float4 _FishCaveFlood;
 half4 _FishCaveFloodStain;
-// FishMMO edit (2026-10-28): the look arrays (_FISH_LOOK_ARRAY, the block below): this material's slices of its arrays — albedo,
+// FishMMO edit: the look arrays (_FISH_LOOK_ARRAY, the block below): this material's slices of its arrays — albedo,
 // normal, gloss, occlusion, and emission; −1 an empty slot — and its row in a look family's table (_FISH_LOOK_TABLE: the family
 // material's default, overridden per DOTS instance; −1 none). In every variant so the buffer's layout never changes.
 float4 _FishLookSlices;
@@ -78,8 +78,8 @@ CBUFFER_END
 // metadata constant "_Smoothness_DOTSInstancingOverrideMode" does not match expected format, ignoring"). So the cbuffer
 // holds only the metadata uints, and the modes (the same value URP's macro gives: overrides supported) sit after it.
 #if defined(SHADER_API_WEBGPU)
-// FishMMO edit (2026-11-01): WebGPU — no per-instance material overrides, so no metadata cbuffer. A browser stage binds at most
-// 12 uniform buffers and this one made the DOTS fragment 13 (Docs/Rendering/2026-11-01/webgpu-constants). The only DOTS draws a
+// FishMMO edit: WebGPU — no per-instance material overrides, so no metadata cbuffer. A browser stage binds at most
+// 12 uniform buffers and this one made the DOTS fragment 13. The only DOTS draws a
 // WebGPU build keeps are the indirect twins' BatchRendererGroup batches (ClientShaderBuildProcessor strips every other DOTS
 // variant there; the GPU Resident Drawer is off in browser builds), and their batches name no material property
 // (TerrainGpuRenderer.Brg.cs SyncDots): every metadata word Unity wrote here was 0, and a 0 word reads the material's value.
@@ -109,7 +109,7 @@ FISH_DOTS_METADATA_START
     FISH_DOTS_METADATA(float , _DetailAlbedoMapScale)
     FISH_DOTS_METADATA(float , _DetailNormalMapScale)
     FISH_DOTS_METADATA(float , _Surface)
-    // FishMMO edit (2026-10-28): a look family's row per instance (_FISH_LOOK_TABLE; FishLookSetup below).
+    // FishMMO edit: a look family's row per instance (_FISH_LOOK_TABLE; FishLookSetup below).
     FISH_DOTS_METADATA(float , _FishLook)
 FISH_DOTS_METADATA_END
 FISH_DOTS_OVERRIDE_MODE(_BaseColor)
@@ -191,7 +191,7 @@ void SetupDOTSLitMaterialPropertyCaches()
 
 #endif
 
-// ── FishMMO edit (2026-10-28): look arrays. The art generator writes each surface family's maps (the structure kit's, the rock
+// ── FishMMO edit: look arrays. The art generator writes each surface family's maps (the structure kit's, the rock
 // and ice surfaces', the cave glow's) as three Texture2DArray assets — albedo + emission (sRGB), normals, gloss + occlusion
 // (linear) — and its materials name their slices instead of 2D maps (ProceduralArtLookArrays; keyword _FISH_LOOK_ARRAY):
 // _FishLookSlices (albedo, normal, gloss, occlusion) and _FishLookEmissionSlice, −1 an empty slot, which reads what URP's
@@ -205,7 +205,7 @@ void SetupDOTSLitMaterialPropertyCaches()
 // (a cave's inner wall laid over its shell, CaveRockLayers). ──
 #if defined(_FISH_LOOK_ARRAY) || defined(_FISH_LOOK_TABLE)
 #define FISH_LOOK_ARRAYS 1
-// FishMMO edit (2026-11-02): an array-backed material's maps are its slices, not its keywords. URP's material validation (the
+// FishMMO edit: an array-backed material's maps are its slices, not its keywords. URP's material validation (the
 // LitShader editor both Weather Lit shaders use) sets _NORMALMAP, _METALLICSPECGLOSSMAP and _OCCLUSIONMAP only where a 2D texture
 // fills the slot, and ProceduralArtLookArrays.Bind empties those slots: any re-validation dropped the three keywords from 2043 of
 // the generated materials, which then ignored their normals and occlusion and drew at _Smoothness (1: the gloss map's scale) —

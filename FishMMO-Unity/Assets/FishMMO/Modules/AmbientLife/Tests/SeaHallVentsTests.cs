@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A sea hall's vents, plumes and brinicles as the Ambient Life module draws them (split from SeaHallTests, Phase 4, 2026-11-17).
+	/// A sea hall's vents, plumes and brinicles as the Ambient Life module draws them (split from SeaHallTests).
 	/// </summary>
 	[TestFixture]
 	public class SeaHallVentsTests
@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// The client reads a hall's spots back (as the World Design module's dressing stores them: one Hall, its sea as the widest
 		/// Pool, a Smoker per vent with the Great flag on the great one, the Brine pools): its water, its smokers and their plumes,
-		/// its sea's floor. Hand-made spots, so the client's half stands without the generator (Phase 4, 2026-11-18).
+		/// its sea's floor. Hand-made spots, so the client's half stands without the generator.
 		/// </summary>
 		[Test]
 		public void TheClient_ReadsAHallsSpotsBack()

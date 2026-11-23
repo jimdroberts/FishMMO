@@ -12,7 +12,7 @@ tooling that drives the world modules' internals; no game code names it.
 | **Depends on** | World Simulation, Water, Terrain |
 | **Depended on by** | World Design (its tests and harness), Naming (its tests) |
 | **Remove together with** | World Design, Naming |
-| **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18 |
+| **Moved** | Out of the core |
 
 ## Folders
 

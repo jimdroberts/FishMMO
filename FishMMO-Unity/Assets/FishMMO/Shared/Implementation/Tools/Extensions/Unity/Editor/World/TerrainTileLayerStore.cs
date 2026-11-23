@@ -5,7 +5,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A terrain tile's own channel → scene layer map (<see cref="TerrainTileLayers"/>), written by the generator's layer sync
-	/// and by the client build's layer stripper. Core editor (Phase 4, 2026-11-18).
+	/// and by the client build's layer stripper. Core editor.
 	/// </summary>
 	public static class TerrainTileLayerStore
 	{

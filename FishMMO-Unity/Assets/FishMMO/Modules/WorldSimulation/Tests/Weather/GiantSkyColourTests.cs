@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// A gas giant's scenes are lit in the giant's own colour (2026-10-14: "Adjust scenes to fit their atmosphere
+	/// A gas giant's scenes are lit in the giant's own colour ("Adjust scenes to fit their atmosphere
 	/// colorization properly"): AtmosphereModel.EvaluateVeiled. Before it, every giant's habitable layer was lit as one
 	/// thick air, which reddened the light of a cyan giant and a tan one alike to the same sepia.
 	/// </summary>

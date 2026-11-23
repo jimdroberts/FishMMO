@@ -6,7 +6,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The moss layer's globals (FishMoss.hlsl), drawn with the weather as one of its overlays (<see cref="WeatherOverlays"/>,
-	/// Phase 4 of the core and modules plan, 2026-11-18; the weather's presentation set them itself before): how damp the biome
+	/// the weather's presentation set them itself before): how damp the biome
 	/// under the camera keeps its rock and timber (<see cref="MossClimate"/>), eased so an ecotone fades it rather than
 	/// switching it, and which way is poleward (the shaded side of a wall). With no Terrain module the globals stay at their
 	/// zero, and the core surface shaders grow no moss.

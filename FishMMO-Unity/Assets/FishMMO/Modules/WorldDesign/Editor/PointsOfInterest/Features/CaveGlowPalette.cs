@@ -12,32 +12,32 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Fungi, Worms;
 		/// <summary>
 		/// Whether the lining's crystals are the biome's own glowing crystals (<see cref="Mineral"/>, <see cref="MineralAccent"/>)
-		/// in place of the glow art's: where its template grows a kind that glows (2026-10-16, I6c).
+		/// in place of the glow art's: where its template grows a kind that glows.
 		/// </summary>
 		public bool Minerals;
 		public BiomeCaveCrystalKind Mineral, MineralAccent;
-		/// <summary>The looks the biome grows them in (<see cref="BiomeCaveCrystal.Look"/>, 2026-10-26; 0 the kind's own).</summary>
+		/// <summary>The looks the biome grows them in (<see cref="BiomeCaveCrystal.Look"/>; 0 the kind's own).</summary>
 		public byte MineralLook, MineralAccentLook;
 		/// <summary>
 		/// How much of the floors' glow is luminous fungus against crystal (1 the dressing's own share) and how often glow-worms hang
-		/// (1 its own chance): the cave biome's glow (BiomeTemplate.CaveGlows, 2026-10-25, I2n).
+		/// (1 its own chance): the cave biome's glow (BiomeTemplate.CaveGlows).
 		/// </summary>
 		public float FungusWeight, WormChance;
 		/// <summary>
 		/// The glow-worms' hue (an index into the glow art's glow-worm hues: the cave biome's Cave Glows' worm hue by name, 0 the art's
-		/// first, every cave's until 2026-10-25) and where they hang (2026-10-26, I2n-c, decision 86 (e)).
+		/// first, every cave's formerly) and where they hang.
 		/// </summary>
 		public int WormHue;
 		public BiomeCaveWormMount WormMount;
 	}
 
 	/// <summary>
-	/// The one place a cave system's glow palette is drawn from its seed (2026-10-20): the cave dressing lays its crystals, fungi
+	/// The one place a cave system's glow palette is drawn from its seed: the cave dressing lays its crystals, fungi
 	/// and ore in it, and the run-time cave cover glows in the same colours (CaveCoverSpecies), so the moss under a glowcap
 	/// glows in the glowcap's hue.
 	/// </summary>
 	/// <remarks>
-	/// The draws are the dressing's since 2026-10-13, in the same order on the same streams: changing them moves every glowing
+	/// The draws are the dressing's, in the same order on the same streams: changing them moves every glowing
 	/// piece of every cave on its next dressing.
 	/// </remarks>
 	public static class CaveGlowPalettes
@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveGlowPalette For(CaveForm form, int seed, BiomeTemplate biome) => For(form, seed, new CaveBiome(biome, null));
 
 		/// <summary>
-		/// The palette of a system by its cave biomes (2026-10-25, I2n): the glow of the biome dressing its inside (its Cave Glows: the
+		/// The palette of a system by its cave biomes: the glow of the biome dressing its inside (its Cave Glows: the
 		/// crystals' hue, the fungus's share, the glow-worms' chance; their defaults are the rule below by form, so nothing moves), its
 		/// crystals the interior's with the host's glowing ones as accents (CaveInteriorArt.Crystals).
 		/// </summary>
@@ -87,7 +87,7 @@ namespace FishMMO.Shared.WorldDesign
 					p.Worms = false;
 					break;
 				case CaveForm.SeaHall:
-					// No fungus or glow-worm lives on marine ice over a warm sea (2026-10-26, I2n-b).
+					// No fungus or glow-worm lives on marine ice over a warm sea.
 					p.Fungi = p.Worms = false;
 					break;
 			}

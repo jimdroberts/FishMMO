@@ -43,6 +43,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
+			/* A server-to-server signal riding the party pump (PartySignals, e.g. Call to Arms): handed to its module, shown to
+			 * nobody. One a PLAYER sent is a forgery: never persisted, never delivered. */
+			if (PartySignals.IsSignal(trimmed))
+			{
+				if (sender == null)
+				{
+					PartySignals.TryDispatch(partyID, trimmed);
+				}
+				return false;
+			}
+
 			/* Persisted whatever the local delivery finds: the row is what carries the line to the
 			 * party's members on every other scene server, and it is the audit record that it was
 			 * said. Only live player messages: pumped ones are already persisted. */
@@ -58,6 +69,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Text = trimmed,
 			});
 			return false;
+		}
+
+		/// <summary>
+		/// Persists a <see cref="PartySignals"/> row for the other scene servers (the poster this system installs). The row is a
+		/// party line, so the pump carries it to exactly the servers hosting the party's members.
+		/// </summary>
+		private bool PostPartySignal(IPlayerCharacter sender, long partyID, string text)
+		{
+			if (sender == null || partyID < 1 || !PartySignals.IsSignal(text))
+			{
+				return false;
+			}
+			EnqueuePersist(sender.ID, sender.CharacterName, sender.Account, sender.WorldServerID, ChatChannel.Party,
+				partyID + " " + text, System.DateTime.UtcNow.Ticks);
+			return true;
 		}
 
 		/// <summary>

@@ -138,7 +138,7 @@ namespace FishMMO.WebServer
 								// The game's own files are fetched in hundreds when a world loads (one per Addressables
 								// bundle, 700+ in a build); under the page's bucket they were refused with 429 and the load
 								// failed. They get their own, larger bucket per client; everything else keeps the small one.
-								// Sized for several whole passes at once (2026-11-10): on a fast link the content preloader's
+								// Sized for several whole passes at once: on a fast link the content preloader's
 								// pass over every bundle takes about a second, so a reload, or two browsers on one address,
 								// emptied a 2000-token bucket in seconds, and Addressables, most of whose groups never retry,
 								// failed the world's load on the first 429. These are static files, cached by the browser:

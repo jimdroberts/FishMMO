@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A piece's collider as its own mesh (2026-10-20): the piece's own triangles, nothing thinner, on positions alone.
+	/// A piece's collider as its own mesh: the piece's own triangles, nothing thinner, on positions alone.
 	/// </summary>
 	/// <remarks>
 	/// <para>

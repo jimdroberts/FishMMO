@@ -280,7 +280,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// No river turns back on itself. Flo Monolith's river 0 turned 146° in one point where river 1 joins it, and 139°
-		/// and 86° near the coast between straight legs 40 m long (2026-10-12: "Fix the river issues"). Eased, every
+		/// and 86° near the coast between straight legs 40 m long ("Fix the river issues"). Eased, every
 		/// bend has room for its radius, the line resampled finer turns nowhere near a right angle, and it keeps its ends.
 		/// </summary>
 		[Test]
@@ -392,7 +392,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A tributary brought onto the river it joins keeps its spacing and never folds. The ease was measured from each point
 		/// to its already moved neighbour, so it fell away within a few points and pulled the last ones apart: Flo Monolith's
-		/// river 1 ended in segments of 7, 11, 21 and 40 m where the rest are 2 m (2026-10-12).
+		/// river 1 ended in segments of 7, 11, 21 and 40 m where the rest are 2 m.
 		/// </summary>
 		[Test]
 		public void ATributaryBroughtOntoItsRiverKeepsItsSpacing()
@@ -446,7 +446,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// A reversal between two long chords is cut off like any other: a line that runs out and back along one straight
 		/// chord each way turns back on itself however long the chords are. Taken against the chords' mean length, a 175°
 		/// turn between a 39 m and a 30 m chord passed for a gentle bend, and Flo Monolith's river 0 ran 39 m down its own
-		/// channel and back up beside it to a fall that dropped under the stretch it had come down (2026-10-15).
+		/// channel and back up beside it to a fall that dropped under the stretch it had come down.
 		/// </summary>
 		[Test]
 		public void ARiverLineOutAndBackAlongLongChordsIsCutOff()
@@ -600,7 +600,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// It was 6 m³/s, a river 8 m wide, and the bluff unmet was then no fall: Knickpoints names a point a fall only where
 		/// the surface falls 0.3 per metre over a width either side of it, and the bluff's 3.9 m over the 17 m an 8 m river
 		/// measures it across is 0.23. A ledge into the sea still, but named a rapid, so the check that the fixture reproduces
-		/// Flo's fall failed before the meet level was ever tried (2026-10-12).
+		/// Flo's fall failed before the meet level was ever tried.
 		/// </remarks>
 		private const float SeaRiverDischarge = 1.3f;
 

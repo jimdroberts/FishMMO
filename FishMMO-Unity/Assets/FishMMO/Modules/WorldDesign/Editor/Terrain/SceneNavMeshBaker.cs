@@ -164,7 +164,7 @@ namespace FishMMO.Shared.WorldDesign
 					if (bodies.Hydrology != null)
 					{
 						lavaBoxes += LavaModifiers(bodies.Hydrology.Lakes, bodies.Hydrology.Rivers, LavaAreaOrNotWalkable(), sources);
-						// A cave's pools too deep to wade (CaveStreamWater, 2026-10-20), likewise under the hillside.
+						// A cave's pools too deep to wade (CaveStreamWater), likewise under the hillside.
 						waterBoxes += CaveStreamWater.DeepModifiers(bodies.Hydrology.Lakes, sources);
 					}
 				}
@@ -236,7 +236,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// True for a collider on a ship under way (<see cref="FloatingBoats.IsUnderWay"/>): it sails on, so baking its hull
 		/// where the cut left it would leave a ship-shaped island of NavMesh (and a hole in the sea's) at the lane's start for
-		/// ever (2026-10-12: "Solid sailing ships needs to be done."). Swimming NPCs steer round the real hull by its
+		/// ever ("Solid sailing ships needs to be done."). Swimming NPCs steer round the real hull by its
 		/// NavMesh obstacle instead.
 		/// </summary>
 		private static bool UnderWay(Transform t)

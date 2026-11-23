@@ -5,8 +5,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 {
 	/// <summary>
-	/// Allows a respawn only while the weather over the spawner is, or is not, doing something
-	/// (Q16).
+	/// Allows a respawn only while the weather over the spawner is, or is not, doing something.
 	/// </summary>
 	/// <remarks>
 	/// <para>

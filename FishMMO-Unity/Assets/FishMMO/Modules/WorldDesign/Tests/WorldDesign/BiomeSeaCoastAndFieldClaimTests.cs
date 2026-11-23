@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 32 of the biome suite (2026-10-18, phase I2k): the sea's SURFACE takes the look of its coast from a small texture
+	/// Decision 32 of the biome suite: the sea's SURFACE takes the look of its coast from a small texture
 	/// baked with the scene's biome map (BiomeSeaCoast), on the same blend as the underwater look (BiomeSeaLooks.Coast), fading to
 	/// the planet's sea offshore; and a site's fields never lie over another site's (PointOfInterestFieldClaims). Every default is
 	/// what was drawn before: no biome has a sea look of its own, so no scene bakes a texture and the sea shader reads none.

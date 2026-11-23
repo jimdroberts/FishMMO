@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The turning parts of what a site laid (2026-10-14: mills): after the template's features, every laid piece with a
+	/// The turning parts of what a site laid (mills): after the template's features, every laid piece with a
 	/// rotor (<see cref="StructurePieces.RotorsOf"/>: a tower mill's sails, a mill's water wheel) gets that part set at its
 	/// hub, client-only, spun by <see cref="MillRotor"/>; a rotor with a head (a tower mill's cap) is laid inside the head's
 	/// yaw frame, which <see cref="MillRotor"/> turns to face the wind.

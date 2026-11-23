@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// A way light's own open fire (<see cref="SceneEmitterKind.Pyre"/>, 2026-10-26, the biome suite's way lights): what its seed
+	/// A way light's own open fire (<see cref="SceneEmitterKind.Pyre"/>, the biome suite's way lights): what its seed
 	/// says of it and how bright it burns. One definition read by the client's site lights (SiteLightPool) and its flames and
 	/// sparks (SiteEmbers), so the light a beacon throws and the flames over it are kindled at the same instant.
 	/// </summary>

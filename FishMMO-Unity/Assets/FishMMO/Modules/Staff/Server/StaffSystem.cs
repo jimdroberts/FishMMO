@@ -15,7 +15,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// <c>/tickets</c>).
 	/// </summary>
 	/// <remarks>
-	/// The Staff and Support module (Phase 3, 2026-11-17). These were partials of <c>SceneServerSystem</c> (the command
+	/// The Staff and Support module. These were partials of <c>SceneServerSystem</c> (the command
 	/// sets, the console, presence) and <c>ChatSystem</c> (support and reports); they are one system now, so a game
 	/// without staff tools leaves the module out and the scene and chat systems run without them.
 	/// </remarks>

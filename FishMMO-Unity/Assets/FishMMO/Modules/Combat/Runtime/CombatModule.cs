@@ -9,7 +9,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Combat module (2026-11-20): damage, healing, death and revive. Every character's
+	/// The Combat module: damage, healing, death and revive. Every character's
 	/// <see cref="CharacterDamageController"/> (the rules: resistances, immortality, the combat timer, the refusals and the
 	/// combat reports), the scene server's combat system (a death's consequences, respawning at the bind point, resurrect
 	/// offers and their acceptance), and the client's combat text and death dialog.

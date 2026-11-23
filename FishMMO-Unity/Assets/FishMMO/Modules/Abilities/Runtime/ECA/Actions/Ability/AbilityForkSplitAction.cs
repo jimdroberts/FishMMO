@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// Not the same as <see cref="AbilityRicochetHitAction"/>, which turns the SAME object onto a new heading (a ricochet)
-	/// and spawns nothing (renamed from the old fork action, 2026-11-22).
+	/// and spawns nothing (renamed from the old fork action).
 	/// </para>
 	/// </remarks>
 	[Serializable]

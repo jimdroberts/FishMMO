@@ -8,7 +8,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The detail scatter's batched draws (2026-11-04, DetailScatterRenderer.BatchDraws): parts of one material merged into a
+	/// The detail scatter's batched draws (DetailScatterRenderer.BatchDraws): parts of one material merged into a
 	/// pooled mesh, a submesh a part, each command's args reading its part's submesh. The pool must hand every command
 	/// exactly its part's triangles, and the draw path must keep each call to a run of commands with work.
 	/// </summary>

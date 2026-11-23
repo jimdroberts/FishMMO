@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The look arrays (2026-10-28): the props' generated surface maps written as Texture2DArray assets, one set of three arrays per
+	/// The look arrays: the props' generated surface maps written as Texture2DArray assets, one set of three arrays per
 	/// surface family — albedo and emission (sRGB), normals, gloss and occlusion (linear) — and the families' materials naming their
 	/// slices instead of 2D maps.
 	/// </summary>

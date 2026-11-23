@@ -9,7 +9,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The two defects the first real cut showed (Flo Monolith probe, 2026-10-10): a capital asked for before the cut was
+	/// The two defects the first real cut showed (Flo Monolith probe): a capital asked for before the cut was
 	/// never sited on rugged ground ("0 of 1 sited"), and every fall on one river carried the river's one name ("Dunwy
 	/// Falls" seven times). Pure: no scene, no asset.
 	/// </summary>
@@ -201,7 +201,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A dry channel 6 m wide and 2 m deep, its walls carved up to ground at 0 m; past the near bank flat ground, past
 		/// the far bank a hillside climbing on. The deck spans the channel's walls and sits on the ground at both ends; the
-		/// hillside is not climbed (2026-10-10: one end buried, the other in the air).
+		/// hillside is not climbed (one end buried, the other in the air).
 		/// </summary>
 		private static float Channel(float z)
 		{
@@ -232,7 +232,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A lowland river: 6 m of water a metre deep, its banks rising gently (a fifth of a metre a metre) from just above
 		/// the water. The deck reaches only as far as the banks take to clear the water, not out across the floodplain
-		/// (2026-10-11: bridges far past the river line, over the path).
+		/// (bridges far past the river line, over the path).
 		/// </summary>
 		private static float Lowland(float z)
 		{
@@ -283,7 +283,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// A river 6 m wide crossed on a hillside: the near bank rises, the far one falls away downhill from the water's edge
 		/// at half a metre a metre, under the water's level all the way. That ground was taken as more water, the deck held
 		/// its level over it to the reach, and the layout cut it off there 6 m over the slope (Flo Monolith,
-		/// 2026-10-12: "still floating in mid air on one end").
+		/// "still floating in mid air on one end").
 		/// </summary>
 		private static float Hillside(float z) => z < -3f ? 0.5f * (-z - 3f) : z < 3f ? -1f : -0.5f * (z - 3f);
 

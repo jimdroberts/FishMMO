@@ -7,7 +7,7 @@ using Random = System.Random;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>Split from TerrainIndexStoreTests (Phase 4 of the core and modules plan, 2026-11-18): the Terrain module's half.</summary>
+	/// <summary>Split from TerrainIndexStoreTests: the Terrain module's half.</summary>
 	public class TerrainIndexStoreReaderTests
 	{
 		/// <summary>
@@ -158,7 +158,7 @@ namespace FishMMO.UnitTests
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.CopyInto(TerrainArrayBinder.IndexMapOf(t), target, slice)"));
 			Assert.That(contact, Does.Contain("TerrainIndexMapBaker.Upload(stored"));
 			Assert.That(contact, Does.Not.Contain("if (data.alphamapTextureCount == 0)\n"), "a tile without alphamaps is no longer left out");
-			// Footstep surfaces (2026-10-21): the alphamaps where the tile kept them, else the stored map through the same filter
+			// Footstep surfaces: the alphamaps where the tile kept them, else the stored map through the same filter
 			// the terrain shader runs.
 			string footsteps = ProjectFiles.ReadAllText(Scripts + "Modules/WorldSimulation/Client/Audio/World/GroundSurface.cs");
 			Assert.That(footsteps, Does.Contain("SceneTerrainBake.IndexOf(data)"));

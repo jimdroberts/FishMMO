@@ -53,7 +53,7 @@ namespace FishMMO.Shared.Weather
 		/// <remarks>
 		/// The middle of what <see cref="PrevailingSpeed"/> produces (8 m/s), brought up to the steering level the
 		/// systems are carried at (<see cref="AirDrift.SteeringGain"/>). Systems are sized in time — so many hours to
-		/// pass — and this is what converts that into a distance: carried at the steering wind since 2026-10-15, they
+		/// pass — and this is what converts that into a distance: carried at the steering wind, they
 		/// are drawn that much larger so they still take as long to pass.
 		/// </remarks>
 		private static float TypicalSpeed => 8f * AirDrift.SteeringGain;
@@ -296,7 +296,7 @@ namespace FishMMO.Shared.Weather
 		/// It used to be the speed the field was actually carried at, held still for ever, because <c>speed × elapsed</c>
 		/// with a speed that wobbled teleported the field (the derivative picks up <c>elapsed × d(speed)/dt</c>). The
 		/// drift is now the integral of the wind itself (<see cref="AirDrift"/>), which has neither fault: it never
-		/// steps, and the sky runs in a gale and idles in a calm (2026-10-15).
+		/// steps, and the sky runs in a gale and idles in a calm.
 		/// </remarks>
 		public static float AdvectionSpeed(uint worldSeed, float latitudeDegrees, in WindBelts belts)
 		{

@@ -29,7 +29,7 @@ namespace FishMMO.Client
 		public const string ServiceId = "world-interactables.state";
 
 		/// <summary>Registers the system as a client service (<see cref="ClientServices"/>), at load. Moved out of
-		/// <c>Client</c>'s own start with the World Interactables module (2026-11-20).</summary>
+		/// <c>Client</c>'s own start with the World Interactables module.</summary>
 		[UnityEngine.RuntimeInitializeOnLoadMethod(UnityEngine.RuntimeInitializeLoadType.SubsystemRegistration)]
 		public static void Install()
 		{

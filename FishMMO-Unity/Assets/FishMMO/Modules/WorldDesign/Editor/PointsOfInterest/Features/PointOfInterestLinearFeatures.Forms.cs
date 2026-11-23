@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The later drafts' linear places and forms (2026-10-26, phase I2f-b): a camp's windbreak on its windward arc, a frontier's barrier
+	/// The later drafts' linear places and forms: a camp's windbreak on its windward arc, a frontier's barrier
 	/// across the scene with its ditch and forts, marker lines set post by post along the ways.
 	/// </summary>
 	/// <remarks>

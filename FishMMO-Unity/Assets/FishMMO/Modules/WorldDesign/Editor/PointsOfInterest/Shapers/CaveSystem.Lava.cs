@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Molten lava in a lava tube (2026-10-20, <see cref="CaveLava"/>): where it lies (<see cref="PlanLava"/>, read only from the
+	/// Molten lava in a lava tube (<see cref="CaveLava"/>): where it lies (<see cref="PlanLava"/>, read only from the
 	/// system's shapes) and the bed the field cuts for it — a river's channel under the floor beside the tube's way, a lake's
 	/// basin, a fall's plunge pool — unioned into the void (<see cref="Tube(Vector3, out float, out float, out float, bool)"/>) so
 	/// everything that reads the field (the mesher, the holes, the dressing, the walk checks) sees one cave.
@@ -296,7 +296,7 @@ namespace FishMMO.Shared.WorldDesign
 				lavaLaid = new List<(Vector3, float, int)>();
 				try
 				{
-					// The lakes first (2026-10-21: "Stacked tubes + big lakes"; the deepest cavern always holds one) and the basins', then
+					// The lakes first ("Stacked tubes + big lakes"; the deepest cavern always holds one) and the basins', then
 					// the trunks' rivers, the chasms' falls (fed by a river where one comes), and the side passages' rivers.
 					LavaLakes(plan);
 					LavaBasins(plan);
@@ -411,7 +411,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float small = Mathf.Min(c.Radii.x, c.Radii.z);
 				// The site's own middle kept: a small or middling site's camp or den over half of it; a large one's (its dungeon gate kept
-				// on its own below, its floor strewn with bones only) a fifth (2026-10-21, it was 0.6 for every cavern), so its lake fits.
+				// on its own below, its floor strewn with bones only) a fifth (it was 0.6 for every cavern), so its lake fits.
 				float keep = own.Contains(ci)
 					? (c.Kind == CaveChamberKind.Cavern ? (SizeClass >= 2 ? Mathf.Max(6f, 0.2f * small) : Mathf.Max(8f, 0.5f * small)) : Mathf.Max(4.5f, 0.35f * small))
 					: c.Kind == CaveChamberKind.Hall ? Mathf.Max(3f, 0.12f * small) : 2f;
@@ -654,7 +654,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				// Under a natural bridge (a short gap since the last run, or a rise of the floor it sank under) the lava runs on at its
-				// own level, hidden in the rock the whole way (2026-10-21: it had sunk in its bed a pace or two from this run's head);
+				// own level, hidden in the rock the whole way (it had sunk in its bed a pace or two from this run's head);
 				// anywhere else it wells up afresh.
 				bool welling = float.IsNaN(carried) || i - lastEnd > 15 || samples[i].Bank - carried > CaveLava.MaxSink;
 				if (!welling && (lastBody < 0 || !UnderRock(plan.Bodies[lastBody].Path[plan.Bodies[lastBody].Path.Length - 1],
@@ -728,7 +728,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Every lava river that still sinks into its bed where other lava lies near its end, no higher than it (another river's
 		/// channel, a lake): run on into it, nearest first, under the rock where it would lie hidden the whole way (UnderRock), else
 		/// over the floor in a channel of its own where the way there is clear and the floor lets it fall gently to that lava
-		/// (2026-10-21: two passages' rivers came to a junction at one level and one sank there a few paces from the other).
+		/// (two passages' rivers came to a junction at one level and one sank there a few paces from the other).
 		/// </summary>
 		private void LavaSinksRunOn(CaveLavaPlan plan)
 		{
@@ -1037,7 +1037,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Falls into chasms ─────────────────────────────────────
 
 		/// <summary>
-		/// A fall down a chasm's free end (2026-10-20: "lava falls between levels into a pool"): the end away from the passage on
+		/// A fall down a chasm's free end ("lava falls between levels into a pool"): the end away from the passage on
 		/// from its floor, past its climb and its crossing; fed by the river ending in the chasm's chamber where one does and its
 		/// way to the lip is clear, else (now and then) pouring from a vent in the chasm's own wall under its lip; a plunge pool
 		/// under it.
@@ -1128,7 +1128,7 @@ namespace FishMMO.Shared.WorldDesign
 						break;
 					}
 					Vector3 poolAt = m + axis * (free * land);
-					// Its floor measured, and nothing of another level under it (2026-10-21: a stacked tube's chasm may stand over one).
+					// Its floor measured, and nothing of another level under it (a stacked tube's chasm may stand over one).
 					if (!LavaPoolFits(poolAt, pool, bottom, axis, out float poolFloor, out float poolTop)
 						|| LavaOverLower(new Vector3(poolAt.x, poolFloor, poolAt.z), pool, ri))
 					{
@@ -1266,7 +1266,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		// ── Lakes ─────────────────────────────────────────────────
 
-		/// <summary>The broadest lava lake (its radius), metres: ~30 m across in a great cavern (2026-10-21).</summary>
+		/// <summary>The broadest lava lake (its radius), metres: ~30 m across in a great cavern.</summary>
 		public const float LakeMost = 15f;
 		/// <summary>The least the deepest cavern's lake is asked to be (its radius), metres, where its floor gives it room.</summary>
 		private const float DeepLakeLeast = 7.5f;
@@ -1280,7 +1280,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float DeepBand = 12f;
 
 		/// <summary>
-		/// Lava lakes in chambers, before anything else is laid (2026-10-21: "Stacked tubes + big lakes"): the bottom of the system
+		/// Lava lakes in chambers, before anything else is laid ("Stacked tubes + big lakes"): the bottom of the system
 		/// always holds one as broad as it fits (up to <see cref="LakeMost"/>): the broadest spot over the floors of its deepest
 		/// great chambers (the caverns and halls within <see cref="DeepBand"/> of the deepest, the site's own last, its camp kept);
 		/// then the other chambers by the seed (most in a cavern or a hall, fewer in rooms), deepest first, one to a chamber, up
@@ -1580,7 +1580,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float flat = Mathf.Max(0.3f * bowl.Radius, bowl.Radius - bowl.Depth / BowlGrade);
 				float reach = Mathf.Min(bowl.Radius, flat + (surface - bed) / BowlGrade);
-				// Nothing of another level under it (2026-10-21: in stacked tubes a basin may stand over a lower one's way).
+				// Nothing of another level under it (in stacked tubes a basin may stand over a lower one's way).
 				if (LavaOverLower(new Vector3(bowl.A.x, Mathf.Min(bowl.A.y, rim), bowl.A.z), reach))
 				{
 					continue;

@@ -7,9 +7,9 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The pitch a roof is built at (2026-10-18, I6e): the classes the roof materials want
+	/// The pitch a roof is built at: the classes the roof materials want
 	/// (<see cref="StructurePieces.MinimumPitch"/>), flat for mud brick, and any class a palette names for its roofs
-	/// (BiomeStructureSurface.Pitch, I6h: the Valley's low 30° shingles, the Carpathian pastures' 60° shakes).
+	/// (BiomeStructureSurface.Pitch, the Valley's low 30° shingles, the Carpathian pastures' 60° shakes).
 	/// </summary>
 	/// <remarks>
 	/// Append-only: the names are in generated mesh and prefab paths (<see cref="StructureRoofs.Suffix"/>), and the order is
@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 		Flat,
 		/// <summary>30°: bamboo half-culms, log roofs, marble slabs.</summary>
 		Pitch30,
-		/// <summary>35°: sandstone slabs, ice blocks, sod and turf (2026-10-18, I6h: earth roofs are pitched sod, not flat).</summary>
+		/// <summary>35°: sandstone slabs, ice blocks, sod and turf (earth roofs are pitched sod, not flat).</summary>
 		Pitch35,
 		/// <summary>40°: slates.</summary>
 		Pitch40,
@@ -31,14 +31,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>50°: thatch and reed, laid thick and steep.</summary>
 		Pitch50,
 		/// <summary>
-		/// 60°: the steep riven-shake roofs of the Carpathian and Goral highlands (2026-10-18, I6h, decided in the Alpine Meadow
+		/// 60°: the steep riven-shake roofs of the Carpathian and Goral highlands (decided in the Alpine Meadow
 		/// round), shedding a mountain winter's snow. No material wants it of itself; a palette names it for its roofs.
 		/// </summary>
 		Pitch60,
 	}
 
 	/// <summary>
-	/// How a roof that follows its palette is built (2026-10-18, I6h): a house's roof (StructurePieces.BuildHouse), a gable a
+	/// How a roof that follows its palette is built: a house's roof (StructurePieces.BuildHouse), a gable a
 	/// piece builds for itself on posts or walls (a well's, a shrine's, a smithy's), or a turned or hipped roof (a tower's
 	/// pyramid, a hut's cone, a keep's hips), whose texture has no grain to turn with its covering.
 	/// </summary>
@@ -110,7 +110,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A roof follows its palette's roof (2026-10-18, I6e for the houses; I6h for every roofed piece, decided 2026-10-18 after
+	/// A roof follows its palette's roof (for the houses; I6h for every roofed piece, decided after
 	/// I6e): a reed or thatch roof is built steep, slate at 40°, sandstone and sod at 35°, bamboo at 30°, and mud brick flat
 	/// behind a parapet; a palette may name its roofs' class itself (the Valley's low 30° shingles, the Carpathian pastures' 60°
 	/// shakes: BiomeStructureSurface.Pitch). Before, a palette could only lay another material on the kit's roof, so reed lay on
@@ -170,7 +170,7 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("Stables", 1, StructureMaterial.Thatch),
 			new StructureRoofFollower("Watermill", 0, StructureMaterial.Timber),
 			new StructureRoofFollower("Watermill", 1, StructureMaterial.Thatch),
-			// 2026-10-18, I6h: the turf longhouse's sod roof, and every roof a piece builds for itself.
+			// The turf longhouse's sod roof, and every roof a piece builds for itself.
 			new StructureRoofFollower("Longhouse", 1, StructureMaterial.Earth, StructureRoofShape.House, 3.6f, 4f),
 			new StructureRoofFollower("Well", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 0.6f, 1f),
 			new StructureRoofFollower("Shrine", 0, StructureMaterial.Thatch, StructureRoofShape.Gable, 1f, 1.2f),
@@ -187,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("Keep", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 2.9f, 2.5f),
 			new StructureRoofFollower("StiltHut", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.05f, 3.32f),
 			new StructureRoofFollower("Dovecote", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.4f, 3.2f),
-			// 2026-10-19: the town's other buildings, appended so no earlier roof variant moves in first-use order.
+			// the town's other buildings, appended so no earlier roof variant moves in first-use order.
 			new StructureRoofFollower("MarketHall", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.4f),
 			new StructureRoofFollower("MarketHall", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5f),
 			new StructureRoofFollower("ShopHouse", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 3.5f, 3.5f),
@@ -214,7 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("Barn", 0, StructureMaterial.Thatch, StructureRoofShape.Gable, 6.5f, 5.5f),
 			new StructureRoofFollower("HenHouse", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 0.55f, 0.6f),
 			new StructureRoofFollower("HenHouse", 1, StructureMaterial.Thatch, StructureRoofShape.Gable, 1.05f, 0.7f),
-			// 2026-10-19: the cathedral and the outskirts (StructurePieces.Outskirts.cs), appended likewise. The cathedral's transept roof
+			// the cathedral and the outskirts (StructurePieces.Outskirts.cs), appended likewise. The cathedral's transept roof
 			// is laid from its nave's plan at the same pitch; the aisles' lean-tos, the hut's barrel roof and the bothy's lean-to do not follow.
 			new StructureRoofFollower("Cathedral", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.1f),
 			new StructureRoofFollower("Cathedral", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 5.4f, 5.1f),
@@ -222,23 +222,23 @@ namespace FishMMO.Shared.WorldDesign
 			new StructureRoofFollower("WaysideCross", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 0.36f, 0.35f),
 			new StructureRoofFollower("ShepherdHut", 1, StructureMaterial.Earth),
 			new StructureRoofFollower("Bothy", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.3f, 2.75f),
-			// 2026-10-19: a capital's palace (StructurePieces.Palace.cs), appended likewise. The throne hall's nave roof (v0) and its
+			// a capital's palace (StructurePieces.Palace.cs), appended likewise. The throne hall's nave roof (v0) and its
 			// great roof (v1), the wing's hips inside its parapet (v0) and its steep roof between stone gables (v1); the basilica's
 			// aisle lean-tos, the turrets' stone spirelets, the towers' and bartizans' cones and the cupola's lead dome do not follow.
 			new StructureRoofFollower("ThroneHall", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 5f, 5.1f),
 			new StructureRoofFollower("ThroneHall", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 6.5f, 9f),
 			new StructureRoofFollower("PalaceWing", 0, StructureMaterial.Timber, StructureRoofShape.Turned, 3f, 4.3f),
 			new StructureRoofFollower("PalaceWing", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 6f, 6f),
-			// The corner tower (2026-10-19): its square variant's pyramid is the square wall tower's.
+			// The corner tower: its square variant's pyramid is the square wall tower's.
 			new StructureRoofFollower("CornerTower", 1, StructureMaterial.Timber, StructureRoofShape.Turned, 4.85f, 4.6f),
-			// The fantasy wave's thatched cones (2026-10-27), as their builders lay them (GreenCone, the round hut's own roof).
+			// The fantasy set's thatched cones, as their builders lay them (GreenCone, the round hut's own roof).
 			new StructureRoofFollower("Talan", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 1.9f, 1.65f),
 			new StructureRoofFollower("Talan", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 1.9f, 1.65f),
 			new StructureRoofFollower("PileRoundHouse", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.2f, 3.1f + 0.9f),
 			new StructureRoofFollower("PileRoundHouse", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 3.2f, 3.1f + 0.9f),
 			new StructureRoofFollower("RoundHut", 0, StructureMaterial.Thatch, StructureRoofShape.Turned, 2.2f, 1.7f + 0.38f + 0.55f),
 			new StructureRoofFollower("RoundHut", 1, StructureMaterial.Thatch, StructureRoofShape.Turned, 2.6f, 2.2f + 0.38f + 0.9f),
-			// The hanging cloister's hall (v0) and chapel (v1) gables (2026-10-27, StructurePieces.Fantasy.Shapes.cs), as its builder works them.
+			// The hanging cloister's hall (v0) and chapel (v1) gables (StructurePieces.Fantasy.Shapes.cs), as its builder works them.
 			new StructureRoofFollower("HangingCloister", 0, StructureMaterial.Timber, StructureRoofShape.Gable, 0.5f * 6.6f * 1.1f, 6.6f * 0.5f),
 			new StructureRoofFollower("HangingCloister", 1, StructureMaterial.Timber, StructureRoofShape.Gable, 0.5f * 5.2f * 1.3f, 5.2f * 0.5f),
 		};
@@ -247,14 +247,14 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly StructureRoofPitch[] Pitches = (StructureRoofPitch[])Enum.GetValues(typeof(StructureRoofPitch));
 
 		/// <summary>
-		/// Whether a house roof of this kit material follows its palette: thatch (the Roof), timber planks (the ShingleRoof) and,
-		/// since 2026-10-18 (I6h), turf (the Turf: the turf longhouse's sod roof). A tent's cloth does not.
+		/// Whether a house roof of this kit material follows its palette: thatch (the Roof), timber planks (the ShingleRoof) and
+		/// turf (the Turf: the turf longhouse's sod roof). A tent's cloth does not.
 		/// </summary>
 		public static bool Follows(StructureMaterial kitRoof) => kitRoof == StructureMaterial.Thatch || kitRoof == StructureMaterial.Timber || kitRoof == StructureMaterial.Earth;
 
 		/// <summary>
 		/// The pitch a roof material wants: flat for mud brick, else its least pitch (<see cref="StructurePieces.MinimumPitch"/>)
-		/// to the class. Packed earth is pitched sod at 35° (2026-10-18, I6h: "earth roofs are pitched sod/turf, only adobe gives
+		/// to the class. Packed earth is pitched sod at 35° ("earth roofs are pitched sod/turf, only adobe gives
 		/// flat roofs"; I6e had laid it flat).
 		/// </summary>
 		public static StructureRoofPitch PitchOf(StructureMaterial roof)
@@ -279,7 +279,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The pitch a palette entry builds its roof at: the class it names (BiomeStructureSurface.Pitch, 2026-10-18, I6h), else
+		/// The pitch a palette entry builds its roof at: the class it names (BiomeStructureSurface.Pitch), else
 		/// its material's (<see cref="PitchOf(StructureMaterial)"/>).
 		/// </summary>
 		public static StructureRoofPitch PitchOf(BiomeStructureSurface surface)

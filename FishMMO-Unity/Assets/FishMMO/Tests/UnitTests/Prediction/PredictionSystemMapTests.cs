@@ -30,7 +30,7 @@ namespace FishMMO.UnitTests
 	public class PredictionSystemMapTests
 	{
 		/// <summary>Every controller driven by the unified prediction pipeline.</summary>
-		/// <remarks>Every loaded assembly: the ability, cooldown and other controllers are modules' since 2026-11-20.</remarks>
+		/// <remarks>Every loaded assembly: the ability, cooldown and other controllers are modules'.</remarks>
 		private static IEnumerable<Type> PredictableControllers()
 			=> AppDomain.CurrentDomain.GetAssemblies()
 				.SelectMany(a =>

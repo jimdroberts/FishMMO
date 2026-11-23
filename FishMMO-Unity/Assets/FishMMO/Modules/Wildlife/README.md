@@ -9,9 +9,9 @@ and the builder that makes the species prefabs.
 | **Module id** | `wildlife` (`WildlifeModule`) |
 | **Assemblies** | `FishMMO.Wildlife`, `.Server`, `.Editor`, `.Tests` |
 | **Depends on** | The core; Abilities; Combat; NPCs & AI (an animal is an NPC driven by the AI) |
-| **Depended on by** | World Design (the wildlife spawner cut) |
+| **Depended on by** | World Design (the wildlife spawner cut), Mounts (the mounts are drawn with the wildlife bodies) |
 | **Remove together with** | World Design |
-| **Moved** | Out of the core, 2026-11-20 |
+| **Moved** | Out of the core |
 
 ## Folders
 

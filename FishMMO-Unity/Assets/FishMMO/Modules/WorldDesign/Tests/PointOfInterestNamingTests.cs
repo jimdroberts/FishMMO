@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// Point-of-interest naming against the project's real naming assets: every kind names in every
 	/// sampled biome, names replay exactly, race slots resolve for every race, and planet-wide water
-	/// names depend on nothing but their seeds (2026-10-10).
+	/// names depend on nothing but their seeds.
 	/// </summary>
 	[TestFixture]
 	public class PointOfInterestNamingTests
@@ -364,7 +364,7 @@ namespace FishMMO.UnitTests
 				}
 				if (BiomeNamingGenerator.IsSpecNamed(biome.name))
 				{
-					// Its words are its spec file's naming column's (2026-10-18, I2o): the table gives it none.
+					// Its words are its spec file's naming column's: the table gives it none.
 					Assert.AreEqual(0, words.Count, $"{biome.name} is spec-named but the table gives it words.");
 					continue;
 				}

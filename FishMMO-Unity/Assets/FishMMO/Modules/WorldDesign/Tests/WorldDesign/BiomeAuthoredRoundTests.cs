@@ -10,14 +10,14 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// What the authored biome rounds' spec files now give (2026-10-26 on): the values the old-table pins skip for these biomes
+	/// What the authored biome rounds' spec files now give: the values the old-table pins skip for these biomes
 	/// (<see cref="BiomeAuthoredRounds"/>), pinned here biome by biome, and for every authored file that it names only grounds and
 	/// prefabs the generator makes (BiomeProceduralArtTests' own check of that loads the biome assets, so runs only in Unity).
 	/// </summary>
 	public class BiomeAuthoredRoundTests
 	{
 		/// <summary>
-		/// Shrubs stand apart (2026-10-27): the rounds first planted them at four to ten times the old woods' density and the cut
+		/// Shrubs stand apart: the rounds first planted them at four to ten times the old woods' density and the cut
 		/// floor became one unbroken carpet of crowns. A rule's crowns cover at most a twentieth of its ground and a layer's
 		/// shrubs together at most the old Forest floor's share (bushes per 100 m² × crown area).
 		/// </summary>
@@ -103,7 +103,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The air invariants for every authored biome that paints a thin-aired or airless band (decisions 7, 41, 44): every plant
+		/// The air invariants for every authored biome that paints a thin-aired or airless band: every plant
 		/// gated to the living air or riding a ground that paints only there, every flame lighting only a kind sited where the air is
 		/// breathable (the rest Glow), every lived-in kind needing that air, and no burn regime.
 		/// </summary>
@@ -112,7 +112,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			string[] plants = { "Detail_Grass", "Detail_Flowers", "Detail_Lichen", "Detail_Fern", "Detail_Herb", "Detail_Cushion", "Detail_Moss",
 				ProceduralArtCatalogue.BushPrefix, "Tree_" };
-			// Cryoconite holes are dust in the ice, not life (the Glacier round's draft: they pock thin worlds' ice too).
+			// Cryoconite holes are dust in the ice, not life (they pock thin worlds' ice too).
 			var mineral = new HashSet<string> { "LichenCryoconite" };
 			const BiomeAtmosphereRequirement off = BiomeAtmosphereRequirement.Thin | BiomeAtmosphereRequirement.Airless;
 			int offAir = 0;
@@ -203,7 +203,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Details.Single(d => d.Family == Ground.CoralBarren).Temperature, Is.EqualTo(new Vector2(-1f, -0.4f)));
 			Assert.That(e.Rules().Any(r => r.rule.Name == "KelpSugar" && r.rule.Temperature == new Vector2(-1f, -0.4f)), Is.True);
 			Assert.That(e.Rules().Any(r => r.rule.Name == "KelpGolden" && r.rule.Temperature == new Vector2(0.45f, 1f)), Is.True);
-			// Jewel anemones only on steep rock (decision 38's slopeMin).
+			// Jewel anemones only on steep rock (the slopeMin).
 			Assert.That(e.Rules().Single(r => r.rule.Name == "JewelAnemone").rule.Slope, Is.EqualTo(new Vector2(35f, 60f)));
 			Assert.That(e.Description, Does.StartWith("Atlantic shallows"));
 			Assert.That(e.Naming.Onsets, Does.Contain("Ker"));
@@ -240,7 +240,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Details[4].Family, Is.EqualTo(Ground.GravelDiamicton));
 			Assert.That(e.Description, Does.StartWith("The slope sea"));
 		}
-		/// <summary>Round G3 (2026-10-26): the treeless arctic — gneiss, permafrost landforms, the prostrate mat, no fields, frozen moats.</summary>
+		/// <summary>Round G3: the treeless arctic — gneiss, permafrost landforms, the prostrate mat, no fields, frozen moats.</summary>
 		[Test]
 		public void Tundra_IsTheTreelessArctic()
 		{
@@ -270,7 +270,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Treeless arctic tundra"));
 		}
 
-		/// <summary>Round G3 (2026-10-26): the ice cap's interior — charnockite nunataks, katabatic sastrugi, a Thin band, nobody living there.</summary>
+		/// <summary>Round G3: the ice cap's interior — charnockite nunataks, katabatic sastrugi, a Thin band, nobody living there.</summary>
 		[Test]
 		public void IceSheet_IsTheCapsInterior()
 		{
@@ -296,7 +296,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.CaveCrystals().Select(c => c.Kind), Is.EqualTo(new[] { BiomeCaveCrystalKind.ClearQuartz, BiomeCaveCrystalKind.FrostCrystal,
 				BiomeCaveCrystalKind.Hornice }));
 			var kinds = e.SiteKinds().Select(k => k.Kind).ToList();
-			// A keep stands even here since the fantasy wave (2026-10-27: keeps and towers at least 1 in every earth land biome), held by
+			// A keep stands even here since the fantasy set (keeps and towers at least 1 in every earth land biome), held by
 			// the cap's enemies or lying ruined (its .Prefers); every lived-in place stays out.
 			foreach (POIType settled in new[] { POIType.Village, POIType.Town, POIType.City, POIType.Capital, POIType.Port, POIType.Castle,
 				POIType.Fortress, POIType.TradingPost, POIType.Island, POIType.Bay, POIType.SunkenShip, POIType.SmugglersCove })
@@ -311,7 +311,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Muus"));
 		}
 
-		/// <summary>Round G3 (2026-10-26): the valley glacier — greenstone, the glacier landform bundle, snow bridges, a Thin band.</summary>
+		/// <summary>Round G3: the valley glacier — greenstone, the glacier landform bundle, snow bridges, a Thin band.</summary>
 		[Test]
 		public void Glacier_IsTheValleyGlacier()
 		{
@@ -328,7 +328,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			BiomeArtSpec.Scatter seracs = e.Details[1].Scatter.Single(s => s.Name == "Seracs");
 			Assert.That(seracs.Slope, Is.EqualTo(new Vector2(18f, 40f)));
 			Assert.That(e.Main.Scatter.Any(s => s.Name == "Seracs"), Is.False);
-			// Every plant is gated to breathable air (decision 41).
+			// Every plant is gated to breathable air.
 			foreach ((BiomeArtSpec.Layer _, BiomeArtSpec.Scatter rule) in e.Rules())
 			{
 				if (rule.Prefabs.Any(p => p.StartsWith("Detail_Grass", System.StringComparison.Ordinal) || p.StartsWith("Detail_Flowers", System.StringComparison.Ordinal)
@@ -352,7 +352,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("A valley glacier"));
 		}
 
-		/// <summary>Round G4 (2026-10-26): the Carpathian high pastures — flysch, three reaches, shepherds, 60° shakes, stormglass.</summary>
+		/// <summary>Round G4: the Carpathian high pastures — flysch, three reaches, shepherds, 60° shakes, stormglass.</summary>
 		[Test]
 		public void AlpineMeadow_IsTheHighPastures()
 		{
@@ -381,7 +381,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Plai"));
 		}
 
-		/// <summary>Round G4 (2026-10-26): the Afromontane cloud forest — phonolite, four reaches, ambas, teff terraces, red water.</summary>
+		/// <summary>Round G4: the Afromontane cloud forest — phonolite, four reaches, ambas, teff terraces, red water.</summary>
 		[Test]
 		public void MountainSlope_IsTheCloudForest()
 		{
@@ -410,7 +410,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Round G4 (2026-10-26): the moving stone of the summits — granodiorite, the scree landforms the falling stone runs on, and,
+		/// Round G4: the moving stone of the summits — granodiorite, the scree landforms the falling stone runs on, and,
 		/// on the thin-aired and airless worlds that carry it (Belron 1, Ithaewyn 1), bare talus with nothing alive and nobody living there.
 		/// </summary>
 		[Test]
@@ -429,7 +429,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Main.AirBand, Is.EqualTo(BiomeAtmosphereRequirement.Living));
 			Assert.That(e.Details.Single(d => d.AirBand == BiomeAtmosphereRequirement.Thin).Family, Is.EqualTo(Ground.GravelRustScree));
 			Assert.That(e.Details.Single(d => d.AirBand == BiomeAtmosphereRequirement.Airless).Family, Is.EqualTo(Ground.RegolithVacuumTalus));
-			// Every plant is gated to the living air (decisions 7, 41) or rides a ground that only paints there.
+			// Every plant is gated to the living air or rides a ground that only paints there.
 			foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) in e.Rules())
 			{
 				if (rule.Prefabs.Any(p => p.StartsWith("Detail_Grass", System.StringComparison.Ordinal) || p.StartsWith("Detail_Flowers", System.StringComparison.Ordinal)
@@ -455,8 +455,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(kinds.Contains(none), Is.False, $"Scree hosts no {none}");
 			}
-			// Off the breathable air nothing burns (decision 41): every flame lights a kind that is only sited where the air is
-			// breathable (the cave dressing swaps its own lights for glows by the world's air, I2n).
+			// Off the breathable air nothing burns: every flame lights a kind that is only sited where the air is
+			// breathable (the cave dressing swaps its own lights for glows by the world's air).
 			Dictionary<POIType, BiomeSiteKind> sited = e.SiteKinds().ToDictionary(k => k.Kind);
 			foreach (BiomeWayLight light in e.WayLights())
 			{
@@ -475,7 +475,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Round G5 (2026-10-26): the Sonoran scrub of the canal builders — caliche its own rock, the bajada landforms, the saguaro
+		/// Round G5: the Sonoran scrub of the canal builders — caliche its own rock, the bajada landforms, the saguaro
 		/// under its nurse trees, creosote evenly spaced, the barrels leaning to the sun, the canal and the warm sunshell glow.
 		/// </summary>
 		[Test]
@@ -522,7 +522,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Round G5 (2026-10-26): the Zimbabwe plateau's veld — granite its own rock, the kopje and termite-island landforms, the annual
+		/// Round G5: the Zimbabwe plateau's veld — granite its own rock, the kopje and termite-island landforms, the annual
 		/// veld fires with their fire lilies, rain-glow crystals, dry moats and the stone-house kings' walls.
 		/// </summary>
 		[Test]
@@ -566,7 +566,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Head-high golden grass"));
 		}
 	
-		/// <summary>Round G1 (2026-10-26): the primeval beech-and-fir forest on its own mossy sandstone, the fey in its rare corners.</summary>
+		/// <summary>Round G1: the primeval beech-and-fir forest on its own mossy sandstone, the fey in its rare corners.</summary>
 		[Test]
 		public void Forest_IsThePrimevalBeechAndFirWood()
 		{
@@ -606,7 +606,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.VineGrowth().Species.Select(v2 => v2.Species), Is.EqualTo(new[] { "Ivy", "Honeysuckle" }));
 		}
 
-		/// <summary>Round G1 (2026-10-26): the managed lowland wood on chalk and flint — coppice, pasture, glades, hedges, tiles.</summary>
+		/// <summary>Round G1: the managed lowland wood on chalk and flint — coppice, pasture, glades, hedges, tiles.</summary>
 		[Test]
 		public void Woodland_IsTheManagedLowlandWood()
 		{
@@ -639,7 +639,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Open lowland woodland"));
 		}
 
-		/// <summary>Round G7 (2026-10-26): the Saharan erg and reg — Nubian sandstone, the dune mix, three humidity reaches, no fields, drifted walls.</summary>
+		/// <summary>Round G7: the Saharan erg and reg — Nubian sandstone, the dune mix, three humidity reaches, no fields, drifted walls.</summary>
 		[Test]
 		public void Desert_IsTheSaharanErgAndReg()
 		{
@@ -680,7 +680,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("The great sand sea"));
 		}
 
-		/// <summary>Round G7 (2026-10-26): the Cappadocian fairy-chimney country — tuff, the rose and red reaches, rills and caprock mesas, vines and apricots.</summary>
+		/// <summary>Round G7: the Cappadocian fairy-chimney country — tuff, the rose and red reaches, rills and caprock mesas, vines and apricots.</summary>
 		[Test]
 		public void Badlands_IsTheFairyChimneyCountry()
 		{
@@ -715,7 +715,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Fairy-chimney badlands"));
 		}
 
-		/// <summary>Round G7 (2026-10-26): the Afar salt plain — Saltrock, the pan and its ridges, the cold band, brine water, salt rafts, no fields.</summary>
+		/// <summary>Round G7: the Afar salt plain — Saltrock, the pan and its ridges, the cold band, brine water, salt rafts, no fields.</summary>
 		[Test]
 		public void SaltFlat_IsTheAfarSaltPlain()
 		{
@@ -736,7 +736,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.VineGrowth().Species, Is.Empty);
 			Assert.That(e.LinearLines().Select(l => l.Unknown), Is.All.Empty);
 			Assert.That(BiomeWayLights.TryFor(e.WayLights(), POIType.Town, out BiomeWayLight t) && t.Light == BiomeWayLightKind.SaltLamp, Is.True);
-			// The wardenblooms grow only under breathable air (decision 41's world gate).
+			// The wardenblooms grow only under breathable air (the world gate).
 			Assert.That(e.Rules().Where(r => r.rule.Name == "FlowersWardenbloom").Select(r => r.rule.World.air),
 				Is.All.EqualTo(BiomeAtmosphereRequirement.Standard | BiomeAtmosphereRequirement.Thick));
 			Assert.That(e.LookOf("Detail_FlowersWardenbloom").Rigid, Is.True, "salt petals never sway");
@@ -751,7 +751,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Dab"));
 			Assert.That(e.Description, Does.StartWith("A dead lake of salt"));
 		}
-		/// <summary>Round G9 (2026-10-26): the Maldivian atoll shelf — Coralstone, painted and grown under the sea, faru and kandu, cowries, no fields.</summary>
+		/// <summary>Round G9: the Maldivian atoll shelf — Coralstone, painted and grown under the sea, faru and kandu, cowries, no fields.</summary>
 		[Test]
 		public void CoralReef_IsTheMaldivianAtoll()
 		{
@@ -793,7 +793,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Dhi"));
 		}
 
-		/// <summary>Round G9 (2026-10-26): the Baltic amber strand — Beachrock, the tide-banded strand, two vegetation bands, dune landforms, no fields.</summary>
+		/// <summary>Round G9: the Baltic amber strand — Beachrock, the tide-banded strand, two vegetation bands, dune landforms, no fields.</summary>
 		[Test]
 		public void Beach_IsTheAmberStrand()
 		{
@@ -828,7 +828,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Nid"));
 		}
 
-		/// <summary>Round G9 (2026-10-26): the hadal trench — Peridotite, painted and grown under the sea, seeps, no light, no grass, moat wet.</summary>
+		/// <summary>Round G9: the hadal trench — Peridotite, painted and grown under the sea, seeps, no light, no grass, moat wet.</summary>
 		[Test]
 		public void Abyss_IsTheHadalTrench()
 		{
@@ -865,7 +865,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Grund"));
 		}
 
-		/// <summary>Round G6 (2026-10-26): the Pannonian puszta — loess, black earth, soda pans, goldbeard, the kunhalom, reed and whitewash.</summary>
+		/// <summary>Round G6: the Pannonian puszta — loess, black earth, soda pans, goldbeard, the kunhalom, reed and whitewash.</summary>
 		[Test]
 		public void Grassland_IsThePannonianPuszta()
 		{
@@ -888,7 +888,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Meadow-steppe on black earth"));
 		}
 
-		/// <summary>Round G6 (2026-10-26): the High Plains prairie — red beds, wallows and playas, cottonwoods, earth lodges, dry moats.</summary>
+		/// <summary>Round G6: the High Plains prairie — red beds, wallows and playas, cottonwoods, earth lodges, dry moats.</summary>
 		[Test]
 		public void Plains_IsTheMixedGrassPrairie()
 		{
@@ -912,7 +912,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Mixed-grass plains"));
 		}
 
-		/// <summary>Round G6 (2026-10-26): the Sary-Arka steppe — porphyry sopkas, sors, takyrs and bobak mounds, yurts, no vines, burns.</summary>
+		/// <summary>Round G6: the Sary-Arka steppe — porphyry sopkas, sors, takyrs and bobak mounds, yurts, no vines, burns.</summary>
 		[Test]
 		public void Steppe_IsTheSaryArka()
 		{
@@ -926,7 +926,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Details[6].Family, Is.EqualTo(Ground.SoilBobakMound), "the BobakMounds preset paints ground 7");
 			Assert.That(e.LandformList().Select(l => l.Kind), Is.EqualTo(new[] { "Sopka", "BobakMounds", "ObaChain", "SaltPan", "Playa", "Wash" }));
 			Assert.That(e.Rules().Any(r => r.rule.Name == "Bush: Sagebrush" || r.rule.Name == "Bush: Rabbitbrush" || r.rule.Name == "Bush: Juniper"), Is.False,
-				"High Desert's sage is gone (decision 50)");
+				"High Desert's sage is gone");
 			Assert.That(e.VineGrowth().Species, Is.Empty);
 			Assert.That(e.BurnRegime, Is.EqualTo(BiomeBurnRegime.Occasional));
 			Assert.That(e.Habitat, Is.EqualTo(BiomeHabitat.Grassland | BiomeHabitat.Scrub));
@@ -939,7 +939,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Sary"));
 		}
 
-		/// <summary>Round G6 (2026-10-26): terraced schist hill country — terraces and orchards, drystone walls, three climate reaches.</summary>
+		/// <summary>Round G6: terraced schist hill country — terraces and orchards, drystone walls, three climate reaches.</summary>
 		[Test]
 		public void Hills_IsTheTerracedSchistCountry()
 		{
@@ -961,7 +961,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Terraced schist hills"));
 		}
 
-		/// <summary>Round G8 (2026-10-26): the Frisian Wadden — tide-banded saltings, a treeless coast, till and terps, tide four times as strong.</summary>
+		/// <summary>Round G8: the Frisian Wadden — tide-banded saltings, a treeless coast, till and terps, tide four times as strong.</summary>
 		[Test]
 		public void Estuary_IsTheFrisianWadden()
 		{
@@ -984,7 +984,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Naming.Onsets, Does.Contain("Rung"));
 		}
 
-		/// <summary>Round G8 (2026-10-26): the Batiha reed marsh — giant reed, shell marl, tells and dibin islands, reed boardwalks, two reaches.</summary>
+		/// <summary>Round G8: the Batiha reed marsh — giant reed, shell marl, tells and dibin islands, reed boardwalks, two reaches.</summary>
 		[Test]
 		public void Wetlands_IsTheBatihaReedMarsh()
 		{
@@ -1009,7 +1009,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Description, Does.StartWith("Open reed marsh"));
 		}
 
-		/// <summary>Round G8 (2026-10-26): the Swahili mangal — tide-zoned stands, coral rag, pole-walks, tide three times as strong, jungle look.</summary>
+		/// <summary>Round G8: the Swahili mangal — tide-zoned stands, coral rag, pole-walks, tide three times as strong, jungle look.</summary>
 		[Test]
 		public void Mangrove_IsTheSwahiliMangal()
 		{
@@ -1130,7 +1130,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(e.Main.AirBand, Is.EqualTo(BiomeAtmosphereRequirement.Living));
 			Assert.That(e.Details.Single(d => d.AirBand == BiomeAtmosphereRequirement.Thin).Family, Is.EqualTo(Ground.RockRustLeeHornstone));
 			Assert.That(e.Details.Single(d => d.AirBand == BiomeAtmosphereRequirement.Airless).Family, Is.EqualTo(Ground.RockZapShatter));
-			// Every plant is gated to the living air (decisions 7, 41), the rigid mineral wool to the thin and airless worlds.
+			// Every plant is gated to the living air, the rigid mineral wool to the thin and airless worlds.
 			foreach ((BiomeArtSpec.Layer layer, BiomeArtSpec.Scatter rule) in e.Rules())
 			{
 				if (rule.Prefabs.Any(p => p.StartsWith("Detail_Grass", System.StringComparison.Ordinal) || p.StartsWith("Detail_Flowers", System.StringComparison.Ordinal)
@@ -1162,7 +1162,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			{
 				Assert.That(sited.ContainsKey(none), Is.False, $"Rocky Terrain hosts no {none}");
 			}
-			// Off the breathable air nothing burns (decision 41): every flame lights a kind that is only sited where the air is breathable.
+			// Off the breathable air nothing burns: every flame lights a kind that is only sited where the air is breathable.
 			foreach (BiomeWayLight light in e.WayLights())
 			{
 				if (!BiomeGlowLights.Glows(light.Light) && sited.TryGetValue(light.Kind, out BiomeSiteKind site))

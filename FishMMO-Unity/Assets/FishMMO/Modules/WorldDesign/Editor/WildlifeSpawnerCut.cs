@@ -83,8 +83,8 @@ namespace FishMMO.Shared
 
 			/* The ground's height is MEASURED, by a ray down onto the scene's own colliders, not read from the biome map: the
 			 * map stores the planet's metres above its sea level, not scene units, and spawners placed at those heights hung
-			 * hundreds of metres off the ground, so their spawns found no ground and floated off the NavMesh (Moron 1 and 2,
-			 * 2026-11-15). Off the map, or where nothing is under the point, is unknown: the planner treats it as nowhere to
+			 * hundreds of metres off the ground, so their spawns found no ground and floated off the NavMesh (Moron 1 and 2).
+			 * Off the map, or where nothing is under the point, is unknown: the planner treats it as nowhere to
 			 * live. */
 			PhysicsScene physics = scene.GetPhysicsScene();
 			if (!physics.IsValid())

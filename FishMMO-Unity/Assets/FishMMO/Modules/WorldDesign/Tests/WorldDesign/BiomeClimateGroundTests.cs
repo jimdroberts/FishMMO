@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 29 of the biome suite (2026-10-18, the Hills round) and decision 23's text columns: ground layers may carry a
+	/// Decision 29 of the biome suite and the text columns: ground layers may carry a
 	/// temperature and humidity band (TerrainTextureLayer.useClimateBand), climate variants' ground overrides
 	/// (BiomeClimateVariant.TextureLayerOverrides) are painted within their envelopes, and a biome's file may rewrite its
 	/// template's description and naming block. The pure parts: the band curve (the spawn rules' own), the slot keys, the

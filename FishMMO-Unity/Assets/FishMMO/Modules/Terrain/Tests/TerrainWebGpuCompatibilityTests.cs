@@ -11,7 +11,7 @@ using Object = UnityEngine.Object;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>Split from WebGpuRenderingCompatibilityTests (Phase 4 of the core and modules plan, 2026-11-18): the Terrain module's half.</summary>
+	/// <summary>Split from WebGpuRenderingCompatibilityTests: the Terrain module's half.</summary>
 	public class TerrainWebGpuCompatibilityTests
 	{
         [TestCase(GraphicsDeviceType.WebGPU,true,BatchBufferTarget.RawBuffer,true)]

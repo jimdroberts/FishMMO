@@ -402,7 +402,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The distance is measured along the line as it lay before the move, as RiverShaping.EndOnto does for a scene's
 		/// tributary: measured as the rows moved, from each to its already moved neighbour, the first step counted the move
 		/// itself as distance along, the ease fell away within a few rows and the end rows were pulled apart (Flo Monolith's
-		/// river 1 ended in a 40 m segment; 2026-10-12). Eased over three times the move, no row passes its neighbour.
+		/// river 1 ended in a 40 m segment). Eased over three times the move, no row passes its neighbour.
 		/// </remarks>
 		private static void ShiftEnd(List<float> x, List<float> z, bool atEnd, Vector2 to)
 		{

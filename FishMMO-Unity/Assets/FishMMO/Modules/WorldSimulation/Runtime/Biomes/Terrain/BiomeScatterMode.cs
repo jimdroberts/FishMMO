@@ -7,66 +7,66 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// Which way a spawn rule's instances are turned (2026-10-26, phase SCATTER-MODES, decision 34): the prefab's +Z is laid along the
+	/// Which way a spawn rule's instances are turned: the prefab's +Z is laid along the
 	/// heading. APPEND-ONLY (the value is serialised).
 	/// </summary>
 	public enum BiomeScatterFacing : byte
 	{
 		/// <summary>Any heading, by each instance's own draw (as before the modes existed).</summary>
 		Random = 0,
-		/// <summary>Down the fall line (sastrugi, decision 64; wall plants facing out of their wall).</summary>
+		/// <summary>Down the fall line (sastrugi; wall plants facing out of their wall).</summary>
 		Downslope = 1,
-		/// <summary>Along the nearest stored landform line of the rule's biome (decision 90: Tidal Fracture's ridges, a canyon's floor).</summary>
+		/// <summary>Along the nearest stored landform line of the rule's biome (Tidal Fracture's ridges, a canyon's floor).</summary>
 		AlongLine = 2,
-		/// <summary>Along the axis of the rule's biome's landform under it (decision 85: a tessera weave's strike).</summary>
+		/// <summary>Along the axis of the rule's biome's landform under it (a tessera weave's strike).</summary>
 		Strike = 3,
-		/// <summary>Downwind, with the scene's prevailing wind (drift tails, decisions 81/82).</summary>
+		/// <summary>Downwind, with the scene's prevailing wind (drift tails).</summary>
 		Wind = 4,
-		/// <summary>With the giant planet's corotating plasma (decision 71): prograde, the moon's local east.</summary>
+		/// <summary>With the giant planet's corotating plasma: prograde, the moon's local east.</summary>
 		Plasma = 5,
-		/// <summary>Toward the equator, where the noon sun stands (decision 90's meridian: penitentes).</summary>
+		/// <summary>Toward the equator, where the noon sun stands (the meridian: penitentes).</summary>
 		Sunward = 6,
 	}
 
-	/// <summary>Which way a spawn rule's instances are tilted off the vertical (SCATTER-MODES). APPEND-ONLY.</summary>
+	/// <summary>Which way a spawn rule's instances are tilted off the vertical. APPEND-ONLY.</summary>
 	public enum BiomeScatterLean : byte
 	{
 		None = 0,
-		/// <summary>Toward the equator (decision 77: barrel cacti lean south; decision 90: penitentes to the meridian).</summary>
+		/// <summary>Toward the equator (barrel cacti lean south; penitentes to the meridian).</summary>
 		Sunward = 1,
 		/// <summary>Down the fall line.</summary>
 		Downslope = 2,
 		/// <summary>Downwind.</summary>
 		Wind = 3,
-		/// <summary>Conformed to the ground's normal, whatever its slope (decision 72: details laid flat; wall-mounted plants).</summary>
+		/// <summary>Conformed to the ground's normal, whatever its slope (details laid flat; wall-mounted plants).</summary>
 		Ground = 4,
 	}
 
-	/// <summary>What a spawn rule's instances gather by (SCATTER-MODES). APPEND-ONLY.</summary>
+	/// <summary>What a spawn rule's instances gather by. APPEND-ONLY.</summary>
 	public enum BiomeScatterAnchor : byte
 	{
 		None = 0,
-		/// <summary>Downwind of an obstacle: trees, boulders, the scene's structures and ways (decisions 81/82: drift tails, tumbleweeds).</summary>
+		/// <summary>Downwind of an obstacle: trees, boulders, the scene's structures and ways (drift tails, tumbleweeds).</summary>
 		Lee = 1,
-		/// <summary>Under a named tree's crown (decision 77: young saguaros under their nurse trees).</summary>
+		/// <summary>Under a named tree's crown (young saguaros under their nurse trees).</summary>
 		Nurse = 2,
-		/// <summary>Within reach of a named shrub (decision 77: grass sheltered under the bushes).</summary>
+		/// <summary>Within reach of a named shrub (grass sheltered under the bushes).</summary>
 		Shelter = 3,
-		/// <summary>At the foot of a cliff: gentle ground with a steep face just uphill (decision 61: a notch at plain level).</summary>
+		/// <summary>At the foot of a cliff: gentle ground with a steep face just uphill (a notch at plain level).</summary>
 		CliffFoot = 4,
-		/// <summary>On the steep face itself (decision 61: wall-mounted flowers and ferns).</summary>
+		/// <summary>On the steep face itself (wall-mounted flowers and ferns).</summary>
 		Wall = 5,
-		/// <summary>On a cliff's seep lines, the strata where water weeps out (decision 50: the hanging garden).</summary>
+		/// <summary>On a cliff's seep lines, the strata where water weeps out (the hanging garden).</summary>
 		SeepLine = 6,
 		/// <summary>Near the scene's points of interest of named kinds (round barns by farms).</summary>
 		NearSite = 7,
 	}
 
-	/// <summary>How a spawn rule's instances are laid out across the ground (SCATTER-MODES). APPEND-ONLY.</summary>
+	/// <summary>How a spawn rule's instances are laid out across the ground. APPEND-ONLY.</summary>
 	public enum BiomeScatterPattern : byte
 	{
 		None = 0,
-		/// <summary>Evenly, one to a jittered lattice cell (decision 77: creosote's root-war spacing).</summary>
+		/// <summary>Evenly, one to a jittered lattice cell (creosote's root-war spacing).</summary>
 		Even = 1,
 		/// <summary>In broad patches of the rule's own (chimney fields, dogtown colonies).</summary>
 		Fields = 2,
@@ -77,7 +77,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A spawn rule's SCATTER MODES (2026-10-26, phase SCATTER-MODES, decision 34; the queued modes of decisions 50, 61, 64, 71, 72, 77, 81,
+	/// A spawn rule's SCATTER MODES (the queued modes of decisions 50, 61, 64, 71, 72, 77, 81,
 	/// 82, 85, 90): how its instances are turned, tilted, sized, anchored and laid out. Every field at its default is OFF and the rule scatters
 	/// exactly as before, drawing nothing more (<see cref="IsOff"/>; <see cref="Signature"/> is empty so no mark or fingerprint changes).
 	/// </summary>
@@ -99,7 +99,7 @@ namespace FishMMO.Shared.Biomes
 	{
 		[Tooltip("Which way instances are turned (their +Z laid along the heading). Random = any heading, as before.")]
 		public BiomeScatterFacing Facing;
-		[Tooltip("Degrees added to the facing's heading (decision 64: sastrugi 30° off the fall line).")]
+		[Tooltip("Degrees added to the facing's heading (sastrugi 30° off the fall line).")]
 		public float FacingOffset;
 		[Tooltip("Half-width, degrees, each instance strays round the heading (from its own turn draw).")]
 		public float FacingSpread;
@@ -121,7 +121,7 @@ namespace FishMMO.Shared.Biomes
 		public float PatternMetres;
 		[Tooltip("Even: each point's jitter as a share of the pitch (≤ 0.45). Fields/RainCells/Rings: share of lattice places holding a patch or ring (0 = the default).")]
 		[Range(0f, 1f)] public float PatternShare;
-		[Tooltip("Tree channel and GPU-scattered details: a power-law size draw over the scale range, N(> s) ∝ s^−α (decision 72: craterlets). 0 = off, as before.")]
+		[Tooltip("Tree channel and GPU-scattered details: a power-law size draw over the scale range, N(> s) ∝ s^−α (craterlets). 0 = off, as before.")]
 		[Range(0f, 3.9f)] public float SizePower;
 
 		/// <summary>True when every mode is off: the rule scatters exactly as before.</summary>
@@ -223,38 +223,38 @@ namespace FishMMO.Shared.Biomes
 
 		// ── The drafts' modes by name (infra map M3, Z3–Z21) ─────────
 
-		/// <summary>Z3 (decisions 81/82): tails and tumbleweeds downwind of trees, boulders, walls and ruts, laid along the wind.</summary>
+		/// <summary>Z3: tails and tumbleweeds downwind of trees, boulders, walls and ruts, laid along the wind.</summary>
 		public static BiomeScatterMode LeeDrift(float tailMetres = 8f, float floor = 0f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Wind, 0f, 8f)
 			.Anchored(BiomeScatterAnchor.Lee, tailMetres, floor);
-		/// <summary>Z4 (decision 64): along the fall line, offset (sastrugi 30°).</summary>
+		/// <summary>Z4: along the fall line, offset (sastrugi 30°).</summary>
 		public static BiomeScatterMode DownslopeAligned(float offset = 30f, float spread = 6f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Downslope, offset, spread);
-		/// <summary>Z5 (decision 90): along the nearest stored landform line.</summary>
+		/// <summary>Z5: along the nearest stored landform line.</summary>
 		public static BiomeScatterMode AlongLandformLine(float spread = 6f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.AlongLine, 0f, spread);
-		/// <summary>Z6 (decision 85): along the strike of the landform under it (TesseraWeave).</summary>
+		/// <summary>Z6: along the strike of the landform under it (TesseraWeave).</summary>
 		public static BiomeScatterMode AlongStrike(float spread = 5f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Strike, 0f, spread);
-		/// <summary>Z7 (decision 90): penitentes leaning to the meridian, their blades across it.</summary>
+		/// <summary>Z7: penitentes leaning to the meridian, their blades across it.</summary>
 		public static BiomeScatterMode MeridianLean(float degrees = 18f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Sunward, 90f, 6f)
 			.Leaning(BiomeScatterLean.Sunward, degrees);
-		/// <summary>Z8 (decision 71): turned to the plasma wind.</summary>
+		/// <summary>Z8: turned to the plasma wind.</summary>
 		public static BiomeScatterMode PlasmaFacing(float spread = 10f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Plasma, 180f, spread);
-		/// <summary>Z9 (decision 77): young plants under named nurse trees' crowns.</summary>
+		/// <summary>Z9: young plants under named nurse trees' crowns.</summary>
 		public static BiomeScatterMode Nursed(string nurses, float reachMetres = 1.5f) => default(BiomeScatterMode).Anchored(BiomeScatterAnchor.Nurse, reachMetres, 0f, nurses);
-		/// <summary>Z10 (decision 77): grass within a metre of named bushes.</summary>
+		/// <summary>Z10: grass within a metre of named bushes.</summary>
 		public static BiomeScatterMode UnderShrub(string shrubs, float reachMetres = 1f) => default(BiomeScatterMode).Anchored(BiomeScatterAnchor.Shelter, reachMetres, 0.05f, shrubs);
-		/// <summary>Z11 (decision 77): even spacing (pitch from the density when 0).</summary>
+		/// <summary>Z11: even spacing (pitch from the density when 0).</summary>
 		public static BiomeScatterMode EvenSpacing(float pitchMetres = 0f, float jitter = 0.2f) => default(BiomeScatterMode).Patterned(BiomeScatterPattern.Even, pitchMetres, jitter);
-		/// <summary>Z12 (decision 77): leaning toward the sun (barrels lean south in the north).</summary>
+		/// <summary>Z12: leaning toward the sun (barrels lean south in the north).</summary>
 		public static BiomeScatterMode LeanSunward(float degrees = 14f) => default(BiomeScatterMode).Leaning(BiomeScatterLean.Sunward, degrees);
-		/// <summary>Z13 (decision 72): power-law sizes.</summary>
+		/// <summary>Z13: power-law sizes.</summary>
 		public static BiomeScatterMode PowerLaw(float alpha = 1.6f) => default(BiomeScatterMode).PowerSized(alpha);
-		/// <summary>Z14 (decision 72): conformed flat on the ground (a detail rule also keeps alignToTerrainNormal on).</summary>
+		/// <summary>Z14: conformed flat on the ground (a detail rule also keeps alignToTerrainNormal on).</summary>
 		public static BiomeScatterMode LaidFlat() => default(BiomeScatterMode).Leaning(BiomeScatterLean.Ground, 0f);
-		/// <summary>Z16 (decision 61): at the foot of a cliff.</summary>
+		/// <summary>Z16: at the foot of a cliff.</summary>
 		public static BiomeScatterMode CliffFoot(float reachMetres = 12f, float floor = 0f) => default(BiomeScatterMode).Anchored(BiomeScatterAnchor.CliffFoot, reachMetres, floor);
-		/// <summary>Z17 (decision 61): on the steep face, facing out of it and conformed to it.</summary>
+		/// <summary>Z17: on the steep face, facing out of it and conformed to it.</summary>
 		public static BiomeScatterMode WallMounted(float minSlope = 58f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Downslope, 0f, 12f)
 			.Leaning(BiomeScatterLean.Ground, 0f).Anchored(BiomeScatterAnchor.Wall, minSlope);
-		/// <summary>Z17 (decision 50): on a cliff's seep lines (the hanging garden), facing out of the face.</summary>
+		/// <summary>Z17: on a cliff's seep lines (the hanging garden), facing out of the face.</summary>
 		public static BiomeScatterMode SeepLine(float spacingMetres = 14f) => default(BiomeScatterMode).Faced(BiomeScatterFacing.Downslope, 0f, 15f)
 			.Leaning(BiomeScatterLean.Ground, 0f).Anchored(BiomeScatterAnchor.SeepLine, spacingMetres);
 		/// <summary>Z18 (Desert): in the scene's shared rain cells.</summary>
@@ -290,7 +290,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The modes' arithmetic (SCATTER-MODES), pure and thread-safe: what the cut's scatter, the tests and (by mirror) the GPU detail scatter
+	/// The modes' arithmetic, pure and thread-safe: what the cut's scatter, the tests and (by mirror) the GPU detail scatter
 	/// compute. With a mode off each function is the identity (a factor of 1, the heading or size it was given).
 	/// </summary>
 	public static class BiomeScatterModes
@@ -332,7 +332,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// A POWER-LAW size draw (decision 72): the share along a scale range [<paramref name="lo"/>, <paramref name="hi"/>] at which a size
+		/// A POWER-LAW size draw: the share along a scale range [<paramref name="lo"/>, <paramref name="hi"/>] at which a size
 		/// drawn from a truncated Pareto, N(&gt; s) ∝ s^−α, stands for the uniform draw <paramref name="t"/>; t itself when α ≤ 0 or the range is
 		/// empty. Monotone in t, 0 at 0, 1 at 1.
 		/// </summary>
@@ -383,7 +383,7 @@ namespace FishMMO.Shared.Biomes
 		public static readonly float[] CliffSamples = { 0.25f, 0.5f, 0.75f, 1f };
 
 		/// <summary>
-		/// A CLIFF FOOT's weight (decision 61): the steepest face (45° → 60°) among the slopes (degrees) found uphill at
+		/// A CLIFF FOOT's weight: the steepest face (45° → 60°) among the slopes (degrees) found uphill at
 		/// <see cref="CliffSamples"/> of the reach, a nearer one counting more (a far one half), times how gentle the ground itself is
 		/// (none past 42°): a notch at plain level, not a ledge on the face.
 		/// </summary>
@@ -402,7 +402,7 @@ namespace FishMMO.Shared.Biomes
 		public static float SeepPhase(int biomeID, float spacing) => Unit(Mix((uint)biomeID ^ 0x5EE91AE5u)) * spacing;
 
 		/// <summary>
-		/// A SEEP LINE's weight (decision 50): on steep ground only, peaking on the contours phase + k·spacing where a stratum weeps, across a
+		/// A SEEP LINE's weight: on steep ground only, peaking on the contours phase + k·spacing where a stratum weeps, across a
 		/// band of 8 % of the spacing (at least 0.5 m).
 		/// </summary>
 		public static float SeepLine(float worldY, float slope, float spacing, float phase)
@@ -477,7 +477,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The EVEN lattice's point in the cell [x0, x1) × [z0, z1), if one falls there (decision 77: creosote): a lattice of
+		/// The EVEN lattice's point in the cell [x0, x1) × [z0, z1), if one falls there (creosote): a lattice of
 		/// <paramref name="pitch"/> turned by the seed, each node jittered by up to <paramref name="jitter"/> of the pitch. False when the
 		/// cell holds none (the pitch is never under a cell, so it holds at most one, the first found in node order).
 		/// </summary>
@@ -651,7 +651,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// What the modes' anchors stand by on one tile (SCATTER-MODES): discs (trees, boulders, shrubs, a shrub's detail cells) with their
+	/// What the modes' anchors stand by on one tile: discs (trees, boulders, shrubs, a shrub's detail cells) with their
 	/// prefab's name, bucketed for the lee, nurse and shelter queries. Built once before the anchored rules run; read-only (thread-safe) after.
 	/// </summary>
 	public sealed class BiomeScatterObstacles
@@ -764,7 +764,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A rule's modes as the GPU detail scatter and the client's tree renderer read them (SCATTER-MODES): two words per prototype in the
+	/// A rule's modes as the GPU detail scatter and the client's tree renderer read them: two words per prototype in the
 	/// terrain's record (TerrainScatterModes), the second two 16-bit headings as shares of a turn. 0 and 0 = no mode: every instance exactly as
 	/// before. MIRRORED by FishDetailScatter.compute (ScatterModeYaw, ScatterModeLeanUp, ScatterModeSize): change both together.
 	/// </summary>

@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Forest)
 				.Wildlife(BiomeHabitat.Forest)
 				.Moat(BiomeMoatWater.Wet)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its vines, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -39,7 +39,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
 					(POIType.OreVein, 1f), (POIType.CrystalFormation, 1f), (POIType.AncientTree, 1f), (POIType.HerbGrove, 1.5f),
 					(POIType.Dockyard, 0.3f), (POIType.Watermill, 0.3f), (POIType.LumberMill, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 1.2f), (POIType.GoblinWarren, 1.2f), (POIType.HauntedManor, 0.8f),
 					(POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.ManorHouse, 0.5f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f),
@@ -61,7 +61,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Monastery, "Timber", 1.5f)
 				.Prefers(POIType.Ruins, "Burned", 1.5f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1.4f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.SpiderThicket, "Brood Nest", 1.5f)
 				.Prefers(POIType.StepPyramid, "Fallen Fane", 1.6f)
 				.Prefers(POIType.LostCity, "Ruined Forum", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.GrowsVines(1f, 1f, 0.45f, 0.22f, ("Ivy", 0.85f), ("Creeper", 0.15f))
 				.Gathers("Silverleaf Patch", "Morel Cluster", "Ancient Oak")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 1f)

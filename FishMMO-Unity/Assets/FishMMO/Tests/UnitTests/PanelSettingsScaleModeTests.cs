@@ -10,8 +10,8 @@ namespace FishMMO.UnitTests
 	/// Pins how the one shared <see cref="PanelSettings"/> asset scales the interface.
 	/// </summary>
 	/// <remarks>
-	/// The interface is laid out for a 1280x960 (4:3) screen and fitted to the window (Jim, 11-16: "UI should be scaled to fit
-	/// 4:3 aspect. 1280x960 should be the default size for everything"): ScaleWithScreenSize, reference 1280x960, Expand. The
+	/// The interface is laid out for a 1280x960 (4:3) screen and fitted to the window (scaled to fit
+	/// 4:3; 1280x960 is the default size for everything): ScaleWithScreenSize, reference 1280x960, Expand. The
 	/// whole 1280x960 area is always on screen, and a wider (or taller) window adds room rather than enlarging everything.
 	/// It replaced matching a 1200x800 reference on WIDTH, which grew the interface with a wide browser window — too large on
 	/// the web even at 75%. Every panel was authored for 1200x800, which fits inside 1280x960 at every aspect ratio.

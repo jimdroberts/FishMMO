@@ -21,8 +21,8 @@ using UnityEngine;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The World Simulation module's operator commands (moved out of the Staff module, Phase 4 of the core and modules plan,
-	/// 2026-11-18): <c>/gm weather</c> and <c>/gm clock</c> (read-only reports both sets reach) and <c>/admin weather</c>
+	/// The World Simulation module's operator commands (moved out of the Staff module):
+	/// <c>/gm weather</c> and <c>/gm clock</c> (read-only reports both sets reach) and <c>/admin weather</c>
 	/// (adds to a scene's air, spawns and steers storm cells, switches the director). Weather changes gameplay, so a game
 	/// master may look but not touch.
 	/// </summary>

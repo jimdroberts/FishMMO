@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Pets module (2026-11-20): the module declares itself, the scene server adopts the pet system by label, and a pet is
+	/// The Pets module: the module declares itself, the scene server adopts the pet system by label, and a pet is
 	/// the NPCs module's <see cref="IAICompanion"/> and the core's <see cref="IPersistedPet"/>.
 	/// </summary>
 	[TestFixture]

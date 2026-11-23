@@ -32,7 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// Only on land (a frozen sea is the Ice Shelf's: <see cref="SceneGeneration.IceShelfMetres(uint, float, float)"/>),
 	/// only on a world with water to make ice of, and only once a biome holds the Ice Sheet water role (its
-	/// template's Water Role; found by the name "Ice Sheet" until 2026-10-15) — without one, ice would be painted
+	/// template's Water Role; found by the name "Ice Sheet" formerly) — without one, ice would be painted
 	/// as whatever grows there.
 	/// </para>
 	/// </remarks>

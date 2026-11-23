@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Airships and their landing stages, for the cloud worlds (2026-10-14: "small floating islands, flying ships"): a
+	/// Airships and their landing stages, for the cloud worlds ("small floating islands, flying ships"): a
 	/// skiff and a sky-cog, timber hulls hung under stitched-hide gasbags in rope netting, steered by sail-fins; and the
 	/// timber stage they tie up at, cantilevered out from an island's edge over the void.
 	/// </summary>

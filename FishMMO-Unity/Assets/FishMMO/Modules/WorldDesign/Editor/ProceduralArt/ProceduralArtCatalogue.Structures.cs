@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Every structure payload file: the surfaces' look arrays (their maps and finish albedos as slices, ProceduralArtLookArrays;
-		/// no single map is written since 2026-10-28), three meshes a variant; and the cave glow art's.
+		/// no single map is written), three meshes a variant; and the cave glow art's.
 		/// </summary>
 		public static IEnumerable<string> StructurePayloadPaths()
 		{
@@ -51,7 +51,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return path;
 			}
-			// The run-time cave cover's mesh, built in the structures' steps too (BiomeArtGenerator.CaveCover.cs, 2026-10-20).
+			// The run-time cave cover's mesh, built in the structures' steps too (BiomeArtGenerator.CaveCover.cs).
 			foreach (string path in CaveCoverPayloadPaths())
 			{
 				yield return path;

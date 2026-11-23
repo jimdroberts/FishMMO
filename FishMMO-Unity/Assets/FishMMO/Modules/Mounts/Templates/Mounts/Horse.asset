@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bd708e51cafd34ff886b5f135027047, type: 3}
+  m_Name: Horse
+  m_EditorClassIdentifier: FishMMO.Mounts::FishMMO.Shared.MountBuffTemplate
+  FXPrefabReference:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: 'Riding a horse: the fastest thing on four legs. Casting, a hit, deep water, a ladder or a roof overhead gets you off; click it off to dismount.'
+  icon:
+    m_AssetGUID: 1b1702d99fb5666ba010360b8f4313ae
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Duration: 0
+  TickRate: 0
+  OnTickEvents: []
+  MaxStacks: 1
+  IsPermanent: 0
+  IsDebuff: 0
+  BreaksOnAction: 1
+  GroundSpeedMultiplier: 1.7
+  JumpHeightMultiplier: 1.3
+  LeapSpeed: 0
+  MaxSlopeDegrees: 0
+  Flies: 0
+  FlySpeed: 15
+  FlySprintMultiplier: 2
+  FlightStaminaPerSecond: 3
+  GlideSinkSpeed: 3
+  GlideSpeedShare: 0.6
+  Body:
+    Length: 1.65
+    Depth: 0.62
+    Width: 0.46
+    LegLength: 0.9
+    LegThickness: 0.09
+    NeckLength: 0.78
+    NeckRaise: 55
+    HeadLength: 0.56
+    HeadSize: 0.22
+    EarSize: 0.13
+    Horns: 0
+    HornSize: 0
+    TailLength: 0.65
+    TailRaise: 15
+    WingSpan: 0
+    HoverHeight: 0
+    Back: {r: 0.45, g: 0.28, b: 0.16, a: 1}
+    Belly: {r: 0.38, g: 0.24, b: 0.14, a: 1}
+    Accent: {r: 0.12, g: 0.1, b: 0.09, a: 1}
+  Material: {fileID: 2100000, guid: c7ef29e7cdd2b2a379c664139c775833, type: 2}
+  SaddleBack: 0.05
+  GaitRunSpeed: 10.200001

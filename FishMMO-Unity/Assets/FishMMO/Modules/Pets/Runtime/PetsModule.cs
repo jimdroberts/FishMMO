@@ -2,12 +2,12 @@ using FishMMO.Core;
 using FishMMO.Shared;
 
 [assembly: GameModule(typeof(FishMMO.Shared.PetsModule))]
-// The controllers are parts every such character gets as it wakes (2026-11-21); no prefab authors them.
+// The controllers are parts every such character gets as it wakes; no prefab authors them.
 [assembly: FishMMO.Shared.CharacterPart(typeof(FishMMO.Shared.PetController), typeof(FishMMO.Shared.Core.IPlayerCharacter))]
 
 namespace FishMMO.Shared
 {
-	/// <summary>The Pets module (2026-11-20). See the module's README.</summary>
+	/// <summary>The Pets module. See the module's README.</summary>
 	public sealed class PetsModule : GameModule
 	{
 		/// <summary>The module's id.</summary>

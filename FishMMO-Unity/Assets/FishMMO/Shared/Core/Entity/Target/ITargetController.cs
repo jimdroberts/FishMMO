@@ -53,7 +53,7 @@ namespace FishMMO.Shared.Core
 		/// the pinned character itself, on nothing, or on something that cannot be pinned. Owning client only.
 		/// </summary>
 		/// <remarks>
-		/// One press per change (11-16). The strict toggle it replaced always released a held pin first, so moving a pin took
+		/// One press per change. The strict toggle it replaced always released a held pin first, so moving a pin took
 		/// two presses.
 		/// </remarks>
 		/// <returns>True when a target is pinned after the call.</returns>

@@ -90,14 +90,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Its rock, cell by cell.</b> Each cell of wall wears the rock it stands in as the biome there takes it
-	/// (2026-10-15): the geology's where that biome's template accepts it, else the biome's own, as the cliff rocks, river
+	///: the geology's where that biome's template accepts it, else the biome's own, as the cliff rocks, river
 	/// boulders and fall ledges beside it are (BiomeTemplateArt.RockRule), so a bog's canyon is not walled in the
 	/// province's sandstone. A wall across two biomes or two provinces changes rock where they do: each chunk's mesh has
 	/// one sub-mesh per rock in it. Before, the whole scene's walls wore the one rock most of their cells stood on, the
 	/// geology's whatever grew there.
 	/// </para>
 	/// <para>
-	/// <b>Re-dressed on a repaint (2026-10-16).</b> The cut keeps the wall cells and the geology's rock under each
+	/// <b>Re-dressed on a repaint.</b> The cut keeps the wall cells and the geology's rock under each
 	/// (<see cref="SceneCanyonWallCells"/>, beside the wall meshes), so "Repaint biomes" gives the walls the rock the templates
 	/// give them now (<see cref="Redress"/>) without the erosion that made the geology grid. Only the rock moves: each chunk's
 	/// mesh keeps its vertices and its triangles, regrouped into one sub-mesh per rock exactly as a cut with those templates

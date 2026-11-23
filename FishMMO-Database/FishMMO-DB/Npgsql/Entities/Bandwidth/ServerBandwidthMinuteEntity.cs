@@ -14,8 +14,8 @@ namespace FishMMO.Database.Npgsql.Entities
 	/// The write is <c>INSERT … ON CONFLICT DO UPDATE SET col = EXCLUDED.col</c>, never an
 	/// addition: a retry after a lost commit reply rewrites the same numbers, and a second sample
 	/// that lands in the same minute rewrites the minute's running total. An additive upsert
-	/// would count a retried write twice, which is the failure the idempotency work of
-	/// 2026-09-25 exists to prevent.
+	/// would count a retried write twice, which is the failure the idempotency work
+	/// exists to prevent.
 	/// </para>
 	/// <para>
 	/// <b>Keyed by <see cref="InstanceID"/> as well as the server's name.</b> A restart starts

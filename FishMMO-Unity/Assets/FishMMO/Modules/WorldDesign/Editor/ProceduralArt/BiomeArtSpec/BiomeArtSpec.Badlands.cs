@@ -10,19 +10,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Badlands</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Badlands()
 		{
-			// The fairy-chimney country of Cappadocia in its Byzantine–Seljuk centuries (biome round, approved 2026-10-18, authored
-			// 2026-10-26): a high pale plateau of soft volcanic tuff carved by rain into knife-ribbed rose-and-cream ravines, forests of
+			// The fairy-chimney country of Cappadocia in its Byzantine–Seljuk centuries:
+			// a high pale plateau of soft volcanic tuff carved by rain into knife-ribbed rose-and-cream ravines, forests of
 			// capped chimneys under dark basalt hats, honeycombed cones and table mesas; flat-floored washes of pink silt where bush-vines,
 			// apricots, pumpkins and oleaster grow in tiny walled plots; dovecote cliffs whitewashed round their pigeon holes; a gorge with
 			// a green stream under oriental planes. Its people live INSIDE the rock: houses, chapels and whole monasteries hollowed from the
 			// cones and cliffs with built ashlar fronts and flat rolled-earth roofs, a pierced rock citadel over every town, cities beneath
 			// the ground behind rolling millstone doors, stone-portalled hans on the road. Its fantasy is the peris': their green-gold light
 			// in the cones at dusk, a wine-dark vintage, the White Mountain's ash-grey breath, an earth-dragon asleep in the red valley. Two
-			// reaches by temperature (decision 29): ROSE (t < 0.45: cream and rose tuff, vines, apricot, gypsophila) and RED (t ≥ 0.45:
+			// reaches by temperature: ROSE (t < 0.45: cream and rose tuff, vines, apricot, gypsophila) and RED (t ≥ 0.45:
 			// iron-red tuff, bare rills, oleaster and Christ's thorn); and by humidity WATERED (h ≥ −0.5: orchards, planes) against BARE.
-			// LATER (I9 T1): every ground and object texture as Badlands' own variant (the rose-cream Tuff, the Ürgüp cream limestone);
+			// LATER: every ground and object texture as Badlands' own variant (the rose-cream Tuff, the Ürgüp cream limestone);
 			// until then the grounds are its own recipes and the barks, leaves and stones the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Winedark V(0.84, 0.62, 0.42) and Ashfall V(0.58, 0.08, 0.70).
+			// LATER (no spec column yet): rare looks Winedark V(0.84, 0.62, 0.42) and Ashfall V(0.58, 0.08, 0.70).
 			return E("Badlands", L(Ground.AshLapilliSteppe,
 					// The plateau steppe: bulbous meadow-grass that browns by midsummer, beaded goatgrass, wild barley on the watered side.
 					Grass("GrassBulbousPoa", 30f), Grass("GrassGoatgrass", 20f, 220), Band(Grass("GrassWildBarley", 4f, 180), -1f, 1f, -0.6f, 1f),
@@ -37,12 +37,12 @@ namespace FishMMO.Shared.WorldDesign
 					Moded(Plants("FlowersHollyhock", 3f), BiomeScatterMode.NearSites("Village,Town,Monastery,Hermitage", 60f)),
 					Moded(Plants("DebrisSherdsTerracotta", 3f, 128), BiomeScatterMode.NearSites("Village,Town,Ruins,AbandonedFarm", 150f, 0.02f)),
 					// The oriental plane at every village fountain and han (the AncientTree's look), moss in its shade.
-					// LATER (SCATTER-MODES near-water anchor): the gorge floors' planes within 25 m of water; the fountains stand in.
+					// LATER (near-water anchor): the gorge floors' planes within 25 m of water; the fountains stand in.
 					Band(Moded(Trees(0.01f, 30f, 20f, "OrientalPlane"), BiomeScatterMode.NearSites("Village,Spring,Waystation,TradingPost", 30f)), -1f, 1f, -0.55f, 1f),
 					Moded(Plants("MossPlaneShade", 1f), BiomeScatterMode.Nursed("OrientalPlane", 6f)),
 					// The hollow stump of a fallen plane in the gorges.
 					With(Moded(Logs("Hollow plane stumps", 0.002f, 60f, Wood("Stump_PlaneHollow")), BiomeScatterMode.NearSites("Gorge", 40f)), r => r.AlignToNormal = false),
-					// Guano and feathers cast down at the cliff feet, thickest under the dovecotes. LATER (I7): the dovecote cliffs themselves.
+					// Guano and feathers cast down at the cliff feet, thickest under the dovecotes. LATER: the dovecote cliffs themselves.
 					Moded(Plants("DebrisPigeon", 1f, 128), BiomeScatterMode.CliffFoot(8f)),
 					Moded(Plants("DebrisPigeon", 6f, 128), BiomeScatterMode.NearSites("AbandonedFarm,Village,Monastery", 60f)),
 					Plants("DebrisPumice", 2f, 128), Stones(Pebbles("Tuff"), 3f), Stones(Pebbles("Obsidian"), 0.4f)),
@@ -58,7 +58,7 @@ namespace FishMMO.Shared.WorldDesign
 					// d1: the wash floors (the Wash landform paints them): pink silt in curling plates, wild barley, Ravenna grass along the
 					// axes, oleasters, Christ's thorn and the copper briar at the edges, hollyhocks, pumice drift lines. The road along it is a
 					// loose flood-smoothed trace.
-					// LATER (SCATTER-MODES near-water anchor): the Ravenna grass within 15 m of water; the wash axes stand in.
+					// LATER (near-water anchor): the Ravenna grass within 15 m of water; the wash axes stand in.
 					With(D(Ground.ClayWashFloor, 64f, 2f, 0f, 6f, Grass("GrassBulbousPoa", 10f), Grass("GrassWildBarley", 12f, 200), Grass("GrassRavenna", 6f, 160),
 						Plants("FlowersHollyhock", 1f), Bush("ChristsThorn", 0.6f), Band(Bush("CopperBriar", 0.4f), -1f, 0.55f), Moded(Plants("HerbHarmal", 1f), BiomeScatterMode.NearSites("Village,Town", 200f)),
 						Trees(0.008f, 18f, 15f, "Oleaster"), With(Logs("Oleaster snags", 0.003f, 40f, Wood("Snag_Oleaster")), r => r.AlignToNormal = false),
@@ -104,9 +104,9 @@ namespace FishMMO.Shared.WorldDesign
 				// Own rock tuff (its formations); approved: accepts the lava caps' basalt, the dark domes' andesite, pumice, obsidian (the
 				// knapping floors) and the white lake limestone of the caps. Sandstone, shale, conglomerate and granite dropped.
 				.Accepts(RockTypes.Tuff, RockTypes.Basalt, RockTypes.Andesite, RockTypes.Pumice, RockTypes.Obsidian, RockTypes.Limestone)
-				// Tuff caves, grottoes and pumice-and-obsidian workings; basalt lava tubes. LATER (I2n-e F25): the Hewn cave style of the
-				// underground cities (rectangular chisel-faced galleries, 3–8 levels, vent shafts, stair ramps) and the rolling millstone door
-				// (I7); LATER (I9 S3): tuff dripstone at 0.2×, salt crusts and soot fans in the halls.
+				// Tuff caves, grottoes and pumice-and-obsidian workings; basalt lava tubes. LATER: the Hewn cave style of the
+				// underground cities (rectangular chisel-faced galleries, 3–8 levels, vent shafts, stair ramps) and the rolling millstone door;
+				// LATER: tuff dripstone at 0.2×, salt crusts and soot fans in the halls.
 				.CaveShell(CaveForm.Cave, "Tuff").CaveShell(CaveForm.Grotto, "Tuff").CaveShell(CaveForm.Mine, "Tuff").CaveShell(CaveForm.LavaTube, "Basalt")
 				// Fire opal nodules in the vesicles, the Badlands' mahogany-banded obsidian, and the peris' water-clear perilight crusts glowing
 				// cold green-gold, lining the ways it lights.
@@ -114,14 +114,14 @@ namespace FishMMO.Shared.WorldDesign
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Pulse)
 				// Rill nets on the steep tuff, caprock mesas, flat-floored washes and the crag a citadel stands on, all carved at the cut.
-				// LATER (I7 I23/I24): the citadel's rooms and the town round its foot on the CitadelCrag pad; the rock-cut dwellings in the cones.
+				// LATER: the citadel's rooms and the town round its foot on the CitadelCrag pad; the rock-cut dwellings in the cones.
 				.Landforms("Rills", "CaprockMesa", "Wash", "CitadelCrag")
 				.Look(BiomeLookClass.Desert)
 				// Approved: the honeycombed cliffs' and rock churches' bats, pigeons and owls beside the desert and mountain life.
 				.Wildlife(BiomeHabitat.Desert | BiomeHabitat.Mountain | BiomeHabitat.Cave | BiomeHabitat.Ruins)
-				// LATER (AMBIENT-LIFE): rock-pigeon flocks out of the dovecote cliffs (the signature), alpine swifts, lesser kestrels in the
+				// LATER: rock-pigeon flocks out of the dovecote cliffs (the signature), alpine swifts, lesser kestrels in the
 				// chimneys, griffon vultures, ravens, hoopoe, rock nuthatch, dusk bats from the churches, tortoise, starred agama, fox, winter
-				// wolves, donkey trains and camel caravans on the rut-cut roads (I18); the peri lights between the chimneys at dusk, and very
+				// wolves, donkey trains and camel caravans on the rut-cut roads; the peri lights between the chimneys at dusk, and very
 				// rarely the earth-dragon in the red valley.
 				.Moat(BiomeMoatWater.Dry)
 				// Rose-silt water: tuff-milk pink-ochre shallows, olive-brown pools.
@@ -190,7 +190,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Tower, 1f), (POIType.RuinedTower, 0.2f), (POIType.Mine, 0.2f), (POIType.Monument, 0.2f), (POIType.Capital, 0.1f),
 					(POIType.Portal, 0.1f), (POIType.LeyNexus, 0.1f), (POIType.FallenStar, 0.1f),
 					(POIType.Peak, 1f), (POIType.Pass, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.Bridge, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.4f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -241,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Graveyard, "Earthen", 1.2f)
 				.Prefers(POIType.Graveyard, "Railed", 0f)
 				.Prefers(POIType.Ruins, "Stone", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -264,10 +264,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Necropolis, "City of the Dead", 1.3f)
 				.Prefers(POIType.Pyramid, "Stepped", 1.2f)
 				.Prefers(POIType.RockCutFacade, "Treasury", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7 + I24 rock-cut dwellings): Badlands' signature pieces and their variants — the chimney house (Village "Chimney
+				// (the fantasy set's variants end here)
+				// LATER (rock-cut dwellings): Badlands' signature pieces and their variants — the chimney house (Village "Chimney
 				// Village" 2.0), the cliff village of stacked ashlar fronts and tuff steps ("Hewn" 1.2/1.4), the rock church with its Fresco
-				// interior (Temple 2.0; I29), the rock monastery round its court (Monastery 2.0), the stylite chimney (Hermitage 1.8), the rock
+				// interior (Temple 2.0), the rock monastery round its court (Monastery 2.0), the stylite chimney (Hermitage 1.8), the rock
 				// citadel (Castle/Keep/Fortress "Hisar" 1.8), the underground city behind its millstone door (DungeonEntrance 2.0), the han with
 				// its carved portal (Waystation/TradingPost 1.6), the dovecote cliff (AbandonedFarm "Dovecotes" 1.4), the rock wine press and
 				// vineyard tower, the rock tombs (Crypt 1.4, Graveyard 1.2), the potters' yard, the village fountain under its plane, the tuff
@@ -278,10 +278,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Hide, 0.3f)
 				.Favours(BiomeStructureStyle.Timber, 0.05f)
 				.Favours(BiomeStructureStyle.Iron, 0f)
-				// The palette: honey-cream tuff ashlar with fine tooling and thin lime joints, flat rolled-earth roofs (decisions 20/30), fronts
+				// The palette: honey-cream tuff ashlar with fine tooling and thin lime joints, flat rolled-earth roofs, fronts
 				// growing out of the living rock, carved rope mouldings and rosettes, walnut-brown carved doors, poplar poles, black wrought
 				// grilles, cream goat-hair cloth and flat-woven banners in pomegranate red; the plateau farms' straw-and-pumice mud brick; the
-				// caravan camps' goat-hair tents at 30°. LATER (NEW-SURFACES U6, I29): TuffAshlar, RolledEarth, CarvedTuff, Cicim, Fresco (the
+				// caravan camps' goat-hair tents at 30°. LATER: TuffAshlar, RolledEarth, CarvedTuff, Cicim, Fresco (the
 				// rock churches' painted interiors) and AshBrick as Badlands' own surfaces; the shared ones tinted stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Sandstone, ErgHex("#d8c4a2"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Sandstone, ErgHex("#d8c4a2"))

@@ -173,7 +173,7 @@ namespace FishMMO.Water
 				// Still in its channel (on the river, or just over the brink): its banks are the river's, not rock in the way.
 				/* Past the lip's LINE by less than a metre and a half, wherever across it the strip is: measured from the lip's
 				 * middle, every strip more than 1.5 m out from it met the shallow bed and the banks at the brink at once and was
-				 * thrown out sideways, flat white wings standing out from the top of every wide fall (2026-10-13). */
+				 * thrown out sideways, flat white wings standing out from the top of every wide fall. */
 				var fromLip = new Vector2(next.x - lip.x, next.z - lip.z);
 				bool inChannel = fallen < BrinkClearMetres && Vector2.Dot(fromLip, new Vector2(ahead.x, ahead.z)) < 1.5f;
 				if (!inChannel)
@@ -230,7 +230,7 @@ namespace FishMMO.Water
 							 * along it, less the harder it struck; only where that leaves it next to nothing does it slide off
 							 * downhill, or spill off a flat ledge the fall's way, at a walking pace. Kept at most of its speed
 							 * and pushed outward by a share of it, a strip that met a bank's wall was flung sideways off the
-							 * fall in a wide arc and on across the ground (2026-10-08). */
+							 * fall in a wide arc and on across the ground. */
 							Vector3 along = (v + normal * into) * Mathf.Lerp(0.8f, 0.45f, steep);
 							if (along.sqrMagnitude < 1f)
 							{
@@ -262,11 +262,11 @@ namespace FishMMO.Water
 					/* Water that comes down on the ground out of the pool spreads and soaks away where it lands; it does not
 					 * skate on across the bank. Counted on any ground the strip runs along without falling (less than
 					 * one metre down in two), not only level ground: on the talus at a cliff's foot (normals under 0.6 up) a
-					 * strip ran on as a white rope crawling along the ground for metres (2026-10-13). A steep face it
+					 * strip ran on as a white rope crawling along the ground for metres. A steep face it
 					 * slides down it keeps, and a ledge's top (a prop) it runs over and spills off. */
 					/* Along the ground, not touching it this very step: a strip sliding down a slope is pushed clear and falls
 					 * back every other step, and counting only the steps it touched reset the run each time it was clear, so
-					 * the rope crawled on for ten metres and more (2026-10-13, the 70 m fall's foot). The run ends only when
+					 * the rope crawled on for ten metres and more (the 70 m fall's foot). The run ends only when
 					 * the strip leaves the ground or drops more steeply than it runs (down a face). */
 					Vector3 stepped = next - p;
 					float steppedRun = stepped.magnitude;

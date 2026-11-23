@@ -7,7 +7,7 @@ using FishMMO.Shared.Biomes;
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// The sea's look at the eye by the biomes of the coast round it (2026-10-18, phase I2h; <see cref="BiomeSeaLooks.Coast"/>),
+	/// The sea's look at the eye by the biomes of the coast round it (<see cref="BiomeSeaLooks.Coast"/>),
 	/// for the underwater pass (<see cref="WaterSurface"/>): peat-brown off a bog, milky off a glacier, the scene's own sea out
 	/// past every coast with a look of its own.
 	/// </summary>
@@ -72,7 +72,7 @@ namespace FishMMO.Water
 			return true;
 		}
 
-		// ── The surface's coastal look (2026-10-18, I2k) ─────────────
+		// ── The surface's coastal look ─────────────
 
 		private Texture2D coastTexture;
 		private byte[] coastBuiltFrom;

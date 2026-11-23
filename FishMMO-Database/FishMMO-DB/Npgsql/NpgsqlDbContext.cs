@@ -171,6 +171,10 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<CharacterWaypointEntity> CharacterWaypoints { get; set; }
 		/// <summary>Per-character activated-portal bitmask pages.</summary>
 		public DbSet<CharacterPortalEntity> CharacterPortals { get; set; }
+		/// <summary>Per-character marked location (the Mark spell): one row per character.</summary>
+		public DbSet<CharacterMarkEntity> CharacterMarks { get; set; }
+		/// <summary>Account-wide fog of war: one encoded explored map per account per scene.</summary>
+		public DbSet<AccountMapFogEntity> AccountMapFog { get; set; }
 		/// <summary>
 		/// Every item a character owns, in whichever container holds it.
 		/// </summary>

@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2g-b of the biome suite (2026-10-25, decision 55): the landform ZONE band on ground layers and spawn rules. Off (the
+	/// The landform ZONE band on ground layers and spawn rules. Off (the
 	/// default everywhere) nothing changes: no mark, no fingerprint, no weight; on, a layer or rule is weighted by one part of its
 	/// biome's stored landforms (or, turned round, by its absence), and the painter and the scatter both read it.
 	/// </summary>

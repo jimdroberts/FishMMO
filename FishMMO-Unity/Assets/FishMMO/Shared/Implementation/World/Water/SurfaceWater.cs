@@ -53,13 +53,13 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// How far over a height a body's floor may lie and the height still be in or over that body, metres (2026-10-21): a
+		/// How far over a height a body's floor may lie and the height still be in or over that body, metres: a
 		/// swimmer's feet, a footstep, a camera stand at most this far under the bed of the water they are in.
 		/// </summary>
 		public const float FloorReach = 1f;
 
 		/// <summary>
-		/// Area water that stands at more than one level over a place (2026-10-21: a cave's stream under a lava tube's river on
+		/// Area water that stands at more than one level over a place (a cave's stream under a lava tube's river on
 		/// the level over it, a lake on the hill over both): which surface a height is in or over, not only the highest.
 		/// </summary>
 		public interface IStackedAreaSource : ILavaAreaSource
@@ -93,7 +93,7 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// A sea that dims the daylight on its way down to its floor (2026-10-25, phase I2m, decision 36 (c)): how much per metre, the
+		/// A sea that dims the daylight on its way down to its floor (phase I2m, decision 36 (c)): how much per metre, the
 		/// scene cut's (BiomeSeaFloors.DaylightExtinction); 0 for none.
 		/// </summary>
 		public interface IDaylightSource : ISource

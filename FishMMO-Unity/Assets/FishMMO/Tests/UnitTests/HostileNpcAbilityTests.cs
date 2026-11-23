@@ -96,7 +96,7 @@ namespace FishMMO.UnitTests
 		{
 			Dictionary<string, string> names = new Dictionary<string, string>();
 
-			// The archetypes are the NPCs module's templates since 2026-11-20.
+			// The archetypes are the NPCs module's templates.
 			string templates = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/NPCs/Templates");
 			if (!ProjectFiles.FolderExists(templates))
 			{

@@ -16,7 +16,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal sealed partial class State
 		{
 			/// <summary>
-			/// Sites a tidal island's kind (<see cref="PointOfInterestKindRule.TidalIslandMetres"/>, 2026-10-27: a tidal abbey): on an island
+			/// Sites a tidal island's kind (<see cref="PointOfInterestKindRule.TidalIslandMetres"/>: a tidal abbey): on an island
 			/// the scene holds whole, no larger than <see cref="MaxTidalIslandM2"/>, whose shore comes within the rule's reach of bigger land
 			/// across sea no deeper than <see cref="MaxCausewayDepth"/> (the causeway its shaper lays); at the island's heart, facing the
 			/// crossing.

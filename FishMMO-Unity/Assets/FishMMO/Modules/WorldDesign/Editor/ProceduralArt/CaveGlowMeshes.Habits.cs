@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace FishMMO.Shared.WorldDesign
 {
-	// ── Cave crystal habits (2026-10-26, NEW-CRYSTALS, decision 34) ────
+	// ── Cave crystal habits ────
 	//
 	// The habits the biome drafts name for their cave crystals beyond the first seven: grape clusters, twins, helictites, massive
 	// columns, coralloid sprays, foliated books, fibrous sheaves, rosettes, octahedra, bipyramids, dendrites, pearls, floss, cups,

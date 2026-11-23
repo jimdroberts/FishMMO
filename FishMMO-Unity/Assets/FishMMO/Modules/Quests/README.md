@@ -10,7 +10,7 @@ turns in and abandons them, quest givers, and the quest ECA actions and conditio
 | **Depends on** | The core |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17. The plan grouped quests with achievements as "Objectives"; achievements stay in the core, because every system records accomplishments (`Accomplishments.Record`) and many core assets name an `AchievementTemplate`. |
+| **Moved** | Out of the core. The plan grouped quests with achievements as "Objectives"; achievements stay in the core, because every system records accomplishments (`Accomplishments.Record`) and many core assets name an `AchievementTemplate`. |
 
 ## Folders
 

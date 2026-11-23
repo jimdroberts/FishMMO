@@ -22,13 +22,13 @@
 //               (1 cruising, more when hurrying), z the turn (-1 .. 1: the body bent into the turn), w spare
 //   _Tint       rgb times the mesh colour (a school's members differ a little; reef fish take their colour
 //               from it), a how much of the animal is drawn (the distance dither; a jelly's opacity)
-//   _Surface    (2026-10-25) x how much of the sea's swell it rides (1 afloat: the sea's own wave sum at its origin,
+//   _Surface    x how much of the sea's swell it rides (1 afloat: the sea's own wave sum at its origin,
 //               FishWaterSwell.hlsl), y its own light's brightness now, z that light's phase in cycles (AmbientGlow, on the
 //               CPU from the shared clock), w spare
 
 #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishAmbient.hlsl"
-// The sea's wave sum (globals only), for what floats at the surface (2026-10-25).
+// The sea's wave sum (globals only), for what floats at the surface.
 #include "Assets/FishMMO/Modules/Water/Shaders/FishWaterSwell.hlsl"
 
 CBUFFER_START(UnityPerMaterial)
@@ -40,7 +40,7 @@ CBUFFER_START(UnityPerMaterial)
     half _SrcBlend;
     half _DstBlend;
     half _ZWrite;
-    half4 _EmitColour;   // its own light at its brightest (linear, HDR); a 1 when it has one (2026-10-25)
+    half4 _EmitColour;   // its own light at its brightest (linear, HDR); a 1 when it has one
     half4 _EmitPattern;  // x 0 even, 1 a wave along the body; y crests at once; z how sharp; w the share lit between crests
     float _LifeInstanceBase; // where this kind's run starts in _LifeInstances (set per camera by SeaLifeSystem)
 CBUFFER_END
@@ -98,7 +98,7 @@ void SeaLifeSwim(inout float3 p, inout float3 n, float2 body, float2 part, float
     {
         // A wave running nose to tail, growing toward the tail (the head barely moves), the body
         // bent into the turn. A fish sweeps side to side; a whale's flukes beat up and down. An eel
-        // (2026-10-25) ripples along its whole length, the head swinging too: anguilliform.
+        // ripples along its whole length, the head swinging too: anguilliform.
         float envelope = mode == 6 ? 0.3 + 0.7 * a : 0.03 + a * a;
         float wave = sin(phase - a * 6.2831853 / max(0.2, _WaveLength));
         float swing = _Amplitude * strength * envelope * wave;
@@ -221,7 +221,7 @@ struct SeaLifeVertex
     float glow;
 };
 
-/// <summary>How much of its light a point of the body has now (2026-10-25): the brightness, and a wave running along the body.</summary>
+/// <summary>How much of its light a point of the body has now: the brightness, and a wave running along the body.</summary>
 float SeaLifeGlow(float along, float4 surface)
 {
     if (_EmitColour.a <= 0.0)
@@ -313,7 +313,7 @@ half4 SeaLifeForwardFragment(SeaLifeVaryings input, FRONT_FACE_TYPE face : FRONT
 #endif
     // With the cloud shadow (the main light's cookie): under cloud the light is boosted for the cookie to dim (FishGrassBlades.hlsl).
     Light mainLight = GetMainLight(shadowCoord, input.positionWS, half4(1.0, 1.0, 1.0, 1.0));
-    // Under the sea the daylight dims with depth (2026-10-25, FishSeaDaylight; 1 where the scene sets none): a deep fish is dark.
+    // Under the sea the daylight dims with depth (FishSeaDaylight; 1 where the scene sets none): a deep fish is dark.
     float seaDaylight = FishSeaDaylight(input.positionWS);
     float3 light = mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation) * seaDaylight;
     float nl = dot(n, mainLight.direction);

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Every biome on every world has its own looks for what grows and runs in it (2026-10-15: "at least 10 variations for
+	/// Every biome on every world has its own looks for what grows and runs in it ("at least 10 variations for
 	/// every biome/planet type to fit atmosphere and fantasy vibe"): BiomeLooks.
 	/// </summary>
 	public class BiomeLooksTests

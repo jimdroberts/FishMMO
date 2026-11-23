@@ -5,7 +5,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Leaderboards module (Phase 2 pilot): PvP and PvE boards read from the database by the scene server's
+	/// The Leaderboards module (the pilot module): PvP and PvE boards read from the database by the scene server's
 	/// <c>LeaderboardSystem</c>, shown in the Leaderboards window and the arena board's standings.
 	/// </summary>
 	/// <remarks>

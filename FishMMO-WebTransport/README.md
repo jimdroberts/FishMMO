@@ -192,9 +192,9 @@ mismatch.
 | ABI | Surface |
 |---|---|
 | 1 | original surface up to `wt_server_set_allow_native_clients` |
-| 2 | `+ wt_server_set_limits` (2026-09-07) |
-| 3 | `+ wt_abi_version`, `wt_tls_provider`, `WT_ERR_TLS_BACKEND` (2026-09-09) |
-| 4 | `+ wt_get_global_counters`, `wt_client_get_connection_stats` (2026-09-25) |
+| 2 | `+ wt_server_set_limits` |
+| 3 | `+ wt_abi_version`, `wt_tls_provider`, `WT_ERR_TLS_BACKEND` |
+| 4 | `+ wt_get_global_counters`, `wt_client_get_connection_stats` |
 
 ## API
 
@@ -351,7 +351,7 @@ FishMMO-WebTransport/
 | `build/` | root `.gitignore` — the general `[Bb]uild/` rule |
 | `build_win_nuget/` | root `.gitignore` — an explicit entry; intermediates of `build_windows_nuget.ps1` (per-flavour msquic extraction, shared `obj/`, `last_tls.txt`) |
 | `build_win/` | root `.gitignore` — an explicit entry; intermediates of `build_windows_cross.sh` |
-| `build_win_schannel/` | root `.gitignore` — an explicit entry; the pre-2026-09-09 name of `build_win_nuget/`, safe to delete |
+| `build_win_schannel/` | root `.gitignore` — an explicit entry; the old name of `build_win_nuget/`, safe to delete |
 | `openssl_cache.cmake` | root `.gitignore` — an explicit entry |
 
 `[Bb]uild/` matches that exact directory name only, which is why every other

@@ -10,7 +10,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The Appearance module (2026-11-20): how a player's body looks. Race proportions and blend shapes
+	/// The Appearance module: how a player's body looks. Race proportions and blend shapes
 	/// (<see cref="CharacterAppearanceManager"/>), body regions hidden under armour (<see cref="BodyVisibilityManager"/>) and the
 	/// equipment drawn on the body (<see cref="EquipmentVisualController"/>), each added to every player as a character part.
 	/// </summary>

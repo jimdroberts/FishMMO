@@ -258,7 +258,7 @@ namespace FishMMO.Shared.Biomes
 			{
 				return 1.0;
 			}
-			// The host's year for a moon: its own month would average a few days of the year it is carried round (2026-10-10).
+			// The host's year for a moon: its own month would average a few days of the year it is carried round.
 			double period = CelestialMath.OrbitHours(system, CelestialMath.HostPlanet(body));
 			if (double.IsInfinity(period) || double.IsNaN(period) || period <= 0.0)
 			{

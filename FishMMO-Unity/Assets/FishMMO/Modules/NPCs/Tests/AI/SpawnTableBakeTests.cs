@@ -221,7 +221,7 @@ namespace FishMMO.UnitTests.AI
 		{
 			/* An empty or prefab-less entry is skipped at runtime without a word, so a spawner that
 			 * has only those stands in the scene and never spawns — which is how the Dungeon's
-			 * spawners and the tutorial banker shipped until 2026-09-16. */
+			 * spawners and the tutorial banker shipped formerly. */
 			List<string> empty = new List<string>();
 			List<string> pending = new List<string>();
 			int scanned = 0;
@@ -236,7 +236,7 @@ namespace FishMMO.UnitTests.AI
 						scanned++;
 						List<string> problems = new List<string>();
 						SpawnTableBaker.Validate(scene, spawner, problems);
-						/* A generated spawner left empty on purpose (a world boss lair's boss, 2026-10-10) says so with
+						/* A generated spawner left empty on purpose (a world boss lair's boss) says so with
 						 * PendingSpawnerContent: a designer's to-do, listed, not a silent defect. */
 						if (problems.Count > 0 && spawner.TryGetComponent(out PendingSpawnerContent marked))
 						{

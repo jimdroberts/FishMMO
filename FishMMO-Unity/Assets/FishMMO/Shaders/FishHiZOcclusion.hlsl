@@ -1,6 +1,6 @@
 #ifndef FISH_HIZ_OCCLUSION_INCLUDED
 #define FISH_HIZ_OCCLUSION_INCLUDED
-// Moved out of FishTerrainInstancing.compute (2026-10-21) so the grass's compute culls by the same pyramid and rule.
+// Moved out of FishTerrainInstancing.compute so the grass's compute culls by the same pyramid and rule.
 // Plain HLSL: no Unity headers. The C# side binds it with FishDepthPyramid.Bind for each kernel that reads it.
 
 // ── Occlusion (FishDepthPyramid) ──────────────────────────────────────

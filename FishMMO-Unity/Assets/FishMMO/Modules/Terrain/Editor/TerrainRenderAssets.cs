@@ -46,14 +46,14 @@ namespace FishMMO.Client
 			// client build ships it; until then the editor loads it by path and a build draws a plain green.
 			if (terrain.MossAlbedo == null) terrain.MossAlbedo = AssetDatabase.LoadAssetAtPath<Texture2D>(MossShaderGlobals.AlbedoPath);
 			if (terrain.MossNormal == null) terrain.MossNormal = AssetDatabase.LoadAssetAtPath<Texture2D>(MossShaderGlobals.NormalPath);
-			// The cave cover (2026-10-20): its compute and shader, and its art, generated with the structures (same rule as the moss).
+			// The cave cover: its compute and shader, and its art, generated with the structures (same rule as the moss).
 			if (terrain.CaveCoverCompute == null) terrain.CaveCoverCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(CaveCoverRenderer.ComputeAssetPath);
 			if (terrain.CaveCoverShader == null) terrain.CaveCoverShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveCoverRenderer.ShaderAssetPath);
 			if (terrain.CaveCoverMesh == null) terrain.CaveCoverMesh = AssetDatabase.LoadAssetAtPath<Mesh>(CaveCoverRenderer.MeshAssetPath);
-			// The rock seam fillets (2026-10-21): their compute and shader, same rule.
+			// The rock seam fillets: their compute and shader, same rule.
 			if (terrain.RockFilletsCompute == null) terrain.RockFilletsCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(RockFillets.ComputeAssetPath);
 			if (terrain.RockFilletShader == null) terrain.RockFilletShader = AssetDatabase.LoadAssetAtPath<Shader>(RockFillets.ShaderAssetPath);
-			// The client's own terrain heightmap draw (2026-10-28): its compute and shader, same rule.
+			// The client's own terrain heightmap draw: its compute and shader, same rule.
 			if (terrain.TerrainHeightmapCompute == null) terrain.TerrainHeightmapCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(TerrainHeightmapSystem.ComputeAssetPath);
 			if (terrain.TerrainHeightmapShader == null) terrain.TerrainHeightmapShader = AssetDatabase.LoadAssetAtPath<Shader>(TerrainHeightmapSystem.ShaderAssetPath);
 			EditorUtility.SetDirty(terrain);

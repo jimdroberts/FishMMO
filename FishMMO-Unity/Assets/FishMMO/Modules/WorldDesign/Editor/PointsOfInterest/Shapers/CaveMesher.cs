@@ -30,10 +30,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Pieces.</b> Triangles go to the 32 m cube their centre is in (the scene's collider chunk size); each piece's
 	/// vertices are its own copies, projected for metre UVs along their triangle's dominant axis. No piece is decimated on
 	/// its own (it would crack against its neighbour); the whole welded net is thinned once before it is cut into pieces
-	/// (<see cref="Simplify"/>, 2026-10-18), and the pieces are culled whole by <see cref="CaveVisibility"/>.
+	/// (<see cref="Simplify"/>), and the pieces are culled whole by <see cref="CaveVisibility"/>.
 	/// </para>
 	/// <para>
-	/// <b>The habitat on every vertex (2026-10-20).</b> Each vertex carries its <see cref="CaveHabitat"/> sample — COLOR = (wet,
+	/// <b>The habitat on every vertex.</b> Each vertex carries its <see cref="CaveHabitat"/> sample — COLOR = (wet,
 	/// daylight, sediment, trodden), UV channel 3 = (organic, glow) — measured on the welded net before it is thinned, so the
 	/// rock's shading (FishCaveRock.hlsl) and the run-time cover read where the cave is damp, lit, silted, worn, rich and glowing.
 	/// </para>
@@ -226,7 +226,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			KeepLargestPiece(total, tris);
 			double kept = clock.Elapsed.TotalSeconds;
-			// The habitat at every vertex of the net (2026-10-20, CaveHabitat: the cave's own "terrain paint"), before it is thinned,
+			// The habitat at every vertex of the net (CaveHabitat: the cave's own "terrain paint"), before it is thinned,
 			// so the thinning keeps the edges of the lanes, the drip clusters and the glow's patches (see Simplify). Read-only and
 			// measured once, so the workers share it.
 			var habitat = CaveHabitat.For(system);
@@ -400,7 +400,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A face on the shell's outer face or its buried top, not the void's face: never seen. Its centre lies well off the void,
 		/// under the ground's skin, and no cave air lies out of its seen side within a cell and a half: the void's distance can
-		/// jump where a far primitive drops out of its reckoning (2026-10-21, a lava tube's branch beside a cavern on Moron 2, "we
+		/// jump where a far primitive drops out of its reckoning (a lava tube's branch beside a cavern on Moron 2, "we
 		/// see issues around these coordinates with cave walls"), and a face of the cave's own wall read as 4 m into the rock and
 		/// was dropped — a hole a player saw the world through. Looking out of the face settles it: an outer face looks out at
 		/// the hill's rock, a wall at the cave.

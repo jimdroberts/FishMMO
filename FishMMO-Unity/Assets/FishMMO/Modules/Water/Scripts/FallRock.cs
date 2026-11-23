@@ -47,7 +47,7 @@ namespace FishMMO.Water
 		public const float UndergroundMetres = 2f;
 
 		/// <summary>
-		/// Whether the fall is a cave's (2026-10-20, caves livened): its lip lies under the terrain over it, so the terrain is not
+		/// Whether the fall is a cave's (caves livened): its lip lies under the terrain over it, so the terrain is not
 		/// the ground it falls on but the hill over it. Its rock is the cave's own (live colliders, its pieces' meshes), and rock it
 		/// comes down on facing up is the ground it spreads over and soaks into.
 		/// </summary>

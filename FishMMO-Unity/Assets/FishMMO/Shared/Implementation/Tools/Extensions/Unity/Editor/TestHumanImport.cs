@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 
 		/// <summary>The clips that cycle (a sit and a guard are a slow breath held round); the punches, the cast, the roll and
 		/// the death play once.</summary>
-		private static readonly string[] Looping = { "SwimSurface", "SwimUnder", "SwimTread", "Climb", "SitGround", "SitSeat", "Block" };
+		private static readonly string[] Looping = { "SwimSurface", "SwimUnder", "SwimTread", "Climb", "SitGround", "SitSeat", "Block", "Ride" };
 
 		/// <summary>
 		/// The rest pose's own take, first in the file so the importer takes the model's default pose (and so the avatar's
@@ -44,7 +44,7 @@ namespace FishMMO.Shared
 			"LeftUpLeg", "RightUpLeg", "LeftLeg", "RightLeg", "LeftToeBase", "RightToeBase",
 		};
 
-		public override uint GetVersion() => 8;
+		public override uint GetVersion() => 9;
 
 		private void OnPreprocessModel()
 		{
@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// After the model imports, points every EMPTY clip slot of <see cref="AnimationSetPath"/> whose name matches one of
-		/// the model's clips at that clip (2026-11-22: the Deflect parry). A clip's sub-asset id is the importer's to assign,
+		/// the model's clips at that clip (the Deflect parry). A clip's sub-asset id is the importer's to assign,
 		/// so a new take is wired here, by name, rather than by a hand-written reference. Slots already set are left alone.
 		/// </summary>
 		private static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)

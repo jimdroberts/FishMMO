@@ -5,7 +5,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The ground is drawn after the other opaques (TerrainHeightmapSystem.DrawnLastQueue): the same picture, measured
-	/// cheaper in the browser (2026-11-05). Pinned so a refactor that drops the queue (back to the shader's Geometry−100)
+	/// cheaper in the browser. Pinned so a refactor that drops the queue (back to the shader's Geometry−100)
 	/// shows here rather than as a lost millisecond.
 	/// </summary>
 	public class GroundDrawOrderTests

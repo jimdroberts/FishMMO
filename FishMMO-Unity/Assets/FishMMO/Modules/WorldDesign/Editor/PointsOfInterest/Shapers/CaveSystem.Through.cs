@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Ways through the rock (2026-10-18: "Caves should connect to/try to connect to each other so pathways through mountains
+	/// Ways through the rock ("Caves should connect to/try to connect to each other so pathways through mountains
 	/// are valid"): the links that join two caves' systems, and a second mouth on the far side of a cave's own hill with a
 	/// passage from it to the first mouth's trunk, so the hill can be walked through.
 	/// </summary>
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// and both sides half way back to that, less its top (the bore's roof and the noise's amplitude): as a passage's walker
 		/// reckons it (Walker.Cover), with the sides half way back too.
 		/// The middle alone let a link run along a steep hillside's contour with metres over its middle and its downhill wall out
-		/// of the ground (2026-10-26, Moron 2: 3–5 m over the middle, the downhill side 2 m out under a 60° face): the shell
+		/// of the ground (Moron 2: 3–5 m over the middle, the downhill side 2 m out under a 60° face): the shell
 		/// stops a skin under the ground, so the cave lay open to the sky there.
 		/// And over the node's rounded end ahead of it, straight on and both ways between that and its sides: the bore is a chain
 		/// of rounded ends, so where the way bends the end's outer shoulder stands past both sides (on the outside of the bend,

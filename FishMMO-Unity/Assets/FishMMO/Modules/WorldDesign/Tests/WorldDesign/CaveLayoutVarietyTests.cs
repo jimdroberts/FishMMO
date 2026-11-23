@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
 	/// A cave system's personality and the variety it lays (<see cref="CaveSystem.TraitsFor"/>, CaveSystem.Variety.cs,
-	/// 2026-10-20: "We would like more random terraces, pits, etc in caves too. Realism and deterministic randomness is good
+	/// "We would like more random terraces, pits, etc in caves too. Realism and deterministic randomness is good
 	/// too. We want caves to feel unique"): traits differ from seed to seed and within one character; terraces are walked up
 	/// onto and along; every pit has a way out; the ways stay walkable; the rock stays within its budget; and the same seed
 	/// gives the same system, stored and rebuilt exactly. On the same synthetic escarpment as PointOfInterestCaveTests.
@@ -149,7 +149,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// Whether a way's fault at <paramref name="at"/> is still there, as it was, with the rock the variety laid (its terraces
 		/// and their ramps, mounds, arches) and the hollows it cut taken out of the field: then it is the layout's own, however
-		/// near a feature it lies (2026-10-26: a trunk's own 42° fall, logged as the layout's on HEAD, failed once a terrace was
+		/// near a feature it lies (a trunk's own 42° fall, logged as the layout's on HEAD, failed once a terrace was
 		/// laid 5 m off it). Its pits stay (their climbs and ledges are counted by index).
 		/// </summary>
 		private static bool StaysWithoutTheVariety(CaveSystem s, IList<Vector3> points, Vector3 at)
@@ -435,7 +435,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void TheVarietyLeavesEveryWayWalkable()
 		{
 			// Every passage walked; a fault within 4 m of anything the variety laid is the variety's. One elsewhere is the
-			// layout's own (2026-10-20: seven over this set before the variety ran, two fixed at their root), logged, not failed.
+			// layout's own (seven over this set before the variety ran, two fixed at their root), logged, not failed.
 			int own = 0;
 			foreach (CaveSystem s in Planned())
 			{
@@ -523,7 +523,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				double megabytes = (vertices * 52.0 + triangles * 12.0 + triangles * 40.0) / 1048576.0;
 				string what = $"{What(system)}: {system.Terraces.Count} terraces, {system.Pits.Count} pits, {system.Hollows.Count} hollows";
 				Console.WriteLine($"{what}: {triangles:N0} triangles, biggest piece {biggest:N0}, ~{megabytes:0.0} MB");
-				// As that fixture's caps stand since 2026-10-21 (raised on purpose for the depth roll; its halls cave of seed 6 ~19 MB).
+				// As that fixture's caps stand (raised on purpose for the depth roll; its halls cave of seed 6 ~19 MB).
 				Assert.That(triangles, Is.LessThanOrEqualTo(300000), what);
 				Assert.That(biggest, Is.LessThanOrEqualTo(40000), what);
 				Assert.That(megabytes, Is.LessThanOrEqualTo(26.0), what);

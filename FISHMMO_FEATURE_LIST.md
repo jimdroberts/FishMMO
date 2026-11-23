@@ -1,6 +1,6 @@
 # FishMMO — Complete Feature List
 
-> Generated 2026-06-26 from the FishMMO-Dev monorepo. Updated 2026-08-15 against commit `630f975c`; module owners added 2026-11-19.  
+> Generated from the FishMMO-Dev monorepo, with module owners.  
 > Built on Unity 6000.6.8f1, FishNet, PostgreSQL, .NET 8.0, WebTransport (QUIC/HTTP3).
 >
 > Items marked *scaffolded*, *planned*, *projected*, or *not yet wired* are **not** shipped functionality — read those qualifiers literally.
@@ -52,6 +52,7 @@ its database tables stay.
 | Leaderboards | Client 52d; Server 51d |
 | Map | Client 65, 65b, 65e–65i |
 | Matchmaking | Client 52, 52b, 52c; Server 51b, 51c |
+| Mounts | Shared 43c |
 | NPCs & AI | Shared 63–75 (the AI), 96–98 (spawners), 111–117 (threat), 137, 138 (editor tools) |
 | Pets | Client 69; Server 48 |
 | Quests | Server 47; Shared 15, 22, 88–90 |
@@ -858,6 +859,7 @@ Both login panels additionally report a connection that stopped **without** the 
 42. **Buff Template Types** *(Buffs module)* — AttributeBuff (flat stat modifier), AttributeTickBuff (per-tick modifier), ResourceTickBuff (DoT/HoT), StateBuff (stun/freeze/mesmerize), CompositeBuff.  
 43. **Buff Reconciliation** *(Buffs module)* — `BuffReconcileEntry` for deterministic rollback in the prediction pipeline.  
 43b. **Absolute Stack Accounting** *(Buffs module)* — Each buff hook *states* the whole contribution for the stack count that will be in effect — `(1 + Stacks) × Value` — rather than adding a delta. Apply and remove are therefore exact inverses at every stack count by construction, and any sequence of stack changes ending at the same count leaves the same value.
+43c. **Mounts** *(Mounts module)* — A **Saddle** equipment socket; the saddle names the mount the **Mount** ability puts its wearer on (Cow, Llama, Horse, Giant Frog, Dragon), drawn as a procedural creature under the rider, who sits astride it. Riding is a buff: removing it dismounts. Each mount changes how its rider moves, predicted on both peers from the reconciled buff set with nothing new on the wire: faster ground speed, a frog's high long leap, a llama's steep slopes, a dragon's free flight with collisions that costs stamina and glides down when it runs out. Casting, a damaging hit, deep water, a ladder, a roof or a cave overhead, or taking the saddle off gets the rider off; no mounting in combat; a **Dismount** effect crafted onto an attack knocks another rider off. A **Stablemaster** stands at every friendly site's stables selling the saddles, the Mount premade and the Dismount effect. A rider logs back in mounted.  
 
 ### Character Attribute System
 44. **Three-Tier Value System** — baseValue + formulaModifier + externalModifier = finalValue. Parent/child dependency graph with formula propagation.  

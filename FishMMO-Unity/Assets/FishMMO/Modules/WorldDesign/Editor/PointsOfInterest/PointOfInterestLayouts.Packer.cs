@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// How a settlement's streets are laid (2026-10-18: "More interesting and natural town and city layouts"): the medieval
+	/// How a settlement's streets are laid ("More interesting and natural town and city layouts"): the medieval
 	/// town plans, each grown the way such places grew. Auto picks by the site's kind, its ground and its seed.
 	/// </summary>
 	/// <remarks>Append only: may be stored by ordinal.</remarks>
@@ -725,7 +725,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Plans the ring along the boundary <paramref name="pull"/> metres further in (2026-10-19, the fortification contract: "palisades
+			/// Plans the ring along the boundary <paramref name="pull"/> metres further in (the fortification contract: "palisades
 			/// aren't properly configured and aligned", "guard tower interiors are not always enterable"). The wall's line follows the
 			/// outline. Each gate stands on its way's bearing square to the line there (its front facing out); a walked curtain's towers
 			/// stand ON the line between the gates, each square to the line where it stands (−z out, ±x along the curtain), at the
@@ -1258,7 +1258,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float stairBand = walked ? StructurePieces.CurtainHalfThickness + StructurePieces.WallStairWidth + StairApproach : 0f;
 				// Everything else keeps inside the wall, its towers and its stairs' band. A gatehouse reaching further in keeps its own
-				// ground by its box (2026-10-19: a deep gatehouse no longer takes its depth from the whole bailey all round).
+				// ground by its box (a deep gatehouse no longer takes its depth from the whole bailey all round).
 				inset = off + Mathf.Max(Mathf.Max(depth * 0.5f, gate >= 0 ? Mathf.Min(gateSize.y * 0.5f, GateInsetMost) : 0f), Mathf.Max(towerInner, stairBand)) + Gap;
 				return planned;
 			}
@@ -1464,7 +1464,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				/* Exactly from one end to the other: as many modules as come nearest the length, each stretched or shrunk a
 				 * little to fit (its footprint's depth says by how much, PropsFeature.Build). Whole modules centred on the
-				 * crossing ran up to most of a module past each end, over the path that comes to it (2026-10-11). */
+				 * crossing ran up to most of a module past each end, over the path that comes to it. */
 				int n = Math.Max(1, Mathf.RoundToInt((to - from) / module));
 				float length = (to - from) / n;
 				float middle = 0.5f * (from + to);
@@ -1793,7 +1793,7 @@ namespace FishMMO.Shared.WorldDesign
 					return;
 				}
 				// The village's green: the street widening at its middle into a green beside it, on the side toward the village's middle,
-				// where the well stands clear of the road (2026-10-20: it stood in the street, the green no wider than a verge either side).
+				// where the well stands clear of the road (it stood in the street, the green no wider than a verge either side).
 				float t = main.Nearest(middle);
 				(Vector2 green, Vector2 tangent) = main.At(t);
 				Vector2 beside = new Vector2(tangent.y, -tangent.x);
@@ -1877,7 +1877,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 centre = Pull(new Vector2(plan.Range(-0.1f, 0.1f), plan.Range(-0.1f, 0.1f)) * size, 0.3f);
 				market = centre;
 				// The market place: a funnel, wide where the main roads meet, narrowing toward the far end. A market town's a third of
-				// its reach long and more where its market wants the room (2026-10-20: a quarter of it, and a third narrower, was too
+				// its reach long and more where its market wants the room (a quarter of it, and a third narrower, was too
 				// cramped for its stalls); a place that keeps no market (a drowned town's statues) keeps the square it had.
 				float length = Mathf.Clamp(size * 0.26f, 12f, 28f), width = Mathf.Clamp(size * 0.11f, 6f, 13f), taper = 0.4f;
 				if (KeepsMarket)
@@ -1928,7 +1928,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 centre = Pull(new Vector2(plan.Range(-0.06f, 0.06f), plan.Range(-0.06f, 0.06f)) * size, 0.2f);
 				market = centre;
 				// A city's market square a fifth of its reach each way from its middle, and more where its market wants the room
-				// (2026-10-20: three twentieths of it was too cramped for a city's stalls, cross, fountains and stocks); a place that keeps
+				// (three twentieths of it was too cramped for a city's stalls, cross, fountains and stocks); a place that keeps
 				// no market keeps the square it had.
 				float half = KeepsMarket ? Mathf.Clamp(size * 0.19f, 14f, 40f) : Mathf.Clamp(size * 0.15f, 12f, 30f);
 				Vector2 lie = Dir(plan.NextFloat() * Mathf.PI);
@@ -1943,7 +1943,7 @@ namespace FishMMO.Shared.WorldDesign
 					AddWay(Spline(e.Start, e.End, Bend(e.End, to, 0.06f), to), MainWidth, 0, 3, false);
 				}
 				// Ring streets following the wall: one half way out, and in a large city one near the wall. The inner ring stands
-				// out far enough that the deepest landmark fronting the square stands between them (2026-10-19: a cathedral 39 m
+				// out far enough that the deepest landmark fronting the square stands between them (a cathedral 39 m
 				// deep had 22 m behind a small city's square), never past 0.72 of the way out.
 				float ringFloor = half + Gap + DeepestLandmark() + SecondWidth * 0.5f + 1f;
 				RingStreet(0.5f, SecondWidth, 1, ringFloor);
@@ -2027,7 +2027,7 @@ namespace FishMMO.Shared.WorldDesign
 					AddWay(new List<Vector2> { from, axis * steps[i] + across * ramps[i], to }, Mathf.Min(SecondWidth, 2f * rampWidth - 1f), 1, 3, false);
 				}
 				// The market: on the middle terrace's street, nearest the middle; where the terrace has the room, a market place beside the
-				// street on its roomier side, the well in it clear of the road (2026-10-20: the street's own width and five metres either
+				// street on its roomier side, the well in it clear of the road (the street's own width and five metres either
 				// side held the well in the road and little else).
 				Way middle = contour[middleBand];
 				if (middle != null)
@@ -2114,7 +2114,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				// The market at the quay's head, its seaward edge on the quay street as before, reaching inland as far as its stalls and
-				// its well want (2026-10-20: ten metres deep, it held the well and little else; the rest stood among the houses, and the
+				// its well want (ten metres deep, it held the well and little else; the rest stood among the houses, and the
 				// street in from behind ran through the middle of it). A street in that would cross it ends at its edge, as a market
 				// town's do.
 				float halfLength = Mathf.Clamp(size * 0.26f, 10f, 20f), halfWidth = Mathf.Clamp(size * 0.1f, 6f, 8f);
@@ -2560,7 +2560,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Whether a point is within a street's width and a margin of the citadel's footprint (its turned rectangle as laid). Measured
-			/// from the rectangle, not from a circle round it (2026-10-19): a capital's palace compound, 72 by 89 m, cut a circle of its
+			/// from the rectangle, not from a circle round it: a capital's palace compound, 72 by 89 m, cut a circle of its
 			/// half diagonal and more out of the ring streets, and with them the frontage of a quarter of a small capital's houses.
 			/// </summary>
 			private bool NearCitadel(Vector2 p)
@@ -2773,7 +2773,7 @@ namespace FishMMO.Shared.WorldDesign
 			private readonly List<(Box box, float room)> stands = new List<(Box, float)>();
 
 			/// <summary>
-			/// A settlement's market place (2026-10-20: "Town centers (market area with well?) are generally too cramped and need to be
+			/// A settlement's market place ("Town centers (market area with well?) are generally too cramped and need to be
 			/// spread out a bit more"; they were spiralled out from the well a metre apart): the well (or the first centrepiece) at the
 			/// market, with walking room all round it (<see cref="CentreRoomMetres"/>); the fountains, the cross, the statues and the
 			/// stocks down the square's middle line about it, each <see cref="MarketWalkMetres"/> clear of the rest
@@ -3377,7 +3377,7 @@ namespace FishMMO.Shared.WorldDesign
 					float bestScore = float.PositiveInfinity, bestT = 0f, bestYaw = 0f;
 					Vector2 bestAt = default, bestNormal = default;
 					float bestAlong = size.x;
-					// A landmark deeper than any frontage leaves it (a cathedral behind a city's square, 2026-10-19) is tried a second
+					// A landmark deeper than any frontage leaves it (a cathedral behind a city's square) is tried a second
 					// time turned a quarter, its long side to the street: only when it found no place square to one, so every site that
 					// laid it before lays it as it did, and the turned search closes no frontage (it is no measure of what a house fits).
 					bool deepLandmark = landmark && size.y > size.x * 1.4f;

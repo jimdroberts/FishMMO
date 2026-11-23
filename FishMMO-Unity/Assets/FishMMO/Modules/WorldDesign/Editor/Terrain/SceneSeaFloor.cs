@@ -9,8 +9,8 @@ using FishMMO.Water;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What a scene's coast and sea floor ask of its sea at the cut and on every repaint (2026-10-25, phase I2m): the tide its coast
-	/// biomes ask (decision 45: an estuary's funnelled tide, <see cref="BiomeTemplate.TideStrength"/>) written to the sea's
+	/// What a scene's coast and sea floor ask of its sea at the cut and on every repaint: the tide its coast
+	/// biomes ask (an estuary's funnelled tide, <see cref="BiomeTemplate.TideStrength"/>) written to the sea's
 	/// <see cref="WaterEnvironment"/>, and how fast the daylight dims on the way down to its floor (decision 36 (c)) written to its
 	/// <see cref="WaterSurface.FloorDaylightExtinction"/>.
 	/// </summary>

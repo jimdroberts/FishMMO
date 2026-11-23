@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cold glow and the wall-mounted street lights (2026-10-18, phase I6g; decisions 28 and 33): the Glow emitter kind
+	/// The cold glow and the wall-mounted street lights: the Glow emitter kind
 	/// (appended; its tint, its soft pulse and the stormglass flicker are pure functions of the shared clock and the place, the
 	/// shader's copy constant for constant; faint from before dusk), the pieces that give it off (glowjar, rune stone, crystal
 	/// post), the flicker reaching a crystal that flickers wherever it lights; and street lights hung on the street-facing
@@ -34,7 +34,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void GlowKind_IsAppended_AndItsHuesAreStable()
 		{
 			string[] kinds = { "Smoke", "Fire", "Forge", "Lamp", "Hearth", "Indoor", "Crystal", "Torch", "Glow", "Beacon", "Magma", "Fumes" };
-			// Its first members exactly: later kinds append after them (2026-10-20, caves livened: Drip and others).
+			// Its first members exactly: later kinds append after them (caves livened: Drip and others).
 			Assert.That(Enum.GetNames(typeof(SceneEmitterKind)).Take(kinds.Length), Is.EqualTo(kinds), "append only: scene assets store the kind");
 			Assert.That((int)SceneEmitterKind.Glow, Is.EqualTo(8));
 			Assert.That(Enum.GetNames(typeof(SceneGlowHue)), Is.EqualTo(new[] { "Violet", "Blue", "Green", "Amber", "Rune", "Faerie" }));
@@ -254,7 +254,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void Flicker_ReachesOnlyACrystalThatFlickers_AndNoneDoesYet()
 		{
-			// Since 2026-10-26 (NEW-CRYSTALS) the drafts' flickering kinds exist (stormglass and eight more), but no biome grows one
+			// The drafts' flickering kinds exist (stormglass and eight more), but no biome grows one
 			// before its round: none of the first ten flickers, and no biome's crystals hold one.
 			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
 			{
@@ -284,7 +284,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void WallLights_AreTheWallMounts_AndEachHasAPostToFallBackOn()
 		{
-			// The I6g wall mounts; the suite's own wall lights and niches (2026-10-26) are WayLightSuiteTests'.
+			// The wall mounts; the suite's own wall lights and niches are WayLightSuiteTests'.
 			var walls = ((BiomeWayLightKind[])Enum.GetValues(typeof(BiomeWayLightKind))).Where(k => k < BiomeWayLights.FirstSuiteLight && BiomeWayLights.MountOf(k) == BiomeWayLightMount.Wall).ToArray();
 			Assert.That(walls, Is.EquivalentTo(new[] { BiomeWayLightKind.WallTorch, BiomeWayLightKind.WallLantern, BiomeWayLightKind.HangingBracket }));
 			Assert.That(BiomeWayLights.PostFor(BiomeWayLightKind.WallTorch), Is.EqualTo(BiomeWayLightKind.TorchPost));
@@ -558,7 +558,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A wall light keeps clear of what else stands off its wall (2026-10-18, I6h): the tavern's sign on its bracket by the door,
+		/// A wall light keeps clear of what else stands off its wall: the tavern's sign on its bracket by the door,
 		/// and the eaves of a low roof (no light is hung where its lantern would stand in the roof); every span of every lived-in
 		/// piece, its roof variants' too. Unity only (it builds the pieces).
 		/// </summary>

@@ -19,7 +19,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
 	/// Validates and processes client interactions with interactable objects, and portals; modules handle their own kinds through <see cref="OnPlayerInteracting"/>
-	/// and the interactables' ECA triggers. Dialogue and containers are the World Interactables module's (2026-11-20), which
+	/// and the interactables' ECA triggers. Dialogue and containers are the World Interactables module's, which
 	/// holds its requests to this system's interaction guard (<see cref="TryBeginInteraction"/>).
 	/// </summary>
 	[CreateAssetMenu(fileName = "InteractableSystem", menuName = "FishMMO/Server/SceneServer/Interactable System", order = 1)]

@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// FALLING STONE (2026-10-25, phase I2u; decisions 79, 95, 97): every fall a pure function of the shared clock, deterministic,
+	/// FALLING STONE: every fall a pure function of the shared clock, deterministic,
 	/// continuous across the 10 000 s wrap and never repeating, at the drafted rates (one fall per 20–60 min, ×3 freeze-thaw, ×2 rain);
 	/// each stone's run continuous and stopping where it should (the coarse further: fall sorting); the bombs bursting exactly when
 	/// VentBursts (and so <c>_FishVentBurst</c>) says; the breathing talus by the season; the stored chutes and cones the cut makes; talus
@@ -441,7 +441,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			Assert.That(new PrefabSpawnRule().talusGrading, Is.False);
 			Assert.That(new BiomeArtSpec.Scatter().Graded, Is.False);
-			// No biome's file grades a rule or names a chute or cone before its round (an authored round's file may: Scree, 2026-10-26).
+			// No biome's file grades a rule or names a chute or cone before its round (an authored round's file may: Scree).
 			bool authoredNamesThem = false;
 			foreach (string path in Directory.GetFiles(ProjectFiles.Folder($"{World}/ProceduralArt"), "*.cs", SearchOption.AllDirectories))
 			{

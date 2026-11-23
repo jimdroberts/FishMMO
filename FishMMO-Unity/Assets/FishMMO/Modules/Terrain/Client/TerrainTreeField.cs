@@ -70,7 +70,7 @@ namespace FishMMO.Client
 		public static TerrainTreeField Build(Terrain terrain, TerrainTreeModel[] models, float chunkMetres = TerrainTreeMath.DefaultChunkMetres)
 		{
 			TerrainData data = terrain.terrainData;
-			// The prototypes' scatter-mode leans (SCATTER-MODES), when the cut recorded any: visual only, colliders stand upright.
+			// The prototypes' scatter-mode leans, when the cut recorded any: visual only, colliders stand upright.
 			FishMMO.Shared.TerrainScatterModes record = terrain.GetComponent<FishMMO.Shared.TerrainScatterModes>();
 			uint[] leanAngles = null;
 			uint[] leanWords = record != null ? record.TreeWords(models.Length, out leanAngles) : null;

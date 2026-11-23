@@ -31,7 +31,7 @@ namespace FishMMO.Client
 	/// and the ground, the hills and the cloud scatter it back into a long diffuse tail.
 	/// </para>
 	/// <para>
-	/// <b>Checked against recordings (2026-10-19).</b> Six field recordings of thunder: energy peaks in the 63–500 Hz
+	/// <b>Checked against recordings.</b> Six field recordings of thunder: energy peaks in the 63–500 Hz
 	/// octaves (centroids 110–520 Hz), within 20 dB of the peak for 3–18 s, rising over 0.3–3 s for a far roll and at
 	/// once for a near crack, decaying smoothly. The first version of this put its energy at 16–63 Hz (N-waves several
 	/// times too long), buzzed (pieces evenly spaced arrive evenly), jumped where distance bands met, and stopped dead

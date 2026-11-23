@@ -374,7 +374,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What scenes deleted before 2026-10-18 left behind, for exactly the names given: their entries in the shared caches
+		/// What scenes deleted formerly left behind, for exactly the names given: their entries in the shared caches
 		/// and catalogues, spawn tables, baked arrays and maps, LOCAL copies, previews, snapshots and re-cut backups. Touches nothing.
 		/// </summary>
 		/// <param name="problems">Names refused because their scene file or atlas entry still exists.</param>

@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldMaps
 	/// <remarks>
 	/// <para>Resolved once, rather than by each hook. Where the scene stands on its world and the moment it is photographed at
 	/// belong to the World Simulation module (the atlas, the solar system, the day-night cycle): it fills them in through
-	/// <see cref="Resolver"/> (Phase 4 of the core and modules plan, 2026-11-18), and keeps its own state in <see cref="Sky"/>.
+	/// <see cref="Resolver"/>, and keeps its own state in <see cref="Sky"/>.
 	/// Without the module the map is photographed as the scene is lit, at no particular moment.</para>
 	/// </remarks>
 	public sealed class WorldMapCaptureContext

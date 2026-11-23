@@ -4,7 +4,7 @@
 per-connection interaction guard, dispatch to the interactable's ECA triggers and to module handlers, server-authoritative
 dialogue, container looting, and portal activations.
 
-> Since 2026-11-20 dialogue and containers are the [World Interactables module](../README.md)'s `WorldInteractableSystem`
+> Dialogue and containers are the [World Interactables module](../README.md)'s `WorldInteractableSystem`
 > (`WorldInteractableSystem.Dialogue.cs`, `WorldInteractableSystem.Container.cs`). The interaction request, its guard and
 > scene-object validation stay in the core `InteractableSystem` ([its README](../../../Server/Implementation/World/SceneServer/Interactable/README.md));
 > this document describes both halves as they work together.

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The colour and clarity of a biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>, 2026-10-16, phase I2e): what its
+	/// The colour and clarity of a biome's fresh water (<see cref="BiomeTemplate.WaterLook"/>): what its
 	/// lakes, pools, rivers, streams and moats look like, in the inland water's own terms (FishMMO/Water/Inland Water: the
 	/// colours of shallow and deep water, what a metre of it absorbs, the silt moving water carries and the colour of its
 	/// foam). A peat bog's water is stained black-brown by the peat: it takes the blue and the green out of the light within a
@@ -16,7 +16,7 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>
 	/// <para>
 	/// Colours are as the material holds them (gamma, as a colour picker gives them); the absorption is per metre, red, green
-	/// and blue, as the material's Absorption per metre. Until 2026-10-16 every body of inland water in every biome took the
+	/// and blue, as the material's Absorption per metre. Formerly every body of inland water in every biome took the
 	/// one material's values; every biome's look is authored from exactly those (<see cref="BiomeWaterLooks.Today"/>), so
 	/// nothing changes until a biome's round gives it its own.
 	/// </para>
@@ -40,9 +40,9 @@ namespace FishMMO.Shared.Biomes
 		public Color Silt;
 		[Tooltip("The colour of the water's foam where it breaks (Foam colour).")]
 		public Color Foam;
-		[Tooltip("Hot water (2026-10-18, phase I2q): fed by the hot ground, it never ices over, however cold the air, and always steams (its surface reads as hot spring water, WaterTemperature.HotWaterC). Off for every biome but those whose files say so.")]
+		[Tooltip("Hot water: fed by the hot ground, it never ices over, however cold the air, and always steams (its surface reads as hot spring water, WaterTemperature.HotWaterC). Off for every biome but those whose files say so.")]
 		public bool Hot;
-		[Tooltip("A melt (2026-10-25, phase I2q-b, decision 84: a sulphur flat's ponds of molten sulphur): opaque and viscous, its ripples small and slow, its colour drifting between its shallow and deep colours on the shared clock. Never counted as liquid water. Off for every biome but those whose files say so.")]
+		[Tooltip("A melt (a sulphur flat's ponds of molten sulphur): opaque and viscous, its ripples small and slow, its colour drifting between its shallow and deep colours on the shared clock. Never counted as liquid water. Off for every biome but those whose files say so.")]
 		public bool Melt;
 
 		public BiomeWaterLook(Color shallow, Color deep, Vector3 absorption, float turbidity, Color silt, Color foam)
@@ -117,12 +117,12 @@ namespace FishMMO.Shared.Biomes
 			Add(Turbidity);
 			AddColor(Silt);
 			AddColor(Foam);
-			// Only when set, so every look marked before the flag existed signs as it did (2026-10-18, I2q).
+			// Only when set, so every look marked before the flag existed signs as it did.
 			if (Hot)
 			{
 				text.Append("hot|");
 			}
-			// Likewise the melt (2026-10-25, I2q-b).
+			// Likewise the melt.
 			if (Melt)
 			{
 				text.Append("melt|");
@@ -141,7 +141,7 @@ namespace FishMMO.Shared.Biomes
 
 	/// <summary>
 	/// Which biome's water look a body of inland water takes, and how a river's look runs into the water it leaves and joins
-	/// (2026-10-16, phase I2e). Pure: the renderer (InlandWaterRenderer) samples the scene's biome map through these and
+	///. Pure: the renderer (InlandWaterRenderer) samples the scene's biome map through these and
 	/// hands the shader the looks.
 	/// </summary>
 	/// <remarks>
@@ -162,7 +162,7 @@ namespace FishMMO.Shared.Biomes
 	/// stencil can show without a seam inside a body.
 	/// </para>
 	/// <para>
-	/// <b>Where water meets water there is no seam</b> (the inland water's rule since 2026-10-05): a river's look runs, over
+	/// <b>Where water meets water there is no seam</b> (the inland water's rule): a river's look runs, over
 	/// its last <see cref="BlendMetres"/>, into the look of the water it joins (the lake it enters, the river it flows into,
 	/// that river's look where they meet), and over its first, out of the lake it leaves; so where two meshes meet, they are
 	/// the same colour. A river running into the sea fades out into the sea's own colour as before.
@@ -171,7 +171,7 @@ namespace FishMMO.Shared.Biomes
 	public static class BiomeWaterLooks
 	{
 		/// <summary>
-		/// The inland water's look until 2026-10-16, which every lake and river in every biome took: InlandWater.mat's values
+		/// The inland water's look formerly, which every lake and river in every biome took: InlandWater.mat's values
 		/// (FishMMO/Water/Inland Water). Every biome's default and what the authoring writes for each (a test holds it equal to
 		/// the material).
 		/// </summary>

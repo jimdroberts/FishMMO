@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Mountain Slope</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry MountainSlope()
 		{
-			// The Afromontane cloud forest of the highlands (biome round, approved 2026-10-18, authored 2026-10-26): steep red-earth
+			// The Afromontane cloud forest of the highlands: steep red-earth
 			// slopes lost in cloud, a dripping forest of moss-sleeved yellowwoods and pink-tasselled kosso hung with old-man's-beard,
 			// gold hypericum in the glades; above it the frost-moor of giant heathers, giant groundsels and blue lobelia spires; below
 			// it the warm coffee forest under strangler-fig giants and tree ferns in the ravines; grey-green phonolite ledges, red
@@ -19,16 +19,16 @@ namespace FishMMO.Shared.WorldDesign
 			// fantasy is the Moon's: moonstone glowing blue in the caves and on the pilgrim road, clinkstone that rings when cloud
 			// pours over it, a horned drake the colour of moss. Four reaches: the FROST-MOOR (t −0.45…0.05), the CLOUD FOREST core,
 			// the COFFEE FOREST (t ≥ 0.55) and a DRY reach (h ≤ 0.15) of pencil cedar and candelabra euphorbia.
-			// LATER (I9): every ground and object texture as Mountain Slope's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Jadeglow (luminous emerald) + Lapisveil (lapis-blue mist).
+			// LATER: every ground and object texture as Mountain Slope's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Jadeglow (luminous emerald) + Lapisveil (lapis-blue mist).
 			return E("Mountain Slope", L(Ground.ForestFloorCloudHumus,
 					// The cloud forest: kosso with the emergent yellowwoods over it, crowns closing; the yellowwoods also alone.
-					// LATER (I9b P2): Hagenia's pink-red flower tassels (a TreeSpecies tassel field); its leaves stand alone.
+					// LATER: Hagenia's pink-red flower tassels (a TreeSpecies tassel field); its leaves stand alone.
 					Band(Stand(Was(0.15f, 10f), 40f, W(0.85f, 0.9f, open: 0.04f), "Hagenia", "Podocarpus"), 0.05f, 0.55f),
 					Trees(0.02f, 18f, 40f, "Podocarpus"),
 					// The dry reach's pencil cedar woods and candelabra euphorbia.
 					Band(Stand(Was(0.1f, 12f), 35f, W(0.5f, 0.6f), "PencilCedar"), 0.05f, 1f, -1f, 0.15f),
-					// LATER (I9b P3): the candelabra's many upturned arms (cactus form, Branches > 3); three arms stand in.
+					// LATER: the candelabra's many upturned arms (cactus form, Branches > 3); three arms stand in.
 					Band(Trees(0.01f, 16f, 45f, "Candelabra"), 0.3f, 1f, -1f, 0.2f),
 					Band(Grass("GrassBasket", 6f), 0.05f, 1f), Plants("FernMontane", 10f), Plants("CushionCloudMoss", 3f), Plants("DebrisCloudForest", 10f, 128),
 					Band(Plants("MushroomTermitomyces", 0.2f), 0.2f, 1f),
@@ -58,7 +58,7 @@ namespace FishMMO.Shared.WorldDesign
 					D(Ground.HeathEricaMoor, 72f, 2.5f, 0f, 35f, Grass("GrassAfroTussock", 10f), Plants("FlowersEverlasting", 4f), Plants("FlowersTorchLily", 1f),
 						Plants("HerbAlchemilla", 4f), Plants("GiantLobelia", 0.15f, 160, 35f), Bush("SilverAlchemilla", 1.5f), Bush("TreeHypericum", 0.5f),
 						Stand(Was(0.3f, 5f), 38f, W(0.6f, 0.8f, metres: 120f), "GiantHeather"), Trees(0.03f, 8f, 35f, "GiantGroundsel"),
-						// LATER (I9b): a standing-snag deadwood form; a contorted dead heather as a tree stands in.
+						// LATER: a standing-snag deadwood form; a contorted dead heather as a tree stands in.
 						Trees(0.02f, 20f, 35f, "SnagHeather"), Plants("DebrisCloudForest", 3f, 128)).Temp(-0.45f, 0.05f)
 						.Ways(path: Ground.PathBundleCauseway, road: Ground.PathBundleCauseway),
 					// d4: mossy phonolite ledges and platy scree on the steep ground; organ columns and ringing slab heaps.
@@ -80,7 +80,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Ways(path: Ground.PathRootStair, road: Ground.PathMuleGully, cobbles: Ground.FlagstoneSlabStair)
 				.Bars(sand: Ground.SandPhonolite, gravel: Ground.GravelRedBlack)
 				// Own rock phonolite; approved: accepts the trap basalt, the crystalline core's gneiss, andesite and the red tuff of the
-				// rock-hewn churches. LATER (I9): the red tuff texture variant of the churches' trenches.
+				// rock-hewn churches. LATER: the red tuff texture variant of the churches' trenches.
 				.Accepts(RegionalRocks.Phonolite, RockTypes.Basalt, RockTypes.Gneiss, RockTypes.Andesite, RockTypes.Tuff)
 				.CaveShell(CaveForm.Cave, "Phonolite").CaveShell(CaveForm.Grotto, "Phonolite").CaveShell(CaveForm.Mine, "Phonolite")
 				.CaveShell(CaveForm.SeaCave, "Phonolite").CaveShell(CaveForm.LavaTube, "Basalt")
@@ -88,13 +88,13 @@ namespace FishMMO.Shared.WorldDesign
 				.Crystals((BiomeCaveCrystalKind.Hydrophane, 0.5f), (BiomeCaveCrystalKind.Moonstone, 0.35f), (BiomeCaveCrystalKind.Amethyst, 0.15f))
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Pulse)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Pulse)
-				// The ambas: sheer flat-topped mesas (approved as carved landforms). LATER (I7 I23): the amba monastery on its pad,
+				// The ambas: sheer flat-topped mesas (approved as carved landforms). LATER: the amba monastery on its pad,
 				// reached by a hauling rope up the cliff.
 				.Landforms("Amba")
 				.Look(BiomeLookClass.Forest)
 				// Approved: the canopy's birds and monkeys (Forest) and the falls' and streams' life (FreshWater) beside the crag life.
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Forest | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): colobus troops, gelada herds at the cliff edges, walia ibex, crimson-winged turacos, malachite
+				// LATER: colobus troops, gelada herds at the cliff edges, walia ibex, crimson-winged turacos, malachite
 				// sunbirds on the lobelias, tree hyrax screaming at night, three-horned chameleons, duikers, the frost-moor's wolf, honey-
 				// guides by the hives; the colour-shifting drake on a mossy trunk (rare). LATER (WEATHER/sound): clinkstones ringing as
 				// the cloud flows over them.
@@ -160,7 +160,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Monument, 1f), (POIType.River, 1f), (POIType.Lake, 1f), (POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Mesa, 1f),
 					(POIType.Butte, 1f), (POIType.Island, 1f), (POIType.Bay, 1f), (POIType.Headland, 1f), (POIType.NaturalArch, 1f), (POIType.SeaCave, 1f),
 					(POIType.FishingCamp, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 1f), (POIType.GoblinWarren, 1f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 1.2f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f),
@@ -214,7 +214,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Hermitage, "Cottage", 0f)
 				.Prefers(POIType.Obelisk, "Obelisk", 0.3f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Dwarven Hold", 1.2f)
 				.Prefers(POIType.Tower, "Dwarven Tower", 1f)
@@ -233,8 +233,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.MountainKingsHall, "Kings Before the Gate", 1.2f)
 				.Prefers(POIType.SilverMineTown, "Stone Delving", 1.3f)
 				.Prefers(POIType.DwarvenGate, "Deep Gate", 1.2f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7 I28): Mountain Slope's signature pieces — the round wattle-daub tukul under a conical thatch with a pot finial
+				// (the fantasy set's variants end here)
+				// LATER: Mountain Slope's signature pieces — the round wattle-daub tukul under a conical thatch with a pot finial
 				// (Village/Town "Tukul" 2.0/1.2; the kit's Timber village, daub and thatch in this palette, stands in at the tukul's
 				// weight), the hidmo (the kit's Stone village), the round church in its sacred grove (Monastery "Round Church" 1.4), the
 				// rock-hewn church in its tuff trench (Temple "Rock-hewn" 1.8), the amba monastery (Monastery "Amba" 1.6), cliff cells
@@ -251,9 +251,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0.2f)
 				// The palette: red-ochre straw daub under dark conical grass thatch, phonolite rubble with timber beam courses (the
 				// "monkey-head" walls), flat earth roofs on the stone houses, carved juniper, brass-inlaid iron, white cotton cloth and
-				// woven banded banners. LATER (NEW-SURFACES U11): ChikaDaub, HighlandThatch, AksumiteCourse, DungPlaster, Shamma and Tibeb
+				// woven banded banners. LATER: ChikaDaub, HighlandThatch, AksumiteCourse, DungPlaster, Shamma and Tibeb
 				// as Mountain Slope's own surfaces, the red tuff carving as its own; the shared surfaces tinted stand in.
-				// LATER (I7 I28): round-plan walls under conical roofs for the tukuls and round churches.
+				// LATER: round-plan walls under conical roofs for the tukuls and round churches.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, UplandHex("#9a5a36"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Plaster, UplandHex("#9a5a36"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Roof, BiomeStructureMaterial.Thatch, UplandHex("#5a4e3a"))
@@ -316,14 +316,14 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.MineLamp, BiomeWayLightKind.HangingLantern)
 				// Moss sleeves on trunks, limbs and walls, and the white-starred highland jasmine.
 				.GrowsVines(0.5f, 0.6f, 0.4f, 0.35f, ("MossSleeve", 0.6f), ("AbyssinianJasmine", 0.4f))
-				// LATER (I7): the Wild Honey Hive node at the tree hives only.
+				// LATER: the Wild Honey Hive node at the tree hives only.
 				.Gathers("Laterite Ironstone", "Hydrophane Seam", "Moonstone Cluster", "Kosso Blossom", "Wild Coffee", "Gesho", "Termite Mushroom Ring",
 					"Yellowwood Elder", "Wild Honey Hive")
 				.Herbs("Detail_HerbKoseret", "Detail_FlowersEverlasting", "Detail_MushroomTermitomyces", "Detail_HerbAlchemilla")
 				.ErodesAs("Mountain");
 		}
 
-		/// <summary>The phonolite boulders (I6b stones of the crust rock): round, slab and spire (the Mountain Slope file's).</summary>
+		/// <summary>The phonolite boulders (stones of the crust rock): round, slab and spire (the Mountain Slope file's).</summary>
 		private static string[] PhonoliteBoulders => new[] { Boulder("Phonolite", "Round"), Boulder("Phonolite", "Slab"), Boulder("Phonolite", "Spire") };
 	}
 }

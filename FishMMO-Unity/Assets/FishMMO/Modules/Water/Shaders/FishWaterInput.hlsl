@@ -151,7 +151,7 @@ SAMPLER(sampler_FishWaterFoamMemory);
 
 // ── The coast's look ───────────────────────────────────────────────────
 //
-// How the water off each stretch of coast differs from the planet's sea (2026-10-18; BiomeSeaCoast, baked with the scene's
+// How the water off each stretch of coast differs from the planet's sea (BiomeSeaCoast, baked with the scene's
 // biome map, published by WaterSurface): RGBA8, RGB the tint's ratio to today's sea and A the absorption's, each coded as
 // doublings, (byte − 128) ÷ 32. Read through the caustics' inline sampler (no sampler slot of its own), the uv held half a texel
 // inside the rectangle, whose edge texels are exactly 1: past it, the planet's sea.

@@ -18,15 +18,15 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: 'Rejuvenation: 3 health a second.'
+  Description: 'Rejuvenation: 3 health every 5 seconds.'
   icon:
     m_AssetGUID: 8d4ebdf9f53fdfaf36bb9d2456a52319
     m_SubObjectName: 
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Duration: 8
-  TickRate: 1
+  Duration: 45
+  TickRate: 5
   OnTickEvents: []
   MaxStacks: 1
   IsPermanent: 0

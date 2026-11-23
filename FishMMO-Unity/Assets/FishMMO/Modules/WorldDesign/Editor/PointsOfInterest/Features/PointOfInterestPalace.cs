@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A capital's palace (2026-10-19: "massive palace style castles with interiors (kings chair?) for capitals"): the compound the
+	/// A capital's palace ("massive palace style castles with interiors (kings chair?) for capitals"): the compound the
 	/// capital's centre slot lays in place of a keep. An inner ward walled with towers, its gatehouse at the front; a court behind the
 	/// gate with the formal garden in its middle; the throne hall at the back of the court, its door to the garden; a residential wing
 	/// down each side, their doors to the garden too. The throne room, the wings' chambers and the gatehouse's and towers' guard rooms
@@ -39,7 +39,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Smaller where it must be.</b> The plan comes in <see cref="Tiers"/>: the walled compound; the palace unwalled (hall, wings,
 	/// garden); the hall over its garden; the hall alone. A site takes the fullest whose reach, at its race's stature, is no more than
-	/// <see cref="ReachShare"/> of its radius (<see cref="TierFor"/>). Measured on the capitals' layouts (2026-10-19, PalaceTests): a
+	/// <see cref="ReachShare"/> of its radius (<see cref="TierFor"/>). Measured on the capitals' layouts (PalaceTests): a
 	/// capital of the kit's stature takes the walled compound from about 175 m (of the planner's 160..220), and the unwalled palace
 	/// below, where the walled one cost the city a third of its houses' frontage; a big race's capital (stature to
 	/// RaceStature.MaxScale) steps down further, a giant's to the throne hall alone.
@@ -304,7 +304,7 @@ namespace FishMMO.Shared.WorldDesign
 			float towerJoin = JoinOf(s.TowerJoin, towerVariant, s.Tower.x);
 			float cornerJoin = JoinOf(s.CornerJoin, towerVariant, s.Corner.x);
 			float towerHalf = 0.5f * Mathf.Max(s.Tower.x, s.Tower.y);
-			// A corner tower at each corner (2026-10-19: the kit's CornerTower, its walk doors on +x and +z, so the walk turns the
+			// A corner tower at each corner (the kit's CornerTower, its walk doors on +x and +z, so the walk turns the
 			// corner): its origin on the joint of the two runs' centre lines, turned so its +x and +z run along them into the ward and
 			// its field quadrant (−x, −z) looks out, its ground door and steps on the ward's side.
 			Vector4 door = s.CornerDoor != null && s.CornerDoor.Length > 0 ? s.CornerDoor[Mathf.Clamp(towerVariant, 0, s.CornerDoor.Length - 1)] : new Vector4(2.8f, 2.8f, 0.7071f, 0.7071f);

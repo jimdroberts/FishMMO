@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The sound of the caves' drips round the listener (2026-10-20, caves livened): each drop the drip field draws lands with its
+	/// The sound of the caves' drips round the listener (caves livened): each drop the drip field draws lands with its
 	/// plink or splat (<see cref="DripSounds"/>) at the very moment it lands on the shared clock (SceneDrip), through the world's
 	/// sound, so the cave's reverb and echoes carry it (WorldAudio, AcousticEnvironment).
 	/// </summary>

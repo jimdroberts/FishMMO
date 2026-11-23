@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Waypoints on the maps: only unlocked ones are drawn, a stray marker component can never reveal one, and the filter
-	/// shelves them with the landmarks. Moved from WaypointTests and TravelWaypointTests with the Map module (2026-11-20);
+	/// shelves them with the landmarks. Moved from WaypointTests and TravelWaypointTests with the Map module;
 	/// the unlock record is a stub here, so the Map module needs no Travel module to test against.
 	/// </summary>
 	[TestFixture]

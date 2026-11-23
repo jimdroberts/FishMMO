@@ -8,7 +8,7 @@ namespace FishMMO.Shared.Weather
 	/// The weather at a place and tick, for gameplay: the core's question, answered by whichever weather is installed.
 	/// </summary>
 	/// <remarks>
-	/// Core (Phase 4 of the core and modules plan, 2026-11-17). The Climate and Weather module installs
+	/// Core. The Climate and Weather module installs
 	/// <see cref="Sampler"/> as it loads (its <c>WeatherTimelines</c>); without it every place reads
 	/// <see cref="WeatherReading.Calm"/>. The storm timelines, cells and weather commands are the module's.
 	/// </remarks>

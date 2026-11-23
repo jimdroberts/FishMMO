@@ -15,7 +15,7 @@ namespace FishMMO.Shared.Weather
 	/// puts it in the same place, and still follows the wind — it creeps in a calm and runs in a gale.
 	/// </para>
 	/// <para>
-	/// The same sum the clouds and the weather field ride (<see cref="AirDrift"/>, 2026-10-15: "Route them through the
+	/// The same sum the clouds and the weather field ride (<see cref="AirDrift"/>: "Route them through the
 	/// same code, everything needs to be deterministic and properly driven by WorldTime"): it used to sum the reported
 	/// wind alone, so an admin's or the bed's added wind ran the clouds and left the fog and the motes where they were.
 	/// The ground's share, not the steering level's, and with no wander: the surface air is the slow layer under the

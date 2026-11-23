@@ -98,7 +98,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <remarks>
 		/// This was a fixed 90 s for the whole load, which cut off slow but healthy loads: a web
 		/// client on a cold cache downloads the world's content first, and one took 96 s
-		/// (2026-11-12). The deadline now moves with the client's heartbeat, so this only has to
+		///. The deadline now moves with the client's heartbeat, so this only has to
 		/// cover the longest gap between heartbeats (sent every few seconds, delayed by a long
 		/// frame at worst) and a client too old to send them at all.
 		/// </remarks>

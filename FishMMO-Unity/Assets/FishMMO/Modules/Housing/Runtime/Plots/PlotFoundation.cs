@@ -428,7 +428,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// A plot keeps its authored name. The namer is here only because every interactable of this kind carries one, and a
 		/// namer added by <c>RequireComponent</c> starts in Character mode, which needs a race a deed post has not got: every
-		/// plot logged "keeps its authored name: Character names need a race" on each client (2026-11-22). Set on every
+		/// plot logged "keeps its authored name: Character names need a race" on each client. Set on every
 		/// peer in Awake, before the namer writes or reads its payload, so the plots already cut into scenes are right
 		/// without a re-cut.
 		/// </summary>
@@ -440,6 +440,7 @@ namespace FishMMO.Shared
 			{
 				namer.Settings.Mode = SceneObjectNamingMode.Authored;
 			}
+			JoinRegistry();
 		}
 
 		public override void OnStartClient()
@@ -618,8 +619,12 @@ namespace FishMMO.Shared
 		/// A foundation whose key does not survive <see cref="PlotIdentity"/> never registers. It
 		/// would otherwise sit in the world looking claimable while every attempt failed against a
 		/// row that does not exist, which is a much harder thing to notice than a warning at load.
+		/// <para>Called from <see cref="OnAwake"/>, never from an <c>Awake</c> of its own: Unity calls only the
+		/// most derived <c>Awake</c>, so a private one here replaced <see cref="Interactable"/>'s. That left its cached
+		/// <c>Transform</c> null and its squared range 0, <c>InRange</c> refused every player, and no deed post in the world
+		/// could be interacted with (the refusal is a Debug-level log only).</para>
 		/// </remarks>
-		private void Awake()
+		private void JoinRegistry()
 		{
 			/* The key is judged on its own merits before the scene is considered. They are separate
 			 * questions — a key is well-formed or not regardless of where it sits — and folding them
@@ -665,11 +670,12 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Leaves the registry.
+		/// Leaves the registry, then the scene object registry (<see cref="Interactable.OnDestroy"/>).
 		/// </summary>
-		private void OnDestroy()
+		protected override void OnDestroy()
 		{
 			Registry.Unregister(this);
+			base.OnDestroy();
 		}
 
 		/// <summary>

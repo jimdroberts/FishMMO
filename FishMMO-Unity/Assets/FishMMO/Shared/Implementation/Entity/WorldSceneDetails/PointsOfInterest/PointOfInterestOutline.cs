@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// A site's footprint seen from above (2026-10-18: "Towns, cities and all other points of interest need different carving
+	/// A site's footprint seen from above ("Towns, cities and all other points of interest need different carving
 	/// besides just circles"): how far its ground reaches from its anchor toward each of a ring of evenly spaced bearings, the
 	/// first due north (+z), turning east (+x) as a yaw does. Between two bearings its edge runs straight, so the footprint is a
 	/// star-shaped polygon: every point of it is seen from the anchor, and a ray from the anchor leaves it exactly once.
@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// A pad's terraces (2026-10-18: hill towns): its ground levelled not to one height but to two to four, stepped up the
+	/// A pad's terraces (hill towns): its ground levelled not to one height but to two to four, stepped up the
 	/// fall line like a hillside's fields, with an earth bank between each pair and a ramp up every bank where a street climbs.
 	/// </summary>
 	/// <remarks>

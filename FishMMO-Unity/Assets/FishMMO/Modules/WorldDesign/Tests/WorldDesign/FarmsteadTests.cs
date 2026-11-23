@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Worked farmland (2026-10-19, PointOfInterestFarmsteads): a farmstead's layout keeps its parts inside its fence, apart, and
+	/// Worked farmland (PointOfInterestFarmsteads): a farmstead's layout keeps its parts inside its fence, apart, and
 	/// clear of the way in and the barn's doors; a reaped field's stooks stand in rows inside its headland; the draws are the
 	/// site's and the field's own; the farm kit's roofs that follow a palette stay sound at every pitch; and the fields lay it
 	/// all after every field, fence and old terrace.

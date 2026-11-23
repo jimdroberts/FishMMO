@@ -50,7 +50,7 @@ namespace FishMMO.UnitTests
 		/// Ticks the visual trails the simulation by, for the rider AND for every platform deck and
 		/// ship (FloatingBoats.VisualInterpolationTicks).
 		/// One: the least a glide between two simulated positions can trail by, and FishNet's
-		/// default. It was two (2026-09-08, never judged in play), which tolerated a tick landing a
+		/// default. It was two (never judged in play), which tolerated a tick landing a
 		/// frame late without the visual stalling, at ~66 ms of visual latency on the player's own
 		/// movement; and one is as far as that goes without
 		/// drawing the body AHEAD of the simulation. Change it here and the prefabs, the ships'
@@ -156,7 +156,7 @@ namespace FishMMO.UnitTests
 		/// never adaptive.
 		/// </summary>
 		/// <remarks>
-		/// No scene ships a platform since the start scenes were removed (2026-10-25); the scan still
+		/// No scene ships a platform since the start scenes were removed; the scan still
 		/// runs over every scene so the next one is held to it, and it is proven on
 		/// <see cref="PlatformFixture"/>, the last shipped <c>MovingPlatform</c>, with each broken
 		/// setting caught.
@@ -248,7 +248,7 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
-		/// The last shipped <c>MovingPlatform</c> (StartScene A, removed 2026-10-25), trimmed to what the
+		/// The last shipped <c>MovingPlatform</c> (StartScene A), trimmed to what the
 		/// scan reads: the deck GameObject, its <c>KCCPlatform</c> and <c>NetworkObject</c>, and the
 		/// child's <c>NetworkTickSmoother</c> bound to that NetworkObject.
 		/// </summary>

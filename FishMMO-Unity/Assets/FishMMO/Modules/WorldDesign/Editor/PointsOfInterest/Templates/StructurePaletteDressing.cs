@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Lays a structure kit piece in a biome's structure palette at the cut (2026-10-16, I6a): the materials its prefab is drawn
+	/// Lays a structure kit piece in a biome's structure palette at the cut: the materials its prefab is drawn
 	/// in, as a baked prop's (ScenePropSet.Prototype.Materials, through <see cref="PointOfInterestPropSink"/>) or on a scene
 	/// object's renderers (<see cref="Dress"/>: doors, moored and sailing ships).
 	/// </summary>
@@ -145,7 +145,7 @@ namespace FishMMO.Shared.WorldDesign
 			return string.Equals(path, StructureKit.PrefabPath(piece.Id, variant, finish, roof), StringComparison.Ordinal);
 		}
 
-		// ── Roofs (2026-10-18, I6e) ───────────────────────────────────
+		// ── Roofs ───────────────────────────────────
 
 		private static readonly Dictionary<string, GameObject> prefabs = new Dictionary<string, GameObject>(StringComparer.Ordinal);
 

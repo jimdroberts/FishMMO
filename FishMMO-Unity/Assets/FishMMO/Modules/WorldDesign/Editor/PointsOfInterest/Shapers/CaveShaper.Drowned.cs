@@ -7,13 +7,13 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveShaper
 	{
-		// ── Drowned galleries (2026-10-25, phase I2n-c, decision 86) ──
+		// ── Drowned galleries ──
 
 		/// <summary>How near water an opening of a root window may stand, metres: never in a lake, though the swamp's water is all round.</summary>
 		private const float RootWindowWaterClear = 3f;
 
 		/// <summary>
-		/// Whether a cave site's host ground is wet (decision 86 (a), <see cref="BiomeCaveWaters.WetHost"/>): water within
+		/// Whether a cave site's host ground is wet (<see cref="BiomeCaveWaters.WetHost"/>): water within
 		/// <see cref="BiomeCaveWaters.WetReach"/> of the site (rings at a third, two thirds and the whole of it), or a host whose habitat
 		/// is a wetland's.
 		/// </summary>
@@ -50,7 +50,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Opens a planned system's root windows (<see cref="CaveSystem.TryAddRootWindows"/>, decision 86 (f)) where the cave biome's
+		/// Opens a planned system's root windows (<see cref="CaveSystem.TryAddRootWindows"/>) where the cave biome's
 		/// Cave Hangings name any for the form and the host's land over it is wooded and wet: after its skylights, before a join, so a
 		/// joined system brings them along; the plan's mouth loop holes and keeps them clear as it does a skylight.
 		/// </summary>
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Gives every body of a cave's water (its pool, its streams and pools; never its lava) the look of the biome <paramref name="lookBiome"/>
-		/// (SceneHydrology's LookBiome, decision 86 (b)). Nothing for 0: the bodies are written afresh on every build, by their shores.
+		/// (SceneHydrology's LookBiome). Nothing for 0: the bodies are written afresh on every build, by their shores.
 		/// </summary>
 		private static void StampWaterLook(PointOfInterestPlaceContext context, PointOfInterestRecord site, int lookBiome)
 		{

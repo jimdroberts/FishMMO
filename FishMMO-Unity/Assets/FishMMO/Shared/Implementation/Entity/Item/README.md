@@ -2,7 +2,7 @@
 
 **Short description:** A component-based, template-driven framework for items, inventories, equipment, and banking in FishMMO.
 
-> **The Items module (2026-11-20).** This folder is the item **data** the core keeps: `Item` and its components,
+> **The Items module.** This folder is the item **data** the core keeps: `Item` and its components,
 > `ItemSlot`, the templates and loot tables, `ItemGenerator`, `ServerItemHooks`, `InventoryType`, and (under
 > `Shared/Core/Entity/Item/`) the container contracts. The containers themselves (`ItemContainer`,
 > `InventoryController`, `BankController`, `EquipmentController`, `ItemStackTransfer`), the scene server's

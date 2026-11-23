@@ -58,7 +58,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The most blade types a record can name: four bits in the packed word, the fifth and sixth in the colour word
 		/// (<see cref="TypeHighShift"/>, <see cref="TypeTopShift"/>), the seventh in the record's sixth word
-		/// (<see cref="RecordMore"/>). 64 since 2026-10-27 (was 32: the sixth bit is the one the colour's valid flag held, now
+		/// (<see cref="RecordMore"/>). 64 (was 32: the sixth bit is the one the colour's valid flag held, now
 		/// read from the colour itself, <see cref="UnpackColour"/>); 128 later that day, once the detail layers stopped wrapping
 		/// at 256 and the scenes' true demand showed: measured over the saved tiles (painted blade prototypes, one type per
 		/// prefab and biome look), Moron 1 27, Moron 2 80, Moron 3 79. Both words of a record were full, so the seventh bit
@@ -539,7 +539,7 @@ namespace FishMMO.Client
 		// ── The blade record (24 bytes: float3 root, uint packed, uint colour, uint more) ─────
 
 		/// <summary>
-		/// Bytes per blade in the slot buffers (FishGrassBlades.compute / .hlsl GrassBlade). 24 since 2026-10-27 (was 20): the
+		/// Bytes per blade in the slot buffers (FishGrassBlades.compute / .hlsl GrassBlade). 24 (was 20): the
 		/// packed and colour words had no bit left for the 128 types' seventh, so it rides a sixth word (<see cref="RecordMore"/>,
 		/// its other bits zero and free). With the profile's 5 M blade cap the five slots cost ~118 MB instead of ~98 MB.
 		/// </summary>
@@ -609,7 +609,7 @@ namespace FishMMO.Client
 		public const int TypeSeventhShift = 0;
 
 		/// <summary>
-		/// A record's sixth word (2026-10-27): the type's seventh bit, on every record of the blade (its shadow casters' and its
+		/// A record's sixth word: the type's seventh bit, on every record of the blade (its shadow casters' and its
 		/// head cards' too). Zero for types 0..63, so their records are what they were; its bits 1..31 are free.
 		/// FishGrassBlades.compute GrassRecordMore.
 		/// </summary>
@@ -634,7 +634,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Packs the terrain's linear albedo under a blade: square root (so dark soils keep their steps) at
-		/// 8 bits a channel; an invalid colour is all zero, a valid one never is (a black ground's blue is raised a step: 2026-10-27,
+		/// 8 bits a channel; an invalid colour is all zero, a valid one never is (a black ground's blue is raised a step;
 		/// the valid flag's bit 31 became the type's sixth, <see cref="TypeTopShift"/>) (FishGrassBlades.compute GrassPackColour).
 		/// Bits 29..30 are the record's head part (<see cref="WithHeadPart"/>), 27..28 its <see cref="RecordBits"/>, 24..26 its burn tone (<see cref="WithBurnTone"/>).
 		/// </summary>
@@ -676,7 +676,7 @@ namespace FishMMO.Client
 		public const int BurnToneShift = 24;
 
 		/// <summary>
-		/// The colour word with the burn mosaic's tone (2026-10-25, I2t; BurnMosaic.BurnStage.Tone, 0..1: charcoal 1, emerald 3/7, the
+		/// The colour word with the burn mosaic's tone (BurnMosaic.BurnStage.Tone, 0..1: charcoal 1, emerald 3/7, the
 		/// blade's own 0) in bits 24..26, dithered to sevenths by <paramref name="dither"/> (the blade's own hash, 0..1) so a scar's edge
 		/// mottles instead of banding. FishGrassBlades.compute GrassWithBurnTone; read back by FishGrassBlades.hlsl.
 		/// </summary>

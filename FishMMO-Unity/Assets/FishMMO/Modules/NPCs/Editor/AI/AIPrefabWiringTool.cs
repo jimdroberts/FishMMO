@@ -19,7 +19,7 @@ namespace FishMMO.Shared
 	/// four things NPC prefabs historically did not have: a
 	/// <see cref="CharacterPredictionController"/> to drive the replicate stream, a
 	/// <see cref="CooldownController"/> for the ability picker to consult (a part every character gets at wake since
-	/// 2026-11-21, so no longer the prefab's), a
+	/// so no longer the prefab's), a
 	/// <see cref="TargetController"/> for the cast to resolve its target and spawn through, and
 	/// <c>EnablePrediction</c> set on the <see cref="NetworkObject"/>. Without all four an NPC
 	/// spawns, ticks its brain, decides to cast — and nothing happens.
@@ -63,7 +63,7 @@ namespace FishMMO.Shared
 				{
 					List<string> changes = new List<string>();
 
-					// The cooldown and ability controllers are parts every character gets at wake (2026-11-21): no prefab carries them.
+					// The cooldown and ability controllers are parts every character gets at wake: no prefab carries them.
 
 					if (root.GetComponent<CharacterPredictionController>() == null)
 					{
@@ -374,7 +374,7 @@ namespace FishMMO.Shared
 		/// targeting requirement does not apply to it.
 		/// </summary>
 		/// <remarks>
-		/// The damage controller is the Combat module's character part since 2026-11-20, added when the character wakes, so a
+		/// The damage controller is the Combat module's character part, added when the character wakes, so a
 		/// prefab no longer carries one and none is authored immortal (none was). Read through the contract in case a prefab
 		/// still does.
 		/// </remarks>

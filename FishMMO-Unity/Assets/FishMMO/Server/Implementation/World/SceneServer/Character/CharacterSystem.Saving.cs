@@ -345,7 +345,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterPersistenceParticipant> participants = CharacterPersistenceParticipants.All;
 			for (int i = 0; i < participants.Count; i++)
 			{
-				participants[i].Capture(character, snapshot.RowsFor(participants[i]));
+				// One module's fault costs only its own rows: the rest of the save, and a departure's hand-off, still go
+				// (the mark's lookup threw on every capture, so nothing of the character saved and a portal's
+				// hand-off died half done, the player left under the terrain).
+				try
+				{
+					participants[i].Capture(character, snapshot.RowsFor(participants[i]));
+				}
+				catch (Exception ex)
+				{
+					Log.Error("CharacterSystem",
+						$"The '{participants[i].Name}' save participant failed to capture character {character.ID}; its rows were skipped this save: {ex}");
+				}
 			}
 			AppendKnownAbilityData(character, snapshot.KnownAbilities, snapshot.KnowledgeVersions);
 		}
@@ -380,7 +391,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			IReadOnlyList<CharacterPersistenceParticipant> participants = CharacterPersistenceParticipants.All;
 			for (int i = 0; i < participants.Count; i++)
 			{
-				participants[i].CaptureDeparture(this, character, snapshot.RowsFor(participants[i]));
+				// As in AppendSubEntities: a module's fault must not stop the character leaving.
+				try
+				{
+					participants[i].CaptureDeparture(this, character, snapshot.RowsFor(participants[i]));
+				}
+				catch (Exception ex)
+				{
+					Log.Error("CharacterSystem",
+						$"The '{participants[i].Name}' save participant failed its departure capture for character {character.ID}; its rows were skipped: {ex}");
+				}
 			}
 		}
 

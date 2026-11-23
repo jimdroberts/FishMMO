@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The layout's built ways drawn out (2026-10-13: "rock bridges leading over crevices and to other deeper areas",
+	/// The layout's built ways drawn out ("rock bridges leading over crevices and to other deeper areas",
 	/// "ladders and ropes"): every climb the planner laid becomes the scene's climbable (what the climbing movement, the
 	/// server's NavMesh links and the NPCs read) and its ladder or rope; every crossing its rope walk or trestle. And the
 	/// field probes the later passes share.

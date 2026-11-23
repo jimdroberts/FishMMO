@@ -30,12 +30,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Built in a carved cave's chamber (<see cref="PointOfInterestChamberFeature"/>), not at its mouth.</summary>
 		public bool InChamber;
 		/// <summary>
-		/// Built only on a world with liquid water on its surface (<see cref="PointOfInterestTemplate.NeedsLiquidWater"/>, decision 96,
-		/// 2026-10-25): a holy well's spring chapel, where its silent well-head stands on any world.
+		/// Built only on a world with liquid water on its surface (<see cref="PointOfInterestTemplate.NeedsLiquidWater"/>):
+		/// a holy well's spring chapel, where its silent well-head stands on any world.
 		/// </summary>
 		public bool NeedsLiquidWater;
 		/// <summary>
-		/// Who holds the place (2026-10-27, the fantasy wave's keeps and towers): its garrison (the kind's own features), a hostile
+		/// Who holds the place (the fantasy set's keeps and towers): its garrison (the kind's own features), a hostile
 		/// band (no waypoint and no service NPCs, a monster pack in their place) or nobody (a ruin: no NPCs at all).
 		/// PointOfInterestTemplateAuthoring.FeaturesFor applies it.
 		/// </summary>
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The weight the list gives a biome by its asset name (a later entry winning; <see cref="DefaultBiomeWeight"/> for one it
 		/// does not name): what the biome art authoring writes onto that biome's template for this variant where it differs from
-		/// the weight elsewhere (BiomeArtSpec.Entry.SiteVariants, 2026-10-16). The cut reads the biome template's.
+		/// the weight elsewhere (BiomeArtSpec.Entry.SiteVariants). The cut reads the biome template's.
 		/// </summary>
 		public float BiomeWeightByName(string biome)
 		{
@@ -213,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Watchtower = "tower+military!wall!keep";
 		public const string Keep = "keep";
 		/// <summary>
-		/// A capital's palace (2026-10-19: "massive palace style castles with interiors (kings chair?) for capitals"), by its throne
+		/// A capital's palace ("massive palace style castles with interiors (kings chair?) for capitals"), by its throne
 		/// hall's id: PropsFeature keeps the whole compound's ground for the slot and lays the compound there (PointOfInterestPalace),
 		/// its gatehouse, towers and curtain round a court with the garden, the two wings and the throne hall.
 		/// </summary>
@@ -238,7 +238,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Gravestone = "=Gravestone";
 		public const string Mound = "=GraveMound";
 		public const string CryptDoor = "=CryptEntrance";
-		/// <summary>Dungeon doors set into a face, anchored at their thresholds (StructurePieces.Dungeon.cs, 2026-10-18).</summary>
+		/// <summary>Dungeon doors set into a face, anchored at their thresholds (StructurePieces.Dungeon.cs).</summary>
 		public const string DungeonPortal = "=DungeonPortal", DungeonBarrow = "=DungeonBarrow";
 		public const string Mausoleum = "=Mausoleum";
 		public const string Bones = "bones";
@@ -262,17 +262,17 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Smithy = "smithy";
 		public const string Stable = "stable";
 		public const string Notice = "notice";
-		/// <summary>Light sources (2026-10-12: torches, braziers): a torch on a pole, and a fire bowl.</summary>
+		/// <summary>Light sources (torches, braziers): a torch on a pole, and a fire bowl.</summary>
 		public const string TorchPost = "=TorchPost";
 		public const string Brazier = "=Brazier";
 		public const string Slipway = "=Slipway";
 		public const string Shipwreck = "=Shipwreck";
-		/// <summary>Mills and the rural works (2026-10-14).</summary>
+		/// <summary>Mills and the rural works.</summary>
 		public const string TowerMill = "=TowerMill", Watermill = "=Watermill", Sawmill = "=Sawmill", SawPit = "=SawPit", LogPile = "=LogPile",
 			PlankStack = "=PlankStack", Granary = "=Granary", Dovecote = "=Dovecote", Apiary = "=Apiary", CharcoalClamp = "=CharcoalClamp",
 			LimeKiln = "=LimeKiln", TanningYard = "=TanningYard";
 		/// <summary>
-		/// The town's other buildings (2026-10-19), by id: none carries a tag an older query matches, so no site that does not
+		/// The town's other buildings, by id: none carries a tag an older query matches, so no site that does not
 		/// name them changes. A shop-house's trade, sign and wares are PointOfInterestTrades'; a farmstead is the fields'.
 		/// </summary>
 		public const string WizardTower = "=WizardTower", Library = "=Library", Observatory = "=Observatory",
@@ -284,7 +284,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Light and lore round a wizard's tower (StructurePieces.Lights.cs).</summary>
 		public const string RuneStone = "=RuneStone", Glowjar = "=Glowjar";
 		/// <summary>
-		/// A settlement's churches by its size and its square's centrepieces (2026-10-19: "more variation for town group types"), by
+		/// A settlement's churches by its size and its square's centrepieces ("more variation for town group types"), by
 		/// variant (StructureKitPieceSource's "#" pin): a village's chapel with its bell-cote (the parish church a time in four), a
 		/// town's parish church under its spire, a city's or the capital's cathedral fronting its square (tagged "cathedral", so no
 		/// "church" query lays one); the stone market cross and the fountain (MarketCross's two variants) and a village green's maypole.
@@ -305,7 +305,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Whether a slot's pieces are a site's landmarks (PointOfInterestLayoutSlot.Landmark: laid before its houses, fronting its square
 		/// where it has one): its churches, temple, market hall and library; in a castle's ward its barracks and its stable too, which
-		/// are its garrison's and must find room before the houses fill it (2026-10-19).
+		/// are its garrison's and must find room before the houses fill it.
 		/// </summary>
 		public static bool IsLandmark(string tag, POIType kind)
 		{
@@ -320,16 +320,16 @@ namespace FishMMO.Shared.WorldDesign
 		public const string Timber = "timber", Stone = "stone", Hide = "hide", Iron = "iron", Earth = "earth";
 
 		// ── Biomes (asset names in Assets/FishMMO/Modules/WorldSimulation/Templates/Biomes, exactly: a name no biome has matches nothing) ───
-		// The variants' DEFAULT biomes (2026-10-16, phase I5): the biome art authoring wrote each biome the weight these lists
+		// The variants' DEFAULT biomes: the biome art authoring wrote each biome the weight these lists
 		// give it for every variant (where it differs from the variant's weight elsewhere) onto its template, and the cut picks
-		// by the template's. Since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) every biome's spec file carries those
+		// by the template's. Now every biome's spec file carries those
 		// weights itself (BiomeArtSpec.Entry.Prefers), so these lists only reach the point-of-interest templates' own biome lists
 		// (what this authoring writes onto their assets): the cut's fallback for a biome template never authored. Change a
 		// biome's variant weights in its file.
 		public static readonly string[] Swamp = { "Swamp", "Mangrove", "Peat Bog", "Wetlands", "Swamp Ruins", "Swamp Temple", "Swamp Cave" };
-		// Dust Sea left the arid list 2026-10-18 (decision 44, the Dust Sea round): a sea of dust on airless and thin-aired worlds,
+		// Dust Sea left the arid list: a sea of dust on airless and thin-aired worlds,
 		// nobody lives there, so it takes no arid settlement, inn or lodge variants (its template's own weights, from its file, rule).
-		// Wasteland left it 2026-10-25 (decision 96): a war-wasted land takes no arid inn, lodge or hermitage variants either.
+		// Wasteland left it: a war-wasted land takes no arid inn, lodge or hermitage variants either.
 		public static readonly string[] Arid = { "Desert", "High Desert", "Badlands", "Salt Flat", "Oasis", "Scrubland" };
 		public static readonly string[] Highland = { "Mountain Slope", "Alpine", "Hills", "Rocky Terrain", "Scree", "Karst", "Rocky Coast", "Alpine Meadow" };
 		public static readonly string[] Cold = { "Tundra", "Taiga", "Snow", "Glacier", "Ice Sheet", "Ice Shelf", "Permanent Ice" };
@@ -376,7 +376,7 @@ namespace FishMMO.Shared.WorldDesign
 			Encounters(a);
 			Caves(a);
 			RoundKinds(a);
-			// The fantasy wave (2026-10-27, PointOfInterestTemplateSpecs.Fantasy*.cs), last so no earlier template moved.
+			// The fantasy set (PointOfInterestTemplateSpecs.Fantasy*.cs), last so no earlier template moved.
 			FantasyKeeps(a);
 			FantasyRealm(a);
 			FantasyGreen(a);
@@ -393,12 +393,12 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Settlements(List<PointOfInterestTemplateSpec> a)
 		{
-			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe. (2026-10-19: "more structure
+			// Villages: a street of houses round a well; longhouses in the cold, yurts on the steppe. ("more structure
 			// types for towns, villages, and cities": a village may keep a healer, a bakehouse, a brewhouse, a craftsman's shop and a
 			// shop or two among its houses, a kiln at its edge, a cross and the stocks on its green. Its barns, sties, hen houses and
-			// ricks are its farmsteads', beside its fields (PointOfInterestFarmsteads; 2026-10-19: "Farm houses and barns should be
+			// ricks are its farmsteads', beside its fields (PointOfInterestFarmsteads: "Farm houses and barns should be
 			// placed next to farm fields and crops"), never among its houses.) Its church is mostly a chapel under a bell-cote, now and
-			// then a parish church with its spire; a maypole stands on some greens (2026-10-19: "more variation for town group types").
+			// then a parish church with its spire; a maypole stands on some greens ("more variation for town group types").
 			// Its lone beekeepers, shepherds, woodcutters and wayside crosses are its outskirts' (PointOfInterestOutskirts).
 			T(a, POIType.Village, "Timber", Streets, Timber)
 				.S(Granary, 0, 1, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(Apiary, 0, 2, Scatter, style: Timber)
@@ -430,10 +430,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Elsewhere(0.02f).In(1.2f, Steppe).In(0.6f, Arid).In(1f, Cold).Pad(0.8f);
 
 			// Towns: two or more streets, a market square.
-			// (2026-10-19) A town's shops line its streets among the houses, its healer, bakehouse, brewhouse and workshops, a counting
+			// A town's shops line its streets among the houses, its healer, bakehouse, brewhouse and workshops, a counting
 			// house, perhaps a market hall on the square and a guard's barracks; the wizard's tower, the butts and the practice yard,
 			// the dyers and the potters at its edge, where there is room and the smoke and the stink are least in the way.
-			// (2026-10-19) Its parish church, its town hall on the square and a fountain on the market every town keeps; a stone cross
+			// Its parish church, its town hall on the square and a fountain on the market every town keeps; a stone cross
 			// beside it in some.
 			T(a, POIType.Town, "Timber", Streets, Timber)
 				.S(Granary, 1, 2, Scatter, style: Timber).S(Dovecote, 0, 1, Scatter, style: Stone).S(TanningYard, 0, 1, Scatter, style: Timber).S(Apiary, 0, 1, Scatter, style: Timber)
@@ -472,7 +472,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(MarketHall, 1, 1, Street).S(Fountain, 1, 1, Centre)
 				.Elsewhere(0.6f).In(1.2f, Woods).In(0.2f, Arid).Races(Civil);
 
-			// Cities: walled in stone, gatehouses on the main streets, a keep in the middle. (2026-10-19) A cathedral fronting the square
+			// Cities: walled in stone, gatehouses on the main streets, a keep in the middle. A cathedral fronting the square
 			// and a parish church or two; fountains on the market in place of the second and third wells (wells stand
 			// PointOfInterestLayouts.WellSpacing apart; a fountain is no well); its cemetery outside the walls (PointOfInterestOutskirts).
 			T(a, POIType.City, "Stone", Walled, Stone)
@@ -482,7 +482,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(ParishChurch, 1, 1, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
 				.S(Stable, 1, 2, Scatter, style: Timber).S(Notice, 2, 3, Centre, style: Timber)
 				.S(Storage, 10, 20, Scatter).S(Banner, 4, 8, Scatter)
-				// (2026-10-19) Every trade and calling a city keeps.
+				// Every trade and calling a city keeps.
 				.S(MarketHall, 1, 1, Street).S(Library, 1, 1, Street).S(ShopHouse, 4, 8, Street).S(Healer, 1, 2, Street).S(Bakery, 1, 2, Street)
 				.S(Workshop, 2, 2, Street).S(Brewhouse, 1, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 1, Street).S(GuardHouse, 0, 2, Street)
 				.S(Warehouse, 0, 1, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
@@ -504,9 +504,9 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Cathedral, 1, 1, Street).S(Fountain, 1, 2, Centre)
 				.Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
-			// The capital: larger than a city (the planner's footprint), more of everything, the palace at its heart (2026-10-19: its
+			// The capital: larger than a city (the planner's footprint), more of everything, the palace at its heart (its
 			// centre slot was the keep; the palace compound, PointOfInterestPalace, stands where the keep stood, the slot changed in place).
-			// (2026-10-20: "There should only be one or two of the same type of structure in a town, city, village, capital, etc.") Not
+			// ("There should only be one or two of the same type of structure in a town, city, village, capital, etc.") Not
 			// more of each building, though: a city and the capital keep one of each landmark and at most two of any other building
 			// (PointOfInterestStructureCaps, which PropsFeature holds every slot to), their size in their houses and shop-houses.
 			T(a, POIType.Capital, "Stone", Walled, Stone)
@@ -516,7 +516,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(ParishChurch, 1, 2, Street, style: Stone).S(Temple, 1, 1, Street, style: Stone).S(Tavern, 2, 2, Street, style: Timber).S(Smithy, 2, 2, Street, style: Timber)
 				.S(Stable, 2, 2, Scatter, style: Timber).S(Notice, 3, 5, Centre, style: Timber)
 				.S(Storage, 20, 30, Scatter).S(Banner, 8, 12, Scatter)
-				// (2026-10-19) The realm's seat: every trade and calling, its astronomer's tower and its mage's.
+				// The realm's seat: every trade and calling, its astronomer's tower and its mage's.
 				.S(MarketHall, 1, 1, Street).S(Library, 1, 1, Street).S(ShopHouse, 6, 10, Street).S(Healer, 2, 2, Street).S(Bakery, 2, 2, Street)
 				.S(Workshop, 2, 2, Street).S(Brewhouse, 2, 2, Street).S(CountingHouse, 1, 1, Street).S(Barracks, 1, 2, Street).S(GuardHouse, 2, 2, Street)
 				.S(Warehouse, 1, 2, Street).S(Pillory, 1, 1, Centre).S(StoneCross, 1, 1, Centre)
@@ -539,14 +539,14 @@ namespace FishMMO.Shared.WorldDesign
 				.Sized(false, false, true).Elsewhere(0.4f).In(1.5f, Woods).In(1f, Cold).In(0.05f, Arid).Races(Civil);
 
 			// Ports: a waterfront street, piers out from the shore ahead (the planner turns a port to the sea).
-			// A port is a harbour town (2026-10-12: "Harbours should probably have towns to go with them"): its
+			// A port is a harbour town ("Harbours should probably have towns to go with them"): its
 			// waterfront has the taverns, chapel, smithy and warehouses a town's has, and the ships at its piers and in its
 			// roads are PointOfInterestHarbour's.
 			T(a, POIType.Port, "Timber", Streets, Timber)
 				.S(Pier, 2, 4, Piers).S(Well, 1, 1, Centre).S(Stall, 3, 6, Centre).S(Notice, 1, 1, Centre).S(House, 12, 22, Street)
 				.S(Tavern, 1, 2, Street).S(Church, 0, 1, Street, style: Stone).S(Smithy, 1, 1, Street).S(Stable, 0, 1, Scatter)
 				.S(Storage, 12, 22, Scatter).S("=Woodpile", 1, 3, Scatter).S(Lighthouse, 0, 1, Scatter).S(Banner, 1, 3, Scatter)
-				// (2026-10-19) The merchants' warehouses and counting house, the ship-chandlers' and coopers' shops (PointOfInterestTrades).
+				// The merchants' warehouses and counting house, the ship-chandlers' and coopers' shops (PointOfInterestTrades).
 				.S(Warehouse, 1, 2, Street).S(ShopHouse, 3, 6, Street).S(Workshop, 1, 2, Street).S(Bakery, 0, 1, Street).S(Healer, 0, 1, Street)
 				.S(CountingHouse, 0, 1, Street).S(Pillory, 0, 1, Centre)
 				.In(0.2f, Arid).In(0.6f, Highland);
@@ -576,7 +576,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static void Strongholds(List<PointOfInterestTemplateSpec> a)
 		{
-			// (2026-10-19) A garrison drills: a practice yard in a keep's ward, a castle's barracks and its butts. (2026-10-19: "the large
+			// A garrison drills: a practice yard in a keep's ward, a castle's barracks and its butts. ("the large
 			// castles should have an interior town/village with at least a barracks and stable") Every castle's ward is its village:
 			// the garrison's barracks and the stable for its horses, a smithy, a bakehouse, houses backed onto the curtain round the
 			// keep, perhaps a chapel; its well out in the open ward, laid after the buildings (beside the keep, where a centrepiece
@@ -622,7 +622,7 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Tower, "Stone", Single, Stone)
 				.S(WallTower, 1, 1, Centre).S(Storage, 1, 3, Scatter).S(Banner, 0, 1, Scatter)
 				.Elsewhere(0.4f).In(2f, Arid).In(2f, Highland);
-			// A mage's tower alone in the wilds (2026-10-19: "Wizard tower (with optional library?)"): its rune stones and glowing jars
+			// A mage's tower alone in the wilds ("Wizard tower (with optional library?)"): its rune stones and glowing jars
 			// about it, a hive and a well for the long years. And an astronomer's tower ("giant telescopes to see the stars?"), best
 			// under the dry, clear skies of the high and arid places.
 			T(a, POIType.Tower, "Wizard", Single, Stone)
@@ -640,7 +640,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// Spans laid across the river the planner sited it on, as long as the water is wide (PropsFeature.MeasureCrossing).
 			T(a, POIType.Bridge, "Timber", Linear, Timber).S(Bridge, 1, 1, Span).Pad(0f);
-			/* The country bridges the biome drafts name (2026-10-26, I2l-b; BiomeCrossingStyle): weighed nowhere (Elsewhere 0), so no seeded
+			/* The country bridges the biome drafts name (BiomeCrossingStyle): weighed nowhere (Elsewhere 0), so no seeded
 			 * pick ever draws one; the stage builds a crossing from its style's variant (PathCrossings.StyleVariant) where the biome at its
 			 * ends names the style and the span fits it. Each span is laid by its piece's id, so no older "bridge" query draws one. */
 			T(a, POIType.Bridge, "Liana", Linear, Timber).S("=LianaBridge", 1, 1, Span).Pad(0f).Elsewhere(0f);
@@ -655,7 +655,7 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Mine, "Adit", Single, Timber)
 				.S(LeanTo, 1, 2, Scatter).S(Storage, 3, 6, Scatter).S("=OreBin", 0, 1, Scatter)
 				.S(Rubble, 2, 4, Scatter, style: Stone).S(Fire, 0, 1, Scatter).S(TorchPost, 1, 2, Scatter).Pad(0.7f);
-			// Mines that do not all look alike (2026-10-12): a shaft head with its headframe and ore bins; a worked-out
+			// Mines that do not all look alike: a shaft head with its headframe and ore bins; a worked-out
 			// one left to the weather; and a delving, cut by a hold's masons. The portal the cave dressing puts at the mouth
 			// follows the template's name (PointOfInterestCaveDressing.PortalVariant).
 			T(a, POIType.Mine, "Shaft Head", Scattered, Timber)
@@ -676,7 +676,7 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Lighthouse, "Stone", Single, Stone)
 				.S(Lighthouse, 1, 1, Centre).S(Storage, 1, 3, Scatter, style: Timber).S(Cottage, 0, 1, Scatter, style: Timber);
 
-			// A shipwright's yard (2026-10-12: "We need docks (dockyards should be Points of interest)"): a ship on the
+			// A shipwright's yard ("We need docks (dockyards should be Points of interest)"): a ship on the
 			// stocks in the middle of the yard, the planner having turned it to the sea; a pier out over the water, the
 			// shipwright's house, sheds and a forge for the ironwork, timber stacked to season. Boats lie at the pier
 			// (PointOfInterestHarbour).
@@ -684,9 +684,9 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Slipway, 1, 1, Centre).S(Pier, 1, 2, Piers).S(House, 1, 1, Scatter).S(LeanTo, 1, 2, Scatter).S(Smithy, 0, 1, Scatter)
 				.S("=Woodpile", 2, 4, Scatter).S(Storage, 3, 6, Scatter).S("=Cart", 0, 1, Scatter).S(TorchPost, 1, 3, Scatter).Pad(0.6f);
 
-			// Mills (2026-10-14: "Windmills, watermills, lumbermills, and more"). The tower mill on the rise the planner chose
+			// Mills ("Windmills, watermills, lumbermills, and more"). The tower mill on the rise the planner chose
 			// for its wind, among the fields it grinds for (PointOfInterestFields), the miller's cottage and granary by it.
-			// (2026-10-15: the post mill it replaced stood on a mound or an open trestle, "weird platforms". The template keeps
+			// (the post mill it replaced stood on a mound or an open trestle, "weird platforms". The template keeps
 			// its name "Post" so re-authoring overwrites the asset: a stale template is left in place and still picked.)
 			T(a, POIType.Windmill, "Post", Single, Timber)
 				.S(TowerMill, 1, 1, Centre, style: Stone).S(Cottage, 0, 1, Scatter).S(Granary, 0, 1, Scatter).S("=Cart", 0, 1, Scatter).S("=HayBales", 1, 2, Scatter)
@@ -694,7 +694,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The watermill on the bank the planner sited it on, its front (the wheel's side) to the river, its floor a fixed
 			// freeboard over the water (StructurePieces.RiverBankFreeboard). The pad levels its yard to that floor and stops at
 			// the shore (PointOfInterestPad.Shore): a whole disc once filled the channel the wheel turns in, and no pad at all
-			// left the mill sunk into a bank that rose behind it (2026-10-15).
+			// left the mill sunk into a bank that rose behind it.
 			T(a, POIType.Watermill, "Wheel", Single, Stone)
 				.S(Watermill, 1, 1, Centre).S(Cottage, 0, 1, Scatter, style: Timber).S("=Cart", 0, 1, Scatter, style: Timber).S(Storage, 2, 4, Scatter, style: Timber)
 				.S(Apiary, 0, 1, Scatter, style: Timber).Pad(1f);
@@ -788,7 +788,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Shrine, 1, 1, Centre).S(Statue, 1, 2, Centre).S(Well, 1, 1, Centre)
 				.S(StoneHouse, 3, 6, Street).S(Storage, 2, 5, Scatter, style: Timber)
 				.S(Dovecote, 0, 1, Scatter).S(Apiary, 1, 2, Scatter, style: Timber).S(Granary, 0, 1, Scatter, style: Timber)
-				// (2026-10-19) The house's scriptorium, its infirmary and its brewhouse; its tithe barn is its grange's, by its fields
+				// The house's scriptorium, its infirmary and its brewhouse; its tithe barn is its grange's, by its fields
 				// (PointOfInterestFarmsteads).
 				.S(Library, 0, 1, Street).S(Healer, 0, 1, Street).S(Brewhouse, 0, 1, Street);
 			T(a, POIType.Monastery, "Timber", Walled, Timber)
@@ -830,7 +830,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			T(a, POIType.Barrow, "Ringed", Round, Stone)
 				.S(Menhir, 5, 9, Ring, 0f, 0.3f).S(CryptDoor, 1, 1, Centre).S(Mound, 1, 3, Scatter);
-			// A barrow being opened (2026-10-19: "archeologists"): the trench cut into its mound, the diggers' finds and their tents.
+			// A barrow being opened ("archeologists"): the trench cut into its mound, the diggers' finds and their tents.
 			T(a, POIType.Barrow, "Excavated", Round, Stone)
 				.S(Menhir, 4, 7, Ring, 0.1f, 0.5f).S(DigSite, 1, 1, Centre, style: Earth).S(DigCamp, 1, 2, Scatter, style: Timber)
 				.S(Tent, 1, 2, Scatter, style: Hide).S(Storage, 1, 3, Scatter, style: Timber).S(Mound, 0, 2, Scatter)
@@ -862,7 +862,7 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.Ruins, "Temple", Round, Stone)
 				.S(Column, 6, 10, Ring, 0.3f, 0.9f).S(Altar, 1, 1, Centre, 0.2f, 0.5f).S(Rubble, 2, 4, Scatter).S(RuinedStatue, 0, 2, Scatter)
 				.Weighs(0.5f).In(1.5f, Arid).Pad(0.5f);
-			// Ruins under excavation (2026-10-19: "archeologists"): an ancient floor being bared, a trench, the finds and the diggers' camp.
+			// Ruins under excavation ("archeologists"): an ancient floor being bared, a trench, the finds and the diggers' camp.
 			T(a, POIType.Ruins, "Excavation", Scattered, Stone)
 				.S(DigSite, 1, 2, Scatter, style: Earth).S(DigCamp, 1, 3, Scatter, style: Timber).S(RuinedWall, 2, 5, Scatter).S(BrokenColumn, 2, 4, Scatter)
 				.S(RuinedHouse, 0, 2, Scatter).S(Tent, 1, 2, Scatter, style: Hide).S(Storage, 2, 4, Scatter, style: Timber).S(Rubble, 2, 4, Scatter)
@@ -886,7 +886,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Columns and statues lining both sides of the road (along the heading); decay breaks some of them.
 			T(a, POIType.AncientRoad, "Colonnade", Linear, Stone)
 				.S(Column, 4, 10, Street, 0.1f, 0.8f).S(RuinedStatue, 0, 2, Street).S(Rubble, 1, 3, Scatter).Pad(0f);
-			// The dry country's old road (2026-10-27, Salt Flat's escarpment track): a caravan trace walled with dry stone where it
+			// The dry country's old road (Salt Flat's escarpment track): a caravan trace walled with dry stone where it
 			// climbs, rest-cairns along it, fallen courses beside it. Weighs nothing in any pick of its own: a biome names it (Salt Flat,
 			// whose colonnade has no place on a salt pan).
 			T(a, POIType.AncientRoad, "Caravan Track", Linear, Stone)
@@ -948,7 +948,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static void Coast(List<PointOfInterestTemplateSpec> a)
 		{
 			// A wreck is its hull on the beach (a cog's stern half, or a longship's bones) and its cargo strewn about it
-			// (2026-10-12: "Shipwrecks don't have a wrecked ship mesh?").
+			// ("Shipwrecks don't have a wrecked ship mesh?").
 			T(a, POIType.Wreck, "Debris", Scattered, Timber)
 				.S(Shipwreck, 1, 1, Centre).S(Storage, 3, 8, Scatter, 0.3f, 0.8f).S(Rubble, 0, 2, Scatter, style: Stone);
 
@@ -972,7 +972,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Wall, 1, 1, Perimeter, 0.4f, 0.9f).S(Gate, 2, 2, Gates, 0.5f, 0.8f).S(Keep, 1, 1, Centre, 0.6f, 0.8f)
 				.S(Statue, 1, 3, Centre, 0.3f, 0.9f).S(House, 15, 35, Street, 0.5f, 1f).S(Column, 4, 10, Scatter, 0.3f, 0.9f)
 				.S(Rubble, 6, 12, Scatter).Weathered(PointOfInterestFinish.Algae).Pad(0f);
-			/* The sea floor's own sites (2026-10-25, phase I2m, decision 36 (b)): the land kinds' pieces under the sea's growth until
+			/* The sea floor's own sites: the land kinds' pieces under the sea's growth until
 			 * I7 gives them their own (drowned shrine, kraken den, crystal garden, colossus). */
 			T(a, POIType.SunkenShrine, "Drowned", Single, Stone)
 				.S(Shrine, 1, 1, Centre, 0.2f, 0.6f).S(Menhir, 0, 2, Scatter, 0.2f, 0.6f, 0.6f, 0.9f).S(Rubble, 1, 3, Scatter)
@@ -1032,7 +1032,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			// The door set into the rock face the planner found, at the threshold its shaper cut there (DungeonEntranceShaper):
 			// the centrepiece only, laid square to the face; its forecourt is dressed about the door's axis by the dungeon
-			// entrance feature, never strewn up the cliff (2026-10-18). The dungeon behind it is hand-made (2026-10-10).
+			// entrance feature, never strewn up the cliff. The dungeon behind it is hand-made.
 			T(a, POIType.DungeonEntrance, "Door", Single, Stone)
 				.S(DungeonPortal, 1, 1, Centre).In(1.4f, Highland).In(1.3f, Arid);
 			T(a, POIType.DungeonEntrance, "Barrow", Single, Stone)
@@ -1061,17 +1061,17 @@ namespace FishMMO.Shared.WorldDesign
 				.Weathered(PointOfInterestFinish.Charred, 1f).Pad(0f);
 		}
 
-		// ── The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS) ─────
+		// ── The biomes' own kinds ─────
 
 		/// <summary>
-		/// Placeholders on the kit's pieces for the biome rounds' kinds that the kit already reads as (a sunk gate, a flooded forum, a
-		/// marsh tower, a toppled colossus, a rune door, a chapel, a well-head, a quarantined hamlet), until I7 gives each its signature
+		/// Placeholders on the kit's pieces for the biomes' kinds that the kit already reads as (a sunk gate, a flooded forum, a
+		/// marsh tower, a toppled colossus, a rune door, a chapel, a well-head, a quarantined hamlet), until a later pass gives each its signature
 		/// pieces. The kinds the kit cannot show yet (the canyon's lip, a cinder cone, a reed isle, a war engine) have none: they are
 		/// named and discovered but lay nothing. No biome hosts any of them yet, so no scene builds one.
 		/// </summary>
 		private static void RoundKinds(List<PointOfInterestTemplateSpec> a)
 		{
-			// Volcanic Temple (decision 95): the smiths' relics in the cinder, the phoenix's stone ring and pyre, a shrine in a tube mouth.
+			// Volcanic Temple: the smiths' relics in the cinder, the phoenix's stone ring and pyre, a shrine in a tube mouth.
 			T(a, POIType.AncientForge, "Relics", Scattered, Stone)
 				.S(RuinedWall, 1, 2, Scatter).S(Menhir, 1, 1, Centre, 0.2f, 0.5f, 0.8f, 1.2f).S(Brazier, 1, 2, Scatter).S(Rubble, 3, 6, Scatter)
 				.Weathered(PointOfInterestFinish.Charred, 0.5f).Pad(0.4f);
@@ -1082,7 +1082,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Shrine, 1, 1, Centre).S(Altar, 0, 1, Scatter).S(Brazier, 1, 2, Scatter)
 				.Weathered(PointOfInterestFinish.Charred, 0.3f).Pad(0.6f);
 
-			// Swamp Ruins (decision 87): the drowned city's gate sunk to its arch in black water and its flooded forum.
+			// Swamp Ruins: the drowned city's gate sunk to its arch in black water and its flooded forum.
 			T(a, POIType.MireGate, "Drowned", Single, Stone)
 				.S(Gate, 1, 1, Centre, 0.3f, 0.6f).S(RuinedWall, 2, 4, Scatter).S(Rubble, 1, 3, Scatter)
 				.Weathered(PointOfInterestFinish.Algae, 0.8f).Wet().Pad(0.3f);
@@ -1099,7 +1099,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(CryptDoor, 1, 1, Centre).S(RuneStone, 2, 4, Scatter).S(Rubble, 0, 2, Scatter)
 				.Weathered(PointOfInterestFinish.Mossy, 0.5f).Pad(0.6f);
 
-			// Swamp Temple (decision 88): the frogs' mound and its stone, a fowler's reed hide, a potters' brick kiln.
+			// Swamp Temple: the frogs' mound and its stone, a fowler's reed hide, a potters' brick kiln.
 			T(a, POIType.FrogShrine, "Mound", Single, Earth)
 				.S(Mound, 1, 1, Centre).S(Shrine, 1, 1, Centre, style: Stone).S(Menhir, 2, 4, Ring, 0f, 0.2f, 0.4f, 0.6f, style: Stone)
 				.Weathered(PointOfInterestFinish.Mossy, 0.5f).Pad(0.6f);
@@ -1108,7 +1108,7 @@ namespace FishMMO.Shared.WorldDesign
 			T(a, POIType.BrickKiln, "Kiln", Scattered, Timber)
 				.S(PotteryKiln, 1, 1, Centre).S(LogPile, 1, 2, Scatter).S(Storage, 2, 4, Scatter).S(LeanTo, 0, 1, Scatter).Pad(0.7f);
 
-			// Wasteland (decision 96): the stroke's cursed stone with its walls thrown outward, the lone chapel, the holy well (its
+			// Wasteland: the stroke's cursed stone with its walls thrown outward, the lone chapel, the holy well (its
 			// spring chapel only on a world with water: the silent well-head anywhere), the quarantined vill with its pyres.
 			T(a, POIType.BlightedCrater, "Stroke", Scattered, Stone)
 				.S(Menhir, 1, 1, Centre, 0.2f, 0.5f, 0.9f, 1.2f).S(RuinedWall, 3, 6, Ring, 0.6f, 1f).S(Rubble, 4, 8, Scatter)

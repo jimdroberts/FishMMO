@@ -25,7 +25,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// One broad paddle leaf filling the cell from its stalk (v = 0) to its rounded tip (v = 1), pale midrib up the
 		/// middle, torn between its veins (banana, heliconia, monstera). The last two free cells were claimed by the
-		/// vegetation expansion (2026-10-10): after it and <see cref="Strand"/> the atlas is full, and another shape
+		/// vegetation expansion: after it and <see cref="Strand"/> the atlas is full, and another shape
 		/// means growing the grid.
 		/// </summary>
 		Paddle = 13,
@@ -110,7 +110,7 @@ namespace FishMMO.Shared.WorldDesign
 					case FoliageCell.BushBroad: DrawLeafMass(canvas, 110, 0.17f, 0.26f, 0.55f); break;
 					case FoliageCell.BushSmall: DrawLeafMass(canvas, 620, 0.06f, 0.1f, 0.5f); break;
 					case FoliageCell.BushNeedle: DrawNeedleMass(canvas); break;
-					// Drawn last of the shapes (2026-10-10): each cell's stream is seeded by its index, so these change no
+					// Drawn last of the shapes: each cell's stream is seeded by its index, so these change no
 					// other cell's pixels.
 					case FoliageCell.Paddle: DrawPaddle(canvas); break;
 					case FoliageCell.Strand: DrawStrands(canvas); break;

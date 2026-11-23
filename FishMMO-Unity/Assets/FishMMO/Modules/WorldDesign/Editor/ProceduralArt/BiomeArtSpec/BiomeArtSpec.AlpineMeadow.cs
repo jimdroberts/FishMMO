@@ -13,7 +13,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Alpine Meadow</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry AlpineMeadow()
 		{
-			// The Carpathian high pastures (biome round, approved 2026-10-18, authored 2026-10-26): long bald grass ridges rising
+			// The Carpathian high pastures: long bald grass ridges rising
 			// out of the spruce, a mauve haze of bent-grass over gold arnica, bellflower and rampion, white false hellebore standing
 			// ungrazed, gentian spires, seas of dwarf mugo pine and crimson rhododendron on the north faces, crocus carpets at the
 			// last snow, rust-brown rush on the wind ridges, grey-green flysch ribs and slab fields where the ridge breaks, old stone
@@ -22,9 +22,9 @@ namespace FishMMO.Shared.WorldDesign
 			// rings, the storm-wizards' black tarns, the stone flock on the ridge, stormglass in the caves). Three reaches: the
 			// MELTLINE (t ≤ −0.35: snow patches, crocus melt-turf), the DRY LIMESTONE (h ≤ 0.1: blue moor-grass, edelweiss, karren)
 			// and the WET springs (h ≥ 0.3: flushes, tall herbs).
-			// LATER (I9): every ground and object texture as Alpine Meadow's own variant of its recipe (decision 12); until then the
+			// LATER: every ground and object texture as Alpine Meadow's own variant of its recipe; until then the
 			// grounds below are Alpine Meadow's own recipes and the barks, leaves and stones the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Sanziene (midsummer honey-lemon) + Ielebloom (the dancers' hot
+			// LATER (no spec column yet): rare looks Sanziene (midsummer honey-lemon) + Ielebloom (the dancers' hot
 			// magenta) (BiomeTemplate.rareLookA/B).
 			return E("Alpine Meadow", L(Ground.GrassMeadowPolonyna,
 					// The polonyna turf: bent and red fescue under a mauve haze, sweet vernal grass, gold arnica and blue bells.
@@ -40,7 +40,7 @@ namespace FishMMO.Shared.WorldDesign
 					// The dock ring round every fold and byre, and the litter of a grazed summer thickest there.
 					Moded(Plants("DockAlpine", 3f), BiomeScatterMode.NearSites("Camp,Village,Hermitage", 40f)),
 					Plants("DebrisPasture", 3f, 128),
-					// Fairy rings (and the dancers' burnt ones). LATER (I9b P29): one ring in six a scorched dead ring; all live here.
+					// Fairy rings (and the dancers' burnt ones). LATER: one ring in six a scorched dead ring; all live here.
 					Moded(Plants("FairyRing", 1.5f), BiomeScatterMode.FairyRings(7f, 0.35f)),
 					// Marmot burrows in the stony slopes of the drier side.
 					With(Band(Plants("DebrisMarmotSpoil", 0.3f, 128), -1f, 1f, -1f, 0.5f), s => s.Slope = new Vector2(10f, 30f)),
@@ -49,10 +49,10 @@ namespace FishMMO.Shared.WorldDesign
 					Faced(Bush("CarpathianRhododendron", 0.3f), BiomeFacing.Poleward),
 					// Old stone pines on the knolls (lone ones in the open), wind-flagged spruce at the forest edge.
 					With(Stand(Was(0.03f, 16f), 30f, W(0.06f, 0.4f, open: 0.05f), "Cembra"), s => s.Height = new Vector2(0.64f, 0.74f)),
-					// LATER (I9b P26): the FlagSpruce's Flag (windward branches stripped) and Skirt (a ring of layered offshoots) fields;
+					// LATER: the FlagSpruce's Flag (windward branches stripped) and Skirt (a ring of layered offshoots) fields;
 					// a leaning spruce crowned to the ground stands in.
 					With(Trees(0.006f, 35f, 30f, "FlagSpruce"), s => s.Height = new Vector2(0.6f, 0.68f)),
-					// LATER (I9b): a standing-snag deadwood form; a dead stone pine as a tree stands in.
+					// LATER: a standing-snag deadwood form; a dead stone pine as a tree stands in.
 					Trees(0.003f, 50f, 35f, "SnagCembra"),
 					// The flysch: rib rows on the slopes, the high slab seas, sandstone tors, the stone crone on the ridge with her flock.
 					With(Outcrops("Flysch ribs", 0.008f, 30f, F(RegionalRocks.Flysch, "Ribs"), 28f), s => s.Slope = new Vector2(10f, 28f)),
@@ -113,7 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Alpine)
 				// Approved: the tarns' and springs' dippers, newts and frogs (FreshWater) beside the grassland and mountain life.
 				.Wildlife(BiomeHabitat.Grassland | BiomeHabitat.Mountain | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): chamois on the crags, whistling marmots, a brown bear at dusk by a fold, wolf howls, golden eagle,
+				// LATER: chamois on the crags, whistling marmots, a brown bear at dusk by a fold, wolf howls, golden eagle,
 				// water pipit, alpine accentor, nutcracker, Apollo butterflies, newts in the tarns; sheep flocks with white sheepdogs,
 				// belled cattle, mountain ponies; the veiled dancers circling at night and a dragon in the hail clouds (storms only).
 				// LATER (WEATHER/sound): the long horn's call across the ridges, sheep and cow bells.
@@ -187,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Delta, 1f), (POIType.Mesa, 1f), (POIType.Butte, 1f), (POIType.Island, 1f), (POIType.Bay, 1f), (POIType.Headland, 1f),
 					(POIType.NaturalArch, 1f), (POIType.Grotto, 1f), (POIType.SeaCave, 1f), (POIType.Overhang, 1f), (POIType.FishingCamp, 1f),
 					(POIType.Ossuary, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 0.4f), (POIType.GoblinWarren, 1f),
 					(POIType.HauntedManor, 1f), (POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f),
 					(POIType.WreckedCaravan, 0.6f), (POIType.Crossroads, 1f), (POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 0.8f),
@@ -245,7 +245,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Hermitage, "Cottage", 0.4f)
 				.Prefers(POIType.Waystation, "Inn", 1.2f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Dwarven Hold", 1f)
 				.Prefers(POIType.Tower, "Dwarven Tower", 1f)
@@ -263,8 +263,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Grange, "Walled Barton", 1.3f)
 				.Prefers(POIType.Henge, "Sun Ring", 1.3f)
 				.Prefers(POIType.SilverMineTown, "Timber Camp", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Alpine Meadow's signature pieces and their variants — the summer fold with its cheese hut, milking gate and
+				// (the fantasy set's variants end here)
+				// LATER: Alpine Meadow's signature pieces and their variants — the summer fold with its cheese hut, milking gate and
 				// leaning-pole fold (Camp "Stana" 2.0) and the herdsman's hut (Camp/Hermitage "Koliba" 0.8/0.6), the painted log house
 				// with its gable hood and houseleeks on the ridge, the carved oak gate, the needle-spire church (Temple 1.6, Monastery
 				// 0.8 "Needle Church"), the painted fresco monastery (Monastery "Painted" 1.2), the roofed wayside cross (Shrine "Troita"
@@ -281,9 +281,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Earth, 0f)
 				// The palette: dark hewn logs with white-limed chinks under steep fir shakes at the 60° Goral pitch (approved), dry-laid
 				// flysch plinths, carved oak, leaning-pole fences, black iron with brass inlay, white-black-red woollen cloth and
-				// woven banded banners. LATER (NEW-SURFACES U11): HewnLog (squared beams, dovetails, painted joint-ends), Shake (riven
+				// woven banded banners. LATER: HewnLog (squared beams, dovetails, painted joint-ends), Shake (riven
 				// fir shakes; church scale pattern), Cerga (long-pile blanket) and Kilim (woven bands) as Alpine Meadow's own surfaces;
-				// LATER (NEW-SURFACES U6): the painted monastery's exterior Fresco (plain lime stands in). The shared surfaces tinted stand in.
+				// LATER: the painted monastery's exterior Fresco (plain lime stands in). The shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Log, UplandHex("#6a4a2e"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Log, UplandHex("#5a3e28"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Roof, BiomeStructureMaterial.Shingle, UplandHex("#5a524a"), pitch: BiomeRoofPitch.Pitch60)
@@ -323,7 +323,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Crops(("Detail_GrassMountainOats", 0.45f), ("Detail_FlowersFlax", 0.2f), ("Detail_GrassHayMeadow", 0.35f))
 				.CropSurface("Detail_GrassMountainOats", BiomeFieldSurface.RidgeAndFurrow)
 				// Leaning-pole fences along the field and meadow edges and the drove lanes; turfed flysch clearance rows on the fields.
-				// The drove lanes are the village's own (2026-10-27, Moron 2: "weird fencing along the roads higher up in the snowy
+				// The drove lanes are the village's own (Moron 2: "weird fencing along the roads higher up in the snowy
 				// hills"): the cart tracks and roads out through its hay meadows, fenced within DroveLaneReach of a settlement; the
 				// high pasture above is open, its footpaths and trails never fenced.
 				.Lines(new Entry.Line(BiomeLinearForm.LeaningPole, BiomeLinearPlace.FieldEdges),
@@ -354,15 +354,15 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.WallLantern, 16f)
 				.CaveLight(BiomeCaveLightPlace.MineStope, BiomeWayLightKind.LanternStand)
 				.CaveLight(BiomeCaveLightPlace.MineLamp, BiomeWayLightKind.HangingLantern)
-				// Houseleek mats on the ruins and crags (and LATER (I7) on every roof ridge, the lightning charm).
-				// LATER (I9b): a rosette-mat leaf for the houseleek; its own species on the palmate leaf stands in.
+				// Houseleek mats on the ruins and crags (and LATER on every roof ridge, the lightning charm).
+				// LATER: a rosette-mat leaf for the houseleek; its own species on the palmate leaf stands in.
 				.GrowsVines(0f, 0.5f, 0.2f, 0f, ("Houseleek", 1f))
 				.Gathers("Arnica Bloom", "Gentian Root", "Iceland Moss", "Carline Star", "Fairy-ring Champignon", "Cembra Heartwood", "Stibnite Vein", "Stormglass Cluster")
 				.Herbs("Detail_HerbArnica", "Detail_GentianYellow", "Detail_HerbMeum", "Detail_LichenIceland")
 				.ErodesAs("Mountain");
 		}
 
-		/// <summary>The flysch boulders (I6b stones of the crust rock): round, slab and spire (the Alpine Meadow file's).</summary>
+		/// <summary>The flysch boulders (stones of the crust rock): round, slab and spire (the Alpine Meadow file's).</summary>
 		private static string[] FlyschBoulders => new[] { Boulder("Flysch", "Round"), Boulder("Flysch", "Slab"), Boulder("Flysch", "Spire") };
 
 		/// <summary>

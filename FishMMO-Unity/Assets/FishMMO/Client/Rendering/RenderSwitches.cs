@@ -6,7 +6,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Named runtime switches modules offer the rendering test beds (the browser probe's SetSetting, the native player's
 	/// --set-a / --set-b): "ambientLife=0" turns the Ambient Life module's animals off for an A/B, and the test bed names no
-	/// module (Phase 4 of the core and modules plan, 2026-11-17).
+	/// module.
 	/// </summary>
 	public static class RenderSwitches
 	{

@@ -94,8 +94,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
-		/// The clock report: the installed world module's (<c>/gm clock</c>: the date and local time too) when there is one
-		/// (Phase 4 of the core and modules plan, 2026-11-18), else the core clock's world time.
+		/// The clock report: the installed world module's (<c>/gm clock</c>: the date and local time too) when there is one, else the core clock's world time.
 		/// </summary>
 		private void ReportClockOrTime(IPlayerCharacter character)
 		{

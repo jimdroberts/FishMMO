@@ -1,6 +1,6 @@
 # FishMMO Control Panel
 
-> **Status (2026-09-26): every route the sidebar offers is built.** Sign-in, registration,
+> **Status: every route the sidebar offers is built.** Sign-in, registration,
 > two-factor enrolment, self-service, the operator character surface, account search and
 > moderation, the audit log, chat log search, the support ticket system, guilds and parties,
 > the server board with lock and shutdown control, sequenced maintenance windows, scene
@@ -21,7 +21,7 @@
 > whether or not its author added anything, and the panel refuses to start outside
 > production if a privileged endpoint does not declare what it records.
 >
-> **Staff reads are recorded too, except automatic refreshes** (2026-09-14). The first load of
+> **Staff reads are recorded too, except automatic refreshes**. The first load of
 > a page and every refresh somebody asked for — Refresh, a filter, a page, the re-read after an
 > action — write a `view.<controller>.<action>` row. A page re-reading itself on a timer (the
 > server board, maintenance, bandwidth, daemon hosts, platform health and queues, the character

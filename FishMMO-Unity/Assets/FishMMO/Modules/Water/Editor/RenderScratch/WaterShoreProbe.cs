@@ -62,7 +62,7 @@ namespace FishMMO.RenderScratch
 
 				/* The foam at the waterline from a few metres, standing on the beach: close enough to
 				 * tell lace from a painted band. It was a solid band, every pixel of the lip 45-75%
-				 * white, before the lip was thresholded against the mottle (2026-09-25). */
+				 * white, before the lip was thresholded against the mottle. */
 				// Eye height on the sand (about 0.5 m up at x 244), looking down the gentle 1:37
 				// beach at the lower swash, which runs up to about x 245 from the waterline at 267.
 				camera.transform.position = new Vector3(244f, 2.3f, -3f);
@@ -124,7 +124,7 @@ namespace FishMMO.RenderScratch
 		}
 
 		/// <summary>
-		/// The breakers (2026-09-26): the sea fading out over the shallows and the sheet rising, curling
+		/// The breakers: the sea fading out over the shallows and the sheet rising, curling
 		/// and landing at the break line, stepped through one wave from along the break line at water
 		/// level, from the beach, and from above where the seam would show. Plus a transect of the
 		/// CPU height, which must be still water inshore of the break line and the sea outside it.

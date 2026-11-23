@@ -16,7 +16,7 @@ namespace FishMMO.Shared.Biomes
 	[Serializable]
 	public struct SurfaceMakeup
 	{
-		[Tooltip("Off: not set — the layer's name decides what it is made of, as before 2026-10-15, with a warning.")]
+		[Tooltip("Off: not set — the layer's name decides what it is made of, as formerly, with a warning.")]
 		public bool Set;
 		[Tooltip("Living plant matter: grass sward, moss, heath (1); litter and peat partly. Wears the planet's and the patch's leaves.")]
 		[Range(0f, 1f)] public float Living;
@@ -29,11 +29,11 @@ namespace FishMMO.Shared.Biomes
 	/// <summary>
 	/// The ways across one ground layer of a biome (<see cref="TerrainTextureLayer.ways"/>): the path, road and cobble grounds a
 	/// way is surfaced with where this ground is the strongest under it. Each empty one is the biome's own slot (Small Path,
-	/// Road, Cobbles), as every ground was before 2026-10-16.
+	/// Road, Cobbles), as every ground was formerly.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Decision 19 (2026-10-16, the Taiga round): "a biome's detail layer may carry its own road/path surface (e.g. Taiga
+	/// Decision 19: "a biome's detail layer may carry its own road/path surface (e.g. Taiga
 	/// corduroy log road only across bog layers, gravel elsewhere)". The scene cut lays each override into the terrain arrays
 	/// beside the biome's own way grounds and points the ground layer's column of the layer table at it, so the terrain draws a
 	/// road over this ground with this ground's road; the way's shape (trail, cart track, road, street) still picks which of the
@@ -127,7 +127,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// What the ground in this slot is made of, as the planet's looks see it (2026-10-15: moved off the layer's NAME, which
+		/// What the ground in this slot is made of, as the planet's looks see it (moved off the layer's NAME, which
 		/// BiomeLooks.GroundShareOf read by keywords): x the share of living plant matter (grass sward, moss, heath: it wears
 		/// the planet's and the patch's leaves), y of lichen and coral (the lichen colour), z of mineral (rock, sand, soil, ash:
 		/// the world's own ground colour where its air is thin or absent). A frozen ground keeps most of its own white (a small
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// <b>A ground that changes with the local climate</b> (2026-10-18, decision 29, the Hills round: "temperature bands on
+		/// <b>A ground that changes with the local climate</b> ("temperature bands on
 		/// ground layers so a biome's ground changes with climate"): one biome stretching from a cold valley head to a warm
 		/// mouth paints its frost turf only where the year is cold and its burnt slope only where it is warm. With the band on,
 		/// the layer's strength at a point is multiplied by <see cref="BiomeClimateBand.Weight(Vector2, float, Vector2, float, float, float)"/>
@@ -204,7 +204,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <remarks>
-		/// <b>A ground for one kind of sky</b> (2026-10-18, decision 44, the Dust Sea round: "AIR BANDS on ground layers, so one biome
+		/// <b>A ground for one kind of sky</b> ("AIR BANDS on ground layers, so one biome
 		/// carries an Airless and a Thin palette"): with a band set, the layer is in a scene's palette only when the scene's world
 		/// has one of the airs ticked (BiomeAir.Admits), its spawn rules with it. A main layer whose air the world lacks hands its
 		/// place to the first detail layer whose band names that air (it is painted as the main ground: grey moondust on an airless
@@ -217,7 +217,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>True when the layer is painted on a world of this air (<see cref="airBand"/>; an unknown air, None, passes).</summary>
 		public bool AdmitsAir(BiomeAtmosphereRequirement worldAir) => BiomeAir.Admits(airBand, worldAir);
 
-		/// <remarks><b>A ground for one kind of world</b> (2026-10-25, decision 68): with a band set, a main, detail or cliff layer is in a scene's
+		/// <remarks><b>A ground for one kind of world</b>: with a band set, a main, detail or cliff layer is in a scene's
 		/// palette only on worlds that meet its Requires and none of its Forbids (liquid water on the surface…). A main layer so refused hands
 		/// its place to the first air- or world-banded detail the world admits. Nothing ticked (the default) = every world, as before.</remarks>
 		[Tooltip("Main, detail and cliff layers: paint this ground only on worlds that meet every Requires flag and no Forbids flag (the scene's body), e.g. Requires Liquid Water. Nothing ticked = every world, as before. Written by Author biome art from the spec (a layer's World); set by hand to override.")]
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.Biomes
 		public bool AdmitsWorld(BiomeWorldConditions? world) => !world.HasValue || worldBand.Admits(world.Value);
 
 		/// <remarks>
-		/// <b>A ground of the open land or of the caves</b> (2026-10-25, phase I2n, decision 57: "an UNDERGROUND band on ground layers:
+		/// <b>A ground of the open land or of the caves</b> ("an UNDERGROUND band on ground layers:
 		/// one template carries surface and interior palettes"): a cave biome's mud and gravel for its caves' floors beside the grounds
 		/// it paints where it is the open land. Both (the default) is what every layer was: painted on the terrain and, where its
 		/// kind fits, laid on the floors of the caves the biome dresses inside (CaveRockLayers). Surface: the terrain only. Interior:
@@ -238,7 +238,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeUnderground underground;
 
 		/// <remarks>
-		/// <b>A ground of the hot ground</b> (2026-10-18, phase I2q, decision 47): with the band on, a DETAIL layer is painted only
+		/// <b>A ground of the hot ground</b>: with the band on, a DETAIL layer is painted only
 		/// within a band of the scene's heat mask (baked at the cut from its geothermal sites and their runoff, 0 cold … 1 a
 		/// spring's throat): a geyser basin's white sinter apron near the vents, its thermophile mats in the warm ring, its green
 		/// halo. The band multiplies the layer's patches like its height and slope bands. Main layers, cliffs, beds and ways ignore
@@ -259,7 +259,7 @@ namespace FishMMO.Shared.Biomes
 		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
 
 		/// <remarks>
-		/// <b>A ground of one part of a landform</b> (2026-10-25, phase I2g-b, decision 55: "LANDFORM ZONE MASK as a general ground/spawn
+		/// <b>A ground of one part of a landform</b> ("LANDFORM ZONE MASK as a general ground/spawn
 		/// BAND"): with the band on, a DETAIL layer is painted only on (or, turned round, only off) one part of its biome's sculpted
 		/// landforms: a crater's rays, a basin's mare or wrinkle ridges, a cell field's troughs. It multiplies the layer's patches like
 		/// its heat band. Main layers, cliffs, beds and ways ignore it. Off (the default) paints as before.
@@ -270,7 +270,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <remarks>
 		/// <para>
-		/// <b>A ground of one depth</b> (2026-10-19, phase I2m, decisions 38 and 45: "ground layers get DEPTH bands in metres below
+		/// <b>A ground of one depth</b> ("ground layers get DEPTH bands in metres below
 		/// the water surface", "the depth bands become SIGNED and may be measured in tide units"): with the band on, the layer is
 		/// painted only where the ground lies between two depths below mean sea level, negative above it: a reef's live coral from
 		/// 1 to 30 m, its rubble from 12 to 40 m, a kelp reef in the lit water; and, in tides (1 the lowest tide's depth, −1 the
@@ -314,7 +314,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <remarks>
-		/// <b>A ground measured from the lava</b> (2026-10-25, phase I2r "molten ground", decision 65 (b)): with the band on, a main or
+		/// <b>A ground measured from the lava</b> ("molten ground"): with the band on, a main or
 		/// detail layer is painted only where the ground stands between two heights above the scene's LAVA surface (negative below
 		/// it): a lava lake's glassy shore bench from 0 to 2 m, its spatter up to 8 m. It multiplies the layer's patches as the sea
 		/// depth band does, and on the main layer says where the base ground stands (the details carry the ground outside it). On a
@@ -345,7 +345,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <remarks>
-		/// <b>A ground that glows</b> (2026-10-25, phase I2r, decision 65 (a)): along the seams of a crust that overturns on the shared
+		/// <b>A ground that glows</b>: along the seams of a crust that overturns on the shared
 		/// clock, or over the whole layer from the world's heat (<see cref="BiomeGroundGlow"/>). Baked into the scene's terrain arrays
 		/// with the layer (TerrainArraySet.LayerGlow) and drawn by the terrain shader, and written into the lava's molten mask. None
 		/// (the default) draws as before.
@@ -355,18 +355,18 @@ namespace FishMMO.Shared.Biomes
 		public BiomeGroundGlow glow;
 
 		/// <remarks>
-		/// <b>A ground of the faces that look one way</b> (2026-10-26, phase GROUND-BANDS, decision 71: "a FACING band on ground layers
+		/// <b>A ground of the faces that look one way</b> ("a FACING band on ground layers
 		/// (frost on shaded/poleward faces)"): with the band on, a DETAIL layer is painted only on slopes whose fall line looks within its
 		/// half width of a compass direction from the scene's place on its globe (<see cref="BiomeFacingBand"/>): a shade frost on the
 		/// poleward faces, a cold trap's ice on the shaded walls. It multiplies the layer's patches like its heat band. Main layers, cliffs,
 		/// beds and ways ignore it. Off (the default) paints as before.
 		/// </remarks>
-		[Header("Ground Bands (2026-10-26)")]
+		[Header("Ground Bands")]
 		[Tooltip("Detail layers: paint this ground only on slopes facing one way (poleward = shade, equatorward = sun, east, west, downwind, upwind). Off = every way, as before. Written by Author biome art from the spec (a layer's Facing); set by hand to override.")]
 		public BiomeFacingBand facingBand;
 
 		/// <remarks>
-		/// <b>Patches drawn out down the fall line</b> (2026-10-26, phase GROUND-BANDS; the Valley draft's avalanche tracks: "noise stretched
+		/// <b>Patches drawn out down the fall line</b> (the Valley draft's avalanche tracks: "noise stretched
 		/// ×4 along fall line"): above 1, a DETAIL layer's blend noise is read in each slope's own frame, its patches this many times longer
 		/// down the slope than across it, so a torn track runs from crest to foot. Flat ground keeps the plain noise. 0 or 1 (the default)
 		/// reads the noise as before.
@@ -375,7 +375,7 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 16f)] public float fallLineStretch;
 
 		/// <remarks>
-		/// <b>A ground of the sites</b> (2026-10-26, phase GROUND-BANDS: "sites paint their own layer"): with the band on, a DETAIL layer is
+		/// <b>A ground of the sites</b> ("sites paint their own layer"): with the band on, a DETAIL layer is
 		/// painted only on and round the planned points of interest of its kinds (<see cref="BiomeSiteBand"/>): a whale fall's blackened halo,
 		/// the old burn at a waste vill. On a scene with none of them it paints nowhere. Off (the default) paints as before.
 		/// </remarks>
@@ -383,7 +383,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeSiteBand siteBand;
 
 		/// <remarks>
-		/// <b>A ground that comes and goes with the shared clock</b> (2026-10-26, phase GROUND-BANDS: a seasonal phytodetritus, a dawn SO₂
+		/// <b>A ground that comes and goes with the shared clock</b> (a seasonal phytodetritus, a dawn SO₂
 		/// frost gone by noon): painted at the cut like any detail, then drawn each frame only through a window of the local year or day,
 		/// giving its share to its biome's main ground outside it (<see cref="BiomeGroundClock"/>; baked into the scene's terrain arrays,
 		/// TerrainArraySet.LayerClock, read by FishGroundClock.hlsl). Main and detail layers. None (the default) draws as before.
@@ -391,7 +391,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("How this ground follows the shared clock: None (always, as before), Year (a window of the local season) or Day (of the local hour); outside the window its biome's main ground shows through. Written by Author biome art from the spec (a layer's Clock); takes effect when the scene's terrain arrays are baked again (in place).")]
 		public BiomeGroundClock clock;
 
-		/// <summary>True when the layer's facing band, fall-line stretch or site band changes where its patches lie (2026-10-26, GROUND-BANDS).</summary>
+		/// <summary>True when the layer's facing band, fall-line stretch or site band changes where its patches lie.</summary>
 		public bool HasGroundBands => facingBand.On || fallLineStretch > 1f || siteBand.On;
 
 		[Header("Ways Across This Ground")]

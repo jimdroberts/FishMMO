@@ -10,7 +10,7 @@ namespace FishMMO.UnitTests.AI
 	/// Pins the NavMesh bake settings a terrain scene needs for NPCs to stand on the ground.
 	/// </summary>
 	/// <remarks>
-	/// Measured 2026-09-03 (issue #220): the one scene baked with a height mesh placed the
+	/// Measured (issue #220): the one scene baked with a height mesh placed the
 	/// NavMesh within 1 cm of the terrain everywhere; the three without it floated NPCs a mean
 	/// 10–19 cm above the ground, a quarter of the map by more than 25 cm, with 0.7 m outliers in
 	/// both directions. Without a height mesh a NavMeshAgent stands on the simplified polygon,

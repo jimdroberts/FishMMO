@@ -29,7 +29,7 @@ namespace FishMMO.Shared.Biomes
 		public float VerticalScale;
 		[Tooltip("The solved flow down the scene's rivers, a sub-asset of this map: loaded by clients when they build the water, never by the server.")]
 		public AssetReferenceT<SceneRiverFlow> RiverFlow;
-		[Tooltip("The sea surface's coastal look (BiomeSeaCoast, 2026-10-18): texels along X. 0 when no biome on the map gives the sea a look of its own.")]
+		[Tooltip("The sea surface's coastal look (BiomeSeaCoast): texels along X. 0 when no biome on the map gives the sea a look of its own.")]
 		public int CoastLookWidth;
 		[Tooltip("The sea surface's coastal look: texels along Z.")]
 		public int CoastLookHeight;
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.Biomes
 		public Vector4 CoastLookRect;
 		[Tooltip("The coastal look's texels, RGBA8 row-major from the south-west (BiomeSeaCoast): written with the map by the cut and every repaint.")]
 		[HideInInspector] public byte[] CoastLook = new byte[0];
-		[Tooltip("The ground's heat (BiomeHeatMask, 2026-10-18, I2q): texels along X. 0 when the scene has no hot ground.")]
+		[Tooltip("The ground's heat (BiomeHeatMask): texels along X. 0 when the scene has no hot ground.")]
 		public int HeatWidth;
 		[Tooltip("The ground's heat: texels along Z.")]
 		public int HeatHeight;
@@ -45,7 +45,7 @@ namespace FishMMO.Shared.Biomes
 		public Vector4 HeatRect;
 		[Tooltip("The heat's texels, 0 cold … 255 boiling, row-major from the south-west: baked by the cut and every repaint from the scene's geothermal sites (GeothermalVents.SceneSites) and their runoff.")]
 		[HideInInspector] public byte[] Heat = new byte[0];
-		[Tooltip("True once the cut (or a repaint) has chosen the scene's Great Spout and stored it here (2026-10-25, I2q): the largest geyser it dug, none when it dug no geyser. False on a map cut before, which finds it by search (GeothermalVents.TryGreatSpout).")]
+		[Tooltip("True once the cut (or a repaint) has chosen the scene's Great Spout and stored it here: the largest geyser it dug, none when it dug no geyser. False on a map cut before, which finds it by search (GeothermalVents.TryGreatSpout).")]
 		public bool GreatSpoutBaked;
 		[Tooltip("True when the scene has a Great Spout (read only when GreatSpoutBaked).")]
 		public bool HasGreatSpout;
@@ -53,17 +53,17 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 GreatSpoutPosition;
 		public uint GreatSpoutSeed;
 		public float GreatSpoutSize;
-		[Tooltip("The scene's stored vent lines (2026-10-25, I2q-b, decision 53: IceStripes.Of): the segments of every landform line (a tiger stripe, a rift, a double ridge) and the pads of a biome whose vents do not stand on the grid, written by the cut and every repaint. Empty: every vent on its grid.")]
+		[Tooltip("The scene's stored vent lines (IceStripes.Of): the segments of every landform line (a tiger stripe, a rift, a double ridge) and the pads of a biome whose vents do not stand on the grid, written by the cut and every repaint. Empty: every vent on its grid.")]
 		[HideInInspector] public List<VentLine> VentLines = new List<VentLine>();
-		[Tooltip("True when the scene has a Great Plume (2026-10-25, I2q-b, decision 53): the largest jet on its stored lines, the cut's choice, which never falls under 0.4 of its strength with the plume tide.")]
+		[Tooltip("True when the scene has a Great Plume: the largest jet on its stored lines, the cut's choice, which never falls under 0.4 of its strength with the plume tide.")]
 		public bool HasGreatPlume;
 		[Tooltip("The Great Plume's seed: the jet whose seed it is (GeothermalVents.IsGreatPlume).")]
 		public uint GreatPlumeSeed;
-		[Tooltip("The scene's stored chutes (2026-10-25, I2u falling stone, decisions 79/95: RockChutes.FromLandforms): every scree chute's and sciara's line, head to runout, its points in Chute Points. Written by the cut and every repaint. Empty: no stone falls.")]
+		[Tooltip("The scene's stored chutes (falling stone, RockChutes.FromLandforms): every scree chute's and sciara's line, head to runout, its points in Chute Points. Written by the cut and every repaint. Empty: no stone falls.")]
 		[HideInInspector] public List<RockChute> Chutes = new List<RockChute>();
 		[Tooltip("The stored chutes' points: xyz on the ground (world m), w metres along its chute.")]
 		[HideInInspector] public List<Vector4> ChutePoints = new List<Vector4>();
-		[Tooltip("The scene's stored talus cones (I2u): apex and toe of each, where a breathing talus breathes.")]
+		[Tooltip("The scene's stored talus cones: apex and toe of each, where a breathing talus breathes.")]
 		[HideInInspector] public List<TalusCone> TalusCones = new List<TalusCone>();
 
 		/// <summary>Stores the scene's chutes, their points and its talus cones (<see cref="RockChutes.FromLandforms"/>); nulls clear them.</summary>
@@ -74,7 +74,7 @@ namespace FishMMO.Shared.Biomes
 			TalusCones = cones != null ? new List<TalusCone>(cones) : new List<TalusCone>();
 		}
 
-		[Tooltip("The scene's stored landform lines for its glows (2026-10-25, I6i-b, decisions 76/90: SceneGlowPlaces.FromLandforms): every stretch of every landform line (a rille's or channel's centreline, a ridge's crest) of every biome, written by the cut and every repaint. A TRAIL glow creeps along the nearest, a KNEADING glow reads its bearing. Empty: a fixed bearing and a smooth field, as before.")]
+		[Tooltip("The scene's stored landform lines for its glows (SceneGlowPlaces.FromLandforms): every stretch of every landform line (a rille's or channel's centreline, a ridge's crest) of every biome, written by the cut and every repaint. A TRAIL glow creeps along the nearest, a KNEADING glow reads its bearing. Empty: a fixed bearing and a smooth field, as before.")]
 		[HideInInspector] public List<VentLine> GlowLines = new List<VentLine>();
 
 		/// <summary>Stores the scene's landform lines for its glows (<see cref="SceneGlowPlaces.FromLandforms"/>); null or empty clears them.</summary>
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.Biomes
 			GlowLines = lines != null ? new List<VentLine>(lines) : new List<VentLine>();
 		}
 
-		[Tooltip("The scene's stored lava lines (2026-10-25, I2r, decision 65 (c): BiomeLavaChannels.FromLandforms): every stretch of every molten landform line (a lava channel, an ʻaʻā tongue's channel, a breakout, an ember rill), its half-width the lava's, written by the cut and every repaint. The client draws a lava ribbon along each. Empty: none.")]
+		[Tooltip("The scene's stored lava lines (I2r, decision 65 (c): BiomeLavaChannels.FromLandforms): every stretch of every molten landform line (a lava channel, an ʻaʻā tongue's channel, a breakout, an ember rill), its half-width the lava's, written by the cut and every repaint. The client draws a lava ribbon along each. Empty: none.")]
 		[HideInInspector] public List<VentLine> LavaLines = new List<VentLine>();
 
 		/// <summary>Stores the scene's lava lines (<see cref="BiomeLavaChannels.FromLandforms"/>); null or empty clears them.</summary>
@@ -260,21 +260,21 @@ namespace FishMMO.Shared.Biomes
 			WorldSize = worldSize;
 			// A new grid's coast is baked by whoever wrote it (SceneBiomeField.WriteTo bakes it next); never the old grid's.
 			SetCoastLook(BiomeSeaCoast.Bake.None);
-			// Likewise its heat (the cut and the repaint bake it after writing the grid, 2026-10-18, I2q).
+			// Likewise its heat (the cut and the repaint bake it after writing the grid).
 			SetHeat(BiomeHeatMask.None);
-			// And its Great Spout (stored after the heat, 2026-10-25): until then the map searches, as one cut before did.
+			// And its Great Spout (stored after the heat): until then the map searches, as one cut before did.
 			GreatSpoutBaked = HasGreatSpout = false;
 			GreatSpoutPosition = Vector2.zero;
 			GreatSpoutSeed = 0u;
 			GreatSpoutSize = 0f;
-			// And its vent lines and Great Plume (2026-10-25, I2q-b): written after the grid by the cut and the repaint.
+			// And its vent lines and Great Plume: written after the grid by the cut and the repaint.
 			SetVentLines(null);
 			SetGreatPlume(false, 0u);
-			// And its glows' landform lines (2026-10-25, I6i-b): written after the grid by the cut and the repaint.
+			// And its glows' landform lines: written after the grid by the cut and the repaint.
 			SetGlowLines(null);
-			// And its chutes and talus cones (2026-10-25, I2u): likewise written after the grid.
+			// And its chutes and talus cones: likewise written after the grid.
 			SetRockChutes(null, null, null);
-			// And its lava lines (2026-10-25, I2r): likewise written after the grid.
+			// And its lava lines: likewise written after the grid.
 			SetLavaLines(null);
 			if (groundAltitudes != null && groundAltitudes.Length == Width * Height && verticalScale > 0f)
 			{

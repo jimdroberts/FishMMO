@@ -24,11 +24,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
 				.Moat(BiomeMoatWater.Dry)
-				/* Its vents (2026-10-25, I2q-b, decision 93): vog, not ash (Hawaiian eruptions are effusive; the ash stays with the
+				/* Its vents: vog, not ash (Hawaiian eruptions are effusive; the ash stays with the
 				 * Volcanic Temple), the vents on its rift lines (the grid until a rift's lines are stored) playing in fountain episodes. */
 				.Emits("Vog", 0.12f)
 				.Vents(BiomeVentLayout.Fissures, BiomeVentTiming.Episode)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 1f),
 					(POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -42,14 +42,14 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Lighthouse, 1f), (POIType.SmugglersCove, 1f), (POIType.PirateCove, 1f), (POIType.SunkenShip, 1f),
 					(POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f),
 					(POIType.OreVein, 1f), (POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.4f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f), (POIType.Hamlet, 0.3f),
 					(POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f), (POIType.SpellScar, 0.8f),
 					(POIType.PlanarRift, 0.6f), (POIType.ElderMonolith, 0.4f), (POIType.WaygateRing, 0.3f), (POIType.WyvernNest, 1f),
 					(POIType.FireTemple, 1.2f), (POIType.FireGiantHall, 1.2f), (POIType.SalamanderLair, 1.2f), (POIType.AshBuriedCity, 1.2f),
 					(POIType.Keep, 1f), (POIType.Tower, 1f))
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 1f)
@@ -65,7 +65,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.WarbandCamp, "Black Host", 1.4f)
 				.Prefers(POIType.FireTemple, "Flame House", 1.5f)
 				.Prefers(POIType.AshBuriedCity, "Grey City", 1.4f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Gathers("Iron Vein", "Emberglass Cluster")
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.ErodesAs("Volcanic");

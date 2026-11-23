@@ -11,7 +11,7 @@ namespace FishMMO.Client
 	[DisallowMultipleComponent, DefaultExecutionOrder(-10000)]
 	public sealed class WorldHlod : MonoBehaviour
 	{
-		[Tooltip("Experimental opaque aggregation. General GPU gains and full shading equivalence have not been established (measured 2026-10-29).")]
+		[Tooltip("Experimental opaque aggregation. General GPU gains and full shading equivalence have not been established .")]
 		public WorldHlodData Data;
 		public sealed class Group
 		{

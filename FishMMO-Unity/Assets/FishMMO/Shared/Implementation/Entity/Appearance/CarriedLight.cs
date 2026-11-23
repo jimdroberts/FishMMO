@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 	/// with a three-beat flicker and a warm orange, and its buried lamps at 2.2, steady: marks along a way, not light to see
 	/// it by. A carried torch uses the same flicker and very nearly the same colour (a shade redder, nearer a pitch flame's
 	/// 2200 K), but at the wall torches' strength it lit the rock within an arm's length and left the rest black in the
-	/// cave walkthrough render (2026-10-13: "Ensure we can see and use the torch or a stronger light source for visual
+	/// cave walkthrough render ("Ensure we can see and use the torch or a stronger light source for visual
 	/// clarity"). URP point lights fall off with the square of distance whatever their range, so the strength is what
 	/// carries: the torch reads the floor and walls a room's width off, the lantern most of a hall's. Underground the sky's
 	/// ambient falls to under a tenth (SkySystem's darkness), so these are most of what lights a cave.

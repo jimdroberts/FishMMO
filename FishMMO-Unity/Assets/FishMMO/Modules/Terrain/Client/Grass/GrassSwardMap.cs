@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// <para>
 	/// <b>Why.</b> A blade is shaded toward its root (<see cref="GrassBladeSettings.RootOcclusion"/>: dense grass shades its
 	/// own base), and the ground it stands in was not: the soil a hand's width from a root caught the whole sun and the whole
-	/// sky, so between the blades the ground shone brighter than the grass growing out of it (2026-10-11). The ground under
+	/// sky, so between the blades the ground shone brighter than the grass growing out of it. The ground under
 	/// a sward now takes the roots' shade, by how closed the sward is, and lets it go where the blades let theirs go — in the
 	/// far blend, where blades are lit flat as the ground they cover — so near and far agree.
 	/// </para>

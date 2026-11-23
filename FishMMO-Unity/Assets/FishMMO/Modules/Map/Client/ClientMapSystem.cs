@@ -21,6 +21,14 @@ namespace FishMMO.Client
 	/// render every frame; a second note list is a second writer to the same file. Both panels are
 	/// views onto this.</para>
 	///
+	/// <para><b>Exploration is the server's.</b> The fog is account-wide and kept by the server
+	/// (<c>MapFogSystem</c>), which works it out from where the character walks. This reveals the same way so the map
+	/// updates at once, and folds in what the server sends (<see cref="ApplyServerFog"/>); nothing is written locally.</para>
+	///
+	/// <para><b>Current and viewed scene.</b> The state above is the scene the character stands in: the minimap, exploration
+	/// and live markers are about it. The world map may show another scene the account has entered
+	/// (<see cref="ViewScene"/>, <see cref="Viewed"/>): its baked map, notes and the server's fog for it, read-only.</para>
+	///
 	/// <para><b>Lifetime.</b> Driven entirely from <see cref="SetCharacter"/> and
 	/// <see cref="Tick"/>, which the minimap calls — it is the panel that is always present. The
 	/// world map reads the same state and works whether or not the minimap is open, but a build
@@ -28,42 +36,11 @@ namespace FishMMO.Client
 	/// </remarks>
 	public static class ClientMapSystem
 	{
-		/// <summary>How often the fog is revealed around the character, in seconds.</summary>
-		/// <remarks>
-		/// Four times a second. This is the cadence the character's position needs sampling at rather
-		/// than a limit on the work: since the chunk model landed a reveal marks the single chunk the
-		/// character stands in, which is two divisions and a byte. What the interval has to be short
-		/// enough for is that nobody crosses a whole chunk between two samples — at the default
-		/// forty-metre grain that would take a hundred and sixty metres a second — because ground
-		/// passed entirely between samples is ground the map never records.
-		/// </remarks>
+		/// <summary>How often the fog is revealed around the character, in seconds (the server's own rate).</summary>
 		private const double RevealInterval = 0.25;
 
 		/// <summary>How often destroyed markers are swept out of the registry, in seconds.</summary>
 		private const double PruneInterval = 15.0;
-
-		/// <summary>How long the explored map must be unchanged before it is written, in seconds.</summary>
-		/// <remarks>
-		/// The same debounce reasoning as <see cref="ClientSettings"/>: walking changes the grid
-		/// continuously, and a write is a compress plus a file replace. Coalescing onto a quiet
-		/// period means a player crossing a zone writes a handful of times rather than hundreds.
-		/// </remarks>
-		private const double SaveDebounce = 6.0;
-
-		/// <summary>
-		/// The longest an explored chunk may go unwritten, in seconds, however busy the walking.
-		/// </summary>
-		/// <remarks>
-		/// <para><b>The debounce alone never fired while travelling.</b> Every newly explored chunk
-		/// pushed the save back another <see cref="SaveDebounce"/>, and at forty-metre chunks a
-		/// running or mounted character enters a new one every few seconds — so a session spent
-		/// exploring wrote nothing until the character stood still for six seconds. On a web build
-		/// that also had no quit flush, closing the tab threw away the whole session's map, which
-		/// was reported as the explored map "not loading".</para>
-		/// <para>A write is a few kilobytes even for a five-kilometre scene, so capping the wait
-		/// costs nothing worth measuring.</para>
-		/// </remarks>
-		private const double MaxSaveDelay = 15.0;
 
 		/// <summary>The character whose map is being shown.</summary>
 		public static IPlayerCharacter Character { get; private set; }
@@ -74,16 +51,13 @@ namespace FishMMO.Client
 		/// <summary>The current scene's map definition, or null when it has none.</summary>
 		public static WorldMapDefinition Definition { get; private set; }
 
-		/// <summary>
-		/// The current scene's details from the cache, or null when the scene is unknown to it.
-		/// Holds the authored waypoints the map draws once they are discovered.
-		/// </summary>
+		/// <summary>The current scene's details from the cache, or null when the scene is unknown to it.</summary>
 		public static WorldSceneDetails SceneDetails { get; private set; }
 
 		/// <summary>The world rectangle the current scene's map covers.</summary>
 		public static Rect MapRect { get; private set; }
 
-		/// <summary>The character's explored map for the current scene, or null before one loads.</summary>
+		/// <summary>The account's explored map for the current scene, or null before one loads.</summary>
 		public static FogOfWarMap Fog { get; private set; }
 
 		/// <summary>The character's notes for the current scene.</summary>
@@ -98,20 +72,97 @@ namespace FishMMO.Client
 		/// <summary>The baked overhead image for the current scene, or null when there is none.</summary>
 		public static Texture2D MapImage { get; private set; }
 
-		/// <summary>The scene the loaded state belongs to.</summary>
+		/// <summary>The scene the loaded state belongs to: the one the character stands in.</summary>
 		public static string SceneName { get; private set; }
 
 		/// <summary>The scene's player-facing name.</summary>
 		public static string SceneDisplayName =>
 			Definition != null ? Definition.ResolvedDisplayName : SceneName;
 
-		/// <summary>
-		/// Raised when the loaded scene changes, so panels can rebuild everything derived from it.
-		/// </summary>
+		/// <summary>Raised when the loaded scene changes, so panels can rebuild everything derived from it.</summary>
 		public static event Action OnSceneMapChanged;
 
 		/// <summary>Raised when a note is added, edited or removed.</summary>
 		public static event Action OnNotesChanged;
+
+		/// <summary>Raised when the world map's viewed scene changes, or something it shows (image, fog) arrives.</summary>
+		public static event Action OnViewedSceneChanged;
+
+		/// <summary>Raised when the list of scenes the account has entered changes.</summary>
+		public static event Action OnVisitedScenesChanged;
+
+		/// <summary>
+		/// Sends a fog request for a scene to the server. Installed by the panel that owns the connection (the minimap);
+		/// null when nothing is connected.
+		/// </summary>
+		public static Action<string> RequestFog { get; set; }
+
+		/// <summary>One scene the account has entered at least once, as the server reports it.</summary>
+		public readonly struct VisitedScene
+		{
+			public readonly string SceneName;
+			public readonly int ExploredCount;
+
+			public VisitedScene(string sceneName, int exploredCount)
+			{
+				SceneName = sceneName;
+				ExploredCount = exploredCount;
+			}
+		}
+
+		/// <summary>Every scene the account has entered (the server's list, plus the current scene).</summary>
+		public static IReadOnlyList<VisitedScene> VisitedScenes => visitedScenes;
+
+		/// <summary>
+		/// What the world map shows: a scene's name, details, map, fog and notes. The current scene's, unless
+		/// <see cref="ViewScene"/> chose another.
+		/// </summary>
+		public sealed class SceneView
+		{
+			public string SceneName;
+			public WorldSceneDetails Details;
+			public WorldMapDefinition Definition;
+			public Rect MapRect;
+			public FogOfWarMap Fog;
+			public Texture2D MapImage;
+			public IReadOnlyList<MapNote> Notes;
+
+			/// <summary>True when this is the scene the character stands in.</summary>
+			public bool IsCurrent;
+
+			/// <summary>The scene's player-facing name.</summary>
+			public string DisplayName => Definition != null ? Definition.ResolvedDisplayName : SceneName;
+		}
+
+		/// <summary>The scene the world map shows now.</summary>
+		public static SceneView Viewed
+		{
+			get
+			{
+				if (otherView != null)
+				{
+					return otherView;
+				}
+				currentView.SceneName = SceneName;
+				currentView.Details = SceneDetails;
+				currentView.Definition = Definition;
+				currentView.MapRect = MapRect;
+				currentView.Fog = Fog;
+				currentView.MapImage = MapImage;
+				currentView.Notes = Notes;
+				currentView.IsCurrent = true;
+				return currentView;
+			}
+		}
+
+		private static readonly SceneView currentView = new SceneView();
+		private static SceneView otherView;
+		private static AsyncOperationHandle<Texture2D> otherImageHandle;
+
+		/// <summary>The latest fog the server sent, by scene; applied to whichever grid shows that scene.</summary>
+		private static readonly Dictionary<string, FogChunkSet> serverFog = new Dictionary<string, FogChunkSet>(StringComparer.Ordinal);
+
+		private static readonly List<VisitedScene> visitedScenes = new List<VisitedScene>();
 
 		/// <summary>Handle for the addressable map image, held so it can be released.</summary>
 		private static AsyncOperationHandle<Texture2D> mapImageHandle;
@@ -122,41 +173,19 @@ namespace FishMMO.Client
 		/// <summary>Time, on the unscaled clock, of the next fog reveal.</summary>
 		private static double nextRevealTime;
 
-		/// <summary>Time, on the unscaled clock, at which a pending save comes due. Zero for none.</summary>
-		private static double saveDueTime;
-
-		/// <summary>
-		/// Time, on the unscaled clock, of the first change not yet written. Zero when none is
-		/// pending. Bounds <see cref="saveDueTime"/> by <see cref="MaxSaveDelay"/>.
-		/// </summary>
-		private static double unsavedSince;
+		/// <summary>Where the last reveal sampled, so the next one explores the way between (a mount or a flight skips nothing).</summary>
+		private static Vector3 lastRevealPosition;
+		private static bool hasLastRevealPosition;
 
 		/// <summary>Time, on the unscaled clock, of the next sweep of destroyed markers.</summary>
 		private static double nextPruneTime;
 
-		/// <summary>The next note identifier for the current scene.</summary>
+		/// <summary>The next ID to hand a new note.</summary>
 		private static long nextNoteID = 1;
 
-		/// <summary>
-		/// Whether the reason exploration is not advancing has already been reported for this scene.
-		/// </summary>
-		/// <remarks>
-		/// Once per scene load, not once per attempt: the check runs four times a second, and a
-		/// condition that holds at all holds for the whole session.
-		/// </remarks>
+		/// <summary>Whether the "fog cannot advance" warning has already been logged for this scene.</summary>
 		private static bool revealRefusalReported;
 
-		/// <summary>
-		/// Reports, once per scene, that exploration cannot advance and why.
-		/// </summary>
-		/// <param name="reason">What is preventing the reveal.</param>
-		/// <remarks>
-		/// A refused reveal is not the same as a reveal that changed nothing. Standing on ground
-		/// already explored changes nothing every quarter second and is entirely normal, so
-		/// <see cref="FogOfWarMap.Reveal"/> returning false is never reported. Only the two
-		/// structural refusals are — no transform to reveal from, and a character outside the
-		/// grid — because those never resolve on their own.
-		/// </remarks>
 		private static void WarnRevealRefused(string reason)
 		{
 			if (revealRefusalReported)
@@ -170,10 +199,7 @@ namespace FishMMO.Client
 				"stay exactly as it is, and the world map's explored percentage will not move.");
 		}
 
-		/// <summary>
-		/// Points the map subsystem at a character, loading everything for the scene they are in.
-		/// </summary>
-		/// <param name="character">The local player character, or null to tear down.</param>
+		/// <summary>Points the maps at a character (or at nobody).</summary>
 		public static void SetCharacter(IPlayerCharacter character)
 		{
 			if (ReferenceEquals(Character, character))
@@ -181,44 +207,28 @@ namespace FishMMO.Client
 				return;
 			}
 
-			/* Flushed before the switch, not after. The pending write belongs to the OUTGOING
-			 * character, and the save path takes its identity from the current one — so a save
-			 * that happened after the swap would write one character's exploration into another
-			 * character's file. */
-			Flush();
-
 			Character = character;
 			Filter.Reset();
 			MapRelationshipTracker.Track(character);
 
+			// The server's fog and scene list belong to the account of the character that was showing.
+			serverFog.Clear();
+			visitedScenes.Clear();
+			OnVisitedScenesChanged?.Invoke();
+
 			if (character == null)
 			{
-				WebGLPageLifecycle.PageHidden -= Flush;
 				UnloadScene();
 				return;
 			}
 
-			/* A closed tab gets no quit flush and stops the frame loop that the save timer runs
-			 * on, so the page-hide notification is the only chance a web build has to write the
-			 * last stretch of walking. Subscribing is idempotent and inert off the web. */
-			WebGLPageLifecycle.PageHidden += Flush;
-
 			/* The scene the character is standing in, which inside an instance is the instance
 			 * scene and not SceneName. The server keys waypoint unlocks and validates travel
-			 * requests by this name; drawing SceneName from inside a dungeon showed the open
-			 * world and had every fast-travel request refused as NotInScene. */
+			 * requests by this name. */
 			LoadScene(character.CurrentSceneName());
 		}
 
-		/// <summary>
-		/// Advances the fog, and writes it when it has settled.
-		/// </summary>
-		/// <remarks>
-		/// Called from the minimap's per-frame update whether or not the minimap is visible. That
-		/// is deliberate: exploration is something the character does by walking, not something
-		/// they do by looking at a map, and tying it to the panel's visibility would mean a player
-		/// who closed their minimap stopped revealing the world.
-		/// </remarks>
+		/// <summary>Per-frame upkeep: follows scene changes, reveals fog, prunes markers.</summary>
 		public static void Tick()
 		{
 			if (Character == null)
@@ -230,7 +240,6 @@ namespace FishMMO.Client
 			string currentScene = Character.CurrentSceneName();
 			if (!string.Equals(currentScene, SceneName, StringComparison.Ordinal))
 			{
-				Flush();
 				LoadScene(currentScene);
 			}
 
@@ -243,83 +252,251 @@ namespace FishMMO.Client
 				Transform transform = Character.Transform;
 				if (transform == null)
 				{
-					/* Nothing to reveal from. Reported because the failure is otherwise completely
-					 * silent: the fog grid still exists, so the map draws fog and the world map's
-					 * readout keeps saying "Explored 0%" for the whole session while exploration
-					 * never advances a single cell. That is indistinguishable from the readout
-					 * itself being broken, which is exactly how it gets reported. */
 					WarnRevealRefused("the character has no transform");
 				}
 				else if (!Fog.WorldRect.Contains(new Vector2(transform.position.x, transform.position.z)))
 				{
-					/* The character is not standing inside the rectangle the fog grid covers, so
-					 * every reveal lands outside the grid and is dropped. Same silence as above,
-					 * and the usual cause is a mismatch between the scene the fog was built for and
-					 * the scene the character is physically in. */
 					WarnRevealRefused($"the character is at {transform.position} but scene '{SceneName}' " +
 						$"covers {Fog.WorldRect} — every reveal falls outside the map");
+					hasLastRevealPosition = false;
 				}
-				else if (Fog.Reveal(transform.position))
+				else
 				{
-					ScheduleSave(now);
+					RevealTravelled(transform.position);
 				}
-			}
-
-			if (saveDueTime > 0.0 && now >= saveDueTime)
-			{
-				saveDueTime = 0.0;
-				unsavedSince = 0.0;
-				SaveFog();
 			}
 
 			if (now >= nextPruneTime)
 			{
-				/* The registry is a static collection keyed by MonoBehaviours. Every marker
-				 * unregisters itself when its object is disabled, so in the ordinary case this
-				 * finds nothing — but a teardown that destroys objects without disabling them
-				 * leaves entries behind, and each one keeps a whole GameObject hierarchy alive for
-				 * the rest of the session. Swept on a slow timer because the null comparison is an
-				 * engine call per entry and the leak accrues at the rate scenes unload. */
 				nextPruneTime = now + PruneInterval;
 				MapMarkerRegistry.Prune();
 			}
 		}
 
 		/// <summary>
-		/// Writes anything outstanding immediately.
+		/// Explores the chunk under <paramref name="position"/> and the way from the last sample, the rule the server applies
+		/// (a sample further than <c>MapFogSystem.MaxTravelPerSampleMetres</c> is a jump: only the arrival).
 		/// </summary>
-		/// <remarks>
-		/// Called on scene change, character change and application quit. The debounce is a
-		/// throughput optimisation, not a durability policy — every path that ends the current
-		/// map's life has to close it out, or the last stretch of walking before a zone change is
-		/// silently lost.
-		/// </remarks>
-		public static void Flush()
+		private static void RevealTravelled(Vector3 position)
 		{
-			saveDueTime = 0.0;
-			unsavedSince = 0.0;
-			SaveFog();
+			const float maxTravel = 120.0f;
+			if (hasLastRevealPosition && (position - lastRevealPosition).sqrMagnitude <= maxTravel * maxTravel)
+			{
+				float dx = position.x - lastRevealPosition.x, dz = position.z - lastRevealPosition.z;
+				float length = Mathf.Sqrt(dx * dx + dz * dz);
+				int steps = Mathf.Clamp(Mathf.CeilToInt(length / (Fog.ChunkSize * 0.25f)), 1, 4096);
+				for (int i = 0; i <= steps; ++i)
+				{
+					float t = i / (float)steps;
+					Fog.Reveal(new Vector3(lastRevealPosition.x + dx * t, 0.0f, lastRevealPosition.z + dz * t));
+				}
+			}
+			else
+			{
+				Fog.Reveal(position);
+			}
+			lastRevealPosition = position;
+			hasLastRevealPosition = true;
 		}
 
 		/// <summary>
-		/// Pushes the pending save back by the debounce, but never past <see cref="MaxSaveDelay"/>
-		/// after the first change it is holding.
+		/// The server's fog for a scene (<c>FogOfWarSceneBroadcast</c>): remembered, and applied to the grid showing that
+		/// scene, the current one or the viewed one.
 		/// </summary>
-		/// <param name="now">The unscaled clock.</param>
-		private static void ScheduleSave(double now)
+		public static void ApplyServerFog(string sceneName, byte[] data)
 		{
-			if (unsavedSince <= 0.0)
+			if (string.IsNullOrEmpty(sceneName))
 			{
-				unsavedSince = now;
+				return;
+			}
+			FogChunkSet set;
+			if (data == null || data.Length == 0)
+			{
+				set = new FogChunkSet();
+			}
+			else if (!FogCodec.TryDecode(data, out set))
+			{
+				Log.Warning("ClientMapSystem", $"The server's fog for scene '{sceneName}' could not be read; the map keeps what it has.");
+				return;
+			}
+			serverFog[sceneName] = set;
+
+			// The grid redraws its own texture when chunks change; no scene event (that would reset the world map's view).
+			if (Fog != null && string.Equals(sceneName, SceneName, StringComparison.Ordinal))
+			{
+				Fog.ApplyChunkSet(set);
+			}
+			if (otherView?.Fog != null && string.Equals(sceneName, otherView.SceneName, StringComparison.Ordinal))
+			{
+				otherView.Fog.ApplyChunkSet(set);
+				OnViewedSceneChanged?.Invoke();
+			}
+			NoteVisited(sceneName, set.Count);
+		}
+
+		/// <summary>The server's list of scenes the account has entered (<c>FogOfWarScenesBroadcast</c>).</summary>
+		public static void ApplyServerScenes(string[] sceneNames, int[] exploredCounts)
+		{
+			visitedScenes.Clear();
+			if (sceneNames != null)
+			{
+				for (int i = 0; i < sceneNames.Length; ++i)
+				{
+					if (!string.IsNullOrEmpty(sceneNames[i]))
+					{
+						visitedScenes.Add(new VisitedScene(sceneNames[i], exploredCounts != null && i < exploredCounts.Length ? exploredCounts[i] : 0));
+					}
+				}
+			}
+			if (!string.IsNullOrEmpty(SceneName))
+			{
+				NoteVisited(SceneName, Fog != null ? Fog.ExploredChunkCount : 0, raise: false);
+			}
+			OnVisitedScenesChanged?.Invoke();
+		}
+
+		private static void NoteVisited(string sceneName, int exploredCount, bool raise = true)
+		{
+			for (int i = 0; i < visitedScenes.Count; ++i)
+			{
+				if (string.Equals(visitedScenes[i].SceneName, sceneName, StringComparison.Ordinal))
+				{
+					visitedScenes[i] = new VisitedScene(sceneName, Math.Max(visitedScenes[i].ExploredCount, exploredCount));
+					return;
+				}
+			}
+			visitedScenes.Add(new VisitedScene(sceneName, exploredCount));
+			if (raise)
+			{
+				OnVisitedScenesChanged?.Invoke();
+			}
+		}
+
+		/// <summary>
+		/// Shows <paramref name="sceneName"/> on the world map; null or the current scene shows the current scene. Another
+		/// scene is read-only: its baked map, this character's notes for it and the account's fog (asked of the server).
+		/// </summary>
+		public static void ViewScene(string sceneName)
+		{
+			if (string.IsNullOrEmpty(sceneName) || string.Equals(sceneName, SceneName, StringComparison.Ordinal))
+			{
+				if (otherView != null)
+				{
+					ReleaseOtherView();
+					OnViewedSceneChanged?.Invoke();
+				}
+				return;
+			}
+			if (otherView != null && string.Equals(otherView.SceneName, sceneName, StringComparison.Ordinal))
+			{
+				return;
 			}
 
-			saveDueTime = Math.Min(now + SaveDebounce, unsavedSince + MaxSaveDelay);
+			ReleaseOtherView();
+			WorldSceneDetails details = null;
+			DetailsCache?.Scenes?.TryGetValue(sceneName, out details);
+			WorldMapDefinition definition = ResolveDefinition(sceneName, details);
+			Rect rect = MapBoundsResolver.Resolve(definition, details);
+			SceneView view = new SceneView
+			{
+				SceneName = sceneName,
+				Details = details,
+				Definition = definition,
+				MapRect = rect,
+				Notes = Character != null ? MapNoteStore.Load(Character.ID, sceneName) : new List<MapNote>(),
+				IsCurrent = false,
+			};
+			if (rect.width > 0.0f && rect.height > 0.0f)
+			{
+				view.Fog = NewFog(definition, rect);
+				if (serverFog.TryGetValue(sceneName, out FogChunkSet known))
+				{
+					view.Fog.ApplyChunkSet(known);
+				}
+			}
+			otherView = view;
+			BeginLoadOtherImage(view);
+
+			// Always asked again: the cached copy is from when it was last viewed, and another character may have walked it since.
+			RequestFog?.Invoke(sceneName);
+			OnViewedSceneChanged?.Invoke();
 		}
 
-		/// <summary>
-		/// Loads the definition, explored map and notes for a scene.
-		/// </summary>
-		/// <param name="sceneName">The scene to load state for.</param>
+		private static void ReleaseOtherView()
+		{
+			if (otherView?.Fog != null)
+			{
+				otherView.Fog.ReleaseTexture();
+			}
+			if (otherImageHandle.IsValid())
+			{
+				Addressables.Release(otherImageHandle);
+				otherImageHandle = default;
+			}
+			otherView = null;
+		}
+
+		private static void BeginLoadOtherImage(SceneView view)
+		{
+			WorldMapDefinition definition = view.Definition;
+			if (definition == null || definition.MapImage == null || !definition.MapImage.RuntimeKeyIsValid())
+			{
+				return;
+			}
+#if UNITY_EDITOR
+			if (UnityEditor.AssetDatabase.GetAssetPath(definition).StartsWith(WorldMapDefinition.BakedDirectory + "/", StringComparison.Ordinal))
+			{
+				view.MapImage = definition.MapImage.editorAsset as Texture2D;
+				return;
+			}
+#endif
+			otherImageHandle = definition.MapImage.LoadAssetAsync<Texture2D>();
+			if (!otherImageHandle.IsValid())
+			{
+				otherImageHandle = default;
+				return;
+			}
+			otherImageHandle.Completed += handle =>
+			{
+				if (!ReferenceEquals(otherView, view) || handle.Status != AsyncOperationStatus.Succeeded)
+				{
+					return;
+				}
+				view.MapImage = handle.Result;
+				OnViewedSceneChanged?.Invoke();
+			};
+		}
+
+		/// <summary>A scene's map definition: the cache's, or in the editor this machine's kept bake.</summary>
+		private static WorldMapDefinition ResolveDefinition(string sceneName, WorldSceneDetails details)
+		{
+			WorldMapDefinition definition = details != null ? details.MapDefinition : null;
+#if UNITY_EDITOR
+			// The committed cache never references the gitignored bake, but this machine's kept map is right here.
+			if (definition == null)
+			{
+				definition = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(sceneName));
+			}
+#endif
+			return definition;
+		}
+
+		/// <summary>An empty grid for a scene, fully revealed when its fog is switched off.</summary>
+		private static FogOfWarMap NewFog(WorldMapDefinition definition, Rect rect)
+		{
+			float chunkSize = definition != null && definition.FogChunkSize > 0.0f
+				? definition.FogChunkSize
+				: FogOfWarDefaults.ChunkSize;
+			FogOfWarMap fog = new FogOfWarMap(rect, chunkSize);
+			if (definition != null && !definition.FogOfWarEnabled)
+			{
+				fog.RevealAll();
+				fog.ClearDirty();
+			}
+			return fog;
+		}
+
+		/// <summary>Loads everything the maps show for the scene the character stands in.</summary>
 		private static void LoadScene(string sceneName)
 		{
 			UnloadScene();
@@ -338,22 +515,14 @@ namespace FishMMO.Client
 			}
 
 			SceneDetails = details;
-			Definition = details != null ? details.MapDefinition : null;
-#if UNITY_EDITOR
-			// The committed cache never references the gitignored bake, but this machine's kept map is right here.
-			if (Definition == null)
-			{
-				Definition = UnityEditor.AssetDatabase.LoadAssetAtPath<WorldMapDefinition>(WorldMapDefinition.BakedAssetPath(sceneName));
-			}
-#endif
+			Definition = ResolveDefinition(sceneName, details);
 			MapRect = MapBoundsResolver.Resolve(Definition, details);
 
 			if (MapRect.width <= 0.0f || MapRect.height <= 0.0f)
 			{
 				/* Without bounds there is nothing to normalise positions against, so the world map
 				 * has no coordinate system and the fog grid has no extent. The minimap still works
-				 * — it is a live camera and needs no bounds at all — which is why this is a
-				 * warning rather than a failure. */
+				 * — it is a live camera and needs no bounds at all. */
 				Log.Warning("ClientMapSystem", $"Scene '{sceneName}' has no map bounds: it has neither a WorldMapDefinition with bounds nor any scene boundary to derive them from. The world map and fog of war are unavailable here; the minimap will still work.");
 				OnSceneMapChanged?.Invoke();
 				return;
@@ -362,16 +531,17 @@ namespace FishMMO.Client
 			LoadFog();
 			LoadNotes();
 			BeginLoadMapImage();
+			NoteVisited(sceneName, Fog != null ? Fog.ExploredChunkCount : 0);
 
 			OnSceneMapChanged?.Invoke();
 		}
 
-		/// <summary>
-		/// Drops everything belonging to the previous scene.
-		/// </summary>
+		/// <summary>Drops everything belonging to the previous scene, the viewed one included.</summary>
 		private static void UnloadScene()
 		{
 			ReleaseMapImage();
+			bool hadOtherView = otherView != null;
+			ReleaseOtherView();
 
 			Fog?.ReleaseTexture();
 			Fog = null;
@@ -381,31 +551,23 @@ namespace FishMMO.Client
 			SceneName = null;
 			Notes.Clear();
 			nextNoteID = 1;
-			saveDueTime = 0.0;
-			unsavedSince = 0.0;
 			nextRevealTime = 0.0;
+			hasLastRevealPosition = false;
 			revealRefusalReported = false;
+
+			if (hadOtherView)
+			{
+				OnViewedSceneChanged?.Invoke();
+			}
 		}
 
-		/// <summary>
-		/// Loads the character's explored map, or starts a fresh one.
-		/// </summary>
+		/// <summary>A fresh grid for the current scene, with whatever the server already sent for it.</summary>
 		private static void LoadFog()
 		{
-			float chunkSize = Definition != null && Definition.FogChunkSize > 0.0f
-				? Definition.FogChunkSize
-				: FogOfWarDefaults.ChunkSize;
-
-			Fog = FogOfWarStore.Load(Character.ID, SceneName, MapRect, chunkSize)
-				?? new FogOfWarMap(MapRect, chunkSize);
-
-			if (Definition != null && !Definition.FogOfWarEnabled)
+			Fog = NewFog(Definition, MapRect);
+			if (serverFog.TryGetValue(SceneName, out FogChunkSet known))
 			{
-				/* A scene with fog turned off reads as fully explored rather than being special
-				 * cased at every draw site. One branch here beats a null check in the marker
-				 * filter, both map views and the discovery rule. */
-				Fog.RevealAll();
-				Fog.ClearDirty();
+				Fog.ApplyChunkSet(known);
 			}
 		}
 
@@ -502,45 +664,16 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// Schedules a save when exploration actually changed something.
+		/// Passes a reveal's count through. (It scheduled the local save; exploration is kept by the server now.)
 		/// </summary>
 		/// <param name="revealed">How many chunks were newly explored.</param>
 		/// <returns><paramref name="revealed"/>, so callers can return it straight through.</returns>
-		/// <remarks>
-		/// The same debounce the walking path uses. Nothing new explored means nothing to write —
-		/// re-using a map item on ground already covered must not dirty the file.
-		/// </remarks>
 		private static int NoteExplored(int revealed)
 		{
-			if (revealed > 0)
-			{
-				ScheduleSave(Time.unscaledTimeAsDouble);
-			}
-
 			return revealed;
 		}
 
 		#endregion
-
-		/// <summary>
-		/// Writes the explored map if it has changed.
-		/// </summary>
-		private static void SaveFog()
-		{
-			if (Character == null || Fog == null || !Fog.IsDirty || string.IsNullOrEmpty(SceneName))
-			{
-				return;
-			}
-
-			// A scene with fog disabled is fully revealed by construction; there is nothing to keep.
-			if (Definition != null && !Definition.FogOfWarEnabled)
-			{
-				Fog.ClearDirty();
-				return;
-			}
-
-			FogOfWarStore.Save(Character.ID, SceneName, Fog);
-		}
 
 		/// <summary>
 		/// Loads the character's notes for the current scene.
@@ -738,16 +871,15 @@ namespace FishMMO.Client
 		/// <summary>Whether the baked map image is still being loaded.</summary>
 		public static bool IsMapImageLoading => mapImageLoading;
 
-		/// <summary>
-		/// Tears everything down. Called on quit to login.
-		/// </summary>
+		/// <summary>Tears everything down: the client is leaving the world.</summary>
 		public static void Shutdown()
 		{
-			Flush();
-			WebGLPageLifecycle.PageHidden -= Flush;
 			UnloadScene();
 
 			Character = null;
+			serverFog.Clear();
+			visitedScenes.Clear();
+			RequestFog = null;
 			Filter.Reset();
 			MapRelationshipTracker.Untrack();
 			MapMarkerRegistry.Clear();
@@ -795,6 +927,6 @@ namespace FishMMO.Client
 		/// rather than to measure.
 		/// </para>
 		/// </remarks>
-		public const float ChunkSize = 40.0f;
+		public const float ChunkSize = FogChunkSet.DefaultChunkSize;
 	}
 }

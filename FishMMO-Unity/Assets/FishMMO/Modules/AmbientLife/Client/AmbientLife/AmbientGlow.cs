@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// A creature's own light (2026-10-20: "Bioluminescent creatures should also exist in caves"; "more glow is good inside the
+	/// A creature's own light ("Bioluminescent creatures should also exist in caves"; "more glow is good inside the
 	/// caves"): when it shines and how brightly, as a pure function of the shared world clock and the animal's own seed, so every
 	/// player sees the same millipede's wave run down its back and the same snail flash at the same moment.
 	/// </summary>
@@ -39,7 +39,7 @@ namespace FishMMO.Client
 		public static double PeriodOf(AmbientCreatureKind kind, uint own) => PeriodOf(kind.GlowPattern, kind.GlowPeriod, kind.StrokeHz, own);
 
 		/// <summary>
-		/// One animal's own round of a pattern, seconds, from the pattern's numbers alone (2026-10-25: the sea creatures' lights
+		/// One animal's own round of a pattern, seconds, from the pattern's numbers alone (the sea creatures' lights
 		/// share these rhythms, SeaLifePlacement): the period ± 15 %, or a ripple's stroke.
 		/// </summary>
 		public static double PeriodOf(AmbientGlowPattern pattern, float glowPeriod, float strokeHz, uint own)

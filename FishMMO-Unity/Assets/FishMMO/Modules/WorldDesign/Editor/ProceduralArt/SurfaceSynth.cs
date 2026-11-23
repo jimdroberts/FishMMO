@@ -32,9 +32,9 @@ namespace FishMMO.Shared.WorldDesign
 		Clumps,
 		/// <summary>Noise drawn out along one axis: bark furrows, peat fibres, cactus ribs.</summary>
 		Fibres,
-		/// <summary>Periglacial frost-crack polygons: a network of dark cracks, the ground between them bulging a little (decision 25).</summary>
+		/// <summary>Periglacial frost-crack polygons: a network of dark cracks, the ground between them bulging a little.</summary>
 		Polygons,
-		/// <summary>Sorted stone circles: fine soil in the middle of each cell, a ring of coarse stones heaved out to its border (decision 25).</summary>
+		/// <summary>Sorted stone circles: fine soil in the middle of each cell, a ring of coarse stones heaved out to its border.</summary>
 		SortedCircles,
 	}
 

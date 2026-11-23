@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// The item half of the character write gate: an item write captured under a claim must find that claim, and every item
 	/// assertion in the inventory system uses the one rule. Moved out of <c>CharacterWriteGateTests</c> with the inventory
-	/// system (the Items module, 2026-11-20).
+	/// system (the Items module).
 	/// </summary>
 	[TestFixture]
 	public class ItemWriteGateTests

@@ -6,8 +6,8 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// Deliberately not a flags enum. A marker is exactly one thing, and the filter UI wants a
-	/// stable ordinal per row rather than a bit the authoring can accidentally combine. A ushort since the fantasy wave
-	/// (2026-10-27) took the point-of-interest kinds past 255; nothing writes the type as a byte, and assets store the number.
+	/// stable ordinal per row rather than a bit the authoring can accidentally combine. A ushort since the fantasy set
+	/// took the point-of-interest kinds past 255; nothing writes the type as a byte, and assets store the number.
 	/// </remarks>
 	public enum MapMarkerType : ushort
 	{
@@ -68,7 +68,7 @@ namespace FishMMO.Shared
 		DungeonEntrance,
 
 		/*
-		 * Generated points of interest, one type per kind (2026-10-10), each named after its
+		 * Generated points of interest, one type per kind, each named after its
 		 * NameGeneration.POIType value so PointOfInterestKinds.MarkerFor maps them by name. Landmark and
 		 * DungeonEntrance above serve the kinds of the same name. Appended in POIType's order; the ordinal is
 		 * draw order, so new kinds go on the end here too.
@@ -87,13 +87,13 @@ namespace FishMMO.Shared
 		SmugglersCove, PirateCove, CoralReef, SunkenShip, SunkenRuins, SunkenCity,
 		BossLair, OreVein, CrystalFormation, AncientTree, HerbGrove,
 		IceGeyserField, Cryovolcano, MethaneLake, ImpactBasin, TidalRift,
-		// Mills (2026-10-14).
+		// Mills.
 		Windmill, Watermill, LumberMill,
-		// The sea floor's own sites (2026-10-25).
+		// The sea floor's own sites.
 		SunkenShrine, SeaMonsterDen, SeaCrystalFormation, SunkenMonument, SunkenStatue,
-		// Adrift on the open sea (2026-10-25).
+		// Adrift on the open sea.
 		AdriftDerelict, WhaleFall, BarnacleLog, Longline, WhaleTow,
-		// The biome rounds' own kinds (2026-10-25).
+		// The biomes' own kinds.
 		TrenchEdge, SeaCavern,
 		CinderCone, Kipuka, HoluaSlide, LavaFall,
 		AncientForge, PhoenixNest, LavaCaveTemple,
@@ -101,9 +101,9 @@ namespace FishMMO.Shared
 		FrogShrine, FloatingIsland, FowlersHide, EelWeir, BrickKiln,
 		BlightedCrater, Chapel, HolyWell, PlagueVillage, DeadForest, WarEngineGraveyard,
 		SunkenWhaleFall, SeaHall,
-		// The hot ground's own sites (2026-10-27).
+		// The hot ground's own sites.
 		Geyser, MudPot, Fumarole, SulphurPool,
-		// The fantasy wave (2026-10-27): 121 kinds hosted only by the biomes whose .Sites name them.
+		// The fantasy set: 121 kinds hosted only by the biomes whose .Sites name them.
 		DragonLair, TrollBridge, GiantsSteading, GoblinWarren, HauntedManor, HangingTree, BuriedHoard, AmbushSite, WreckedCaravan,
 		Crossroads, BoundaryStone, SignalBeacon, TollGate, Hamlet, ManorHouse, SiegeCamp, BurnedVillage, WarbandCamp, CultistHideout,
 		AncientWall, SpellScar, PlanarRift, PetrifiedBattle, TitansBones, WishingStone, ElderMonolith, WaygateRing, GolemGraveyard,
@@ -120,7 +120,7 @@ namespace FishMMO.Shared
 		RoyalMausoleum,
 
 		/// <summary>
-		/// A housing plot for sale (2026-11-22, Jim: "We would like a Plot for sale map marker"), placed by the Housing module
+		/// A housing plot for sale, placed by the Housing module
 		/// from the server's list of its scene's unclaimed plots. Appended last: the ordinal is draw order.
 		/// </summary>
 		HousingPlot,

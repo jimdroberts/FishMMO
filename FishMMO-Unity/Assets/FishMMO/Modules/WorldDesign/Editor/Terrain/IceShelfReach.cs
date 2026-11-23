@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// Where the ice sheet meets a cold sea, the ice it runs out over that sea: the floating SHELF to a sheer calving front,
-	/// then the FAST ICE to a ragged floe edge (biome suite decision 68, phase I2s). Laid as ground, as the ice sheet's own
+	/// then the FAST ICE to a ragged floe edge. Laid as ground, as the ice sheet's own
 	/// ice is (<see cref="IceSheetSurface"/>), so it has collision, footing, painting and cliffs for nothing.
 	/// </summary>
 	/// <remarks>

@@ -11,10 +11,10 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2i-b of the biome suite (2026-10-25, decision 34): every floating kind the biome drafts name is a kind of I2i's
-	/// baked-prop scatter (a detail mesh, a habit, a prefab), the Underwater Canyon's kelp raft a kind of I2p's sea floats, and
-	/// every boardwalk style the drafts name a style of I2i's boardwalk pieces. Every default is what was cut before: no biome
-	/// names a new kind or a style, and a planked walk lays exactly as I2i's.
+	/// Every floating kind the biome drafts name is a kind of I2i's
+	/// baked-prop scatter (a detail mesh, a habit, a prefab), the Underwater Canyon's kelp raft a kind of the sea floats, and
+	/// every boardwalk style the drafts name a style of the boardwalk pieces. Every default is what was cut before: no biome
+	/// names a new kind or a style, and a planked walk lays exactly as before.
 	/// </summary>
 	public class BiomeFloatKindsAndBoardwalkStylesTests
 	{

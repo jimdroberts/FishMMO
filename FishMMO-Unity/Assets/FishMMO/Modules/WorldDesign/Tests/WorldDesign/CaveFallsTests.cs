@@ -9,7 +9,7 @@ using FishMMO.Water;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Where a cave's falling water and lava end up (2026-10-21: "Cave waterfalls and lava flows don't always flow properly into
+	/// Where a cave's falling water and lava end up ("Cave waterfalls and lava flows don't always flow properly into
 	/// the little underground river areas"): every fall, shower, spring and vent written into the scene's hydrology lands in the
 	/// water it feeds (its curtain, traced as the inland water's renderer traces it, comes down in that stream's channel or that
 	/// pool, at its surface; a lava pour's foot in the river or lake it pours into), every river that ends in another body ends

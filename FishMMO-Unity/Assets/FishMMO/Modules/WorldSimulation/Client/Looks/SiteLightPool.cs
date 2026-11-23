@@ -9,7 +9,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// Real light from the sites' lamps, fires and forges (SceneSiteEmitters, baked by the cut): a small pool of point
 	/// lights given to the nearest of them round the camera, so a lantern lights the street under it at night and a
-	/// campfire flickers on the tents round it (2026-10-11).
+	/// campfire flickers on the tents round it.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -129,7 +129,7 @@ namespace FishMMO.Client
 				foundVersion = SceneSiteEmitters.Version;
 				foundAt = eye;
 				// Not a chimney's smoke, and not an indoor hearth's bed: a room's light is its Indoor emitter, at its middle. Nor a lava
-				// tube's fumes: haze lit by the lava under it, no light of its own. Nor a cave's drips (2026-10-20): water, not a lamp.
+				// tube's fumes: haze lit by the lava under it, no light of its own. Nor a cave's drips: water, not a lamp.
 				SceneSiteEmitters.Near(eye, Reach + Refind, kind => kind != SceneEmitterKind.Smoke && kind != SceneEmitterKind.Hearth && kind != SceneEmitterKind.Fumes
 					&& kind != SceneEmitterKind.Drip, MaxLights, nearest);
 				// A lava tube's lava lights first (the nearest dozen within 50 m), then the rest nearest first (SceneMagma.PickLights):
@@ -195,7 +195,7 @@ namespace FishMMO.Client
 						color = hue == 0 ? new Color(0.62f, 0.4f, 1f) : hue == 2 ? new Color(0.4f, 1f, 0.7f) : hue == 3 ? new Color(1f, 0.68f, 0.32f) : new Color(0.35f, 0.62f, 1f);
 						range = e.Reach > 0f ? e.Reach : 6f;
 						intensity = 1.4f * (0.85f + 0.15f * Mathf.Sin(time * 0.7f + phase));
-						// A biome that names a mode for its crystals (2026-10-25, I6i): the crystal's own glow moves by it (GlowModeTable).
+						// A biome that names a mode for its crystals: the crystal's own glow moves by it (GlowModeTable).
 						if (GlowModeTable.TryAt(e.Position, SceneGlowSource.Crystal, out FishMMO.Shared.Biomes.BiomeGlowMode crystalMode))
 						{
 							SceneGlowSky sky = GlowSky.Current;
@@ -221,15 +221,15 @@ namespace FishMMO.Client
 					}
 					case SceneEmitterKind.Glow:
 					{
-						// A glowjar's mote, a rune stone's runes, a crystal post's crystal (2026-10-18): a cool tint from the seed, a soft
+						// A glowjar's mote, a rune stone's runes, a crystal post's crystal: a cool tint from the seed, a soft
 						// slow pulse on the shared clock that its glowing parts share (SceneGlow; FishStructureWeathering.hlsl), or the
-						// stormglass's crackling flicker where its seed asks (decision 33), faintly from before dusk, full at night, and
+						// stormglass's crackling flicker where its seed asks, faintly from before dusk, full at night, and
 						// day and night alike underground.
 						bool buried = TerrainSet.Current.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f;
 						color = SceneGlow.Colour(SceneGlow.HueOf(e.Seed));
 						range = e.Reach > 0f ? e.Reach : SceneGlow.Range;
 						intensity = SceneGlow.Light(time, e.Position, glow, buried, SceneGlow.Flickers(e.Seed));
-						// A biome that names a mode for this glow's source (2026-10-25, I6i): as its glowing parts move on the GPU.
+						// A biome that names a mode for this glow's source: as its glowing parts move on the GPU.
 						if (GlowModeTable.TryAt(e.Position, SceneGlowModes.SourceOf(SceneGlow.HueOf(e.Seed)), out FishMMO.Shared.Biomes.BiomeGlowMode glowMode))
 						{
 							SceneGlowSky sky = GlowSky.Current;
@@ -260,20 +260,20 @@ namespace FishMMO.Client
 						break;
 					}
 					case SceneEmitterKind.Pyre:
-						// A way light's own fire (2026-10-26): a beacon dark by day and kindled at its own moment of the dusk, or a
+						// A way light's own fire: a beacon dark by day and kindled at its own moment of the dusk, or a
 						// brimstone lamp's low blue flame (ScenePyre, read by its flames in SiteEmbers too).
 						color = ScenePyre.Colour(e.Seed);
 						range = e.Reach > 0f ? e.Reach : ScenePyre.Range(e.Seed);
 						intensity = ScenePyre.Light(time, night, e.Seed);
 						break;
 					case SceneEmitterKind.Magma:
-						// Molten lava in a cave (2026-10-20): a deep orange churning slowly on the shared clock, day and night alike (SceneMagma).
+						// Molten lava in a cave: a deep orange churning slowly on the shared clock, day and night alike (SceneMagma).
 						color = SceneMagma.Colour(e.Seed);
 						range = e.Reach > 0f ? e.Reach : SceneMagma.Range;
 						intensity = SceneMagma.Light(time, e.Position, e.Seed);
 						break;
 					case SceneEmitterKind.Skylight:
-						// An opening in a cave's roof (2026-10-20, caves livened): the sunlit floor under it throws a soft daylight round
+						// An opening in a cave's roof (caves livened): the sunlit floor under it throws a soft daylight round
 						// its chamber, by day only, through the cloud as the ground has it (CaveSkylights.Bounce).
 						intensity = CaveSkylights.Bounce(e, out color, out range);
 						break;

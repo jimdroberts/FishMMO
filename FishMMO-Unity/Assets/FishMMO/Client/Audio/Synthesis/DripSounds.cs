@@ -5,7 +5,7 @@ using static FishMMO.Client.SoundSynth;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// A cave's drips, synthesised (2026-10-20, caves livened): a drop into its puddle, a drop on wet rock or on the stalagmite it
+	/// A cave's drips, synthesised (caves livened): a drop into its puddle, a drop on wet rock or on the stalagmite it
 	/// has built. Each is a recipe over <see cref="SoundSynth"/> run from a seed, so a variant is the same sound on every client.
 	/// </summary>
 	/// <remarks>

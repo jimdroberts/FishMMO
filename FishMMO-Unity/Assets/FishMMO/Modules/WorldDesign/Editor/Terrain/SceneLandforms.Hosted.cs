@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The planner's share of the last landform-preset pass (2026-10-25, phase I2g-d, decisions 80–96): entries standing on a host
+	/// The planner's share of the last landform-preset pass: entries standing on a host
 	/// entry's sites (<see cref="BiomeLandformAnchor.OnTopOf"/>, <see cref="BiomeLandformAnchor.OnFlankOf"/>), the strike-slip shift
 	/// of the lines carved before a trace, the obstacles a dune field's wakes lie behind, and the cycloid's chain of arcs.
 	/// </summary>
@@ -334,7 +334,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The obstacles a dune field's wake lies behind (decision 91): every mound, crater or table of its biome placed before it
+		/// The obstacles a dune field's wake lies behind: every mound, crater or table of its biome placed before it
 		/// inside its box and at least 10 m across its radius, each as a segment (A its centre, Half its radius, Depth its wake's
 		/// length: its diameter times the field's Wake range by its hash); null for none.
 		/// </summary>
@@ -364,7 +364,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A strike-slip trace's offset (decision 90): every line placed before it (any biome's) moved along the trace by its Shift
+		/// A strike-slip trace's offset: every line placed before it (any biome's) moved along the trace by its Shift
 		/// on the trace's left side, all of it between the trace's ends and fading to nothing a quarter of its length past each.
 		/// </summary>
 		private static void ShiftLines(List<BiomeLandformSite> sites, int trace)
@@ -435,7 +435,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The strike-slip traces of a scene's landforms as the ways jog at them (2026-10-26, I2l-b, <see cref="PathJogs"/>): each site
+		/// The strike-slip traces of a scene's landforms as the ways jog at them (<see cref="PathJogs"/>): each site
 		/// with a Shift, in the order placed. Empty for none (every scene until a round names a strike-slip preset).
 		/// </summary>
 		public static List<PathJogs.Trace> StrikeSlipTraces(IReadOnlyList<BiomeLandformSite> sites)
@@ -486,7 +486,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A cycloid's line (decision 90, pure): 4 … its Count arcs along its axis, each a chord about its size long (± 20 % by
+		/// A cycloid's line (pure): 4 … its Count arcs along its axis, each a chord about its size long (± 20 % by
 		/// its hash), every one bulging the same way (its axis's left) by three tenths of its chord, so the cusps stand in one line.
 		/// </summary>
 		private static List<Vector2> CycloidLine(Vector2 at, Vector2 axis, in BiomeLandformSite site)

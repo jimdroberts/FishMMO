@@ -5,8 +5,7 @@ using UnityEngine.Rendering.Universal;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// Hosts the modules' render features (<see cref="ModuleRenderFeatures"/>) on a URP renderer (Phase 4 of the core and modules
-	/// plan, 2026-11-18): the World Simulation module's clouds, height fog, froxel fog and heat shimmer stood on the renderers
+	/// Hosts the modules' render features (<see cref="ModuleRenderFeatures"/>) on a URP renderer: the World Simulation module's clouds, height fog, froxel fog and heat shimmer stood on the renderers
 	/// themselves, so a project without the module had renderers with missing features. This core feature stands where they
 	/// stood and draws whatever modules are installed, in their registered order; with none, it draws nothing.
 	/// </summary>

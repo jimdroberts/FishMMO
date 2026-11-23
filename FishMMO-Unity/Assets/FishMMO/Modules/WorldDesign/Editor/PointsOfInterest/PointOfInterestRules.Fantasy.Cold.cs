@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed partial class PointOfInterestRules
 	{
 		/// <summary>
-		/// The fantasy wave's Cold pack (poi-fantasy-wave/WAVE.md): one row per kind, hosted by no biome by default. Written at the density the
+		/// The fantasy set's Cold pack: one row per kind, hosted by no biome by default. Written at the density the
 		/// kind wants before PointOfInterestRules.Default() scales it by FantasyWaveDensity. Coast kinds stand on low beaches or, for the cliff
 		/// castle and the wreckers' beacon, on exposed high ground by the sea; the waters' kinds stand on the sea floor, a lake bed or a lake shore.
 		/// </summary>
@@ -28,7 +28,7 @@ namespace FishMMO.Shared.WorldDesign
 				Placed(POIType.IcePalace, 0.02f, 0, 1, 2500f).Footprint(12f, 26f, 18f).Only().AwayFromSettlements(500f).Races("Undead", "Elemental"),
 				Placed(POIType.FrozenShipwreck, 0.05f, 0, 2, 1200f).Footprint(12f, 20f, 16f).Only().Coast(40f).Altitude(0.3f, 6f),
 				// ── Pack Co ──
-				// (2026-10-27) The tidal island abbey is a carved kind: its row is in PointOfInterestRules.Fantasy.Shapes.cs. The cliff castle and the
+				// The tidal island abbey is a carved kind: its row is in PointOfInterestRules.Fantasy.Shapes.cs. The cliff castle and the
 				// wreckers' light stand by a detected headland (NearLandform), their coast and exposure gates kept.
 				Placed(POIType.CliffCastle, 0.02f, 0, 1, 2500f).Footprint(25f, 35f, 18f).Only().Coast(80f).NearLandform(POIType.Headland, 150f).OnExposedGround().Altitude(8f, 90f).AwayFromSettlements(400f).Races("Humanoid", "Beastfolk"),
 				Placed(POIType.SmugglersTunnel, 0.08f, 0, 2, 700f).Footprint(12f, 20f, 16f).Only().Hard(0.45f, true).Coast(60f).Altitude(0.5f, 25f).AwayFromSettlements(400f).Races("Humanoid"),

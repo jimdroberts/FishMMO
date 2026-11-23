@@ -12,15 +12,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Woodland</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Woodland()
 		{
-			// The open, managed, lived-in lowland wood (biome round, approved 2026-10-16, authored 2026-10-26): coppice-with-standards
+			// The open, managed, lived-in lowland wood: coppice-with-standards
 			// of hazel and sweet chestnut under spaced oak standards, sunny rides and glades of foxglove and bracken, a blue haze of
 			// bluebells under the hazel, grazed wood-pasture of squat oak pollards and crab apples on short turf, all on white chalk
 			// and black flint, edged by laid hedges round the assarts. Red peg-tile roofs, white daub, flint walls. Its fantasy is
 			// romance, not the fey: the white hart, knights' pavilions, an enchanted fountain, a blasted oak, golden mistletoe.
 			// Forest keeps the closed beech, fir, yew, holly, ivy and fey; this wood keeps hazel, bramble, hawthorn and the open oak.
-			// LATER (I9): every ground and object texture as Woodland's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Gilded + Copperleaf (BiomeTemplate.rareLookA/B).
-			// LATER (I9b P27): pollards (a swollen bolling of straight poles) and coppice stools on the scatter's trees; the oaks
+			// LATER: every ground and object texture as Woodland's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Gilded + Copperleaf (BiomeTemplate.rareLookA/B).
+			// LATER: pollards (a swollen bolling of straight poles) and coppice stools on the scatter's trees; the oaks
 			// below stand whole until the generator grows them.
 			return E("Woodland", L(Ground.GrassWoodPasture,
 					// Wood-pasture: wide-spaced veteran oaks and crab apples on the turf.
@@ -30,9 +30,9 @@ namespace FishMMO.Shared.WorldDesign
 					Plants("FlowersGlade", 3f, 180), Plants("FlowersHedgerow", 2f, 180), Plants("FernBrackenWoodland", 2f), Plants("HerbNettle", 1f),
 					Plants("DebrisOakLeaf", 1f, 128), Plants("MushroomParasol", 0.4f),
 					Bush("HawthornWoodland", 0.22f), Bush("BrambleWoodland", 0.43f), Bush("HazelCoppice", 0.28f), Bush("Blackthorn", 0.28f), Bush("DogRose", 0.28f),
-					// LATER (I9b): the shed pollard limb's crooked lie; a light fallen limb stands in.
+					// LATER: the shed pollard limb's crooked lie; a light fallen limb stands in.
 					Logs("Shed limbs", 0.04f, 14f, Wood("FallenLimb_Oak", "Stump_Beefsteak")),
-					// LATER (I7/I9b): warren spoil fans (WarrenSpoil, a flat chalk-and-burrow mesh); none until built.
+					// LATER: warren spoil fans (WarrenSpoil, a flat chalk-and-burrow mesh); none until built.
 					Stones(SmallRocks("Flint"), 0.8f),
 					// The grey wethers: sarsens lying in the turf like a flock, in groups of four to twelve.
 					With(Blocks("Grey wethers", 0.006f, 30f, F(RegionalRocks.Sarsen, "Wether")), s => { s.ClusterMetres = 30f; s.ClusterSize = 8f; }),
@@ -71,10 +71,10 @@ namespace FishMMO.Shared.WorldDesign
 				// Own rock chalk with flint (its formations); approved: accepts Limestone, Shale, Conglomerate (puddingstone).
 				.Accepts(RockTypes.Chalk, RockTypes.Limestone, RockTypes.Shale, RockTypes.Conglomerate)
 				.Crystals((BiomeCaveCrystalKind.FlintGeode, 0.7f), (BiomeCaveCrystalKind.Sunstone, 0.3f))
-				// LATER (I7): the denehole mine form (narrow shaft, bell chambers in the chalk).
+				// LATER: the denehole mine form (narrow shaft, bell chambers in the chalk).
 				.Look(BiomeLookClass.Temperate)
 				// Approved: wood-pasture and glades add the grassland's hares, skylarks and voles; chipmunks, hummingbirds and parrots
-				// dropped creature-side. LATER (AMBIENT-LIFE): fallow deer, badger, fox, green woodpecker, nightingale, dormouse, the
+				// dropped creature-side. LATER: fallow deer, badger, fox, green woodpecker, nightingale, dormouse, the
 				// rare White Hart at dawn and dusk.
 				.Wildlife(BiomeHabitat.Woodland | BiomeHabitat.Grassland)
 				.Moat(BiomeMoatWater.Wet)
@@ -114,7 +114,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.AncientTree, 1f), (POIType.HerbGrove, 1.2f), (POIType.Dockyard, 0.9f), (POIType.Windmill, 0.3f),
 					(POIType.Watermill, 1.2f), (POIType.LumberMill, 0.5f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 1.2f), (POIType.GoblinWarren, 1.2f), (POIType.HauntedManor, 0.8f),
 					(POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.ManorHouse, 0.5f),
@@ -166,7 +166,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Stone", 1f)
 				.Prefers(POIType.Tower, "Timber", 0.6f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Elven Hall", 1.2f)
 				.Prefers(POIType.Tower, "Elven Tower", 1f)
 				.Prefers(POIType.TrollBridge, "Mossed Span", 1.4f)
@@ -177,8 +177,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.4f)
 				.Prefers(POIType.Commandery, "Preceptory", 1.3f)
 				.Prefers(POIType.TreeVillage, "Talan Town", 1.4f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Woodland's signature pieces — Wealden hall house, round colombier, moated manor, flint round-tower church
+				// (the fantasy set's variants end here)
+				// LATER: Woodland's signature pieces — Wealden hall house, round colombier, moated manor, flint round-tower church
 				// and lychgate, coppice yard, chalk pit, deer-park pale and leap, striped pavilion camp and quintain, lavoir, wayside
 				// calvary, bee garden, enchanted fountain, Herne's oak, sarsen avenue; the kit's variants below stand in.
 				.Favours(BiomeStructureStyle.Timber, 1.5f)
@@ -187,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Earth, 0.4f)
 				.Favours(BiomeStructureStyle.Iron, 0.2f)
 				// The palette: white limewash in large square panels, silvered oak, long-straw thatch and red plain tiles, flint plinths
-				// and pitching, clunch dressings, heraldic banners. LATER (NEW-SURFACES U11): PegTile (clay plain tile, roof and
+				// and pitching, clunch dressings, heraldic banners. LATER: PegTile (clay plain tile, roof and
 				// tile-hanging, 50°) and Flint (knapped flushwork, pitching) surfaces, weatherboard and chalk cob; red-tinted shingle and
 				// dark fieldstone stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, WoodsHex("#eeeae0"))
@@ -218,11 +218,11 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, WoodsHex("#2a4a8a"))
 				// Buckwheat, woad, field peas and Woodland's own rye; apple and cherry orchards (approved).
 				.Crops(("Detail_FlowersBuckwheat", 0.3f), ("Detail_FlowersWoad", 0.25f), ("Detail_FlowersFieldPea", 0.25f), ("Detail_GrassRye", 0.3f))
-				// LATER (I9b): orchard apple and cherry as fruiting orchard trees; the crab apple and gean stand in.
+				// LATER: orchard apple and cherry as fruiting orchard trees; the crab apple and gean stand in.
 				.Orchards(new Entry.Orchard("CrabApple", 0.25f, 7f, "Detail_GrassPasture"), new Entry.Orchard("WildCherry", 0.12f, 8f, "Detail_GrassPasture"))
 				// Approved: laid hedges of hawthorn and hazel (blackthorn, dogwood, field maple and dog rose in them, oak standards)
 				// along the clearing edges, the lanes and the assarts' fields; a cleft-oak pale round the parks and manors.
-				// The hedged lanes are the settlements' own (2026-10-27, owner: "limit Woodland hedges near settlements"): the cart tracks
+				// The hedged lanes are the settlements' own (owner: "limit Woodland hedges near settlements"): the cart tracks
 				// and roads within LaneHedgeReach of a settlement; footpaths, trails and the ways between villages run unhedged.
 				.Lines(
 					new Entry.Line(BiomeLinearForm.Laid, BiomeLinearPlace.ClearingEdges, "HawthornWoodland", "HazelCoppice", "Blackthorn", "Dogwood") { Standards = new[] { "OakWoodland", "FieldMaple" } },

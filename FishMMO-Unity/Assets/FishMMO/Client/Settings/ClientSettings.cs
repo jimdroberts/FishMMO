@@ -457,7 +457,7 @@ namespace FishMMO.Client
 		/// <summary>Smallest interface scale offered, as a multiplier of the authored size.</summary>
 		/// <remarks>
 		/// 50%: the panel is 1200 reference units wide whatever the screen, so on a wide browser window the interface grows
-		/// with it, and 75% was still too large for some web resolutions (11-16).
+		/// with it, and 75% was still too large for some web resolutions.
 		/// </remarks>
 		public const float MinimumUIScale = 0.5f;
 

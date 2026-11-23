@@ -8,7 +8,7 @@ const origin=(process.env.FISHMMO_WEBGPU_ORIGIN||'http://127.0.0.1:8090');
 const output = path.resolve(process.argv[2] || 'Library/WebGpuPerformance/shaders');
 const firstInstance = process.argv[3] !== 'fallback';
 // Optional 'brg': also require the twins' BatchRendererGroup (DOTS) programs, within the uniform limit and without the
-// material/user metadata cbuffers WebGPU drops (Docs/Rendering/2026-11-01/webgpu-constants).
+// material/user metadata cbuffers WebGPU drops.
 const expectBrg = process.argv[4] === 'brg';
 const twin = /Fish(WeatherLitIndirect|VegetationIndirect|VegetationPrime)\.shader/;
 const port = Number(process.env.FISHMMO_WEBGPU_DEBUG_PORT || 9229);

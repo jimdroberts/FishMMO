@@ -24,7 +24,7 @@ namespace FishMMO.UnitTests.AI
 	/// still reads correctly.
 	/// </para>
 	/// <para>
-	/// Baseline after the 2026-09-03 rebake: mean absolute error 0.000 m on all four scenes, one
+	/// Baseline after the rebake: mean absolute error 0.000 m on all four scenes, one
 	/// 0.43 m outlier at a single Dungeon column. Before it, three scenes averaged 0.10–0.19 m
 	/// off with a quarter of their columns beyond 0.25 m. The limits sit well clear of the good
 	/// bake and well inside the bad one.

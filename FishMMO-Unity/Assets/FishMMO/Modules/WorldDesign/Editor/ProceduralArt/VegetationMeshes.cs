@@ -29,7 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 		Shells,
 		TubeWorms,
 
-		// ── Declared ahead of their meshes (vegetation expansion, 2026-10-10) ──
+		// ── Declared ahead of their meshes (vegetation expansion) ──
 		// Every kind below is pre-declared so the packages that build them never edit this enum. Appended,
 		// never inserted: nothing stores a kind's number, but appending keeps every existing value as it was.
 		// A kind no package builds yet yields an empty mesh; none is in the catalogue until its owner adds it.
@@ -101,7 +101,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The bacterial mat's land variant: orange slime-mould and biofilm in caves (NOT aquatic).</summary>
 		SlimeMat,
 
-		// Floating plants on still fresh water (FloatingPlantMeshes, 2026-10-18, I2i): laid as baked props at the water's surface,
+		// Floating plants on still fresh water (FloatingPlantMeshes): laid as baked props at the water's surface,
 		// never as terrain details (a detail stands on the heightmap). Not aquatic: they lie on the surface, in the air.
 		/// <summary>A carpet of duckweed: hundreds of tiny round fronds lying flat on the water.</summary>
 		Duckweed,
@@ -111,7 +111,7 @@ namespace FishMMO.Shared.WorldDesign
 		WaterHyacinth,
 		/// <summary>Frogbit: little kidney-shaped floating leaves in rosettes, a few three-petalled white flowers.</summary>
 		Frogbit,
-		// The floating kinds the biome drafts name (FloatingPlantMeshes, 2026-10-25, I2i-b), one per BiomeFloatingPlantKind from
+		// The floating kinds the biome drafts name (FloatingPlantMeshes), one per BiomeFloatingPlantKind from
 		// Tasselweed on, in its order; appended so every earlier kind keeps its value.
 		Tasselweed,
 		SacredLotus,

@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A cave's drips (2026-10-20, caves livened): their emitter kind appended and never taken for a light; the seed's packing; the
+	/// A cave's drips (caves livened): their emitter kind appended and never taken for a light; the seed's packing; the
 	/// drops' fall and beat as pure functions of the shared clock (<see cref="SceneDrip"/>) with never more than three in the air; the
 	/// dressing's drips (<see cref="CaveDrips"/>) the same every time, within budget, spaced, landing in the void on floors that hold
 	/// their puddles, refused where the caller says, few in a dry lava tube; the client's numbers for the shader

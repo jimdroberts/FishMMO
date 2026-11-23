@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2p of the biome suite (2026-10-25, decision 42): what drifts on the open sea (BiomeSeaFloats, SeaFloatSystem, FishMMO/Sea
+	/// What drifts on the open sea (BiomeSeaFloats, SeaFloatSystem, FishMMO/Sea
 	/// Floats, riding FishWaterSwell.hlsl, the sea's own wave sum split out of FishWaterWaves.hlsl), and the adrift sites. Every default
 	/// is what was there before: no biome floats anything, no biome hosts an adrift site, and the sea's surface is drawn from the same sum.
 	/// </summary>

@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Appearance module (2026-11-20): its three components are character parts every player gets when it wakes, and
+	/// The Appearance module: its three components are character parts every player gets when it wakes, and
 	/// no race prefab authors them, so removing the folder leaves the prefabs whole.
 	/// </summary>
 	[TestFixture]

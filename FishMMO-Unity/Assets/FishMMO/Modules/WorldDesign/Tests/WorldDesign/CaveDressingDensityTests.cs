@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cave dressing's plenty (2026-10-20, cave realism): mushroom trees stand 5–15 m whatever their art and whatever is
+	/// The cave dressing's plenty (cave realism): mushroom trees stand 5–15 m whatever their art and whatever is
 	/// asked, always with their clearance under the roof; the plan (CaveFungi.For) gives each form what grows in it and the
 	/// biome what it adds; the new glow art (mushroom trees, middle glowcaps, puffballs, bracket tiers, glowroots, roots and
 	/// glow-vines) is as tall as it says and within its budget.

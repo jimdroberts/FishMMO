@@ -74,10 +74,10 @@ namespace FishMMO.Shared.WorldDesign
 	/// <remarks>
 	/// <para><b>Resolution.</b> The most specific row wins — the race's own row, else its category's, else the wildcard;
 	/// among equally specific rows the first. A role nothing answers resolves to nothing: the feature still places its
-	/// spawner, empty, and logs it, so a designer can fill it (2026-10-10: unknown → null).</para>
+	/// spawner, empty, and logs it, so a designer can fill it (unknown → null).</para>
 	/// <para><b>Defaults.</b> Written in code (<see cref="FillDefaults"/>) so the generator works before anyone authors the
 	/// asset: the shipped human banker, merchant and ability crafter serve every race; orcs fill an orc site's pack
-	/// (weighted 0.5 / 0.3 / 0.2, the dungeon's mix) and its elite; every other race gets the guards, townsfolk and generated monsters of <see cref="SiteRows"/> (2026-11-22).
+	/// (weighted 0.5 / 0.3 / 0.2, the dungeon's mix) and its elite; every other race gets the guards, townsfolk and generated monsters of <see cref="SiteRows"/>.
 	/// <see cref="CreateAsset"/> writes the defaults to <see cref="AssetPath"/> for editing; once it exists it wins.</para>
 	/// </remarks>
 	[CreateAssetMenu(fileName = "Point of Interest NPC Table", menuName = "FishMMO/World/Point of Interest NPC Table")]
@@ -146,8 +146,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The rows for the roles that had no prefab until 2026-11-22 (Jim: "add some basic NPCs for the empty spawners";
-		/// "NPCs (specific races) should spawn based on Biome just like points of interest"). A site's race is the biome's
+		/// The rows for the roles that had no prefab before (basic NPCs for the empty spawners;
+		/// races spawn by biome, as points of interest do). A site's race is the biome's
 		/// (PointOfInterestStage.PickRace), and its NPCs follow it: guards and townsfolk copied for the race; a beast race's camp
 		/// or lair its own generated monster; any other race's a raider copied for it (goblins at a goblin camp); a beast race
 		/// with no body of its own, the generated beasts. A race's own authored row (orcs) still wins.
@@ -337,7 +337,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A race copy's name, as its nameplate shows it: "an elf raider" from Elf and "a raider", "a frost giant guard" from
-		/// Frost Giant and "a guard" (2026-11-22: it was "Elf a raider"). The base's own article is dropped, the race lowered
+		/// Frost Giant and "a guard" (it was "Elf a raider"). The base's own article is dropped, the race lowered
 		/// and an article chosen for it.
 		/// </summary>
 		public static string RaceCopyName(RaceTemplate race, string baseName)

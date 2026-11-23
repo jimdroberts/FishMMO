@@ -13,7 +13,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the invariants the 2026-09-07 persistence audit restored: factions and archetypes
+	/// Pins the invariants the persistence audit restored: factions and archetypes
 	/// carry a dirty mark and a version that advances on mutation, restored rows are clean, a
 	/// pooled attribute forgets its previous occupant's version stream, the faction reader
 	/// refuses a frame too short to hold its header, and the player prefab requires every

@@ -305,7 +305,7 @@ namespace FishMMO.Shared.Biomes
 		/// honest climate there — never one shifted by today's weather or season.
 		/// </summary>
 		/// <remarks>
-		/// For a position the baked map does not cover (2026-10-10). Choosing from the weather-shifted
+		/// For a position the baked map does not cover. Choosing from the weather-shifted
 		/// sample with no selection noise made ground off the map change biome with the season and
 		/// disagree with the painted ground at every ecotone.
 		/// </remarks>

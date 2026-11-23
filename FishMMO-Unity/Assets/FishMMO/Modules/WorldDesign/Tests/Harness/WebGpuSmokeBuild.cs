@@ -21,7 +21,7 @@ namespace FishMMO.TestHarness.World.Editor
         /// The harness player's engine code options (image-identical; restored after the build). WebAssembly 2023 compiles
         /// memcpy to native memory.copy instead of a call out to JavaScript (Unity's WebGPU backend copies every constant buffer
         /// per pass application); OptimizeSpeed generates specialized generic code instead of IL2CPP's fully shared generics.
-        /// Opt out with FISHMMO_WEBGPU_WASM2023=0 / FISHMMO_WEBGPU_CODEGEN=size for an A/B (measured 2026-11-02).
+        /// Opt out with FISHMMO_WEBGPU_WASM2023=0 / FISHMMO_WEBGPU_CODEGEN=size for an A/B .
         /// </summary>
         public static bool UseWasm2023(string value) => value != "0";
         public static Il2CppCodeGeneration CodeGeneration(string value) => value == "size" ? Il2CppCodeGeneration.OptimizeSize : Il2CppCodeGeneration.OptimizeSpeed;

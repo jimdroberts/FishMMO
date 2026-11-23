@@ -161,6 +161,10 @@ namespace FishMMO.Shared
 			{
 				content.AddStat("Duration", "Permanent", TooltipPriority.Stats);
 			}
+			else if (LastsUntilRemoved)
+			{
+				content.AddStat("Duration", "Until removed", TooltipPriority.Stats);
+			}
 			else if (Duration > 0.0f)
 			{
 				content.AddStat("Duration", $"{Duration:0.##}s", TooltipPriority.Stats);
@@ -321,6 +325,13 @@ namespace FishMMO.Shared
 		/// </para>
 		/// </remarks>
 		public virtual int InitialCharges => 0;
+
+		/// <summary>
+		/// True for a buff that never runs out but, unlike <see cref="IsPermanent"/>, is the character's own: saved with it,
+		/// restored at login and cleared by a death like any other (a mount, issue #109). It ends only when something removes
+		/// it. <see cref="Duration"/> is ignored. A property, not a field, so a template kind states it for all its assets.
+		/// </summary>
+		public virtual bool LastsUntilRemoved => false;
 
 		public abstract void OnApply(Buff buff, ICharacter target);
 

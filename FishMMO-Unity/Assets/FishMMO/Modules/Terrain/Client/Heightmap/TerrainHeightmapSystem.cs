@@ -8,7 +8,7 @@ using FishMMO.Shared;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The client's own draw of the generated scenes' ground (2026-10-28): every terrain tile drawn with FishMMO/Weather Terrain
+	/// The client's own draw of the generated scenes' ground: every terrain tile drawn with FishMMO/Weather Terrain
 	/// Array is drawn instead by one GPU-driven indirect draw a scene (<see cref="TerrainHeightmapField"/>, FishTerrainHeightmap
 	/// .compute, FishMMO/Weather Terrain Array GPU), with the same pixel shader on geomorphed patches.
 	/// </summary>
@@ -57,7 +57,7 @@ namespace FishMMO.Client
 		/// and grass already drawn and shades only where it shows; drawn first, it only spared what stands behind a hill. The
 		/// picture is the same either way (opaque, depth-tested, nothing in the opaque queues overlays the ground: pixel-
 		/// identical in the browser A/B). Its per-pixel layers are the frame's dearest opaque shading, so last is cheaper:
-		/// browser, 2560×1440, 4× MSAA (2026-11-05), GPU 10.1 → 9.1 ms in the forest, 9.7 → 8.2 ms in the settlement, 6.4 → 5.8
+		/// browser, 2560×1440, 4× MSAA, GPU 10.1 → 9.1 ms in the forest, 9.7 → 8.2 ms in the settlement, 6.4 → 5.8
 		/// ms looking down at the forest floor (ABBA, no overlap).
 		/// </summary>
 		public const int DrawnLastQueue = 2450;

@@ -7,7 +7,7 @@ using FishMMO.Shared;
 namespace FishMMO.RenderScratch
 {
 	/// <summary>
-	/// The Items module's part of the panel render rig (moved with the module, 2026-11-20): the inventory, bank and equipment
+	/// The Items module's part of the panel render rig (moved with the module): the inventory, bank and equipment
 	/// windows in the all-panels render, the grid fit probe and the interface scaling render. The rig's characters carry the
 	/// core's fake containers (<see cref="FakeInventory"/>, <see cref="FakeBank"/>, <see cref="FakeEquipment"/>), which the
 	/// windows read through the container contracts.

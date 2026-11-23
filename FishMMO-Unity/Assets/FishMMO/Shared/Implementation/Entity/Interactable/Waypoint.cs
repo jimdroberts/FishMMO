@@ -27,6 +27,10 @@ namespace FishMMO.Shared
 	public class Waypoint : Interactable, IWaypoint
 	{
 		[Header("Waypoint")]
+		[Tooltip("A fast-travel point, or a Gate Stone (the Gate spell's destination and return gate; never fast travel). Shares the scene's index space with every other waypoint.")]
+		[SerializeField]
+		private WaypointKind kind = WaypointKind.Waypoint;
+
 		[Tooltip("Index of this waypoint within its scene, unique per scene and stable forever. It is the bit a character's unlock record stores.")]
 		[SerializeField]
 		private int waypointIndex;
@@ -59,6 +63,12 @@ namespace FishMMO.Shared
 		public int WaypointIndex => waypointIndex;
 
 		/// <inheritdoc />
+		public WaypointKind Kind => kind;
+
+		/// <summary>Whether this is a Gate Stone (<see cref="WaypointKind.GateStone"/>).</summary>
+		public bool IsGateStone => kind == WaypointKind.GateStone;
+
+		/// <inheritdoc />
 		public string SceneName => gameObject.scene.name;
 
 		/// <inheritdoc />
@@ -79,10 +89,10 @@ namespace FishMMO.Shared
 		public List<Trigger> OnTravelTriggers => onTravelTriggers;
 
 		/// <inheritdoc />
-		public override string Title => "Waypoint";
+		public override string Title => IsGateStone ? "Gate Stone" : "Waypoint";
 
 		/// <inheritdoc />
-		public override Color TitleColor => TinyColor.ToUnityColor(TinyColor.skyBlue);
+		public override Color TitleColor => IsGateStone ? TinyColor.ToUnityColor(TinyColor.plum) : TinyColor.ToUnityColor(TinyColor.skyBlue);
 
 		/// <summary>
 		/// Registers the scene object and the waypoint. See <see cref="WaypointRegistry"/>.
@@ -107,14 +117,28 @@ namespace FishMMO.Shared
 		/// </summary>
 		public SceneWaypointDetails ToDetails()
 		{
+			Transform arrival = ArrivalPoint;
 			return new SceneWaypointDetails()
 			{
 				Index = waypointIndex,
+				Kind = kind,
 				Name = ResolvedName,
 				Description = description,
 				Position = transform.position,
 				Icon = Icon,
+				HasArrival = true,
+				ArrivalPosition = arrival.position,
+				ArrivalYaw = arrival.eulerAngles.y,
 			};
+		}
+
+		/// <summary>
+		/// Makes this a waypoint of <paramref name="value"/>'s kind. Authoring tools only (the site cut's Gate Stone feature);
+		/// a shipped scene's kinds never change.
+		/// </summary>
+		public void SetKind(WaypointKind value)
+		{
+			kind = value;
 		}
 
 #if UNITY_EDITOR

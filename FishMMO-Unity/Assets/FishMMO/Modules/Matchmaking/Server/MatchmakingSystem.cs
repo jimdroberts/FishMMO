@@ -17,7 +17,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 	/// arenas and arena matches.
 	/// </summary>
 	/// <remarks>
-	/// The Matchmaking module (Phase 3, 2026-11-17). These were partials of <c>InteractableSystem</c>; they are their own
+	/// The Matchmaking module. These were partials of <c>InteractableSystem</c>; they are their own
 	/// system now, with their own request guard and main-thread queue, so a game without matchmaking leaves the module
 	/// out. The entrances, boards and arena objectives placed in the world stay in the core; their ECA actions raise
 	/// events this system answers.

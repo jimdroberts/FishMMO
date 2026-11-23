@@ -170,7 +170,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Random scale range for tree height (only used when non-uniform scaling is enabled).")]
 		public Vector2 heightScaleRange = new Vector2(0.8f, 1.2f);
 		/// <remarks>
-		/// 2026-10-20 ("we want massive crystals"): a tree-channel instance's size draw t (0..1 along its range, after a group's or a
+		/// "we want massive crystals": a tree-channel instance's size draw t (0..1 along its range, after a group's or a
 		/// stand's lean) is taken as t^skew: 1 leaves every rule exactly as it was; above 1 most instances keep near the small end
 		/// and the odd one reaches the top, so a wide range reads as ordinary rock with the occasional giant rather than giants
 		/// everywhere. Detail-layer rules ignore it (the terrain's detail prototypes draw their own sizes, evenly).
@@ -219,7 +219,7 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 depthRange = Vector2.zero;
 
 		/// <remarks>
-		/// Decision 35 (2026-10-18): under a lake or a river a bed rule's depth is measured below THAT water's surface, not below
+		/// Under a lake or a river a bed rule's depth is measured below THAT water's surface, not below
 		/// mean sea level (before, nothing ever grew under an inland lake: its bed stood above the sea's line). Which waters a rule
 		/// grows under is its own: <see cref="BiomeBedWaters.Default"/> keeps the slot's (a lakebed's rules the sea alone, as they
 		/// always were, so a coast biome's kelp never comes up in its ponds; a riverbed's a river; a bed layer's its own waters).
@@ -243,7 +243,7 @@ namespace FishMMO.Shared.Biomes
 		[Range(0f, 1f)] public float humidityFalloff = 0.1f;
 
 		/// <remarks>
-		/// Decision 41 (2026-10-18): which WORLDS the rule grows on, by their air, mean temperature and flags (BiomeWorldGate). One
+		/// Which WORLDS the rule grows on, by their air, mean temperature and flags (BiomeWorldGate). One
 		/// answer for a whole scene, so the rule is grown or skipped; open (the default) grows it on every world, as before.
 		/// </remarks>
 		[Header("World Gate")]
@@ -251,7 +251,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeWorldGate worldGate;
 
 		/// <remarks>
-		/// 2026-10-18, phase I2q (decision 47): grow only within a band of the ground's HEAT, the scene's heat mask baked at the
+		/// Grow only within a band of the ground's HEAT, the scene's heat mask baked at the
 		/// cut from its geothermal sites (0 cold ground … 1 a spring's throat; SceneBiomeMap.HeatAt): a geyser basin's bare sinter
 		/// apron, its warm ring of mats and panic grass, its green halo. Off (the default) grows the rule as before.
 		/// </remarks>
@@ -267,7 +267,7 @@ namespace FishMMO.Shared.Biomes
 		public float HeatWeight(float heat) => useHeatBand ? BiomeHeatBand.Weight(heatRange, heatFalloff, heat) : 1f;
 
 		/// <remarks>
-		/// 2026-10-25, phase I2g-b (decision 55): grow only on (or, turned round, only off) one part of the biome's sculpted landforms
+		/// Grow only on (or, turned round, only off) one part of the biome's sculpted landforms
 		/// (BiomeLandformBand: a crater's rim, a basin's mare, a cell field's junctions), read from the sites the cut stored. Off (the
 		/// default) grows the rule as before.
 		/// </remarks>
@@ -276,7 +276,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeLandformBand landformBand;
 
 		/// <remarks>
-		/// 2026-10-25, phase I2u (decision 79 (d)): talus SIZE GRADING. Tree-channel rules only (Unity sizes details itself): inside its
+		/// Talus SIZE GRADING. Tree-channel rules only (Unity sizes details itself): inside its
 		/// biome's talus cones (the stored ScreeCone landforms) an instance's size is scaled from ×0.6 at the apex to ×1.8 at the toe, the
 		/// fall-sorting of a real cone. Off (the default) sizes it as before.
 		/// </remarks>
@@ -284,7 +284,7 @@ namespace FishMMO.Shared.Biomes
 		public bool talusGrading;
 
 		/// <remarks>
-		/// 2026-10-26, phase SCATTER-MODES (decision 34; the queued modes of decisions 50, 61, 64, 71, 72, 77, 81, 82, 85, 90): how the rule's
+		/// How the rule's
 		/// instances are turned, tilted, sized, anchored and laid out (BiomeScatterMode). Every field at its default is off: the rule scatters
 		/// exactly as before and draws nothing more.
 		/// </remarks>
@@ -293,7 +293,7 @@ namespace FishMMO.Shared.Biomes
 		public BiomeScatterMode scatterMode;
 
 		/// <remarks>
-		/// 2026-10-26, phase GROUND-BANDS (decision 71): grow only on slopes whose fall line looks one way (BiomeFacingBand: shade-facing
+		/// Grow only on slopes whose fall line looks one way (BiomeFacingBand: shade-facing
 		/// poleward faces for a cold trap's rime clods, the sunny faces, a lee), the ground layers' facing band for plants and stones. Off
 		/// (the default) grows the rule as before.
 		/// </remarks>
@@ -308,7 +308,7 @@ namespace FishMMO.Shared.Biomes
 		[Tooltip("Controls how widely detail prototypes spread noise across the terrain patch.")]
 		[Range(0.05f, 5f)] public float detailNoiseSpread = 0.5f;
 		/// <remarks>
-		/// The scatter writes these into the rule's detail prototypes, and the blade grass reads them there (since 2026-10-15):
+		/// The scatter writes these into the rule's detail prototypes, and the blade grass reads them there:
 		/// a blade prototype's healthy and dry tints are its rule's, so a biome's rule says how its grass, reeds and flowers
 		/// brown through the season and in drought (FishGrassBlades.hlsl GrassSeasonTint). The authoring writes the detail's
 		/// catalogue tints, the same as its material's, so nothing changed. Mesh details (ferns, shrubs, stones) still take

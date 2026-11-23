@@ -18,7 +18,7 @@ namespace FishMMO.UnitTests
 	/// The terrain detail arithmetic and the GPU-driven path the trees and rocks use: deterministic placement and counts,
 	/// the GPU buffer layouts, slot layout and overflow guard, the CPU mirror of the cull kernel, the range allocator, the
 	/// path choice, and the detail-distance seam. (The CPU chunk renderer's own tests, its lifecycle and its count
-	/// calibration, went with it on 2026-10-27.)
+	/// calibration, went with it.)
 	/// </summary>
 	public class TerrainDetailInstancingTests
 	{

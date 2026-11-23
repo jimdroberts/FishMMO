@@ -177,7 +177,7 @@ namespace FishMMO.Shared
 		/// <para>
 		/// With the budget in place the shrink bought no bandwidth a crowd could notice and cost the
 		/// authored 100 m range: at scale 0.5 a busy town quietly became a 50 m world, then a 25 m
-		/// one at the old floor, which is the culling the 2026-09-08 audit was asked to remove. The
+		/// one at the old floor, which is the culling the audit was asked to remove. The
 		/// machinery stays — set <c>ObserverRangeScaleAtHighDensity</c> below 1 to bring it back for
 		/// a deployment that measures a need for it.
 		/// </para>

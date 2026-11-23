@@ -1,4 +1,4 @@
-// FishMMO: how a biome's cold glows move (2026-10-25, I6i; SceneGlowModes.cs, constant for constant): its way glows' parts (a glowjar's
+// FishMMO: how a biome's cold glows move (SceneGlowModes.cs, constant for constant): its way glows' parts (a glowjar's
 // mote, a rune stone's runes: _FishStructure 3) and its glowing crystals (_FishStructure -1 flickering, -2 steady), each by the mode its
 // biome names (BiomeTemplate.GlowModes), read from the biome under the piece's origin. Every mode a pure function of the shared motion
 // clock (_FishWeatherMisc.w, wrapped at 10 000 s; every rate a whole number of cycles in it) and of the sky's and the weather's state
@@ -12,14 +12,14 @@
 // _FishGlowInfo = (on, rows, grid w, grid h): x 0 when no biome on the scene names a mode, and every glow draws exactly as before.
 // The sky: _FishGlowSkyA (sun height, local time 0..1, night share, day mod 720720) · B (moon lit, parent lit, field turn, orbit turn) ·
 //   C (wet, wind, rain to come, fog) · D (sea, turbidity, prevailing way xz); _FishPlumeTide; _FishTidalStress (cos 2φ, sin 2φ, 0, 0);
-//   _FishVentBurst (the scene's own vent's Strombolian burst, decision 95).
-// The stored places (2026-10-25, I6i-b; SceneGlowPlaces.cs, number for number): _FishGlowLines[64] (a stored landform line's stretch:
+//   _FishVentBurst (the scene's own vent's Strombolian burst).
+// The stored places (SceneGlowPlaces.cs, number for number): _FishGlowLines[64] (a stored landform line's stretch:
 //   A.xz, B.xz) + _FishGlowLineData[64] (along at A + the line's phase, along span to B, cos 2b, sin 2b), which a TRAIL creeps along
 //   and a KNEADING reads the bearing of; _FishGlowVents[16] (a fountain vent: x, z, its seed's high half + 65536·its schedule, its
 //   seed's low half), whose episodes an EPISODE plays; _FishGlowAnchors[32] (x, z, radius, row: a site or a light by a biome edge,
 //   everything inside reads that row, so a light and its stone agree); _FishGlowPlaceInfo = (lines, vents, anchors, caves). With none
 //   stored: a fixed bearing, a smooth field, a 500 m cell and the grid's own row, as before.
-// The linked caves (2026-10-26, I2n-c, decision 86 (h); SceneGlowCaves.cs): _FishGlowCaves[32], two a cave: (min x, min z, max x,
+// The linked caves (SceneGlowCaves.cs): _FishGlowCaves[32], two a cave: (min x, min z, max x,
 //   max z) and (min y, max y, row, 0), the box of a cave's air whose inside is an interior biome and that biome's row: a glow whose
 //   origin is in it reads that row before any anchor or the grid, so a cave's crystals and glow-worms move by the interior's mode.
 //
@@ -44,7 +44,7 @@ float4 _FishGlowSkyB;
 float4 _FishGlowSkyC;
 float4 _FishGlowSkyD;
 float _FishPlumeTide;
-// The scene's own Strombolian vent's burst, 0..1 (decision 95; VentBursts.At on the scene's seed, GlowSky).
+// The scene's own Strombolian vent's burst, 0..1 (VentBursts.At on the scene's seed, GlowSky).
 float _FishVentBurst;
 float4 _FishTidalStress;
 
@@ -254,7 +254,7 @@ float FishGlowEpisodeOf(float4 slots, float ramp, float seconds, uint seed)
 }
 
 /// <summary>
-/// The fountains' episode a glow plays: its nearest stored fountain vent's (I6i-b: that vent's seed and schedule), else its 500 m
+/// The fountains' episode a glow plays: its nearest stored fountain vent's (that vent's seed and schedule), else its 500 m
 /// cell's seed on its own schedule (BiomeFountainEpisodes.GlowAt).
 /// </summary>
 float FishGlowEpisode(float4 slots, float ramp, float seconds, float2 xz)
@@ -286,7 +286,7 @@ float FishGlowModeValue(int mode, float every, float4 slots, float ramp, float3 
     float4 b = _FishGlowSkyB;
     float4 c = _FishGlowSkyC;
     float4 d = _FishGlowSkyD;
-    // The nearest stored line, for a trail or a kneading only (I6i-b): one search, read by either branch.
+    // The nearest stored line, for a trail or a kneading only: one search, read by either branch.
     float along = 0.0;
     float2 doubled = float2(1.0, 0.0);
     bool onLine = false;
@@ -399,7 +399,7 @@ float FishGlowModeValue(int mode, float every, float4 slots, float ramp, float3 
     }
     else if (mode == 17)
     {
-        // Along the nearest stored line (I6i-b), else along a fixed bearing.
+        // Along the nearest stored line, else along a fixed bearing.
         if (!onLine)
         {
             along = x * 0.6 + z * 0.8;
@@ -417,7 +417,7 @@ float FishGlowModeValue(int mode, float every, float4 slots, float ramp, float3 
     }
     else if (mode == 22)
     {
-        // The nearest stored crack's bearing (I6i-b), else the smooth field's.
+        // The nearest stored crack's bearing, else the smooth field's.
         if (!onLine)
         {
             float bearing = 3.14159265359 * (0.5 + 0.5 * sin(FISH_GLOW_TURN * frac(x * 0.0011 + z * 0.0007)));

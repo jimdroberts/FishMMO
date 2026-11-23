@@ -6,14 +6,14 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// What drifts on a biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>, 2026-10-25, phase I2p, decisions 42, 60, 68, 69, 80):
+	/// What drifts on a biome's open sea (<see cref="BiomeTemplate.SeaFloats"/>):
 	/// sargassum windrows, by-the-wind sailors, drift logs crusted with goose barnacles, mangrove propagule rafts, a lost fishing
 	/// corkline, growlers calved off the bergs, pumice rafts off a sea-floor eruption, pancake and brash ice. Append-only (stored by
 	/// value). Drawn by the client on the GPU (SeaFloatSystem, FishMMO/Sea Floats) riding the sea's own wave sum, carried
 	/// downwind on the shared clock; nothing is cut into the scene and the server never knows of them.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-25 no sea carried anything; an empty list (every biome's default, and what the authoring writes until a biome's
+	/// Formerly no sea carried anything; an empty list (every biome's default, and what the authoring writes until a biome's
 	/// file names its own with <c>.FloatsAtSea(...)</c>) keeps it so, and draws nothing at all.
 	/// </remarks>
 	public enum BiomeSeaFloatKind : byte
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.Biomes
 		PancakeIce = 7,
 		/// <summary>Brash ice: the broken rubble of floes and bergs, chunks under two metres. Freezing seas only.</summary>
 		BrashIce = 8,
-		/// <summary>A kelp raft (2026-10-25, I2i-b): a detached bull-kelp mat of whip stipes, bulbs and blades drifting off a cool kelp coast.</summary>
+		/// <summary>A kelp raft: a detached bull-kelp mat of whip stipes, bulbs and blades drifting off a cool kelp coast.</summary>
 		KelpRaft = 9,
 	}
 

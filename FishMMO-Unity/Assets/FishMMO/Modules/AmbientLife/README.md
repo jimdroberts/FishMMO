@@ -11,7 +11,7 @@ small animals, sea life and what floats on the sea, motes in the air, falling le
 | **Depends on** | World Simulation (the weather, sky and biomes it draws with); its tests also reference Water |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17 |
+| **Moved** | Out of the core |
 
 ## Folders
 

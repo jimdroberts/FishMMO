@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"): the town's own: market hall, shop-houses, warehouse, stocks and pillory, market cross.
+	/// The town's other buildings ("more structure types for towns, villages, and cities"): the town's own: market hall, shop-houses, warehouse, stocks and pillory, market cross.
 	/// </summary>
 	public static partial class StructurePieces
 	{
@@ -165,7 +165,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The market hall on its arcade (2026-10-19): the ground left open between stone piers for the market's stalls and the
+		/// The market hall on its arcade: the ground left open between stone piers for the market's stalls and the
 		/// passers-by, as the market halls of the wool towns stood, its paving one low step (0.15 m) up from the square on every
 		/// side; over it the council's hall, jettied out front and back, reached by a stone forestair straight up to a door in its
 		/// right gable. A hall over a market must be climbed to from outside: a stair inside would take a bay of the market; and
@@ -320,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			// The forestair: a solid stone flight straight out from the door down the right gable, its top step at the threshold.
 			Steps(d, new Vector3(halfW, 0f, doorZ), Vector3.right, StairWidth, upper, StructureMaterial.Stone, 500);
-			// A rail down each side of the flight on a post at its foot: at every level (2026-10-19, round 3: LOD0-1 only, the
+			// A rail down each side of the flight on a post at its foot: at every level (round 3: LOD0-1 only, the
 			// collider let a climber walk off the flight's sides 3 m over the ground).
 			{
 				float flight = (Mathf.CeilToInt(upper / StepRise) - 1) * StepTread;
@@ -381,7 +381,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The stone guildhall (2026-10-19): one tall hall on a plinth, its studded double door up three steps, tall two-light
+		/// The stone guildhall: one tall hall on a plinth, its studded double door up three steps, tall two-light
 		/// windows between buttresses, the guild's arms carved over the door and its banners either side, the hall's hearth under
 		/// a stack on the right gable, and a lead-capped clock cupola on the ridge.
 		/// </summary>
@@ -519,14 +519,14 @@ namespace FishMMO.Shared.WorldDesign
 		private const float ShopBoardWidth = 2.9f, ShopBoardDepth = 0.7f;
 
 		/// <summary>
-		/// A medieval shop-house (2026-10-19), its gable to the street as a burgage plot's narrow front was: the shop on the ground
+		/// A medieval shop-house, its gable to the street as a burgage plot's narrow front was: the shop on the ground
 		/// floor behind a wide unglazed front whose lower shutter folds down on its legs as the stall-board the wares are laid out
 		/// on and whose upper shutter is propped up over it as a canopy; the door beside it; an iron sign bracket out from the
 		/// jettied storey where the family lives, up a real stair (UpperStorey). The roof follows its palette, its gables with it.
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// What the trade dresses (2026-10-19: one shop-house for every trade, each laid one given its trade's sign, wares and
+		/// What the trade dresses (one shop-house for every trade, each laid one given its trade's sign, wares and
 		/// room): the stall-board is built EMPTY and the bracket with no board on it. Two marks say where they go
 		/// (<see cref="StructurePieces.MarksOf"/>):
 		/// <c>"sign"</c>, the top-centre of the sign board, the point under the bracket it hangs from; its yaw is the way the
@@ -687,7 +687,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Warehouse ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// A merchant's warehouse (2026-10-19), its gable to the quay or the street: the cart door, the loft door shut high over it
+		/// A merchant's warehouse, its gable to the quay or the street: the cart door, the loft door shut high over it
 		/// under the hoist beam (its hood, pulley, rope and a sack on the hook), small barred windows high in the long walls; one
 		/// tall store open to the roof's tie beams inside (its loft door is shut from outside: nothing behind glass is out of reach).
 		/// </summary>
@@ -930,7 +930,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The stocks and the whipping post (2026-10-19): a low bench to sit the offender on, the leg board before it between two
+		/// The stocks and the whipping post: a low bench to sit the offender on, the leg board before it between two
 		/// posts (split along its ankle holes, the upper half hinged and locked down), and beside them a tall post on its stone
 		/// with iron shackles at wrist height and a cross-bar.
 		/// </summary>

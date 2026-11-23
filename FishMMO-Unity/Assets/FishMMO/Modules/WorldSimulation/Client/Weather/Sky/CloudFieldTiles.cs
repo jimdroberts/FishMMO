@@ -13,7 +13,7 @@ namespace FishMMO.Client
 	/// every <see cref="WeatherDriver.TowerPeriodTiles"/> and <see cref="WeatherDriver.MesoscalePeriodTiles"/> cells
 	/// and smooth over kilometres; only the world's seed changes them. Worked out per sample they were most of the
 	/// cloud field's cost — the tower's nine-cell search 5.8 ms of fair weather's march at 2560x1440, the noise's two
-	/// octaves 3.6 (ScenePerfProbe, 2026-10-07). Drawn by the clouds' CloudFieldTile pass from the same functions, so
+	/// octaves 3.6 (ScenePerfProbe). Drawn by the clouds' CloudFieldTile pass from the same functions, so
 	/// the tiles are the same patterns; the weather's contrast on the noise is still applied per sample.
 	/// </remarks>
 	public sealed class CloudFieldTiles

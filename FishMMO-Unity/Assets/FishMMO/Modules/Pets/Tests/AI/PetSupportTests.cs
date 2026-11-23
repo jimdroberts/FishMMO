@@ -71,7 +71,7 @@ namespace FishMMO.UnitTests.AI
 			PetAbilityTemplate lesser = Load<PetAbilityTemplate>(SummonLesserFireElemental);
 			PetAbilityTemplate summon = Load<PetAbilityTemplate>(SummonFireElemental);
 
-			/* Its own, larger elemental since 2026-11-16 ("a fire elemental", with its own attributes and icon); the lesser
+			/* Its own, larger elemental ("a fire elemental", with its own attributes and icon); the lesser
 			 * spell keeps "a lesser fire elemental". */
 			Assert.IsNotNull(summon.PetPrefab, "the summon names an elemental");
 			Assert.IsNotNull(lesser.PetPrefab, "and so does the lesser spell");

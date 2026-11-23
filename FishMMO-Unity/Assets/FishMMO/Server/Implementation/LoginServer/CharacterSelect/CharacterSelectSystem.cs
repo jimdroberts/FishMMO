@@ -408,6 +408,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 						// Unversioned: the waypoint pages are a merge-only bitmask with no version stream.
 						r = await waypointService.DeleteAsync(characterId);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete waypoints for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						// The travel spells' one marked location (issue #241). Optional: a build without the service keeps the row, which nothing reads.
+						if (TryGetDbService(out ICharacterMarkService markService))
+						{
+							r = await markService.DeleteAsync(characterId);
+							if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete the mark for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						}
 						r = await archetypeService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete archetypes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 					}

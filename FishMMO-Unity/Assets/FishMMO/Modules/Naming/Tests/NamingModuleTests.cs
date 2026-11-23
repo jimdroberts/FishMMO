@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Naming module (Phase 4 of the core and modules plan, 2026-11-18): the generator names the scene objects through the
+	/// The Naming module: the generator names the scene objects through the
 	/// core's <see cref="SceneObjectNames"/>, and its race registry follows the races the core loads.
 	/// </summary>
 	[TestFixture]

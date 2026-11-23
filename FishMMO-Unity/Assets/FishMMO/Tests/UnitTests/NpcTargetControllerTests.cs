@@ -61,8 +61,8 @@ namespace FishMMO.UnitTests
 		{
 			LogAssert.IsTrue(ProjectFiles.FolderExists(NpcRoot), $"NPC prefabs must live at {NpcRoot}");
 
-			/* Every NPC casts: the ability controller is a part every character gets as it wakes (the Abilities module's,
-			 * 2026-11-21), so no prefab authors it and the NPC script marks a casting prefab. */
+			/* Every NPC casts: the ability controller is a part every character gets as it wakes (the Abilities module's),
+			 * so no prefab authors it and the NPC script marks a casting prefab. */
 			string npcGuid = ScriptGuid("Implementation/Entity/NPC/NPC.cs");
 			string targetControllerGuid = ScriptGuid("Implementation/Entity/Target/TargetController.cs");
 
@@ -83,7 +83,7 @@ namespace FishMMO.UnitTests
 				string name = Path.GetFileNameWithoutExtension(prefab);
 
 				/* An NPC authored immortal used to be skipped here. The damage controller is the Combat module's character part
-				 * since 2026-11-20, added as the character wakes, so no prefab authors one and none is immortal by prefab. */
+				 *, added as the character wakes, so no prefab authors one and none is immortal by prefab. */
 
 				checkedCount++;
 

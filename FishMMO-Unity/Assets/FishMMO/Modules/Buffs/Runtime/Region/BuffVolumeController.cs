@@ -28,7 +28,7 @@ namespace FishMMO.Shared
 	/// the way every other buff does.
 	/// </para>
 	/// <para>
-	/// See <see cref="BuffVolume"/> for why this is a position test and not a trigger (N13).
+	/// See <see cref="BuffVolume"/> for why this is a position test and not a trigger.
 	/// </para>
 	/// </remarks>
 	[DisallowMultipleComponent]

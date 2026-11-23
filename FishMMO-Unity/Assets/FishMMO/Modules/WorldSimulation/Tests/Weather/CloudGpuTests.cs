@@ -80,10 +80,10 @@ namespace FishMMO.UnitTests.Weather
 		public void EveryTierRebuildsAtFourTimesItsMarchAndHighIsNotStretchedFar()
 		{
 			// Each tier rebuilds at four times its march, capped at the screen, every pixel re-marched once in sixteen
-			// frames. 2026-10-07: High had come down to a march of 0.07, rebuilt at 0.28 of the screen and stretched 3.5x
+			// frames. High had come down to a march of 0.07, rebuilt at 0.28 of the screen and stretched 3.5x
 			// by the composite: "very blurry". At 0.25 it was rebuilt at the screen's size, and a still frame matched
 			// a march of 0.48 at 3.7 ms of march against 8.6 (overcast, 2560x1440).
-			// 2026-10-21 (frame-budget pass, chosen by eye against 0.125 and 0.0625): High marches at 0.18, rebuilt at
+			// frame-budget pass, chosen by eye against 0.125 and 0.0625: High marches at 0.18, rebuilt at
 			// 0.72 of the screen and stretched 1.4x — the cauliflower edges kept, about 0.8 ms saved. The bar is that
 			// High stays near the screen's size, nowhere near the 3.5x that blurred it.
 			foreach (WeatherTierSettings tier in new[] { WeatherTierSettings.Performant(), WeatherTierSettings.Balanced(), WeatherTierSettings.High() })

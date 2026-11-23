@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The plants floating on a scene's still fresh water (2026-10-18, phase I2i, decision 27): duckweed carpets, water-lilies,
+	/// The plants floating on a scene's still fresh water: duckweed carpets, water-lilies,
 	/// water hyacinth and frogbit on its lakes, ponds, moats and the slack pools of its rivers, each biome's own
 	/// (BiomeTemplate.FloatingPlants), laid as baked props at the water's surface.
 	/// </summary>

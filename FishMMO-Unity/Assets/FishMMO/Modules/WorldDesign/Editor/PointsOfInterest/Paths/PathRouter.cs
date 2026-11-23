@@ -39,7 +39,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>No cliffs, ever.</b> A relaxed search (the retry when the strict one found nothing) prices any climb rather than
 	/// refusing it, but still never steps steeper than <see cref="WalkableGrade"/>. A bridge's cells are climbed at its
 	/// deck's height, not for free, and only cells at the deck's height are its deck; a way is network only in the cells
-	/// at its own height. Each of those once let a way step 60 m down a fall's cliff (Flo Monolith, 2026-10-12).
+	/// at its own height. Each of those once let a way step 60 m down a fall's cliff (Flo Monolith).
 	/// </para>
 	/// <para>Deterministic: fixed neighbour order, and ties in the open list broken by cell index.</para>
 	/// </remarks>

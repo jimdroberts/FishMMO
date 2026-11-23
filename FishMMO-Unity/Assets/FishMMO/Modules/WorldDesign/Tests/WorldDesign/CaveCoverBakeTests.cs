@@ -12,7 +12,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The cave cover's bake (2026-11-03, CaveCoverBake): players logged "index buffer is null" from CaveCoverSystem.TakeOn
+	/// The cave cover's bake (CaveCoverBake): players logged "index buffer is null" from CaveCoverSystem.TakeOn
 	/// for every stored piece, because an unreadable mesh's index buffer cannot be re-targeted raw where there is no CPU copy,
 	/// so no cover ever grew in a player. The cut now bakes what FishCaveCover.compute reads; these pin that the bake is that
 	/// data byte for byte (so the cover lands exactly as from the mesh), that it reads an unreadable piece, and the wiring.

@@ -183,7 +183,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void AFreshWindow_ReadsItsOwnSlice_FarFromTheOriginAndMetresAcross()
 		{
-			// The browser's settlement close view (2026-11-05): the near cascade a few metres across, the light's view translated
+			// The browser's settlement close view: the near cascade a few metres across, the light's view translated
 			// by kilometres. In float, TryMap put a fresh window's texel centres hundredths of a texel off and refused the very
 			// slice it was built from (~1 frame in 6, each then without structure shadows); in double it reads it, and any slice
 			// moved by whole texels within the margin.
@@ -289,7 +289,7 @@ namespace FishMMO.UnitTests
 		{
 			// Unity reverses a material's ZTest under a reversed depth buffer itself (the casters' "ZTest LEqual" reaches the GPU as
 			// greater-equal there), so the merge names LessEqual everywhere: GreaterEqual came out as less-equal in the browser and
-			// kept the farther depth (2026-11-02).
+			// kept the farther depth.
 			Assert.AreEqual(UnityEngine.Rendering.CompareFunction.LessEqual, CachedMainLightShadows.MergeDepthTest(false));
 			Assert.AreEqual(UnityEngine.Rendering.CompareFunction.Always, CachedMainLightShadows.MergeDepthTest(true));
 			string source = ProjectFiles.ReadAllText("Assets/FishMMO/Client/Rendering/WorldPasses/CachedMainLightShadows.cs");
@@ -298,7 +298,7 @@ namespace FishMMO.UnitTests
 			StringAssert.Contains("_FishShadowCacheZTest(\"Merge depth test\", Float) = 4", ProjectFiles.ReadAllText(Shaders + "FishShadowCacheMerge.shader"));
 		}
 
-		// Off everywhere until the merge is right (2026-11-06: the browser merge writes depth no caster put there); the owner wants
+		// Off everywhere until the merge is right (the browser merge writes depth no caster put there); the owner wants
 		// it on in browsers then.
 		[Test]
 		public void OffByDefaultUntilTheMergeIsRight()

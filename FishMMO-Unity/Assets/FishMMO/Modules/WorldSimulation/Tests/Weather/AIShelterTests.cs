@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// Whether an NPC goes and stands out of the weather, and which cover it picks (Q15).
+	/// Whether an NPC goes and stands out of the weather, and which cover it picks.
 	/// </summary>
 	/// <remarks>
 	/// The decision is pure — a weather sample and an archetype's settings in, a yes or no out — so
@@ -85,7 +85,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AnArchetypeThatSaysNothingAboutWeatherNeverShelters()
 		{
-			/* The default, and the one that matters most (Q15). Every archetype already in the
+			/* The default, and the one that matters most. Every archetype already in the
 			 * project gets this struct at its defaults, and weather covers whole regions — so a
 			 * default of "on" would have had every NPC on the continent leave its post the first
 			 * time a front came through. Patrols off their routes, merchants away from their stalls,

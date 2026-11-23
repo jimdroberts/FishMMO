@@ -4,7 +4,7 @@ using FishMMO.Client;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>The Terrain module's saved profile (split from SeaLifeTests, Phase 4 of the core and modules plan, 2026-11-18).</summary>
+	/// <summary>The Terrain module's saved profile (split from SeaLifeTests).</summary>
 	public class TerrainProfileAssetTests
 	{
 		[Test]

@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Salt Flat</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry SaltFlat()
 		{
-			// The Afar salt plain in the medieval centuries (biome round, approved 2026-10-25, authored 2026-10-26): a furnace-hot basin far
+			// The Afar salt plain in the medieval centuries: a furnace-hot basin far
 			// below its rim, a dead-flat sheet of hard white salt cracked into metre plates with raised rims and crossed by thrust-up
 			// ridges; grey knobbly crust towards the edges, then a khaki clay pan of curled mud plates, then the black lava reg, salted soot
 			// sand and a rust-black escarpment. Round the low places brine eyes red as wine and turquoise lakes floored with salt cubes; warm
@@ -20,17 +20,17 @@ namespace FishMMO.Shared.WorldDesign
 			// salt-masters' towns are built of salt blocks the night dew flutes like melting sugar; the dead lie under basalt ring-cairns.
 			// Its fantasy is its own lore: the salt-wardens turning all day to watch the sun, the giant's bar, the crust ringing like far
 			// bells in the afternoon heat, embersalt glowing at dusk, the ghost asses running white on the noon mirage. Salt Flat is also
-			// the playa ring round every terminal lake (water role SaltFlat, decision 73), so it is painted on cool worlds too: a COLD band
+			// the playa ring round every terminal lake (water role SaltFlat), so it is painted on cool worlds too: a COLD band
 			// (t < 0.25) wears the alkali playa, the etched crust and the warm-only plants off.
-			// LATER (I9 T1): every ground and object texture as Salt Flat's own variant (the Afar basalt, the Abbe travertine, the Asale
+			// LATER: every ground and object texture as Salt Flat's own variant (the Afar basalt, the Abbe travertine, the Asale
 			// plates, etched pinnacles and spring rims of the halite, the swallowtail gypsum); until then the grounds are its own recipes.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Amolegold V(0.125, 0.48, 0.58) and Wardensalt V(0.205, 0.30, 0.88).
+			// LATER (no spec column yet): rare looks Amolegold V(0.125, 0.48, 0.58) and Wardensalt V(0.205, 0.30, 0.88).
 			return E("Salt Flat", L(Ground.SaltAmoleCrust,
 					// The walkable crust relief (the Asale plates) and the trade's litter thickest at the cuts, tolls and halts.
 					With(Blocks("Salt polygons", 0.2f, 5f, F(RockTypes.Halite, "Polygons"), 8f), r => r.Spacing = 4.5f),
 					Plants("DebrisAmole", 0.2f, 128), Moded(Plants("DebrisAmole", 4f, 128), BiomeScatterMode.NearSites("Quarry,Mine,TradingPost,Waystation", 60f)),
 					// The wardenblooms: glassy salt flowers only round the salt-warden pillars, and only under breathable air.
-					// LATER (I7 I27): the pillars themselves, turning to the sun's azimuth on the shared clock.
+					// LATER: the pillars themselves, turning to the sun's azimuth on the shared clock.
 					OnWorlds(Moded(Plants("FlowersWardenbloom", 6f), BiomeScatterMode.NearSites("Statue", 6f)), BiomeAtmosphereRequirement.Standard | BiomeAtmosphereRequirement.Thick),
 					// The bedded rock salt: ledges on the salt dome's flanks, fluted pinnacles and scree at the salt cliffs' feet.
 					OnLandform(Blocks("Bedded salt", 0.004f, 40f, F(RegionalRocks.Saltrock, "Bedded"), 40f), BiomeLandformPart.Flank, "SaltDome"),
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.WorldDesign
 				// formations, the Afar basalt of the escarpment and the Abbe travertine. Granite dropped.
 				.Accepts(RegionalRocks.Saltrock, RockTypes.Halite, RockTypes.Gypsum, RockTypes.Basalt, RegionalRocks.Travertine)
 				// Salt caves, grottoes and salt galleries keep the host's content (no interior link); lava tubes in the Afar basalt.
-				// LATER (I9 S3): the Saltrock dripstone (salt straws, curtains, white-to-amber flowstone) and halite crystal walls.
+				// LATER: the Saltrock dripstone (salt straws, curtains, white-to-amber flowstone) and halite crystal walls.
 				.CaveShell(CaveForm.Cave, "Saltrock").CaveShell(CaveForm.Grotto, "Saltrock").CaveShell(CaveForm.Mine, "Saltrock")
 				.CaveShell(CaveForm.LavaTube, "Basalt").CaveShell(CaveForm.IceCave, "Ice")
 				// Halite hopper cubes, brick-red sylvite, and embersalt glowing warm from dusk, lining the ways it lights.
@@ -98,11 +98,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Water(BiomeWaterRole.SaltFlat)
 				// Approved: the herders' and salt towns' life and the ruins' beside the desert's and the barren ground's.
 				.Wildlife(BiomeHabitat.Desert | BiomeHabitat.Barren | BiomeHabitat.Settlement | BiomeHabitat.Ruins)
-				// LATER (AMBIENT-LIFE): African wild ass at dawn on the clay pan, beisa oryx, Soemmerring's gazelle, hamadryas baboon troops on
+				// LATER: African wild ass at dawn on the clay pan, beisa oryx, Soemmerring's gazelle, hamadryas baboon troops on
 				// the escarpment, striped hyena by night, Arabian bustard, cream-coloured coursers, brine-fly mats lifting where walked
 				// through (client only), goat flocks round the camps; the salt caravans of camels and donkeys carrying paired bars on the bar
-				// roads (I18); the ghost asses on the noon mirage (I15, ≤ 1 herd a scene). LATER (SEA-LIFE): Danakil cichlids in the warm
-				// springs. LATER (I7 I26): the bell-crust's afternoon pings. LATER (WATER C21): the mirror morning after rain.
+				// roads; the ghost asses on the noon mirage (≤ 1 herd a scene). LATER: Danakil cichlids in the warm
+				// springs. LATER: the bell-crust's afternoon pings. LATER (WATER C21): the mirror morning after rain.
 				.Moat(BiomeMoatWater.Dry)
 				// The brine lakes: turquoise over a white salt floor. LATER (WATER C12): the brine eyes' wine-red per-lake look, and the
 				// playa-ringed terminal lakes taking this look.
@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Battlefield, 0.2f), (POIType.Fortress, 0.2f), (POIType.Keep, 1f), (POIType.BossLair, 0.2f), (POIType.Overhang, 0.2f),
 					(POIType.FallenStar, 0.2f), (POIType.HerbGrove, 0.2f), (POIType.Oasis, 0.2f), (POIType.DuneSea, 0.2f), (POIType.Hermitage, 0.2f),
 					(POIType.City, 0.1f), (POIType.Obelisk, 0.1f), (POIType.NaturalArch, 0.1f), (POIType.Portal, 0.1f), (POIType.LeyNexus, 0.1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.4f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -206,7 +206,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Fortress, "Palisade", 0f)
 				.Prefers(POIType.Keep, "Stone", 1f)
 				.Prefers(POIType.DungeonEntrance, "Door", 0.8f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -225,8 +225,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.TitansBones, "Sunken Skull", 1.4f)
 				.Prefers(POIType.LostLibrary, "Dry Athenaeum", 1.4f)
 				.Prefers(POIType.NomadCamp, "Black Tents", 1.4f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Salt Flat's signature pieces and their variants — the salt cut with its lever poles, trimming floor and bar
+				// (the fantasy set's variants end here)
+				// LATER: Salt Flat's signature pieces and their variants — the salt cut with its lever poles, trimming floor and bar
 				// stacks (Quarry "Salt Cut" 2.0, Mine 0.6), the loading line, the Ari camp of mat domes in a thorn zariba under its dobera
 				// (Camp 1.8, Village 1.4; I28 MatDome), the saltwall town of salt blocks (Town 1.6, Village 1.0, City 1.0), the toll ring
 				// and its cairn of bars (TradingPost 1.6, Waystation 0.8), the ring-cairns (Graveyard 1.8, Crypt 1.2), the brine-pan works, the
@@ -234,7 +234,7 @@ namespace FishMMO.Shared.WorldDesign
 				// escarpment track (AncientRoad 1.2), the melted saltwall (Ruins 1.2), the salt mine (Mine 1.6, DungeonEntrance 0.8), the
 				// salt-wardens (Statue 1.6, ≤ 2 fields a scene), the giant's bar (Monument 0.4, ≤ 1) and the brine eye's first bars (RitualSite
 				// 1.0). Until then the kit's variants below stand in at the draft's weights (yurts for the mat domes).
-				// The escarpment track stands in for its own piece (LATER (I7)): the kit's walled caravan trace with its rest-cairns (2026-10-27).
+				// The escarpment track stands in for its own piece (LATER): the kit's walled caravan trace with its rest-cairns.
 				.Prefers(POIType.AncientRoad, "Caravan Track", 1.2f)
 				.Favours(BiomeStructureStyle.Hide, 2f)
 				.Favours(BiomeStructureStyle.Stone, 1.6f)
@@ -243,7 +243,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: the herders' doum mats striped brown and madder over bent acacia ribs, goat-hide panels, dull iron; the salt
 				// towns' rough-hewn salt blocks with brown clay seams under flat pole-and-mat roofs skinned in mud-salt, pale dobera lintels,
-				// narrow plank doors, basalt rubble plinths; the ring-cairns' and wells' black vesicular drystone. LATER (NEW-SURFACES U10):
+				// narrow plank doors, basalt rubble plinths; the ring-cairns' and wells' black vesicular drystone. LATER:
 				// the SaltBlock building material (translucent edges under a low sun) — ice block tinted salt-grey stands in; LATER (U3/U8):
 				// DoumMat, AcaciaRib, GoatHide, PoleMatRoof, DoberaBeam, AcaciaPlankDoor, AfarDrystone as Salt Flat's own surfaces.
 				.Builds(BiomeStructureStyle.Hide, BiomeStructureRole.Wall, BiomeStructureMaterial.Reed, ErgHex("#c8b088"))
@@ -273,11 +273,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Dewfluted: the salt-block faces fluted by the night dew, corners rounded like melting sugar, polished bands at the doors.
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Dewfluted, 0.5f, 1f)
-				// LATER (I2j-c J19): the brine-pan works as fields — the SaltPan field surface (bunded pans, brine clear → rose → white, raked
+				// LATER: the brine-pan works as fields — the SaltPan field surface (bunded pans, brine clear → rose → white, raked
 				// cones; 0.6, bottomland by the brine lakes, ≤ 80 × 60 m). No grain and no orchards, so no fields until then.
 				.NoCrops()
 				// Thorn zaribas round the camps (a dead thorn hedge of caper stands in) and black basalt drystone round the towns, toll rings
-				// and graveyards. LATER (I2f-b style): ThornZariba and AfarDrystone as named styles, each on its own sites' bounds.
+				// and graveyards. LATER (style): ThornZariba and AfarDrystone as named styles, each on its own sites' bounds.
 				.Lines(new Entry.Line(BiomeLinearForm.Dead, BiomeLinearPlace.SiteBounds, "Cadaba"), AfarDrystoneLine())
 				// Salt lamps (the wick seen through its salt) in the towns, villages and halts, braziers at the toll rings and forts, embersalt
 				// posts at the wardens, the giant's bar and the brine eyes; the camps go unlit (their hearths).
@@ -305,7 +305,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Loose("Silicate Sand");
 		}
 
-		/// <summary>An after-rain plant of the playa: only inside the rain cells (SCATTER-MODES Z18). LATER (I9b P29): their timing after rain.</summary>
+		/// <summary>An after-rain plant of the playa: only inside the rain cells. LATER: their timing after rain.</summary>
 		private static Scatter PlayaRain(Scatter rule) => Moded(rule, BiomeScatterMode.RainCellClusters(300f, 0.35f));
 
 		/// <summary>The Afar drystone wall stand-in: black basalt rubble 1.2 m round the sites.</summary>

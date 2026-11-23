@@ -89,7 +89,7 @@ FishFoam FishFoamCutResolved(half lace, half coverage, half resolved)
 	/* Antialiased by the lace's own change across the pixel, never sharper than a soft wet edge; and the thinner the foam
 	 * the softer its edge. Thin foam is a web of bubbles thinning to nothing at its fringe, not a cut-out: cut at the
 	 * same hard edge as dense froth, the thin foam a river or the sea carries drew as flat flakes of paper scattered on
-	 * the water (2026-10-13). */
+	 * the water. */
 	half edge = max(lerp(0.09h, 0.012h, saturate(coverage * 2.5h)), (half)fwidth(lace));
 	half crisp = saturate(over / edge + 0.5h);
 	// The body: how far inside its cut the lace is. Thin foam is near the cut, the middle of a dense patch far above it.
@@ -149,7 +149,7 @@ half3 FishFoamOver(half3 water, FishFoam f, half3 foamLit, out half opacity)
 {
 	/* Foam is bubbles in water, never a coat of paint on it: thin lace mostly lets the water through (bubble walls with the
 	 * water behind them), and even thick froth lets some of the water's colour show, tinted by it. Laid near opaque, pure
-	 * white at its thickest, every patch read as solid white pasted on the water (2026-10-13). */
+	 * white at its thickest, every patch read as solid white pasted on the water. */
 	opacity = f.cover * lerp(0.25h, 0.8h, f.body);
 	half3 foam = lerp(lerp(water, foamLit, 0.6h), lerp(water, foamLit, 0.9h), f.body);
 	return lerp(FishFoamAerate(water, f.share, foamLit), foam, opacity);

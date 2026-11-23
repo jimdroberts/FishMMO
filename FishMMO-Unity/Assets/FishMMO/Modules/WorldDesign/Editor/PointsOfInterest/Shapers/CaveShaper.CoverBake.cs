@@ -8,7 +8,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The cave cover's bake (2026-11-03, <see cref="CaveCoverBake"/>): what FishCaveCover.compute reads of each piece, written
+	/// The cave cover's bake (<see cref="CaveCoverBake"/>): what FishCaveCover.compute reads of each piece, written
 	/// beside the pieces as <c>Cave &lt;id&gt; Cover</c>. A player cannot read the stored pieces (they are unreadable), so
 	/// without it no cover grew there.
 	/// </summary>

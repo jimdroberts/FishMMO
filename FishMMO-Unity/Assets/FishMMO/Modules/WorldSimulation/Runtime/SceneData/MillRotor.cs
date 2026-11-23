@@ -6,13 +6,13 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Turns a mill's sails or water wheel (2026-10-14: "Windmills, watermills, lumbermills"): spins this object about its
+	/// Turns a mill's sails or water wheel ("Windmills, watermills, lumbermills"): spins this object about its
 	/// own z axis, which the cut lays along the windshaft or the axle. Client-only, under a <see cref="ClientOnlyObject"/>:
 	/// nothing collides with it and nothing about it is sent.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>One mill for every player (2026-10-15: "It all needs to be deterministic so the simulation is shared across all
+	/// <b>One mill for every player ("It all needs to be deterministic so the simulation is shared across all
 	/// clients and they all see the same thing at the same time").</b> Every angle here is a pure function of the shared
 	/// world clock (<see cref="WorldMotion.Seconds"/>) and the scene's weather, which every machine computes alike: no
 	/// sum of frame times, no state carried from frame to frame, so two players side by side see the same sail at the
@@ -23,7 +23,7 @@ namespace FishMMO.Shared
 	/// surge integrated, not stepped.
 	/// </para>
 	/// <para>
-	/// <b>Sails</b> (<see cref="WindDriven"/>, 2026-10-15: "they don't properly turn in varying wind") have gone round as
+	/// <b>Sails</b> (<see cref="WindDriven"/>: "they don't properly turn in varying wind") have gone round as
 	/// many times as the scene's wind has turned them (<see cref="AirDrift.SailTurns"/>): still below a cut-in breeze,
 	/// faster with the wind up to the miller's working pace (<see cref="Rpm"/>), braked in a gale; with a surge on the
 	/// weather's gustiness. The <see cref="Head"/> (a tower mill's cap) faces the wind at the mill as it was a minute

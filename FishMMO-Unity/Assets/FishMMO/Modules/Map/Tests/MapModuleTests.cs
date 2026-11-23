@@ -12,7 +12,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Map module (2026-11-20): the wiring that lets the folder be removed. Its two windows are placed into the world
+	/// The Map module: the wiring that lets the folder be removed. Its two windows are placed into the world
 	/// GUI by label, and nothing in the core names a client map type; the core keeps the map data, the bake, the explore
 	/// event and true north.
 	/// </summary>

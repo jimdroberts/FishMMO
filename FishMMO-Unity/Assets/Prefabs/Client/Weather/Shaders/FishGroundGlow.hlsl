@@ -1,7 +1,7 @@
 #ifndef FISHMMO_GROUND_GLOW_INCLUDED
 #define FISHMMO_GROUND_GLOW_INCLUDED
 
-// A ground layer's glow (2026-10-25, phase I2r "molten ground", decision 65 (a)): per terrain layer, from its layer table texel
+// A ground layer's glow ("molten ground"): per terrain layer, from its layer table texel
 // (FISH_LAYER_ROW_GLOW, baked from its template slot's BiomeGroundGlow), a pure function of the shared motion clock
 // (_FishWeatherMisc.w) and the place. FishMMO.Shared.Weather.GroundGlow is the C# twin, constant for constant; GroundGlowTable
 // publishes the globals (client only). Presentation only.

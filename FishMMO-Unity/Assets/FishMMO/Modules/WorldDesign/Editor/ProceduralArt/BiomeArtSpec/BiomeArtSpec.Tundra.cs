@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Tundra</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Tundra()
 		{
-			// The treeless arctic (biome round, approved 2026-10-16, authored 2026-10-26): endless low ground patterned by frost —
+			// The treeless arctic: endless low ground patterned by frost —
 			// ice-wedge polygons with water in their troughs, frost-boil circles ringed with sorted stones, solifluction lobes,
 			// pingos and palsas out of the flats, thaw lakes everywhere; a knee-high mat of dwarf birch, arctic willow and
 			// bearberry that burns scarlet in autumn, cottongrass drifts, Dryas and arctic poppies on the gravel, pink late
@@ -19,10 +19,10 @@ namespace FishMMO.Shared.WorldDesign
 			// its fantasy an Ice Age that never quite ended (mammoth-tusk halls, the fire-fox's aurora, labradorite and aurorite).
 			// Taiga keeps the reindeer-lichen heath, juniper and bilberry; Peat Bog the crowberry and hare's-tail; Alpine the moss
 			// campion and alpine flowers.
-			// LATER (I9): every ground and object texture as Tundra's own variant of its recipe (decision 12); until then the
+			// LATER: every ground and object texture as Tundra's own variant of its recipe; until then the
 			// grounds below are Tundra's own recipes and the stones, barks and leaves the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Aurora + Hoarfrost (BiomeTemplate.rareLookA/B, decision 25).
-			// LATER (CODE-TABLE CLEARANCE Q13): nothing changes in its selection row.
+			// LATER (no spec column yet): rare looks Aurora + Hoarfrost (BiomeTemplate.rareLookA/B).
+			// LATER: nothing changes in its selection row.
 			return E("Tundra", L(Ground.LichenTundraMat,
 					// The dwarf-shrub and lichen mat: bronze fescue tufts, the odd cotton drift, arctic flowers.
 					Grass("GrassTuft", 14f), Grass("GrassCotton", 2f), Plants("FlowersArctic", 3f, 180),
@@ -41,7 +41,7 @@ namespace FishMMO.Shared.WorldDesign
 					With(Blocks("Solifluction lobes", 0.02f, 16f, F(RegionalRocks.Permafrost, "Lobe")), s => s.Slope = new Vector2(6f, 20f)),
 					// The thaw slumps' ice-rich headwalls, where the landform carved one beside a thaw lake.
 					OnLandform(Blocks("Thaw slump headwalls", 0.004f, 60f, F(RegionalRocks.Permafrost, "ThawSlump")), BiomeLandformPart.Whole, "ThawSlump"),
-					// Rafted driftwood. LATER (SCATTER-MODES): a near-water anchor for the lake shores and bars; sparse on the mat until then.
+					// Rafted driftwood. LATER: a near-water anchor for the lake shores and bars; sparse on the mat until then.
 					Logs("Driftwood", 0.004f, 30f, Wood("Driftwood", "DriftwoodTrunk"))),
 				Ds(
 					// d0: the ice-wedge polygon mire on the flats (≤ 3°, low ground), cottongrass and sedge in the centres, pendant grass in
@@ -52,17 +52,17 @@ namespace FishMMO.Shared.WorldDesign
 					// d1: frost-boil sorted circles (≤ 5°), Dryas and saxifrage on their rims, wood-rush; the ring stones as pebbles laid in rings.
 					D(Ground.GravelSortedCircles, 64f, 3f, 0f, 5f, Plants("FlowersArctic", 6f, 180), Plants("CushionDryas", 5f), Plants("CushionSaxifrage", 2f),
 						Grass("GrassWoodrushArctic", 4f),
-						// LATER (I7): a stone-ring piece of its own (Detail_StoneRing, 1.5–3 m rings); gneiss pebbles in rings stand in.
+						// LATER: a stone-ring piece of its own (Detail_StoneRing, 1.5–3 m rings); gneiss pebbles in rings stand in.
 						Moded(Stones(Pebbles("Gneiss"), 4f), BiomeScatterMode.FairyRings(1.2f, 0.6f)),
 						Blocks("Frost-jacked slabs", 0.01f, 16f, F(RockTypes.Gneiss, "FrostJacked"))),
 					// d2: tussock cottongrass meadow on the damp ground (≤ 8°, humidity ≥ 0), earth hummocks, palsas, dwarf birch; slab
 					// causeways across it; the feltleaf willow along its streams.
 					D(Ground.GrassTussockTundra, 80f, 2f, 0f, 8f, Grass("GrassCotton", 16f), Grass("GrassSedge", 8f), Bush("DwarfBirch", 2f, 0.65f),
-						// LATER (SCATTER-MODES): the willow within 15 m of water (a near-water anchor); the wet tussock stands in.
+						// LATER: the willow within 15 m of water (a near-water anchor); the wet tussock stands in.
 						Bush("Willow", 0.6f, 0.5f),
 						Blocks("Earth hummocks", 0.06f, 6f, F(RegionalRocks.Permafrost, "Thufur")), Blocks("Palsas", 0.01f, 40f, F(RegionalRocks.Permafrost, "Palsa")))
 						.Humid(0f, 1f).Ways(road: Ground.PathSlabCauseway),
-					// d3: the frost-shattered gneiss fell-field (felsenmeer) on 4–28°. LATER (GROUND-BANDS): also on the high ground (≥ 0.54)
+					// d3: the frost-shattered gneiss fell-field (felsenmeer) on 4–28°. LATER: also on the high ground (≥ 0.54)
 					// and the polar desert (humidity < −0.3) as one either-or band; the slope band alone until then, ventifacts in the dry reach.
 					D(Ground.RockFellField, 96f, 3f, 4f, 28f, Grass("GrassTuft", 4f), Grass("GrassWoodrushArctic", 8f), Plants("CushionDryas", 6f),
 						Plants("CushionSaxifrage", 3f), Plants("FlowersArctic", 4f, 180), Plants("LichenSnow", 6f), Plants("LichenRockTripe", 4f),
@@ -93,7 +93,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Cold)
 				// Approved: the thaw lakes' ducks, terns and geese (FreshWater); Grassland's insects, toads and rats dropped.
 				.Wildlife(BiomeHabitat.Tundra | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): reindeer herd, arctic fox, lemming, ptarmigan, snowy owl, skua, snow buntings, loon, muskox, the
+				// LATER: reindeer herd, arctic fox, lemming, ptarmigan, snowy owl, skua, snow buntings, loon, muskox, the
 				// rare distant woolly mammoth and the revontuli fire-fox trailing green-violet sparks at night.
 				.Moat(BiomeMoatWater.Frozen)
 				.NoVines()
@@ -127,7 +127,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Keep, 1f), (POIType.Fortress, 0.05f), (POIType.TradingPost, 1.2f), (POIType.Waystation, 0.3f), (POIType.Mine, 0.2f),
 					(POIType.Quarry, 0.2f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.DungeonEntrance, 0.6f), (POIType.BossLair, 0.4f),
 					(POIType.OreVein, 0.5f), (POIType.CrystalFormation, 0.4f), (POIType.HerbGrove, 0.5f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.8f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -172,7 +172,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Hermitage, "Stone", 1.5f)
 				.Prefers(POIType.Hermitage, "Cottage", 0.2f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.6f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -194,12 +194,12 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Commandery, "Preceptory", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.2f)
 				.Prefers(POIType.NomadCamp, "Felt Yurts", 0.7f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Tundra's signature pieces — the great chum with its ring of sledges, the semi-sunken turf-and-whalebone house,
+				// (the fantasy set's variants end here)
+				// LATER: Tundra's signature pieces — the great chum with its ring of sledges, the semi-sunken turf-and-whalebone house,
 				// inuksuit and route cairns, the stone meat cache and fox trap, the mammoth-tusk hall, the boulder labyrinth, the sacred
 				// antler heap, drying and skin-boat racks, the reindeer corral, the permafrost ice cellar and the snow-house winter camp
 				// (approved); until then the kit's variants below stand in, the palette giving them hide, turf, bone and gneiss.
-				// LATER (I7): a mammoth "Tusks" ossuary variant; the tomb stands in.
+				// LATER: a mammoth "Tusks" ossuary variant; the tomb stands in.
 				.Favours(BiomeStructureStyle.Hide, 1.8f)
 				.Favours(BiomeStructureStyle.Earth, 1.6f)
 				.Favours(BiomeStructureStyle.Stone, 1.2f)
@@ -207,7 +207,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0.3f)
 				// The palette: two-tone reindeer hide on bare poles (the chum), turf blocks on gneiss footings under sod with whale and
 				// mammoth rib rafters (the qarmaq), drystone gneiss, schist flags, driftwood logs, ivory and antler carving, sky-iron,
-				// sealskin, ochre-red felt. LATER (I9 / NEW-SURFACES): Tundra's own textured variants of hide, turf, bone, driftwood,
+				// sealskin, ochre-red felt. LATER: Tundra's own textured variants of hide, turf, bone, driftwood,
 				// gneiss and schist (the shared surfaces tinted stand in).
 				.Builds(BiomeStructureStyle.Hide, BiomeStructureRole.Wall, BiomeStructureMaterial.Canvas, NivalHex("#5a4a3a"))
 				.Builds(BiomeStructureStyle.Hide, BiomeStructureRole.Roof, BiomeStructureMaterial.Canvas, NivalHex("#c8bcaa"))
@@ -241,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, NivalHex("#a04a2a"))
 				// Approved: no fields at all (authored empty list).
 				.NoCrops()
-				// Inuksuit and route cairns along the drove roads. LATER (I7): the inuksuk and window-stone pieces; the marker cairn stands in.
+				// Inuksuit and route cairns along the drove roads. LATER: the inuksuk and window-stone pieces; the marker cairn stands in.
 				.Lines(With(new Entry.Line(BiomeLinearForm.Cairn, BiomeLinearPlace.Lanes), l =>
 				{
 					l.Style.Spacing = 80f;

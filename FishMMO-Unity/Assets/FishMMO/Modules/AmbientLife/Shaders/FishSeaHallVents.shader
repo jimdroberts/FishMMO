@@ -1,4 +1,4 @@
-// A sea hall's vents and ice near the camera (SeaHallVents, 2026-10-26, phase I2n-b, decision 83), drawn in one call from a few numbers
+// A sea hall's vents and ice near the camera (SeaHallVents), drawn in one call from a few numbers
 // a smoker and a hall (SceneSeaHallVents.cs, number for number). Every part is the shared motion clock's; nothing scrubs (each phase
 // runs on a period that is a whole number of cycles in its wrap, at a speed of its own):
 //   part 0  PLUMES: puffs climbing from each smoker's orifice to its ceiling, widening as they entrain the water, black (white for a

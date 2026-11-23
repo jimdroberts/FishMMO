@@ -5,7 +5,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Cameras that draw no ground cover (grass, flowers, pebbles, blade grass): the minimap. Trees, rocks and the ground still
-	/// draw. Core so the minimap names no module (Phase 4 of the core and modules plan, 2026-11-18); the Terrain module's
+	/// draw. Core so the minimap names no module; the Terrain module's
 	/// renderers read it.
 	/// </summary>
 	public static class CameraGroundCover

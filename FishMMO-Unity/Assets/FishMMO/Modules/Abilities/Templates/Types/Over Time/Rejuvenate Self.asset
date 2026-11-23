@@ -18,7 +18,7 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: You regain 3 health a second for 8 seconds.
+  Description: You regain 3 health every 5 seconds for 45 seconds.
   ActivationTime: 1
   LifeTime: 0
   Speed: 0

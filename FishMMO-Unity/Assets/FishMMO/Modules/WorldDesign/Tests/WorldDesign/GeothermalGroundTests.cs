@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2q "hot ground" (decision 47, 2026-10-18): the Steam emission authored for the geyser basin, mud pots as a fourth
+	/// The Steam emission authored for the geyser basin, mud pots as a fourth
 	/// geothermal kind on a per-biome split, the cut finding the client's very sites and digging pools, cones, rims and runoff
 	/// under them (idempotent), the heat mask and its bands, the Great Spout and its timing, and hot water. Pure: no Unity object
 	/// is made (templates and maps are native), so what needs one is read from the sources or the assets' YAML.
@@ -117,7 +117,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string vents = Code("Assets/FishMMO/Modules/WorldSimulation/Runtime/Weather/GeothermalVents.cs");
 			// The template overload (Near, the client) reads the ground through GeothermalGround.Of, as SceneSites (the cut) does.
 			StringAssert.Contains("Find(origin, area, seed, p => GeothermalGround.Of(biomeAt(p)), into, cellMetres, MaxSites);", vents);
-			// Both through GroundOf since 2026-10-25 (I2q-b): the template's ground, marked lined when the map stores its vent lines.
+			// Both through GroundOf: the template's ground, marked lined when the map stores its vent lines.
 			StringAssert.Contains("GeothermalGround ground = GeothermalGround.Of(map.Sample(new Vector3(p.x, 0f, p.y)));", vents);
 			StringAssert.Contains("Find(map.WorldOrigin, scene, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, int.MaxValue);", vents);
 			StringAssert.Contains("Find(map.WorldOrigin, near, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, MaxSites);", vents);
@@ -403,7 +403,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(all.GreatSpout, Is.EqualTo(GeothermalVents.GreatSpoutIndex(sites)));
 		}
 
-		// ── The Great Spout, as the cut chooses and the map stores it (2026-10-25) ──
+		// ── The Great Spout, as the cut chooses and the map stores it ──
 
 		[Test]
 		public void TheGreatSpout_IsTheLargestGeyserDug_NeverOneUnderWaterOrInAFootprint()
@@ -458,7 +458,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("if (map.GreatSpoutBaked)", vents);
 		}
 
-		// ── Hooks for the fissure fields (decision 53) and the hot springs' warm ground (decision 54) ──
+		// ── Hooks for the fissure fields and the hot springs' warm ground ──
 
 		[Test]
 		public void TheKinds_AreAppendOnly()
@@ -597,9 +597,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				bool basin = entry.Biome == "Geyser Basin";
-				// I2q-b (2026-10-25, decisions 84/95): the Sulphur Flats' and Volcanic Temple's own site rates; the flats' pools are hot melt.
+				// The Sulphur Flats' and Volcanic Temple's own site rates; the flats' pools are hot melt.
 				bool rated = entry.Biome == "Sulphur Flats" || entry.Biome == "Volcanic Temple";
-				// Rocky Terrain (round G12, 2026-10-26): warm springs and fumaroles, no geysers. Salt Flat (round G7, 2026-10-26): the warm
+				// Rocky Terrain (round G12): warm springs and fumaroles, no geysers. Salt Flat (round G7): the warm
 				// brine springs and Abbe's steaming chimneys, no geysers.
 				Assert.That(entry.GeothermalShares.HasValue, Is.EqualTo(basin || rated || entry.Biome == "Rocky Terrain" || entry.Biome == "Salt Flat"), entry.Biome);
 				// An authored round may give its own water the hot flag (Salt Flat's brine, round G7): only the unauthored keep today's.
@@ -617,7 +617,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(geyser.Emission, Is.EqualTo(("Steam", 0.5f)));
 			Assert.That(geyser.GeothermalShares.Value.Signature(), Is.EqualTo(Basin.Signature()));
 			// Its colours stay today's: only the flag is new until its round tints it.
-			// (Round G12, 2026-10-26: the basin's round has since given it the sapphire hot-pool colours.)
+			// (Round G12: the basin's round has since given it the sapphire hot-pool colours.)
 			BiomeWaterLook look = geyser.WaterLook();
 			Assert.That(look.Hot, Is.True);
 			// The weather content generator ships Steam (a vapour) and the authoring makes it when missing.
@@ -647,7 +647,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				{
 					continue;
 				}
-				/* Authored since (Author biome art, 2026-10-21): the basin alone carries its own split and hot water; every other
+				/* Authored since (Author biome art): the basin alone carries its own split and hot water; every other
 				 * template that serialises the split carries today's, and no heat band is authored anywhere yet (the round's). */
 				string name = Path.GetFileNameWithoutExtension(path);
 				bool basin = name == "Geyser Basin", sulphur = name == "Sulphur Flats";

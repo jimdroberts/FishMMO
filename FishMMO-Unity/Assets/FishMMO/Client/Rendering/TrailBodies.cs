@@ -5,7 +5,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Bodies that are not characters but tread the ground as one does: the world test bed's walker. Core so the test bed's
-	/// scene components name no module (Phase 4 of the core and modules plan, 2026-11-18); the Terrain module's trail map
+	/// scene components name no module; the Terrain module's trail map
 	/// reads them with the characters.
 	/// </summary>
 	public static class TrailBodies

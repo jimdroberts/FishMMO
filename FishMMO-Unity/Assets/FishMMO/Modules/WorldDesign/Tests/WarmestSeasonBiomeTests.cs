@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The summer decides what grows (2026-10-10): a biome's warmest-season range is part of its envelope
+	/// The summer decides what grows: a biome's warmest-season range is part of its envelope
 	/// where the body's seasons are known, the spec table draws Köppen's lines (trees from a 10 °C summer,
 	/// tundra and bog from a thaw, the Ice Sheet where nothing thaws), and the Ice Sheet is tabled, named,
 	/// dressed and worn like the biomes it joins.

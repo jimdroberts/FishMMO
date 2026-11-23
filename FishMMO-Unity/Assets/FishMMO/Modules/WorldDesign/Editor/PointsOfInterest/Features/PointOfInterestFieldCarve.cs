@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Ridge and furrow carved into the terrain (2026-10-18, phase I2h, decision 26): each ridge-and-furrow field's broad
+	/// Ridge and furrow carved into the terrain: each ridge-and-furrow field's broad
 	/// ridges raised into the heightmap where its crop is sown (<see cref="PointOfInterestFields.CarveRaise"/>), the same on every
 	/// cut, repaint and Regenerate POIs.
 	/// </summary>
@@ -207,7 +207,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The samples of one tile's heightmap a carve to a target ground moves, and by how much, metres, signed (pure; 2026-10-18, I2i,
+		/// The samples of one tile's heightmap a carve to a target ground moves, and by how much, metres, signed (pure, I2i,
 		/// a paddy's floor and bund): every sample in <paramref name="area"/> (world xz) whose <paramref name="offset"/> (x, z, the
 		/// ground there in metres) is not nothing. <paramref name="groundAt"/> gives a sample's ground (column, row) in metres. As
 		/// <see cref="Plan"/>, the samples stand by their share across the tile, so two tiles sharing an edge move it alike.
@@ -247,7 +247,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Carves the ground in <paramref name="area"/> to a target (2026-10-18, I2i: a paddy's level floor and its bund) on every tile
+		/// Carves the ground in <paramref name="area"/> to a target (a paddy's level floor and its bund) on every tile
 		/// it crosses, <paramref name="offset"/> giving the move at (x, z, the ground there), and records the moves for
 		/// <see cref="Restore"/> exactly as a ridge-and-furrow carve's (raised or lowered alike). Returns the samples moved.
 		/// </summary>

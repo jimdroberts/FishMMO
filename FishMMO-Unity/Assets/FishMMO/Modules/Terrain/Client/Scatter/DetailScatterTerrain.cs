@@ -24,7 +24,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public Mesh[] Levels;
 		/// <summary>
-		/// The meshes its instances cycle, one each by its hash (2026-10-26, <see cref="DetailScatterMath.Variant"/>): <see cref="Mesh"/>
+		/// The meshes its instances cycle, one each by its hash (<see cref="DetailScatterMath.Variant"/>): <see cref="Mesh"/>
 		/// first, then the prefab's <c>Variant1</c>, <c>Variant2</c> children (bare MeshFilters, one sub-mesh each,
 		/// <see cref="DetailScatterSettings.VariantChildPrefix"/>) when it has them. One for a bush or any type with levels: a
 		/// type's variants take the slots its levels would.
@@ -134,7 +134,7 @@ namespace FishMMO.Client
 
 	/// <summary>
 	/// The per-prototype placement settings, read once from a detail prototype (the CPU chunk renderer's, kept when it was
-	/// removed on 2026-10-27: the scatter averages them per channel and slope-sinks by the foot's reach).
+	///: the scatter averages them per channel and slope-sinks by the foot's reach).
 	/// </summary>
 	public struct DetailPrototypeSettings
 	{
@@ -220,7 +220,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// One terrain as the GPU detail scatter reads it: its scattered prototypes' detail layers summed into 2 m blocks of
 	/// exact expected counts (<see cref="DetailScatterMath"/>), one channel per TYPE painted on it (every prototype of a
-	/// prefab adds into it, as the blade grass does), kept SPARSE (2026-10-27): only the painted pairs of block and channel,
+	/// prefab adds into it, as the blade grass does), kept SPARSE: only the painted pairs of block and channel,
 	/// each with the block's painted cells (<see cref="DetailScatterDensity"/>); each channel's placement settings (the
 	/// prototypes' own, averaged by how much each contributes); the terrain's own height texture; and, per work item (8 × 8
 	/// blocks), an exact upper bound on each channel's instances and the ground's height range, so the CPU sizes the slots
@@ -242,7 +242,7 @@ namespace FishMMO.Client
 			public int Seed;
 			public float AlignToGround;
 			/// <summary>
-			/// The channel's scatter modes (2026-10-26, SCATTER-MODES): the two words of <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord"/>
+			/// The channel's scatter modes: the two words of <see cref="FishMMO.Shared.Biomes.BiomeScatterModeWord"/>
 			/// (facing, lean, power-law size), from the terrain's <see cref="FishMMO.Shared.TerrainScatterModes"/> record; 0 and 0 (every
 			/// mode off, the scatter exactly as before) when it has none.
 			/// </summary>
@@ -499,7 +499,7 @@ namespace FishMMO.Client
 			}
 
 			/// <summary>
-			/// Each channel's mode words from the terrain's <see cref="FishMMO.Shared.TerrainScatterModes"/> record (SCATTER-MODES): the first of
+			/// Each channel's mode words from the terrain's <see cref="FishMMO.Shared.TerrainScatterModes"/> record: the first of
 			/// the channel's prototypes the record names (by prefab name and noise seed, as the cut wrote it). Nothing is set with no record.
 			/// True when any channel leans its instances.
 			/// </summary>
@@ -1027,7 +1027,7 @@ namespace FishMMO.Client
 				st.FinishBounds();
 				return new Slices
 				{
-					// No stone, litter or plant over an opening, nor so near its edge that it lies out over it (2026-10-27).
+					// No stone, litter or plant over an opening, nor so near its edge that it lies out over it.
 					Holes = cut != null && cut.Any ? PlantsClear(cut).ToTexels(st.HeightResolution) : null,
 				};
 			}

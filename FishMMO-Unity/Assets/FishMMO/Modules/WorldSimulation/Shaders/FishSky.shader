@@ -304,7 +304,7 @@ Shader "FishMMO/Sky"
                 color = lerp(color, max(color, ownRingLight), ownRing);
 
                 // The sun's disc is a great deal further off than the ring, and goes behind it.
-                /* Captured for the reflection probe, the sky is what the ground reflects (2026-10-11: "glow" on the
+                /* Captured for the reflection probe, the sky is what the ground reflects ("glow" on the
                  * terrain, building up in Play). The sun's disc stays out: its highlight is the sun light's own, and
                  * the disc in the probe, smeared over the rough mips the ground reads, lit every field a second time,
                  * toward the sun, through every gap in the grass. And it takes the cloud as the ambient does: the

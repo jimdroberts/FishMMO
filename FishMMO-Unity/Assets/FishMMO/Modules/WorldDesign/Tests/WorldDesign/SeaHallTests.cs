@@ -13,13 +13,13 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2n-b "sea halls" (2026-10-26, decision 83): the SeaHall cave form laid on the cave machinery (dome, ledge, melt shaft and
+	/// The SeaHall cave form laid on the cave machinery (dome, ledge, melt shaft and
 	/// its stair, dived passages, floor basins, stored smokers), its link gated by its interior's world, its spots and the client's
 	/// presentation (pure functions of the shared clock), and the defaults (only the four hosts name it; nothing else moves).
 	/// </summary>
 	public class SeaHallTests
 	{
-		/// <summary>The sea halls' hosts and their weights (decision 83).</summary>
+		/// <summary>The sea halls' hosts and their weights.</summary>
 		public static readonly (string Biome, float Weight)[] Hosts =
 		{
 			("Ice Shelf", 0.4f), ("Tidal Fracture", 0.6f), ("Ice Geyser Field", 0.5f), ("Cryovolcanic Plain", 0.3f),
@@ -165,7 +165,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(BiomeCaveInteriors.InEveryList(f), Is.EqualTo(f != BiomeCaveForm.SeaHall), f.ToString());
 			}
 			const int barren = (int)BiomeHabitat.Barren, sea = (int)(BiomeHabitat.Sea | BiomeHabitat.Cave);
-			Assert.That(BiomeCaveInteriors.LinkedHabitat(BiomeCaveForm.SeaHall, barren, sea, barren), Is.EqualTo(sea), "no host Barren bit (Q7)");
+			Assert.That(BiomeCaveInteriors.LinkedHabitat(BiomeCaveForm.SeaHall, barren, sea, barren), Is.EqualTo(sea), "no host Barren bit");
 			Assert.That(BiomeCaveInteriors.LinkedHabitat(BiomeCaveForm.Cave, barren, sea, barren), Is.EqualTo(BiomeCaveInteriors.LinkedHabitat(barren, sea, barren)));
 			Assert.That(BiomeCaveInteriors.DefaultInterior(BiomeCaveForm.SeaHall), Is.Null, "no default link: only its hosts name it");
 			Assert.That(BiomeCaveInteriors.DefaultFormations().Any(f => f.Form == BiomeCaveForm.SeaHall), Is.False);

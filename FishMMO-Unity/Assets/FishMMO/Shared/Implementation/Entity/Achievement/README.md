@@ -309,7 +309,7 @@ Tier 2:    │         │          ├───────────┤
 
 ### Directory Structure
 
-The achievement system is split between the core and the Achievements module (2026-11-20). What content names stays in
+The achievement system is split between the core and the Achievements module. What content names stays in
 the core; what tracks a player's progress is the module's.
 
 ```

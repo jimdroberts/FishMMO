@@ -236,7 +236,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// The component behind a role's core interface, found in whichever module provides it (null without the module): the
-		/// merchant is Commerce's, the banker Items', the ability crafter AbilityCrafting's (2026-11-21, second-wave moves).
+		/// merchant is Commerce's, the banker Items', the ability crafter AbilityCrafting's (second-wave moves).
 		/// </summary>
 		private static Type ComponentFor<TInterface>()
 		{

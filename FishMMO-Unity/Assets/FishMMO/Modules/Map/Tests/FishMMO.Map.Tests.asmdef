@@ -15,6 +15,7 @@
         "KinematicCharacterController",
         "FishMMO.Map",
         "FishMMO.Map.Client",
+        "FishMMO.Map.Server",
         "Unity.InputSystem",
         "FishMMO.Client.Input.Generated",
         "FishMMO.Matchmaking"

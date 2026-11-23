@@ -57,7 +57,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The healthy and dry tints (linear) a prototype's blades take: its rule's (<paramref name="fromRule"/>: the scatter wrote
 		/// the rule's <c>detailHealthyColor</c>/<c>detailDryColor</c> into it; for a generated detail they equal its material's,
-		/// both being the catalogue's), else its prefab material's (as every type had before 2026-10-15), else the defaults.
+		/// both being the catalogue's), else its prefab material's (as every type had formerly), else the defaults.
 		/// </summary>
 		public static void TintsOf(DetailPrototype prototype, bool fromRule, out Color healthy, out Color dry)
 		{
@@ -232,7 +232,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Blade types one terrain can carry, a density channel each (<see cref="MaxDensityMaps"/> maps of four). Was 8: a
 		/// terrain across wetland, forest and meadow (sedge, rush, reeds, Phragmites, wet and woodland flowers, three
-		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain. 32 on 2026-10-27 (was 16), and
+		/// grasses…) ran past it, and every type past the eighth stayed meshes on that terrain. 32 (was 16), and
 		/// 64 later that day, once the detail layers stopped wrapping at 256 and the tiles' true demand showed (painted blade
 		/// types, measured over the saved tiles): Moron 1 at most 20 a tile, Moron 2 46 (3_3), Moron 3 48 (2_1). A terrain past
 		/// <see cref="NarrowChannels"/> needs the generate kernel's wide variant (GRASS_WIDE), one past <see cref="WideChannels"/>
@@ -242,7 +242,7 @@ namespace FishMMO.Client
 		/// </summary>
 		public const int MaxChannels = 64;
 
-		/// <summary>The channels the narrow generate kernel reads (four density maps), what every terrain had until 2026-10-27.</summary>
+		/// <summary>The channels the narrow generate kernel reads (four density maps), what every terrain had formerly.</summary>
 		public const int NarrowChannels = 16;
 
 		/// <summary>The channels the wide generate kernel (GRASS_WIDE) reads in registers: eight density maps.</summary>
@@ -966,7 +966,7 @@ namespace FishMMO.Client
 				gt.Occupied = g.Occupied;
 				gt.Sward = g.Sward;
 				// On a worker: ~290k texels × up to 16 channels a terrain was 35–60 ms of the frame each baked terrain was taken
-				// in (StartupTimeline, 2026-10-13). Nothing reads it before it lands but CoverAt, which reads 0 until then.
+				// in (StartupTimeline). Nothing reads it before it lands but CoverAt, which reads 0 until then.
 				byte[] packed = g.Density;
 				int channels = count;
 				float[] heights = (float[])channelHeights.Clone();
@@ -1178,7 +1178,7 @@ namespace FishMMO.Client
 					if (holes.Any)
 					{
 						TerrainHoleMask cut = holes;
-						// No blade over an opening, nor rooted so near its edge that it leans out over it (2026-10-27).
+						// No blade over an opening, nor rooted so near its edge that it leans out over it.
 						queue.Enqueue(() =>
 						{
 							cut.KeepPlantsClear();

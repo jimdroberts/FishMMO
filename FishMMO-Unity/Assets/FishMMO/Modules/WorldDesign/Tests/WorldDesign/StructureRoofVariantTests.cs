@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A roof follows its palette's roof (2026-10-18, I6e for houses; I6h for every roofed piece, sod pitched at 35°, a 60° class
+	/// A roof follows its palette's roof (for houses; I6h for every roofed piece, sod pitched at 35°, a 60° class
 	/// and a pitch a palette names): the pitch classes, which roofs follow, the variant a palette wants and the deduplicated set
 	/// the art is generated for, the kit's palette laying exactly today's prefab, the names, and a cloud world's own palette and
 	/// lights (empty: the kit). The pure tests need no art and no native maths; the ones that build the pieces (marked) run in
@@ -82,7 +82,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(StructureRoofs.PitchOf(StructureMaterial.Log), Is.EqualTo(StructureRoofPitch.Pitch30));
 			Assert.That(StructureRoofs.PitchOf(StructureMaterial.Marble), Is.EqualTo(StructureRoofPitch.Pitch30));
 			Assert.That(StructureRoofs.PitchOf(StructureMaterial.Adobe), Is.EqualTo(StructureRoofPitch.Flat), "only mud brick gives a flat roof");
-			Assert.That(StructureRoofs.PitchOf(StructureMaterial.Earth), Is.EqualTo(StructureRoofPitch.Pitch35), "sod and turf are pitched (2026-10-18, decision 30)");
+			Assert.That(StructureRoofs.PitchOf(StructureMaterial.Earth), Is.EqualTo(StructureRoofPitch.Pitch35), "sod and turf are pitched");
 			Assert.That(StructurePieces.MinimumPitch(StructureMaterial.Earth), Is.EqualTo(35f));
 			foreach (StructureMaterial m in AllMaterials)
 			{
@@ -98,7 +98,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(StructureRoofs.Pitches.Where(StructureRoofs.Soft), Is.EqualTo(new[] { StructureRoofPitch.Pitch50 }), "only thatch's pitch is laid thick; 60° shakes are laid in courses");
 			Assert.That((int)StructureRoofPitch.Flat, Is.EqualTo(0));
 			Assert.That((int)StructureRoofPitch.Pitch50, Is.EqualTo(5), "append-only: the names are in paths");
-			Assert.That((int)StructureRoofPitch.Pitch60, Is.EqualTo(6), "appended (2026-10-18, decision 33), and the steepest: Rise orders classes by value");
+			Assert.That((int)StructureRoofPitch.Pitch60, Is.EqualTo(6), "appended, and the steepest: Rise orders classes by value");
 			// The ladder from degrees to a class: the steepest class reached, to half a degree.
 			Assert.That(StructureRoofs.ClassOf(0f), Is.EqualTo(StructureRoofPitch.Flat));
 			Assert.That(StructureRoofs.ClassOf(31f), Is.EqualTo(StructureRoofPitch.Pitch30));
@@ -117,7 +117,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			var mirror = (BiomeRoofPitch[])Enum.GetValues(typeof(BiomeRoofPitch));
 			Assert.That(mirror[0], Is.EqualTo(BiomeRoofPitch.Material));
-			Assert.That((int)BiomeRoofPitch.Material, Is.EqualTo(0), "a palette entry written before 2026-10-18 reads as the material's own");
+			Assert.That((int)BiomeRoofPitch.Material, Is.EqualTo(0), "a palette entry written formerly reads as the material's own");
 			Assert.That(mirror.Skip(1).Select(m => m.ToString()), Is.EqualTo(StructureRoofs.Pitches.Select(p => p.ToString())), "append-only, in step with StructureRoofPitch");
 			Assert.That(StructureRoofs.Named(BiomeRoofPitch.Material), Is.Null);
 			foreach (StructureRoofPitch p in StructureRoofs.Pitches)
@@ -185,15 +185,15 @@ namespace FishMMO.UnitTests.WorldDesign
 		// ── Which roofs follow ────────────────────────────────────────
 
 		/// <summary>
-		/// Every roofed piece follows (2026-10-18, decision 30): the houses' roofs (thatch, planks, and the turf longhouse's sod), then
+		/// Every roofed piece follows: the houses' roofs (thatch, planks, and the turf longhouse's sod), then
 		/// the roofs pieces build for themselves, each with the rise its builder gives it over its run.
 		/// </summary>
 		[Test]
 		public void Followers_AreEveryRoofOfTheKit_ThatchPlanksOrTurf()
 		{
-			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(79), "34, the 26 roofs of the town's other buildings, the 6 of the cathedral and the outskirts, the 4 of the palace and the corner tower's (2026-10-19), the fantasy wave's 6 thatched cones and the hanging cloister's 2 gables (2026-10-27)");
+			Assert.That(StructureRoofs.Followers.Length, Is.EqualTo(79), "34, the 26 roofs of the town's other buildings, the 6 of the cathedral and the outskirts, the 4 of the palace and the corner tower's, the fantasy set's 6 thatched cones and the hanging cloister's 2 gables");
 			Assert.That(StructureRoofs.Followers.Count(f => f.Shape == StructureRoofShape.House), Is.EqualTo(33),
-				"the 18 house roofs of I6e, the turf longhouse, 13 house-kit roofs of the town's other buildings and the shepherd's turf bothy (2026-10-19)");
+				"the 18 house roofs of I6e, the turf longhouse, 13 house-kit roofs of the town's other buildings and the shepherd's turf bothy");
 			var seen = new HashSet<(string, int)>();
 			foreach (StructureRoofFollower f in StructureRoofs.Followers)
 			{
@@ -218,7 +218,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(f.KitDegrees, Is.InRange(25f, 60f), $"{f}: a roof's slope");
 				}
 			}
-			// The roofs pieces build for themselves (2026-10-18): the well's, the shrines', the smithy's, the sawmill's, the
+			// The roofs pieces build for themselves: the well's, the shrines', the smithy's, the sawmill's, the
 			// granary's, the towers' and the keep's, the round stilt hut's and the thatched dovecote's.
 			foreach ((string id, int v) in new[] { ("Well", 0), ("Shrine", 0), ("Shrine", 1), ("Smithy", 0), ("Smithy", 1), ("Sawmill", 0), ("Sawmill", 1),
 				("Granary", 0), ("Granary", 1), ("Watchtower", 0), ("Watchtower", 1), ("WallTower", 1), ("Keep", 1), ("StiltHut", 1), ("Dovecote", 1), ("Longhouse", 1) })
@@ -228,7 +228,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			// What does not follow: a tent's cloth, the lean-tos, lids and awnings, the stone pediments and the stone cone, the
 			// lighthouse's iron cap, a windmill's turning cap, the open-topped towers, and every ruin.
 			Assert.That(StructureRoofs.Follows(StructureMaterial.Canvas), Is.False);
-			Assert.That(StructureRoofs.Follows(StructureMaterial.Earth), Is.True, "the turf longhouse's sod roof follows (2026-10-18)");
+			Assert.That(StructureRoofs.Follows(StructureMaterial.Earth), Is.True, "the turf longhouse's sod roof follows");
 			foreach ((string id, int v) in new[] { ("TentMedium", 0), ("TentLarge", 0), ("LeanTo", 0), ("NoticeBoard", 0), ("MarketStall", 0), ("Woodpile", 0),
 				("SawPit", 1), ("Apiary", 0), ("TownTemple", 0), ("Mausoleum", 0), ("Dovecote", 0), ("Lighthouse", 0), ("MillCap", 0), ("MillCap", 1),
 				("WallTower", 0), ("Keep", 0), ("Well", 1) })
@@ -331,7 +331,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(StructureRoofs.Wanted(cottage, 0, With(BiomeStructureRole.Roof, BiomeStructureMaterial.Slate)), Is.EqualTo(StructureRoofPitch.Pitch40));
 			Assert.That(StructureRoofs.Wanted(cottage, 1, With(BiomeStructureRole.ShingleRoof, BiomeStructureMaterial.Sandstone)), Is.EqualTo(StructureRoofPitch.Pitch35));
 			Assert.That(StructureRoofs.Wanted(cottage, 1, With(BiomeStructureRole.ShingleRoof, BiomeStructureMaterial.Bamboo)), Is.EqualTo(StructureRoofPitch.Pitch30));
-			Assert.That(StructureRoofs.Wanted(cottage, 1, With(BiomeStructureRole.ShingleRoof, BiomeStructureMaterial.Earth)), Is.EqualTo(StructureRoofPitch.Pitch35), "sod is pitched (2026-10-18)");
+			Assert.That(StructureRoofs.Wanted(cottage, 1, With(BiomeStructureRole.ShingleRoof, BiomeStructureMaterial.Earth)), Is.EqualTo(StructureRoofPitch.Pitch35), "sod is pitched");
 			// The style is the piece's own: a stone palette entry moves the stone houses, not the timber ones.
 			BiomeStructurePalette stoneOnly = With(BiomeStructureRole.Roof, BiomeStructureMaterial.Adobe, BiomeStructureStyle.Stone);
 			Assert.That(StructureRoofs.Wanted(stone, 0, stoneOnly), Is.EqualTo(StructureRoofPitch.Flat));
@@ -349,7 +349,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(StructureRoofs.Needed(new[] { With(BiomeStructureRole.Roof, BiomeStructureMaterial.Adobe, BiomeStructureStyle.Hide) }), Is.Empty);
 		}
 
-		/// <summary>Every roofed piece takes its palette's roof (2026-10-18, decision 30): its own gable, pyramid, cone or hips, and the turf longhouse's sod.</summary>
+		/// <summary>Every roofed piece takes its palette's roof: its own gable, pyramid, cone or hips, and the turf longhouse's sod.</summary>
 		[Test]
 		public void Wanted_ReachesEveryRoofedPiece_AndThePitchAPaletteNames()
 		{
@@ -422,7 +422,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			List<StructureRoofVariant> all = StructureRoofs.Needed(every);
 			Assert.That(all, Is.EquivalentTo(StructureRoofs.EveryVariant()));
-			Assert.That(all.Count, Is.EqualTo(450), "79 roofs × 6 pitches, less 24 a class leaves as the kit builds them (2026-10-18; 26 roofs of the town's other buildings, the keep's and the square tower's re-pitched, 6 of the cathedral and the outskirts, 4 of the palace and the corner tower's, 2026-10-19; the fantasy wave's 8, 2026-10-27): the art's worst case");
+			Assert.That(all.Count, Is.EqualTo(450), "79 roofs × 6 pitches, less 24 a class leaves as the kit builds them (26 roofs of the town's other buildings, the keep's and the square tower's re-pitched, 6 of the cathedral and the outskirts, 4 of the palace and the corner tower's; the fantasy set's 8): the art's worst case");
 			Assert.That(all.Count, Is.LessThan(StructureRoofs.Followers.Length * (StructureRoofs.Pitches.Length - 1)));
 		}
 
@@ -563,7 +563,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The values outside the generator's folder that bake into the art are hashed with the structures (2026-10-18, I6h): the cold
+		/// The values outside the generator's folder that bake into the art are hashed with the structures: the cold
 		/// glows' colours (SceneGlow.cs, the Glowlight materials) and the kit palette (BiomeStructurePalette.cs, the parts and tints and
 		/// the pitches a palette names). SceneEmitter.cs is the cut's, not the art's.
 		/// </summary>

@@ -1,7 +1,7 @@
 #ifndef FISHMMO_DITHER_INCLUDED
 #define FISHMMO_DITHER_INCLUDED
 
-// Core (Phase 4 of the core and modules plan, 2026-11-17): the screen-door pattern every dissolve in the world uses — the
+// Core: the screen-door pattern every dissolve in the world uses — the
 // day/night fade (FishSurface.hlsl) and the LOD crossfade (FishLodFade.hlsl) — so the LOD fade needs no world module.
 
 // ── Dithered dissolve ──────────────────────────────────────────────────

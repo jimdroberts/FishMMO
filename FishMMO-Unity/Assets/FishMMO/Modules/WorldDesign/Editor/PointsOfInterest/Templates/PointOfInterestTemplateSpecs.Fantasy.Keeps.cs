@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Who holds a place a template builds (2026-10-27, the fantasy wave: keeps and towers "mixed by land", garrisoned in the settled
+	/// Who holds a place a template builds (keeps and towers "mixed by land", garrisoned in the settled
 	/// lands, ruined or held by orcs, bandits, the undead or a dark sorcerer in the wild): what PointOfInterestTemplateAuthoring.KindFeatures
 	/// makes of the kind's recommended gameplay.
 	/// </summary>
@@ -26,7 +26,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string DarkSpire = "=DarkSpire", ElvenSpire = "=ElvenSpire";
 
 		/// <summary>
-		/// The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the keeps' and towers' new variants (Orc Hold, Ruined Keep, Dark Keep,
+		/// The fantasy set: the keeps' and towers' new variants (Orc Hold, Ruined Keep, Dark Keep,
 		/// Dwarven Hold, Elven Hall; Dark Tower, Ruined Watchtower, Elven Tower, Dwarven Tower). The lands' own variants weigh 0 elsewhere
 		/// and the ruins 0.3: each biome's spec file names the ones it holds (BiomeArtSpec.Entry.Prefers), the wild the hostile and ruined
 		/// ones, the woods the elves', the high places the dwarves', so a biome no file has reached yet keeps its garrisons.

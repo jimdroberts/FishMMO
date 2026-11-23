@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 	/// <see cref="WorldMapDefinition"/>.
 	/// </summary>
 	/// <remarks>
-	/// Core (Phase 4 of the core and modules plan, 2026-11-17): only what the game itself needs of a scene. What the world
+	/// Core: only what the game itself needs of a scene. What the world
 	/// modules know of it — where it lies on its planet, its time of day, its climate, biomes and weather — they read through
 	/// their own extensions of this component (<c>WorldSceneAtlas</c>, <c>WorldSceneClimates</c>), from the scene's atlas
 	/// entry and, for a scene that authors its own climate, a <c>WorldSceneClimate</c> beside it. The day and night cycle

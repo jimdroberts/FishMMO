@@ -11,7 +11,7 @@ namespace FishMMO.UnitTests
 	/// Every item template has an icon, and the icon is a sprite that exists.
 	/// </summary>
 	/// <remarks>
-	/// 2026-11-21: 300 of 306 items had none, and the other 6 held the icon field's older direct-sprite form, which the
+	/// 300 of 306 items had none, and the other 6 held the icon field's older direct-sprite form, which the
 	/// AssetReferenceSprite cannot read, so they showed none either. Icons are drawn by FishMMO-Art/Icons/generate_item_icons.py
 	/// (run with --assign for a new item).
 	/// </remarks>

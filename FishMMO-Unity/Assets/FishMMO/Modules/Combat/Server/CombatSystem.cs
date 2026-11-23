@@ -14,7 +14,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
-	/// The Combat module's scene-server system (2026-11-20): what a death does and how a player comes back from it. A kill's
+	/// The Combat module's scene-server system: what a death does and how a player comes back from it. A kill's
 	/// consequences (the death flag, the buffs dropped, an instance's lives, a combat-logged body's end, the death dialog,
 	/// an NPC's or pet's despawn), respawning at the bind point, resurrect offers and their acceptance, and the dialog for a
 	/// player who loads dead. Moved out of the core's character system, which lends it what a death touches that is the

@@ -10,7 +10,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The moss layer in the world lit shader (FishMoss.hlsl; 2026-10-12): the biome dampness that scales it, the
+	/// The moss layer in the world lit shader (FishMoss.hlsl): the biome dampness that scales it, the
 	/// globals it reads, the amounts the art generator gives each material, and the shader-side contracts — one material
 	/// constant in UnityPerMaterial, no keyword and no sampler state of its own (the forward pass is at D3D11's sixteen).
 	/// The vegetation shader grows the same layer for the deadwood, from the same library and the same constant.

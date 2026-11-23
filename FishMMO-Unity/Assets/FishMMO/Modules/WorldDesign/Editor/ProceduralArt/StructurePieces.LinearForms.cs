@@ -6,10 +6,10 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The linear forms the later drafts ask for (2026-10-26, phase I2f-b): a frontier's brick barrier and its forts, a snow-block
+	/// The linear forms the later drafts ask for: a frontier's brick barrier and its forts, a snow-block
 	/// windbreak, a hand rope up a steep way, a palm-rib sand screen, a fir-bough break, marker wands, posts, poles and cairns set
 	/// along a way, a bisse's bracketed flume and its water-hammer, a great canal's river weir, a qanat's shaft mouths and its gallery
-	/// mouth. Registered after the I2f pieces (<see cref="AddLinearForms"/>), each in its own frame as those are.
+	/// mouth. Registered after the pieces (<see cref="AddLinearForms"/>), each in its own frame as those are.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// daylights at an arched mouth.
 	/// </para>
 	/// <para>
-	/// <b>Frames.</b> Walls and fences run along x one module long, foot at y = 0, as the I2f pieces. A marker stands at the origin.
+	/// <b>Frames.</b> Walls and fences run along x one module long, foot at y = 0, as the pieces. A marker stands at the origin.
 	/// A channel's pieces run along z: the bracketed flume is a deck piece (y = 0 its rim, its cliff on −x), the hammer and the gallery
 	/// mouth stand across the channel at z = 0 (y = 0 its banks; the gallery's tunnel runs back into the slope toward −z, its mouth
 	/// opening toward +z), the weir lies along x across a river (y = 0 the water). A shaft mouth and a fort stand at the origin on the

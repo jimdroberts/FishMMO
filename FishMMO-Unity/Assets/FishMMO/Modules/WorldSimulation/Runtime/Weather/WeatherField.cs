@@ -131,7 +131,7 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>One world's weather, not one patch of it (2026-10-15).</b> The field was read at scene-local metres, so every
+		/// <b>One world's weather, not one patch of it.</b> The field was read at scene-local metres, so every
 		/// scene on a world read the same patch of it — a scene at the pole and one on the equator had the same fronts at the
 		/// same moment, offset only by how differently their winds had carried them. Now each reads its own place, on the
 		/// atlas's sphere (the scale its scenes are cut at and players travel), so neighbours share a front crossing from one

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Medieval light sources (2026-10-12: "We need torches, light posts, braziers, and other light sources"): a torch
+	/// Medieval light sources ("We need torches, light posts, braziers, and other light sources"): a torch
 	/// on a pole, a torch in an iron sconce for a wall, and a brazier. Each gives off its flame (SceneEmitterKind.Torch for a
 	/// torch, Fire for a brazier's bowl), which the client lights (SiteLightPool) and burns (SiteEmbers' flames).
 	/// </summary>
@@ -25,7 +25,7 @@ namespace FishMMO.Shared.WorldDesign
 			Piece(list, "Brazier", StructureStyle.Iron, StructureSize.Small,
 				"A fire bowl: v0 an iron brazier on three splayed legs, v1 a stone bowl on a pedestal.",
 				Brazier, "light", "military", "sacred");
-			// The lights of the biome suite (2026-10-16, I6c): what a biome's streets, gates, groves, caves and mines may be lit
+			// The lights of the biome suite: what a biome's streets, gates, groves, caves and mines may be lit
 			// with besides the lantern post, the torch post and the brazier (BiomeWayLightKind names each by its id). They are laid
 			// by id only (=Cresset…), so none carries a tag a template's slot queries by ("fire" is a camp's fire or a kiln): a new
 			// light joining a query's candidates would move every pick the query makes in every site.
@@ -53,7 +53,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string CrystalPostId = "CrystalPost";
 
 		/// <summary>
-		/// The tint of a piece's cold glow (SceneEmitterKind.Glow, 2026-10-18, I6g): a rune stone's rune-light, a glowjar's
+		/// The tint of a piece's cold glow (SceneEmitterKind.Glow): a rune stone's rune-light, a glowjar's
 		/// faerie-light; null for a crystal post, whose glow is its crystal's (the site's biome's, laid by the site: SceneGlow.WithCrystalHue),
 		/// and for a piece with no glow.
 		/// </summary>
@@ -64,10 +64,10 @@ namespace FishMMO.Shared.WorldDesign
 				case "RuneStone": return SceneGlowHue.Rune;
 				// A dungeon door's rune frieze or lintel (StructurePieces.Dungeon.cs).
 				case "DungeonPortal": case "DungeonGate": return SceneGlowHue.Rune;
-				// The wizard's tower's door runes and finial, the scrying focus, the observatory's rune star (2026-10-19).
+				// The wizard's tower's door runes and finial, the scrying focus, the observatory's rune star.
 				case "WizardTower": case "ArcaneFocus": case "Observatory": return SceneGlowHue.Rune;
 				case "Glowjar": return SceneGlowHue.Faerie;
-				// The suite's cold lights (2026-10-26, StructurePieces.WayLights.cs).
+				// The suite's cold lights (StructurePieces.WayLights.cs).
 				default: return SuiteGlowHueOf(pieceId);
 			}
 		}
@@ -80,7 +80,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Where a piece holds a crystal of its site's biome's own kind (the crystal post's cradle, in the piece's frame) and the
-		/// scale the crystal is laid at; false for every other piece (2026-10-16, I6c). The crystal is not the piece's own mesh: a
+		/// scale the crystal is laid at; false for every other piece. The crystal is not the piece's own mesh: a
 		/// kit piece is built once for every biome, and the crystal is the biome's (PointOfInterestSiteContext.AddProp lays it).
 		/// </summary>
 		public static bool TryCrystalSocket(StructurePiece piece, int variant, out Vector3 socket, out float scale)
@@ -207,8 +207,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A crystal post: an iron cradle on a carved stone pillar (v0) or an iron-banded timber post (v1). The crystal is the site
-		/// biome's own and laid by the site in the cradle (<see cref="TryCrystalSocket"/>); its light a cold glow (SceneEmitterKind.Glow,
-		/// 2026-10-18) in the crystal's hue, set where it is laid (<see cref="GlowHueOf"/>).
+		/// biome's own and laid by the site in the cradle (<see cref="TryCrystalSocket"/>); its light a cold glow (SceneEmitterKind.Glow)
+		/// in the crystal's hue, set where it is laid (<see cref="GlowHueOf"/>).
 		/// </summary>
 		private static void CrystalPost(StructureDraft d)
 		{
@@ -250,7 +250,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// A rune stone: a standing stone with runes cut into it and filled with a glowing lacquer (Runelight), giving off a cold
-		/// glow (SceneEmitterKind.Glow, 2026-10-18) that shows faintly from before dusk. The runes are strokes of the elder
+		/// glow (SceneEmitterKind.Glow) that shows faintly from before dusk. The runes are strokes of the elder
 		/// futhark's shapes, set proud of the face by a few millimetres.
 		/// </summary>
 		private static void RuneStone(StructureDraft d)

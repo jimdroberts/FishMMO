@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// One scene's point-of-interest choices: asked before every cut (2026-10-10) and editable afterwards.
+	/// One scene's point-of-interest choices: asked before every cut and editable afterwards.
 	/// </summary>
 	/// <remarks>
 	/// Saved beside the scene's atlas entry, not in its terrain folder, so it exists before the first cut and a
@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 		public float Multiplier = 1f;
 		public List<PointOfInterestKindOverride> Overrides = new List<PointOfInterestKindOverride>();
 
-		/// <summary>The least a cave system goes under its mouth, metres (2026-10-21): its random depth is rolled within this scene's range.</summary>
+		/// <summary>The least a cave system goes under its mouth, metres: its random depth is rolled within this scene's range.</summary>
 		[Tooltip("The least a cave, ice cave or lava tube goes down under its mouth, m. Its depth is still rolled at random, within this scene's range: shallow pockets need this under 12 m. A lava tube goes no deeper than 120 m whatever this says, and a cave whose mouth stands low over the sea stays shallower.")]
 		[Range(DefaultCaveDepthMin, DefaultCaveDepthMax)]
 		public float CaveDepthMin = DefaultCaveDepthMin;

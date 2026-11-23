@@ -37,7 +37,7 @@ namespace FishMMO.Shared.Celestial
 	}
 
 	/// <summary>
-	/// What a cloud world's own structures are built of and lit by (2026-10-18, I6e; decided 2026-10-16): its landing stages,
+	/// What a cloud world's own structures are built of and lit by: its landing stages,
 	/// its airships and the rope bridges between its islands, which stand in no biome (the islands' sites take their own biome's
 	/// palette). The world body is the source; nothing authors it, so an empty palette is the structure kit's own materials and
 	/// an empty light list lays no lights, exactly what a cloud world was built of before.
@@ -56,7 +56,7 @@ namespace FishMMO.Shared.Celestial
 		[Tooltip("The lights along the cloud world's ways: one entry per place (bridge ends, landing stages). Empty: none, as the kit lays.")]
 		public List<CloudWorldWayLight> WayLights = new List<CloudWorldWayLight>();
 
-		[Tooltip("How the cloud world's cold glows move (2026-10-25, I6i): its Way glows and glowing Crystals, by a mode on the shared clock, warm or cold. The islands' own biomes' entries come first; these move every glow whose biome names none. Empty: as before.")]
+		[Tooltip("How the cloud world's cold glows move: its Way glows and glowing Crystals, by a mode on the shared clock, warm or cold. The islands' own biomes' entries come first; these move every glow whose biome names none. Empty: as before.")]
 		public List<BiomeGlowMode> GlowModes = new List<BiomeGlowMode>();
 
 		/// <summary>True when the palette names nothing: the cloud world is built in the kit's own materials.</summary>

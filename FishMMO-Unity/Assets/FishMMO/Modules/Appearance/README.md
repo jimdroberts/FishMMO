@@ -10,7 +10,7 @@ the equipment drawn on the body.
 | **Depends on** | The core (the character and its model load, race templates, items and the equipment controller, the mesh-binding helpers) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

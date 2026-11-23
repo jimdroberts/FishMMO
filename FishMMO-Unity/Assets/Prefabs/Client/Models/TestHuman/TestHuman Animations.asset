@@ -37,3 +37,5 @@ MonoBehaviour:
   SitSeat: {fileID: 8232304437931070248, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
   SeatHeight: 0.46
   KeyedHeight: 1.8
+  Ride: {fileID: 8324138086883354672, guid: 1415d177248ae8f059f8ca1795391d82, type: 3}
+  RideHipHeight: 0.848

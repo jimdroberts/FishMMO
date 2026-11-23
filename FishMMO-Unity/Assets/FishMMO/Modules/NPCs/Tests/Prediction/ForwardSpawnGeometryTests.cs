@@ -15,7 +15,7 @@ namespace FishMMO.UnitTests.Prediction
 	/// does. Both are derived from the PREFAB ASSET's collider, and a collider that has never
 	/// been simulated reports an empty <see cref="Collider.bounds"/> — so the spawn offset used to
 	/// read as zero while the reach (shape-based) did not, and an orc that had stopped "in reach"
-	/// punched the air in front of the player (reported 2026-09-07). These tests pin that both
+	/// punched the air in front of the player (reported). These tests pin that both
 	/// read the authored shape, and that they agree.
 	/// </summary>
 	[TestFixture]

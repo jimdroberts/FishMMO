@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// Which waters a bed layer is painted under, or a bed rule grows under (decision 35, 2026-10-18): the sea, a lake (or a
+	/// Which waters a bed layer is painted under, or a bed rule grows under: the sea, a lake (or a
 	/// pond, a moat, a grotto pool) and a river. <see cref="Default"/> on a spawn rule means "the slot's own": the lakebed's
 	/// rules the sea only (what they always grew under), the riverbed's a river, a bed layer's its own <see cref="BedTextureLayer.waters"/>.
 	/// </summary>
@@ -22,7 +22,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// One of a biome's extra BED layers (decision 35 (b), 2026-10-18): ground painted under water by its depth below THAT water's
+	/// One of a biome's extra BED layers: ground painted under water by its depth below THAT water's
 	/// own surface, and in a river by its current too — a lake's pale wave-cut shelf, its pondweed slope (the Halde) and its dark
 	/// ooze in the deeps; a river's riffles, scour pools and bedrock reefs. Up to <see cref="BiomeTemplate.MaximumBedLayers"/> a
 	/// biome, each taking a share of the submerged ground where its bands allow (several overlap as a union, as detail layers do)
@@ -79,7 +79,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// What lies over a point of the bed (decision 35, 2026-10-18): how much of it is the sea's, a lake's and a river's (shares
+	/// What lies over a point of the bed: how much of it is the sea's, a lake's and a river's (shares
 	/// summing to 1 under water, all 0 with none), how deep it lies below THAT water's own surface, and how quick the river runs there.
 	/// </summary>
 	public readonly struct BedWater
@@ -158,7 +158,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The pure arithmetic of the bed layers (decision 35, 2026-10-18): their depth and current bands, and how a biome's
+	/// The pure arithmetic of the bed layers: their depth and current bands, and how a biome's
 	/// submerged ground is shared among its lakebed, its riverbed and its extra bed layers.
 	/// </summary>
 	public static class BiomeBedBands
@@ -225,8 +225,8 @@ namespace FishMMO.Shared.Biomes
 		/// cover three quarters, as detail layers do). <b>What they leave is the default bed's</b>: the riverbed takes the river's
 		/// share of it, the lakebed the rest (under a lake or the sea). A biome with only one of the two gives it the whole of that
 		/// remainder; with neither, the remainder is not the beds' (the caller leaves it to the biome's ground, as when a biome had
-		/// no submerged art before). Before 2026-10-18 the riverbed was painted only when a biome had no lakebed, so every river
-		/// lay on its biome's lakebed (decision 35 (h)).
+		/// no submerged art before). Formerly the riverbed was painted only when a biome had no lakebed, so every river
+		/// lay on its biome's lakebed.
 		/// </para>
 		/// <para>
 		/// With no extra layer and no river share, the lakebed's share is exactly 1 (bit for bit: nothing is multiplied by a
@@ -310,7 +310,7 @@ namespace FishMMO.Shared.Biomes
 		public const BiomeBedWaters RiverbedWaters = BiomeBedWaters.River;
 
 		/// <summary>
-		/// How fully an aquatic rule grows under INLAND water (decision 35 (a)): the share of its waters there, a fade in from just
+		/// How fully an aquatic rule grows under INLAND water: the share of its waters there, a fade in from just
 		/// under the surface (no tide on a lake or a river: <paramref name="fadeFrom"/> … <paramref name="fadeTo"/> metres below it,
 		/// both ≤ 0), its depth band below THAT surface (<paramref name="depthRange"/>, the sea rules' band read the same way) and its
 		/// current band. The sea's own case keeps the scatter's sea-level arithmetic exactly; this is the rest.

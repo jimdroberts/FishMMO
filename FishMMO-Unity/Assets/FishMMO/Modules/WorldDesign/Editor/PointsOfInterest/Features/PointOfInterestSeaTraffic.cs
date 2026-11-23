@@ -9,10 +9,10 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Ships under way on a scene's sea (2026-10-12: "We should have ships floating out in the ocean too?"): lanes over
+	/// Ships under way on a scene's sea ("We should have ships floating out in the ocean too?"): lanes over
 	/// deep water between its harbours and out to the open sea past the scene's edge, and the cogs, longships and smacks that
 	/// ply them, moved by <see cref="FloatingBoats"/> from the synced tick on the server and every client alike: solid, and
-	/// with a deck a player can ride (2026-10-12: "Solid sailing ships needs to be done.").
+	/// with a deck a player can ride ("Solid sailing ships needs to be done.").
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -142,7 +142,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			/* Kept by the server (2026-10-12: "Solid sailing ships needs to be done."): the lanes are what every peer
+			/* Kept by the server ("Solid sailing ships needs to be done."): the lanes are what every peer
 			 * works a ship's pose out from, and each ship's root carries its hull's collider. Only the drawn hulls under the
 			 * roots are client-only. No NetworkObject anywhere: a ship's pose is a function of the synced tick, so nothing
 			 * about it is sent and no scene id is needed (see FloatingBoats). */
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 			holder.transform.SetParent(root, false);
 			var ships = new List<FloatingBoats.Sailing>();
 			// A ship is built where it puts out from: in the structure palette of the harbour nearest its lane's start (a lane
-			// in from the open sea is the nearest harbour's trade too); the kit's own materials with no harbour (2026-10-16).
+			// in from the open sea is the nearest harbour's trade too); the kit's own materials with no harbour.
 			BiomeStructurePalette PaletteOf(Vector3 start)
 			{
 				PointOfInterestRecord home = null;
@@ -368,7 +368,7 @@ namespace FishMMO.Shared.WorldDesign
 						deep[z * w + x] = ok;
 					}
 				}
-				/* Only the open sea's (2026-10-20: "Ships are only on seas and the FFT ocean"): deep water the scene's edge reaches
+				/* Only the open sea's ("Ships are only on seas and the FFT ocean"): deep water the scene's edge reaches
 				 * through deep water. A deep basin shut in by land or shallows is a lagoon however deep, and no ship sails it. */
 				var reached = new bool[w * d];
 				var open = new Queue<int>();

@@ -198,7 +198,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// As <see cref="Build(GameObject, int, out string)"/>, drawing the prefab in <paramref name="dress"/> instead of its own
-		/// materials (a baked prop's ScenePropSet.Prototype.Materials, 2026-10-16: a structure piece in its biome's palette): one
+		/// materials (a baked prop's ScenePropSet.Prototype.Materials: a structure piece in its biome's palette): one
 		/// material per slot of every renderer, level by level. Null, empty or the wrong length draws the prefab's own.
 		/// </summary>
 		public static TerrainTreeModel Build(GameObject prefab, int layer, Material[] dress, out string reason)

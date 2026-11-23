@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The fields laid so far in one placing of a scene's sites (2026-10-18, phase I2k, decision 32), so a settlement's fields
+	/// The fields laid so far in one placing of a scene's sites, so a settlement's fields
 	/// never lie over another's: each site's fields (PointOfInterestFields) claim their ground once they are laid, and the next
 	/// site's keep clear of every claim. Pure: one is made for each Place (PointOfInterestStage) and handed to every site.
 	/// </summary>
@@ -61,7 +61,7 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly List<PointOfInterestEnclosureClearance.Enclosure> enclosures = new List<PointOfInterestEnclosureClearance.Enclosure>();
 
 		/// <summary>
-		/// The ground the sites enclosed so far (2026-10-27): every field, fold, farmstead and holding, cleared of its wild growth once
+		/// The ground the sites enclosed so far: every field, fold, farmstead and holding, cleared of its wild growth once
 		/// every site is built (PointOfInterestEnclosureClearance). In the order laid.
 		/// </summary>
 		public IReadOnlyList<PointOfInterestEnclosureClearance.Enclosure> Enclosures => enclosures;

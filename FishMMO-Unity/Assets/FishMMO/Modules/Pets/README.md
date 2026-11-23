@@ -11,7 +11,7 @@ panel.
 | **Depends on** | The core; Abilities (pet abilities, summon events); Buffs (a pet's buffs); Combat; NPCs & AI (a pet is driven by the AI) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 |
+| **Moved** | Out of the core |
 
 ## Folders
 

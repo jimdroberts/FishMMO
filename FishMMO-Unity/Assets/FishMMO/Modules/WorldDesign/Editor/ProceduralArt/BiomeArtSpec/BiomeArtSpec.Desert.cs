@@ -10,19 +10,19 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Desert</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Desert()
 		{
-			// The great sand sea and its gravel plains, West Saharan, in the caravan centuries (biome round, approved 2026-10-18, authored
-			// 2026-10-26): ochre-gold seas of transverse and barchan dunes rising to star dunes, long seif ridges with pale gassi corridors
+			// The great sand sea and its gravel plains, West Saharan, in the caravan centuries:
+			// ochre-gold seas of transverse and barchan dunes rising to star dunes, long seif ridges with pale gassi corridors
 			// between, and round them the black reg, a varnished pebble pavement to every horizon; wind-fluted yardangs, Nubian-sandstone
 			// mesas streaked with black varnish, a guelta at the head of a dry gorge, a lone desert-date tree every caravan steers by. Its
 			// people are veiled caravaneers: red-leather tents, camel trains on braided pistes marked by slab pillars, deep draw-wells, and
 			// dune-edge ksour of dry-laid rose slab the dunes are slowly drowning; beneath the sand the tombs of an older people. Its fantasy
 			// is the emptiness: the spirits of the void dancing as noon dust-devils, sunglass that drinks the day and glows at night, dunes
-			// that boom at dusk, the ribs of a sand-wyrm arching out of a dune. Three reaches by humidity (decision 29): the HYPERARID reg
+			// that boom at dusk, the ribs of a sand-wyrm arching out of a dune. Three reaches by humidity: the HYPERARID reg
 			// (h < −0.8: yardangs, glass, almost no plants), the ERG core, and the FRINGE (h ≥ −0.6: red sand sheets, taman grass, wadi
-			// trees, ephemeral flowers, most settlement). The American cactus kit left Desert (decision 43; offered to High Desert/Scrubland).
-			// LATER (I9 T1): every ground and object texture as Desert's own variant (the Nubian sandstone, the varnished basalt ventifacts);
+			// trees, ephemeral flowers, most settlement). The American cactus kit left Desert (offered to High Desert/Scrubland).
+			// LATER: every ground and object texture as Desert's own variant (the Nubian sandstone, the varnished basalt ventifacts);
 			// until then the grounds are its own recipes and the barks, leaves and stones the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Djinnfire V(0.88, 0.85, 0.72) and Tagelmust V(0.665, 0.80, 0.40).
+			// LATER (no spec column yet): rare looks Djinnfire V(0.88, 0.85, 0.72) and Tagelmust V(0.665, 0.80, 0.40).
 			return E("Desert", L(Ground.SandErg,
 					// The erg: drinn tussocks building their mounds, a little taman, had cushions, arta switches over the sand.
 					Band(Grass("GrassDrinn", 3f, 180), -1f, 1f, -0.8f, 1f), Band(Grass("GrassTaman", 1f, 170), -1f, 1f, -0.7f, 1f),
@@ -48,7 +48,7 @@ namespace FishMMO.Shared.WorldDesign
 					// fagonia mats, zilla tangles, resurrection balls lodged against the stones, wind-faceted pebbles, basalt ventifacts,
 					// Ténéré fossil wood broken in rounds, the odd lone atil, the green Sahara's litter where the old lake beds are near.
 					// The road across it is the reg track, its pebbles swept aside into two pale sand lanes.
-					// LATER (I6f): the faceted dreikanter pebbles (Pebbles_Reg) and the pale sunglass lumps (Pebbles_Sunglass) as stone sets of
+					// LATER: the faceted dreikanter pebbles (Pebbles_Reg) and the pale sunglass lumps (Pebbles_Sunglass) as stone sets of
 					// their own; basalt and quartzite pebbles stand in.
 					D(Ground.RegPavement, 120f, 2f, 0f, 8f, Band(Grass("GrassSilverAwn", 10f, 160), -1f, 1f, -0.85f, 1f), Plants("FlowersFagonia", 3f),
 						Plants("Zilla", 1f), Plants("RoseOfJericho", 1f), Stones(Pebbles("Basalt"), 4f), Stones(Pebbles("Quartzite"), 2f),
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Own rock the Nubian sandstone (its formations); approved: accepts the reg's quartzite, the inselbergs' granite and the
 				// ventifacts' basalt. Shale, conglomerate and limestone dropped: canyon walls fall back to sandstone.
 				.Accepts(RockTypes.Sandstone, RockTypes.Quartzite, RockTypes.Granite, RockTypes.Basalt)
-				// Sandstone caves, rock shelters and copper mines; lava tubes in basalt. LATER (I9 S3): sandstone dripstone at 0.1× (dry),
+				// Sandstone caves, rock shelters and copper mines; lava tubes in basalt. LATER: sandstone dripstone at 0.1× (dry),
 				// honeycomb tafoni and sand drifts on the cave floors; the copper-green seams of the mines.
 				.CaveShell(CaveForm.Cave, "Sandstone").CaveShell(CaveForm.Grotto, "Sandstone").CaveShell(CaveForm.Mine, "Sandstone")
 				.CaveShell(CaveForm.LavaTube, "Basalt")
@@ -112,11 +112,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Desert)
 				// Approved: the buried towns' and tombs' life (owls, snakes, scorpions, bats in the tomb halls) beside the desert's.
 				.Wildlife(BiomeHabitat.Desert | BiomeHabitat.Ruins)
-				// LATER (AMBIENT-LIFE): dromedary caravans strung along the pistes on the shared clock (I18), addax and dorcas gazelle, the
+				// LATER: dromedary caravans strung along the pistes on the shared clock, addax and dorcas gazelle, the
 				// fennec at dusk, jerboas, desert monitor, horned vipers' sidewinder tracks, deathstalkers, darkling-beetle tracks on the dawn
 				// dunes, ostrich pairs, lappet-faced vultures, ravens, sandgrouse at the wells at dawn; the void-spirits' noon whirls (WEATHER
 				// O7), stronger in their stone rings, and very rarely a ripple-wave running against the wind across a dune field (the wyrm).
-				// LATER (I7 I26): the booming dune's dusk roar on the shared clock.
+				// LATER: the booming dune's dusk roar on the shared clock.
 				.Moat(BiomeMoatWater.Dry)
 				// The guelta's water: clear olive-jade over black silt, rock-shadowed.
 				.WaterTint(new BiomeWaterLook(ErgHex("#8c8c60"), ErgHex("#1e281e"), new Vector3(0.30f, 0.22f, 0.26f), 0.15f, ErgHex("#b09a70"), ErgHex("#f0ece0")))
@@ -177,7 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Temple, 0.2f), (POIType.Capital, 0.1f), (POIType.River, 0.1f), (POIType.Lake, 0.05f),
 					(POIType.Cave, 1f), (POIType.Grotto, 1f), (POIType.Peak, 1f), (POIType.Pass, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
 					(POIType.Bridge, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.4f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -240,7 +240,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.DungeonEntrance, "Door", 1.6f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 0.3f)
 				.Prefers(POIType.Ruins, "Stone", 2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -263,14 +263,14 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Necropolis, "City of the Dead", 1.3f)
 				.Prefers(POIType.Pyramid, "Smooth-sided", 1.3f)
 				.Prefers(POIType.CaravanHalt, "Well Camp", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Desert's signature pieces and their variants — the slab ksar with its ostrich-egg tower (Village/Town "Slab Ksar"
+				// (the fantasy set's variants end here)
+				// LATER: Desert's signature pieces and their variants — the slab ksar with its ostrich-egg tower (Village/Town "Slab Ksar"
 				// 2.0/1.6, "Red Banco" 1.0), the ribat (Keep 1.8, Fortress 1.2, Waystation 0.8), the ehan camp and the azalai halt (Camp 2.0/1.2),
 				// the draw well and its draw-track (Waystation 2.0), the alam pillars (AncientRoad "Alam Trace" 2.0), the antenna tumuli
 				// (Barrow 2.0, Graveyard 1.0), the buried tomb half-drowned by a dune (Crypt 2.0, DungeonEntrance 1.6), the dune-swallowed ksar
 				// (Ruins 2.0), the rock-art panel with its glowing dot-and-line glyphs (Monument/Landmark 1.4; RuneStone light), the library
 				// house, the saint's dome with its rag-tied tree (Shrine 1.4, Hermitage 1.0), the salt market (TradingPost 1.6), the copper
-				// furnaces (Mine 1.4), the Ring of the Empty (FeyRing 1.4), the booming dune (I26 audio cue), the glass field (FallenStar 1.6)
+				// furnaces (Mine 1.4), the Ring of the Empty (FeyRing 1.4), the booming dune (audio cue), the glass field (FallenStar 1.6)
 				// and the wyrm ribs (MonsterDen 0.8). Until then the kit's variants below stand in at the draft's weights.
 				.Favours(BiomeStructureStyle.Stone, 1.6f)
 				.Favours(BiomeStructureStyle.Hide, 1.4f)
@@ -280,7 +280,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The palette: dry-laid rose sandstone slabs under red-ochre clay render, flat clay roofs on acacia beams with stepped
 				// parapets, single-slab lintels, studded acacia doors, beaten clay floors, slab drystone fences, black iron with brass,
 				// glazed indigo cloth and indigo banners striped white and saffron; the caravan towns' red banco walls; red-leather tents
-				// on arched frames over woven grass screens. LATER (NEW-SURFACES U3/U6/U8): SlabStone, RedBanco, MatClay, AcaciaStudded,
+				// on arched frames over woven grass screens. LATER: SlabStone, RedBanco, MatClay, AcaciaStudded,
 				// NicheCourse, BancoRelief, IndigoCloth, TentLeather and EsaberMat as Desert's own surfaces; the shared ones tinted stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Sandstone, ErgHex("#b0703e"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Adobe, ErgHex("#9a3a22"))
@@ -316,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Coated(BiomeStructureCoat.Drifted, 0.6f, 1f)
 				// No fields (approved: the gardens are the Oasis's).
 				.NoCrops()
-				// LATER (I7): the alam pillars of stacked slabs every 300–600 m along the caravan ways, a camel skull on some; a cairn
+				// LATER: the alam pillars of stacked slabs every 300–600 m along the caravan ways, a camel skull on some; a cairn
 				// marker line at that spacing stands in.
 				.Lines(AlamLine())
 				// Pierced terracotta lamp-jars on the street walls of the ksour, cressets on the ribats, one brazier at the well, a jar at
@@ -345,7 +345,7 @@ namespace FishMMO.Shared.WorldDesign
 				.GrowsVines(0.05f, 0.15f, 0f, 0.08f, ("Pergularia", 1f))
 				.Gathers("Copper Lode", "Sunglass Lump", "Malachite Crust", "Petrified Wood Round", "Ostrich Eggshell", "Colocynth Gourd", "Cistanche Spike",
 					"Rose of Jericho", "Terfez Truffle", "Balanites Date", "Markh Fibre", "Irak Stick", "Camel Bone")
-				// LATER (I9b P29): the rose of Jericho's opened green state inside the rain cells and the truffles' cracked mounds after rain.
+				// LATER: the rose of Jericho's opened green state inside the rain cells and the truffles' cracked mounds after rain.
 				.Herbs("Detail_Cistanche", "Detail_Colocynth", "Detail_RoseOfJericho", "Detail_Had")
 				.ErodesAs("Erg")
 				.Loose("Silicate Sand");
@@ -355,12 +355,12 @@ namespace FishMMO.Shared.WorldDesign
 		private static BiomeScatterMode YardangWind => default(BiomeScatterMode).Faced(BiomeScatterFacing.Wind, 0f, 6f);
 
 		/// <summary>
-		/// The acheb: Schouwia's violet carpets, only inside the rain cells (decision 43; SCATTER-MODES Z18), none outside them.
-		/// LATER (I9b P29): the bloom's timing after the weather driver's rain on the shared clock; the cells stand bloomed.
+		/// The acheb: Schouwia's violet carpets, only inside the rain cells, none outside them.
+		/// LATER: the bloom's timing after the weather driver's rain on the shared clock; the cells stand bloomed.
 		/// </summary>
 		private static Scatter AchebCarpet() => Moded(Band(Plants("FlowersSchouwia", 10f, 200), -1f, 1f, -0.75f, 1f), BiomeScatterMode.RainCellClusters(200f, 0.3f));
 
-		/// <summary>The varnished sandstone boulders (Desert's; LATER (I9 T3): their black varnish tops): round and slab.</summary>
+		/// <summary>The varnished sandstone boulders (Desert's; LATER: their black varnish tops): round and slab.</summary>
 		private static string[] VarnishedBoulders => new[] { Boulder("Sandstone", "Round"), Boulder("Sandstone", "Slab") };
 
 		/// <summary>The alam stand-in: a cairn marker every 400 m along the ways, one side.</summary>

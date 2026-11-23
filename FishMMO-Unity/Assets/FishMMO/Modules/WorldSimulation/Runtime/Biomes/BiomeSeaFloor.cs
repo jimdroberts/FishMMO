@@ -5,13 +5,13 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// What a biome paints and grows under the sea (<see cref="BiomeTemplate.SeaFloor"/>, 2026-10-19, phase I2m: decisions 36 (a),
+	/// What a biome paints and grows under the sea (<see cref="BiomeTemplate.SeaFloor"/>: decisions 36 (a),
 	/// 38, 40 and 45): the shore's rule, its own ground at every depth, or its own ground down to the lowest tide. Values are stored
 	/// by number: append only.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Until 2026-10-19 every biome followed the shore's rule: under the sea its lakebed took the ground from the water line down
+	/// Formerly every biome followed the shore's rule: under the sea its lakebed took the ground from the water line down
 	/// (over BiomeSplatOptions.ShoreFadeMetres) and its main and detail layers never painted there, so an abyss was one layer of
 	/// silt with basalt cliffs, and a reef's live coral, rubble and drop-off walls could never be told apart. A sea-floor biome's own
 	/// grounds now paint under the sea as they do on land, zoned by their depth bands (<see cref="TerrainTextureLayer.useSeaDepthBand"/>),
@@ -23,7 +23,7 @@ namespace FishMMO.Shared.Biomes
 	/// </remarks>
 	public enum BiomeSeaFloor : byte
 	{
-		/// <summary>The shore's rule, every biome's before 2026-10-19: under the sea the lakebed takes the ground from the water line down.</summary>
+		/// <summary>The shore's rule, every biome's formerly: under the sea the lakebed takes the ground from the water line down.</summary>
 		Shore = 0,
 		/// <summary>
 		/// A sea-floor biome, deep or on the shelf (Abyss, Abyssal Plain, Deep Ocean, Coastal Water, Coral Reef…): its main and
@@ -39,7 +39,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The pure arithmetic of the sea floor (2026-10-19, phase I2m): how a biome's bed shares the ground under the sea, the signed
+	/// The pure arithmetic of the sea floor: how a biome's bed shares the ground under the sea, the signed
 	/// depth bands of its ground layers (in metres or in tides), the tide a scene's coast biomes ask of its sea, and how fast the
 	/// sea takes the daylight out on its way down to the floor.
 	/// </summary>
@@ -60,7 +60,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>How much the open-ocean tide is amplified on a coast that asks nothing (WaterEnvironment.CoastalAmplification's default, held equal by a test).</summary>
 		public const float DefaultAmplification = 2.5f;
 
-		/// <summary>The most a coast biome's tide strength may move the sea, metres (decision 45, 2026-10-18: "capped 4 m").</summary>
+		/// <summary>The most a coast biome's tide strength may move the sea, metres ("capped 4 m").</summary>
 		public const float MaximumTideMetres = 4f;
 
 		/// <summary>The widest tide strength a template may ask (the Estuary's ×4).</summary>
@@ -135,7 +135,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// A depth below mean sea level in tides (decision 45: 1 is the depth of the lowest tide, −1 the height of the highest),
+		/// A depth below mean sea level in tides (1 is the depth of the lowest tide, −1 the height of the highest),
 		/// for a scene whose tide moves the sea <paramref name="tideMetres"/> either way.
 		/// </summary>
 		public static float InTides(float depthMetres, float tideMetres) => depthMetres / Mathf.Max(MinimumTideUnit, tideMetres);
@@ -151,7 +151,7 @@ namespace FishMMO.Shared.Biomes
 			return new Vector2(shallow, deep);
 		}
 
-		// ── The tide a coast asks (decision 45) ───────────────────────
+		// ── The tide a coast asks ───────────────────────
 
 		/// <summary>
 		/// The tide strength a scene's coast asks of its sea: the mean of its coast biomes' strengths (<see cref="BiomeTemplate.TideStrength"/>)
@@ -235,7 +235,7 @@ namespace FishMMO.Shared.Biomes
 		/// How fast the sea takes the daylight out on its way down to the floor, per metre (FishWeather.hlsl's _FishOcclusionWater.w,
 		/// FishSeaDaylight): <see cref="DaylightShare"/> of the coverage-weighted mean of the sea looks' extinction
 		/// (<see cref="BiomeSeaLook.Extinction"/>, the underwater pass's own) over the scene's sea-floor biomes; 0 (no dimming, as
-		/// before 2026-10-25) when the scene holds none.
+		/// formerly) when the scene holds none.
 		/// </summary>
 		/// <param name="looks">Each sea-floor biome's sea look and its share of the scene (texels, cells, any weight).</param>
 		public static float DaylightExtinction(IEnumerable<(BiomeSeaLook look, float weight)> looks)
@@ -272,10 +272,10 @@ namespace FishMMO.Shared.Biomes
 			return Mathf.Exp(-extinction * depth);
 		}
 
-		// ── What grows and stands under the sea (decision 36 (a), (b)) ─
+		// ── What grows and stands under the sea ((b)) ─
 
 		/// <summary>
-		/// True when a spawn rule on a biome's MAIN or DETAIL layer grows under the sea (2026-10-25): only in a sea-floor biome
+		/// True when a spawn rule on a biome's MAIN or DETAIL layer grows under the sea: only in a sea-floor biome
 		/// (<see cref="BiomeSeaFloor.Ground"/> or <see cref="BiomeSeaFloor.ToLowWater"/>, whose own grounds paint there) and only for a
 		/// rule that names the sea in its waters (PrefabSpawnRule.waters); every other rule on those layers grows on land as before.
 		/// </summary>
@@ -287,7 +287,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// The depth band an underwater site kind stands in on a biome's floor, metres below mean sea level: the biome's own
 		/// (<see cref="BiomeTemplate.UnderwaterSiteDepth"/>) when it gives one (y &gt; 0), else the kind's (<paramref name="kindMin"/> …
-		/// <paramref name="kindMax"/>), as every sunken site was sited before 2026-10-25.
+		/// <paramref name="kindMax"/>), as every sunken site was sited formerly.
 		/// </summary>
 		public static Vector2 SiteDepth(Vector2 biome, float kindMin, float kindMax)
 		{

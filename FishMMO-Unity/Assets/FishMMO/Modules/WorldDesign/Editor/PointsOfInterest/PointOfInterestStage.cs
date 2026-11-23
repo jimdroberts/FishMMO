@@ -26,7 +26,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>A repaint does not plan.</b> It reads the plan back from the scene's asset (<see cref="ForRepaint"/>) and
 	/// places it again: the ground already carries the pads, and planning again on flattened ground would move them.
-	/// A re-cut regenerates everything (2026-10-10).
+	/// A re-cut regenerates everything.
 	/// </para>
 	/// </remarks>
 	public sealed class PointOfInterestStage
@@ -132,13 +132,13 @@ namespace FishMMO.Shared.WorldDesign
 		public readonly List<PointOfInterestKeepOut> Reserved = new List<PointOfInterestKeepOut>();
 
 		/// <summary>
-		/// Discs the sites and the ways keep off but trees and rocks may stand in (2026-10-26, phase I2g-f): the landforms whose
+		/// Discs the sites and the ways keep off but trees and rocks may stand in: the landforms whose
 		/// entries ask it (BiomeLandform.KeepClear, a sciara's loose chute), laid by the cut after the carve.
 		/// </summary>
 		public readonly List<PointOfInterestKeepOut> Avoided = new List<PointOfInterestKeepOut>();
 
 		/// <summary>
-		/// The strike-slip traces of the scene's landforms (2026-10-26, phase I2l-b, SceneLandforms.StrikeSlipTraces): the ways jog where
+		/// The strike-slip traces of the scene's landforms (SceneLandforms.StrikeSlipTraces): the ways jog where
 		/// they cross one (PathJogs). Empty for none.
 		/// </summary>
 		public readonly List<PathJogs.Trace> Faults = new List<PathJogs.Trace>();
@@ -217,7 +217,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="Excludes"/> for the details (grass, flowers): a road's trodden width only. A site's grounds keep their
-		/// grass between the buildings (2026-10-11: a village stood on a bare disc of terrain); the grass and details are
+		/// grass between the buildings (a village stood on a bare disc of terrain); the grass and details are
 		/// thinned per blade on its streets, yards and paths, and kept out of its buildings, by the path field
 		/// (FishGroundPaths.hlsl, the yards PropsFeature writes). Null when it keeps nothing out.
 		/// </summary>
@@ -338,11 +338,11 @@ namespace FishMMO.Shared.WorldDesign
 				? ScenePlacementClimate.For(system, Request.Body, Request.Footprint, Request.ResolvedRadiusKm, true)
 				: null;
 
-			// A template that needs liquid water (a holy well's spring chapel, decision 96) is built only on a world with some; no
+			// A template that needs liquid water (a holy well's spring chapel) is built only on a world with some; no
 			// template written before needs it, so this changes no pick.
 			bool liquidWater = BiomeWorldConditions.For(system, Request.Body).HasLiquidWater;
 			int unstyled = 0;
-			// Each site's race, climate variant and template; a function, since the wayside kinds are sited after the ways (2026-10-27).
+			// Each site's race, climate variant and template; a function, since the wayside kinds are sited after the ways.
 			void Furnish(PointOfInterestRecord record)
 			{
 				biomes.TryGetValue(record.BiomeID, out BiomeTemplate biome);
@@ -356,8 +356,8 @@ namespace FishMMO.Shared.WorldDesign
 					ClimateSample sample = climate.SampleAt(record.Position, out _);
 					record.VariantIndex = PointOfInterestNaming.VariantIndexOf(biome, biome.ResolveOwnVariant(sample.Temperature, sample.Humidity));
 				}
-				// The template's weight in the site's biome is the biome template's for its variant (2026-10-16); a cave whose host
-				// links its form to a cave biome weighs the two templates' variants merged (2026-10-25, I2n, decision 51).
+				// The template's weight in the site's biome is the biome template's for its variant; a cave whose host
+				// links its form to a cave biome weighs the two templates' variants merged.
 				Func<PointOfInterestTemplate, float> weights = BiomeTemplateArt.SiteVariantWeights(biome);
 				CaveBiome caves = default;
 				if (CaveShaper.TryForm(record.Kind, out _))
@@ -370,7 +370,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				PointOfInterestTemplate template = (record.Kind == POIType.Bridge ? CrossingTemplate(library, biome, PathCrossings.SpanOfRecord(record.Radius), false) : null)
 					?? library.Pick(record, PointOfInterestTemplate.WaterFit(weights, liquidWater), RaceCategoryOf(record.Race));
-				/* A site its biome's styles leave with no template at all (2026-10-27): the planner sited the kind at the biome's weight,
+				/* A site its biome's styles leave with no template at all: the planner sited the kind at the biome's weight,
 				 * and a style the biome weighs 0 (Earth, in Alpine Meadow, Scree, Ice Sheet, Glacier, Salt Flat) weighed every cave,
 				 * ice cave, nest and bone den there at 0, since each of them is "earth", so they stood as bare markers. Picked again by
 				 * the variants alone: the styles choose among a kind's templates, they never strand a sited kind with none. */
@@ -408,8 +408,8 @@ namespace FishMMO.Shared.WorldDesign
 				Func<float, float, bool> padChannel = water == null ? null : (Func<float, float, bool>)((x, z) =>
 					!float.IsNegativeInfinity(water.RiverSurfaceNear(x, z, 0f)) || !float.IsNegativeInfinity(water.LakeSurfaceNear(x, z)));
 				/* Nor is a bank cut under the water beside it: a mill's yard levelled to its floor (its own water and a freeboard)
-				 * cut the bank upstream, where the river past it stands higher, 0.64 m under the river (Flo Monolith's Sha Mill Race,
-				 * 2026-10-15), and the water measured on the finished ground stood that much lower. As the ways' carve keeps it. */
+				 * cut the bank upstream, where the river past it stands higher, 0.64 m under the river (Flo Monolith's Sha Mill Race),
+				 * and the water measured on the finished ground stood that much lower. As the ways' carve keeps it. */
 				Func<float, float, float> padFloor = water == null ? null : (Func<float, float, float>)((x, z) =>
 				{
 					float near = Mathf.Max(water.RiverSurfaceNear(x, z, PathBankReachMetres), water.LakeSurfaceNear(x, z));
@@ -487,7 +487,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The ways between the sites, on the ground the pads and shapers left: routed, bridged and carved in.
 				PlanPaths(tiles, terrains, water, input, ground, library, biomes, notes);
 
-				/* The kinds that stand by the ways (2026-10-27, the fantasy wave: a toll gate, an ambush, a crossroads) are sited on the
+				/* The kinds that stand by the ways (a toll gate, an ambush, a crossroads) are sited on the
 				 * ways just laid, among every site planned; furnished as the rest were, and a site that builds nothing is dropped. No pad:
 				 * the ways are carved, and a pad levelled now would cut into them. */
 				List<PointOfInterestRecord> wayside = PointOfInterestPlanner.PlaceBesideWays(input, plan, plan.Paths);
@@ -533,7 +533,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// carves the ways into the ground (<see cref="PathCarver"/>).
 		/// </summary>
 		/// <summary>
-		/// The straight roads the biome at a point lays (BiomeTemplateArt.StraightRoads, 2026-10-26, I2l-b), for the path planner; null
+		/// The straight roads the biome at a point lays (BiomeTemplateArt.StraightRoads), for the path planner; null
 		/// when no biome of the scene lays any (the planner then asks nothing and routes every way as before).
 		/// </summary>
 		private static Func<float, float, BiomeStraightRoads> StraightRoadsAt(PointOfInterestPlanInput input, Dictionary<int, BiomeTemplate> biomes)
@@ -564,7 +564,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The Bridge template a crossing is built from in its biome's crossing style (BiomeTemplateArt.CrossingStyle, 2026-10-26, I2l-b):
+		/// The Bridge template a crossing is built from in its biome's crossing style (BiomeTemplateArt.CrossingStyle):
 		/// the style's variant where the span fits it (PathCrossings.StyleFits) and the template exists; null otherwise (the seeded pick,
 		/// as before: no biome names a style by default, and the styled templates weigh nothing in any pick).
 		/// </summary>
@@ -628,7 +628,7 @@ namespace FishMMO.Shared.WorldDesign
 				HasStreets = r => Templates.TryGetValue(r.Id, out PointOfInterestTemplate t)
 					&& (t.Layout == PointOfInterestLayout.Street || t.Layout == PointOfInterestLayout.Walled),
 				Seed = input.Seed,
-				// The straight roads (2026-10-26, I2l-b): asked only where some biome of the scene lays them, so no other scene changes.
+				// The straight roads: asked only where some biome of the scene lays them, so no other scene changes.
 				StraightRoadsAt = StraightRoadsAt(input, biomes),
 				Faults = Faults.Count > 0 ? Faults : null,
 				ExtraSpurs = Housing != null ? Housing.Spurs : (IReadOnlyList<PathSpurEnd>)Array.Empty<PathSpurEnd>(),
@@ -677,7 +677,7 @@ namespace FishMMO.Shared.WorldDesign
 				int biomeId = 0;
 				if (input.BiomeAt != null && input.Biomes.Count > 0)
 				{
-					/* A bridge belongs to the banks it joins, not to the water under its middle (decision 35 (i), 2026-10-18): over a
+					/* A bridge belongs to the banks it joins, not to the water under its middle: over a
 					 * river 8 m and more wide the centre is the River biome's, which built every such bridge in the River's palette. */
 					int b = Mathf.Clamp(PathCrossings.BridgeBiome(c, site.Yaw, site.Span, input.BiomeAt,
 						i => input.Biomes[i] != null && biomes.TryGetValue(input.Biomes[i].Id, out BiomeTemplate t) && PathCrossings.IsWaterBiome(t != null ? t.WaterRole : BiomeWaterRole.None),
@@ -708,10 +708,10 @@ namespace FishMMO.Shared.WorldDesign
 				};
 				NearestRiver(input.Water, c.x, c.z, record);
 				biomes.TryGetValue(biomeId, out BiomeTemplate biome);
-				// In the country bridge of the biome at its ends where the span fits it (2026-10-26, I2l-b), else the seeded pick as before.
+				// In the country bridge of the biome at its ends where the span fits it, else the seeded pick as before.
 				PointOfInterestTemplate template = CrossingTemplate(library, biome, site.Span, site.Gorge)
 					?? library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome), string.Empty);
-				/* A way the biome's styles leave with no bridge at all (2026-10-27, owner: "we need desert bridges"): Desert weighs Timber 0,
+				/* A way the biome's styles leave with no bridge at all (owner: "we need desert bridges"): Desert weighs Timber 0,
 				 * and every Bridge template but the styled ones is timber, so its wadi crossings went unbuilt. Picked again by the variants
 				 * alone, as a sited kind is above: the styles choose among the bridges, they never leave a way unbridged. */
 				if (template == null && biome != null && biome.SiteStyles != null && biome.SiteStyles.Count > 0)
@@ -743,14 +743,14 @@ namespace FishMMO.Shared.WorldDesign
 			List<PointOfInterestShape> shapes = Plan.Shapes;
 			/* And on a landing past the ditch, at the drawbridge's level, left as it was levelled: carved as any way's stretch, its
 			 * level taken from the ground either side past the landing's edges, the road filled the landing back up toward the far
-			 * bank's own height (Flo Monolith's Mossy Elkring Keep, 2026-10-15). */
+			 * bank's own height (Flo Monolith's Mossy Elkring Keep). */
 			Func<float, float, float> deck = (x, z) => MoatShaper.BankLevel(shapes, x, z, ground, out float bank) ? bank
 				: MoatShaper.OnLanding(laid, x, z, out MoatShaper.Landing landing) ? landing.Hinge : ground(x, z);
 			// Never cut under the water beside it: a way along a bank keeps the bank above the river's or lake's surface.
 			Func<float, float, float> aboveWater = water == null ? null : (Func<float, float, float>)((x, z) =>
 			{
 				/* Out to well past the river's own margin: a way cut under the water just past it left the water's edge standing
-				 * over the lower ground beside it (Flo Monolith, 2026-10-13, a metre and a half under 4 m past the bank). */
+				 * over the lower ground beside it (Flo Monolith, a metre and a half under 4 m past the bank). */
 				float near = Mathf.Max(water.RiverSurfaceNear(x, z, PathBankReachMetres), water.LakeSurfaceNear(x, z));
 				return float.IsNegativeInfinity(near) ? float.NegativeInfinity : near + PathBankFreeboardMetres;
 			});
@@ -786,7 +786,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Flags the stretches of the ways their biomes raise as boardwalks (2026-10-18, I2i; PathBoardwalks.MarkWays), before they
+		/// Flags the stretches of the ways their biomes raise as boardwalks (PathBoardwalks.MarkWays), before they
 		/// are carved, so the carve and the path field leave the ground under each deck as it lies. Nothing when no biome of the
 		/// scene raises a way (every biome's default).
 		/// </summary>
@@ -864,20 +864,20 @@ namespace FishMMO.Shared.WorldDesign
 			Func<float, float, int> biomeAt = null;
 			if (field != null && field.Biomes.Count > 0)
 			{
-				// Lived-in kinds only where the world's air is breathable (decision 39, 2026-10-18): a thin or airless world's biomes
-				// place their natural sites and relics alone; so do a methane, nitrogen, acid or molten-rock world's (decision 62).
-				// Kinds that work open water only where the world has liquid water on its surface (decision 68; no kind by default).
+				// Lived-in kinds only where the world's air is breathable: a thin or airless world's biomes
+				// place their natural sites and relics alone; so do a methane, nitrogen, acid or molten-rock world's.
+				// Kinds that work open water only where the world has liquid water on its surface (no kind by default).
 				BiomeWorldConditions world = BiomeWorldConditions.For(system, Request.Body);
 				bool breathable = BiomeAir.IsBreathable(in world), liquidWater = world.HasLiquidWater;
 				foreach (BiomeTemplate biome in field.Biomes)
 				{
-					// The kinds the biome hosts are its template's (2026-10-16), not the catalogue rows' names.
+					// The kinds the biome hosts are its template's, not the catalogue rows' names.
 					biomes.Add(biome != null
 						? new PointOfInterestBiome(biome.name, BiomeRegistry.IDOf(biome), biome.ResolvedDisplayName,
-							// A sea hall only where its host links one that holds on this world (2026-10-26, I2n-b, decision 83).
+							// A sea hall only where its host links one that holds on this world.
 							CaveInteriorArt.GateSeaHalls(biome, BiomeTemplateArt.SiteKinds(biome, rules, breathable, liquidWater), in world))
 						{
-							// How deep its underwater sites stand (2026-10-25, phase I2m): (0, 0), each kind's own, unless its round says.
+							// How deep its underwater sites stand: (0, 0), each kind's own, unless its round says.
 							UnderwaterDepth = biome.UnderwaterSiteDepth,
 						}
 						: null);
@@ -1068,10 +1068,10 @@ namespace FishMMO.Shared.WorldDesign
 			 * Regenerate POIs have taken it out already, before anything read the ground): the fields carve it again from the
 			 * ground as it was (PointOfInterestFieldCarve), never on top of itself. */
 			PointOfInterestFieldCarve.Restore(scene, terrains, notes);
-			// And the last run's paddies' water (2026-10-18, I2i): each field lays its own again below.
+			// And the last run's paddies' water: each field lays its own again below.
 			PointOfInterestPaddies.ClearWater(TerrainFolder, Request.SceneName);
-			/* The hot springs' pools the biome stage dug (2026-10-18, I2q): in the paddies' range, so cleared just now; written again,
-			 * into a hydrology asset made for them where the scene's ground has no river or lake (2026-10-27). */
+			/* The hot springs' pools the biome stage dug: in the paddies' range, so cleared just now; written again,
+			 * into a hydrology asset made for them where the scene's ground has no river or lake. */
 			GeothermalGroundCarve.WriteWater(scene, TerrainFolder, Request.SceneName, notes, seaLevel);
 			ScenePointsOfInterest asset = WriteAsset(wrote);
 			GameObject root = EnsureRoot(scene, asset);
@@ -1097,7 +1097,7 @@ namespace FishMMO.Shared.WorldDesign
 				Notes = notes,
 				Sink = sink,
 			};
-			// Every site's fields claim their ground as they are laid, so a later site's keep off them (2026-10-18, I2k).
+			// Every site's fields claim their ground as they are laid, so a later site's keep off them.
 			var fieldClaims = new PointOfInterestFieldClaims();
 
 			foreach (PointOfInterestRecord record in asset.Points)
@@ -1192,7 +1192,7 @@ namespace FishMMO.Shared.WorldDesign
 						notes?.Add($"{site.name}: site builder {builder.GetType().Name} threw: {ex.Message}");
 					}
 				}
-				// Every way in on the map (2026-10-20): a dungeon door always an entrance, each of a cave's mouths its own entry.
+				// Every way in on the map: a dungeon door always an entrance, each of a cave's mouths its own entry.
 				try
 				{
 					PointOfInterestEntrances.Mark(Context(PointOfInterestEntrances.Salt));
@@ -1216,9 +1216,9 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// The ways (with the streets the layouts just laid) baked for the client's path surface.
-			// The boardwalks along the routed ways their biomes raise (2026-10-18, I2i; a settlement laid its streets' own).
+			// The boardwalks along the routed ways their biomes raise (a settlement laid its streets' own).
 			PathBoardwalks.LayWays(asset.Paths, sink, ground, PathBoardwalks.MapBiomes(TerrainFolder, Request.SceneName), unchecked((int)SceneGenerator.SceneSeed(Request)), notes);
-			// The linear features but the fields' edges (2026-10-18, I2f): lanes' hedges and walls, woods' edges, small sites' bounds,
+			// The linear features but the fields' edges: lanes' hedges and walls, woods' edges, small sites' bounds,
 			// folds and the leats to the fields, in their biomes' styles; nothing (and nothing read) where no biome names one.
 			try
 			{
@@ -1229,7 +1229,7 @@ namespace FishMMO.Shared.WorldDesign
 				Debug.LogException(ex);
 				notes?.Add($"Linear features threw: {ex.Message}");
 			}
-			// The enclosures' own clearance (2026-10-27): the scatter's trees, bushes and boulders off every field, fold, farmstead and
+			// The enclosures' own clearance: the scatter's trees, bushes and boulders off every field, fold, farmstead and
 			// holding the sites laid, a turf one's wild details with them (before the trees are baked and the detail maps are read).
 			PointOfInterestEnclosureClearance.Clear(terrains, fieldClaims.Enclosures, notes);
 			// A floor under every ground-storey room no yard floored (a keep, a market hall, a shrine), so all below keep off it too.
@@ -1240,10 +1240,10 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			// The scatter's trees and bushes off the buildings' floors, as the grass is (before the trees are baked into props).
 			PointOfInterestTreeClearance.Clear(terrains, asset.Paths, notes);
-			/* And every detail layer under them (2026-10-27): the path field the floors are baked into below clears only what the blade
+			/* And every detail layer under them: the path field the floors are baked into below clears only what the blade
 			 * grass and the GPU scatter draw; the chunk renderer draws every other kind, and drew them indoors. */
 			PointOfInterestDetailClearance.Clear(terrains, asset.Paths, notes);
-			// The ground round every cave opening bare (2026-10-27, its own margin): nothing grows, lies or stands out over a mouth, a
+			// The ground round every cave opening bare (its own margin): nothing grows, lies or stands out over a mouth, a
 			// skylight or a root window, the sites' own mouth growth included (written after the holes were cut).
 			PointOfInterestCaveOpeningClearance.Clear(terrains, tiles, asset, notes);
 			ScenePathBake.Write(scene, root.transform, TerrainFolder, Request.SceneName, asset, wrote, notes);

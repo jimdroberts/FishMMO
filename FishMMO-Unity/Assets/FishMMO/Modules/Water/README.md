@@ -16,7 +16,7 @@ scale the dispersion is wrong and the sea moves like a bath.
 | **Depends on** | World Simulation (the sky, the weather and the scene's water bodies) |
 | **Depended on by** | World Simulation's, Terrain's, Ambient Life's and Naming's tests; World Design; the World Test Bed |
 | **Remove together with** | All seven world modules (World Simulation's tests reference it, and World Simulation takes the rest) |
-| **Moved** | From `Assets/Plugins/FishMMO Water` in Phase 4 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-18; the assemblies keep their names |
+| **Moved** | From `Assets/Plugins/FishMMO Water` in the core and modules split; the assemblies keep their names |
 
 ## Core seams it uses
 

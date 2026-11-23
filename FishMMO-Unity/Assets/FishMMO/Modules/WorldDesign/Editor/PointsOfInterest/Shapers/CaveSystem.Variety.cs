@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A system's personality (2026-10-20: "We would like more random terraces, pits, etc in caves too. Realism and
+	/// A system's personality ("We would like more random terraces, pits, etc in caves too. Realism and
 	/// deterministic randomness is good too. We want caves to feel unique"): a mix of these drawn from its seed on top of its
 	/// <see cref="CaveCharacter"/>, weighted by form and size (<see cref="CaveSystem.TraitsFor"/>), so two caves of one
 	/// character are still not alike. Each is a process real caves are shaped by, and lays the features it leaves.
@@ -61,7 +61,7 @@ namespace FishMMO.Shared.WorldDesign
 		Raise,
 		/// <summary>
 		/// An aven: a round shaft rising from a roof into the rock, narrowing as it goes, where water once fell in down a joint
-		/// (2026-10-20). Nothing is walked in it; nothing can fall into it.
+		///. Nothing is walked in it; nothing can fall into it.
 		/// </summary>
 		Aven,
 	}
@@ -134,7 +134,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A pit the layout sank (system frame), and its way out (2026-10-13: no fall damage, but nothing can be fallen into
+	/// A pit the layout sank (system frame), and its way out (no fall damage, but nothing can be fallen into
 	/// without one). Basins (pothole, gour, sinkhole, cold trap) are a <see cref="CaveHollowKind.Bowl"/> in
 	/// <see cref="CaveSystem.Hollows"/> (<see cref="Hole"/>), their sides walked; shafts and winzes a
 	/// <see cref="CaveShaft"/> (<see cref="Hole"/> in Shafts) with a climb (<see cref="Way"/> in Climbs); a ledged pit a
@@ -656,7 +656,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// Each column is walked in strides as long as the field allows (<see cref="WalkFieldSlope"/>), down to 2 cm by a surface:
 		/// a thin roof or floor is found as by the fixed fine marches it replaced (0.02 m down to the floor, 0.1 m up the
 		/// headroom: five times the old marches' field evaluations) wherever the field rises no faster than that, which is all
-		/// but its rare seams. 2026-10-26: the variety fixture's 45 caves planned bit for bit as with the fine marches, in three
+		/// but its rare seams. The variety fixture's 45 caves planned bit for bit as with the fine marches, in three
 		/// quarters of the time.
 		/// </summary>
 		internal bool WalkFits(IList<Vector3> path, out string why, float steepest = 40f)
@@ -703,7 +703,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How fast the noisy field rises per metre straight up or down, but at its rare seams, with room to spare (2026-10-26,
+		/// How fast the noisy field rises per metre straight up or down, but at its rare seams, with room to spare (
 		/// ~10M samples a centimetre apart up columns through the variety fixture's 45 caves: 99.97% under 1.5/m): a point the
 		/// field puts v into the void has no rock within −v / this of it up or down its column.
 		/// </summary>
@@ -850,7 +850,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The pass ──────────────────────────────────────────────
 
 		/// <summary>
-		/// The variety pass over a planned system (2026-10-20): what its traits lay — side passages, a mine's stopes, collapses
+		/// The variety pass over a planned system: what its traits lay — side passages, a mine's stopes, collapses
 		/// and winzes, breakdown domes and mounds, terraces, galleries, pits, rimstone, a cold trap, columns, arches, keyhole
 		/// trenches — each on its own stream (so the plan's own draws and one pass's count never move another's), each kept off
 		/// the ways, the mouths, the chamber middles, the chasms and the climbs, and each checked on the field as it then stands
@@ -876,7 +876,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>The site's own chamber (its camp's, den's or gathering's: <see cref="TryChamberOf"/>), −1 for none.</summary>
 			private readonly int siteChamber = -1;
 			/// <summary>
-			/// The system as the layout left it, before the pass (2026-10-21): where a way near a feature no longer walks, whether it
+			/// The system as the layout left it, before the pass: where a way near a feature no longer walks, whether it
 			/// walked before (the feature broke it) or never did (the layout's own fault, not the pass's to keep).
 			/// </summary>
 			private readonly CaveSystem before;
@@ -979,7 +979,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Whether every way near a feature just laid still walks (2026-10-21: a labyrinth's side passage dipping under a way at
+			/// Whether every way near a feature just laid still walks (a labyrinth's side passage dipping under a way at
 			/// another floor opened a hole in its floor; a basin beside one steepened it): each passage's stretch between two nodes
 			/// within <paramref name="reach"/> (and 6 m) in plan and 25 m in height, each chamber's middle (headroom over its floor),
 			/// each terrace's walk the pass laid. A way the layout left that did not walk before the pass is the layout's own.

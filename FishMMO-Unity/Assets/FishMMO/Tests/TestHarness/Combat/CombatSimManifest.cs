@@ -8,7 +8,7 @@ namespace FishMMO.TestHarness
 	/// Direct references to everything the CombatSim needs: its fighter, its network prefabs, and the ability roster with
 	/// the events and buffs it is built from, cached by hand so the sim does not wait on the addressable labels. Populated
 	/// by the scene generator (FishMMO Dashboard → Maintenance, Test Scenes: Generate Combat Sim, or Refresh Combat Sim
-	/// Roster) from the shipped test ability suite under <c>Modules/Abilities/Templates/Types</c> (2026-11-22: the Mock
+	/// Roster) from the shipped test ability suite under <c>Modules/Abilities/Templates/Types</c> (the Mock
 	/// set it was built from is gone).
 	/// </summary>
 	public sealed class CombatSimManifest : ScriptableObject

@@ -13,7 +13,7 @@ equip, grant and exchange, and the item writes), and the inventory, bank and equ
 | **Depends on** | The core (the item data, the container contracts, the item broadcasts, the equipment replicate fields, the character persistence and prediction); Abilities (the inventory system hears a consumable cast cancel on the ability controller) |
 | **Depended on by** | None (Commerce, Housing, Quests, Achievements, Staff and World Interactables reach the inventory through the core's `ICharacterInventorySystem`; their tests that need a real inventory find it by name and skip without it) |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

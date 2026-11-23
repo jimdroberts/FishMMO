@@ -52,7 +52,7 @@ namespace FishMMO.Shared.Biomes
 
 	/// <summary>
 	/// What the living things of a biome look like on a given world: <see cref="Variants"/> distinct looks for its grass,
-	/// flowers, small plants, fungi and lichen, the stones they grow on, and the small animals among them (2026-10-15:
+	/// flowers, small plants, fungi and lichen, the stones they grow on, and the small animals among them (
 	/// "Grass, flowers, critters, and other detail objects look identical on all biomes and/or planets. We need significant
 	/// (at least 10) variations for every biome/planet type to fit atmosphere and fantasy vibe").
 	/// </summary>
@@ -148,7 +148,7 @@ namespace FishMMO.Shared.Biomes
 		/// shorter), thick air lets them stand taller and broader, no air at all leaves only the hardiest, half height. The
 		/// one thing about grass's SHAPE a world changes: each biome's grass types are already the height their biome grows
 		/// (a tundra's short, a savanna's tall), so a biome's theme must not scale them again, and a patch's look never
-		/// does (2026-10-15: per-patch heights stepped at every patch's edge).
+		/// does (per-patch heights stepped at every patch's edge).
 		/// </summary>
 		public static Vector2 GrowthOf(in WorldTraits world)
 		{
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.Biomes
 		/// of the world's ground (a frost on a rust world is still white), lava none (it glows its own colour).
 		/// </summary>
 		/// <remarks>
-		/// Since 2026-10-15 a FALLBACK only. A ground's makeup is a property of its surface: each generated ground declares it
+		/// A FALLBACK only. A ground's makeup is a property of its surface: each generated ground declares it
 		/// (SurfaceCatalogue.MakeupOf, written to equal this for every ground), the biome art authoring writes it onto every
 		/// template slot holding that ground (<see cref="TerrainTextureLayer.GroundMakeup"/>), and the terrain array bake
 		/// carries it per layer (<c>TerrainArraySet.LayerMakeup</c>). A layer read by its name here is one whose set was baked
@@ -262,7 +262,7 @@ namespace FishMMO.Shared.Biomes
 		// ── Classes ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// A biome's class: its template's <see cref="BiomeTemplate.LookClass"/>, the one source since 2026-10-15 (the biome
+		/// A biome's class: its template's <see cref="BiomeTemplate.LookClass"/>, the one source (the biome
 		/// art authoring writes it from the spec table, which names every biome's class). A template not authored yet falls
 		/// back on its name (<see cref="ClassFromName"/>) and says so once.
 		/// </summary>
@@ -304,7 +304,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// The old keyword reading of a biome's class from its name, the way it reads to a player (keywords, as the ambient
 		/// life reads habitats), or from its climate where the name says nothing: <paramref name="temperature"/> and
-		/// <paramref name="humidity"/> are the middle of its envelope. Since 2026-10-15 only the fallback for a template not
+		/// <paramref name="humidity"/> are the middle of its envelope. Only the fallback for a template not
 		/// yet authored (<see cref="ClassOf(BiomeTemplate)"/>); the spec table's look classes were written to equal it for
 		/// every biome, so authoring changed no biome's looks.
 		/// </summary>
@@ -515,7 +515,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The biome's own looks, falling in weight: name, hue/saturation/value offsets, weight, height, width, bend.</summary>
 		/// <remarks>
 		/// The common look is about two patches in five: a meadow is a meadow, with others through it rather than a quilt
-		/// of twelve (2026-10-15: twelve near-equal looks read as "chunks of colours"). Their hue offsets are gentle for the
+		/// of twelve (twelve near-equal looks read as "chunks of colours"). Their hue offsets are gentle for the
 		/// same reason (a rarer look is a tint of the common one, not another plant); lightness and saturation carry most of
 		/// the difference.
 		/// </remarks>

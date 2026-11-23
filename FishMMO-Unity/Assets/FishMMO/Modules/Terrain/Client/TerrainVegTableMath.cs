@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The pure half of the vegetation families (DetailScatterRenderer, 2026-11-04): which FishMMO/Vegetation properties a family's
+	/// The pure half of the vegetation families (DetailScatterRenderer): which FishMMO/Vegetation properties a family's
 	/// table carries per kind, and the table's row layout as FishVegetationPasses.hlsl FishVegTableSetup reads it.
 	/// </summary>
 	/// <remarks>

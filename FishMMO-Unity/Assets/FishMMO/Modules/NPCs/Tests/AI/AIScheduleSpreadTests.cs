@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
 	/// Pins how NPC brain work is spread across network ticks, and the per-tick body work a brain
-	/// skips when there is nothing to do (hot-path audit, 2026-09-25: M1, M3, M4, L9).
+	/// skips when there is nothing to do (hot-path audit: M1, M3, M4, L9).
 	/// </summary>
 	[TestFixture]
 	public class AIScheduleSpreadTests

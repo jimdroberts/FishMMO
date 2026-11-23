@@ -24,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Every stone material's shapes, each from how its rock breaks and weathers (2026-10-16, decision 6 of the biome
+	/// Every stone material's shapes, each from how its rock breaks and weathers (decision 6 of the biome
 	/// suite): basalt as angular columnar chips, column drums and broken columns; granite as rounded corestones,
 	/// onion-skin sheets and grus; sandstone as flat cross-bedded slabs with rounded edges; limestone pitted and
 	/// karren-fluted; shale and slate as thin flakes and plates; river cobbles as smooth flattened ellipsoids; flint as
@@ -250,7 +250,7 @@ namespace FishMMO.Shared.WorldDesign
 					P(S(0.08f, 0.06f, 0.075f).Noise(0.15f, 0f)),
 				});
 
-			// ── The rest of the crust (2026-10-16), each wearing its rock type's own material ──
+			// ── The rest of the crust, each wearing its rock type's own material ──
 
 			yield return Named("Andesite", "Blocky and subangular with platy flow jointing: rough angular blocks and plates.",
 				S(1.6f, 1.1f, 1.4f).Boxy(3f, 2.8f).Cut(6, 0.4f, 0.06f, -0.15f, 0.6f).Bedded(2.5f, 0.05f, 8f).Noise(0.25f, 0.25f),
@@ -478,7 +478,7 @@ namespace FishMMO.Shared.WorldDesign
 					P(S(0.09f, 0.05f, 0.05f).Cut(6, 0.65f, 0.015f)),
 				});
 
-			// ── Stones of no one rock type (2026-10-16), each with a material of its own ──
+			// ── Stones of no one rock type, each with a material of its own ──
 
 			yield return Named("Flint", "Flint from the chalk: knobbly nodules, tabular sheets and barrel-shaped paramoudras; knapped flakes.",
 				S(1.4f, 1f, 1.2f).Knobbly(7, 0.5f, 0.374f).Conchoidal(1, 0.4f, 1f).Noise(0.3f, 0.05f),
@@ -513,7 +513,7 @@ namespace FishMMO.Shared.WorldDesign
 					P(S(0.08f, 0.07f, 0.075f).Noise(0.05f, 0f)),
 				});
 
-			// ── Each biome's own crust rock (2026-10-25, StoneStyles.Regional.cs) ──
+			// ── Each biome's own crust rock (StoneStyles.Regional.cs) ──
 
 			foreach (StoneSet set in RegionalSets())
 			{

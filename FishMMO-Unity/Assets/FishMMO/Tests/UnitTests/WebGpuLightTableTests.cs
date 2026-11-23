@@ -140,7 +140,7 @@ namespace FishMMO.UnitTests
 		public void HotLitPassesReadTheTable(string label)
 		{
 			var match=Compiled().Where(c=>c.label==label).ToArray();
-			// The grass, HLOD and heightmap draws are the Terrain module's (Phase 4, 2026-11-18): absent without it.
+			// The grass, HLOD and heightmap draws are the Terrain module's: absent without it.
 			if(match.Length==0&&!InstalledModules.Has("Terrain"))Assert.Ignore("The Terrain module is not installed.");
 			Assert.That(match.Length,Is.EqualTo(1),"no program "+label);
 			Assert.That(match[0].result.ResourceBindings.Select(r=>r.Name),Does.Contain("_FishLightTable"),label);
@@ -177,7 +177,7 @@ namespace FishMMO.UnitTests
 		/// <summary>The URP sources the table's copies come from (FishLightTableLighting.hlsl, FishLightTable.hlsl, the gather's declarations).</summary>
 		static readonly (string file,string sha)[] UrpSources =
 		{
-			// URP 17.6 (editor 6000.6, 2026-11-07); the copies were re-checked against it on 2026-11-20 (SSR in the glossy reflection).
+			// URP 17.6 (editor 6000.6); the copies were re-checked against it (SSR in the glossy reflection).
 			("Input.hlsl","de458480e1b73f20"),("RealtimeLights.hlsl","53bb9d68a177dc59"),("Shadows.hlsl","41dbe5965ef3f3cd"),
 			("GlobalIllumination.hlsl","23938dcb7faf56b4"),("LightCookie/LightCookie.hlsl","2660a79e9653764b"),
 			("LightCookie/LightCookieInput.hlsl","b223f4665570d9e5"),("Lighting.hlsl","73021044223c60c2"),

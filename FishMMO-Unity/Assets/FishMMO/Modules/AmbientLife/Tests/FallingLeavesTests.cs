@@ -91,7 +91,7 @@ namespace FishMMO.UnitTests.Weather
 		public void SomeAllYear_MoreInAGust()
 		{
 			Vector2 summer = FallingLeaves.Rates(0.5f, 1f, 0f, 0f);
-			// Raised above a real wood's few percent for atmosphere (2026-10-10): leaves on the air all year.
+			// Raised above a real wood's few percent for atmosphere: leaves on the air all year.
 			Assert.That(summer.x, Is.InRange(0.1f, 0.25f), "a broadleaf wood's summer trickle");
 			Assert.That(summer.y, Is.InRange(0.03f, 0.1f), "an evergreen's year-round drop");
 			Vector2 autumnCalm = FallingLeaves.Rates(0.89f, 1f, 0f, 0f);
@@ -105,7 +105,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void AutumnLeaves_HaveTurned()
 		{
-			// The all-year trickle (raised 2026-10-10) mixes a few green leaves into the autumn fall: still mostly turned.
+			// The all-year trickle (raised) mixes a few green leaves into the autumn fall: still mostly turned.
 			Assert.That(FallingLeaves.TurnedShare(0.89f, 1f, 0f, 0f), Is.GreaterThan(0.85f));
 			Assert.AreEqual(0.5f, FallingLeaves.TurnedShare(0.5f, 1f, 0f, 0f), 1e-4f);
 		}

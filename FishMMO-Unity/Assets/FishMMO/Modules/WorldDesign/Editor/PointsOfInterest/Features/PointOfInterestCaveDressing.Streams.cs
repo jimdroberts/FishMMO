@@ -29,7 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// A wet cave's water, dressed (2026-10-20, caves livened; after every earlier pass, on its own stream, so nothing laid
+			/// A wet cave's water, dressed (caves livened; after every earlier pass, on its own stream, so nothing laid
 			/// before it moves): rounded stones in the streams' beds and on the pools' floors, flowstone and wet-loving glow on the
 			/// walls under each spring, rimstone and luminous fungus round the pools, boulders round the plunge pools, and a soft
 			/// light over the larger pools and at the falls' feet, in the cave's own glow (<see cref="CaveStreamDressing"/>).

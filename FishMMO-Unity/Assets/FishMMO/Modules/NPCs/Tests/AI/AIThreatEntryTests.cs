@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests.AI
 {
 	/// <summary>
 	/// Pins how an NPC enters combat from a hit and how it evades on a leash return (hot-path
-	/// audit, 2026-09-25: H9, L10, L11, L12).
+	/// audit: H9, L10, L11, L12).
 	/// </summary>
 	/// <remarks>
 	/// <para>

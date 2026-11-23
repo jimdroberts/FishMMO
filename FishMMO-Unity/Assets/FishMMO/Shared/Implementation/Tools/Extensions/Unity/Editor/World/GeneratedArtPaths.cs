@@ -2,7 +2,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// Where the generated biome art lives (the World Design module writes it; core tools such as the shader prewarm read
-	/// it). Core editor (Phase 4, 2026-11-18).
+	/// it). Core editor.
 	/// </summary>
 	public static class GeneratedArtPaths
 	{

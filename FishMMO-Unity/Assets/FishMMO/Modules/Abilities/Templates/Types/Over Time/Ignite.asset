@@ -18,7 +18,7 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: 'Sets the first foe it strikes alight: 2 fire damage, then 2 fire damage a second for 6 seconds. Stacks up to three times.'
+  Description: 'Sets the first foe it strikes alight: 2 fire damage, then 2 fire damage every 5 seconds for 30 seconds. Stacks up to three times.'
   ActivationTime: 0.8
   LifeTime: 1.5
   Speed: 18

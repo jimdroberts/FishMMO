@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// An ice cave's ice (2026-10-20, caves livened: <see cref="CaveIce"/>): nothing in any other form of cave, the same every time,
+	/// An ice cave's ice (caves livened: <see cref="CaveIce"/>): nothing in any other form of cave, the same every time,
 	/// some of every kind over a few caves; its falls against rock, its curtains hung from the roof clear of the floor and of a
 	/// person's head over a way, its pools' ice on the floor or in their basins, nothing on a built way; the new glow art appended
 	/// after every older kind and as large as the placer is told.
@@ -176,7 +176,7 @@ namespace FishMMO.UnitTests.WorldDesign
 					Assert.That(piece.Hue, Is.InRange(0, CaveArt.HueCount(piece.Kind) - 1));
 					Assert.That(piece.Scale.x > 0f && piece.Scale.y > 0f && piece.Scale.z > 0f, Is.True);
 				}
-				// A modest share of its props: 120 pieces, more in a cave of many chambers (2026-10-21: the ice grows with its chambers).
+				// A modest share of its props: 120 pieces, more in a cave of many chambers (the ice grows with its chambers).
 				Assert.That(layout.Pieces.Count, Is.LessThanOrEqualTo(Mathf.Max(120, 6 * system.Chambers.Count)), "an ice cave's ice stays a modest share of its props");
 				Assert.That(layout.Lights.Count, Is.LessThanOrEqualTo(CaveIce.MaxLights));
 				for (int i = 0; i < layout.Lights.Count; i++)

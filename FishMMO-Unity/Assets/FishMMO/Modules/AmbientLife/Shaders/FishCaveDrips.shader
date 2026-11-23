@@ -1,4 +1,4 @@
-// Water dripping in the caves (CaveDripField, 2026-10-20): the nearest drips' falling drops, the spatter where they land and the
+// Water dripping in the caves (CaveDripField): the nearest drips' falling drops, the spatter where they land and the
 // puddles they fall into, with the rings each drop sends over its puddle. A pre-built set of quads per drip that the vertex
 // shader places from a few numbers a drip (CaveDripField: where its drops land, how far they fall, and the seconds to each of its
 // next landings on the shared motion clock, SceneDrip), so every player sees the same drop land at the same moment and hears it

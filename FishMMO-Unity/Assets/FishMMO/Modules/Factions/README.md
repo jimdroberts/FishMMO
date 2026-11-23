@@ -11,7 +11,7 @@ faction matrix editor.
 | **Depends on** | The core |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 2 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-16 |
+| **Moved** | Out of the core |
 
 ## Folders
 

@@ -67,7 +67,7 @@ float3 WaterRippleNormal(float2 xz, float strength)
 }
 
 /// <summary>
-/// The water's colours in the look of the coast at <paramref name="xz"/> (2026-10-18; BiomeSeaCoast): the climate's shallow, deep,
+/// The water's colours in the look of the coast at <paramref name="xz"/> (BiomeSeaCoast): the climate's shallow, deep,
 /// sediment and scatter colours tinted, and its absorption scaled, by how the coast's water differs from today's sea. A peat
 /// coast browns and darkens the sea off it; offshore, and in every scene whose biomes all have today's look, nothing changes.
 /// </summary>
@@ -203,7 +203,7 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	#if defined(_WATER_DEPTH)
 		float rawDepth = SampleSceneDepth(screenUV);
 		float sceneEye = WaterEyeDepth(rawDepth);
-		/* What the depth texture holds IN FRONT of this fragment is no sea bed (2026-10-21). Under MSAA it keeps one resolved
+		/* What the depth texture holds IN FRONT of this fragment is no sea bed. Under MSAA it keeps one resolved
 		 * sample a pixel, so along a ridge or a headland standing before the sea it is the land's, and the sea read it as
 		 * a shore of no depth: faded to nothing by the edge fade, it let the bright horizon through as a pixel-wide line
 		 * along every mountain range. Open water there, as it is behind the ridge. */

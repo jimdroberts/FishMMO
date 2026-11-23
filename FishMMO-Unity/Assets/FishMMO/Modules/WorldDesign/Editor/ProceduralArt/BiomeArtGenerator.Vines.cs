@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The vines (<see cref="VineMeshes"/>, 2026-10-12): their atlas, two materials a species, and a prefab a variant of
+	/// The vines (<see cref="VineMeshes"/>): their atlas, two materials a species, and a prefab a variant of
 	/// every hanging, mat and spill piece and of every trunk climber.
 	/// </summary>
 	/// <remarks>

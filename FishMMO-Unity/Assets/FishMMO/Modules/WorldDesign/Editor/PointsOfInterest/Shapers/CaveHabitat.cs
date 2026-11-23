@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>Positions and normals are in the system's frame (as <see cref="CaveSystem"/>'s nodes are).</para>
 	/// <para>
-	/// <b>How it is worked out (2026-10-20).</b> Everything a sample needs that is not local is measured once, in
+	/// <b>How it is worked out.</b> Everything a sample needs that is not local is measured once, in
 	/// <see cref="For"/>: a graph of the system's walking points (every passage node, every chamber's middle, the shafts' and
 	/// chasms' ends), joined where passages meet and where they run through a chamber, and from each mouth the distance along it
 	/// to every point (Dijkstra) — so the light from a mouth falls off with the way a person would walk in, never straight
@@ -73,7 +73,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float GlowCell = 11f;
 		/// <summary>
 		/// An ice cave's cold zone and thaw ring, metres along the way in, and how far under the sill the cold trap lies, frozen
-		/// however far in (2026-10-21; decision 51 froze it only within 160 m).
+		/// however far in (decision 51 froze it only within 160 m).
 		/// </summary>
 		private const float ColdReach = CaveIce.ColdReach, ColdSinkDepth = CaveIce.ColdSinkDepth, ThawRing = CaveIce.ThawRing;
 
@@ -90,8 +90,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The one place the habitat's per-form physics is chosen (2026-10-20): code defaults until the biome suite's cave interiors
-		/// (I2n) carry them on templates.
+		/// The one place the habitat's per-form physics is chosen: code defaults until the biome suite's cave interiors
+		/// carry them on templates.
 		/// </summary>
 		public static FormTraits TraitsOf(CaveForm form)
 		{
@@ -108,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveForm.Mine:
 					return new FormTraits { Wet = 0.6f, Sediment = 1f, Litter = 0.5f, Guano = 0.25f, Glow = 0.3f, Spoil = true };
 				case CaveForm.SeaHall:
-					// Wet through, the sea's sediment on its floor, no litter, no roost, no glow crust (2026-10-26, I2n-b).
+					// Wet through, the sea's sediment on its floor, no litter, no roost, no glow crust.
 					return new FormTraits { Wet = 1.2f, Sediment = 1f, Litter = 0f, Guano = 0f, Glow = 0f };
 				default:
 					return new FormTraits { Wet = 1f, Sediment = 1f, Litter = 1f, Guano = 1f, Glow = 1f };
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 		private readonly float[] mouthReach, mouthStrength, mouthRadius;
 		private readonly bool[] mouthWet;
 		private readonly bool[] mouthSky;
-		/// <summary>The root windows' throats (2026-10-26, I2n-c, decision 86 (f)): their mouths' indices, none in a system that opens none.</summary>
+		/// <summary>The root windows' throats: their mouths' indices, none in a system that opens none.</summary>
 		private readonly int[] rootWindows;
 
 		/// <summary>The roof-opening kind when the layout has one (an enum member it may add): compiled whether or not it exists.</summary>
@@ -344,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 				Attach(riftBase + 2 * r, reach);
 				Attach(riftBase + 2 * r + 1, reach);
 			}
-			// Climbs (2026-10-21): foot and head, each onto the way nearest it. A chimney's top stands a bore over the way that
+			// Climbs: foot and head, each onto the way nearest it. A chimney's top stands a bore over the way that
 			// comes to it, past its own reach, so a deep system's levels under one were walked from no mouth.
 			for (int c = 0; c < system.Climbs.Count; c++)
 			{
@@ -641,7 +641,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (system.Form == CaveForm.SeaHall && floorness > 0f)
 			{
-				// The floor's heat zones (2026-10-26, I2n-b, decision 83: the stored smokers' heat, CaveSystem.HeatAt): the sea's fine
+				// The floor's heat zones (the stored smokers' heat, CaveSystem.HeatAt): the sea's fine
 				// metalliferous sediment (the silt ground) away from the vents, coarse chimney rubble (the gravel ground) round them.
 				float heat = system.HeatAt(p);
 				sediment = floorness * Mathf.Lerp(Mathf.Max(0.62f, sediment / Mathf.Max(0.01f, floorness)), 0.25f, Smooth(0.4f, 0.65f, heat));
@@ -680,7 +680,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (rootWindows != null)
 			{
-				// The peat a root window rotted down through, on its throat's rock and the vault round it (2026-10-26, I2n-c: its lip).
+				// The peat a root window rotted down through, on its throat's rock and the vault round it (its lip).
 				organic = Mathf.Max(organic, BiomeCaveWaters.PeatLipOrganic * PeatLipAt(p));
 			}
 			if (hasWater && system.Form == CaveForm.SeaCave)

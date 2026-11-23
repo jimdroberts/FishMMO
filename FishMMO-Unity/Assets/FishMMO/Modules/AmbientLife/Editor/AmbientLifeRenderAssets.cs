@@ -40,7 +40,7 @@ namespace FishMMO.Client
 			AmbientLifeRenderProfile ambient = WeatherRenderAssets.EnsureProfile<AmbientLifeRenderProfile>(ProfilePath, "Ambient Life Render Profile");
 			// The sea's background creatures: same rule as the weather's.
 			if (ambient.SeaLifeShader == null) ambient.SeaLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaLifeShaderPath);
-			// What drifts on the open sea (2026-10-25): its compute and shader, same rule as the weather's.
+			// What drifts on the open sea: its compute and shader, same rule as the weather's.
 			if (ambient.SeaFloatsCompute == null) ambient.SeaFloatsCompute = AssetDatabase.LoadAssetAtPath<ComputeShader>(SeaFloatSystem.ComputeAssetPath);
 			if (ambient.SeaFloatsShader == null) ambient.SeaFloatsShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaFloatSystem.ShaderAssetPath);
 			// The land's birds, bats and small animals: same rule as the weather's.
@@ -54,9 +54,9 @@ namespace FishMMO.Client
 			if (ambient.SiteFlamesShader == null) ambient.SiteFlamesShader = AssetDatabase.LoadAssetAtPath<Shader>(SiteFlamesShaderPath);
 			// The lighthouses' turning beams: same rule as the weather's.
 			if (ambient.LighthouseBeamsShader == null) ambient.LighthouseBeamsShader = AssetDatabase.LoadAssetAtPath<Shader>(LighthouseBeamsShaderPath);
-			// The caves' drips (2026-10-20): same rule as the weather's.
+			// The caves' drips: same rule as the weather's.
 			if (ambient.CaveDripsShader == null) ambient.CaveDripsShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveDripsShaderPath);
-			// The caves' still water's beads and leeches (2026-10-26): same rule as the weather's.
+			// The caves' still water's beads and leeches: same rule as the weather's.
 			if (ambient.CaveWaterLifeShader == null) ambient.CaveWaterLifeShader = AssetDatabase.LoadAssetAtPath<Shader>(CaveWaterLifeShaderPath);
 			if (ambient.SeaHallVentsShader == null) ambient.SeaHallVentsShader = AssetDatabase.LoadAssetAtPath<Shader>(SeaHallVentsShaderPath);
 			if (ambient.RockfallStonesShader == null) ambient.RockfallStonesShader = AssetDatabase.LoadAssetAtPath<Shader>(RockfallStonesShaderPath);

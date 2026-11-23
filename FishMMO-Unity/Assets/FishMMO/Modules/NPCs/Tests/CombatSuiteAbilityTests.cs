@@ -10,7 +10,7 @@ using FishMMO.Server.Implementation.World.SceneServer.AI;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the crowd-control, over-time, projectile-behaviour and defence abilities (2026-11-22): the held guard's rule,
+	/// Pins the crowd-control, over-time, projectile-behaviour and defence abilities: the held guard's rule,
 	/// the fork's ids, who a charm may take, and the content TestAbilitySuiteGenerator.CombatSuite writes for Stunning Blow,
 	/// Freezing Bolt, Mesmerize, Ignite, Rejuvenate, Ricochet Shot, Forked Bolt, Chain Lightning, Shield Block and Deflect.
 	/// Also that the old Mock ability set is gone.
@@ -216,7 +216,7 @@ namespace FishMMO.UnitTests
 			AbilityTemplate block = Ability("Defense/Shield Block");
 			CharacterAttributeTemplate stamina = LoadAsset<CharacterAttributeTemplate>(Stamina);
 			Assert.That(block.Type, Is.EqualTo(AbilityType.Block), "a Block ability is held (AbilityController.RequiresHeld)");
-			Assert.That(block.Guard.ReducePercent, Is.InRange(1, 99), "Jim, 2026-11-22: a guard reduces, it does not negate");
+			Assert.That(block.Guard.ReducePercent, Is.InRange(1, 99), "a guard reduces, it does not negate");
 			Assert.That(block.Guard.CostResource, Is.SameAs(stamina), "each blocked blow costs stamina");
 			Assert.That(block.Guard.CostPerHit, Is.GreaterThan(0));
 			Assert.That(block.AbilityObjectPrefab, Is.Null, "the guard spawns nothing");
@@ -423,7 +423,7 @@ namespace FishMMO.UnitTests
 				.Select(AssetDatabase.GUIDToAssetPath)
 				.Where(p => System.IO.Path.GetFileName(p).StartsWith("Mock "))
 				.ToArray();
-			Assert.That(found, Is.Empty, "the Mock abilities, events and buffs were deleted 2026-11-22");
+			Assert.That(found, Is.Empty, "the Mock abilities, events and buffs were deleted");
 		}
 	}
 }

@@ -10,7 +10,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The bandwidth round of 2026-11-14, each part lossless or bounded: compact NetworkTransform positions and rotations,
+	/// The bandwidth round, each part lossless or bounded: compact NetworkTransform positions and rotations,
 	/// packet compression, quiet reconciles for an idle owner, and the idle send interval.
 	/// </summary>
 	public class BandwidthReductionTests
@@ -370,7 +370,7 @@ namespace FishMMO.UnitTests
 		/// <summary>
 		/// The idle send interval needs "near combat" to mean a fight. A target counts only when the viewer may harm it or it
 		/// is already fighting: the target is whatever character is under the crosshair, so in a crowd a player always had
-		/// one and spent 0% of ticks on the idle interval (simulate run 2026-11-15, against 91% before).
+		/// one and spent 0% of ticks on the idle interval (simulate run, against 91% before).
 		/// </summary>
 		[TestCase(false, false, false)]
 		[TestCase(true, false, true)]

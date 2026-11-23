@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// Curtains of fire (2026-10-25, phase I2r "molten ground", decision 65 (d) and 93): lava fountains standing along a fissure, a
+	/// Curtains of fire ("molten ground"): lava fountains standing along a fissure, a
 	/// stretch of each stored vent line of a biome whose vents lie on Fissures and whose template names fountain episodes
 	/// (<see cref="BiomeTemplate.FountainEpisodes"/>), playing on THE slot function (<see cref="BiomeFountainEpisodes.At"/>, I6i's
 	/// <see cref="EpisodeSlots"/>): every stretch its own seed, so a fissure erupts in sections, each rising, holding and dying away on

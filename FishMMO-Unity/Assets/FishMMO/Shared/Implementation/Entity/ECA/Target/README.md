@@ -317,7 +317,7 @@ Two ways:
 1. Two actions on the same trigger:
    - Action A: `ApplyDamageAction` with no `TargetSelector` (uses event Target).
    - Action B: `ApplyDamageAction` with `AreaTargetSelector` and `MaxHits=4`. The cap is applied after a
-     nearest-first sort, so it really does mean "the 4 nearest". (Before the 2026-08-28 audit it sorted by
+     nearest-first sort, so it really does mean "the 4 nearest". (Before the audit it sorted by
      network identity and the cap kept the four lowest ObjectIds regardless of distance.)
 2. One action with `ChainTargetSelector` on the trigger.
 

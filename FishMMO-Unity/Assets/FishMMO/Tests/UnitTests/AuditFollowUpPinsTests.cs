@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Source pins for the defects the 2026-09-13 audit of the request-preamble, ability-system and
+	/// Source pins for the defects the audit of the request-preamble, ability-system and
 	/// character-sheet commits closed — each one an ORDERING or a SUBSCRIPTION that compiles either
 	/// way round and that no behavioural test can see without a server.
 	/// </summary>

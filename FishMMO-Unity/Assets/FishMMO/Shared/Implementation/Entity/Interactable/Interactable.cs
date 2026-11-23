@@ -276,7 +276,12 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// Called when the object is destroyed. Unregisters this interactable from the scene.
 		/// </summary>
-		void OnDestroy()
+		/// <remarks>
+		/// Protected and virtual so a subclass extends it (calling base) instead of declaring an <c>OnDestroy</c> of its own,
+		/// which Unity would call in place of this one. The same holds for <c>Awake</c>: a subclass uses <see cref="OnAwake"/>
+		/// (InteractableUnityMessageTests).
+		/// </remarks>
+		protected virtual void OnDestroy()
 		{
 			SceneObject.Unregister(this);
 		}

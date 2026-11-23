@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Laid, then measured.</b> A river's line, its junctions, its falls and their pools are planned and cut into the ground
 	/// first (<see cref="SceneWater"/>, <see cref="WaterCarver"/>), at the levels they were planned at. Everything after that
 	/// reshapes the ground again: the sites' pads and moats, the ways and their carve, the cliffs and their talus. Water kept at
-	/// its planned level wherever that ground was lowered stood over the air beside it (2026-10-15: a scour hole beside a
+	/// its planned level wherever that ground was lowered stood over the air beside it (a scour hole beside a
 	/// rapid, a mouth flared over a falling river), and each case had its own repair. Here the water is taken from the ground
 	/// as it is: whatever cut a bank, the water stands no higher than the bank, and a pool, a pond or a moat no higher than the
 	/// lowest point of its rim.
@@ -222,7 +222,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// Straight out only. Walked on a slant as well, the walk met the banks of the same river further down, which hold its
 		/// lower water there, and beside a fall it ran out over the brink: the level reach above Flo Monolith's 49 m fall was
-		/// lowered 4.5 m for ground that never held it (2026-10-15).
+		/// lowered 4.5 m for ground that never held it.
 		/// </remarks>
 		public static float Hold(SceneWater water, RiverPath river, int i, float nx, float nz, float planned, Func<float, float, float> ground)
 		{

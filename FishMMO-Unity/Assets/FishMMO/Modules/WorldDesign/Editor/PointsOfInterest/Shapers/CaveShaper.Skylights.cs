@@ -6,7 +6,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class CaveShaper
 	{
-		// ── Skylights (2026-10-20, caves livened) ─────────────────
+		// ── Skylights (caves livened) ─────────────────
 
 		/// <summary>How far an opening in a roof keeps from water (a river, a lake, the sea's reach), metres.</summary>
 		private const float SkylightWaterClear = 10f;

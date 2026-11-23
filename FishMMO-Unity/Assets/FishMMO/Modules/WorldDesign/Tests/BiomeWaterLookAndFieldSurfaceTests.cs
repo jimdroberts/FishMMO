@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 21 of the biome suite (2026-10-16, phase I2e): each biome's fresh water has its own colour and clarity (the
+	/// Decision 21 of the biome suite: each biome's fresh water has its own colour and clarity (the
 	/// template's Water Look, read by the inland water for its lakes, pools, rivers, streams and moats), and each crop its
 	/// field surface (flat, lazy beds, ridge and furrow). Every biome's defaults are exactly what every lake and every field
 	/// had before (the inland water material's look, flat fields), so authoring changes no scene; a body of water takes the

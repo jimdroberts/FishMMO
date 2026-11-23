@@ -378,7 +378,7 @@ namespace FishMMO.Shared
 		/// The server can drop a pet from its owner's view (a crowd evicting it from the observer budget, before own pets
 		/// were pinned there; or a step out of range) and send it again later. The client then despawns the old object to
 		/// the pool and spawns the pet as a new one, but no PetAdd comes with it, so the list and the panel kept the old
-		/// object: its health frozen while the live pet fought on (2026-11-18). Registration is the moment the new one has
+		/// object: its health frozen while the live pet fought on. Registration is the moment the new one has
 		/// its ID and payload.
 		/// </remarks>
 		private void SceneObject_PetRespawned(ISceneObject sceneObject)
@@ -423,7 +423,7 @@ namespace FishMMO.Shared
 			 * despawned to the pool, and the server keeps a re-spawned pet's ID — so after any despawn (a scene change, a
 			 * dismiss and re-summon, a death, an observer drop) this ID could still name the previous, pooled copy until
 			 * the new one arrived and overwrote the entry. That copy was bound: the pet panel drew its frozen health (full)
-			 * while the target frame, reading the live pet, showed 70% (2026-11-17). A dead copy now waits like a missing
+			 * while the target frame, reading the live pet, showed 70%. A dead copy now waits like a missing
 			 * one, for the live object's registration. */
 			if (SceneObject.Objects.TryGetValue(msg.ID, out ISceneObject sceneObject) &&
 				sceneObject != null && sceneObject.GameObject != null && sceneObject.GameObject.TryGetComponent(out Pet pet) &&

@@ -94,9 +94,9 @@ typedef uint64_t wt_stream_id_t;
  * (tests/check_abi_version.sh verifies the pair).
  *
  *   1  original surface up to wt_server_set_allow_native_clients
- *   2  + wt_server_set_limits (2026-09-07)
- *   3  + wt_abi_version, wt_tls_provider, WT_ERR_TLS_BACKEND (2026-09-09)
- *   4  + wt_get_global_counters, wt_client_get_connection_stats (2026-09-25)
+ *   2  + wt_server_set_limits
+ *   3  + wt_abi_version, wt_tls_provider, WT_ERR_TLS_BACKEND
+ *   4  + wt_get_global_counters, wt_client_get_connection_stats
  */
 #define WT_ABI_VERSION           4
 

@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// THE slot function of the shared motion clock's episodes (2026-10-25, I6i; decisions 93 and 95): the clock cut into slots of a
+	/// THE slot function of the shared motion clock's episodes: the clock cut into slots of a
 	/// length that divides its 10 000 s wrap, each slot holding one episode at a hashed moment, early enough that it ends in its slot
 	/// (so a slot is read alone, and the strength is continuous in time and across the wrap), ramped in and out, perhaps skipped, at a
 	/// hashed strength. Shared by the lava fountains' episodes and the glows that follow them (BiomeFountainEpisodes, Glow EPISODE), the
@@ -53,7 +53,7 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// Strombolian vent bursts (2026-10-25, I6i; decision 95, the Volcanic Temple round): each vent bursts once a slot of 625, 1000 or
+	/// Strombolian vent bursts: each vent bursts once a slot of 625, 1000 or
 	/// 1250 s (by its seed; all divide the 10 000 s wrap), a few seconds of bombs at a hashed strength, one slot in seven-ish skipped
 	/// (15 %). <see cref="EpisodeSlots.At"/> with these constants, so the later vent effect (GPU bombs, the Sciara rockfall) and the glow
 	/// that follows the scene's vent (Glow BURST, <c>_FishVentBurst</c>) read the same burst.

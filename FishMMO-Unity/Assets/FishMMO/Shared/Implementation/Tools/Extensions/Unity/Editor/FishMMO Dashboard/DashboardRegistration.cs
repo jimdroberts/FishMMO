@@ -180,7 +180,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Small extension points of the dashboard for modules (2026-11-20): where a new asset of a type is filed, and extra
+	/// Small extension points of the dashboard for modules: where a new asset of a type is filed, and extra
 	/// buttons under an asset's inspector. Modules add to them from an <c>[InitializeOnLoadMethod]</c>.
 	/// </summary>
 	public static class DashboardHooks

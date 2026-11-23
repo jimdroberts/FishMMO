@@ -23,7 +23,7 @@ namespace FishMMO.UnitTests
 	/// log showed why — every swing at it resolved to <c>target Elf(Clone)</c>, the caster, because
 	/// the ability found no target and <c>TargetSelector</c> falls back to the initiator. The
 	/// warrior's CharacterAttributeController, which owns Health, was bound to the orc mage's
-	/// NetworkObject. The template-to-ID migration of 2026-03-27 had rewritten the field on three
+	/// NetworkObject. The template-to-ID migration had rewritten the field on three
 	/// prefabs at once: the warrior and a lesser fire elemental on both fields, and a plain orc on
 	/// one — and the orc stayed damageable with one of the two intact, which is what made this look
 	/// like a warrior problem rather than a family one (PR #212).
@@ -41,7 +41,7 @@ namespace FishMMO.UnitTests
 		private static string AssetRoot =>
 			Path.Combine(Directory.GetCurrentDirectory(), "Assets");
 
-		/// <summary>The warrior's CharacterAttributeController as committed on 2026-03-27.</summary>
+		/// <summary>The warrior's CharacterAttributeController as committed.</summary>
 		private const string BrokenWarrior =
 			"  _componentIndexCache: 1\n" +
 			"  _addedNetworkObject: {fileID: -4468559157413045786, guid: a7364fafb6a45174babebcc6a5fbdce4,\n" +

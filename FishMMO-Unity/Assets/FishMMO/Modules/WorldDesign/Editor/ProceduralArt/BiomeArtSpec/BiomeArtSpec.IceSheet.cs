@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Ice Sheet</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry IceSheet()
 		{
-			// The continental ice cap's interior (biome round, approved 2026-10-25, authored 2026-10-26): a white dome to every horizon
+			// The continental ice cap's interior: a white dome to every horizon
 			// combed by the katabatic wind falling off it — hard wind-slab carved into sastrugi down the fall line, slopes polished to
 			// a wind glaze, megadune swells, and in the lee of every nunatak a field of old blue ice where black star-stones lie. The
 			// nunataks are dark charnockite, honey-rinded, ringed by wind-scooped moats, their ledges streaked with petrels'
@@ -19,26 +19,26 @@ namespace FishMMO.Shared.WorldDesign
 			// On thin-aired worlds nobody comes: dust-banded layered ice, spiral troughs, Swiss-cheese carbon-dioxide slab (the Thin
 			// band's grounds below, banded Thin and Airless until the selection row drops Airless).
 			// Calving fronts and ice cliffs are Ice Shelf's; Glacier keeps the flowing valley ice, Tundra the herders' snow-houses.
-			// LATER (I9): every ground and object texture as the Ice Sheet's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Stoneoil V(0.075, 0.85, 0.16) + Parhelion V(0.16, 0.32, 1.00).
-			// LATER (CODE-TABLE CLEARANCE Q13): Atmosphere 15 → 14 (drop Airless) in its selection row.
+			// LATER: every ground and object texture as the Ice Sheet's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Stoneoil V(0.075, 0.85, 0.16) + Parhelion V(0.16, 0.32, 1.00).
+			// LATER: Atmosphere 15 → 14 (drop Airless) in its selection row.
 			// LATER (WEATHER O1): the spindrift ground-mist mode and the katabatic wind term, on the shared clock.
 			const BiomeAtmosphereRequirement thin = BiomeAtmosphereRequirement.Thin | BiomeAtmosphereRequirement.Airless;
 			return E("Ice Sheet", L(Ground.SnowKatabatic,
 					// The biome's signature: katabatic sastrugi along the fall line turned 30°, sharper in the dry interior.
-					// LATER (I9): the "Katabatic" variant of the firn sastrugi (undercut prows, layered cut faces).
+					// LATER: the "Katabatic" variant of the firn sastrugi (undercut prows, layered cut faces).
 					Moded(Blocks("Katabatic sastrugi", 0.06f, 8f, F(RockTypes.Firn, "Sastrugi"), 20f), BiomeScatterMode.DownslopeAligned(30f, 12f)),
 					Moded(Band(Blocks("Dry-interior sastrugi", 0.03f, 8f, F(RockTypes.Firn, "Sastrugi"), 20f), -1f, 1f, -1f, -0.3f),
 						BiomeScatterMode.DownslopeAligned(30f, 12f)),
-					// LATER (NEW-ROCK-TYPES): wind-crust plates of their own (Detail_WindCrustPlates); ice cobbles stand in.
+					// LATER: wind-crust plates of their own (Detail_WindCrustPlates); ice cobbles stand in.
 					Stones(SmallRocks("IceCobble"), 0.2f)).Air(BiomeAtmosphereRequirement.Living),
 				Ds(
 					// d0: the wind glaze (≤ 6°), migrating snow barchans and wind-crust litter on it; no way is painted over it (the
-					// serge line is the way). LATER (NEW-ROCK-TYPES): a SnowBarchan crescent drift; the firn wave dune stands in.
+					// serge line is the way). LATER: a SnowBarchan crescent drift; the firn wave dune stands in.
 					D(Ground.IceWindGlaze, 96f, 3f, 0f, 6f, Blocks("Snow barchans", 0.01f, 30f, F(RockTypes.Firn, "WaveDune"), 20f),
 						Stones(SmallRocks("IceCobble"), 0.5f)).Air(BiomeAtmosphereRequirement.Living),
 					// d1: blue-ice fields in the nunataks' lee (the BlueIceTail landform paints it), star-stones on it.
-					// LATER (NEW-ROCK-TYPES): a star-stone set (black fusion crust, regmaglypts); basalt stones stand in.
+					// LATER: a star-stone set (black fusion crust, regmaglypts); basalt stones stand in.
 					D(Ground.IceBlueField, 160f, 4f, 0f, 10f, Stones(SmallRocks("Basalt"), 0.05f), Stones(SmallRocks("Charnockite"), 0.3f)),
 					// d2: the charnockite nunatak fell (≥ 22° and on the nunataks), its lichens, the petrels' stone-oil by the nests,
 					// seep moss where the guano feeds it; the path over it is a shingle trod.
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 				.WaterTint(new BiomeWaterLook(NivalHex("#5a8aa8"), NivalHex("#08161e"), new Vector3(0.55f, 0.12f, 0.06f), 0.04f, NivalHex("#8a8478"),
 					NivalHex("#eef4f8")))
 				.Wildlife(BiomeHabitat.Ice)
-				// LATER (AMBIENT-LIFE): snow petrels round the nunataks, Antarctic petrel flocks high over the dome, and the Winter Bull
+				// LATER: snow petrels round the nunataks, Antarctic petrel flocks high over the dome, and the Winter Bull
 				// glimpsed through drifting snow when the wind is strong (client-only, ≤ 1 visible a scene).
 				.Moat(BiomeMoatWater.Frozen)
 				.NoVines()
@@ -121,7 +121,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.NaturalArch, 0.2f), (POIType.Cave, 0.3f), (POIType.CrystalFormation, 0.4f), (POIType.Monument, 0.5f), (POIType.Graveyard, 0.5f),
 					(POIType.MonsterDen, 0.3f), (POIType.BossLair, 0.2f), (POIType.DungeonEntrance, 0.3f), (POIType.Portal, 0.2f), (POIType.AncientRoad, 0.4f),
 					(POIType.Ruins, 0.2f), (POIType.Glacier, 0.3f), (POIType.Lake, 0.2f), (POIType.Hermitage, 0.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1f), (POIType.TrollBridge, 0.6f), (POIType.GiantsSteading, 0.8f), (POIType.GoblinWarren, 0.7f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -160,7 +160,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Waystation, "Stone Inn", 0.2f)
 				.Prefers(POIType.Camp, "Hide Tents", 1.6f)
 				.Prefers(POIType.Camp, "Crude", 0.8f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -178,7 +178,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.PetrifiedBattle, "Frozen Field", 1.4f)
 				.Prefers(POIType.Commandery, "Preceptory", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.2f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Air(POIType.Shrine, true)
 				.Air(POIType.Nest, true)
 				.Air(POIType.Monument, true)
@@ -188,7 +188,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Air(POIType.Hermitage, true)
 				.Air(POIType.Waystation, true)
 				.Air(POIType.Camp, true)
-				// LATER (I7): the Ice Sheet's signature pieces — the balagan refuge, serge row, Horns of the Winter Bull (≤ 1 a scene),
+				// LATER: the Ice Sheet's signature pieces — the balagan refuge, serge row, Horns of the Winter Bull (≤ 1 a scene),
 				// the Bull's Bed (≤ 1), stone-oil ledges, arangas, the rider panel, the abaasy gate (≤ 1), black stones on blue ice, the
 				// windbreak camp, sledge cache, choron cairn, nunatak cairn and old ice road (approved); until then the kit's variants
 				// below stand in, the palette giving them larch, sod, hide, wind-slab and charnockite.
@@ -200,7 +200,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The palette. Timber (the refuges): slanted larch daubed grey with clay and dung, bark-and-sod roofs at 30°, snow banked to
 				// the sills, larch carved in ring-bands, cowhide doors, bloomery iron, white horsehair. Hide (the camps): wind-slab block
 				// walls under smoked cowhide. Stone: charnockite cairns. Earth and Iron build as Timber.
-				// LATER (NEW-SURFACES U3/U4/U7/U8/U9): SlantLarch, BarkSod, SnowBank, SergeCarve, HideDoor, IcePane, BloomIron,
+				// LATER: SlantLarch, BarkSod, SnowBank, SergeCarve, HideDoor, IcePane, BloomIron,
 				// WhiteHorsehair, WindSlabBlock, SmokedCowhide, CharnockiteCairn; the kit's materials tinted stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, NivalHex("#8a8272"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Roof, BiomeStructureMaterial.Earth, NivalHex("#5a4a3a"), pitch: BiomeRoofPitch.Pitch30)

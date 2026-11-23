@@ -9,7 +9,7 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why a model and not a formula (2026-10-15).</b> Temperature was the sun's height at noon and nothing else: no
+	/// <b>Why a model and not a formula.</b> Temperature was the sun's height at noon and nothing else: no
 	/// day length, so a polar summer under a sun that never sets came out 15–24 K too cold; no heat capacity, so every
 	/// season peaked on the solstice and the subtropics swung twice as far as Earth's do; no land or sea, so a coast and a
 	/// continent's heart at one latitude had one climate. Each of those is a physical fact a few lines of energy balance

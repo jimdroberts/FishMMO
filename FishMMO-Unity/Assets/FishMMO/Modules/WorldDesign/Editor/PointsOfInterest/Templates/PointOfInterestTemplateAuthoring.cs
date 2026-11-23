@@ -145,7 +145,7 @@ namespace FishMMO.Shared.WorldDesign
 					report.Stale.Add(path);
 				}
 				// A stale or drifted template is still picked, and a slot naming a piece the kit no longer has lays
-				// nothing in its place, silently (2026-10-15: windmill sites without a windmill, "=PostMill" retired).
+				// nothing in its place, silently (windmill sites without a windmill, "=PostMill" retired).
 				List<string> unresolved = Unresolved(AssetDatabase.LoadAssetAtPath<PointOfInterestTemplate>(path));
 				if (unresolved.Count > 0)
 				{
@@ -234,7 +234,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				built.Add(feature);
 			}
-			// A door down into the dark is a dungeon's way in, whatever the site (2026-10-20: a crypt's stood as scenery).
+			// A door down into the dark is a dungeon's way in, whatever the site (a crypt's stood as scenery).
 			if (LaysDungeonDoor(spec) && !built.Exists(f => f is DungeonEntranceFeature))
 			{
 				built.Add(new DungeonEntranceFeature());
@@ -249,7 +249,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The kind's recommended gameplay at a size class as the spec's holder has it (2026-10-27, the fantasy wave's keeps and towers,
+		/// The kind's recommended gameplay at a size class as the spec's holder has it (the fantasy set's keeps and towers,
 		/// <see cref="PointOfInterestHolder"/>): its garrison keeps the kind's own; a hostile band drops the waypoint, the respawn and every
 		/// service NPC (guard, merchant, banker, crafter, townsfolk) for a monster pack, an elite from medium size and, where the spec
 		/// names its lord (<see cref="PointOfInterestTemplateSpec.HolderBoss"/>), an empty boss spawner after them at the large size; a ruin
@@ -451,13 +451,18 @@ namespace FishMMO.Shared.WorldDesign
 						waypoint.Offset = Spot(-3f, front + 3f, 2f);
 						Clear(waypoint.Offset, 2f);
 						break;
+					case GateStoneFeature stone:
+						// The stone stands at the site's heart, among its own stones' ring.
+						stone.Offset = Spot(0f, front + 2f, 2f);
+						Clear(stone.Offset, 2f);
+						break;
 					case RespawnFeature respawn:
 						respawn.Offset = Spot(3f, front + 3f, 1.5f);
 						Clear(respawn.Offset, 1.5f);
 						break;
 					case DungeonEntranceFeature door:
 						// At its own site the door is the centrepiece, at the threshold (DungeonEntranceShaper), and its box stands in
-						// the doorway; in a cave's chamber the feature lays a gate against the cavern's wall (2026-10-18). The offset
+						// the doorway; in a cave's chamber the feature lays a gate against the cavern's wall. The offset
 						// is only where no door stands.
 						door.Offset = Vector2.zero;
 						door.Architecture = "=DungeonGate";

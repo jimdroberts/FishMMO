@@ -128,7 +128,7 @@ namespace FishMMO.Shared.WorldDesign
 				SceneBiomeField field = SceneBiomeField.Build(request, plan, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north), system, water: water);
 				PointOfInterestStage stage = PointOfInterestStage.ForCut(request, terrainFolder);
 				stage.PlanSites(scene, plan, terrains, field.Biomes.Count > 0 ? field : null, water, notes);
-				// The hot ground's sites the last cut or repaint marked (2026-10-27): this plans without the biome stage that marks them.
+				// The hot ground's sites the last cut or repaint marked: this plans without the biome stage that marks them.
 				GeothermalPointsOfInterest.KeepFrom(stage, scene, notes);
 				// The water again: the plan's moats are lakes of the scene's (MoatShaper), drawn and swum from its hydrology.
 				if (water != null && !scope.AllowsLocal)
@@ -138,7 +138,7 @@ namespace FishMMO.Shared.WorldDesign
 					{
 						var hydrology = AssetDatabase.LoadAssetAtPath<SceneHydrology>(hydrologyPath);
 						SceneGenerator.EnsureInlandWater(scene, hydrology);
-						// The new plan's moats float their biome's plants too (2026-10-18, I2i; nothing in any biome by default).
+						// The new plan's moats float their biome's plants too (nothing in any biome by default).
 						FloatingPlants.Lay(scene, water, hydrology, entry.BiomeMap, (east, north) => SceneGenerator.GroundAltitude(terrains, plan, east, north),
 							stage.DetailExcludes, SceneGenerator.SceneSeed(request), notes);
 					}

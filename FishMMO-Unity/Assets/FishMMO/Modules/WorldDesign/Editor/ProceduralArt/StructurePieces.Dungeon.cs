@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Dungeon entrances (2026-10-18: "Dungeon entrances look boring and misaligned"): doorways into the dark set into a rock
+	/// Dungeon entrances ("Dungeon entrances look boring and misaligned"): doorways into the dark set into a rock
 	/// face or a hillside, and one built against the back wall of a great cavern. Each is an OPEN door: the leaves stand
 	/// swung back, and steps run down from the threshold into a short passage whose far end is soot-black, so the way in
 	/// reads as going down into the earth (the client darkens the passage as indoors, from <see cref="TryDoorwayOf"/>).

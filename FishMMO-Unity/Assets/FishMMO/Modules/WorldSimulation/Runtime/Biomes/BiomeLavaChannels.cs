@@ -5,8 +5,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The lava that runs along a scene's molten landform lines and stands in its lava moats (2026-10-25, phase I2r "molten ground",
-	/// decision 65 (c) and 95): which lines the cut stores (<see cref="FromLandforms"/>, on <see cref="SceneBiomeMap.LavaLines"/>), and
+	/// The lava that runs along a scene's molten landform lines and stands in its lava moats ("molten ground"):
+	/// which lines the cut stores (<see cref="FromLandforms"/>, on <see cref="SceneBiomeMap.LavaLines"/>), and
 	/// the ribbon a client draws along each with the lava material (<see cref="Ribbon"/>), laid on the carved ground. Pure: the same
 	/// lines and the same ribbon for every player; presentation only (the ground was carved by the landform, nothing collides).
 	/// </summary>

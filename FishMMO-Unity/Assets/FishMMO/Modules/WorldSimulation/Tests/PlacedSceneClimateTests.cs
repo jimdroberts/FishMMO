@@ -126,7 +126,7 @@ namespace FishMMO.UnitTests
 				ClimateSample actual = placement.SampleAt(new Vector3(x, y, z), out float normalized);
 
 				/* The two upwind walks are the costly, direction-only terms, so both come off the grid: the moisture (since
-				 * the start) and the continentality the seasons are read with (2026-10-15; the splat painter samples this per
+				 * the start) and the continentality the seasons are read with (the splat painter samples this per
 				 * alphamap texel). Everything else in the temperature is the field's own at the point: given the gridded
 				 * continentality, the temperature is the field's to the bit. */
 				Vector3 unit = direction.normalized;

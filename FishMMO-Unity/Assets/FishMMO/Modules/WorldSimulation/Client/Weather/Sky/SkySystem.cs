@@ -331,7 +331,7 @@ namespace FishMMO.Client
 
 		/// <summary>A profile colour recoloured by the air: its own brightness, the air's hue.</summary>
 		/// <remarks>
-		/// Only the brightness is the profile's (2026-10-26). Water's drops and flakes scatter every colour alike, so the
+		/// Only the brightness is the profile's. Water's drops and flakes scatter every colour alike, so the
 		/// profile's bluish rain, snow and hail greys were a tint of their own laid over the air's hue — the two
 		/// multiplied, the authored blue times a mint air — where a fog of them is just the colour of what lights it.
 		/// </remarks>
@@ -352,7 +352,7 @@ namespace FishMMO.Client
 		/// A light of the sky's own with its URP data beside it. Every one of them wears a cookie (the cloud's shadow or the
 		/// white stand-in), and URP reads a cookied directional light's data without checking it is there whenever that light
 		/// is not the main one (LightCookieManager.GetLightUVScaleOffset): with the moon or a companion star up beside the
-		/// sun, a light made bare threw a NullReferenceException in the render graph every frame (2026-10-20). The editor adds
+		/// sun, a light made bare threw a NullReferenceException in the render graph every frame. The editor adds
 		/// this component to a light made from its menu; a light added from code has to be given it.
 		/// </summary>
 		private static void WithLightData(Light light)
@@ -752,7 +752,7 @@ namespace FishMMO.Client
 		}
 
 		// What Update's time goes on, for the profiler (ScenePerfProbe's CPU table): it was 1.4 ms a frame in the editor
-		// with nothing inside it to say where (2026-10-07).
+		// with nothing inside it to say where.
 		private static readonly ProfilerMarker SampleMarker = new ProfilerMarker("Sky.Sample");
 		private static readonly ProfilerMarker LightningMarker = new ProfilerMarker("Sky.Lightning");
 		private static readonly ProfilerMarker WeatherMapMarker = new ProfilerMarker("Sky.WeatherMap");
@@ -895,7 +895,7 @@ namespace FishMMO.Client
 			// The fog is the colour of the light the air is lit by under the cloud (AirLight): the overcast's own grey, as dark
 			// as the ground under it, and the weather's fog takes its hue (InAir), so the far ground fogged by it meets the
 			// cloud base without an edge. It was the clear sky's fog greyed toward a grey of its own — a constant until
-			// 2026-10-21, which lit night and storm fog several times over the sky — and never dimmed by the deck at all.
+			// which lit night and storm fog several times over the sky — and never dimmed by the deck at all.
 			Color airLight = AirLight(sample, state.SunAltitude, out float airThrough);
 			AirLightThrough = airThrough;
 			AirChroma = Chroma(airLight, 0.73f);
@@ -933,12 +933,12 @@ namespace FishMMO.Client
 				meteorsWindow = meteorWindow;
 			}
 			/* The belts again only every BodyRefreshSeconds: every speck is an orbit solved in double precision, and rebuilt
-			 * every frame they were 1.2 ms of the main thread at noon, when none of them showed (ScenePerfProbe, 2026-10-07).
+			 * every frame they were 1.2 ms of the main thread at noon, when none of them showed (ScenePerfProbe).
 			 * At once when the clock leaps (a join, the bed's scrub) or the sky changes. Between rebuilds they are carried
 			 * round with the stars (beltTurn): a speck's own orbit moves it nowhere near a pixel in a quarter of a second.
 			 * The moons and planets are NOT held with them. A near moon's own orbit is a good share of its motion across the
 			 * sky (half of it, in the capture that found this), so carried round with the stars it ran ahead for a quarter of
-			 * a second and snapped back at every rebuild (2026-10-09). There are a handful of them and the cycle solves them every frame
+			 * a second and snapped back at every rebuild. There are a handful of them and the cycle solves them every frame
 			 * anyway (CelestialState.Bodies), so they are laid out every frame where they now stand, and the meteors with them. */
 			if (bodyTimer <= 0f || blendTo != beltBuiltFor || System.Math.Abs(worldSeconds - beltBuiltAt) >= BodyLeapSeconds)
 			{
@@ -1174,9 +1174,9 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(SunCountId, count);
 			// Lamps and lit windows (FishStructureWeathering.hlsl): lit from dusk, as the main sun goes down, out by sunrise.
 			Shader.SetGlobalFloat(NightLightsId, 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(-0.04f, 0.12f, sunDirections[0].y)));
-			// Faerie, rune and crystal glows (SceneGlow, 2026-10-18): faintly from before the lamps, full at night.
+			// Faerie, rune and crystal glows (SceneGlow): faintly from before the lamps, full at night.
 			Shader.SetGlobalFloat(GlowLightsId, SceneGlow.Visibility(sunDirections[0].y));
-			// What the glow modes read of the sky and the weather (GlowSky, 2026-10-25, I6i).
+			// What the glow modes read of the sky and the weather (GlowSky).
 			GlowSky.Publish(state, in context, sunDirections[0].y);
 
 			Shader.SetGlobalVector(CloudLitId, sample.CloudLit);
@@ -1971,7 +1971,7 @@ namespace FishMMO.Client
 			// Where the air has got to by now: the integral of the wind the weather reports, with what the scene's author
 			// and its runtime air add (AirDrift), worked out from the world clock rather than added up frame by frame, so
 			// every player has the same sky; and the same drift the weather field is sampled through, so the cloud
-			// overhead and the weather underneath are the same air. It runs in a gale and idles in a calm (2026-10-15:
+			// overhead and the weather underneath are the same air. It runs in a gale and idles in a calm (
 			// it was a speed fixed per latitude, whatever the wind did). Exact, in double: each band wraps it to its own
 			// period on the way to the shader.
 			airTimeline = context.Timeline;
@@ -2067,7 +2067,7 @@ namespace FishMMO.Client
 			// What distance does to a cloud: the air in front of it — its molecules and the dust and
 			// salt in it, swollen by the humidity. Two e-foldings of that air is where the haze curve
 			// is at its strongest: about 26 km on an ordinary day under our own air.
-			// Lit as the air under the low cloud is (AirLight, 2026-10-26): the air between the camera and a far cloud
+			// Lit as the air under the low cloud is (AirLight): the air between the camera and a far cloud
 			// base is under the same deck, so the base fades into the fog's own dimmed colour toward the horizon instead
 			// of into a clear noon's haze. The open-air haze goes beside it for the rain hanging under a cloud, which the
 			// march dims by the cloud over that spot itself.
@@ -2079,7 +2079,7 @@ namespace FishMMO.Client
 			// the deck lets down, which its drops have made colourless, so it is as dark as the deck's base and the same grey —
 			// one colour for the far sea, the far ground, the sky under the deck and the deck's own far fade to meet on. Dimmed
 			// only, it kept the clear horizon's blue, and under a heavy deck that blue band stood out between the warm-grey base
-			// and the sea (2026-10-26). The open sky's share keeps the clear air's colour.
+			// and the sea. The open sky's share keeps the clear air's colour.
 			Color hazeUnder = Color.Lerp(haze * hazeThrough, airLight, Mathf.Clamp01(CloudOverheadCover));
 			Shader.SetGlobalVector(CloudHazeId, new Vector4(hazeUnder.r, hazeUnder.g, hazeUnder.b, Mathf.Max(2000f, hazeDistance)));
 		}
@@ -2183,7 +2183,7 @@ namespace FishMMO.Client
 			// Mathf.SmoothStep is an interpolation from a to b, not the shader's smoothstep(edge, edge, x):
 			// handed (0.85, 1, overcast) it returns about 0.86 whatever the sky is doing.
 			float strength = low * up * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.85f, 1f, overcast)));
-			// And by how much of the sun's BEAM gets down past the low cloud (2026-10-26): a shaft is air lit by the direct
+			// And by how much of the sun's BEAM gets down past the low cloud: a shaft is air lit by the direct
 			// beam, so it can be only where a line to the sun misses the cloud — the gaps, plus what comes straight through
 			// the cloud itself, which for any real cloud is nothing. The gather cannot tell: it measures each pixel's cloud
 			// against the clearest sky in the frame, and under an even deck that clearest sky is the deck, so a 0.92 deck
@@ -2512,7 +2512,7 @@ namespace FishMMO.Client
 			float under = Underground();
 			dim *= 1f - UndergroundAmbientCut * under;
 			RenderSettings.reflectionIntensity = 1f - UndergroundAmbientCut * under;
-			// The sky's reflection probe too (2026-10-21): with a probe in use reflectionIntensity dims nothing, and what is drawn
+			// The sky's reflection probe too: with a probe in use reflectionIntensity dims nothing, and what is drawn
 			// with stock shaders in a cave mirrored the daylight sky.
 			if (probe != null)
 			{
@@ -2546,7 +2546,7 @@ namespace FishMMO.Client
 		public float AirLightThrough { get; private set; } = 1f;
 
 		/// <summary>
-		/// The light the air is lit by, as the colour a fog takes in it (2026-10-26): the same sun and sky that light the
+		/// The light the air is lit by, as the colour a fog takes in it: the same sun and sky that light the
 		/// ground and the cloud's base, through the same cloud, so a fog under an overcast is the overcast's own grey and
 		/// meets the cloud base without an edge.
 		/// </summary>
@@ -2564,7 +2564,7 @@ namespace FishMMO.Client
 		/// by the overcast and never dimmed by it, and the weather's fog colour the render profile's daytime tint dimmed
 		/// only by that: under a deck that let a tenth of the light down, the fog and the far ground fogged by it stayed
 		/// at a clear noon's brightness — a glowing pale band under a dark cloud base, the far terrain's edge lit
-		/// like a clear noon (2026-10-26). How bright a clear day's fog is stays the
+		/// like a clear noon. How bright a clear day's fog is stays the
 		/// sky model's (its fog's luminance): only the hue and the dimming are the light's.
 		/// </para>
 		/// </remarks>
@@ -2614,9 +2614,9 @@ namespace FishMMO.Client
 				{
 					float t = Mathf.Clamp01((ground - eye.y - 6f) / 14f);
 					target = t * t * (3f - 2f * t);
-					// In a cave's air however thin the rock over it (2026-10-21, CaveEnclosure), as the lit surfaces are.
+					// In a cave's air however thin the rock over it (CaveEnclosure), as the lit surfaces are.
 					target = Mathf.Max(target, FishMMO.Shared.CaveVisibility.EnclosedAt(eye));
-					// Under an opening in a cave's roof the sky it lets in reaches the eye too (2026-10-20, CaveSkylights).
+					// Under an opening in a cave's roof the sky it lets in reaches the eye too (CaveSkylights).
 					target *= 1f - CaveSkylights.OpenAt(eye);
 				}
 				// Indoors (a room of a site's building), the sky comes in at the windows and the door: part of the way.
@@ -2692,7 +2692,7 @@ namespace FishMMO.Client
 			 * Set for every camera, so it is off again for the next. */
 			bool capture = camera != null && camera.cameraType == CameraType.Reflection;
 			// z: how much of the open air's light the air under the low cloud gets (AirLightThrough), which the dome's horizon is
-			// dimmed by as the fog is, or the sky beyond the far ground glowed over it under an overcast (2026-10-26).
+			// dimmed by as the fog is, or the sky beyond the far ground glowed over it under an overcast.
 			Shader.SetGlobalVector(SkyCaptureId, new Vector4(capture ? 1f : 0f, ambientThrough, AirLightThrough, 0f));
 			// Every camera starts with no cloud buffer of its own: the feature raises the flag once it has published
 			// one FOR THIS CAMERA. Cleared once a frame only, a second camera (the Scene view, a probe) inherited the

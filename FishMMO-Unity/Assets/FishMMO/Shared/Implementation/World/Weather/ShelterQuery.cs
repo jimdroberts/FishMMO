@@ -4,7 +4,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// Where an NPC can get out of the weather (Phase 4 of the core and modules plan, 2026-11-18): the nearest shelter volume's
+	/// Where an NPC can get out of the weather: the nearest shelter volume's
 	/// bounds. The World Simulation module installs <see cref="Source"/> from its weather volumes; with none installed there is
 	/// no shelter anywhere, and an NPC that would seek one stays where it is.
 	/// </summary>

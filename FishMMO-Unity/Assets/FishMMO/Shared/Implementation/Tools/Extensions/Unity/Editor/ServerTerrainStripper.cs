@@ -97,7 +97,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		/// <remarks>
 		/// Before a tile loses its splat maps, its ground is kept as a coarse grid of kinds on its object
-		/// (<see cref="TerrainGroundKinds"/>, 2026-11-21): the wildlife spawners read it to keep each species on its own ground.
+		/// (<see cref="TerrainGroundKinds"/>): the wildlife spawners read it to keep each species on its own ground.
 		/// </remarks>
 		public static int Strip(Scene scene)
 		{

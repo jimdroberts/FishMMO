@@ -16,7 +16,7 @@ namespace FishMMO.TestHarness.World.Editor
 	{
 		/// <summary>
 		/// The settings the build changes, as they were. A killed build never reaches its finally, and the editor had already saved
-		/// the changed settings into ProjectSettings.asset (2026-11-03: IL2CPP's --jobs flags appended once a killed run). The next
+		/// the changed settings into ProjectSettings.asset (IL2CPP's --jobs flags appended once a killed run). The next
 		/// build, or the next editor start, puts them back from this file first.
 		/// </summary>
 		private const string RecoveryPath = "Library/FishMMO/PlayerPerfBuildRecovery.json";
@@ -96,7 +96,7 @@ namespace FishMMO.TestHarness.World.Editor
 				int jobs = int.TryParse(Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_JOBS"),out int requestedJobs) ? Mathf.Clamp(requestedJobs,1,16) : 2;
 				PlayerSettings.SetAdditionalIl2CppArgs((original.il2cppArgs + " --jobs=" + jobs + " --bee-jobs=" + jobs).Trim());
 				// FISHMMO_PERF_BUILD_STRICT_VARIANTS=1: a missing variant is an error and draws the error shader instead of
-				// the nearest variant, which proves a stripping rule against real frames (measured 2026-11-03).
+				// the nearest variant, which proves a stripping rule against real frames .
 				PlayerSettings.strictShaderVariantMatching = Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_STRICT_VARIANTS") == "1" || original.strict;
 				BuildOptions options = Environment.GetEnvironmentVariable("FISHMMO_PERF_BUILD_DEVELOPMENT") == "1" ? BuildOptions.Development : BuildOptions.None;
 				var result = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = scenes, locationPathName = Path.Combine(output, "FishRenderingBenchmark.x86_64"), target = BuildTarget.StandaloneLinux64, subtarget = (int)StandaloneBuildSubtarget.Player, options = options });

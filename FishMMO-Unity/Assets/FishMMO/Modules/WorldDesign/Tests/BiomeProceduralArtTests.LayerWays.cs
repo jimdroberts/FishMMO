@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A ground layer's own ways (decision 19, 2026-10-16): the authoring writes the ways the spec gives a main or detail
+	/// A ground layer's own ways: the authoring writes the ways the spec gives a main or detail
 	/// layer, marked way by way, and keeps a hand edit; the palette draws a way across that ground with the layer's own
 	/// ground and across the rest of the biome with the biome's. Unity-only: templates and terrain layers are native objects.
 	/// </summary>

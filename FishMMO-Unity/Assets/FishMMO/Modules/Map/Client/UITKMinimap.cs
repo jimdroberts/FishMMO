@@ -219,18 +219,48 @@ namespace FishMMO.Client
 			base.OnDestroying();
 		}
 
-		/// <summary>Listens for the server's whole-map reveal (<c>/gm reveal map</c>).</summary>
+		/// <summary>
+		/// Listens for the server's map messages: the whole-map reveal (<c>/gm reveal map</c>) and the account's fog and scene
+		/// list (exploration is kept by the server), and lets the map system ask for another scene's fog.
+		/// </summary>
 		public override void OnClientSet()
 		{
 			base.OnClientSet();
 			Client.NetworkManager.ClientManager.RegisterBroadcast<MapRevealBroadcast>(OnMapRevealBroadcast);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<FogOfWarSceneBroadcast>(OnFogSceneBroadcast);
+			Client.NetworkManager.ClientManager.RegisterBroadcast<FogOfWarScenesBroadcast>(OnFogScenesBroadcast);
+			ClientMapSystem.RequestFog = RequestFog;
 		}
 
-		/// <summary>Stops listening for the whole-map reveal.</summary>
+		/// <summary>Stops listening.</summary>
 		public override void OnClientUnset()
 		{
 			base.OnClientUnset();
 			Client.NetworkManager.ClientManager.UnregisterBroadcast<MapRevealBroadcast>(OnMapRevealBroadcast);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<FogOfWarSceneBroadcast>(OnFogSceneBroadcast);
+			Client.NetworkManager.ClientManager.UnregisterBroadcast<FogOfWarScenesBroadcast>(OnFogScenesBroadcast);
+			if (ClientMapSystem.RequestFog == RequestFog)
+			{
+				ClientMapSystem.RequestFog = null;
+			}
+		}
+
+		private void OnFogSceneBroadcast(FogOfWarSceneBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			ClientMapSystem.ApplyServerFog(msg.SceneName, msg.Data);
+		}
+
+		private void OnFogScenesBroadcast(FogOfWarScenesBroadcast msg, FishNet.Transporting.Channel channel)
+		{
+			ClientMapSystem.ApplyServerScenes(msg.SceneNames, msg.ExploredCounts);
+		}
+
+		private void RequestFog(string sceneName)
+		{
+			if (Client.NetworkManager != null && Client.NetworkManager.ClientManager.Started && !string.IsNullOrEmpty(sceneName))
+			{
+				Client.NetworkManager.ClientManager.Broadcast(new FogOfWarRequestBroadcast { SceneName = sceneName }, FishNet.Transporting.Channel.Reliable);
+			}
 		}
 
 		/// <summary>

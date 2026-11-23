@@ -265,7 +265,7 @@ namespace FishMMO.Client
 			Step(0f);
 		}
 
-		// What Step's time goes on, for the profiler (0.8 ms a frame in the editor, 2026-10-07, with nothing inside it).
+		// What Step's time goes on, for the profiler (0.8 ms a frame in the editor, with nothing inside it).
 		private static readonly Unity.Profiling.ProfilerMarker OcclusionMarker = new Unity.Profiling.ProfilerMarker("Weather.Occlusion");
 		private static readonly Unity.Profiling.ProfilerMarker CoverMarker = new Unity.Profiling.ProfilerMarker("Weather.CoverMap");
 		private static readonly Unity.Profiling.ProfilerMarker GlobalsMarker = new Unity.Profiling.ProfilerMarker("Weather.Globals");

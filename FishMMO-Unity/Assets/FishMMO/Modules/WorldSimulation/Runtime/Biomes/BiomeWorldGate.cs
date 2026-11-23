@@ -15,8 +15,8 @@ namespace FishMMO.Shared.Biomes
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Decision 41 (2026-10-18, the Cryovolcanic Plain round): "a per-spawn-rule WORLD GATE (world air mask, minimum/maximum world
-	/// temperature, world flags such as InGiantMagnetosphere) so condition-gated fantasy flora (decision 7) can be authored". One
+	/// Decision 41: "a per-spawn-rule WORLD GATE (world air mask, minimum/maximum world
+	/// temperature, world flags such as InGiantMagnetosphere) so condition-gated fantasy flora can be authored". One
 	/// biome is painted on many worlds (a Crater on an Earth-like world and on an airless moon; a Dust Sea under a thin sky and
 	/// under none), and the plants it grows cannot all be right on every one: a glowing lichen that lives only in a thin sky, a
 	/// frost candelabra fed by a giant planet's radiation belts.
@@ -145,7 +145,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The worlds whose air is the wrong STUFF to breathe or burn, however dense (decision 62, 2026-10-25, merged with 65(h)):
+		/// The worlds whose air is the wrong STUFF to breathe or burn, however dense (merged with 65(h)):
 		/// a methane sky (Titan), any sky cold enough to condense methane or nitrogen, frozen nitrogen on the ground (Triton, Pluto),
 		/// a runaway greenhouse of acid cloud (Venus), and molten rock open at the surface. Each is the
 		/// <see cref="BiomeWorldRequirement"/> flag a template's <see cref="BiomeTemplate.Requires"/> names, tested by
@@ -164,9 +164,9 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// True when people can breathe the world's air and fires burn in it: air dense enough (<see cref="IsDenseEnough"/>: Earth-like
-		/// or thick) AND of the right make-up, on a world that meets none of <see cref="UnbreathableWorlds"/> (decision 62,
-		/// 2026-10-25: Titan's thick nitrogen-methane sky counted as breathable, so its cuts sited bridges and its biomes kept fire).
-		/// The ONE answer every consumer asks: what a point-of-interest kind that needs breathable air asks (decision 39), whether a
+		/// or thick) AND of the right make-up, on a world that meets none of <see cref="UnbreathableWorlds"/>
+		/// (Titan's thick nitrogen-methane sky counted as breathable, so its cuts sited bridges and its biomes kept fire).
+		/// The ONE answer every consumer asks: what a point-of-interest kind that needs breathable air asks, whether a
 		/// cave's fire lights burn (<see cref="BiomeCaveInteriors.ForAir"/>). The home world (<see cref="BiomeWorldConditions.Earthlike"/>)
 		/// and every Earth-like or thick-aired world of water cloud is breathable exactly as before.
 		/// </summary>
@@ -190,7 +190,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// True when a template admits only worlds of thin air or none (its <see cref="BiomeTemplate.Atmosphere"/> names Airless
-		/// and/or Thin and nothing else): no fire burns on any world it is ever painted on (decision 41's light rule). The density
+		/// and/or Thin and nothing else): no fire burns on any world it is ever painted on (the light rule). The density
 		/// half of <see cref="NeverBreathable"/>.
 		/// </summary>
 		public static bool OnlyThinAir(BiomeAtmosphereRequirement templateAtmosphere)
@@ -200,7 +200,7 @@ namespace FishMMO.Shared.Biomes
 		/// True when no world a template is ever painted on has breathable air (<see cref="IsBreathable"/> false on every one): it
 		/// admits only thin air or none (<see cref="OnlyThinAir"/>), or its <see cref="BiomeTemplate.Requires"/> names any of
 		/// <see cref="UnbreathableWorlds"/> (a world must meet every flag a template requires to carry it). The authoring's
-		/// Glow-only light rule (decisions 41 and 62/65(h)): such a biome's streets, caves and mines are lit with no flame.
+		/// Glow-only light rule: such a biome's streets, caves and mines are lit with no flame.
 		/// </summary>
 		public static bool NeverBreathable(BiomeAtmosphereRequirement templateAtmosphere, BiomeWorldRequirement templateRequires)
 			=> OnlyThinAir(templateAtmosphere) || (templateRequires & UnbreathableWorlds) != 0;
@@ -212,11 +212,11 @@ namespace FishMMO.Shared.Biomes
 		public static bool Admits(BiomeAtmosphereRequirement band, BiomeAtmosphereRequirement worldAir)
 			=> band == BiomeAtmosphereRequirement.None || worldAir == BiomeAtmosphereRequirement.None || (band & worldAir) != 0;
 
-		/// <summary>How much of the wind's sway a blade keeps under a world's air, Thin's share (decision 41: Thin ≈ 0.3).</summary>
+		/// <summary>How much of the wind's sway a blade keeps under a world's air, Thin's share (Thin ≈ 0.3).</summary>
 		public const float ThinSway = 0.3f;
 
 		/// <summary>
-		/// How hard the world's air moves the grass, as a share of the wind's sway (decision 41, 2026-10-18: "blade SWAY follows the
+		/// How hard the world's air moves the grass, as a share of the wind's sway ("blade SWAY follows the
 		/// world's air density, none when airless"): 0 with no air, <see cref="ThinSway"/> under a thin sky, exactly 1 under
 		/// Earth-like air (every scene sways as it always did) and under thick air (its winds are slow; a heavier push is not
 		/// modelled).
@@ -233,7 +233,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// Which point-of-interest kinds need breathable air by default (decision 39, 2026-10-18): the authoring writes each biome's
+	/// Which point-of-interest kinds need breathable air by default: the authoring writes each biome's
 	/// <see cref="BiomeSiteKind.NeedsBreathableAir"/> from this, a biome's file may say otherwise per kind, and the cut skips a
 	/// kind whose entry needs it on a world whose air is not breathable (<see cref="BiomeAir.IsBreathable"/>).
 	/// </summary>
@@ -264,12 +264,12 @@ namespace FishMMO.Shared.Biomes
 			POIType.Shrine, POIType.Temple, POIType.Monastery, POIType.BogShrine,
 			// Living groves, gardens and nests.
 			POIType.HerbGrove, POIType.AncientTree, POIType.Clearing, POIType.Oasis, POIType.Nest,
-			// The biome rounds' own kinds (2026-10-25, phase NEW-POI-KINDS), by the same rule: worked, kept or living. Their relics
+			// The biomes' own kinds, by the same rule: worked, kept or living. Their relics
 			// (gate, plaza, colossus, vault, forge, engines, blighted crater) and natural sites stand on any world.
 			POIType.MarshWatchtower, POIType.BrickKiln, POIType.FowlersHide, POIType.EelWeir, POIType.HoluaSlide, POIType.PlagueVillage,
 			POIType.Chapel, POIType.HolyWell, POIType.FrogShrine, POIType.LavaCaveTemple,
 			POIType.Kipuka, POIType.FloatingIsland, POIType.PhoenixNest,
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			POIType.DragonLair, POIType.GiantsSteading, POIType.GoblinWarren, POIType.Crossroads, POIType.SignalBeacon, POIType.TollGate,
 			POIType.Hamlet, POIType.ManorHouse, POIType.SiegeCamp, POIType.BurnedVillage, POIType.WarbandCamp, POIType.CultistHideout,
 			POIType.KoboldDelving, POIType.DruidGrove, POIType.TreeVillage, POIType.SpiderThicket, POIType.CharcoalClamps,
@@ -284,14 +284,14 @@ namespace FishMMO.Shared.Biomes
 		};
 
 		/// <summary>
-		/// The kinds that work or stand in open water (decision 68): a reed isle afloat, a wood drowned where it stood, an eel weir, a
-		/// fowler's hide over open water, a flooded square and a gate sunk in black water. Only the biome rounds' kinds (2026-10-25):
+		/// The kinds that work or stand in open water: a reed isle afloat, a wood drowned where it stood, an eel weir, a
+		/// fowler's hide over open water, a flooded square and a gate sunk in black water. Only the biomes' kinds:
 		/// every older kind needs no liquid water unless a biome's file says so, as decision 68 left them.
 		/// </summary>
 		private static readonly HashSet<POIType> Wet = new HashSet<POIType>
 		{
 			POIType.FloatingIsland, POIType.DrownedForest, POIType.EelWeir, POIType.FowlersHide, POIType.SunkenPlaza, POIType.MireGate,
-			// The fantasy wave (2026-10-27).
+			// The fantasy set.
 			POIType.Cenote, POIType.Crannog, POIType.ReedVillage, POIType.MerfolkVillage, POIType.KrakenGrounds, POIType.LadyOfTheLake,
 			POIType.NymphPool, POIType.LakeMonsterLair,
 		};
@@ -302,7 +302,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// True when a kind needs liquid water on the world's surface unless a biome's file says otherwise (<see cref="BiomeSiteKind.NeedsLiquidWater"/>).
 		/// A holy well is not one: its spring-fed variants need water, its silent well-head does not (a template's own
-		/// NeedsLiquidWater, decision 96).
+		/// NeedsLiquidWater).
 		/// </summary>
 		public static bool NeedsWaterByDefault(POIType kind) => Wet.Contains(kind);
 
@@ -315,8 +315,8 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// <see cref="WeightOn(in BiomeSiteKind, bool)"/> on a world that also has (<paramref name="liquidWater"/>) or lacks liquid
-		/// water on its surface: 0 too where it lacks it and the entry needs it (<see cref="BiomeSiteKind.NeedsLiquidWater"/>,
-		/// decision 68). An entry without the flag weighs exactly what the air alone gives it.
+		/// water on its surface: 0 too where it lacks it and the entry needs it (<see cref="BiomeSiteKind.NeedsLiquidWater"/>).
+		/// An entry without the flag weighs exactly what the air alone gives it.
 		/// </summary>
 		public static float WeightOn(in BiomeSiteKind entry, bool breathable, bool liquidWater)
 			=> liquidWater || !entry.NeedsLiquidWater ? WeightOn(entry, breathable) : 0f;
@@ -335,7 +335,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The lights a biome that only exists under thin air or none is lit with: no flame burns there (decision 41, 2026-10-18), so
+	/// The lights a biome that only exists under thin air or none is lit with: no flame burns there, so
 	/// its streets, caves and mines take the cold Glow kinds (<see cref="BiomeWayLightKind.Glowjar"/>, <see cref="BiomeWayLightKind.CrystalPost"/>,
 	/// <see cref="BiomeWayLightKind.RuneStone"/>) in place of every lantern, torch and fire bowl, at the same places and spacing.
 	/// </summary>
@@ -343,7 +343,7 @@ namespace FishMMO.Shared.Biomes
 	{
 		/// <summary>
 		/// True for a light that gives off the cold Glow (no flame): the glowjar, the crystal post, the rune stone, and the suite's
-		/// cold lights (2026-10-26: the bell-glow, the sun lens, the crescent standard, the lure-light…), by their emitter
+		/// cold lights (the bell-glow, the sun lens, the crescent standard, the lure-light…), by their emitter
 		/// (<see cref="BiomeWayLights.EmitterOf"/>).
 		/// </summary>
 		public static bool Glows(BiomeWayLightKind light) => BiomeWayLights.EmitterOf(light) == SceneEmitterKind.Glow;
@@ -383,7 +383,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A ground layer's or landform's WORLD band (decision 68, 2026-10-25): what the scene's world must be (<see cref="requires"/>, every
+	/// A ground layer's or landform's WORLD band: what the scene's world must be (<see cref="requires"/>, every
 	/// flag met) and must not be (<see cref="forbids"/>, no flag met) for it to be painted or carved: a reed bed only where water stands
 	/// liquid, a salt crust only where none does. Both None (the default) is no band: admitted on every world, as before.
 	/// </summary>

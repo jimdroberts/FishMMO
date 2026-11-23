@@ -219,7 +219,7 @@ namespace FishMMO.UnitTests
 				"private List<CharacterBuffData> CaptureBuffSet(IPlayerCharacter character, long version)",
 				"private void AppendAttributeData("));
 
-			/* Since 2026-11-20 the Buffs module's controller emits the buffs into a set the core creates first: a character
+			/* The Buffs module's controller emits the buffs into a set the core creates first: a character
 			 * with none emits nothing and the empty set is returned. Null stays reserved for "could not be read". */
 			int set = capture.IndexOf("var buffs = new List<CharacterBuffData>();", StringComparison.Ordinal);
 			LogAssert.IsTrue(set >= 0, "the no-buffs case is handled explicitly");

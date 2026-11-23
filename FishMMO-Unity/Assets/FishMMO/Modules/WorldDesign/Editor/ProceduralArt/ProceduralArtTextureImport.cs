@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <see cref="GetVersion"/>; Unity then reimports every texture this processes.
 	/// </para>
 	/// <para>
-	/// <b>The shape is set, never inherited (2026-10-02).</b> The generator writes each PNG's .meta
+	/// <b>The shape is set, never inherited.</b> The generator writes each PNG's .meta
 	/// with nothing but its GUID (<see cref="ProceduralArtPayload.MetaText"/>). A TextureImporter read
 	/// from a .meta with no importer block has no <c>serializedVersion</c>, so Unity runs its oldest
 	/// upgrade path on it, and that path derives the shape from the legacy cube-map setting, whose
@@ -107,7 +107,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A look array's flipbook (<see cref="ProceduralArtLookArrays"/>, 2026-10-28): a <see cref="Texture2DArray"/> of its cells, each
+		/// A look array's flipbook (<see cref="ProceduralArtLookArrays"/>): a <see cref="Texture2DArray"/> of its cells, each
 		/// imported exactly as the single map it replaces was above — colour as an albedo (sRGB, its alpha the smoothness), normals
 		/// through the normal-map importer, masks linear; mips, trilinear, aniso 8, Repeat, high-quality compression. The grid is
 		/// read from the image's own size and the set's slice size; the image is never scaled (no power-of-two rounding, and a

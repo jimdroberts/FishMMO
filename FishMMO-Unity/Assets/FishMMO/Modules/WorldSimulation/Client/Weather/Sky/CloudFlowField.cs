@@ -63,7 +63,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Bound as <c>_FishCloudFlowField</c> until the flow is solved. The shaders read the field only when the rect's w
 		/// says it is there, but a compute kernel that declares a texture must have one bound to dispatch at all, and the
-		/// volumetric fog can now run before the flow is ready (for the waterfalls' mist alone, 2026-10-08): "Property
+		/// volumetric fog can now run before the flow is ready (for the waterfalls' mist alone): "Property
 		/// (_FishCloudFlowField) at kernel index (0) is not set".
 		/// </summary>
 		private static Texture3D placeholderField;

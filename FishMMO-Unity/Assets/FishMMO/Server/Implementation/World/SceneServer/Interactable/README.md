@@ -5,7 +5,7 @@ per-connection interaction guard, dispatch to the interactable's ECA triggers an
 dialogue, container looting, and portal activations.
 
 > Dialogue sessions and container takes moved to the [World Interactables module](../../../../../Modules/WorldInteractables/README.md)
-> on 2026-11-20 (`WorldInteractableSystem`; its [Server/README.md](../../../../../Modules/WorldInteractables/Server/README.md)
+> (`WorldInteractableSystem`; its [Server/README.md](../../../../../Modules/WorldInteractables/Server/README.md)
 > documents them). Its requests take this system's interaction guard (`IInteractableSystem.TryBeginInteraction`) and
 > resolve object IDs through `TryResolveSceneObject`.
 

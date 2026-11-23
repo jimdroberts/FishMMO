@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Items module (2026-11-20): the player's three containers are character parts every player gets when it wakes (no
+	/// The Items module: the player's three containers are character parts every player gets when it wakes (no
 	/// race prefab authors them), the equipment still takes part in prediction and still sends its spawn state, the scene
 	/// server adopts the inventory system by label, and the world GUI places the three windows by label. The core keeps the
 	/// item data, the contracts, the load and the login sends.

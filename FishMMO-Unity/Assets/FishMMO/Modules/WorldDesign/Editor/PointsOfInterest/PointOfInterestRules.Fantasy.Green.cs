@@ -7,12 +7,12 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class PointOfInterestRules
 	{
-		/// <summary>The fantasy wave's Green pack (poi-fantasy-wave/WAVE.md): one row per kind, hosted by no biome by default.</summary>
+		/// <summary>The fantasy set's Green pack: one row per kind, hosted by no biome by default.</summary>
 		private static IEnumerable<PointOfInterestKindRule> FantasyGreenRows()
 		{
 			return new List<PointOfInterestKindRule>
 			{
-				// Tuned 2026-10-27: the wet kinds keep to water (a crannog over lake shallows, a hydra's fen within reach of it); the rest are
+				// Tuned: the wet kinds keep to water (a crannog over lake shallows, a hydra's fen within reach of it); the rest are
 				// ground-only and take their hosts from the biomes' .Sites. Cenote is a carved kind: its row is in PointOfInterestRules.Fantasy.Shapes.cs.
 				// ── Pack W ──
 				Placed(POIType.DruidGrove, 0.05f, 0, 2, 1200f).Footprint(8f, 16f, 18f).Only().Races("Humanoid", "Plant"),

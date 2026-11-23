@@ -19,9 +19,9 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The item half of the 2026-09-25 server hot-path audit proofs (H3, M20, M22, M23, L22): what an item snapshot writes,
+	/// The item half of the server hot-path audit proofs (H3, M20, M22, M23, L22): what an item snapshot writes,
 	/// each character's snapshot turn, the item write journal, and what an item write's refusal or batch outcome means.
-	/// Moved out of <c>PersistenceHotPathTests</c> with the inventory system (the Items module, 2026-11-20).
+	/// Moved out of <c>PersistenceHotPathTests</c> with the inventory system (the Items module).
 	/// </summary>
 	/// <remarks>
 	/// The rules that could be written as pure functions are tested as such; the journal is driven

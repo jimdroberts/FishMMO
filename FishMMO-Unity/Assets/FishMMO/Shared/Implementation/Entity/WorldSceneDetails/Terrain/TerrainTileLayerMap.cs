@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// <para>
 	/// <b>Why.</b> Every tile of a cut used to carry the scene's whole palette: Moron 2's 210 layers are 53 control maps of 512²
-	/// RGBA with mips, 74 MB a tile, when no tile paints more than 62 of them (measured over the saved tiles, 2026-10-27). A tile
+	/// RGBA with mips, 74 MB a tile, when no tile paints more than 62 of them (measured over the saved tiles). A tile
 	/// now keeps exactly the layers it paints: those with a non-zero weight byte anywhere on it. No weight changes, so every
 	/// texel — the ones on a seam too — holds the bytes it held, and two tiles meeting at a seam agree there as before, whatever
 	/// either keeps. Dropping light layers by a threshold as well was measured and refused: 1–5% fewer maps for a visible change.
@@ -27,7 +27,7 @@ namespace FishMMO.Shared
 	{
 		/// <summary>
 		/// The most layers a tile may still paint after it is compacted, where the cut reports an ERROR: 24 control maps (33 MB a
-		/// 512² tile). The busiest tile measured paints 65 (Moron 3 1_1, 2026-10-27).
+		/// 512² tile). The busiest tile measured paints 65 (Moron 3 1_1).
 		/// </summary>
 		public const int MaximumTileLayers = 96;
 

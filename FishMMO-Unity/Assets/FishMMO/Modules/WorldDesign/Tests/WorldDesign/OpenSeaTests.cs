@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The open sea (<see cref="PointOfInterestOpenSea"/>, 2026-10-20: "Docks, shipyards, etc … land on lakes and inlets instead
+	/// The open sea (<see cref="PointOfInterestOpenSea"/>: "Docks, shipyards, etc … land on lakes and inlets instead
 	/// of open ocean. Ships are only on seas and the FFT ocean."): the water under sea level the scene's edge reaches through a
 	/// ship's depth, not a basin shut in from it; and how much open water a harbour sees.
 	/// </summary>

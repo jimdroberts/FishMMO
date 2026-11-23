@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// 2026-11-21 (Jim: "a player's pet should always be visible to them"): flying away with /gm fly carried the owner out of
+	/// A player's pet is always visible to them: flying away with /gm fly carried the owner out of
 	/// the pet's DistanceCondition range, and the budget's own-pet pin is bounded by the engagement ceiling, so the pet was
 	/// despawned on the owner's client. The owner commands it and reads it on the pet panel wherever it is.
 	/// </para>

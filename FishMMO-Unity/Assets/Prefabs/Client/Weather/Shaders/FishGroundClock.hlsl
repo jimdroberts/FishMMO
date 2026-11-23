@@ -1,7 +1,7 @@
 #ifndef FISHMMO_GROUND_CLOCK_INCLUDED
 #define FISHMMO_GROUND_CLOCK_INCLUDED
 
-// FishMMO (2026-10-26, phase GROUND-BANDS): ground layers that come and go on the SHARED CLOCK — a seasonal phytodetritus
+// FishMMO: ground layers that come and go on the SHARED CLOCK — a seasonal phytodetritus
 // on an abyssal plain, a dawn SO2 frost gone by noon. The cut paints such a layer like any other; here, after a pixel's
 // four strongest layers are found (FishTopLayers), a clocked layer's weight is scaled by a window of the local year or day
 // and what it gives up goes to its biome's main ground (the layer table's clock rows, TerrainLayerTable.RowClock /

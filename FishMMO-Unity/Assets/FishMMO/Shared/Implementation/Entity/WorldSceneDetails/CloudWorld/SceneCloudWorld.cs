@@ -70,7 +70,7 @@ namespace FishMMO.Shared
 		{
 			public Vector3 From, To;
 			/// <summary>
-			/// What the lights beside its ends give off (2026-10-25, I6i: the world body's bridge-end lights, CloudWorldStructures),
+			/// What the lights beside its ends give off (the world body's bridge-end lights, CloudWorldStructures),
 			/// in the scene's frame, as a site's lights are; empty when its ends are unlit. Offered to the client's site lights.
 			/// </summary>
 			public SceneEmitter[] Lights;
@@ -95,7 +95,7 @@ namespace FishMMO.Shared
 		public Dock[] Docks = Array.Empty<Dock>();
 		public Crossing[] Bridges = Array.Empty<Crossing>();
 
-		[Tooltip("What the landing stages' lights give off (2026-10-25), in the scene's frame; written with the stages by the cut.")]
+		[Tooltip("What the landing stages' lights give off, in the scene's frame; written with the stages by the cut.")]
 		public SceneEmitter[] StageLights = Array.Empty<SceneEmitter>();
 
 		/// <summary>Every light of the cloud world's own ways: each bridge's end lights, then the landing stages'.</summary>

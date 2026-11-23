@@ -32,7 +32,7 @@ namespace FishMMO.Client
 	/// texture, but URP services a StandardRequest by running its whole per-frame <c>Render</c>
 	/// path (per-frame constants, camera sorting, render-graph end-of-frame) for that one camera,
 	/// while a SingleCameraRequest renders just the camera. The single-camera path is the one URP
-	/// documents for this use. Measured on 2026-09-15 with <c>PreviewLeakProbe</c>: the two are
+	/// documents for this use. Measured with <c>PreviewLeakProbe</c>: the two are
 	/// indistinguishable on memory — neither leaks per request — so this is a cost choice, not a
 	/// leak fix.</para>
 
@@ -443,7 +443,7 @@ namespace FishMMO.Client
 		private void ApplyCameraSettings()
 		{
 			camera.orthographic = true;
-			/* A Preview camera, not a Game camera (2026-11-22, Jim: the preview showed the sky and clouds). The layer mask
+			/* A Preview camera, not a Game camera (the preview showed the sky and clouds). The layer mask
 			 * only culls renderers; the world's renderer features (clouds, volumetric and height fog, heat shimmer, the
 			 * world passes, the target outline, colour vision) draw full-screen passes for every Game camera whatever it
 			 * culls, so the portrait got the weather behind the character. Each of them stands down for any camera that is

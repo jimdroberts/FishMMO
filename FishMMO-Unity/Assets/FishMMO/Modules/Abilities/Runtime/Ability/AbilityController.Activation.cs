@@ -111,7 +111,7 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The weather multiplier for one of this ability's numbers, at the moment of the cast (Q16).
+		/// The weather multiplier for one of this ability's numbers, at the moment of the cast.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -205,6 +205,11 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private bool TryStartAbility(AbilityActivationReplicateData activationData, ReplicateState state)
 		{
+			// A press that does something else instead of casting (the Mount ability while mounted: get off). Nothing starts.
+			if (TryPressOverride(activationData.QueuedAbilityID))
+			{
+				return true;
+			}
 			if (CanActivate(activationData.QueuedAbilityID, activationData.GetTick(), out Ability newAbility))
 			{
 				//Log.Debug($"1 New Ability Activation:{newAbility.ID} State:{state} Tick:{activationData.GetTick()}");
@@ -2366,6 +2371,33 @@ namespace FishMMO.Shared
 		///   - canManipulateHandlers (external Func delegates, e.g. UI MouseMode) — use CanActivateOptimistic
 		///   - Pet check (broadcast-synced, not reconciled) — use CanActivateOptimistic
 		/// </summary>
+		/// <summary>
+		/// The press override (<see cref="AbilityPressOverrides"/>) for pressing a known ability now, or null: only for a live
+		/// character that may act, as a cast would need.
+		/// </summary>
+		private IAbilityPressOverride PressOverrideFor(long abilityID, out Ability ability)
+		{
+			ability = null;
+			if (abilityID == NO_ABILITY || !CanManipulate() || !KnownAbilities.TryGetValue(abilityID, out ability) ||
+				cachedDamageController == null || !cachedDamageController.IsAlive)
+			{
+				return null;
+			}
+			return AbilityPressOverrides.Find(Character, ability);
+		}
+
+		/// <summary>Runs the press override for a queued press, if one applies (inside the replicate). True when one ran.</summary>
+		private bool TryPressOverride(long abilityID)
+		{
+			IAbilityPressOverride handler = PressOverrideFor(abilityID, out Ability ability);
+			if (handler == null)
+			{
+				return false;
+			}
+			handler.Press(Character, ability);
+			return true;
+		}
+
 		private bool CanActivate(long abilityID, uint currentTick, out Ability validatedAbility)
 		{
 			validatedAbility = null;
@@ -2429,6 +2461,11 @@ namespace FishMMO.Shared
 		/// </summary>
 		private bool CanActivateOptimistic(long abilityID, uint currentTick, out Ability validatedAbility)
 		{
+			// A press the replicate will turn into something else (AbilityPressOverrides) is always worth sending.
+			if (PressOverrideFor(abilityID, out validatedAbility) != null)
+			{
+				return true;
+			}
 			if (!CanActivate(abilityID, currentTick, out validatedAbility))
 			{
 				return false;
@@ -2713,6 +2750,25 @@ namespace FishMMO.Shared
 		public void Interrupt(ICharacter attacker)
 		{
 			Interrupt(base.IsServerStarted, HasInputAuthority);
+		}
+
+		/// <summary>
+		/// Breaks the cast in progress when its ability is <see cref="AbilityTemplate.InterruptedByDamage"/>. Server: called by
+		/// the ability system for every damage this character takes.
+		/// </summary>
+		/// <returns>True when a cast was broken.</returns>
+		public bool InterruptIfDamageBreaksCast()
+		{
+			// A consumable use sets currentAbilityID to an item template, which is not a known ability: never broken here.
+			if (currentAbilityID == NO_ABILITY || KnownAbilities == null ||
+				!KnownAbilities.TryGetValue(currentAbilityID, out Ability ability) ||
+				ability?.Template == null ||
+				!ability.Template.InterruptedByDamage)
+			{
+				return false;
+			}
+			Interrupt(null);
+			return true;
 		}
 
 		/// <summary>

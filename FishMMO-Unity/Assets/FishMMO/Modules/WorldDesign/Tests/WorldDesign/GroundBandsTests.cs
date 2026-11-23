@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase GROUND-BANDS of the biome suite (2026-10-26; decisions 34, 71, 84, 87, AbyssalPlain Q5, the drafts' site paint, Valley's
+	/// Phase GROUND-BANDS of the biome suite (AbyssalPlain Q5, the drafts' site paint, Valley's
 	/// avalanche tracks): the facing band (ground layers and spawn rules), the fall-line stretch, the site band, landform zones on bed
 	/// layers, and the shared-clock window drawn on the GPU. Off (the default on every layer, rule and template) nothing changes: no
 	/// mark, no weight, the plain painter's weights to the bit, and a layer table whose clock rows say "none". On, each is pure and the

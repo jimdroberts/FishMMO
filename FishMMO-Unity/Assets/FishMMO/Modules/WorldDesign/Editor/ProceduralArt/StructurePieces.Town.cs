@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The buildings a settlement is more than houses for (2026-10-11): church, temple, tavern, smithy, stables, notice board.
+	/// The buildings a settlement is more than houses for: church, temple, tavern, smithy, stables, notice board.
 	/// Each is built from the house kit and the same parts as the rest, so it wears the same surfaces and weathers alike.
 	/// </summary>
 	public static partial class StructurePieces
@@ -354,7 +354,7 @@ namespace FishMMO.Shared.WorldDesign
 						0.22f, 0.22f, StructureMaterial.Timber, 10 + (sx > 0 ? 2 : 0) + (sz > 0 ? 1 : 0)));
 				}
 			}
-			// At its palette's pitch, or a flat canopy (StructureRoofs, I6h): the forge's stack stands clear of either.
+			// At its palette's pitch, or a flat canopy (StructureRoofs): the forge's stack stands clear of either.
 			OwnGable(d, depth, width, eave, 1.5f, 0.45f, 0.12f, StructureMaterial.Timber, 20, Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
 			// The back wall: planks (the smithy's log wall in a palette), or stone.
 			using (d.Builds(WallRoles))

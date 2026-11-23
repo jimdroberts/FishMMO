@@ -24,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 			private bool InLava(Vector3 local) => LavaPlan.Active && CaveLavaDressing.InLava(LavaPlan, local);
 
 			/// <summary>
-			/// Whether a glowing crystal of the passes before the lava's gives way to it (2026-10-20: a molten tube "full of glowing
+			/// Whether a glowing crystal of the passes before the lava's gives way to it (a molten tube "full of glowing
 			/// crystals reads oddly"): every one within <see cref="CaveLavaDressing.CrystalClear"/> of the lava, and of the rest all
 			/// but <see cref="CaveLavaDressing.CrystalShare"/> by a hash of where it stands. Asked in <see cref="Place"/> after the
 			/// pass's draws, as <see cref="InLava"/> is (no stream moves; a crystal not laid gives no light); never in a cooled cave.
@@ -44,7 +44,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// A lava tube that still runs (2026-10-20, PointOfInterestCaveDressing.Lava.cs): its glowing cracks, seeps, lavacicles
+			/// A lava tube that still runs (PointOfInterestCaveDressing.Lava.cs): its glowing cracks, seeps, lavacicles
 			/// and crust, its lava lights and its fumes (<see cref="CaveLavaDressing"/>). Last of all the passes, on its own stream,
 			/// its lights spaced off the glow's, so nothing laid before it moves; nothing at all in a cooled system.
 			/// </summary>
@@ -111,7 +111,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// What makes a lava tube that still runs look and feel molten round its lava (2026-10-20: "glowing floor/wall cracks,
+	/// What makes a lava tube that still runs look and feel molten round its lava ("glowing floor/wall cracks,
 	/// magma seeping from walls, glowing lavacicles; heat haze, drifting embers/sparks, sulphur fumes, orange light filling the
 	/// tube"), laid round the lava the layout planned (<see cref="CaveLava.Plan"/>).
 	/// </summary>
@@ -147,7 +147,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The least distance between a lava light and a light already in the system (the glow's), metres: only so two never stand
 		/// together. The lava's win a place in the client's pool before the glow's (SceneMagma.PickLights), so it need not keep
-		/// the glow's own spacing (2026-10-20, first render: a tube's hundred crystal lights had crowded its lava dark).
+		/// the glow's own spacing (first render: a tube's hundred crystal lights had crowded its lava dark).
 		/// </summary>
 		public const float GlowLightSpacing = 3f;
 		/// <summary>

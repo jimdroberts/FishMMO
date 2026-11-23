@@ -58,7 +58,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Meshes, not Unity terrains.</b> Terrain tiles carry heightmaps, colliders and per-tile
 	/// draw costs that a surface nobody stands on does not need, and a ring is not square.
-	/// Measured 2026-10-08 (ScenePerfProbe, Flo Monolith, 1440p High): filling ~60% of the frame
+	/// Measured (ScenePerfProbe, Flo Monolith, 1440p High): filling ~60% of the frame
 	/// from 150 m up at the scene's edge, the whole backdrop draw was 0.14–0.22 ms opaque plus
 	/// 0.05–0.07 ms depth-normals.
 	/// </para>
@@ -108,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The scene layers a backdrop's 32 channels hold when the scene has more (<see cref="SceneBackdrop.ControlLayers"/>):
 		/// the 32 that carry the most weight over the backdrop, in layer order (the lower layer between equals); null when every
-		/// layer has a channel of its own (channel c is layer c, as before 2026-10-16).
+		/// layer has a channel of its own (channel c is layer c, as formerly).
 		/// </summary>
 		/// <param name="totals">Each scene layer's weight summed over the backdrop.</param>
 		public static int[] ChannelLayersFor(float[] totals, int layerCount)

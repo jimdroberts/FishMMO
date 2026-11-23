@@ -113,7 +113,7 @@ namespace FishMMO.Client
 			var prototypes = new List<int>();
 			var chosenGrass = new List<GrassType>();
 			var chosenScatter = new List<DetailScatterType>();
-			// Every detail kind the GPU renderers cannot draw, or that a cap leaves out (2026-10-27: GPU only, there is no CPU
+			// Every detail kind the GPU renderers cannot draw, or that a cap leaves out (GPU only, there is no CPU
 			// path): the cut reports them as errors, never a quiet fallback.
 			var problems = new List<string>();
 			int grassTerrains = 0, scatterTerrains = 0, indexTerrains = 0;

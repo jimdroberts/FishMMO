@@ -988,7 +988,7 @@ does not install host certificates.
 Choose **Web Server → 6: Install/Renew Local Development Certificates**, or run
 `FishMMO-Installer --component dev-certificates`. This requires OpenSSL and sudo;
 it does not require nginx, public DNS, port forwarding, or Let's Encrypt.
-Choose the OS account that runs the game servers (for example `jim`). Choose **Y**
+Choose the OS account that runs the game servers (for example `fishmmo`). Choose **Y**
 when asked to trust the development CA if you want native clients on this machine
 to connect. The trust decision is local to this machine; other client machines
 need the public CA certificate imported separately. This component is deliberately

@@ -5,7 +5,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// Input actions a module creates at run time, and the names the key bindings page shows for them. The Hotkeys module
-	/// registers its extra bars' modifier and page actions here (2026-11-20); the core never names it.
+	/// registers its extra bars' modifier and page actions here; the core never names it.
 	/// </summary>
 	public static class ModuleInputActions
 	{

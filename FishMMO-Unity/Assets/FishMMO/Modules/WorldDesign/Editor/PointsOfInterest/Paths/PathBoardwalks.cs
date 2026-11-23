@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Boardwalks along a scene's ways (2026-10-18, phase I2i, decision 27): which stretches of a way are raised on a plank deck
+	/// Boardwalks along a scene's ways: which stretches of a way are raised on a plank deck
 	/// (<see cref="ScenePathPointFlags.Boardwalk"/>), the deck's line over the ground, and the modules and pile bents laid along
 	/// it (StructurePieces.BoardwalkSpan / BoardwalkBent) as baked props, collided with and walked on the NavMesh like any deck.
 	/// </summary>
@@ -262,7 +262,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				Vector2 dir = Direction(stations, k);
 				var side = new Vector2(-dir.y, dir.x);
-				// A country style's deck is its own width (I2i-b); the plank walk's the way's.
+				// A country style's deck is its own width; the plank walk's the way's.
 				float w = deckWidth > 0f ? 0.5f * deckWidth : DeckHalfWidth(stations[k].Half);
 				float h = stations[k].Ground;
 				for (int a = -1; a <= 1; a++)
@@ -368,7 +368,7 @@ namespace FishMMO.Shared.WorldDesign
 			return clear > BentClearMetres ? StructurePieces.BoardwalkBentScale(clear) : 0f;
 		}
 
-		/// <summary>The y scale of a style's bent under a station (pure, I2i-b): 0 under the style's own clearance, else scaled from its own depth.</summary>
+		/// <summary>The y scale of a style's bent under a station (pure): 0 under the style's own clearance, else scaled from its own depth.</summary>
 		public static float BentScale(Station station, in StructurePieces.BoardwalkStyleShape shape)
 		{
 			float clear = station.Deck - station.Ground;
@@ -387,7 +387,7 @@ namespace FishMMO.Shared.WorldDesign
 			int seed, List<string> missing = null, bool rampStart = true, bool rampEnd = true, BiomeBoardwalkStyle style = BiomeBoardwalkStyle.Planked)
 		{
 			bool footway = path.Class == ScenePathClass.Footpath || path.Class == ScenePathClass.Trail;
-			// The style's pieces and deck (I2i-b); the plank walk's shape is I2i's constants, so a planked run lays as before.
+			// The style's pieces and deck; the plank walk's shape is the constants, so a planked run lays as before.
 			StructurePieces.BoardwalkStyleShape shape = StructurePieces.BoardwalkShape(style, footway);
 			GameObject span = StructureKit.Prefab("BoardwalkSpan", shape.Span);
 			GameObject[] bents = { StructureKit.Prefab("BoardwalkBent", shape.Bent), shape.Braced ? StructureKit.Prefab("BoardwalkBent", 1) : null };
@@ -463,7 +463,7 @@ namespace FishMMO.Shared.WorldDesign
 						Palette = BiomeTemplateArt.StructurePalette(biome),
 						Notes = notes,
 					};
-					// Built in the style of the biome at its middle (I2i-b; planked unless the biome names another).
+					// Built in the style of the biome at its middle (planked unless the biome names another).
 					int n = Lay(path, from, to, ground, context.AddProp, seed ^ path.Id, missing, true, true, BiomeTemplateArt.BoardwalkStyle(biome));
 					laid += n;
 					runs += n > 0 ? 1 : 0;

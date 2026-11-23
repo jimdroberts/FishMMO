@@ -11,7 +11,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The point-of-interest kinds the biome rounds named (2026-10-25, phase NEW-POI-KINDS): each exists with its map marker,
+	/// The point-of-interest kinds the biome rounds named: each exists with its map marker,
 	/// kind facts, words and catalogue row; no biome hosts any until its round says so, so no scene gains or loses a site; the
 	/// lived-in ones need breathable air and the wet ones liquid water by default; Wasteland left the arid family; and the
 	/// detected kinds' biome lists are only defaults, a template that hosts the kind finding it. Pure but for one template test.
@@ -34,7 +34,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			"FrogShrine", "FloatingIsland", "FowlersHide", "EelWeir", "BrickKiln",
 			// Wasteland (96).
 			"BlightedCrater", "Chapel", "HolyWell", "PlagueVillage", "DeadForest", "WarEngineGraveyard",
-			// Abyssal Plain (Q4: the floor's whale fall) and Subsurface Ocean Vent (83: the sea hall).
+			// Abyssal Plain (the floor's whale fall) and Subsurface Ocean Vent (83: the sea hall).
 			"SunkenWhaleFall", "SeaHall",
 		};
 
@@ -48,7 +48,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			foreach (string name in Named)
 			{
 				Assert.That(Enum.TryParse(name, false, out POIType kind), Is.True, $"{name} is a POIType");
-				Assert.That((int)kind, Is.GreaterThan(last), $"{name} is appended after the I2p kinds, in the order named");
+				Assert.That((int)kind, Is.GreaterThan(last), $"{name} is appended after the kinds, in the order named");
 				last = (int)kind;
 				Assert.That(Enum.TryParse(name, false, out MapMarkerType marker), Is.True, $"{name} has its map marker type");
 				Assert.That(PointOfInterestKinds.MarkerFor(kind), Is.EqualTo(marker));
@@ -65,9 +65,9 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(rule.PerKm2, Is.GreaterThan(0f), name);
 				Assert.That(rule.Max, Is.GreaterThan(0), name);
 			}
-			// Nothing after them but the hot ground's own kinds (2026-10-27, GeothermalPointsOfInterest: found, not placed, no row).
+			// Nothing after them but the hot ground's own kinds (GeothermalPointsOfInterest: found, not placed, no row).
 			Assert.That((int)POIType.Geyser, Is.EqualTo(last + 1), "the hot ground's kinds follow them");
-			Assert.That((int)POIType.DragonLair, Is.EqualTo((int)POIType.SulphurPool + 1), "the fantasy wave follows the hot ground's (FantasyWaveKindsTests pins the rest)");
+			Assert.That((int)POIType.DragonLair, Is.EqualTo((int)POIType.SulphurPool + 1), "the fantasy set follows the hot ground's (FantasySetKindsTests pins the rest)");
 			// The two underwater kinds and the floor's whale fall stand under the sea; the whale fall adrift stays on it.
 			foreach (POIType kind in new[] { POIType.TrenchEdge, POIType.SeaCavern, POIType.SunkenWhaleFall })
 			{
@@ -76,7 +76,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(rules.RuleFor(kind).MaxDepth, Is.EqualTo(PointOfInterestKindRule.Unbounded), kind + ": the biome's band narrows it");
 			}
 			Assert.That(rules.RuleFor(POIType.SunkenWhaleFall).MinDepth, Is.EqualTo(200f), "the abyssal plain's falls, 200 m and deeper");
-			Assert.That(rules.RuleFor(POIType.WhaleFall).Afloat, Is.True, "the I2p whale fall is still the one adrift");
+			Assert.That(rules.RuleFor(POIType.WhaleFall).Afloat, Is.True, "the whale fall is still the one adrift");
 		}
 
 		/// <summary>No biome hosts a new kind: not by the catalogue's rows by name, not in any of the 83 files, so no scene changes.</summary>
@@ -85,7 +85,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			PointOfInterestRules rules = PointOfInterestRules.Default();
 			var named = new HashSet<POIType>(Kinds());
-			// The sea hall's hosts are named by its phase (2026-10-26, I2n-b, decision 83: SeaHallTests pins them); every other new kind waits.
+			// The sea hall's hosts are named by its phase (SeaHallTests pins them); every other new kind waits.
 			named.Remove(POIType.SeaHall);
 			foreach (POIType kind in named)
 			{
@@ -159,7 +159,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(BiomeSiteAir.NeedsAirByDefault(kind), Is.EqualTo(lived.Contains(kind)), $"{kind}: breathable air");
 				Assert.That(BiomeSiteAir.NeedsWaterByDefault(kind), Is.EqualTo(wet.Contains(kind)), $"{kind}: liquid water");
 			}
-			// Decision 96: the holy well needs no water as a kind (its silent well-head stands on a dry world), only its spring chapel.
+			// The holy well needs no water as a kind (its silent well-head stands on a dry world), only its spring chapel.
 			Assert.That(BiomeSiteAir.NeedsWaterByDefault(POIType.HolyWell), Is.False);
 			// No older kind gained a water default (decision 68 left them all dry until a file says so).
 			foreach (POIType kind in (POIType[])Enum.GetValues(typeof(POIType)))
@@ -242,7 +242,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Decision 96: Wasteland left the arid family (the rules' and the templates'), so the desert's kinds and variants no longer
+		/// Wasteland left the arid family (the rules' and the templates'), so the desert's kinds and variants no longer
 		/// default in; every other arid biome keeps them.
 		/// </summary>
 		[Test]
@@ -265,7 +265,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The detected kinds' .Only lists are defaults (decisions 90, 95, Rille Q9): a biome whose template hosts Volcano,
+		/// The detected kinds' .Only lists are defaults (Rille Q9): a biome whose template hosts Volcano,
 		/// ObsidianField, FumaroleField or TidalRift finds its cluster site whatever its name, and none without; today's default
 		/// host lists are unchanged.
 		/// </summary>

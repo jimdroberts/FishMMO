@@ -1,7 +1,7 @@
 #ifndef FISHMMO_CHANNEL_FLOW_INCLUDED
 #define FISHMMO_CHANNEL_FLOW_INCLUDED
 
-// Inland water as what grows in it sees it (decision 35 (a)/(k), 2026-10-18): where a lake's or a river's surface stands and how
+// Inland water as what grows in it sees it: where a lake's or a river's surface stands and how
 // its current runs, round the camera. Published by the inland water (InlandWaterRenderer.Channel.cs) from the scene's
 // SceneWaterBodies, on its own window, rebuilt as the camera moves:
 //
@@ -12,7 +12,7 @@
 //
 // Read by the aquatic plants (FishVegetationPasses.hlsl, _Aquatic): a weed rooted under a lake or a river streams with its
 // current and stays under ITS surface; before, every aquatic plant was kept under the SEA's ceiling, which would have
-// flattened a lake's weeds to sea level (nothing grew under inland water until 2026-10-18, so nothing showed it).
+// flattened a lake's weeds to sea level (nothing grew under inland water formerly, so nothing showed it).
 
 TEXTURE2D(_FishChannelFlow);
 float4 _FishChannelFlowRect;
@@ -72,7 +72,7 @@ float FishKeepUnder(inout float3 positionWS, float ceiling, float soft)
 }
 
 /// <summary>
-/// How a weed rooted in a river streams (decision 35 (k)): laid DOWN the current rather than rocked by the sea's surge — its
+/// How a weed rooted in a river streams: laid DOWN the current rather than rocked by the sea's surge — its
 /// lean grows with the speed and saturates near 1.5 m/s, a slow wave runs along it downstream (a ribbon's undulation, about 3 s
 /// at a metre a second, quicker in faster water), and it flicks a little across. In still water (a lake) it barely drifts.
 /// <paramref name="weight"/> is how far a vertex goes (0 at the root); the result is a world offset, xz only.

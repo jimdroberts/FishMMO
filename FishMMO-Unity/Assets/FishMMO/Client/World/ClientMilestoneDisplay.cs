@@ -6,7 +6,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// A milestone shown over a character as a floating label: an achievement's completed tier, announced by the
-	/// Achievements module. Split out of the combat display (2026-11-20) when the combat text became the Combat module's.
+	/// Achievements module. Split out of the combat display when the combat text became the Combat module's.
 	/// </summary>
 	/// <remarks>
 	/// Rare (one label per milestone), so nothing is cached per character: the label's height is read from the character's

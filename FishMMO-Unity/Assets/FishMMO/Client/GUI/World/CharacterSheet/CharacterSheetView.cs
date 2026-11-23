@@ -59,7 +59,7 @@ namespace FishMMO.Client
 		/// which this array did not name. The result was an <see cref="ItemSlot.Accessory"/> slot
 		/// that could never render — <c>Q</c> returned null and the per-slot guard quietly skipped
 		/// it — and two dead elements the player could click to no effect. Both halves are fixed;
-		/// the markup now declares exactly these ten names, and there is one array rather than one
+		/// the markup now declares exactly these names (eleven since the mount saddle, issue #109), and there is one array rather than one
 		/// per panel.
 		/// </para>
 		/// </remarks>
@@ -75,6 +75,7 @@ namespace FishMMO.Client
 			"slot-mainhand",  // ItemSlot.Primary   = 7
 			"slot-offhand",   // ItemSlot.Secondary = 8
 			"slot-accessory", // ItemSlot.Accessory = 9
+			"slot-saddle",    // ItemSlot.MountSaddle = 10 (issue #109)
 		};
 
 		// ── UXML element names ────────────────────────────────────────────────

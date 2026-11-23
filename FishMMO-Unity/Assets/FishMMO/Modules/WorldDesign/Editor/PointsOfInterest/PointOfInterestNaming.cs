@@ -105,10 +105,10 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Tells apart the falls (and rapids, mouths) one river has in the scene. They share the river's planet-wide name, so a
-		/// river stepping down a valley had seven "Dunwy Falls" (Flo Monolith probe, 2026-10-10). Two or three become Upper /
+		/// river stepping down a valley had seven "Dunwy Falls" (Flo Monolith probe). Two or three become Upper /
 		/// (Middle /) Lower Dunwy Falls, highest first. Past three, a river's falls are each named for themselves, as real
 		/// ones are (Vernal, Nevada, Bridalveil on one river): the highest and the lowest keep the river's name as Upper and
-		/// Lower, and the ones between take their own (2026-10-11: "First … Ninth Dunwy Falls" read as a list, not places).
+		/// Lower, and the ones between take their own ("First … Ninth Dunwy Falls" read as a list, not places).
 		/// With no namer (tests, templates not loaded) the ones between are numbered. Rivers themselves are left alone: two
 		/// runs of one river ARE the same river.
 		/// </summary>
@@ -193,7 +193,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The words a site may be called by, from what its template builds: a timber bridge is a bridge or a span, never a
-		/// viaduct, a causeway or a ford; a plain shrine is no chapel; a timber tower no spire (2026-10-11: names did not
+		/// viaduct, a causeway or a ford; a plain shrine is no chapel; a timber tower no spire (names did not
 		/// match what stood there). Null where the template leaves the kind's own words fitting, or the site has none.
 		/// </summary>
 		public static string[] TypeWordsFor(PointOfInterestRecord record)
@@ -402,7 +402,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 	}
 
-	/// <summary>Who a site belongs to: a seeded pick among the races at home in its biome (2026-10-10).</summary>
+	/// <summary>Who a site belongs to: a seeded pick among the races at home in its biome.</summary>
 	public static class PointOfInterestRaces
 	{
 		/// <summary>One race the planner may pick: its naming key, its category, its affinity for the site's biome.</summary>

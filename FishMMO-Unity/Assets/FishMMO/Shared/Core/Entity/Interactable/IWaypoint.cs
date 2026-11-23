@@ -21,6 +21,12 @@ namespace FishMMO.Shared.Core
 		/// <summary>The name of the scene this waypoint stands in.</summary>
 		string SceneName { get; }
 
+		/// <summary>
+		/// What the waypoint is: a fast-travel point, or a Gate Stone (the Gate spell's destination and return gate, never a
+		/// fast-travel point). Both share the scene's index space and the discovery record.
+		/// </summary>
+		WaypointKind Kind { get; }
+
 		/// <summary>The player-facing name shown on the map.</summary>
 		string WaypointName { get; }
 

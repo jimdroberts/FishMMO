@@ -5,7 +5,7 @@ using FishMMO.Shared.Weather;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The air the clouds and the weather field ride (<see cref="AirDrift"/>, 2026-10-15: "Clouds don't seem to be moving
+	/// The air the clouds and the weather field ride (<see cref="AirDrift"/>: "Clouds don't seem to be moving
 	/// properly with the wind speed" / "It all needs to be deterministic"): its slope is the wind, it is the same however
 	/// it is asked, it carries on when the wind is changed, and a calm stills it rather than running it backwards.
 	/// </summary>

@@ -60,7 +60,7 @@ namespace FishMMO.UnitTests
 			return weld.Count - use.Count + t.Count / 3;
 		}
 
-		// Builds every section live, 1-4 s each; past Unity's 180 s default since the Overhang and Arch styles joined (2026-10-10).
+		// Builds every section live, 1-4 s each; past Unity's 180 s default since the Overhang and Arch styles joined.
 		[Test, Timeout(600000)]
 		public void EveryLevelIsClosedAndValid()
 		{

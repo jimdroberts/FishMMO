@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A settlement church's yard closed in (2026-10-19: "a church with a graveyard and mausoleum or two"): the low wall round its
+	/// A settlement church's yard closed in ("a church with a graveyard and mausoleum or two"): the low wall round its
 	/// graves, the roofed lychgate where the yard meets the street, and a mausoleum or two in its back corners. Laid by PropsFeature
 	/// round each church (and cathedral) it lays, after the rows of graves.
 	/// </summary>
@@ -27,7 +27,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>Which yards.</b> A village's, a town's, a port's, a city's and the capital's: one or two mausoleums in a town's or a city's,
-	/// one in some villages' (<see cref="MausoleumsFor"/>), never more than two in all a settlement's yards (2026-10-20,
+	/// one in some villages' (<see cref="MausoleumsFor"/>), never more than two in all a settlement's yards (
 	/// PointOfInterestStructureCaps). A castle's chapel keeps only its graves: its ward has no room for a yard.
 	/// </para>
 	/// <para>
@@ -152,7 +152,7 @@ namespace FishMMO.Shared.WorldDesign
 			StructurePiece mausoleumPiece = StructurePieces.Find("Mausoleum"), gatePiece = StructurePieces.Find("Lychgate");
 			Vector2 mausoleum = (mausoleumPiece != null ? mausoleumPiece.Footprint : new Vector2(5f, 7f)) * stature;
 			Vector2 lychgate = (gatePiece != null ? gatePiece.Footprint : LychgateFallback) * stature;
-			// No more than the settlement's two mausoleums in all its yards (2026-10-20, PointOfInterestStructureCaps): a second church's
+			// No more than the settlement's two mausoleums in all its yards (PointOfInterestStructureCaps): a second church's
 			// yard, and the cemetery after them (PointOfInterestOutskirts), keep what room the ones laid before left.
 			int tombs = Mathf.Min(MausoleumsFor(record.Kind, U(1)), PointOfInterestStructureCaps.Tally.Of(context).Room(MausoleumType));
 			Plan plan = Layout(size, rows, tombs, mausoleum, lychgate, U(2) < 0.5f ? 0 : 1);

@@ -15,7 +15,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2m of the biome suite (2026-10-25: decisions 34, 36 (a)–(d), (f), 38, 40, 45) "the deep floor and the shelf": sea-floor
+	/// Phase I2m of the biome suite ((d), (f), 38, 40, 45) "the deep floor and the shelf": sea-floor
 	/// biomes paint their own grounds and grow their rules under the sea; signed depth bands (metres or tides) on ground layers; the tide
 	/// a coast asks of its sea; the daylight dimmed with depth on what lies under the sea; underwater site kinds and per-biome site
 	/// depths; the Abyss selectable; the Eel shape and Lurk behaviour on the shared clock. Pure, except the painter's (managed Perlin:
@@ -316,7 +316,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("AuthorSeaFloor(biome, entry, report, apply);", authoring);
 			StringAssert.Contains("BiomeTemplate.Authored.UnderwaterSiteDepth", authoring);
 			string spec = Read(World + "/ProceduralArt/BiomeArtSpec.cs");
-			StringAssert.Contains("float slopeMax = 40f, float slopeMin = 0f)", spec, "Sea() takes a least slope (decision 38)");
+			StringAssert.Contains("float slopeMax = 40f, float slopeMin = 0f)", spec, "Sea() takes a least slope");
 			string generator = Read(World + "/SceneGenerator.cs");
 			int apply = generator.IndexOf("SceneSeaFloor.Apply(scene, field, terrains, plan, result.Notes)", StringComparison.Ordinal);
 			int splat = generator.IndexOf("BiomeSplatReport splat = BiomeSplatPainter.Paint(tiles, palette, field, options);", StringComparison.Ordinal);

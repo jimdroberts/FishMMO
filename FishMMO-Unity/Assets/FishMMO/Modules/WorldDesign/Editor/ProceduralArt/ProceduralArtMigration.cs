@@ -19,7 +19,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why it exists.</b> Until 2026-10-02 the wrappers (terrain layers, materials, prefabs) and the
+	/// <b>Why it exists.</b> Formerly the wrappers (terrain layers, materials, prefabs) and the
 	/// layers built from loose biome textures were created with <c>AssetDatabase.CreateAsset</c>, so each
 	/// has the random GUID Unity gave it — and prefabs random object IDs — and committed scenes and
 	/// terrain data reference them by those. Regenerating them with derived IDs would orphan every such
@@ -599,7 +599,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The editor tool ───────────────────────────────────────────
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Migrate generated art to deterministic IDs", Section = "Art", Order = 3,
-			Tooltip = "One-time and idempotent: gives every generated terrain layer, material, prefab and built terrain layer made before 2026-10-02 its path-derived GUID (and prefabs deterministic object IDs), and rewrites every reference to them under Assets (scenes, terrain data, biomes; never Assets/LOCAL). Every rewritten file is backed up to Library/FishMMO/DeterminismMigrationBackup first. The generator also runs this by itself when it finds such files.",
+			Tooltip = "One-time and idempotent: gives every generated terrain layer, material, prefab and built terrain layer made formerly its path-derived GUID (and prefabs deterministic object IDs), and rewrites every reference to them under Assets (scenes, terrain data, biomes; never Assets/LOCAL). Every rewritten file is backed up to Library/FishMMO/DeterminismMigrationBackup first. The generator also runs this by itself when it finds such files.",
 			Confirm = "Re-address generated art made before deterministic IDs and rewrite every reference to it under Assets? Open affected scenes are closed and reopened; every rewritten file is backed up to Library/FishMMO/DeterminismMigrationBackup/<timestamp>/ first.")]
 		public static void MigrateFromDashboard()
 		{

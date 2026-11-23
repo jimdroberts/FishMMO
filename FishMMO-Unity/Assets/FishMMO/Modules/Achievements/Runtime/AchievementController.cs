@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// Controls and tracks a character's achievements, including progress, tier, and event handling.
 	/// </summary>
 	/// <remarks>
-	/// A <see cref="CharacterPart"/> of every player, added at wake by the Achievements module (2026-11-20); no prefab
+	/// A <see cref="CharacterPart"/> of every player, added at wake by the Achievements module; no prefab
 	/// carries it. It has no spawn state: the server sends a spawned player its achievements (<c>AchievementSystem</c>).
 	/// </remarks>
 	public class AchievementController : CharacterPart, IAchievementController

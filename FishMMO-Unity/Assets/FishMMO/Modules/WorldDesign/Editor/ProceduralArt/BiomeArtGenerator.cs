@@ -32,7 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Nothing generated is committed (2026-10-02).</b> Textures and meshes (the payload) and
+	/// <b>Nothing generated is committed.</b> Textures and meshes (the payload) and
 	/// the terrain layers, materials and prefabs built on them (the wrappers) are all build output:
 	/// gitignored, regenerated on every machine — on editor load and first in every build — and
 	/// each with a GUID that is a function of its path (<see cref="ProceduralArtPayload"/>) and object
@@ -73,7 +73,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Cost, and the asset database.</b> The computing is minutes: the ground textures dominate
 	/// (thirty-four 1024² families, a few noise octaves per texel on every core), and meshes, the
 	/// billboards' software render and prefabs are seconds. What made a full run take 2604 s
-	/// (2026-10-02) was the asset database: every write outside a
+	/// was the asset database: every write outside a
 	/// <c>StartAssetEditing</c>/<c>StopAssetEditing</c> batch is a refresh of its own, each about
 	/// 0.33 s of fixed cost (the editor log's "PostAssetChangesProfiler"), and the run made 7538
 	/// of them — about four per new mesh (create staged, save, delete staged, import), three per
@@ -771,7 +771,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// Asks the asset database for each main asset's TYPE, which loads nothing. This is the check
-		/// that would have caught 2026-10-02's failure at its source: every payload PNG had imported
+		/// that would have caught the failure at its source: every payload PNG had imported
 		/// as a Cubemap (<see cref="ProceduralArtTextureImport"/>), so <c>LoadAssetAtPath&lt;Texture2D&gt;</c>
 		/// answered null for files that were there, and the wrappers were written regardless.
 		/// </remarks>
@@ -1139,7 +1139,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool aquatic = SeaFloorMeshes.IsAquatic(spec.Plant.Kind);
 				if (aquatic && spec.Glow.maxColorComponent > 0f)
 				{
-					/* A glowing sea detail (2026-10-25, phase I2m, decision 36 (d)): the cave glow's material, its own colours lit
+					/* A glowing sea detail: the cave glow's material, its own colours lit
 					 * from within, so it is seen where the daylight never reaches. */
 					var glow = new CaveGlowHue { Name = spec.Name, Albedo = spec.Healthy, Emission = spec.Glow, Smoothness = 0.45f, Metallic = 0f };
 					WriteMaterial(c, ProceduralArtCatalogue.DetailPrefab(spec.Name), rock, m => CaveGlowLit(c, m, ProceduralArtCatalogue.AtlasPath, ProceduralArtCatalogue.AtlasPath, in glow, false));
@@ -1161,7 +1161,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					if (FloatingPlantMeshes.IsFloating(spec.Plant.Kind))
 					{
-						/* On the water (2026-10-18, I2i): laid as baked props at the surface, so held still (a pad does not lean in a
+						/* On the water: laid as baked props at the surface, so held still (a pad does not lean in a
 						 * breeze), not rooted where its origin is (no ground colour or contact band from the lake bed under it: the
 						 * vines' _Clinging), no lean to tip a pad under the surface, and no detail fade (a prop has its own draw
 						 * distance). Not _Aquatic, which would keep it under the water. */

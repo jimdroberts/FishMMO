@@ -44,14 +44,14 @@ namespace FishMMO.Client
 		public const int MaxBushesPerBlock = 2;
 
 		/// <summary>
-		/// Types one terrain can scatter, a channel each (2026-10-27: was 8, two RGBA density slices). The density is sparse now
+		/// Types one terrain can scatter, a channel each (was 8, two RGBA density slices). The density is sparse now
 		/// (<see cref="PackEntry"/>: only the painted pairs of block and channel are kept), so a channel costs nothing where it is
 		/// not painted; the cap is the table's. Moron 2's busiest terrain paints 63 mesh kinds. Past it the cut reports an error
 		/// (TerrainDetailBaker) and play logs one: nothing is drawn on the CPU instead.
 		/// </summary>
 		public const int MaxChannels = 256;
 
-		// ── The sparse density (2026-10-27) ───────────────────────────────────────────────────────────────────────
+		// ── The sparse density ───────────────────────────────────────────────────────────────────────
 		/* A terrain's density is every painted (block, channel) pair, one uint each, grouped by work item and within it by
 		 * block (0..63, row z first), channel ascending: bits 0..15 the stored count as a half float (Stored: what the dense
 		 * slices held), 16..27 the channel, 28..31 the block's painted cells (CellMask). Each item has a header of
@@ -78,7 +78,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The cells a side of a block the painted-cell mask covers: one for a 2 m cell, two for 1 m cells (the generator's), 0 for
-		/// finer cells (no mask: the block's instances stand anywhere in it, as every one did before 2026-10-27).
+		/// finer cells (no mask: the block's instances stand anywhere in it, as every one did formerly).
 		/// </summary>
 		public static int MaskCells(int factor) => factor == 1 ? 1 : factor == 2 ? 2 : 0;
 
@@ -228,7 +228,7 @@ namespace FishMMO.Client
 		public const int VariantStream = 5;
 
 		/// <summary>
-		/// Which of a type's <paramref name="variants"/> meshes an instance draws (2026-10-26): 0 for a type of one mesh, else
+		/// Which of a type's <paramref name="variants"/> meshes an instance draws: 0 for a type of one mesh, else
 		/// one of them by its own hash, every one alike likely; its own stream, so its place, turn and size are as they were.
 		/// </summary>
 		public static int Variant(uint hash, int variants)

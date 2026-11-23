@@ -63,6 +63,11 @@ namespace FishMMO.Shared
 		/// Accessory slot (e.g., rings, amulets, trinkets).
 		/// </summary>
 		Accessory = 9,
+		/// <summary>
+		/// Mount saddle slot (issue #109): the saddle names the mount the Mount ability puts its wearer on (the
+		/// Mounts module's SaddleTemplate). Nothing is drawn on the body for it.
+		/// </summary>
+		MountSaddle = 10,
 	}
 
 	/// <summary>
@@ -105,6 +110,9 @@ namespace FishMMO.Shared
 					return "Off Hand";
 				case ItemSlot.Accessory:
 					return "Accessory";
+				case ItemSlot.MountSaddle:
+					// "Mount Saddle" is wider than a socket's label (EquipmentPanelLayoutTests); a saddle is only ever a mount's.
+					return "Saddle";
 				default:
 					return slot.ToString();
 			}

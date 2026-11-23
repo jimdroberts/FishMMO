@@ -77,7 +77,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// How far a prop of <paramref name="size"/> metres is drawn: in proportion to its size, so a boulder goes at a few
-		/// hundred metres and a crag stays on the skyline for kilometres (2026-10-06: larger objects keep larger
+		/// hundred metres and a crag stays on the skyline for kilometres (larger objects keep larger
 		/// distances, for realism). Scaled by the quality level's LOD bias (its square root: 0.6 Performant, 1 Balanced,
 		/// 1.4 High Fidelity).
 		/// </summary>
@@ -112,7 +112,7 @@ namespace FishMMO.Client
 		/// blade grass does, GrassBladeRenderer.RegatherMetres). Gathered against a view widened by what that sweeps at
 		/// the far edge, with the level masks widened for the move, the list holds until then; the GPU culls each
 		/// instance against the camera's own frustum every frame. Walking every chunk of every source for every camera
-		/// was 0.7 ms of the main thread in the editor (ScenePerfProbe, 2026-10-07).
+		/// was 0.7 ms of the main thread in the editor (ScenePerfProbe).
 		/// </summary>
 		public const float RegatherMetres = 1.5f, RegatherDegrees = 3f;
 

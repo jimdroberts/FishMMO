@@ -7,8 +7,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// A COAT the weather of a biome lays over its buildings on the GPU (<see cref="BiomeWeathering.Coat"/>; decisions 25, 31, 33 and
-	/// every finish a biome draft named from 2026-10-16 to 2026-10-25): lichen, rime, salt bloom, soot, a tide-mark… Drawn by
+	/// A COAT the weather of a biome lays over its buildings on the GPU (<see cref="BiomeWeathering.Coat"/>, 33 and
+	/// every finish a biome draft named): lichen, rime, salt bloom, soot, a tide-mark… Drawn by
 	/// FishStructureCoat.hlsl from a recipe (<see cref="BiomeStructureCoats"/>) on top of the structure weathering every building
 	/// already wears; no prefab, no material, no texture of its own. Append-only (stored by value).
 	/// </summary>
@@ -245,7 +245,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>
 		/// The foot band is measured from the LOCAL water's surface (any water standing within 6 m of the piece, from the fine ground
 		/// map round the camera: a lake, a river, a methane sea), not from the ground; a piece with no water by it has no band.
-		/// I2g-e: Sinkline's algal band, Waxed's bathtub ring. Wins over <see cref="FromSea"/>.
+		/// Sinkline's algal band, Waxed's bathtub ring. Wins over <see cref="FromSea"/>.
 		/// </summary>
 		public bool FromWater;
 		/// <summary>How much the foot band's height differs piece to piece (a hash of its origin): 0.6 → 0.4…1.6 × the height (Teastain).</summary>
@@ -283,12 +283,12 @@ namespace FishMMO.Shared.Biomes
 	/// 0 A.rgb + strength · 1 B.rgb + cover · 2 C.rgb + speckle · 3 foot.rgb + foot height m · 4 skyward, shade, windward (signed), sun ·
 	/// 5 film, edge, streaks, cracks · 6 patchiness, smoothness (&lt; 0 keep), bleach (signed), keep · 7 mark m, foot from (0 the ground,
 	/// 1 the sea's low water, 2 the local water), scale m, foot wind (signed) · 8 uphill, uphill foot, foot spread, year fade ·
-	/// 9 scour, scour top m, faults (signed), growth below m. (Texels 8.zw and 9 since I2g-e; a recipe that leaves them zero draws as
+	/// 9 scour, scour top m, faults (signed), growth below m. (Texels 8.zw and 9; a recipe that leaves them zero draws as
 	/// before.)
 	/// </para>
 	/// <para>
 	/// <b>Defaults:</b> a biome with no coat (or strength 0) has a row of zeros, which the shader skips; a scene in which no biome has a
-	/// coat publishes the table off (<see cref="AnyCoat"/>), so every building draws exactly as before 2026-10-25.
+	/// coat publishes the table off (<see cref="AnyCoat"/>), so every building draws exactly as formerly.
 	/// </para>
 	/// <para>
 	/// Not drawn yet (no data on the GPU): Plume-rimed's hoar grown toward the NEAREST jet (it grows into the prevailing wind), and
@@ -498,7 +498,7 @@ namespace FishMMO.Shared.Biomes
 				[BiomeStructureCoat.Tideline] = R("#8a8070", b: "#3a2a1a", c: "#1e2020", foot: "#8a8070", speckle: 0.3f, footH: 1.2f, sea: true, mark: 0.4f, patch: 0.3f),
 				[BiomeStructureCoat.Rootheave] = R("#1a1a16", b: "#1e1a14", c: "#e8dcc0", film: 0.25f, edge: 0.3f, streaks: 0.3f, cracks: 0.6f, speckle: 0.45f, patch: 0.6f,
 					air: BiomeCoatParts.Speckle),
-				// The bathtub ring (I2g-e): a darker amber band at the local lake's surface, a pale wax line above it.
+				// The bathtub ring: a darker amber band at the local lake's surface, a pale wax line above it.
 				[BiomeStructureCoat.Waxed] = R("#b07a2a", b: "#8a5a1a", foot: "#5a3a12", sky: 0.85f, streaks: 0.55f, footH: 0.35f, mark: 0.08f, patch: 0.2f, smooth: 0.8f,
 					water: true),
 				[BiomeStructureCoat.Ochred] = R("#c8884a", b: "#1e1c1a", c: "#d8781e", sun: 0.6f, edge: 0.4f, streaks: 0.35f, speckle: 0.35f, patch: 0.5f, air: BiomeCoatParts.Speckle),
@@ -515,19 +515,19 @@ namespace FishMMO.Shared.Biomes
 					air: BiomeCoatParts.Speckle | BiomeCoatParts.Windward),
 				[BiomeStructureCoat.Termitecast] = R("#9a5a3a", b: "#8a4a2a", c: "#d0782a", foot: "#3a2a22", film: 0.15f, streaks: 0.55f, cracks: 0.2f, speckle: 0.3f, footH: 0.5f, patch: 0.55f,
 					air: BiomeCoatParts.Speckle),
-				// The step (I2g-e): dipping faults struck along the rille wall's contour, the coat stepped down across them.
+				// The step: dipping faults struck along the rille wall's contour, the coat stepped down across them.
 				[BiomeStructureCoat.Riftstepped] = R("#8a847a", b: "#1e1c1a", foot: "#8a847a", edge: 0.2f, cracks: 0.7f, footH: 0.3f, patch: 0.3f, smooth: 0.02f,
 					faults: -0.8f),
 				[BiomeStructureCoat.Rainmelt] = R("#ece4d4", b: "#6a5444", foot: "#8a6a4e", sky: 0.5f, edge: 0.3f, streaks: 0.55f, footH: 0.35f, patch: 0.4f),
 				[BiomeStructureCoat.Sunfrost] = R("#8a8690", b: "#ece8e0", foot: "#a8a296", sun: 0.4f, edge: 0.45f, cracks: 0.3f, footH: 0.3f, mark: 0.06f, patch: 0.6f, smooth: 0.1f, bleach: 0.4f),
 				[BiomeStructureCoat.Stoneshot] = R("#c8c4bc", c: "#5a5650", foot: "#7a766e", film: 0.12f, edge: 0.5f, cracks: 0.2f, speckle: 0.3f, footH: 0.45f,
 					patch: 0.55f, smooth: 0.05f, b: "#4a4640", uphill: 0.75f, uphillFoot: 1f),
-				// The depth term (I2g-e): above 15 m only the coralline crust (B, the pink).
+				// The depth term: above 15 m only the coralline crust (B, the pink).
 				[BiomeStructureCoat.Currentgrown] = R("#e0a070", b: "#c86a7a", c: "#d8b030", wind: 0.8f, cracks: 0.15f, speckle: 0.45f, patch: 0.6f, smooth: 0.1f, bleach: -0.5f,
 					growthBelow: 15f),
 				[BiomeStructureCoat.Snowladen] = R("#f4f7fa", c: "#ffffff", foot: "#eef2f6", sky: 0.95f, edge: 0.2f, wind: 0.15f, speckle: 0.15f, footH: 0.35f, patch: 0.15f,
 					smooth: 0.25f, air: BiomeCoatParts.All),
-				// I2g-e: the coats of decisions 82–96. "No moss" in a draft is a partial keep (the structure weathering's moss and damp undone).
+				// The coats of decisions 82–96. "No moss" in a draft is a partial keep (the structure weathering's moss and damp undone).
 				[BiomeStructureCoat.Burandrift] = R("#b09a78", c: "#8a7050", foot: "#b8a07a", wind: -0.35f, speckle: 0.15f, footH: 0.7f, footWind: -1f, patch: 0.4f, smooth: 0.05f,
 					bleach: 0.35f, keep: 0.3f, scour: 0.6f, scourTop: 1f, air: BiomeCoatParts.Windward | BiomeCoatParts.Foot | BiomeCoatParts.Scour),
 				[BiomeStructureCoat.Fumed] = R("#d8c040", b: "#ece8dc", c: "#3a3428", foot: "#f0eee4", sky: 0.4f, film: 0.25f, cracks: 0.45f, speckle: 0.3f, footH: 0.3f, patch: 0.55f,

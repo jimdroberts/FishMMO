@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// onto it over the last metres.
 	/// </para>
 	/// <para>
-	/// <b>Why a map.</b> Scanning the holes from the vertex (2026-10-19) reached three cells and was read only at the
+	/// <b>Why a map.</b> Scanning the holes from the vertex reached three cells and was read only at the
 	/// vertices drawn: a far patch's vertices stand several cells apart, so its fade collapsed into a flat square plate that
 	/// moved with the level of detail. Here every vertex's own value is the exact distance to the nearest hole quad, its own
 	/// tile's or a neighbour's, so a vertex shared by two patches or two tiles is lifted alike whichever draws it.

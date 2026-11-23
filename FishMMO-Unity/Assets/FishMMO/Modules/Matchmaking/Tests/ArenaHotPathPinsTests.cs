@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// Pins the shape of the arena coordinator's and the group finder pump's hot paths after the
-	/// 2026-09-25 hot-path audit (S1, M19, L7), so the per-recipient and per-row patterns they
+	/// hot-path audit (S1, M19, L7), so the per-recipient and per-row patterns they
 	/// replaced cannot grow back unnoticed.
 	/// </summary>
 	/// <remarks>

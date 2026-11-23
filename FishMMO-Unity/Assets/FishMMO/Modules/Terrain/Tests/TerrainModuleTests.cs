@@ -7,7 +7,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>The Terrain module's seams into the core (Phase 4 of the core and modules plan, 2026-11-18).</summary>
+	/// <summary>The Terrain module's seams into the core.</summary>
 	public class TerrainModuleTests
 	{
 		[Test]

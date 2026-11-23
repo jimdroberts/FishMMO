@@ -5,7 +5,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// How damp a biome keeps its rock and timber, for the moss layer in the world lit shader (FishMoss.hlsl): 0 grows
-	/// none, 1 grows all a surface's material allows (2026-10-12: "a moss layer that can be applied to objects").
+	/// none, 1 grows all a surface's material allows ("a moss layer that can be applied to objects").
 	/// Pure functions of the biome's own definition, so a scene's moss follows its climate and not today's weather:
 	/// a desert after a shower is still a desert. The rain's wetness is applied on top of the moss by the weather
 	/// (FishWeatherSurface), which darkens it like the rest.

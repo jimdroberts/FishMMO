@@ -14,7 +14,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Measured before it was built (2026-10-27, the saved tiles):</b> Moron 2's 16 tiles carried 210 layers each, 53 control
+	/// <b>Measured before it was built (the saved tiles):</b> Moron 2's 16 tiles carried 210 layers each, 53 control
 	/// maps, ~74 MB a tile (1186 MB the scene) when they paint 16–62 (207 MB); Moron 1 783 → 208 MB, Moron 3 537 → 101 MB,
 	/// Belron 1 12.6 → 7 MB. The exact rule (a layer stays where any of its weight bytes is not zero) changes no texel, so seams,
 	/// the index maps' choices and every reader's weights are what they were; only the channel numbers move, and every reader that
@@ -355,7 +355,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		[DashboardTool(DashboardToolAttribute.Biomes, "Compact terrain layers per tile (open scene)", Section = "Diagnostics", Order = 118,
-			Tooltip = "Gives every terrain tile of the active scene only the terrain layers it paints (every weight kept, so the ground does not change), what a cut or repaint now does at its end, then bakes the scene's terrain details and index maps again. A scene cut before 2026-10-27 carries its whole palette on every tile (Moron 2: 53 control maps, ~74 MB a tile). Save the scene after.",
+			Tooltip = "Gives every terrain tile of the active scene only the terrain layers it paints (every weight kept, so the ground does not change), what a cut or repaint now does at its end, then bakes the scene's terrain details and index maps again. A scene cut by an older generator carries its whole palette on every tile (Moron 2: 53 control maps, ~74 MB a tile). Save the scene after.",
 			Confirm = "Compact the active scene's terrain layers per tile? Each tile's layer list and alphamaps are rewritten to the layers it paints (weights unchanged), and its terrain details and index maps are baked again.")]
 		public static void CompactActiveScene()
 		{

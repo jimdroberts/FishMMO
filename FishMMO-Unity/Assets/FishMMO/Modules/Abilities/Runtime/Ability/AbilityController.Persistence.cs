@@ -5,7 +5,7 @@ using FishMMO.Shared.Core;
 
 namespace FishMMO.Shared
 {
-	/// <summary>The controller's side of the core character load and save (<see cref="IAbilityPersistence"/>, 2026-11-20).</summary>
+	/// <summary>The controller's side of the core character load and save (<see cref="IAbilityPersistence"/>).</summary>
 	public partial class AbilityController : IAbilityPersistence
 	{
 		/// <inheritdoc />

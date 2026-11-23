@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The plants that float on still fresh water (2026-10-18, phase I2i, decision 27): a duckweed carpet, water-lily pads with a
+	/// The plants that float on still fresh water: a duckweed carpet, water-lily pads with a
 	/// flower or two, water hyacinth rosettes with their lilac spikes, frogbit's little kidney leaves. One detail mesh each, one
 	/// sub-mesh, the vegetation shader's vertex layout, under the detail budget.
 	/// </summary>
@@ -35,7 +35,7 @@ namespace FishMMO.Shared.WorldDesign
 				case DetailKind.WaterLily:
 				case DetailKind.WaterHyacinth:
 				case DetailKind.Frogbit:
-				// The drafts' kinds (2026-10-25, I2i-b).
+				// The drafts' kinds.
 				case DetailKind.Tasselweed:
 				case DetailKind.SacredLotus:
 				case DetailKind.WaterChestnut:
@@ -346,7 +346,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		// ══ The drafts' kinds (2026-10-25, phase I2i-b) ═══════════════════
+		// ══ The drafts' kinds ═══════════════════
 		// Each from the shared parts above and below: carpets of cards, rosettes and chains of flat leaves, lotus dishes on stalks,
 		// sword rosettes half sunk, plates of salt, froth and foam, and lumps of ice. Built at the water line as the first four; a
 		// kind's Reach says how far under and over it may go. Things that are not plants (ice, salt, froth, foam, propagules) are

@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// One orchard a biome's farmland plants (<see cref="BiomeTemplate.Orchards"/>, 2026-10-18, phase I2j-b, decision 23): a field
+	/// One orchard a biome's farmland plants (<see cref="BiomeTemplate.Orchards"/>): a field
 	/// set out in a grid of one tree species, drawn against the biome's crops by <see cref="Weight"/> (the same draw), with an
 	/// understorey sown under the trees or the meadow left to grow there.
 	/// </summary>
@@ -83,7 +83,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// How a biome lays its settlements' fields out (<see cref="BiomeTemplate.FieldLayout"/>, 2026-10-18, phase I2j-b): fields kept to the
+	/// How a biome lays its settlements' fields out (<see cref="BiomeTemplate.FieldLayout"/>): fields kept to the
 	/// bottomland near rivers and lakes, and fields set square to a Roman-style centuriation grid. Both off (0) by default: fields
 	/// lie where they always did.
 	/// </summary>
@@ -113,7 +113,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The centuriation grid's geometry (pure; 2026-10-18, I2j-b): one grid a scene, turned and offset by the scene's seed, each of
+	/// The centuriation grid's geometry (pure): one grid a scene, turned and offset by the scene's seed, each of
 	/// its squares divided into cells about <see cref="CellTarget"/> across, a field set in the middle of a cell square to the grid.
 	/// </summary>
 	public static class BiomeCenturiation
@@ -161,7 +161,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The old terraces round a biome's settlements (<see cref="BiomeTemplate.AbandonedTerraces"/>, 2026-10-18, phase I2j-b, decision
+	/// The old terraces round a biome's settlements (<see cref="BiomeTemplate.AbandonedTerraces"/>, decision
 	/// 29): flights of benches stepped into the hillsides near a hamlet and long given up, their walls tumbled, broom and heath grown
 	/// over them. Carved at the cut as a terraced field is; nothing sown. None (0 flights) by default.
 	/// </summary>
@@ -202,7 +202,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The ground a biome paints along its water channels (<see cref="BiomeTemplate.ChannelMargin"/>, 2026-10-18, phase I2j-b, decision
+	/// The ground a biome paints along its water channels (<see cref="BiomeTemplate.ChannelMargin"/>, decision
 	/// 38): one of its own detail ground layers (a roggia's wet margin of gley silt and cress) laid in a strip either side of every
 	/// channel the last placing of the scene's sites carried. The channels are laid after the ground is painted, so their lines are
 	/// stored with the scene (GeneratedChannelLines) and the NEXT repaint paints along them. None by default.

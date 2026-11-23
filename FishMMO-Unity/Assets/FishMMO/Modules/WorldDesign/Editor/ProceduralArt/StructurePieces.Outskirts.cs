@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A city's great church and what stands round a settlement's edges (2026-10-19): the cathedral, the churchyard's lychgate,
+	/// A city's great church and what stands round a settlement's edges: the cathedral, the churchyard's lychgate,
 	/// the gallows on its hill, a wayside cross by the road, the village green's maypole, the shepherd's hut and the sheepfold on
 	/// the pasture, and the outlier's bothy at the wood's or the orchard's edge.
 	/// </summary>
@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float CathedralFloor = 0.6f;
 
 		/// <summary>
-		/// A city's cathedral (2026-10-19: "a city's or the capital's great church"): a Gothic church on the cross, its west front
+		/// A city's cathedral ("a city's or the capital's great church"): a Gothic church on the cross, its west front
 		/// to the square (−z) and its altar at the east end (+z). The nave is a tall middle vessel between arcades of pointed bays,
 		/// lit from high up by the clerestory over the lean-to roofs of the aisles either side; the transepts cross it two thirds of
 		/// the way down, the choir beyond them; the thrust of the high vault is taken out over the aisle roofs by buttresses (flying
@@ -513,7 +513,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Lychgate ──────────────────────────────────────────────────
 
 		/// <summary>
-		/// The churchyard's roofed gate (2026-10-19), where a coffin rested out of the rain while the priest came down to meet it:
+		/// The churchyard's roofed gate, where a coffin rested out of the rain while the priest came down to meet it:
 		/// its passage runs front (−z) to back, 2.6 m wide and open at every level. v0 the timber lychgate, its posts on low stone
 		/// sill walls whose capped tops are the coffin rests, the roof steep and gabled to the path (it follows its palette); v1 a
 		/// pointed stone arch through a short length of wall under a little gabled stone cap.
@@ -636,7 +636,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Gallows ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// Justice outside the town (2026-10-19), on a hill where the road could see it: v0 a gallows on its scaffold, the trap in the
+		/// Justice outside the town, on a hill where the road could see it: v0 a gallows on its scaffold, the trap in the
 		/// planks under the noose, a ladder for the hangman against the beam, a flight of steps up the front; v1 a gibbet, where the
 		/// hanged were left in an iron cage as a warning (empty here: no bodies).
 		/// </summary>
@@ -774,7 +774,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Wayside cross ─────────────────────────────────────────────
 
 		/// <summary>
-		/// A marker where roads meet (2026-10-19), as different from the kit's wayside shrine (a niche on a post) as a cross is from a
+		/// A marker where roads meet, as different from the kit's wayside shrine (a niche on a post) as a cross is from a
 		/// box: v0 a carved stone cross of the old kind, its shaft on two square steps, its head a ringed sun-disc with rays and runes
 		/// cut in it; v1 a timber calvary, a tall cross carrying a carved robed figure under a pent gable of boards (it follows its
 		/// palette), an offering ledge and a kneeling step before it.
@@ -876,7 +876,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Maypole ───────────────────────────────────────────────────
 
 		/// <summary>
-		/// The village green's maypole (2026-10-19), raised each spring and left standing: a tall pole painted in bands on a mound
+		/// The village green's maypole, raised each spring and left standing: a tall pole painted in bands on a mound
 		/// of turf kept by a ring of stones, the garland at its head and the ribbons hanging from it for the dance.
 		/// </summary>
 		private static void Maypole(StructureDraft d)
@@ -962,7 +962,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Shepherd's hut ────────────────────────────────────────────
 
 		/// <summary>
-		/// Where the shepherd slept out on the hill at lambing (2026-10-19), with a stove for the lambs that came weak: v0 the hut
+		/// Where the shepherd slept out on the hill at lambing, with a stove for the lambs that came weak: v0 the hut
 		/// on wheels, drawn from pasture to pasture, its curved board roof on bent hoops (a barrel, not a pitch: it does not follow a
 		/// palette's roof) and its end door up timber steps; v1 the stone bothy of the high grazing, under turf. One room
 		/// (StructureRoomKind.Dwelling: a bunk, the stove, a chest).
@@ -1104,7 +1104,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Sheepfold ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// Where the flock is gathered for counting, shearing and dipping (2026-10-19): open ground inside a wall a sheep cannot
+		/// Where the flock is gathered for counting, shearing and dipping: open ground inside a wall a sheep cannot
 		/// clear, one gap at the front (−z) to drive them through. v0 the round drystone fold of the uplands, coped, a creep hole
 		/// in its back for the lambs; v1 the lowland fold of wattle hurdles lashed to stakes, put up and taken down as the flock
 		/// moves.
@@ -1212,7 +1212,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Bothy ─────────────────────────────────────────────────────
 
 		/// <summary>
-		/// An outlier's hut (2026-10-19), for the man who lives with his work: the woodcutter in the wood, the beekeeper by his skeps,
+		/// An outlier's hut, for the man who lives with his work: the woodcutter in the wood, the beekeeper by his skeps,
 		/// the keeper of a far orchard. One room (StructureRoomKind.Keeper: a bed, a table and stool, a chest, a shelf). v0 a plank
 		/// shed under a lean-to of boards falling to the back (a lean-to keeps its own pitch, StructureRoofs); v1 the round hut of
 		/// wattle daubed with clay under a cone of thatch (it follows its palette).

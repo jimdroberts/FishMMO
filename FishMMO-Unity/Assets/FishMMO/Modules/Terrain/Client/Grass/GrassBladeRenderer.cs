@@ -85,7 +85,7 @@ namespace FishMMO.Client
 		/// The GPU-driven gather: every tile with grass baked once into a table (<see cref="EnsureTiles"/>), and each frame
 		/// a compute pass culls it (reach, view, the shadows' sweep), picks each tile's level and writes the work list the
 		/// generation reads, dispatched indirectly from the counts it wrote. Nothing is gathered or uploaded on the CPU per
-		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). 2026-10-07: "the real fix".
+		/// frame. Off: the CPU gather (the work list kept across frames, RegatherMetres). On is the real fix.
 		/// </summary>
 		public static bool GpuGather = true;
 
@@ -270,7 +270,7 @@ namespace FishMMO.Client
 		/// against a view widened by as much (the frustum's sides pushed out by what that move and turn sweep at the
 		/// grass's far edge), it still holds every tile the camera can see until then, and the compute culls each blade
 		/// against the camera's own frustum every frame. The gather was 4 ms of every camera's render in the editor
-		/// (ScenePerfProbe, 2026-10-07: 3 500 tiles, 67 000 items) for a list that changes only as the camera moves.
+		/// (ScenePerfProbe: 3 500 tiles, 67 000 items) for a list that changes only as the camera moves.
 		/// </summary>
 		public const float RegatherMetres = 1.5f, RegatherDegrees = 3f;
 
@@ -401,7 +401,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The generate kernel turns away, right after a candidate's root, one its blade could never survive: buried in snow
 		/// even at the tallest it can be (FishGrassBlades.compute). The same blades, less work: at the forest test camera a
-		/// third of all candidates were found buried only after every other test (2026-11-05). Off only for the A/B that proves
+		/// third of all candidates were found buried only after every other test. Off only for the A/B that proves
 		/// the blades the same (harness grassEarly, probe noearly).
 		/// </summary>
 		public static bool EarlyExits = true;
@@ -441,7 +441,7 @@ namespace FishMMO.Client
 		private readonly LocalKeyword noTerrainColour;
 		/// <summary>The generate kernel's 32-channel variant (FishGrassBlades.compute GRASS_WIDE): on only while a terrain needs it.</summary>
 		private readonly LocalKeyword wideChannels;
-		/// <summary>Its 64-channel variant (GRASS_WIDEST, 2026-10-27): on only while a terrain has more than 32 channels.</summary>
+		/// <summary>Its 64-channel variant (GRASS_WIDEST): on only while a terrain has more than 32 channels.</summary>
 		private readonly LocalKeyword widestChannels;
 		private readonly LocalKeyword activeChannelsKeyword;
 		private bool generated;
@@ -608,7 +608,7 @@ namespace FishMMO.Client
 		private static readonly BiomeGrassType FallbackLook = new BiomeGrassType { GroundTint = BiomeGrassType.LegacyGroundTint };
 
 		/// <summary>
-		/// How hard the world's air moves the blades, as a share of the wind's sway (BiomeAir.Sway, decision 41, 2026-10-18): 0 on
+		/// How hard the world's air moves the blades, as a share of the wind's sway (BiomeAir.Sway): 0 on
 		/// an airless world (no blade moves), 0.3 under a thin sky, 1 under Earth-like air (exactly as before). Set by the blade
 		/// system from the scene's world before each <see cref="Publish"/>; it scales the published wind strength, flutter and idle
 		/// breeze, so no material property is added.
@@ -668,7 +668,7 @@ namespace FishMMO.Client
 				BiomeGrassType look = type.Look ?? FallbackLook;
 				SetType(t, RowShape, new Vector4(type.Height * look.HeightScale / Mathf.Max(0.05f, type.BuiltHeightScale), Mathf.Clamp(look.Density, 0.01f, 1f), Mathf.Clamp(look.ClumpPull, 0f, 0.95f), Mathf.Max(0f, look.Wade)));
 				// The root row's alpha is how much of the terrain texture's colour the type takes (per type and biome since
-				// 2026-10-15; one global 0.85 before, _GrassParams6.x).
+				// one global 0.85 before, _GrassParams6.x).
 				SetType(t, RowRoot, new Vector4(type.Root.r, type.Root.g, type.Root.b, Mathf.Clamp01(look.GroundTint)));
 				SetType(t, RowTip, new Vector4(type.Tip.r, type.Tip.g, type.Tip.b, s.BladeWidth * look.Width));
 				SetType(t, RowHealthy, new Vector4(type.Healthy.r, type.Healthy.g, type.Healthy.b, type.TintSpread));
@@ -682,7 +682,7 @@ namespace FishMMO.Client
 				float headSize = Mathf.Max(0.002f, look.HeadSize);
 				SetType(t, RowShape2, new Vector4(GrassMath.SprinkleChance(sprinkle, sprinkleLevel), (float)head, head != GrassBladeHead.None ? headSize : 0f, Mathf.Clamp01(type.SnowBury)));
 				// The share of stems with a head, the sprinkled type's lattice level, 1 for a rigid (mineral) type that never sways, and 1 for
-				// an after-burn type that grows only on freshly burnt ground (fire lilies; 2026-10-25, I2t).
+				// an after-burn type that grows only on freshly burnt ground (fire lilies).
 				SetType(t, RowMore, new Vector4(head != GrassBladeHead.None ? Mathf.Clamp01(look.HeadShare) : 0f, sprinkleLevel, look.Rigid ? 1f : 0f, look.AfterBurn ? 1f : 0f));
 				// The head's colours: the mesh's petals (unless the look's win: GrassType.Build left none), else the look's.
 				int colours = Mathf.Clamp(type.HeadColours.Count, 0, GrassType.MaxHeadColours);
@@ -858,13 +858,13 @@ namespace FishMMO.Client
 			// This camera's RENDERED pixel at a distance, for the blades' on-screen width cap and the sub-pixel coverage
 			// (FishGrassBlades.hlsl). A global, set before every draw of this camera, so its shadow casters widen exactly as its
 			// blades do. Under a render scale (a quality level drawn below native with STP) a rendered pixel is 1/scale screen pixels: the
-			// sub-pixel test counted screen pixels until 2026-10-27, so a "pixel-wide" blade was two thirds of what it drew to.
+			// sub-pixel test counted screen pixels formerly, so a "pixel-wide" blade was two thirds of what it drew to.
 			var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
 			float renderScale = RenderScaleOf(camera, pipeline);
 			float pixelsHigh = Mathf.Max(1f, camera.pixelHeight * renderScale);
 			float perMetre = camera.orthographic ? 0f : 2f * Mathf.Tan(0.5f * camera.fieldOfView * Mathf.Deg2Rad) / pixelsHigh;
 			float flat = camera.orthographic ? 2f * camera.orthographicSize / pixelsHigh : 0f;
-			// w: how a blade thinner than a rendered pixel is drawn (2026-10-21 MSAA; 2026-10-27 temporal): a pixel wide with its true
+			// w: how a blade thinner than a rendered pixel is drawn (MSAA, then temporal): a pixel wide with its true
 			// width as coverage, MSAA's alpha to coverage (1) or a dither that turns every frame for STP/TAA to average (2), so it
 			// fades smoothly instead of flipping whole pixels as it sways; 0 as it is (no resolve could smooth it).
 			bool msaa = camera.allowMSAA && pipeline != null && pipeline.msaaSampleCount > 1;
@@ -1545,7 +1545,7 @@ namespace FishMMO.Client
 			cmd.SetComputeVectorParam(compute, FloraGroundId, valid ? Shader.GetGlobalVector(FloraGroundId) : Vector4.zero);
 			// The world's growth (FishFloraGrowth: thin air low, thick air tall), which the blade heights take.
 			cmd.SetComputeVectorParam(compute, FloraWorldId, valid ? Shader.GetGlobalVector(FloraWorldId) : new Vector4(1f, 1f, 0f, 0f));
-			// The burn mosaic (2026-10-25, I2t; FishBurn.hlsl): stubble, the flush and the fire lilies on the flora grid's rows.
+			// The burn mosaic (FishBurn.hlsl): stubble, the flush and the fire lilies on the flora grid's rows.
 			BurnMosaicTable.BindCompute(cmd, compute);
 		}
 

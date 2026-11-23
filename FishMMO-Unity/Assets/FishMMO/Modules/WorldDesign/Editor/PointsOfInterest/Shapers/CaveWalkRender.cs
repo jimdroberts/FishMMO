@@ -16,7 +16,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Walks a camera through one generated cave system and renders it frame by frame (2026-10-13: "Render a 'walk' through a
+	/// Walks a camera through one generated cave system and renders it frame by frame ("Render a 'walk' through a
 	/// cave … Ensure we can see and use the 'torch' or a stronger light source"): in at the mouth, down the trunk, through the
 	/// hubs to the chasm, over its bridge, and down its climb, carrying the player's light; then the same three spots lit by
 	/// nothing but the cave, by the torch and by the lantern; and what it all costs.
@@ -35,7 +35,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// Environment: <c>FISHMMO_CAVE_WALK_OUT</c> (default <c>WorldRenders/cavewalk</c> under <see cref="ProbeOutput.Root"/>);
 	/// <c>FISHMMO_CAVE_WALK_CAVE</c> (<c>Form:size</c>, default <c>Cave:2</c>); <c>FISHMMO_CAVE_WALK_SEED</c> (a seed to
-	/// use as it is); <c>FISHMMO_CAVE_WALK_FRAMES</c> (default 720). For a <c>LavaTube</c> (2026-10-20) the seed is the first whose
+	/// use as it is); <c>FISHMMO_CAVE_WALK_FRAMES</c> (default 720). For a <c>LavaTube</c> the seed is the first whose
 	/// tube runs molten with a river, a lake and a fall (<see cref="CaveLava.Plan"/>); its lava is written into a hydrology in memory
 	/// and drawn by the inland water renderer as a scene draws it, the walk goes to a lava lake's chamber, and every lava body gets a
 	/// still of its own (<c>stills/lava*</c>), lit by the cave alone and by the torch. <c>FISHMMO_CAVE_WALK_FLY=1</c> flies instead:
@@ -103,7 +103,7 @@ namespace FishMMO.Shared.WorldDesign
 				? r : Env("FISHMMO_CAVE_WALK_SHOW", "") == "life" ? 45f : 140f;
 
 			// ── The art the dressing places ──
-			// Always asked: whatever the kit is missing is made (the art the dressing passes added since, 2026-10-20), and a kit
+			// Always asked: whatever the kit is missing is made (the art the dressing passes added since), and a kit
 			// with nothing missing costs a scan.
 			{
 				var art = System.Diagnostics.Stopwatch.StartNew();
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 			CaveSystem system = null;
 			int seed = 0;
 			var planClock = new System.Diagnostics.Stopwatch();
-			// The caves livened (2026-10-20): a cave with water, a fall and a skylight to show them all.
+			// The caves livened: a cave with water, a fall and a skylight to show them all.
 			bool life = Env("FISHMMO_CAVE_WALK_SHOW", "") == "life";
 			if (int.TryParse(Env("FISHMMO_CAVE_WALK_SEED", ""), out int forced))
 			{
@@ -196,7 +196,7 @@ namespace FishMMO.Shared.WorldDesign
 				$"{system.Solids.Count} solid(s) [{string.Join(", ", system.Solids.GroupBy(o => o.Kind).Select(g => $"{g.Count()} {g.Key}"))}], {system.Climbs.Count} climb(s), " +
 				$"{system.Crossings.Count} built crossing(s), plan {planClock.Elapsed.TotalMilliseconds:0} ms");
 
-			// Every opening's holes: the mouth's, and a skylight's in the hill over its chamber (2026-10-20).
+			// Every opening's holes: the mouth's, and a skylight's in the hill over its chamber.
 			for (int m = 0; m < system.Mouths.Count; m++)
 			{
 				List<Vector2Int> cells = system.HoleCells(m, groundAt, holeStep, gridX, gridZ);
@@ -476,7 +476,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		// ── Lava (2026-10-20) ─────────────────────────────────────
+		// ── Lava ─────────────────────────────────────
 
 		/// <summary>A tube worth walking for its lava: molten, with a river, a lake and a fall.</summary>
 		private static bool LavaShowcase(CaveSystem system)
@@ -764,7 +764,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A system worth flying for its form's life (2026-10-20, "a fresh webp of each cave type"): a cave's water with a pool and
+		/// A system worth flying for its form's life ("a fresh webp of each cave type"): a cave's water with a pool and
 		/// a fall, a lava tube's molten lava, a mine's flooded workings, an ice cave's frozen streams; and (when asked, where the form
 		/// has them) a skylight. A grotto or a sea cave: any.
 		/// </summary>
@@ -1051,7 +1051,7 @@ namespace FishMMO.Shared.WorldDesign
 					intensity = 3.2f;
 					return;
 				case SceneEmitterKind.Magma:
-					// A lava tube's molten lava (2026-10-20), at the middle of its churn.
+					// A lava tube's molten lava, at the middle of its churn.
 					colour = SceneMagma.Colour(e.Seed);
 					range = e.Reach > 0f ? e.Reach : SceneMagma.Range;
 					intensity = SceneMagma.Brightness(e.Seed);

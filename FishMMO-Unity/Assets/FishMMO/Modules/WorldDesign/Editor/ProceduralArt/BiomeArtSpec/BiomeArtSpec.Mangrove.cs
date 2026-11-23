@@ -10,8 +10,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Mangrove</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Mangrove()
 		{
-			// The mangal of the medieval Swahili coast (Kilwa, Lamu, Pemba, the Rufiji delta; biome round, approved 2026-10-25, authored
-			// 2026-10-26): a dark, glossy, even-topped forest of mkoko standing knee-deep at high water on arching prop roots, a seaward
+			// The mangal of the medieval Swahili coast (Kilwa, Lamu, Pemba, the Rufiji delta):
+			// a dark, glossy, even-topped forest of mkoko standing knee-deep at high water on arching prop roots, a seaward
 			// fringe of grey Avicennia and round-crowned Sonneratia over a bed of pencil and cone pneumatophores crusted with rock oysters,
 			// behind it Bruguiera on knee roots, tannin-barked Ceriops and cannonball Xylocarpus, inland the tan hypersaline ukanda, then
 			// the grey-black razor-pitted coral rag under Pemphis, doum and wild date palms, sea hibiscus and coconut groves. The creeks
@@ -20,11 +20,11 @@ namespace FishMMO.Shared.WorldDesign
 			// mangrove poles, fishing villages of daub under steep makuti thatch, sewn mtepe on the mud, tidal uzio fences on the flats.
 			// Wet reach (h >= 0.75): taller mangrove, Heritiera, flood rice, no ukanda; dry reach (h < 0.55): dwarf Avicennia, doum palms,
 			// the big ukanda; cool edge (t < 0.65): Avicennia and Rhizophora only. Fantasy: nguva sea-maidens, seafire, the Root Throne, Nuru.
-			// LATER (I9 T1): every ground and object texture as Mangrove's own variant of its recipe (decision 12); until then the grounds
+			// LATER: every ground and object texture as Mangrove's own variant of its recipe; until then the grounds
 			// are its own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Seaspark + Springtide. LATER (WATER): the seafire flag on dark-moon nights.
-			// LATER (SEA-LIFE): mudskipper 2, dugong 0.4, sawfish 0.15, the nguva 0.05; the kit's baitfish, crabs and turtles stand in.
-			// LATER (AMBIENT-LIFE): fiddler crabs waving by the thousand, mudskippers, ghost crabs, crab plovers, egrets, a creek crocodile.
+			// LATER (no spec column yet): rare looks Seaspark + Springtide. LATER (WATER): the seafire flag on dark-moon nights.
+			// LATER: mudskipper 2, dugong 0.4, sawfish 0.15, the nguva 0.05; the kit's baitfish, crabs and turtles stand in.
+			// LATER: fiddler crabs waving by the thousand, mudskippers, ghost crabs, crab plovers, egrets, a creek crocodile.
 			return E("Mangrove", L(Ground.MudMkokoBrown,
 					// MKOKO: Rhizophora closed over the mid-tide mud, a few Avicennia and Bruguiera among it, on a litter of yellow leaves,
 					// propagules and crab chimneys; die-back skeletons and the coupes' cut-pole stumps.
@@ -53,7 +53,7 @@ namespace FishMMO.Shared.WorldDesign
 						Logs("Die-back skeletons", 0.006f, 40f, Wood("Snag_Mangrove"), 8f))
 						.Tide(0.85f, 1.25f),
 					// d3: the ukanda — a tan salt flat flooded only by spring tides: saltcouch rims, sesuvium, curled algal-mat chips, dwarf Avicennia.
-					// LATER (I2j-a): the dry reach's doubled ukanda; the Ukanda pan carves it here wherever it stands.
+					// LATER: the dry reach's doubled ukanda; the Ukanda pan carves it here wherever it stands.
 					D(Ground.SaltUkandaCrust, 120f, 4f, 0f, 1f, Grass("GrassSaltCouch", 24f, 220, 5f), Plants("FlowersSesuvium", 8f, 200, 5f),
 						Plants("AlgalMatChips", 25f, 128, 5f), Trees(0.02f, 3f, 5f, "Mchu"), Plants("PneumatophoresAvicennia", 30f, 200, 5f),
 						Bush("Lumnitzera", 1f), Logs("Die-back skeletons", 0.006f, 40f, Wood("Snag_Mangrove"), 8f))
@@ -87,7 +87,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Ways(path: Ground.PathMudCreekPath, road: Ground.LateriteRagRoad, cobbles: Ground.FlagstoneChokaa)
 				.Bars(sand: Ground.SandCreekMouth, gravel: Ground.GravelRagShell)
 				// Own rock coral rag (the raised reef: champignon, lapiaz, notch), accepting the red-and-white Magarini sands.
-				// LATER (I9): Sandstone "Magarini" as Mangrove's own look.
+				// LATER: Sandstone "Magarini" as Mangrove's own look.
 				.Accepts(RegionalRocks.CoralRag, RockTypes.Sandstone)
 				.CaveShell(CaveForm.Cave, "CoralRag").CaveShell(CaveForm.SeaCave, "CoralRag").CaveShell(CaveForm.Grotto, "CoralRag")
 				.CaveShell(CaveForm.Mine, "Sandstone").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
@@ -115,7 +115,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Blades("FlowersAsmini", t => WoodsBlade(t, "#4a6a34", "#5e7e40", 0.4f,
 					head: GrassBladeHead.Flower, sprinkle: 12f, headSize: 0.03f, heads: new[] { "#f6f4ee" }))
 				// Sites: the Swahili coast's mangal — mangrove mazes, villages, fishing camps, pole yards; the stone towns few.
-				// LATER (I7): the named pieces — the long stone town house, the hall of domes, pillar tombs, the cliff-top Husuni, the makuti
+				// LATER: the named pieces — the long stone town house, the hall of domes, pillar tombs, the cliff-top Husuni, the makuti
 				// village, the boriti landing, the lime kiln, the rag quarry, the mtepe yard, uzio and dema traps, the Kilwa harbour and mint
 				// house, the mzimu, the root-split town, the kisima well, the Root Throne, the mangrove maze dressing and Nguva Rock;
 				// traffic: mtepe, ngalawa, mtumbwi. The kit's variants below stand in.
@@ -126,7 +126,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.MonsterDen, 0.4f), (POIType.SmugglersCove, 0.4f), (POIType.PirateCove, 0.3f), (POIType.HerbGrove, 0.5f), (POIType.Keep, 1f),
 					(POIType.Landmark, 0.4f), (POIType.Monument, 0.3f), (POIType.Waystation, 0.3f), (POIType.Camp, 0.4f), (POIType.Hermitage, 0.2f),
 					(POIType.City, 0.1f), (POIType.Capital, 0.02f), (POIType.River, 1f), (POIType.Lake, 1f), (POIType.Bridge, 1f), (POIType.Cave, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HauntedManor, 0.6f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.FishingCamp, "Huts", 0.6f)
 				.Prefers(POIType.Waystation, "Inn", 1.2f)
 				.Prefers(POIType.Graveyard, "Railed", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -167,7 +167,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.WarbandCamp, "Black Host", 1.2f)
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.2f)
 				.Prefers(POIType.LizardfolkVillage, "Basking", 1.4f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Favours(BiomeStructureStyle.Stone, 1.2f)
 				.Favours(BiomeStructureStyle.Earth, 1.4f)
 				.Favours(BiomeStructureStyle.Timber, 0.8f)
@@ -175,7 +175,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: coral rag in lime rendered cream and roofed flat on projecting mangrove poles, dressed coral trim, dark hardwood
 				// doors; grey-brown wattle-and-daub under steep makuti thatch, boriti poles; indigo and madder cotton.
-				// LATER (NEW-SURFACES U1/U6): CoralRag rubble, Chokaa render, BoritiRoof, KilwaCoral, Mlango, Boriti, Pamba, Udongo and
+				// LATER: CoralRag rubble, Chokaa render, BoritiRoof, KilwaCoral, Mlango, Boriti, Pamba, Udongo and
 				// Makuti as surfaces of their own; the kit's stone, plaster, thatch and timber, tinted, stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Stone, SeaHex("#8e8a7e"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Plaster, SeaHex("#ece4d0"))
@@ -208,7 +208,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Stake-and-coir fences on the field edges.
 				.Lines(new Entry.Line(BiomeLinearForm.Picket, BiomeLinearPlace.FieldEdges))
 				// Coconut-husk torches in the villages, wall lamps in the stone towns, braziers at a keep, cressets at the landings; the
-				// Nuru posts at shrines, great trees and the mazes. LATER (I7a): non-town site lights are laid once I7a places them.
+				// Nuru posts at shrines, great trees and the mazes. LATER: non-town site lights are laid once a later pass places them.
 				.Lights(POIType.Village, BiomeWayLightKind.TorchPost, 18f)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.TorchPost, 18f)
 				.Lights(POIType.LumberCamp, BiomeWayLightKind.TorchPost, 18f)

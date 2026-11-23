@@ -4,7 +4,7 @@
 // FishShadowVariants.hlsl makes URP's lighting cbuffers plain globals on WebGPU (to stay within the device's 10 dynamic
 // uniform buffers), so every lit program's $Globals carried ~14 KB of light, shadow-slice, cookie and reflection-probe
 // arrays, and Unity copies a program's whole $Globals on every pass application: the largest engine cost left in the
-// browser (Docs/Rendering/2026-11-03/webgpu-light-buffer). The table holds the same values, copied from URP's globals once
+// browser. The table holds the same values, copied from URP's globals once
 // per camera (AdditionalLightTable.cs, FishLightTableGather.hlsl), and is bound once, so nothing per light is copied per draw.
 //
 // This file: the buffer, its rows, and the additional-light cookie read from it. FishLightTableLighting.hlsl routes URP's

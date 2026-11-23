@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The shape families a biome's sculpted landforms are carved from (2026-10-18, phase I2g, decisions 25, 26, 36(e), 38–46): a
+	/// The shape families a biome's sculpted landforms are carved from: a
 	/// handful of parametric shapes, each a pure function of where a landform was placed and the point asked (BiomeLandforms).
 	/// </summary>
 	/// <remarks>
@@ -54,13 +54,13 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Mound: a pyramid with radiating arms (star dune as a single draa).</summary>
 		Star = 0x05,
 		/// <summary>
-		/// Mound (2026-10-25, phase I2g-b): a sheer tower with fluted flanks at <see cref="BiomeLandform.Flank"/> degrees and a rounded
+		/// Mound: a sheer tower with fluted flanks at <see cref="BiomeLandform.Flank"/> degrees and a rounded
 		/// cap (<see cref="BiomeLandform.Top"/>: 0 flat … 1 a full dome); <see cref="BiomeLandform.Count"/> flutes round it, a foot notch as
 		/// its moat (fenglin tower, inselberg, the winter wall's ice front, a lodestone crag).
 		/// </summary>
 		Tower = 0x06,
 		/// <summary>
-		/// Mound (I2g-b): a square-planned stepped pyramid of <see cref="BiomeLandform.Count"/> tiers, its plan as long as
+		/// Mound: a square-planned stepped pyramid of <see cref="BiomeLandform.Count"/> tiers, its plan as long as
 		/// <see cref="BiomeLandform.Length"/>; <see cref="BiomeLandform.Rim"/> faces (1 or 4) carry an axial stair <see cref="BiomeLandform.Width"/>
 		/// wide, and its moat is square, with a causeway on each stair's axis (temple mound, temple mountain, moated enclosure).
 		/// </summary>
@@ -71,26 +71,26 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Crater: a ghost crater, only its low rim left, its inside filled flat.</summary>
 		Ghost = 0x11,
 		/// <summary>
-		/// Crater (I2g-b, decision 55): a multi-ring basin fitted to its patch: an inward-facing outer scarp at the radius, massif rings
+		/// Crater: a multi-ring basin fitted to its patch: an inward-facing outer scarp at the radius, massif rings
 		/// at √2 spacing inward (0.71 and 0.5 of it) with gaps, a sunk floor filled flat with mare to a level, wrinkle ridges on it,
 		/// radial sculpture and secondary crater chains in the ejecta, and a few mare pits. Its parts are the zone mask its biome's
 		/// grounds and rules band on (Floor = mare, Crest = ridge crests, Melt, Rim = the rings, Knobby, Flank = the scarp, Ejecta, Rays).
 		/// </summary>
 		MultiRing = 0x12,
 		/// <summary>
-		/// Crater (I2g-b): a summit caldera on its patch's highest ground: a flat floor (a crater lake), steep inner walls, a rim of
+		/// Crater: a summit caldera on its patch's highest ground: a flat floor (a crater lake), steep inner walls, a rim of
 		/// <see cref="BiomeLandform.Count"/> peaks and one outlet notch; no ejecta.
 		/// </summary>
 		Caldera = 0x13,
 		/// <summary>
-		/// Crater (2026-10-25, decision 71): an ice ring basin (Valhalla's): a pale, near-flat palimpsest at the middle (a fifth of the
+		/// Crater: an ice ring basin (Valhalla's): a pale, near-flat palimpsest at the middle (a fifth of the
 		/// radius) and <see cref="BiomeLandform.Count"/> concentric graben out to the radius, spaced wider outward, each a flat-floored
 		/// trough between two inward-facing scarps <see cref="BiomeLandform.Width"/> across and <see cref="BiomeLandform.Height"/> metres
 		/// deep, broken into arcs (60–85 % continuous). Its parts: Floor/Top the palimpsest, Channel/Moat the troughs, Flank the scarps.
 		/// </summary>
 		RingGraben = 0x14,
 		/// <summary>
-		/// Crater (2026-10-25, decision 72): a rampart crater (Mars's fluidised ejecta, thin air): an Impact bowl and rim without rays,
+		/// Crater: a rampart crater (Mars's fluidised ejecta, thin air): an Impact bowl and rim without rays,
 		/// its ejecta a lobate sheet out to <see cref="BiomeLandform.Crown"/> radii (1 … 2.5) ending in a distal rampart ridge
 		/// <see cref="BiomeLandform.CrownDepth"/> metres high; three in ten carry a second, inner lobe (double-layered).
 		/// </summary>
@@ -105,7 +105,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Depression: every closed low of the patch filled flat to its spill level (dust-fill).</summary>
 		SpillFill = 0x23,
 		/// <summary>
-		/// Depression (I2g-b): a rectangular embanked reservoir: a flat floor below the ground, earth dykes <see cref="BiomeLandform.Rim"/>
+		/// Depression: a rectangular embanked reservoir: a flat floor below the ground, earth dykes <see cref="BiomeLandform.Rim"/>
 		/// metres high round it, an island at its middle (<see cref="BiomeLandform.Crown"/> of the width, <see cref="BiomeLandform.CrownDepth"/>
 		/// metres above the ground) (baray).
 		/// </summary>
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Mesa: rimstone treads stepping down a slope, each rimmed into a pool (travertine terraces).</summary>
 		Rimstone = 0x31,
 		/// <summary>
-		/// Mesa (2026-10-25, decision 74): a wave-cut platform as a field over its patch: the ground within three metres of the sea's
+		/// Mesa: a wave-cut platform as a field over its patch: the ground within three metres of the sea's
 		/// surface cut to stepped flag treads (<see cref="BiomeLandform.Height"/> each) between half a metre below and above it.
 		/// </summary>
 		Bench = 0x32,
@@ -132,14 +132,14 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Ridge: a one-sided step, the ground beyond it raised (terrace scarp).</summary>
 		Scarp = 0x44,
 		/// <summary>
-		/// Ridge (2026-10-25, decision 76): a graben, a flat-floored trough (<see cref="BiomeLandform.Top"/> its floor's share) between
+		/// Ridge: a graben, a flat-floored trough (<see cref="BiomeLandform.Top"/> its floor's share) between
 		/// two inward-facing scarps along a stored line, <see cref="BiomeLandform.Height"/> metres deep: straight, or an arc of a circle
 		/// <see cref="BiomeLandform.Size"/> across when one is set; <see cref="BiomeLandform.Count"/> parallel troughs
 		/// <see cref="BiomeLandform.Moat"/> metres apart (an arcuate rille's set). Its parts: Floor, Wall/Scarp/Flank, Rim the shoulders.
 		/// </summary>
 		Graben = 0x45,
 		/// <summary>
-		/// Ridge (2026-10-25, phase I2g-d, decision 90): a cycloid, a chain of 4 … <see cref="BiomeLandform.Count"/> arcs, each a chord
+		/// Ridge: a cycloid, a chain of 4 … <see cref="BiomeLandform.Count"/> arcs, each a chord
 		/// <see cref="BiomeLandform.Size"/> long, every one bulging to the same side so their cusps stand in one line (Europa's
 		/// flexi); a low ridge, twinned when <see cref="BiomeLandform.Crown"/> is set; every cusp a pad.
 		/// </summary>
@@ -156,22 +156,22 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Channels: passes cut through the biome's ring landforms (kandu).</summary>
 		Pass = 0x54,
 		/// <summary>
-		/// Channels (I2g-b): a string of sheer pits along a meandering line down the slope, rock bridges left between them (a lava tube's
+		/// Channels: a string of sheer pits along a meandering line down the slope, rock bridges left between them (a lava tube's
 		/// skylight chain); every pit a pad.
 		/// </summary>
 		PitChain = 0x55,
 		/// <summary>
-		/// Channels (I2g-b, decision 64): <see cref="BiomeLandform.Count"/> troughs spiralling out from the place (Mars's polar troughs),
+		/// Channels: <see cref="BiomeLandform.Count"/> troughs spiralling out from the place (Mars's polar troughs),
 		/// each with one steep scarp (<see cref="BiomeLandform.Lean"/>), out to half its <see cref="BiomeLandform.Size"/>.
 		/// </summary>
 		Spiral = 0x56,
 		/// <summary>
-		/// Channels (2026-10-25, decision 74): a geo, a sheer slot from its shore place straight inland <see cref="BiomeLandform.Length"/>,
+		/// Channels: a geo, a sheer slot from its shore place straight inland <see cref="BiomeLandform.Length"/>,
 		/// floored under the sea (<see cref="BiomeLandform.Datum"/> SeaSurface) and rising at its head to the beach.
 		/// </summary>
 		Geo = 0x57,
 		/// <summary>
-		/// Channels (2026-10-25, decision 76): a sinuous rille, one meandering trench from its head (the patch's highest ground) down
+		/// Channels: a sinuous rille, one meandering trench from its head (the patch's highest ground) down
 		/// the slope, narrowing to half its width at its toe and shallowing out there; U-floored by <see cref="BiomeLandform.Top"/>, a
 		/// levee lip <see cref="BiomeLandform.Rim"/> metres high; a vent hollow at its head <see cref="BiomeLandform.CrownDepth"/> times
 		/// its depth (0 none); beaded when <see cref="BiomeLandform.Crown"/> is set (necks that share of its width every three widths).
@@ -179,14 +179,14 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		Rille = 0x58,
 		/// <summary>
-		/// Channels (2026-10-25, phase I2g-d, decision 92): a submarine canyon, one sinuous V-walled cut from its head (the patch's
+		/// Channels: a submarine canyon, one sinuous V-walled cut from its head (the patch's
 		/// highest ground, its amphitheatre rounded off) down the slope, deepening from four tenths of its depth at the head to all of
 		/// it a third of the way down; <see cref="BiomeLandform.Top"/> its flat thalweg's share. Its stored line is what its steps,
 		/// gullies, slides and fan follow. Its parts: Head, Floor, Wall/Scarp/Flank, Rim (with a levee).
 		/// </summary>
 		Canyon = 0x59,
 		/// <summary>
-		/// Channels (I2g-d, decision 92): sediment waves along a stored line, the cyclic steps down a canyon's floor: crescents
+		/// Channels: sediment waves along a stored line, the cyclic steps down a canyon's floor: crescents
 		/// <see cref="BiomeLandform.Width"/> apart and <see cref="BiomeLandform.Height"/> high, bowed down the line, on the floor of
 		/// the host entry it stands on (<see cref="BiomeLandformAnchor.OnTopOf"/>; its line is the host's). Parts: Floor, Crest.
 		/// </summary>
@@ -223,23 +223,23 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Waves: narrow deep slots across the slope, a field of crevasses (glacier).</summary>
 		Crevasses = 0x84,
 		/// <summary>
-		/// Waves (I2g-b, decision 61): a cone field on a jittered lattice, flanks at <see cref="BiomeLandform.Flank"/> degrees, the closed
+		/// Waves: a cone field on a jittered lattice, flanks at <see cref="BiomeLandform.Flank"/> degrees, the closed
 		/// star-shaped hollows between them floored flat (fengcong cockpit karst).
 		/// </summary>
 		Cockpits = 0x85,
 		/// <summary>
-		/// Waves (I2g-b, decision 62): a dissolved plateau: flat-topped mesas in a warped cellular net, flat-floored valleys cut between
+		/// Waves: a dissolved plateau: flat-topped mesas in a warped cellular net, flat-floored valleys cut between
 		/// them to the field's height (Titan's labyrinth terrain).
 		/// </summary>
 		Labyrinth = 0x86,
 		/// <summary>
-		/// Waves (I2g-b, decision 66): warped convection cells (Sputnik's): each cell's middle swelled by the field's height, a trough
+		/// Waves: warped convection cells (Sputnik's): each cell's middle swelled by the field's height, a trough
 		/// <see cref="BiomeLandform.Moat"/> metres wide and <see cref="BiomeLandform.MoatDepth"/> deep along every edge; its parts the
 		/// troughs (Channel, Moat), the interiors (Top) and the triple junctions (Junction).
 		/// </summary>
 		Cells = 0x87,
 		/// <summary>
-		/// Waves (2026-10-25, phase I2g-d, decision 85): a tessera weave: fins along the field's axis (its strike, by the patch's
+		/// Waves: a tessera weave: fins along the field's axis (its strike, by the patch's
 		/// hash) <see cref="BiomeLandform.Width"/> apart and <see cref="BiomeLandform.Height"/> high, crossed at 70° by flat-floored
 		/// troughs about <see cref="BiomeLandform.Moat"/> apart (0.7 … 1.3 of it by the site), <see cref="BiomeLandform.Top"/> of that
 		/// spacing wide (0: a quarter) and <see cref="BiomeLandform.MoatDepth"/> deep. Parts: Crest the fins, Channel/Floor the troughs.
@@ -257,7 +257,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A field covering the whole patch (dunes, waves, flow steps, spill fill).</summary>
 		Field = 2,
 		/// <summary>
-		/// A chain (2026-10-25, decision 71): each place found as a scatter's is the middle of a line <see cref="BiomeLandform.Length"/>
+		/// A chain: each place found as a scatter's is the middle of a line <see cref="BiomeLandform.Length"/>
 		/// long (straight, or an arc when <see cref="BiomeLandform.Lean"/> ≠ 0: the share of a half turn it bends through) along which
 		/// <see cref="BiomeLandform.Count"/> sites of the form stand, sized from <see cref="BiomeLandform.Size"/> and tapering to both
 		/// ends, set off the line by <see cref="BiomeLandform.Roughness"/> of their size (a catena of merged craters, the knobs left on a
@@ -284,27 +284,27 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>The patch's highest ground.</summary>
 		Highest = 6,
 		/// <summary>
-		/// In the lee of each site of the entry just before it in the list (2026-10-25, decision 64): downwind of it by its radius and
+		/// In the lee of each site of the entry just before it in the list: downwind of it by its radius and
 		/// half its own length (a blue-ice tail behind each nunatak). Placed after that entry, one for each of its sites.
 		/// </summary>
 		LeeOf = 7,
 		/// <summary>
-		/// <see cref="BiomeLandform.NearWater"/> metres inside the patch's edge (2026-10-25, decision 70: the steps round a wet ice
+		/// <see cref="BiomeLandform.NearWater"/> metres inside the patch's edge (the steps round a wet ice
 		/// cap's margin), measured across the patch's cells; the scene's edge is not a patch edge.
 		/// </summary>
 		PatchEdge = 8,
 		/// <summary>
-		/// <see cref="BiomeLandform.NearWater"/> metres from the shoreline (2026-10-25, decision 74): inland (a gloup behind the cliff),
+		/// <see cref="BiomeLandform.NearWater"/> metres from the shoreline: inland (a gloup behind the cliff),
 		/// or out to sea for an entry with a <see cref="BiomeLandform.Depth"/> band (a stack off the cliff, a tidal brough).
 		/// </summary>
 		ShoreSetback = 9,
 		/// <summary>
-		/// Across a bay's mouth (2026-10-25, decision 74): shallow water between two shores at most <see cref="BiomeLandform.Length"/>
+		/// Across a bay's mouth: shallow water between two shores at most <see cref="BiomeLandform.Length"/>
 		/// apart; a line entry lies along that span (an ayre closing an oyce).
 		/// </summary>
 		BayMouth = 10,
 		/// <summary>
-		/// On the host (2026-10-25, phase I2g-d, decision 80): the nearest entry before it in the list that is not itself on a
+		/// On the host: the nearest entry before it in the list that is not itself on a
 		/// host. On a mound, table or bowl: inside its top (a pinnacle on a guyot, a fire pit in a caldera floor), in a row along
 		/// its axis when the host is long; concentric with it when <see cref="BiomeLandform.FitShare"/> is set (a ring that many
 		/// times the host's size: a flexural moat). On a line: the line itself for a form that follows one (a canyon's cyclic
@@ -314,7 +314,7 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		OnTopOf = 11,
 		/// <summary>
-		/// On the host's flank (I2g-d, decision 80): round a mound's, table's or bowl's flank ring, evenly spaced with a jitter (rift
+		/// On the host's flank: round a mound's, table's or bowl's flank ring, evenly spaced with a jitter (rift
 		/// spurs, flank cones, a collapse scar); along a line's walls, either side (a canyon's wall slides; grooves become gullies
 		/// down both walls, <see cref="BiomeLandform.Length"/> apart). Counted as <see cref="OnTopOf"/>.
 		/// </summary>
@@ -334,27 +334,27 @@ namespace FishMMO.Shared.Biomes
 		Contour = 3,
 		/// <summary>One axis for the whole scene, by its seed (parallel abyssal hills).</summary>
 		SceneAxis = 4,
-		/// <summary>Square to the compass, its axis east (2026-10-25: a temple's enclosure and reservoir), within a degree.</summary>
+		/// <summary>Square to the compass, its axis east (a temple's enclosure and reservoir), within a degree.</summary>
 		Cardinal = 5,
-		/// <summary>Its axis north–south, within a degree (2026-10-25: bladed ridges' strike).</summary>
+		/// <summary>Its axis north–south, within a degree (bladed ridges' strike).</summary>
 		Meridian = 6,
 		/// <summary>
-		/// Down the host as carved (2026-10-25, phase I2g-d), for an entry on a host: away from a raised host's middle or line (a
+		/// Down the host as carved, for an entry on a host: away from a raised host's middle or line (a
 		/// spur off a guyot), toward a cut one's (a slide down a canyon's wall). Elsewhere: by its hash.
 		/// </summary>
 		HostDownhill = 7,
 		/// <summary>
-		/// Along its patch's long axis (2026-10-26, phase I2g-f, decision 76: a graben opening along the plain it splits), within a
+		/// Along its patch's long axis (a graben opening along the plain it splits), within a
 		/// few degrees; a round patch's axis is still its own, by its cells. With no patch (an entry on a host): by its hash.
 		/// </summary>
 		PatchAxis = 8,
 		/// <summary>
-		/// Each its own way by its hash, also for grooves, which otherwise run straight down the slope (I2g-f: an iceberg's plough
+		/// Each its own way by its hash, also for grooves, which otherwise run straight down the slope (an iceberg's plough
 		/// mark, dragged by the current whatever the floor's slope, and curving a little as it goes).
 		/// </summary>
 		Azimuth = 9,
 		/// <summary>
-		/// Square to the scene's wind (I2g-f): a wave field's crests, which stand across its axis, then run along the wind (an ice
+		/// Square to the scene's wind: a wave field's crests, which stand across its axis, then run along the wind (an ice
 		/// shelf's rolls, laid down the flow).
 		/// </summary>
 		AcrossWind = 10,
@@ -368,8 +368,8 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>A crest or floor at <see cref="BiomeLandform.DatumDepth"/> metres below the sea's surface (negative: above it).</summary>
 		SeaSurface = 1,
 		/// <summary>
-		/// A crest or floor at <see cref="BiomeLandform.DatumDepth"/> metres below the LAVA's surface (negative: above it; 2026-10-25,
-		/// phase I2r, decision 65 (b)): a patera's floor flooded by its lake, a crust island's top a metre or two over it. Only on a
+		/// A crest or floor at <see cref="BiomeLandform.DatumDepth"/> metres below the LAVA's surface (negative: above it):
+		/// a patera's floor flooded by its lake, a crust island's top a metre or two over it. Only on a
 		/// scene whose low ground holds lava; elsewhere the landform stands on its ground as <see cref="Ground"/> does.
 		/// </summary>
 		LavaSurface = 2,
@@ -402,31 +402,31 @@ namespace FishMMO.Shared.Biomes
 		Sand = 10,
 		/// <summary>A ridge's or dune's crest.</summary>
 		Crest = 11,
-		/// <summary>The faces turned downwind: a dune's or a wave field's slip faces, a mound's lee flank (2026-10-25, decision 64).</summary>
+		/// <summary>The faces turned downwind: a dune's or a wave field's slip faces, a mound's lee flank.</summary>
 		Lee = 12,
-		/// <summary>A multi-ring basin's melt sheet: the ring of ground between its mare's lip and its peak ring (decision 55).</summary>
+		/// <summary>A multi-ring basin's melt sheet: the ring of ground between its mare's lip and its peak ring.</summary>
 		Melt = 13,
-		/// <summary>A multi-ring basin's knobby ground between its outer ring and its scarp (decision 55).</summary>
+		/// <summary>A multi-ring basin's knobby ground between its outer ring and its scarp.</summary>
 		Knobby = 14,
-		/// <summary>A cell field's triple junctions, where three of its troughs meet (decision 66).</summary>
+		/// <summary>A cell field's triple junctions, where three of its troughs meet.</summary>
 		Junction = 15,
-		/// <summary>A crater's inner wall, rim crest to floor (2026-10-25, decision 72; the same ground as its Flank).</summary>
+		/// <summary>A crater's inner wall, rim crest to floor (the same ground as its Flank).</summary>
 		Wall = 16,
-		/// <summary>A rille's head: the vent hollow it rises from (decision 76).</summary>
+		/// <summary>A rille's head: the vent hollow it rises from.</summary>
 		Head = 17,
-		/// <summary>A trough's scarps: a graben's or a rille's walls (decision 76; the same ground as its Wall).</summary>
+		/// <summary>A trough's scarps: a graben's or a rille's walls (the same ground as its Wall).</summary>
 		Scarp = 18,
-		/// <summary>A dune field's wake: the dune-free teardrop downwind of an obstacle (2026-10-25, phase I2g-d, decision 91).</summary>
+		/// <summary>A dune field's wake: the dune-free teardrop downwind of an obstacle.</summary>
 		Wake = 19,
 		/// <summary>
-		/// An impact's dark halo parabola (2026-10-26, phase I2g-f, decision 89: Venus's), its vertex upwind of the crater and its
+		/// An impact's dark halo parabola (Venus's), its vertex upwind of the crater and its
 		/// arms trailing down its axis out to <see cref="BiomeLandform.RayReach"/> radii; the crater itself is not in it.
 		/// </summary>
 		Halo = 20,
 	}
 
 	/// <summary>
-	/// One sculpted landform a biome carves into its ground at the cut (<see cref="BiomeTemplate.Landforms"/>, 2026-10-18, phase I2g):
+	/// One sculpted landform a biome carves into its ground at the cut (<see cref="BiomeTemplate.Landforms"/>):
 	/// its shape (<see cref="Form"/>), how often and where it stands, its sizes, and how its biome paints it. Stored by value; the
 	/// rounds author them by name from <see cref="BiomeLandformPresets"/>.
 	/// </summary>
@@ -438,7 +438,7 @@ namespace FishMMO.Shared.Biomes
 	/// for every other family they are metres.
 	/// </para>
 	/// <para>
-	/// Until 2026-10-18 no ground was sculpted; an empty list (every biome's default) carves nothing, so a cut is unchanged.
+	/// Formerly no ground was sculpted; an empty list (every biome's default) carves nothing, so a cut is unchanged.
 	/// </para>
 	/// </remarks>
 	[Serializable]
@@ -490,7 +490,7 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float SizePower;
 		[Tooltip("Impact craters age by their hash (fresh 6 %, young 14 %, mature 45 %, old 35 %: shallower, softer, ray-less, flat-floored), carved old first.")]
 		public bool Ages;
-		[Tooltip("Treads cut into a table's flank or benches down a caldera's walls (2026-10-25: a guyot's drowned shorelines, a shield's step faults); 0 none.")]
+		[Tooltip("Treads cut into a table's flank or benches down a caldera's walls (a guyot's drowned shorelines, a shield's step faults); 0 none.")]
 		[Min(0)] public int Steps;
 		[Tooltip("Its rim breached on one side (a crater, caldera or cone's crown): that share of its depth cut out down its axis (+) or against it (−); 0 none.")]
 		[Range(-2f, 2f)] public float Breach;
@@ -500,9 +500,9 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 Forks;
 		[Tooltip("Dune fields: a dune-free wake behind every mound, crater or table its biome carved before it, this many obstacle diameters long (min, max); (0, 0) none.")]
 		public Vector2 Wake;
-		[Tooltip("Its line carries molten lava (2026-10-25, phase I2r, decision 65 (c)): a lava channel, an ʻaʻā tongue's channel, a breakout, a temple's ember rill. The cut stores its line on the biome map and the client draws a lava ribbon along it with the lava material; the ground is carved as before.")]
+		[Tooltip("Its line carries molten lava (phase I2r, decision 65 (c)): a lava channel, an ʻaʻā tongue's channel, a breakout, a temple's ember rill. The cut stores its line on the biome map and the client draws a lava ribbon along it with the lava material; the ground is carved as before.")]
 		public bool Molten;
-		// 2026-10-26, phase I2g-f: the landform follow-ups. Each is inert at its default, so every entry before carves as it did.
+		// The landform follow-ups. Each is inert at its default, so every entry before carves as it did.
 		[Tooltip("Only on the highest share of its patch's ground (0.2: the top fifth; a bladed ridge field, a salt dome, a kopje); 0 anywhere.")]
 		[Range(0f, 1f)] public float Upper;
 		[Tooltip("Its temperature and humidity bands read at the sea's surface over its place, not on the floor (an iceberg's plough mark: cold water at the top).")]
@@ -545,7 +545,7 @@ namespace FishMMO.Shared.Biomes
 		public Vector2 Humidity;
 		[Tooltip("The worlds' air it forms under; None: any.")]
 		public BiomeAtmosphereRequirement Air;
-		[Tooltip("The worlds it forms on: every Requires flag met, no Forbids flag (decision 68, 2026-10-25: a tide crack only where the sea is liquid). Nothing ticked: any world.")]
+		[Tooltip("The worlds it forms on: every Requires flag met, no Forbids flag (a tide crack only where the sea is liquid). Nothing ticked: any world.")]
 		public BiomeWorldBand World;
 		[Tooltip("NearWater anchor: at most this many metres from a river or lake. PatchEdge anchor: this many metres inside the patch's edge.")]
 		[Min(0f)] public float NearWater;
@@ -615,7 +615,7 @@ namespace FishMMO.Shared.Biomes
 			return copy;
 		}
 
-		/// <summary>A copy carved only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/> (decision 68).</summary>
+		/// <summary>A copy carved only on worlds that meet <paramref name="requires"/> and none of <paramref name="forbids"/>.</summary>
 		public BiomeLandform OnWorlds(BiomeWorldRequirement requires, BiomeWorldRequirement forbids = BiomeWorldRequirement.None)
 		{
 			BiomeLandform copy = this;
@@ -637,7 +637,7 @@ namespace FishMMO.Shared.Biomes
 
 		/// <summary>
 		/// A copy whose scattered sizes follow a power law (<paramref name="power"/>: N(> D) ∝ D^−power) and, when
-		/// <paramref name="ages"/>, whose impact craters age by their hash (2026-10-25, decision 72: a crater field).
+		/// <paramref name="ages"/>, whose impact craters age by their hash (a crater field).
 		/// </summary>
 		public BiomeLandform PowerLaw(float power, bool ages)
 		{
@@ -647,7 +647,7 @@ namespace FishMMO.Shared.Biomes
 			return copy;
 		}
 
-		/// <summary>A copy whose linear dunes fork every <paramref name="metres"/> (min, max), each Y opening upwind (2026-10-25, decision 91).</summary>
+		/// <summary>A copy whose linear dunes fork every <paramref name="metres"/> (min, max), each Y opening upwind.</summary>
 		public BiomeLandform Forked(Vector2 metres)
 		{
 			BiomeLandform copy = this;
@@ -655,7 +655,7 @@ namespace FishMMO.Shared.Biomes
 			return copy;
 		}
 
-		/// <summary>A copy whose dune field leaves a wake <paramref name="diameters"/> (min, max) obstacle diameters long behind each earlier landform (decision 91).</summary>
+		/// <summary>A copy whose dune field leaves a wake <paramref name="diameters"/> (min, max) obstacle diameters long behind each earlier landform.</summary>
 		public BiomeLandform Waked(Vector2 diameters)
 		{
 			BiomeLandform copy = this;
@@ -663,7 +663,7 @@ namespace FishMMO.Shared.Biomes
 			return copy;
 		}
 
-		/// <summary>A copy whose rim is breached (<paramref name="share"/> of its depth; + down its axis, − against it) (2026-10-25, phase I2g-d).</summary>
+		/// <summary>A copy whose rim is breached (<paramref name="share"/> of its depth; + down its axis, − against it).</summary>
 		public BiomeLandform Breached(float share)
 		{
 			BiomeLandform copy = this;
@@ -671,7 +671,7 @@ namespace FishMMO.Shared.Biomes
 			return copy;
 		}
 
-		/// <summary>A copy whose line carries molten lava, drawn as a ribbon along it on the client (2026-10-25, phase I2r).</summary>
+		/// <summary>A copy whose line carries molten lava, drawn as a ribbon along it on the client.</summary>
 		public BiomeLandform MoltenLine()
 		{
 			BiomeLandform copy = this;
@@ -708,7 +708,7 @@ namespace FishMMO.Shared.Biomes
 			s.Append('|').Append(PaintGround).Append(',').Append(PaintPart);
 			Append(s, PaintStrength);
 			s.Append('|').Append(Pad ? "pad" : "-");
-			// Appended only when set (2026-10-25), so every entry written before prints as it did.
+			// Appended only when set, so every entry written before prints as it did.
 			if (MoatBias != 0f)
 			{
 				Append(s.Append("|wind"), MoatBias);
@@ -725,7 +725,7 @@ namespace FishMMO.Shared.Biomes
 			{
 				s.Append("|w").Append(World.Signature());
 			}
-			// 2026-10-25, phase I2g-d: the same rule for its tuners.
+			// The same rule for its tuners.
 			if (Steps != 0)
 			{
 				s.Append("|steps").Append(Steps);
@@ -746,12 +746,12 @@ namespace FishMMO.Shared.Biomes
 			{
 				Append(s.Append("|wake"), Wake);
 			}
-			// 2026-10-25, phase I2r: the same rule.
+			// The same rule.
 			if (Molten)
 			{
 				s.Append("|molten");
 			}
-			// 2026-10-26, phase I2g-f: the same rule.
+			// The same rule.
 			if (Upper != 0f)
 			{
 				Append(s.Append("|upper"), Upper);
@@ -877,8 +877,8 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// A landform's top offered as a place for a point of interest to stand (2026-10-18, I2g): a terp's or motte's summit, a mesa's
-	/// table, a fan's apron, a brine lake's mirror, a resting boulder. The sites that use them are built in phase I7.
+	/// A landform's top offered as a place for a point of interest to stand: a terp's or motte's summit, a mesa's
+	/// table, a fan's apron, a brine lake's mirror, a resting boulder. The sites that use them are built later.
 	/// </summary>
 	[Serializable]
 	public struct BiomeLandformPad

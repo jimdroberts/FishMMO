@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Furnishes a building's room (2026-10-11: every building with a door gets an interior): a recipe per
+	/// Furnishes a building's room (every building with a door gets an interior): a recipe per
 	/// <see cref="StructureRoomKind"/> laid against the walls (backs to the wall, facing in), in the middle with room to walk
 	/// round, and seats round tables; the doors' swing and the way in from each door kept clear.
 	/// </summary>
@@ -327,7 +327,7 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureRoomKind.Guard:
 					return new[] { W("WeaponRack", 1, 1, Mode.Wall), W("Table", area > 6f ? 1 : 0, area > 6f ? 1 : 0, Mode.Centre, 1, 2), W("Chest", 1, 1, Mode.Wall),
 						W("Crate", 1, 2, Mode.Wall), W("Barrel", 1, 1, Mode.Wall), W("Bed", area > 9f ? 1 : 0, area > 9f ? 1 : 0, Mode.Wall, 0),
-						// Last (2026-10-19), so every earlier piece of a guard room lies where it did: an armour stand where there is room.
+						// Last, so every earlier piece of a guard room lies where it did: an armour stand where there is room.
 						W("ArmourStand", 0, area > 12f ? 1 : 0, Mode.Wall) };
 				case StructureRoomKind.Keeper:
 					return new[] { W("Bed", 1, 1, Mode.Wall), W("Table", 1, 1, Mode.Centre, 1, 1), W("Chest", 1, 1, Mode.Wall), W("Shelf", 1, 1, Mode.Wall),
@@ -346,7 +346,7 @@ namespace FishMMO.Shared.WorldDesign
 					// The meal floor of a tower mill: what is ground and waiting round the wall, the miller's tally in the middle.
 					return new[] { W("Crate", 2, 3, Mode.Wall), W("Barrel", 1, 2, Mode.Wall), W("Chest", 1, 1, Mode.Wall), W("Shelf", 0, 1, Mode.Wall),
 						W("Table", area > 14f ? 1 : 0, area > 14f ? 1 : 0, Mode.Centre, 1, 1) };
-				// The town's other buildings (2026-10-19).
+				// The town's other buildings.
 				case StructureRoomKind.Study:
 					// A wizard's room: where the work is done first, then the books, then where they sleep.
 					return new[] { W("Desk", 1, 1, Mode.Wall), W("Bookcase", 1, area > 20f ? 3 : 2, Mode.Wall), W("ArcaneFocus", area > 12f ? 1 : 0, 1, Mode.Centre),
@@ -373,7 +373,7 @@ namespace FishMMO.Shared.WorldDesign
 					return new[] { W("Crate", 3, area > 80f ? 8 : 5, Mode.Wall), W("Barrel", 2, area > 80f ? 5 : 3, Mode.Wall), W("Sacks", 1, 3, Mode.Wall) };
 				case StructureRoomKind.Shop:
 					return new[] { W("BarCounter", 1, 1, Mode.Wall, 0), W("Shelf", 1, 2, Mode.Wall), W("Crate", 1, 2, Mode.Wall), W("Barrel", 0, 1, Mode.Wall) };
-				// A shop-house let to a trade (2026-10-19, PointOfInterestTrades): the trade's bench first, then its stocked shelves
+				// A shop-house let to a trade (PointOfInterestTrades): the trade's bench first, then its stocked shelves
 				// (TradeShelf, the trade's own variant), then what it keeps its stuff in.
 				case StructureRoomKind.Tailor:
 					return new[] { W("CuttingTable", 1, 1, Mode.Wall), W("DressForm", 1, area > 20f ? 2 : 1, Mode.Wall), W("TradeShelf", 1, area > 30f ? 3 : 2, Mode.Wall, (int)StructureTrade.Tailor),
@@ -400,7 +400,7 @@ namespace FishMMO.Shared.WorldDesign
 				case StructureRoomKind.Scribe:
 					return new[] { W("Desk", 1, area > 20f ? 2 : 1, Mode.Wall), W("Bookcase", 1, 2, Mode.Wall), W("TradeShelf", 1, area > 30f ? 2 : 1, Mode.Wall, (int)StructureTrade.Scribe),
 						W("Lectern", 0, 1, Mode.Centre, 0), W("Chest", 0, 1, Mode.Wall) };
-				// The professions' own houses (2026-10-19, StructurePieces.Landmarks.cs).
+				// The professions' own houses (StructurePieces.Landmarks.cs).
 				case StructureRoomKind.CountingHouse:
 					// The counting table facing the door, the coin in strongboxes round the walls, the ledgers on shelves.
 					return new[] { W("CountingTable", 1, 1, Mode.Wall), W("Strongbox", 1, area > 40f ? 3 : 2, Mode.Wall), W("Shelf", 1, 2, Mode.Wall),
@@ -504,7 +504,7 @@ namespace FishMMO.Shared.WorldDesign
 				return true;
 			}
 
-			// Fits, and (if it is solid) leaves every part of the floor reachable from the way in (2026-10-15: "House/building
+			// Fits, and (if it is solid) leaves every part of the floor reachable from the way in ("House/building
 			// interiors aren't always fully walkable" — pieces kept 8 cm apart, and a table's walkway only from what came after
 			// it, closed off a room's back behind a bed and a table).
 			bool Clear(string piece, in Shape s, Vector2 at, float yaw) =>
@@ -531,7 +531,7 @@ namespace FishMMO.Shared.WorldDesign
 				FurnishChurch(centre, roomMin, roomMax, floor, footprint, placed, taken, keepOut);
 				return placed;
 			}
-			// A throne room's own layout (2026-10-19): the throne on its dais, the court's benches along the walls facing the aisle.
+			// A throne room's own layout: the throne on its dais, the court's benches along the walls facing the aisle.
 			if (room.Kind == StructureRoomKind.ThroneRoom && !room.Round)
 			{
 				FurnishThroneRoom(centre, roomMin, roomMax, floor, footprint, placed, taken, keepOut, rng);
@@ -820,7 +820,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			// The front pew a walk's width (1.3 m) short of the altar, so the chancel either side of it is reachable
-			// (2026-10-15: it stood 0.9 m off, the lectern in that gap, and both front corners were shut in).
+			// (it stood 0.9 m off, the lectern in that gap, and both front corners were shut in).
 			float front = roomMin.y + Approach + 0.3f, back = altarZ - altar.y - 1.3f - pew.y * 0.5f;
 			int index = 0;
 			for (float z = back; z >= front; z -= row)
@@ -845,7 +845,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A throne room (2026-10-19, StructurePieces.Palace.cs): the throne at the back wall's middle ON the dais (the room's back
+		/// A throne room (StructurePieces.Palace.cs): the throne at the back wall's middle ON the dais (the room's back
 		/// <see cref="StructurePieces.ThroneDaisDepth"/>, <see cref="StructurePieces.ThroneDaisRise"/> over its floor: an item's
 		/// height is its own, so these stand on the dais' top), a brazier either side of it and the guard's armour by the side walls
 		/// up there; a brazier either side of the runner at the dais' foot; and down both side walls, facing the aisle, the court's

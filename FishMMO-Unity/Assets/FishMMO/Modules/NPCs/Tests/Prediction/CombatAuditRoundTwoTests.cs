@@ -9,7 +9,7 @@ using FishMMO.Server.Implementation.World.SceneServer.AI;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Regressions for the second round of the 2026-08-30 combat/prediction audit.
+	/// Regressions for the second round of the combat/prediction audit.
 	/// </summary>
 	/// <remarks>
 	/// Every defect pinned here shares a shape: a rule that was correct for the peer or the

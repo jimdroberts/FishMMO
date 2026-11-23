@@ -45,7 +45,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// How much of the inland water at a world position (x, z) is a river's (x, 0 … 1: 1 in its channel, easing to 0 over its last
 		/// stretch into a lake or the sea), the river's current there (y, m/s), and z ≥ 0.5 where the rest is the sea's (a mouth on the
 		/// coast) rather than a lake's (SceneWater.RiverBedAt). What shares a biome's bed between its riverbed and its lakebed, and
-		/// what a bed layer's current band reads (decision 35, 2026-10-18). Asked only under inland water; called from the painter's
+		/// what a bed layer's current band reads. Asked only under inland water; called from the painter's
 		/// worker threads. Null for none: every inland bed is a lake's, as every bed was the lakebed before.
 		/// </summary>
 		public Func<float, float, Vector3> RiverAt;
@@ -79,13 +79,13 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The ground's heat at a world point (x, z), 0 cold … 1 boiling: the scene's heat mask from its geothermal sites
-		/// (2026-10-18, phase I2q; GeothermalGroundCarve), what a detail layer's heat band (TerrainTextureLayer.useHeatBand) reads.
+		/// (GeothermalGroundCarve), what a detail layer's heat band (TerrainTextureLayer.useHeatBand) reads.
 		/// Asked only when some layer has one; called from the painter's worker threads (an array read). Null: every heat band passes.
 		/// </summary>
 		public Func<float, float, float> HeatAt;
 
 		/// <summary>
-		/// The scene's landform zones (2026-10-25, phase I2g-b, decision 55; BiomeLandformZones of the sites the cut stored), what a
+		/// The scene's landform zones (BiomeLandformZones of the sites the cut stored), what a
 		/// detail layer's landform band (TerrainTextureLayer.landformBand) reads. Asked only when some layer has one; thread-safe.
 		/// Null: no landform, so an "on the part" band paints nothing and an "off the part" band everywhere.
 		/// </summary>
@@ -93,27 +93,27 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// How far the scene sea's tide moves it either way, metres (its WaterEnvironment.MaximumTideMetres, after its coast's tide
-		/// strength: BiomeSeaFloors.TideMetres; 2026-10-25, phase I2m): the lowest tide's depth, down to which an estuary's own grounds
+		/// strength: BiomeSeaFloors.TideMetres): the lowest tide's depth, down to which an estuary's own grounds
 		/// paint (<see cref="BiomeSeaFloor.ToLowWater"/>), and the unit a ground layer's depth band in tides reads
 		/// (<see cref="TerrainTextureLayer.seaDepthInTides"/>).
 		/// </summary>
 		public float TideMetres = BiomeSeaFloors.DefaultTideMetres;
 
 		/// <summary>
-		/// The scene's lava surface, world y (2026-10-25, phase I2r, decision 65 (b)): what a ground layer's lava band
+		/// The scene's lava surface, world y: what a ground layer's lava band
 		/// (<see cref="TerrainTextureLayer.useLavaBand"/>) measures heights from. NaN for a scene with no lava: every lava band passes.
 		/// </summary>
 		public float LavaLevel = float.NaN;
 
 		/// <summary>
-		/// The scene's compass (2026-10-26, phase GROUND-BANDS; TerrainScatter.CompassFor, the scatter modes' own): which way the equator,
+		/// The scene's compass (TerrainScatter.CompassFor, the scatter modes' own): which way the equator,
 		/// the east and the prevailing wind lie, what a detail layer's facing band (<see cref="TerrainTextureLayer.facingBand"/>) measures
 		/// against. Default (all zero): the plain axes, east +x and the equator −z, and no wind (a wind facing band passes).
 		/// </summary>
 		public BiomeScatterCompass Compass;
 
 		/// <summary>
-		/// The scene's planned points of interest (2026-10-26, phase GROUND-BANDS; TerrainScatter.SitesOf), what a detail layer's site band
+		/// The scene's planned points of interest (TerrainScatter.SitesOf), what a detail layer's site band
 		/// (<see cref="TerrainTextureLayer.siteBand"/>) paints round. Null: none, so a site-banded layer paints nowhere.
 		/// </summary>
 		public IReadOnlyList<BiomeScatterSite> Sites;
@@ -181,7 +181,7 @@ namespace FishMMO.Shared.WorldDesign
 			object gate = new object();
 			// No climate-banded layer, no climate read: the paint is what it was before the bands existed.
 			bool climatic = options.ClimateAt != null && palette.NeedsClimate;
-			// No facing band or fall-line stretch, no normals read (2026-10-26, GROUND-BANDS): the paint is what it was before.
+			// No facing band or fall-line stretch, no normals read: the paint is what it was before.
 			bool downhills = Weigher.NeedsDownhill(palette);
 
 			foreach (Terrain terrain in tiles)
@@ -198,8 +198,8 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 origin = terrain.transform.position;
 				Vector3 size = data.size;
 
-				/* The local climate over the tile, on the scatter's coarse grid, when any layer is banded by it (decision 29,
-				 * 2026-10-18): built here because the climate and the terrain answer on this thread, read by the workers. */
+				/* The local climate over the tile, on the scatter's coarse grid, when any layer is banded by it:
+				 * built here because the climate and the terrain answer on this thread, read by the workers. */
 				TerrainClimateGrid climate = climatic
 					? TerrainClimateGrid.Build(options.ClimateAt, origin, new Vector2(size.x, size.z), (u, v) => origin.y + data.GetInterpolatedHeight(u, v))
 					: null;
@@ -300,15 +300,15 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>Per biome: its ground slots and their occupants when any is climatic (<see cref="SceneTerrainPalette.Entry.Climatic"/>), else null.</summary>
 			private readonly GroundSlot[][] climaticSlots;
 			private readonly bool anyClimatic;
-			/// <summary>True when some detail layer has a heat band and the ground's heat is known (2026-10-18, I2q); the point's heat then.</summary>
+			/// <summary>True when some detail layer has a heat band and the ground's heat is known; the point's heat then.</summary>
 			private readonly bool anyHeat;
 			private float heat = float.NaN;
-			/// <summary>True when some detail layer has a landform zone band (2026-10-25, I2g-b); the point's ground and slope then.</summary>
+			/// <summary>True when some detail layer has a landform zone band; the point's ground and slope then.</summary>
 			private readonly bool anyZone;
 			private float zoneGround, zoneSlope;
-			/// <summary>Per biome: its beds (decision 35, 2026-10-18), null for a biome with none.</summary>
+			/// <summary>Per biome: its beds, null for a biome with none.</summary>
 			private readonly BedSet[] beds;
-			/// <summary>Per biome: what it paints under the sea (<see cref="BiomeTemplate.SeaFloor"/>, 2026-10-25, phase I2m).</summary>
+			/// <summary>Per biome: what it paints under the sea (<see cref="BiomeTemplate.SeaFloor"/>).</summary>
 			private readonly BiomeSeaFloor[] floors;
 			/// <summary>
 			/// True when some main or detail layer has a sea depth band (<see cref="TerrainTextureLayer.useSeaDepthBand"/>); the point's
@@ -316,18 +316,18 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			private readonly bool anyDepthBand;
 			private float seaDepth = float.NaN;
-			/// <summary>True when some main or detail layer has a lava band (2026-10-25, I2r); the point's height above the lava then (NaN: no lava).</summary>
+			/// <summary>True when some main or detail layer has a lava band; the point's height above the lava then (NaN: no lava).</summary>
 			private readonly bool anyLavaBand;
 			private float aboveLava = float.NaN;
 			/// <summary>
-			/// True when some detail layer has a facing band or a fall-line stretch (2026-10-26, GROUND-BANDS); the point's fall line then
+			/// True when some detail layer has a facing band or a fall-line stretch; the point's fall line then
 			/// (world xz, its length the slope's sine; zero unknown or flat).
 			/// </summary>
 			private readonly bool anyDownhill;
 			private Vector2 downhill;
-			/// <summary>Per entry with a site band (2026-10-26, GROUND-BANDS): the scene's sites of its kinds (empty: none), else null.</summary>
+			/// <summary>Per entry with a site band: the scene's sites of its kinds (empty: none), else null.</summary>
 			private readonly List<BiomeScatterSite>[] siteLists;
-			/// <summary>True when some detail or bed layer has a landform zone band (bed layers 2026-10-26, GROUND-BANDS, decision 87).</summary>
+			/// <summary>True when some detail or bed layer has a landform zone band (bed layers: GROUND-BANDS).</summary>
 			private readonly bool anyBedZone;
 			/// <summary>Scratch for one biome's extra beds: their strengths and shares at the point being weighed.</summary>
 			private readonly float[] bedStrength = new float[BiomeTemplate.MaximumBedLayers];
@@ -391,12 +391,12 @@ namespace FishMMO.Shared.WorldDesign
 				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 				{
 					anyZone |= entry.Role == PaletteRole.Detail && entry.Source != null && entry.Source.landformBand.On;
-					// A bed layer's zone band (2026-10-26, GROUND-BANDS, decision 87: drowned paving only on a sinking quarter's floor).
+					// A bed layer's zone band (drowned paving only on a sinking quarter's floor).
 					anyBedZone |= entry.Role == PaletteRole.Submerged && entry.Source is BedTextureLayer && entry.Source.landformBand.On;
 				}
 				anyZone |= anyBedZone;
 				anyDownhill = NeedsDownhill(palette);
-				/* The sites each site-banded detail paints round, filtered by its kinds once (2026-10-26, GROUND-BANDS): a texel then
+				/* The sites each site-banded detail paints round, filtered by its kinds once: a texel then
 				 * walks only the whale falls, not every planned site. */
 				foreach (SceneTerrainPalette.Entry entry in palette.Entries)
 				{
@@ -505,8 +505,8 @@ namespace FishMMO.Shared.WorldDesign
 			public bool Climatic => anyClimatic;
 
 			/// <summary>
-			/// True when some detail layer of the palette reads the ground's fall line (a facing band or a fall-line stretch, 2026-10-26,
-			/// GROUND-BANDS), so the painter reads the terrain's normals; false paints exactly as before.
+			/// True when some detail layer of the palette reads the ground's fall line (a facing band or a fall-line stretch),
+			/// so the painter reads the terrain's normals; false paints exactly as before.
 			/// </summary>
 			public static bool NeedsDownhill(SceneTerrainPalette palette)
 			{
@@ -547,8 +547,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// <see cref="Weigh(float, float, float, float, float[], Vector2)"/> with the ground's fall line at the point (2026-10-26,
-			/// GROUND-BANDS): world xz, its length the slope's sine (the terrain normal's level part); zero where it is not known (the
+			/// <see cref="Weigh(float, float, float, float, float[], Vector2)"/> with the ground's fall line at the point:
+			/// world xz, its length the slope's sine (the terrain normal's level part); zero where it is not known (the
 			/// backdrop), which a facing band reads as flat ground and a fall-line stretch as round patches. Read only when a detail layer
 			/// asks (<see cref="NeedsDownhill"/>).
 			/// </summary>
@@ -561,7 +561,7 @@ namespace FishMMO.Shared.WorldDesign
 				float submerged = options.HasLiquidWater && options.ShoreFadeMetres > 0f
 					? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(-worldY / options.ShoreFadeMetres))
 					: 0f;
-				// The sea's share alone and the inland water's alone, for a sea-floor biome's own bed share (2026-10-25, phase I2m).
+				// The sea's share alone and the inland water's alone, for a sea-floor biome's own bed share.
 				float seaShore = submerged;
 				float inlandUnder = 0f;
 				float inland = float.NegativeInfinity;
@@ -579,7 +579,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				seaDepth = anyDepthBand && options.HasLiquidWater ? -worldY : float.NaN;
 				aboveLava = anyLavaBand && !float.IsNaN(options.LavaLevel) ? worldY - options.LavaLevel : float.NaN;
-				/* What lies over the bed (decision 35, 2026-10-18): which water, how deep below its own surface, how quick. Only where
+				/* What lies over the bed: which water, how deep below its own surface, how quick. Only where
 				 * something is submerged; a river's share asked only under inland water. */
 				BedWater water = BedWater.None;
 				if (submerged > 0f)
@@ -606,7 +606,7 @@ namespace FishMMO.Shared.WorldDesign
 						continue;
 					}
 					reached += biomeWeight;
-					/* A sea-floor biome's own grounds paint under the sea (decision 36 (a), 38, 45): its bed takes none of the sea floor
+					/* A sea-floor biome's own grounds paint under the sea: its bed takes none of the sea floor
 					 * (Ground), or none above the lowest tide (ToLowWater); still the whole bed under inland water. Every other biome
 					 * keeps the shore's rule, the very value it always had. */
 					float biomeSubmerged = floors[b] == BiomeSeaFloor.Shore ? submerged
@@ -712,7 +712,7 @@ namespace FishMMO.Shared.WorldDesign
 						bedStrength[k] = bedSet.ExtraSources[k].Strength(in water);
 						if (anyBedZone && bedStrength[k] > 0f && bedSet.ExtraSources[k].landformBand.On)
 						{
-							// On (or off) one part of its biome's landforms (2026-10-26, GROUND-BANDS, decision 87): a sunk quarter's paving.
+							// On (or off) one part of its biome's landforms: a sunk quarter's paving.
 							bedStrength[k] *= BiomeLandformZones.WeightOf(options.LandformZones, bedSet.ExtraSources[k].landformBand,
 								bedSet.Extras[k].Biome != null ? bedSet.Extras[k].Biome.ID : 0, worldX, worldZ, zoneGround, zoneSlope);
 						}
@@ -778,7 +778,7 @@ namespace FishMMO.Shared.WorldDesign
 				float rest = groundShare * (1f - union);
 				if (main != null && Banded(main.Source) && sum > 0f)
 				{
-					/* A main layer banded by depth (2026-10-25, phase I2m) stands only inside its band; outside it the details carry the
+					/* A main layer banded by depth stands only inside its band; outside it the details carry the
 					 * ground between them, and where none does the main layer stays, never a hole (as a main layer's climate band). */
 					float stands = DepthWeight(main);
 					layerWeights[main.LayerIndex] += rest * stands;
@@ -811,7 +811,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The ground share of a biome whose ground changes with the climate (decision 29, 2026-10-18): what <see cref="Share"/>
+			/// The ground share of a biome whose ground changes with the climate: what <see cref="Share"/>
 			/// does with its details and main layer, with each ground slot shared among its occupants by the climate first.
 			/// </summary>
 			/// <remarks>
@@ -964,17 +964,17 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// How fully a main or detail layer's sea depth band (<see cref="TerrainTextureLayer.SeaDepthWeight"/>, decision 38/45) admits
+			/// How fully a main or detail layer's sea depth band (<see cref="TerrainTextureLayer.SeaDepthWeight"/>) admits
 			/// the point being weighed: its depth below mean sea level, in metres or in the scene's tides. 1 on a world with no sea.
 			/// </summary>
 			private float DepthWeight(SceneTerrainPalette.Entry entry)
 			{
 				float sea = float.IsNaN(seaDepth) ? 1f : entry.Source.SeaDepthWeight(seaDepth, options.TideMetres);
-				// And its lava band (2026-10-25, I2r): the height above the lava's surface; 1 with no band or no lava.
+				// And its lava band: the height above the lava's surface; 1 with no band or no lava.
 				return entry.Source.HasLavaBand ? sea * entry.Source.LavaWeight(aboveLava) : sea;
 			}
 
-			/// <summary>True when a layer's sea depth band or lava band (2026-10-25, I2r) changes where it is painted.</summary>
+			/// <summary>True when a layer's sea depth band or lava band changes where it is painted.</summary>
 			private static bool Banded(TerrainTextureLayer layer) => layer.HasSeaDepthBand || layer.HasLavaBand;
 
 			/// <summary>
@@ -996,7 +996,7 @@ namespace FishMMO.Shared.WorldDesign
 				float n = Mathf.PerlinNoise(x, z) * 0.67f + Mathf.PerlinNoise(x * 2.03f + 17.1f, z * 2.03f - 9.7f) * 0.33f;
 				if (anyDownhill && source.fallLineStretch > 1f && entry.Role == PaletteRole.Detail)
 				{
-					// Drawn out down the fall line (2026-10-26, GROUND-BANDS: avalanche tracks), eased in from flat ground.
+					// Drawn out down the fall line (avalanche tracks), eased in from flat ground.
 					n = FallLineNoise(n, offset, scale, source.fallLineStretch, worldX, worldZ, slope);
 				}
 				n = Mathf.Clamp01((n - 0.5f) * 1.6f + 0.5f);
@@ -1016,18 +1016,18 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				if (anyZone && source.landformBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
 				{
-					// On (or off) a part of its biome's sculpted landforms (2026-10-25, I2g-b, decision 55).
+					// On (or off) a part of its biome's sculpted landforms.
 					strength *= BiomeLandformZones.WeightOf(options.LandformZones, source.landformBand, entry.Biome != null ? entry.Biome.ID : 0,
 						worldX, worldZ, zoneGround, zoneSlope);
 				}
 				if (source.facingBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
 				{
-					// On the faces that look one way (2026-10-26, GROUND-BANDS, decision 71): a shade frost on the poleward slopes.
+					// On the faces that look one way: a shade frost on the poleward slopes.
 					strength *= source.facingBand.Weight(downhill, slope, in options.Compass);
 				}
 				if (siteLists != null && source.siteBand.On && entry.Role == PaletteRole.Detail && strength > 0f)
 				{
-					// On and round the sites of its kinds (2026-10-26, GROUND-BANDS): a whale fall's halo; nowhere on a scene with none.
+					// On and round the sites of its kinds: a whale fall's halo; nowhere on a scene with none.
 					strength *= BiomeScatterModes.NearSite(siteLists[entry.Index], string.Empty, worldX, worldZ, source.siteBand.Metres);
 				}
 				return Mathf.Clamp01(strength);
@@ -1035,7 +1035,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// A detail's two-octave noise read in the slope's own frame, its patches <paramref name="stretch"/> times longer down the fall
-			/// line than across it (2026-10-26, GROUND-BANDS), blended toward the round <paramref name="plain"/> noise on gentle ground.
+			/// line than across it, blended toward the round <paramref name="plain"/> noise on gentle ground.
 			/// </summary>
 			/// <remarks>
 			/// Turning the world's coordinates by the local fall line alone would make a degree's wobble in the line slide the pattern by

@@ -254,7 +254,7 @@ namespace FishMMO.UnitTests
 			var payload = new HashSet<string>(ProceduralArtCatalogue.PayloadPaths());
 			var wrappers = new HashSet<string>(ProceduralArtCatalogue.WrapperPaths());
 			var prefabs = new HashSet<string>(ProceduralArtCatalogue.AllPrefabNames());
-			// The surfaces' maps are slices of the structure look arrays (2026-10-28): every one has its slice, and the arrays are
+			// The surfaces' maps are slices of the structure look arrays: every one has its slice, and the arrays are
 			// the payload, not the single maps.
 			foreach (string surface in StructureSurfaces.Names)
 			{
@@ -307,7 +307,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── The structure palette (2026-10-16, I6a) ──────────────────
+		// ── The structure palette ──────────────────
 
 		/// <summary>
 		/// Under the kit's palette every submesh of every level of every variant, in every finish, is laid in the material it
@@ -371,7 +371,7 @@ namespace FishMMO.UnitTests
 					}
 				}
 			}
-			// The special-material pieces have roles of their own (2026-10-16): smithy and timber longhouse log walls, the turf
+			// The special-material pieces have roles of their own: smithy and timber longhouse log walls, the turf
 			// longhouse, the tall timber house's stone ground floor; and the houses' floors, fences, doors, steps.
 			foreach (FishMMO.Shared.Biomes.BiomeStructureRole role in new[]
 			{

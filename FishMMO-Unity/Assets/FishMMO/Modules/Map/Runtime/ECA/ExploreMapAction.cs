@@ -58,16 +58,29 @@ namespace FishMMO.Shared
 		public bool EntireScene;
 
 		/// <inheritdoc />
+		/// <summary>
+		/// Server: raised with the character, the centre and the radius (positive infinity for the whole scene). The Map
+		/// module's server fog system stores it; the client's own reveal is only what it draws.
+		/// </summary>
+		public static event Action<ICharacter, Vector3, float> OnServerExploreMap;
+
 		public override void Execute(ICharacter initiator, EventData eventData)
 		{
+			/* Server first, by a runtime check rather than UNITY_SERVER: the editor runs the scene server without that
+			 * define. The server is where exploration is recorded (account-wide). */
+			if (initiator != null && initiator.Transform != null && EcaAuthority.IsServer(initiator, eventData))
+			{
+				OnServerExploreMap?.Invoke(initiator, initiator.Transform.position, EntireScene ? float.PositiveInfinity : Mathf.Max(0.0f, Radius));
+				return;
+			}
 #if !UNITY_SERVER
 			if (initiator == null || initiator.Transform == null)
 			{
 				return;
 			}
 
-			/* The owning client only. Exploration is written to that player's own files, so running
-			 * this for a peer would be writing someone else's map from this machine. */
+			/* The owning client only: it draws the reveal at once; the server records it. Running this for a peer
+			 * would draw someone else's map on this machine. */
 			if (initiator.NetworkObject == null || !initiator.NetworkObject.IsOwner)
 			{
 				return;

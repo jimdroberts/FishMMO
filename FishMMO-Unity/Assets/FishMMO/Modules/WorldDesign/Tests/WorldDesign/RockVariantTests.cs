@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I6f of the biome suite (2026-10-26, decisions 22 and 34): each rock's formation variant count (four for every rock
+	/// Each rock's formation variant count (four for every rock
 	/// there was, two for the suite's formation-only and off-world rocks), the stone details' variant meshes the GPU detail
 	/// scatter cycles per instance, the drafts' named stone sets, and the orphan list. Pure C#: every test here runs outside
 	/// the editor but <see cref="NamedSets_AndDetailVariants_AreClosedSoundAndWithinBudget"/>, which needs only the mesh maths.

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A cave's drowned galleries dressed (2026-10-25, phase I2n-c "drowned galleries", decision 86): what floats on its water and its
+	/// A cave's drowned galleries dressed ("drowned galleries"): what floats on its water and its
 	/// stream pools (c), its water roots (d), its glow-worms threaded on the roots or hung on drowned and fallen logs (e) and the
 	/// roots screening its root windows (f). Each by the biome dressing the cave's inside (its interior where the host links one),
 	/// each on its own random stream after every other pass, so nothing laid before moves; and each does nothing until that
@@ -16,7 +16,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	public sealed partial class PointOfInterestCaveDressing
 	{
-		/// <summary>The root art's hue water roots are drawn in (ProceduralArtCatalogue.RootHues, decision 86 (d)).</summary>
+		/// <summary>The root art's hue water roots are drawn in (ProceduralArtCatalogue.RootHues).</summary>
 		public const string WaterRootsHueName = "WaterRoots";
 
 		private sealed partial class Dresser
@@ -54,8 +54,8 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Water roots (d) ───────────────────────────────
 
 			/// <summary>
-			/// A tap root over the cave's water hung down to the water's surface, its tassels a hand's depth into it (decision 86 (d):
-			/// "tap roots reach the water surface, not the floor, where it floods"), in the root art's WaterRoots hue where the art
+			/// A tap root over the cave's water hung down to the water's surface, its tassels a hand's depth into it
+			/// ("tap roots reach the water surface, not the floor, where it floods"), in the root art's WaterRoots hue where the art
 			/// has one. False where it does not fit (too short a drop or too long), so the caller hangs its tangle as before.
 			/// </summary>
 			private bool WaterRoot(Vector3 ground, float roof, int hue, float pick, float yaw, float girth)
@@ -90,7 +90,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			/// <summary>
 			/// Glow-worm colonies threaded along the roots the hanging pass laid, where the biome hangs its glow-worms on roots (its Cave
-			/// Glows' mount, decision 86 (e)), in its glow-worms' hue (the palette's: by name in the glow art; its first where the art has
+			/// Glows' mount), in its glow-worms' hue (the palette's: by name in the glow art; its first where the art has
 			/// none so named): about half the roots at the biome's glow-worm chance, a small colony each, never low over a way.
 			/// </summary>
 			private void WormsOnRoots(DeterministicRNG random)
@@ -133,7 +133,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Root windows (f) ──────────────────────────────
 
 			/// <summary>
-			/// The host's tree roots hung round each root window's throat (CaveSystem.IsRootWindow, decision 86 (f): "screened by
+			/// The host's tree roots hung round each root window's throat (CaveSystem.IsRootWindow: "screened by
 			/// host-tree roots"): a ring of curtains at the vault round the opening, in the biome's root art, down to the water where
 			/// the floor under them is flooded.
 			/// </summary>
@@ -248,7 +248,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// The same floats on the cave's stream pools (2026-10-26, I2n-c: "floats on stream pools"), each pool at its own level: the
+			/// The same floats on the cave's stream pools ("floats on stream pools"), each pool at its own level: the
 			/// lattice points within its rim (FloatingPlants.TryPlant at its depth and distance from the rim), for a linked interior's
 			/// Floating Plants only, as on its level's water. Laid as on any still water (a pool's water is no stream's to refuse them).
 			/// </summary>
@@ -322,7 +322,7 @@ namespace FishMMO.Shared.WorldDesign
 			private static readonly (string name, float min, float max)[] DrownedLogs = { ("FallenLog_Birch", 0.5f, 0.75f), ("Driftwood", 0.75f, 1.05f) };
 
 			/// <summary>
-			/// Logs the water carried in, and the glow-worm colonies hung along them (decision 86 (e): WormMount Wood, "larvae thread the
+			/// Logs the water carried in, and the glow-worm colonies hung along them (WormMount Wood, "larvae thread the
 			/// drowned logs"), where the biome hangs its glow-worms on wood: about one log a 40 m of the cave's ways
 			/// (BiomeCaveWaters.LogsWanted), lying along a way's side, half sunk and awash where the floor is under the water, else fallen
 			/// on the floor off the trodden lane; on each a few small colonies on its flanks, their threads short of the water or the

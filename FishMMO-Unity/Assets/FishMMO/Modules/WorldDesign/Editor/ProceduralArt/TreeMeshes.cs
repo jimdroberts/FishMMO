@@ -61,7 +61,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Turns in autumn and drops its leaves in winter.</summary>
 		public bool Deciduous;
 
-		// ── Added by the vegetation expansion (2026-10-10) ──
+		// ── Added by the vegetation expansion ──
 		// Every field below is zero on every species made before them, and zero means "as the form always grew",
 		// so no tree made before them changes: each is read only when a species sets it.
 
@@ -179,7 +179,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// area is <see cref="LodFoliageShare"/> of <paramref name="full"/>'s (at most <see cref="MaxLodLeafScale"/>).
 		/// The level used to keep a tenth of a conifer's needle area at the same card size (pine 146 leaf triangles
 		/// against 1 396) and about a seventh of a broadleaf's: from fifty metres on a pine stood as a bare trunk with a
-		/// few tufts (2026-10-07). Area is linear in the width scale, so one correction lands it.
+		/// few tufts. Area is linear in the width scale, so one correction lands it.
 		/// </summary>
 		public static MeshBuilder BuildReduced(in TreeSpecies species, int lod, int seed, MeshBuilder full)
 		{
@@ -802,7 +802,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			// ── Forms and features added by the vegetation expansion (2026-10-10) ──────────────────
+			// ── Forms and features added by the vegetation expansion ──────────────────
 			// Each runs only for a species that asks for it (a field set, or one of the two new forms), so every tree
 			// made before is drawn exactly as it was: none of these draws from a stream an older species reads.
 
@@ -1000,7 +1000,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// The wood under a deciduous conifer's needle bough (a larch, a bald cypress): a tapering stick along the
 			/// spray and a card of fine twigs over its outer part, neither tintable. A conifer's boughs were needle cards
-			/// alone, so when winter clipped them the tree stood as a bare spike of trunk (2026-10-19); bare, it now
+			/// alone, so when winter clipped them the tree stood as a bare spike of trunk; bare, it now
 			/// shows its tiers of boughs as a broadleaf shows its limbs. The card on every level, so a reduced level's leaf
 			/// area (<see cref="BuildReduced"/>) still matches the full tree's. Drawn from a stream of its own, part
 			/// <paramref name="stream"/>, so the needles hang where they always did.

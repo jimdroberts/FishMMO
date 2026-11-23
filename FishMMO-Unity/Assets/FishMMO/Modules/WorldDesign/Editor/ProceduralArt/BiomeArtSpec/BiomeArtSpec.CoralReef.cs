@@ -10,16 +10,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Coral Reef</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry CoralReef()
 		{
-			// The atoll reefs of the medieval Maldives (Dhivehi Raajje; biome round, approved 2026-10-18, authored 2026-10-26):
+			// The atoll reefs of the medieval Maldives (Dhivehi Raajje):
 			// turquoise lagoons over white Halimeda sand, the reef flat of cemented coral pavement where the cowries are gathered by
 			// the basket, the crest of staghorn and table corals, great Porites boulders and the drop-off wall of red gorgonians
 			// and black coral; coral-stone masons, cowrie gatherers, sewn bathheli ships and the drowned stupas of the Redin.
 			// Hot band (t >= 0.9): the shallow flats bleach white. Fantasy: the Rannamaari lantern-ship, the Redin's reef palace.
-			// Everything below is painted and grown UNDER the sea (decision 38, I2m: UnderTheSea, depth bands in metres below mean sea
+			// Everything below is painted and grown UNDER the sea (UnderTheSea, depth bands in metres below mean sea
 			// level; the lakebed is only the coastal fade and the islets' pools).
-			// LATER (I9 T1): every ground and object texture as Coral Reef's own variant of its recipe (decision 12); until then the
+			// LATER: every ground and object texture as Coral Reef's own variant of its recipe; until then the
 			// grounds are its own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Kauri (cowrie cream-and-honey) + Rannamaari (spawning-night green).
+			// LATER (no spec column yet): rare looks Kauri (cowrie cream-and-honey) + Rannamaari (spawning-night green).
 			return E("Coral Reef", L(Ground.SandAtoll,
 					// Open sand: mushroom corals lying free, garden-eel colonies on the sand slope, leopard cucumbers, Linckia stars,
 					// cowries and cone shells, shipworm-bored drift palms, a little coral rubble.
@@ -72,20 +72,20 @@ namespace FishMMO.Shared.WorldDesign
 					"SeaCucumber", Pebbles("Coral"))
 				.Ways(path: Ground.PathSweptSand, road: Ground.FlagstoneHirigaa, cobbles: Ground.FlagstoneRagSett)
 				.Bars(sand: Ground.SandForamBar, gravel: Ground.GravelCayShingle)
-				// Own rock Coralstone (its formations; approved Q1), accepting the raised Feshi limestone reef and the atoll's basalt root.
-				// LATER (I9): Limestone's Feshi notch ledges and Basalt's Atoll-root (below 40 m on the drop-off) as Coral Reef's own looks.
+				// Own rock Coralstone (its formations), accepting the raised Feshi limestone reef and the atoll's basalt root.
+				// LATER: Limestone's Feshi notch ledges and Basalt's Atoll-root (below 40 m on the drop-off) as Coral Reef's own looks.
 				.Accepts(RockTypes.Limestone, RockTypes.Basalt)
 				.CaveShell(CaveForm.SeaCave, "Coralstone").CaveShell(CaveForm.Cave, "Coralstone").CaveShell(CaveForm.Grotto, "Limestone")
 				.CaveShell(CaveForm.Mine, "Coralstone").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
 				.Crystals((BiomeCaveCrystalKind.Apatite, 0.6f), (BiomeCaveCrystalKind.Lagoonglass, 0.4f))
-				// The lagoonglass's light ripples like caustics, in its caves and on its crystal posts (decision 33's cold Glow).
+				// The lagoonglass's light ripples like caustics, in its caves and on its crystal posts (the cold Glow).
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Caustic)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Caustic)
-				// Faru ring reefs round their lagoons, a blue hole, kandu passes cut through the rings (approved Q2).
+				// Faru ring reefs round their lagoons, a blue hole, kandu passes cut through the rings.
 				.Landforms("Faru", "BlueHole", "Kandu")
 				.Look(BiomeLookClass.Aquatic)
 				.Wildlife(BiomeHabitat.Sea)
-				// LATER (SEA-LIFE N4/N5/N12/N13 + the Eel shape): bumphead parrotfish 1 (reef fish stand in), moray 0.6 (lurking, I2m's Eel
+				// LATER (the Eel shape): bumphead parrotfish 1 (reef fish stand in), moray 0.6 (lurking, I2m's Eel
 				// + Lurk), whale shark 0.2 (the kit's shark stands in), spinner dolphin 0.4, Kandu-fureta 0.1 (pale sea-spirit, passes by
 				// night). The kit's reef fish carry the parrotfish's weight and the shark the whale shark's.
 				.HomeTo(("Reef fish", 7f), ("Baitfish", 3f), ("Jacks", 1.5f), ("Shark", 1.2f), ("Manta", 1.2f), ("Sea turtle", 2f), ("Crab", 1f), ("Jellyfish", 0.4f))
@@ -95,7 +95,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Moat(BiomeMoatWater.Wet)
 				// The islets' pools and moats: clear tropical turquoise over white sand.
 				.WaterTint(new BiomeWaterLook(SeaHex("#6ad0c8"), SeaHex("#0a5a78"), new Vector3(0.40f, 0.06f, 0.04f), 0.05f, SeaHex("#e0d8c2"), SeaHex("#f6f8f8")))
-				// Clear tropical turquoise. LATER (I2k column): the coastal surface colour #2aa6b4.
+				// Clear tropical turquoise. LATER: the coastal surface colour #2aa6b4.
 				.SeaTint(new BiomeSeaLook(new Color(0.02f, 0.33f, 0.40f), 35f, 0.7f))
 				.Describe("Warm atoll shallows — coral walls in every colour over white sand, cowrie flats, and the drowned stupas of the Redin")
 				.Names(onsets: new[] { "Fu", "Hu", "Thi", "Dhi", "Ma", "Ka", "Ra", "Fe", "Vaa", "Kan", "Mii", "Hi", "Gaa", "Faa" },
@@ -126,16 +126,16 @@ namespace FishMMO.Shared.WorldDesign
 				// The shelf's sites: wrecks, havittas and coral halls, the Redin's reef palace (rare, at most one a scene), offering rings,
 				// the copper-plate stand, a Redin head, a moray's grotto, the lagoonglass garden; over the flats the fish weirs, cowrie
 				// lines and quarry. Island, Bay, Headland, the river mouths and the reef itself kept; the land detections zeroed.
-				// LATER (I7): the named pieces — the drowned havitta, the coral-stone hall, the Redin reef palace re-dressed from "Reef
+				// LATER: the named pieces — the drowned havitta, the coral-stone hall, the Redin reef palace re-dressed from "Reef
 				// Halls", the bathheli and sewn-hull wrecks with cowrie drifts, the offering ring, the Lomafanu stand, the Redin head, the
-				// moray grotto, fish weirs and cowrie lines over the water (I21 over-water placement), the hirigaa quarry, kandu cairns,
-				// the harbours' coral-block jetties; sea lanes: bathheli 1.0, masdhoni 1.0 and bokkura inshore (I13) and the Rannamaari
-				// phantom lantern-ship, one night a lunar cycle, fading within 400 m (I14). The kit's variants below stand in.
+				// moray grotto, fish weirs and cowrie lines over the water (over-water placement), the hirigaa quarry, kandu cairns,
+				// the harbours' coral-block jetties; sea lanes: bathheli 1.0, masdhoni 1.0 and bokkura inshore and the Rannamaari
+				// phantom lantern-ship, one night a lunar cycle, fading within 400 m. The kit's variants below stand in.
 				.Sites((POIType.RiverMouth, 1f), (POIType.Island, 1f), (POIType.Bay, 1f), (POIType.Headland, 1f), (POIType.CoralReef, 1f),
 					(POIType.FishingCamp, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 0.2f),
 					(POIType.SunkenShrine, 0.3f), (POIType.SunkenMonument, 0.2f), (POIType.SunkenStatue, 0.15f), (POIType.SeaMonsterDen, 0.25f),
 					(POIType.SeaCrystalFormation, 0.15f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.KrakenWreck, 0.6f), (POIType.MerfolkVillage, 1.4f))
 				.Prefers(POIType.SunkenCity, "Reef Halls", 2f)
 				.Prefers(POIType.SunkenCity, "Drowned", 0.2f)
@@ -143,7 +143,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Timber, 1f)
 				// The palette: carved Porites coral-stone walls, lime-wash, rag plinths and causeways, lacquered red-black-yellow timber,
 				// plaited-frond roofs, bronze gone green; coconut-palm timber, palm-mat sails, the sultan's plain red banner.
-				// LATER (NEW-SURFACES U1/U4): Hirigaa, Lacquerwood and the Cadjan thatch as surfaces of their own, coir rope and the
+				// LATER: Hirigaa, Lacquerwood and the Cadjan thatch as surfaces of their own, coir rope and the
 				// dhandimathi banner; tinted stone, timber and thatch stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Stone, SeaHex("#e4dcc4"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Trim, BiomeStructureMaterial.Stone, SeaHex("#e4dcc4"))
@@ -161,7 +161,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, SeaHex("#b01c1c"))
 				// No towns stand on the shelf (the land biomes build them): their streets unlit. The weirs, quarry and harbours burn
 				// niche lamps; the sunken sites and the caves' routes crystal posts holding lagoonglass.
-				// LATER (I7a): lights at non-town sites are laid once I7a places them; the entries are the template's already.
+				// LATER: lights at non-town sites are laid once a later pass places them; the entries are the template's already.
 				.Unlit(POIType.Village).Unlit(POIType.Town).Unlit(POIType.City).Unlit(POIType.Capital).Unlit(POIType.Port)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.NicheLamp, 16f)
 				.Lights(POIType.SunkenCity, BiomeWayLightKind.CrystalPost, 22f)
@@ -171,7 +171,7 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.NicheLamp, 14f)
 				.Gathers("Pearl Oyster Bed", "Hirigaa Block", "Money Cowrie", "Black Coral", "Apatite", "Lagoonglass")
 				// Reefgrown: living coral heads and soft corals on every stone, crinoids on the edges, sponges in the joints.
-				// LATER (I7): the harbour pieces' lighter coat (0.3); one cover for every piece today.
+				// LATER: the harbour pieces' lighter coat (0.3); one cover for every piece today.
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Reefgrown, 0.9f, 1f)
 				.ErodesAs("Seabed");

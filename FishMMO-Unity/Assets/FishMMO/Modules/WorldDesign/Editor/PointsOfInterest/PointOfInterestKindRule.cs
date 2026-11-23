@@ -46,7 +46,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// One biome's default weight for a kind or a template variant, matched by the biome asset's name (case ignored): what the
-	/// biome art authoring writes onto the biome's template (2026-10-16); the cut reads the template's.
+	/// biome art authoring writes onto the biome's template; the cut reads the template's.
 	/// </summary>
 	[Serializable]
 	public struct PointOfInterestBiomeWeight
@@ -118,7 +118,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Stands where a river crosses the way between two settlements (a bridge).</summary>
 		public bool RiverCrossing;
 		/// <summary>
-		/// Stands on a river's bank, its front to the water (a watermill, a sawmill: 2026-10-14), on a steady reach well
+		/// Stands on a river's bank, its front to the water (a watermill, a sawmill), on a steady reach well
 		/// clear of any fall, where the bank stands a little over the water.
 		/// </summary>
 		public bool RiverBank;
@@ -126,11 +126,11 @@ namespace FishMMO.Shared.WorldDesign
 		public bool Exposed;
 
 		/// <summary>
-		/// May stand IN a river's current (decision 35 (g), 2026-10-18; <see cref="PointOfInterestWaterSites.TryChannelSpot"/>): a ship
+		/// May stand IN a river's current (<see cref="PointOfInterestWaterSites.TryChannelSpot"/>): a ship
 		/// mill, a lift-net stage, a toll keep, moored <see cref="ChannelBankMetres"/> off a bank where the channel is
 		/// <see cref="ChannelMinDepth"/> deep and runs <see cref="ChannelMinSpeed"/>. Off for every rule until the in-stream pieces exist.
 		/// </summary>
-		[Header("In the Water (decision 35)")]
+		[Header("In the Water")]
 		public bool InStream;
 		public float ChannelMinDepth = 1.5f;
 		public float ChannelMinSpeed = 0.8f;
@@ -146,16 +146,16 @@ namespace FishMMO.Shared.WorldDesign
 		public float ShallowsMaxDepth = 3f;
 		public float ShallowsShoreMetres = 300f;
 		/// <summary>
-		/// An underwater kind (<see cref="Underwater"/>) that may also lie under a lake, by its depth below THAT lake's level
-		/// (decision 35 (d)); off: under the sea only, as every sunken kind was.
+		/// An underwater kind (<see cref="Underwater"/>) that may also lie under a lake, by its depth below THAT lake's level;
+		/// off: under the sea only, as every sunken kind was.
 		/// </summary>
 		public bool InLakes;
 		/// <summary>
-		/// Afloat on the open sea's SURFACE (2026-10-25, I2p): sited as an <see cref="Underwater"/> kind over at least <see cref="MinDepth"/>
+		/// Afloat on the open sea's SURFACE: sited as an <see cref="Underwater"/> kind over at least <see cref="MinDepth"/>
 		/// of water by the kind's OWN band (never the biome's UnderwaterSiteDepth), but stood at sea level, not on the floor.
 		/// </summary>
 		public bool Afloat;
-		/// <summary>At least this far from anything but the open sea (ground, a shut-in basin), metres; 0 for no such rule (2026-10-25).</summary>
+		/// <summary>At least this far from anything but the open sea (ground, a shut-in basin), metres; 0 for no such rule.</summary>
 		public float OffshoreMetres;
 
 		/// <summary>Within this of a settlement, metres; 0 for no such rule. The site's parent is that settlement.</summary>
@@ -175,7 +175,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Stands beside a way (a road, a cart track, a trail) the path planner laid, its footprint's edge within this of the way's
-		/// verge, metres; 0 for no such rule (2026-10-27, the fantasy wave: a toll gate, an ambush, a wrecked caravan). The ways are
+		/// verge, metres; 0 for no such rule (a toll gate, an ambush, a wrecked caravan). The ways are
 		/// laid after the sites, so such a kind is sited after them (<see cref="PointOfInterestPlanner.PlaceBesideWays"/>), on the
 		/// ways themselves, never on a guess at them.
 		/// </summary>
@@ -188,7 +188,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float JunctionMetres;
 
 		/// <summary>
-		/// Stands within <see cref="NearDetectedMetres"/> of what a detector finds (a pass, a peak, a headland: 2026-10-27), whether or
+		/// Stands within <see cref="NearDetectedMetres"/> of what a detector finds (a pass, a peak, a headland), whether or
 		/// not that detected kind was marked there; <see cref="PointOfInterestDetector.None"/> for no such rule.
 		/// </summary>
 		[Header("Landform")]
@@ -196,7 +196,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float NearDetectedMetres;
 
 		/// <summary>
-		/// Stands on a small island joined to the mainland by a causeway the low tide uncovers (a tidal island's abbey: 2026-10-27), the
+		/// Stands on a small island joined to the mainland by a causeway the low tide uncovers (a tidal island's abbey), the
 		/// island's shore within this of the mainland's across shallow sea, metres; 0 for no such rule
 		/// (<see cref="PointOfInterestPlanner"/>'s tidal islands; the causeway is the site's shaper's).
 		/// </summary>
@@ -211,7 +211,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// ground with no biome.
 		/// </summary>
 		/// <remarks>
-		/// The list is the kind's DEFAULT biomes (2026-10-16): the biome art authoring writes the weight it gives each biome onto
+		/// The list is the kind's DEFAULT biomes: the biome art authoring writes the weight it gives each biome onto
 		/// that biome's template (BiomeTemplate.SiteKinds), and the cut reads the template's. A template never authored with
 		/// them still takes these, by its name, with a warning (BiomeTemplateArt.SiteKinds).
 		/// </remarks>

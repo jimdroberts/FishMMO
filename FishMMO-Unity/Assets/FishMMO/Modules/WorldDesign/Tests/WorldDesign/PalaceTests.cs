@@ -12,7 +12,7 @@ using Tier = FishMMO.Shared.WorldDesign.PointOfInterestPalace.Tier;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A capital's palace (2026-10-19: "massive palace style castles with interiors (kings chair?) for capitals"): the compound's plan
+	/// A capital's palace ("massive palace style castles with interiors (kings chair?) for capitals"): the compound's plan
 	/// (PointOfInterestPalace.Plan: nothing overlaps, every door has its approach, the doors look into the court on the garden's walks,
 	/// the gate on the front, all inside the footprint, the same plan for the same seed) and the capitals' layouts keeping its ground
 	/// as their citadel at every size and stature.
@@ -193,7 +193,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The ward's walk closed (2026-10-19): every station's two walk doors (a corner tower's turning the corner) met square by a module's
+		/// The ward's walk closed: every station's two walk doors (a corner tower's turning the corner) met square by a module's
 		/// end, and every module's end met by its neighbour's or a station's walk door, so no walk door and no walk ends over a drop.
 		/// </summary>
 		private static void AssertTheRingCloses(PointOfInterestPalace.Layout plan, string name)

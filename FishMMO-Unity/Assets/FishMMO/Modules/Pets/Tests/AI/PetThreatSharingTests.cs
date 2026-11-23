@@ -178,7 +178,7 @@ namespace FishMMO.UnitTests.AI
 			string host = ProjectFiles.ReadAllText(Path.Combine(ai, "AIBrainHost.cs"));
 
 			/* The pet is the Pets module's and the dispatcher is the NPCs module's, which does not reference it, so the
-			 * link travels through the NPCs module's companion seam (2026-11-20): the pet announces every owner change on
+			 * link travels through the NPCs module's companion seam: the pet announces every owner change on
 			 * AICompanions, and the dispatcher — subscribed by the brain host before any pet can exist — links on an owner
 			 * and unlinks on null. */
 			LogAssert.IsTrue(pet.Contains("AICompanions.RaiseOwnerChanged(this, value);"),

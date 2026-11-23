@@ -8,7 +8,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static partial class StructurePieces
 	{
 		/// <summary>
-		/// The fantasy wave's Keeps pack: its new pieces (2026-10-27, poi-fantasy-wave/WAVE.md). A sorcerer's black spire for the dark
+		/// The fantasy set's Keeps pack: its new pieces. A sorcerer's black spire for the dark
 		/// towers and dark keeps (Orthanc's horned crown, Barad-dûr's stepped tiers) and the elves' slender white tower, each with its
 		/// keeper's room at the foot behind a real door. Laid by id only (=DarkSpire, =ElvenSpire): "building" and "tower" draw neither
 		/// into an older query (a wall tower is "tower+wall", a watchtower "tower+military").
@@ -34,7 +34,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float DarkFloor = 0.6f, DarkRoomTop = 4.6f, DarkOuter = 3.4f, DarkWall = 0.8f, DarkPlinthR = 4.1f;
 
 		/// <summary>
-		/// A sorcerer's black tower (2026-10-27, the fantasy wave: "a tall black sorcerer's tower"): a guard room at the foot with its
+		/// A sorcerer's black tower ("a tall black sorcerer's tower"): a guard room at the foot with its
 		/// iron door, the shaft over it sealed, slit windows lit at night. v0 (Orthanc) tapers, faceted, between four buttresses that
 		/// run up into four horns round an orb of rune-light; v1 (Barad-dûr) rises in three octagonal tiers to a spiked battlement round
 		/// a fire bowl.
@@ -182,7 +182,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float ElfFloor = 0.4f, ElfRoomTop = 4.2f, ElfOuter = 2.7f, ElfWall = 0.6f, ElfBalcony = 15.15f;
 
 		/// <summary>
-		/// The elves' slender white tower (2026-10-27, the fantasy wave: "a slender white/pale tower"): a study at its foot behind a
+		/// The elves' slender white tower ("a slender white/pale tower"): a study at its foot behind a
 		/// studded door, its marble shaft tapering with four ribs up it to a balcony at 15 m; v0 a lantern drum of lancets under a
 		/// needle spire, v1 a drum ringed by slender columns under a leaf-shaped dome with a faerie light caged on its tip.
 		/// </summary>

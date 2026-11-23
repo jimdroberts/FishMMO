@@ -153,7 +153,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int p = 0; p < paths.Count; p++)
 			{
 				ScenePath path = paths[p];
-				// Its class's numbers in its form (a straight road's, raised or cut, 2026-10-26; a routed way's exactly its class's).
+				// Its class's numbers in its form (a straight road's, raised or cut; a routed way's exactly its class's).
 				ScenePathStyle style = ScenePathStyle.Of(path);
 				int n = path.Count;
 				var natural = new float[n];
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 					float even = weight > 0f ? sum / weight : natural[i];
 					target[i] = Mathf.Clamp(even, natural[i] - style.MaxCut, natural[i] + style.MaxCut) - style.Dip;
 				}
-				// A straight road's stairs (2026-10-26, I2l-b) are one even flight from the level at their foot to the level at their top.
+				// A straight road's stairs are one even flight from the level at their foot to the level at their top.
 				Stairs(path, target);
 				targets[p] = target;
 			}
@@ -241,7 +241,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				ScenePath way = index.Paths[path];
 				ScenePathPointFlags fa = way.FlagsAt(point - 1), fb = way.FlagsAt(point);
-				// A boardwalk's stretch (2026-10-18) is not carved either: its deck stands on piles over the ground as it lies.
+				// A boardwalk's stretch is not carved either: its deck stands on piles over the ground as it lies.
 				if (((fa | fb) & ScenePathPointFlags.InSite) != 0 || (fa & fb & (ScenePathPointFlags.Bridge | ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0)
 				{
 					continue;
@@ -267,7 +267,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <param name="floor">
 		/// The lowest the carve may bring the ground (east, north), metres; negative infinity for no limit. Beside a river the
 		/// water's surface and a little: a way along a bank was carved to its own level, under the river's water, and the
-		/// water's edge stood in the air over the cut bank (Flo Monolith, 2026-10-13). Ground already lower is left as it is.
+		/// water's edge stood in the air over the cut bank (Flo Monolith). Ground already lower is left as it is.
 		/// </param>
 		public static int Carve(Terrain[,] terrains, TerrainTilePlan tiles, IReadOnlyList<ScenePath> paths, Func<float, float, float> ground,
 			Func<float, float, bool> wet, IReadOnlyList<PointOfInterestPad> pads, Func<float, float, bool> keep = null,

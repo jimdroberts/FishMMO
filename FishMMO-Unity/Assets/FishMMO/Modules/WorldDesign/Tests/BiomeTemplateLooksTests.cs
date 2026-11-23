@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Flora looks and blade grass moved onto the biome template (2026-10-15): every value the template now carries is
+	/// Flora looks and blade grass moved onto the biome template: every value the template now carries is
 	/// what the code decided before (a biome's look class from its name, each ground's makeup from its layer's name, each
 	/// blade prefab's look from the render profile's one list and its one ground tint), so authoring changes no scene; the
 	/// scene's blade type table keeps one entry per distinct look within the GPU's 32; and nothing outside the fallbacks
@@ -27,14 +27,14 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>The look classes a biome round changed from what the name gave (the round's approved choice).</summary>
 		private static readonly Dictionary<string, BiomeLookClass> RoundLookClasses = new Dictionary<string, BiomeLookClass>
 		{
-			{ "Woodland", BiomeLookClass.Temperate }, // Woodland round, 2026-10-26: lighter greens, not the closed forest's.
-			{ "Mountain Slope", BiomeLookClass.Forest }, // Mountain Slope round, 2026-10-26: dark saturated cloud forest, not Alpine's sparse pale theme.
-			{ "Grassland", BiomeLookClass.Arid }, // Grassland round, 2026-10-26: straw-gold puszta summer.
-			{ "Plains", BiomeLookClass.Arid }, // Plains round, 2026-10-26: tawny-copper prairie.
-			{ "Hills", BiomeLookClass.Arid }, // Hills round, 2026-10-26: summer-tawny schist hills.
-			{ "Estuary", BiomeLookClass.Coastal }, // Estuary round, 2026-10-26: the salt marsh's grey-green and thrift pinks (Q6).
-			{ "Mangrove", BiomeLookClass.Jungle }, // Mangrove round, 2026-10-26: glossy tropical evergreen, not Wetland's temperate fen (Q6).
-			{ "Geyser Basin", BiomeLookClass.Cold }, // Geyser Basin round, 2026-10-26: grey-green fell-field, campion and cotton blooms (Q9).
+			{ "Woodland", BiomeLookClass.Temperate }, // Lighter greens, not the closed forest's.
+			{ "Mountain Slope", BiomeLookClass.Forest }, // Dark saturated cloud forest, not Alpine's sparse pale theme.
+			{ "Grassland", BiomeLookClass.Arid }, // Straw-gold puszta summer.
+			{ "Plains", BiomeLookClass.Arid }, // Tawny-copper prairie.
+			{ "Hills", BiomeLookClass.Arid }, // Summer-tawny schist hills.
+			{ "Estuary", BiomeLookClass.Coastal }, // The salt marsh's grey-green and thrift pinks.
+			{ "Mangrove", BiomeLookClass.Jungle }, // Glossy tropical evergreen, not Wetland's temperate fen.
+			{ "Geyser Basin", BiomeLookClass.Cold }, // Grey-green fell-field, campion and cotton blooms.
 		};
 
 		/// <summary>Every biome asset's spec look class is what <see cref="BiomeLooks.ClassOf(string, float, float)"/> read from it, or its round's own.</summary>
@@ -148,7 +148,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		// ── Blade looks ───────────────────────────────────────────────
 
 		/// <summary>
-		/// The old per-type tunings, as the Weather Render Profile asset and GrassTypeDefaults held them before 2026-10-15
+		/// The old per-type tunings, as the Weather Render Profile asset and GrassTypeDefaults held them formerly
 		/// (prefix, density, stiffness, width, clump pull, bend, sprinkle, head, head size, head share, blunt, wade, tall,
 		/// root, tip, head colours), every one at the profile's one Terrain Texture Tint of 0.85.
 		/// </summary>
@@ -336,7 +336,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void TheTypeTable_IsCappedAtTheGpus32_MergingLooksOfAPrefabItHas()
 		{
-			Assert.That(GrassBladeRenderer.MaxTypes, Is.EqualTo(128), "seven bits of the blade record (the sixth the colour's old valid flag, the seventh its sixth word, 2026-10-27)");
+			Assert.That(GrassBladeRenderer.MaxTypes, Is.EqualTo(128), "seven bits of the blade record (the sixth the colour's old valid flag, the seventh its sixth word)");
 			var keys = new List<(string Prefab, string Look)>();
 			for (int i = 0; i < GrassBladeRenderer.MaxTypes; i++)
 			{

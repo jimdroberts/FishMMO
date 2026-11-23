@@ -26,7 +26,7 @@ Shader "FishMMO/Water/Underwater"
 
         /* Two passes, one pixel's MSAA samples split between them by the depth buffer itself. The depth TEXTURE has one
          * depth a pixel, and at a frond's edge a pixel is part frond, part open water: shaded once by the frond's depth,
-         * the water behind it took almost no fog and the bright horizon past it rimmed every edge (2026-10-10).
+         * the water behind it took almost no fog and the bright horizon past it rimmed every edge.
          * Both passes draw at the far plane: ZTest LEqual passes only the samples nothing was drawn on (fogged the
          * whole way), ZTest Greater only the samples something was (fogged to its depth). */
         HLSLINCLUDE
@@ -55,7 +55,7 @@ Shader "FishMMO/Water/Underwater"
             float _FishWaterHeldWindSpeed;  // the wind's speed held for that window, m/s
             float _FishWaterGravity;
             // The weather's water: w how fast the daylight dims with depth on the scene's floor (FishWeather.hlsl's FishSeaDaylight;
-            // 0 on every scene with no sea-floor biome, 2026-10-25).
+            // 0 on every scene with no sea-floor biome).
             float4 _FishOcclusionWater;
 
             CBUFFER_START(UnityPerMaterial)
@@ -381,14 +381,14 @@ Shader "FishMMO/Water/Underwater"
 
                 /* What is behind was lit by light that came DOWN through the water to it, and the fog above only
                  * counts the water between it and the eye. Without this a rock twenty metres down, near the camera,
-                 * was as sunlit as one on the beach (2026-10-06: "the sky light glow is visible on objects under
+                 * was as sunlit as one on the beach ("the sky light glow is visible on objects under
                  * water"). Its light, the sky's and the sun's, dimmed by the depth it stands at, as the water's own
                  * inscatter is; one number, since the blend carries one (the water's colour is in the inscatter).
                  * Nothing past the surface: the ray left the water before it reached that. */
                 bool reachedUnderwater = sceneDistance <= exitDistance;
                 float behindDepth = reachedUnderwater ? max(0.0, _FishWaterLevel - positionWS.y) : 0.0;
                 half3 behindLight = exp(-0.5 * (dimming + beamDimming) * behindDepth);
-                /* On a scene whose floor dims its own daylight (2026-10-25, phase I2m: the ground, plants, stone and sea life take
+                /* On a scene whose floor dims its own daylight (the ground, plants, stone and sea life take
                  * FishSeaDaylight in their lighting) this would dim them twice, and darken their own glow with them: a lure's light
                  * at 4 000 m would be black. There what lies behind is fogged only by the water between it and the eye. */
                 behindLight = _FishOcclusionWater.w > 0.0 ? half3(1.0, 1.0, 1.0) : behindLight;

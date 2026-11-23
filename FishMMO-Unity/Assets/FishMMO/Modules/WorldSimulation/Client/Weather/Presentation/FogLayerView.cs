@@ -350,7 +350,7 @@ namespace FishMMO.Client
 			/* Carried by the surface air, worked out from the shared motion clock: every player's banks
 			 * stand in the same place and a rejoin finds them where they were. They were integrated
 			 * here frame by frame from each client's own eased wind, so each client's fog stood where
-			 * its own history had left it (audit 2026-10-06). The surface air follows the wind the
+			 * its own history had left it. The surface air follows the wind the
 			 * weather reports — still in a calm, running in a gale — at the share a fog's middle feels
 			 * (DriftWind). Stirred faster in wind: twice as fast by a fresh breeze, as before. */
 			double seconds = WorldMotion.Seconds;

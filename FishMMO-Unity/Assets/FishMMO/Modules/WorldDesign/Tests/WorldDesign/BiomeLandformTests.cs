@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2g of the biome suite (2026-10-18, decisions 25, 26, 36(e), 38–50): sculpted landforms carved at the cut. Every shape
+	/// Sculpted landforms carved at the cut. Every shape
 	/// family is deterministic, bounded and meets the untouched ground at its edge; the carve restores bit for bit; the presets cover
 	/// every landform a draft asked for; and with every biome's list empty (the default) nothing changes.
 	/// </summary>
@@ -131,11 +131,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Every landform name an APPROVED section of a biome draft (written before 2026-10-25; the drafts live outside the
-		/// repository) asks a phase to build as a preset, by biome; since 2026-10-25 (phase I2g-d) every draft to the last (Wasteland),
-		/// Ice Geyser Field's TigerStripe among them (I2q-b's preset, whose stored lines IceStripes reads). Left out: Geyser Basin's
-		/// HotPoolBasin and RunoffChannels (the geothermal carve, I2q), Hills' abandoned terraces and Glacier's flow field (the terrace
-		/// field surface, I2j-b; the glacier flow is no carve).
+		/// Every landform name an APPROVED section of a biome draft (written formerly; the drafts live outside the
+		/// repository) asks a phase to build as a preset, by biome; every draft to the last (Wasteland),
+		/// Ice Geyser Field's TigerStripe among them (the preset, whose stored lines IceStripes reads). Left out: Geyser Basin's
+		/// HotPoolBasin and RunoffChannels (the geothermal carve), Hills' abandoned terraces and Glacier's flow field (the terrace
+		/// field surface; the glacier flow is no carve).
 		/// </summary>
 		private static readonly (string Biome, string[] Names)[] ApprovedNames =
 		{
@@ -187,7 +187,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			("Rocky Coast", new[] { "SeaStacks", "StoorwormTeeth", "OldMan", "Geos", "Gloup", "WaveCutPlatform", "Ayre", "TidalBrough" }),
 			("Valley", new[] { "LateralMoraine", "AlluvialFan" }),
 			("Wetlands", new[] { "Tell", "Dibin" }),
-			// 2026-10-25, phase I2g-d: the drafts written since (decisions 77–96).
+			// The drafts written since.
 			("Scrubland", new[] { "Bajada", "Pediment", "BraidedWash", "Malpaís", "Maar", "OvalCourt" }),
 			("Rocky Terrain", new[] { "Pamir", "ShatterComb" }),
 			("Scree", new[] { "ScreeCone", "ScreeChutes", "ProtalusRampart", "NivationHollow", "PinnacleRidge", "WalkingRock" }),
@@ -224,12 +224,12 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 			}
 			Assert.That(missing, Is.Empty, "approved draft landforms with no preset");
-			// The chain and the ring basin carry their own placement and form (decision 71); the steps their own anchor (decision 70).
+			// The chain and the ring basin carry their own placement and form; the steps their own anchor.
 			Assert.That(BiomeLandformPresets.Named("Catena").Placement, Is.EqualTo(BiomeLandformPlacement.Chain));
 			Assert.That(BiomeLandformPresets.Named("Valhalla").Form, Is.EqualTo(BiomeLandformForm.RingGraben));
 			Assert.That(BiomeLandformPresets.Named("StepMargin").Anchor, Is.EqualTo(BiomeLandformAnchor.PatchEdge));
 			Assert.That(BiomeLandformPresets.Named("RingBasin").Kind, Is.EqualTo("MultiRingBasin"), "the plain ring basin stays decision 55's");
-			// I2g-d: the entries on a host carry their anchor; the swamp ruins' barrow is not the lava field's tumuli.
+			// The entries on a host carry their anchor; the swamp ruins' barrow is not the lava field's tumuli.
 			Assert.That(BiomeLandformPresets.Named("Pinnacle").Anchor, Is.EqualTo(BiomeLandformAnchor.OnTopOf));
 			Assert.That(BiomeLandformPresets.Named("RiftSpurs").Anchor, Is.EqualTo(BiomeLandformAnchor.OnFlankOf));
 			Assert.That(BiomeLandformPresets.Named("Tumulus").Kind, Is.Not.EqualTo(BiomeLandformPresets.Named("Tumuli").Kind));
@@ -426,7 +426,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(graben.Apply(0f, 41f, 0f, 0f, flat), Is.EqualTo(0f), "untouched past its scarps");
 			Assert.That(graben.Mask(BiomeLandformPart.Scarp, 0f, 32f, -10f, 40f), Is.GreaterThan(0.5f), "the scarp mask on its wall");
 			BiomeLandformSite rilleSite = Line("SinuousRille", 40f, 30f);
-			// The plain rille: its inner channel and roofed stretches (2026-10-26, I2g-f) are their own test.
+			// The plain rille: its inner channel and roofed stretches are their own test.
 			rilleSite.Form.Inner = 0f;
 			rilleSite.Form.Roofed = 0f;
 			rilleSite.Segments = SceneLandforms.Line(new List<Vector2> { new Vector2(-200f, 0f), new Vector2(200f, 0f) }, 40f, 30f, false);
@@ -577,7 +577,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 			if (preset.Form.OnHost)
 			{
-				// An entry on a host stands on the nearest preset before it that is not itself on one (2026-10-25, I2g-d).
+				// An entry on a host stands on the nearest preset before it that is not itself on one.
 				forms.Add(Opened(BiomeLandformPresets.All[HostPreset(Array.FindIndex(BiomeLandformPresets.All, p => p.Name == preset.Name))].Form));
 			}
 			forms.Add(Opened(preset.Form));
@@ -785,7 +785,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			}
 		}
 
-		// ── 2026-10-25, phase I2g-d: hosts, breaches, treads, wakes, forks, shifts ──
+		// ── Hosts, breaches, treads, wakes, forks, shifts ──
 
 		[Test]
 		public void OnHost_PinnacleStandsOnTheGuyotsTop_SpursRunDownItsFlank()
@@ -1027,7 +1027,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(pads.Count, Is.EqualTo(sites.ConvertAll(s => SceneLandforms.CycloidCusps(s).Count).Sum()));
 		}
 
-		// ── 2026-10-26, phase I2g-f: the landform follow-ups ─────────
+		// ── The landform follow-ups ─────────
 
 		[Test]
 		public void FollowUps_AreAppendOnly_AndPrintOnlyWhenSet()

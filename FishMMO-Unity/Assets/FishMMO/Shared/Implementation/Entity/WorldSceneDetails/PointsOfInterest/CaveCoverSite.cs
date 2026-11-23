@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What a carved cave's run-time cover is made of (2026-10-20): the cover types it grows (<see cref="CaveCoverType"/> bits),
+	/// What a carved cave's run-time cover is made of: the cover types it grows (<see cref="CaveCoverType"/> bits),
 	/// its density and glow, and the colours its glowing cover takes. Decided at the cut from the cave's biome and form
 	/// (the editor's CaveCoverSpecies.For) and written on the cave's client-only Visual beside its <see cref="CaveVisibility"/>,
 	/// because at run time the client knows neither: the cover renderer (FishMMO.Client CaveCoverSystem) reads it from there.
@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 		[SerializeField] private Color accent = new Color(0.3f, 0.7f, 1.45f);
 		[Tooltip("The glow of its crystal hue (HDR): mineral glints and frost.")]
 		[SerializeField] private Color crystal = new Color(0.95f, 0.45f, 1.6f);
-		[Tooltip("What the cover reads of the cave's rock (CaveCoverBake, in the scene's caves asset): a player cannot read the unreadable pieces themselves. None: cut before 2026-11-03; the editor reads the meshes, a player grows nothing until the scene is cut again.")]
+		[Tooltip("What the cover reads of the cave's rock (CaveCoverBake, in the scene's caves asset): a player cannot read the unreadable pieces themselves. None: cut by an older generator; the editor reads the meshes, a player grows nothing until the scene is cut again.")]
 		[SerializeField] private CaveCoverBake bake;
 
 		/// <summary>The choice a cave with none carries.</summary>

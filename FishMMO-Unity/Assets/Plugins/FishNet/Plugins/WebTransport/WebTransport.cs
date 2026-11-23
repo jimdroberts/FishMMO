@@ -46,7 +46,7 @@ namespace FishNet.Transporting.WebTransport
 		/// HTTP/3 Quarter Stream ID a browser session adds (RFC 9297 §2.1) come out of it, which left 1150.
 		/// <para>
 		/// 1024 is the smallest limit any browser reports for what it will send
-		/// (<c>WebTransportDatagramDuplexStream.maxDatagramSize</c>), measured 2026-11-11: Firefox 159 reports 1024,
+		/// (<c>WebTransportDatagramDuplexStream.maxDatagramSize</c>): Firefox 159 reports 1024,
 		/// Chrome 157, Brave and Opera 1211. A datagram over a browser's reported limit may be discarded without an
 		/// error. Measured on a local 1452-byte path, every one of them in fact sent up to 1200 and received
 		/// everything up to 1400 (each advertises a max_datagram_frame_size of 64 KiB), so 1024 leaves room on

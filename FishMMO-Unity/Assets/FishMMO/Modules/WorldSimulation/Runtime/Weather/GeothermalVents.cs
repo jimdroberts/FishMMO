@@ -6,7 +6,7 @@ using FishMMO.Shared.Biomes;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// What kind of hot ground a geothermal site is. APPEND-ONLY (2026-10-19, decision 53): a kind's number is in every peer's
+	/// What kind of hot ground a geothermal site is. APPEND-ONLY: a kind's number is in every peer's
 	/// arithmetic and the cut's records, so new kinds (a fissure's Jet next, after <see cref="MudPot"/>) take the next number and
 	/// nothing is renumbered; code that counts kinds sizes by the enum, not by four.
 	/// </summary>
@@ -19,23 +19,23 @@ namespace FishMMO.Shared.Weather
 		/// <summary>A spring whose plumbing boils over now and then: a column of water and steam, then quiet.</summary>
 		Geyser = 2,
 		/// <summary>
-		/// A pot of grey boiling mud (2026-10-18, phase I2q): too little water to make a spring, so the steam and gas bubble up
+		/// A pot of grey boiling mud: too little water to make a spring, so the steam and gas bubble up
 		/// through clay, plopping and spattering on the shared clock (<see cref="GeothermalVents.Plop"/>), a thin steam over it.
 		/// </summary>
 		MudPot = 3,
 		/// <summary>
-		/// A jet (2026-10-25, phase I2q-b, decision 53): a narrow jet of vapour and ice grains out of a fissure, laid along the scene's
+		/// A jet: a narrow jet of vapour and ice grains out of a fissure, laid along the scene's
 		/// stored lines (an ice moon's tiger stripes); on an airless world a fountain of grains, on a thin one a plume leaning downwind.
 		/// </summary>
 		Jet = 4,
 		/// <summary>
-		/// A pond of molten sulphur (2026-10-25, phase I2q-b, decision 84): dug and pooled as a hot spring is, wearing its biome's
+		/// A pond of molten sulphur: dug and pooled as a hot spring is, wearing its biome's
 		/// water look (an opaque Melt look whose colour drifts on the shared clock), fuming thinly; never counted as liquid water.
 		/// </summary>
 		SulphurPool = 5,
 		/// <summary>
-		/// A black smoker (2026-10-25, decisions 83 and 97: the next free value after the jets and sulphur pools): a sulphide chimney
-		/// in a sea hall's hot floor, its plume dark. Placed only by the sea halls (stored per hall, phase I2n-b), never on the surface.
+		/// A black smoker (the next free value after the jets and sulphur pools): a sulphide chimney
+		/// in a sea hall's hot floor, its plume dark. Placed only by the sea halls (stored per hall), never on the surface.
 		/// </summary>
 		Smoker = 6,
 	}
@@ -51,7 +51,7 @@ namespace FishMMO.Shared.Weather
 		public bool AllKinds;
 		public BiomeGeothermalShares Shares;
 		public WeatherSubstance Substance;
-		/// <summary>The biome's vents' layout and timing (2026-10-25, I2q-b; <see cref="BiomeTemplate.Vents"/>).</summary>
+		/// <summary>The biome's vents' layout and timing (<see cref="BiomeTemplate.Vents"/>).</summary>
 		public BiomeVents Vents;
 		/// <summary>The biome's fountain episodes, which an Episode timing follows.</summary>
 		public BiomeFountainEpisodes Episodes;
@@ -88,7 +88,7 @@ namespace FishMMO.Shared.Weather
 	}
 
 	/// <summary>
-	/// One plop of a mud pot (2026-10-18, phase I2q): a bubble of steam bursting through the mud and throwing a spatter up,
+	/// One plop of a mud pot: a bubble of steam bursting through the mud and throwing a spatter up,
 	/// a pure function of the site and the shared clock (<see cref="GeothermalVents.Plop"/>).
 	/// </summary>
 	public struct MudPlop
@@ -122,7 +122,7 @@ namespace FishMMO.Shared.Weather
 		public uint Seed;
 		/// <summary>The biome's steam, when it emits one (its look); null for a volcano's fumaroles, which steam plain white.</summary>
 		public WeatherSubstance Substance;
-		/// <summary>The colour it fumes (2026-10-25, I2q-b: its biome's <see cref="BiomeGeothermalShares.FumeTint"/>); alpha 0 for its steam's own.</summary>
+		/// <summary>The colour it fumes (its biome's <see cref="BiomeGeothermalShares.FumeTint"/>); alpha 0 for its steam's own.</summary>
 		public Color Fume;
 		/// <summary>How its strength moves on the shared clock (its biome's <see cref="BiomeVents.Timing"/>; presentation only, <see cref="VentTiming"/>).</summary>
 		public BiomeVentTiming Timing;
@@ -193,7 +193,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>A vented (volcanic) biome's chance of a fumarole in a cell, per unit of emission rate.</summary>
 		public const float FumarolesPerVentedEmission = 1f;
 		/// <summary>
-		/// In a steaming biome whose split is <see cref="BiomeGeothermalShares.Today"/> (every biome's until 2026-10-18), the share
+		/// In a steaming biome whose split is <see cref="BiomeGeothermalShares.Today"/> (every biome's formerly), the share
 		/// of sites that are geysers, and that are hot springs; the rest are fumaroles. A template's own split
 		/// (<see cref="BiomeTemplate.Geothermal"/>) says otherwise (<see cref="KindOf"/>).
 		/// </summary>
@@ -201,7 +201,7 @@ namespace FishMMO.Shared.Weather
 		/// <summary>
 		/// The most sites one search returns, the first in grid order: more than the client's search round its camera can hold
 		/// ((2 × 1560 m ÷ 80 m + 1)² = 1600 cells), so that search is never cut short and finds every site the cut carved
-		/// under (2026-10-18, I2q; it was 512, which a whole geyser basin could fill from its southern rows). The cut searches
+		/// under (it was 512, which a whole geyser basin could fill from its southern rows). The cut searches
 		/// the whole scene with no cap (<see cref="SceneSites"/>).
 		/// </summary>
 		public const int MaxSites = 2048;
@@ -227,8 +227,8 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>
 		/// The chance of a site in a cell of a biome, and whether every kind of its split is among them (else fumaroles only): a
-		/// steaming biome's by its emission, as before; else, a biome with a site rate of its own (2026-10-25, decision 84:
-		/// <see cref="BiomeGeothermalShares.Rate"/>) every kind of its split at that rate, whatever it emits; else a vented biome's
+		/// steaming biome's by its emission, as before; else, a biome with a site rate of its own
+		/// (<see cref="BiomeGeothermalShares.Rate"/>) every kind of its split at that rate, whatever it emits; else a vented biome's
 		/// fumaroles by its emission, as before.
 		/// </summary>
 		public static float SiteChance(BiomeTemplate biome, out bool allKinds)
@@ -292,7 +292,7 @@ namespace FishMMO.Shared.Weather
 					var at = new Vector2(x, z);
 					GeothermalGround ground = groundAt(at);
 					float chance = ground.Chance;
-					// A biome laid out on the scene's stored lines has its sites there instead (2026-10-25, I2q-b; FindAlong).
+					// A biome laid out on the scene's stored lines has its sites there instead (FindAlong).
 					if (chance <= 0f || ground.OnLines || Unit(h * 2891336453u + 7u) >= chance)
 					{
 						continue;
@@ -320,7 +320,7 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>
 		/// A steaming site's kind from its draw <paramref name="k"/> (0 … 1) and the biome's split: geysers first, then springs,
-		/// fumaroles, mud pots, each its share of the sum. The split every biome had before 2026-10-18
+		/// fumaroles, mud pots, each its share of the sum. The split every biome had formerly
 		/// (<see cref="BiomeGeothermalShares.Today"/>, and any split nobody filled in) takes the old comparison verbatim, so
 		/// those sites are what they were to the bit.
 		/// </summary>
@@ -344,10 +344,10 @@ namespace FishMMO.Shared.Weather
 			}
 			if (shares.Jet <= 0f && shares.SulphurPool <= 0f)
 			{
-				// Every split before 2026-10-25 (no jets, no sulphur pools): the comparison as it was, to the bit.
+				// Every split formerly (no jets, no sulphur pools): the comparison as it was, to the bit.
 				return shares.MudPot > 0f && k >= vent ? GeothermalKind.MudPot : GeothermalKind.Fumarole;
 			}
-			// Then mud pots, jets and sulphur pools, each its share (2026-10-25, I2q-b); a draw rounding past the last goes to the last named.
+			// Then mud pots, jets and sulphur pools, each its share; a draw rounding past the last goes to the last named.
 			float mud = (shares.Geyser + shares.HotSpring + shares.Fumarole + shares.MudPot) / total;
 			float jet = (shares.Geyser + shares.HotSpring + shares.Fumarole + shares.MudPot + shares.Jet) / total;
 			if (k < vent)
@@ -369,9 +369,9 @@ namespace FishMMO.Shared.Weather
 			return shares.Jet > 0f ? GeothermalKind.Jet : shares.MudPot > 0f ? GeothermalKind.MudPot : GeothermalKind.Fumarole;
 		}
 
-		// ── Sites on the scene's stored lines (2026-10-25, phase I2q-b, decisions 53, 90, 95) ──
+		// ── Sites on the scene's stored lines ──
 
-		/// <summary>The spacing of a jet along a fissure, and of a vent along a ridge, m (decision 53: one every 40–80 m of stripe).</summary>
+		/// <summary>The spacing of a jet along a fissure, and of a vent along a ridge, m (one every 40–80 m of stripe).</summary>
 		public const float FissureSpacing = 60f, RidgeSpacing = 200f;
 		/// <summary>How far a jet may stray along its slot of a line, as a share of the spacing (either way), and across it, as a share of the half width.</summary>
 		public const float AlongScatter = 0.3f, AcrossScatter = 0.3f;
@@ -500,7 +500,7 @@ namespace FishMMO.Shared.Weather
 			return ground;
 		}
 
-		// ── The Great Plume (2026-10-25, phase I2q-b, decision 53) ──
+		// ── The Great Plume ──
 
 		/// <summary>
 		/// The scene's Great Plume among its sites: the jet on a line of the largest size, the smaller seed on a tie, among those
@@ -538,7 +538,7 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>
 		/// The seed from a biome map's asset name: what <see cref="SeedOf(SceneBiomeMap)"/> gives the map of that name, for the cut,
-		/// which places the sites before the map asset is written (2026-10-18, I2q).
+		/// which places the sites before the map asset is written.
 		/// </summary>
 		public static uint SeedOf(string mapName)
 		{
@@ -546,7 +546,7 @@ namespace FishMMO.Shared.Weather
 		}
 
 		/// <summary>
-		/// Every site of a scene (2026-10-18, I2q): the whole map's rectangle, searched as <see cref="Near"/> searches a corner of
+		/// Every site of a scene: the whole map's rectangle, searched as <see cref="Near"/> searches a corner of
 		/// it (the same origin, seed and biomes, so every site <see cref="Near"/> finds is among these), with no cap. What the cut
 		/// carves under and where the Great Spout is found (<see cref="GreatSpoutIndex"/>).
 		/// </summary>
@@ -560,7 +560,7 @@ namespace FishMMO.Shared.Weather
 			IReadOnlyList<VentLine> lines = IceStripes.Of(map);
 			var scene = new Rect(map.WorldOrigin, map.WorldSize);
 			Find(map.WorldOrigin, scene, SeedOf(map), p => GroundOf(map, lines, p), into, CellMetres, int.MaxValue);
-			// The sites on its stored lines after the grid's (2026-10-25, I2q-b): none on a map that stores none.
+			// The sites on its stored lines after the grid's: none on a map that stores none.
 			FindAlong(lines, scene, SeedOf(map), p => GroundOf(map, lines, p), into, int.MaxValue);
 		}
 
@@ -599,7 +599,7 @@ namespace FishMMO.Shared.Weather
 				case GeothermalKind.HotSpring: return 2f + 6f * u;
 				case GeothermalKind.Geyser: return 1f + 2f * u;
 				case GeothermalKind.MudPot: return 1f + 3f * u;
-				// A jet's slot in the fissure; a smoker's chimney; a sulphur pond's basin 3–12 m across (decision 84).
+				// A jet's slot in the fissure; a smoker's chimney; a sulphur pond's basin 3–12 m across.
 				case GeothermalKind.Jet: return 0.3f + 0.7f * u;
 				case GeothermalKind.Smoker: return 0.5f + 1.5f * u;
 				case GeothermalKind.SulphurPool: return 1.5f + 4.5f * u;
@@ -657,7 +657,7 @@ namespace FishMMO.Shared.Weather
 			}
 		}
 
-		// ── The ground a site stands in (2026-10-18, phase I2q) ─────────
+		// ── The ground a site stands in ─────────
 		/* The cut carves each site's ground (GeothermalGroundCarve, the editor's), and the client stands its steam on that ground:
 		 * both read these, so the vent the steam rises from is the throat the cut dug. */
 
@@ -668,11 +668,11 @@ namespace FishMMO.Shared.Weather
 		/// </summary>
 		public static float PoolDepth(in GeothermalSite site)
 		{
-			// A sulphur pond is a shallow pan of melt (decision 84), a spring's funnel deeper.
+			// A sulphur pond is a shallow pan of melt, a spring's funnel deeper.
 			return site.Kind == GeothermalKind.SulphurPool ? 0.4f + 1.2f * Mathf.Clamp01(site.Size) : 0.8f + 2.2f * Mathf.Clamp01(site.Size);
 		}
 
-		/// <summary>True for a kind whose site is a pool the cut digs and floods (a hot spring, a sulphur pond, 2026-10-25).</summary>
+		/// <summary>True for a kind whose site is a pool the cut digs and floods (a hot spring, a sulphur pond).</summary>
 		public static bool IsPool(GeothermalKind kind) => kind == GeothermalKind.HotSpring || kind == GeothermalKind.SulphurPool;
 
 		/// <summary>How far under its rim a mud pot's dish is dug, m.</summary>
@@ -740,7 +740,7 @@ namespace FishMMO.Shared.Weather
 			return HeatPeak(site) * s * s;
 		}
 
-		// ── Mud pots' plops (2026-10-18, phase I2q) ──────────────────────
+		// ── Mud pots' plops ──────────────────────
 
 		/// <summary>A mud pot's clock ticks this often, s: at most one plop a tick in each of its lanes, down again inside it.</summary>
 		public const float PlopSeconds = 1.2f;
@@ -779,11 +779,11 @@ namespace FishMMO.Shared.Weather
 			return plop;
 		}
 
-		// ── The Great Spout (2026-10-18, phase I2q) ──────────────────────
+		// ── The Great Spout ──────────────────────
 
 		/// <summary>
 		/// The scene's Great Spout among its sites (<see cref="SceneSites"/>): the geyser of the largest size, the smaller seed on a
-		/// tie; −1 when the scene has no geyser. At most one a scene, the same for every peer: a Spout clock (I7) reads its
+		/// tie; −1 when the scene has no geyser. At most one a scene, the same for every peer: a Spout clock reads its
 		/// eruptions from <see cref="Moment"/> and <see cref="SecondsToNextEruption"/>, as the client's steam does.
 		/// </summary>
 		public static int GreatSpoutIndex(IReadOnlyList<GeothermalSite> sites) => GreatSpoutIndex(sites, null);

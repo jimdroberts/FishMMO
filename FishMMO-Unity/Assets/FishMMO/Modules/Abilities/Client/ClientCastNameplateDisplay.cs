@@ -30,7 +30,7 @@ namespace FishMMO.Client
 	/// </remarks>
 	public sealed class ClientCastNameplateDisplay : IClientService
 	{
-		/// <summary>The service's id (the Abilities module's; it was the core Client's, 2026-11-20).</summary>
+		/// <summary>The service's id (the Abilities module's; it was the core Client's).</summary>
 		public const string ServiceId = "abilities.cast-nameplates";
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

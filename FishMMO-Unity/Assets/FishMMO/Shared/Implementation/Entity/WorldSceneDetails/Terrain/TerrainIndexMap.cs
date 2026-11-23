@@ -10,7 +10,7 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// <para>
 	/// <b>Why.</b> The shader used to read every control map of a tile (four layers each) per pixel and keep the four
-	/// strongest: 32 layers were eight maps and eight samples a pixel, and every layer more another map (2026-10-16:
+	/// strongest: 32 layers were eight maps and eight samples a pixel, and every layer more another map (
 	/// "every biome has unique textures for everything" needs far more than 32 layers a scene). The four strongest are
 	/// found once per texel instead, here, and the pixel blends the four texels around it.
 	/// </para>

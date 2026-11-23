@@ -7,7 +7,7 @@ namespace FishMMO.Client
 {
 	/// <summary>
 	/// The GPU detail scatter: the mesh counterpart of the blade grass (<see cref="GrassBladeSystem"/>). It takes EVERY mesh
-	/// detail prototype the blade grass does not (2026-10-27: bushes, pebbles, rocks, shells, litter, and the ferns, herbs,
+	/// detail prototype the blade grass does not (bushes, pebbles, rocks, shells, litter, and the ferns, herbs,
 	/// mushrooms, lichens, cushions, shrubs and sea life the CPU chunk renderer used to draw) of every terrain the detail
 	/// driver (<see cref="TerrainDetailInstancing"/>) takes, and generates their instances on the GPU every frame around each
 	/// camera (<see cref="DetailScatterRenderer"/>, FishDetailScatter.compute). There is no CPU path: a kind it cannot draw
@@ -42,7 +42,7 @@ namespace FishMMO.Client
 		public const double VisibleBuildBudgetMilliseconds = 1.0;
 
 		/// <summary>
-		/// The most types the scatter keeps in a scene (one per prefab; 2026-10-27, was 64). Moron 2 paints 84 mesh kinds and
+		/// The most types the scatter keeps in a scene (one per prefab, was 64). Moron 2 paints 84 mesh kinds and
 		/// Moron 3 115; the audit's spec count for the busiest scene is 127 + 127. Past it a prefab is not drawn: an error.
 		/// </summary>
 		public const int MaxTypes = 1024;
@@ -139,7 +139,7 @@ namespace FishMMO.Client
 					{
 						s.Append($" L{level} {counts[DetailScatterRenderer.SlotOf(t, level, 0)]}");
 					}
-					// The variant meshes it cycles share the slots (2026-10-26): level 0 above is its first variant's.
+					// The variant meshes it cycles share the slots: level 0 above is its first variant's.
 					for (int v = 1; v < DetailScatterRenderer.VariantsOf(types[t]) && DetailScatterRenderer.SlotOf(t, v, 0) < counts.Length; v++)
 					{
 						s.Append($" V{v} {counts[DetailScatterRenderer.SlotOf(t, v, 0)]}");
@@ -454,7 +454,7 @@ namespace FishMMO.Client
 		/// cannot draw is an error, said once in the log and, when <paramref name="problems"/> is given (the cut), added to it.
 		/// </summary>
 		/// <remarks>
-		/// Painted only (2026-10-27): a cut listed the whole scene's prototypes on every terrain (578 on Moron 2's) but painted a
+		/// Painted only: a cut listed the whole scene's prototypes on every terrain (578 on Moron 2's) but painted a
 		/// tile with a few dozen; channels were spent on the rest. A cut now gives a tile only the prototypes it paints (TerrainScatter). A prototype with nothing painted anywhere on the terrain
 		/// weighs nothing anywhere, so leaving it out changes no plant.
 		/// </remarks>

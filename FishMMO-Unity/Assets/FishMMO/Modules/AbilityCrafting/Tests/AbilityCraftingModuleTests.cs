@@ -7,7 +7,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Ability Crafting module (Phase 3, 2026-11-17): AbilityCraftingSystem answers craft requests; the interactable
+	/// The Ability Crafting module: AbilityCraftingSystem answers craft requests; the interactable
 	/// system, the crafters placed in the world and abilities themselves run without it.
 	/// </summary>
 	[TestFixture]

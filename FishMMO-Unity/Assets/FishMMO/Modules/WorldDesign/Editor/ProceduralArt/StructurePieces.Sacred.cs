@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				d.Add(StructureShapes.Box(new Vector3(0f, 2.29f, 0f), new Vector3(2.5f, 0.18f, 2.5f), StructureMaterial.Timber, 20));
-				// At its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+				// At its palette's pitch, or a flat canopy (StructureRoofs).
 				OwnGable(d, 2.4f, 2.4f, 2.38f, 1f, 0.35f, 0.22f, StructureMaterial.Thatch, 21, Matrix4x4.identity);
 				if (d.Mid)
 				{
@@ -455,7 +455,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A crypt's door in its barrow (2026-10-18: it was a door frame with a solid iron slab in it, and its frame stood off
+		/// A crypt's door in its barrow (it was a door frame with a solid iron slab in it, and its frame stood off
 		/// its footprint's middle): an OPEN doorway, its iron door swung back against the passage wall, steps down into a short
 		/// passage that ends soot-black, and the barrow split round the passage so the way in is not filled. Centred on its
 		/// footprint like every free-standing piece; its doorway is <see cref="TryDoorwayOf"/>'s.

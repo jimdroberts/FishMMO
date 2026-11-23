@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The land flora of the vegetation expansion (2026-10-10): its detail plants (FloraMeshes, ProceduralArtCatalogue.Flora),
+	/// The land flora of the vegetation expansion: its detail plants (FloraMeshes, ProceduralArtCatalogue.Flora),
 	/// and the deadwood props (DeadwoodMeshes, BiomeArtGenerator.Deadwood). Every item the design names is in the catalogue
 	/// under that name; the blade types carry the colours the blade renderer reads from them; the newer kinds are land
 	/// kinds with their materials' traits; and the deadwood is valid, bedded, lighter by level and listed.
@@ -34,15 +34,15 @@ namespace FishMMO.UnitTests
 			"DebrisNeedle", "DebrisPalm", "DebrisWrack", "DebrisBranch", "DebrisBamboo",
 			"MushroomForest", "MushroomCluster", "MushroomSwamp", "MushroomCave",
 			"Horsetail", "EchiumSpire", "PitcherPlant",
-			// The Forest round's (2026-10-26).
+			// The Forest biome's.
 			"GrassWoodrush", "GrassWoodMelick", "GrassSedgePendulous", "FlowersBeechwood", "FlowersRamsons", "FernShuttlecock", "DogsMercury",
 			"CushionMossPincushion", "IvyForest", "SerpentRoots", "DebrisBranchMossy", "MushroomCep", "MushroomPorcelain", "MushroomFoxfire",
 			"Butterbur", "HerbWoodBetony", "GrassOats", "GrassSpelt", "FlowersFieldBean",
-			// The Woodland round's (2026-10-26).
+			// The Woodland biome's.
 			"GrassPasture", "GrassYorkshireFog", "GrassFalseBrome", "GrassHairgrass", "GrassRye", "FlowersBluebell", "FlowersPrimrose",
 			"FlowersFoxglove", "FlowersGlade", "FlowersHedgerow", "FlowersBuckwheat", "FlowersWoad", "FlowersFieldPea", "FernBrackenWoodland",
 			"HerbNettle", "DebrisCoppice", "MushroomParasol", "MushroomChanterelle", "WoodSpurge", "LordsAndLadies", "HerbAgrimony", "HerbWildMarjoram",
-			// The Alpine Meadow, Mountain Slope and Scree rounds' (2026-10-26).
+			// The Alpine Meadow, Mountain Slope and Scree biomes'.
 			"GrassBent", "GrassSweetVernal", "GrassRushTrifid", "GrassBlueMoor", "FlowersPolonyna", "FlowersMeltCrocus", "FlowersTallHerb", "FlowersCrag",
 			"GrassMountainOats", "FlowersFlax", "GrassHayMeadow", "Veratrum", "DockAlpine", "GentianYellow", "CarlineThistle", "HerbArnica", "HerbMeum",
 			"LichenIceland", "MossFlush", "FairyRing", "DebrisMarmotSpoil", "DebrisPasture",
@@ -51,60 +51,60 @@ namespace FishMMO.UnitTests
 			"DebrisCloudForest", "DebrisFig",
 			"GrassRidgeReed", "GrassRockSedge", "FlowersDiamondBell", "FlowersStonecrop", "CushionNetwort", "LichenCoral", "LichenBlackdot", "FernParsley",
 			"ClubmossFir", "HerbMountainRoot", "CropPerilla", "DebrisRockfallScar", "DebrisFirDrift",
-			// The Scrubland and Savanna rounds' (2026-10-26).
+			// The Scrubland and Savanna biomes'.
 			"GrassBushMuhly", "GrassThreeAwn", "GrassCottontop", "GrassSixWeeks", "ReedsCarrizo", "FlowersGoldPoppy", "FlowersLupine", "FlowersDesertMarigold",
 			"FlowersSandVerbena", "ChollaTeddybear", "CactusFishhook", "PadCactusEngelmann", "AgaveHohokam", "OrganPipeSonoran", "CactusPincushion",
 			"QueenOfTheNight", "Spikemoss", "HerbChia", "HerbDesertTobacco", "DebrisSaguaroRibs", "DebrisPackratMidden", "DebrisSherdsRedBuff",
 			"GrassMaizeCanal", "FlowersCottonCanal", "GrassLittleBarley",
 			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
 			"GrassPearlMillet", "Bambara", "Myrothamnus", "Xerophyta", "Sansevieria", "HerbWildSage", "MushroomPodaxis", "DebrisVeld",
-			// The Tundra, Ice Sheet and Glacier rounds' (2026-10-26).
+			// The Tundra, Ice Sheet and Glacier biomes'.
 			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
 			"CushionDryas", "CushionSaxifrage", "CushionHairCap", "LichenSnow", "LichenRockTripe", "Roseroot", "MushroomRoughStalk", "DebrisAntler",
 			"LichenStoneOil", "LichenFrigid", "LichenBlacktuft", "LichenSulphur", "CushionMossSeep", "RhubarbHimalayan", "HerbDhoop", "BergeniaStone",
 			"CushionGlacierMice", "LichenMap", "LichenCryoconite", "DebrisGlacier",
-			// The Grassland round's (2026-10-26).
+			// The Grassland biome's.
 			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
 			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet", "CropHemp", "CropMelon", "ArtemisiaSalt", "ThistleMusk", "Eryngo", "Mullein",
 			"ThymeMat", "MushroomField", "DebrisSteppe", "DebrisSuslikSpoil", "HerbChamomile",
-			// The Plains round's (2026-10-26).
+			// The Plains biome's.
 			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBuffalo", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed",
 			"FlowersConeflower", "FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn",
 			"CropSquash", "FlowersFieldSunflower", "YuccaSoapweed", "PricklyPearPlains", "CompassPlant", "Milkweed", "HerbBergamot", "HerbPrairieTurnip",
 			"MushroomPuffball", "DebrisBison", "DebrisCottonwood", "DebrisDogtownMound",
-			// The Steppe round's (2026-10-26).
+			// The Steppe biome's.
 			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
 			"FlowersSafflower", "FlowersTartaryBuckwheat", "WormwoodWhiteEarth", "Biyurgun", "Izen", "Nanophyton", "LichenManna", "LichenSoilCrust",
 			"DebrisHarvesterDisc", "DebrisAwns", "DebrisSaigaSkull",
-			// The Estuary round's (2026-10-26).
+			// The Estuary biome's.
 			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire", "Glasswort", "SeaBlite", "SeaPlantain", "ScurvyGrass", "SeaWormwood", "LugwormCasts", "Teek", "ShellsCockle", "CropFlax", "CropCamelina", "CropMadder",
-			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			// The Desert, Badlands and Salt Flat biomes'.
 			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
 			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
 			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom", "Cistanche", "Had", "Zilla", "Colocynth",
 			"RoseOfJericho", "DebrisCamel", "DebrisBones", "DebrisNeolithic", "Acantholimon", "Noaea", "HerbHarmal", "HerbSalep", "HerbKenger", "LichenTuff",
 			"MossPlaneShade", "DebrisPumice", "DebrisSherdsTerracotta", "DebrisPigeon", "DebrisVinePrunings", "CropBushVine", "CropPumpkin", "CropChickpea",
 			"Halopeplis", "Aerva", "Aizoon", "HerbAloe", "DebrisSaltHopper", "DebrisAmole",
-			// The Hills round's (2026-10-26).
+			// The Hills biome's.
 			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
 			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill", "CropVineGoblet", "HerbLavender", "HerbImmortelle", "HerbRue",
 			"HerbSavory", "GiantFennel", "MushroomCaesar", "LichenSchist", "DebrisHill",
-			// The Wetlands round's (2026-10-26).
+			// The Wetlands biome's.
 			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta", "DebrisReed", "ReedSheaves", "Halocnemum", "Licorice", "WaterPlantain", "MushroomInkcap", "ShellsMelanopsis", "Sherds", "DungCakes", "CropRiceAnbar", "CropBarleySixRow", "CropSugarcane",
-			// The Mangrove round's (2026-10-26).
+			// The Mangrove biome's.
 			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini", "PneumatophoresAvicennia", "PneumatophoresSonneratia", "KneeRoots", "Propagules", "MangroveFern", "MudWhelks", "CrabChimneys", "MangroveLitter", "AlgalMatChips", "Rihani", "CropFingerMillet", "CropSesame", "CropRiceMangrove",
-			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			// The Jungle and Bamboo Forest biomes'.
 			"GrassForestBroad", "GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily", "Arrowroot", "Palisota",
 			"FernRainforest", "Selaginella", "TermiteCaps", "MushroomTermite", "MushroomLampcap", "DebrisRainforest", "DebrisPods", "HerbScentLeaf",
 			"CropYam", "CropEgusi", "CropRiceAfrican", "GrassSusuki", "GrassHakone", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa",
 			"FlowersShaga", "FlowersKatakuri", "Takenoko", "DebrisCulmSheath", "DebrisCutCulm", "FernKurawarabi", "FernZenmai", "HerbDokudami",
 			"HerbSenburi", "HerbGennosho", "MushroomKinugasa", "MushroomMatsutake", "MushroomShiitake", "MossKoke", "CropRice", "CropSoba", "CropAsa",
-			// The Lake and River rounds' (2026-10-26).
+			// The Lake and River biomes'.
 			"GrassShoreweed", "GrassNeedleSpike", "LakeBulrush", "FlowersStrand", "HorsetailWater", "DebrisDriftLine", "PileStumps", "GrassGalingale",
 			"BurReed", "FlowersStromtal", "FlowersFloodbank", "DebrisBrash",
 		};
 
-		/// <summary>The rounds' litter on the legacy flat Debris kind (2026-10-26): in the catalogue, but flat as the legacy litter is.</summary>
+		/// <summary>The rounds' litter on the legacy flat Debris kind: in the catalogue, but flat as the legacy litter is.</summary>
 		private static readonly string[] RoundLitter = { "DebrisBeechMast", "DebrisOakLeaf", "DebrisMesquitePods" };
 
 		/// <summary>The design's deadwood props (§2g's tree-channel items).</summary>
@@ -115,25 +115,25 @@ namespace FishMMO.UnitTests
 			"Stump_Mugo", "FallenLog_Podocarp",
 			"Snag_Saguaro", "FallenLog_Ironwood", "FallenLog_Leadwood", "Stump_ElephantBroken",
 			"DriftwoodTrunk", "FallenLog_AvalancheBirch",
-			// The Grassland round's (2026-10-26).
+			// The Grassland biome's.
 			"Snag_Pear",
-			// The Plains round's (2026-10-26).
+			// The Plains biome's.
 			"FallenLog_Cottonwood", "Snag_Cottonwood",
-			// The Steppe round's (2026-10-26).
+			// The Steppe biome's.
 			"Snag_Saxaul", "FallenLimb_Elm",
-			// The Estuary round's (2026-10-26).
+			// The Estuary biome's.
 			"DikeStakes",
-			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			// The Desert, Badlands and Salt Flat biomes'.
 			"Snag_Balanites", "PetrifiedLog_Tenere", "Snag_Oleaster", "Stump_PlaneHollow", "Snag_SaltedAcacia",
-			// The Hills round's (2026-10-26).
+			// The Hills biome's.
 			"Stump_Olive",
-			// The Wetlands round's (2026-10-26).
+			// The Wetlands biome's.
 			"Snag_DrownedPalm", "FallenLog_Willow",
-			// The Mangrove round's (2026-10-26).
+			// The Mangrove biome's.
 			"Snag_Mangrove", "PoleStumps",
-			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			// The Jungle and Bamboo Forest biomes'.
 			"FallenLog_Buttressed", "Snag_Iroko", "FallenLog_Sugi", "Snag_Akamatsu", "Culm_Fallen",
-			// The Lake and River rounds' (2026-10-26).
+			// The Lake and River biomes'.
 			"Log_Sunken", "Logboat_Wreck", "DrownedStump", "Snag_Uprooted", "LogJam", "Log_Sunk_River", "Stump_Beaver",
 		};
 
@@ -153,33 +153,33 @@ namespace FishMMO.UnitTests
 			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
 			"GrassPearlMillet",
 			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
-			// The Grassland round's (2026-10-26).
+			// The Grassland biome's.
 			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
 			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet",
-			// The Plains round's (2026-10-26).
+			// The Plains biome's.
 			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBuffalo", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed",
 			"FlowersConeflower", "FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn",
 			"FlowersFieldSunflower",
-			// The Steppe round's (2026-10-26).
+			// The Steppe biome's.
 			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
 			"FlowersSafflower", "FlowersTartaryBuckwheat",
-			// The Estuary round's (2026-10-26).
+			// The Estuary biome's.
 			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire",
-			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			// The Desert, Badlands and Salt Flat biomes'.
 			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
 			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
 			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom",
-			// The Hills round's (2026-10-26).
+			// The Hills biome's.
 			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
 			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill",
-			// The Wetlands round's (2026-10-26).
+			// The Wetlands biome's.
 			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta",
-			// The Mangrove round's (2026-10-26).
+			// The Mangrove biome's.
 			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini",
-			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			// The Jungle and Bamboo Forest biomes'.
 			"GrassForestBroad", "GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily",
 			"GrassSusuki", "GrassHakone", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa", "FlowersShaga", "FlowersKatakuri",
-			// The Lake and River rounds' (2026-10-26).
+			// The Lake and River biomes'.
 			"GrassShoreweed", "GrassNeedleSpike", "FlowersStrand", "GrassGalingale", "FlowersStromtal", "FlowersFloodbank",
 		};
 
@@ -199,32 +199,32 @@ namespace FishMMO.UnitTests
 			"GrassThatch", "GrassRedOat", "GrassWire", "GrassGuinea", "GrassStar", "ReedsElephant", "FlowersVeld", "FlowersFireLily", "FlowersFlameLily",
 			"GrassPearlMillet",
 			"GrassPendant", "GrassWoodrushArctic", "FlowersArctic", "FlowersRiverBeauty", "GrassTrisetum", "GrassMeltSedge", "FlowersSnowmeltPrimula",
-			// The Grassland round's (2026-10-26).
+			// The Grassland biome's.
 			"GrassBrome", "GrassGoldbeard", "GrassRedBeard", "GrassBlueFescue", "GrassAlkali", "ReedsThatch", "FlowersPannonia", "FlowersSpringSteppe",
 			"FlowersPeony", "FlowersSzik", "FlowersTatar", "GrassMillet",
-			// The Plains round's (2026-10-26).
+			// The Plains biome's.
 			"GrassWheatgrass", "GrassLittleBluestem", "GrassGrama", "GrassBigBluestem", "GrassSwitchgrass", "GrassSandReed", "FlowersConeflower",
 			"FlowersSunflower", "FlowersBlazingStar", "FlowersPrairieSmoke", "FlowersSandhill", "FlowersPlaya", "GrassFlintCorn", "FlowersFieldSunflower",
-			// The Steppe round's (2026-10-26).
+			// The Steppe biome's.
 			"GrassTyrsa", "GrassTipchak", "GrassChiy", "GrassZhitnyak", "FlowersTulipSteppe", "FlowersPhlomis", "FlowersGoniolimon", "FlowersGagea",
 			"FlowersSafflower", "FlowersTartaryBuckwheat",
-			// The Estuary round's (2026-10-26).
+			// The Estuary biome's.
 			"GrassCordgrass", "GrassSaltmarsh", "GrassFescueRed", "GrassRushGerard", "GrassSeaCouch", "GrassSeaClubrush", "ReedsBrackish", "FlowersSeaLavender", "FlowersThrift", "FlowersKwelder", "FlowersGoldenSamphire",
-			// The Desert, Badlands and Salt Flat rounds' (2026-10-26).
+			// The Desert, Badlands and Salt Flat biomes'.
 			"GrassDrinn", "GrassTaman", "GrassSilverAwn", "FlowersSchouwia", "FlowersFagonia", "FlowersSandLily", "GrassBulbousPoa", "GrassGoatgrass",
 			"GrassWildBarley", "GrassRavenna", "FlowersGypsophila", "FlowersSpringAsh", "FlowersOnosma", "FlowersEremurus", "FlowersHollyhock",
 			"FlowersSternbergia", "GrassOdyssea", "GrassBrineSedge", "FlowersCressa", "FlowersWardenbloom",
-			// The Hills round's (2026-10-26).
+			// The Hills biome's.
 			"GrassSheepFescue", "GrassSilverbeard", "GrassMatgrass", "GrassMelick", "FlowersAsphodel", "FlowersHillSpring", "FlowersSchist",
 			"FlowersTerraceWeeds", "FlowersFell", "FlowersSaffron", "GrassBarleyHill",
-			// The Wetlands round's (2026-10-26).
+			// The Wetlands biome's.
 			"ReedsQasab", "ReedsBardi", "GrassBulrush", "GrassKnotgrass", "GrassFlatsedge", "GrassSaltgrass", "GrassSweetFlag", "FlowersButomus", "FlowersBatiha", "FlowersDelta",
-			// The Mangrove round's (2026-10-26).
+			// The Mangrove biome's.
 			"GrassSaltCouch", "GrassSedgeFimbristylis", "FlowersSesuvium", "FlowersAsmini",
-			// The Jungle and Bamboo Forest rounds' (2026-10-26).
+			// The Jungle and Bamboo Forest biomes'.
 			"GrassSpear", "FlowersAlligatorPepper", "FlowersCostus", "FlowersBalsam", "FlowersBloodLily",
 			"GrassSusuki", "GrassRyunohige", "FlowersHiganbana", "FlowersAkiNanakusa", "FlowersShaga", "FlowersKatakuri",
-			// The Lake and River rounds' (2026-10-26).
+			// The Lake and River biomes'.
 			"FlowersStrand", "GrassGalingale", "FlowersStromtal", "FlowersFloodbank",
 		};
 

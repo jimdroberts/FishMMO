@@ -5,7 +5,7 @@ namespace FishMMO.Server.Core.World.SceneServer
 {
 	/// <summary>
 	/// What a death touches that is the world's, lent by the character system to the Combat module's combat system
-	/// (2026-11-20): an instance's lives and its resurrection ban, the combat-logout linger, the pets' owners' notice, the
+	///: an instance's lives and its resurrection ban, the combat-logout linger, the pets' owners' notice, the
 	/// move to a bind point (possibly in another scene, which is a scene-server transfer), and the system line.
 	/// </summary>
 	/// <remarks>

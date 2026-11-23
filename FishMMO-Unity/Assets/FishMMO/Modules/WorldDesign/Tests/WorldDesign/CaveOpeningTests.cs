@@ -8,7 +8,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Every place a cave is open to the sky is an opening the cut made (2026-10-27, Moron 2: "we are still seeing holes in cave
+	/// Every place a cave is open to the sky is an opening the cut made (Moron 2: "we are still seeing holes in cave
 	/// walls from the interior facing out ... unique holes into caves are fine but we need to ensure they are proper cave
 	/// entrances"): wherever the cave's air rises into the skin under the ground the terrain over it is holed (and the collar
 	/// frames the hole), mouth zones included; nowhere is the air left under unholed terrain, which is drawn from above only.
@@ -305,7 +305,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void GroundCarvedDownOverACaveAfterItsPlanIsRaisedBackOverItsRock()
 		{
-			// 2026-10-27 (Moron 2): the ground is not left as the cave was planned on: the ways are carved, other sites' pads levelled,
+			// Moron 2: the ground is not left as the cave was planned on: the ways are carved, other sites' pads levelled,
 			// hot ground dug, after the cave is laid out, and the layout's cover tests sample its bores at a few points. A hollow dug
 			// down to a fifth of a metre over a cave's air, away from its mouths, opens its air to the sky under unholed terrain; the seal the shaper
 			// runs before meshing (CaveShaper.RoofSeal) raises the ground there till every column is roofed again, and nowhere else.
@@ -463,8 +463,8 @@ namespace FishMMO.UnitTests.WorldDesign
 			int bare = stage.IndexOf("PointOfInterestCaveOpeningClearance.Clear(terrains, tiles, asset, notes);", StringComparison.Ordinal);
 			Assert.That(bare, Is.GreaterThan(stage.IndexOf("PointOfInterestLinearFeatures.LayScene(", StringComparison.Ordinal)), "after every site has written its ground");
 			Assert.That(bare, Is.LessThan(stage.IndexOf("ScenePathBake.Write(scene", StringComparison.Ordinal)), "before the ground is baked for the client");
-			// The client's two plant builders (every detail kind is the blades' or the scatter's since the CPU chunk renderer went,
-			// 2026-10-27) read the plants' mask, the clouds and the ambient life the terrain's own holes.
+			// The client's two plant builders (every detail kind is the blades' or the scatter's since the CPU chunk renderer went)
+			// read the plants' mask, the clouds and the ambient life the terrain's own holes.
 			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/Grass/GrassTerrain.cs"), Does.Contain("cut.KeepPlantsClear();"));
 			Assert.That(ProjectFiles.ReadAllText("Assets/FishMMO/Modules/Terrain/Client/Scatter/DetailScatterTerrain.cs"), Does.Contain("PlantsClear(cut).ToTexels("));
 			Assert.That(File.Exists("Assets/FishMMO/Modules/Terrain/Client/TerrainDetailField.cs"), Is.False, "no CPU chunk renderer places plants of its own");

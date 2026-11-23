@@ -18,7 +18,7 @@ namespace FishMMO.Shared
 		Territorial = 3,
 	}
 
-	/// <summary>Whether a species lives out in the open, in caves, or both (2026-11-21: deer were spawning in caves).</summary>
+	/// <summary>Whether a species lives out in the open, in caves, or both (deer were spawning in caves).</summary>
 	/// <remarks>Append only; the ordinal is stored on the species templates.</remarks>
 	public enum WildlifeShelter : byte
 	{
@@ -50,7 +50,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// What the core reads of a wild animal's species (2026-11-20: the species template is the Wildlife module's): its role
+	/// What the core reads of a wild animal's species (the species template is the Wildlife module's): its role
 	/// toward others, how long its carcass lies, and where and in what numbers a spawner puts it.
 	/// </summary>
 	public interface IWildlifeSpecies

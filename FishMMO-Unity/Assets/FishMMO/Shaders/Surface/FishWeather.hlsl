@@ -30,7 +30,7 @@ float4 _FishWindHold;
 // (world x, z; its prevailing wind, which never turns with the weather), z how far its ten-metre wind has carried
 // it, m (summed exactly from the world clock, with what the scene adds), wrapped at w. What a pattern laid out across
 // the world on the wind reads: laid on the eased wind at the camera, it was each player's own, and turning it about
-// the world's origin moved it metres a degree far from there (2026-10-15).
+// the world's origin moved it metres a degree far from there.
 float4 _FishWindWay;
 
 // The way the scene's air blows, unit (_FishWindWay.xy); a diagonal before any weather is set.
@@ -395,7 +395,7 @@ float FishWaterOpen(float3 worldPos)
     return _FishOcclusionWater.y > 0.5 ? saturate((worldPos.y - _FishOcclusionWater.x) * 4.0 + 1.0) : 1.0;
 }
 
-// The share of the daylight that reaches a point under the sea (2026-10-25, phase I2m, decision 36 (c); BiomeSeaFloors.Daylight,
+// The share of the daylight that reaches a point under the sea (phase I2m, decision 36 (c); BiomeSeaFloors.Daylight,
 // held equal by a test): exp(-w x the depth below the still surface), w the scene cut's loss per metre (_FishOcclusionWater.w:
 // WaterSurface.FloorDaylightExtinction, from the sea looks of the scene's sea-floor biomes). Exactly 1 above the water and on every
 // scene with no sea-floor biome (w = 0). For the sun's and the sky's light on what lies under the sea, never for its own glow or a

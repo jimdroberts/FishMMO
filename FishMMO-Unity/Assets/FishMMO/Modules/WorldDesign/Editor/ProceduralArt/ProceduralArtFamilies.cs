@@ -65,7 +65,7 @@ namespace FishMMO.Shared.WorldDesign
 			("SeaFloorMeshes.cs", new[] { ArtFamily.Plants }),
 			("ProceduralArtCatalogue.Flora.cs", new[] { ArtFamily.Plants, ArtFamily.Deadwood }),
 			("ProceduralArtCatalogue.Sea.cs", new[] { ArtFamily.Plants }),
-			// The plants floating on still water (2026-10-18): details like the rest.
+			// The plants floating on still water: details like the rest.
 			("FloatingPlantMeshes.cs", new[] { ArtFamily.Plants }),
 			("ProceduralArtCatalogue.Floating.cs", new[] { ArtFamily.Plants }),
 			("BiomeArtGenerator.Rocks.cs", new[] { ArtFamily.Rocks, ArtFamily.Cliffs }),
@@ -102,34 +102,34 @@ namespace FishMMO.Shared.WorldDesign
 			("StructurePieces*", new[] { ArtFamily.Structures }),
 			("StructureSolids.cs", new[] { ArtFamily.Structures }),
 			("StructureSurfaces.cs", new[] { ArtFamily.Structures }),
-			// The structure palette's parts, keys and surfaces (2026-10-16).
+			// The structure palette's parts, keys and surfaces.
 			("StructureSurfaces.Palette.cs", new[] { ArtFamily.Structures }),
 			("StructurePalettes.cs", new[] { ArtFamily.Structures }),
-			// The house roofs built at their palette's pitch (2026-10-18).
+			// The house roofs built at their palette's pitch.
 			("StructureRoofs.cs", new[] { ArtFamily.Structures }),
-			// Sources outside the generator's folder whose values the structures bake (ProceduralArtPayload.ForeignSources, 2026-10-18).
+			// Sources outside the generator's folder whose values the structures bake (ProceduralArtPayload.ForeignSources).
 			("SceneGlow.cs", new[] { ArtFamily.Structures }),
 			("BiomeStructurePalette.cs", new[] { ArtFamily.Structures }),
 			("StructureRuins.cs", new[] { ArtFamily.Structures }),
 			("StructureKit.cs", new[] { ArtFamily.Structures }),
 			("ProceduralArtCatalogue.Structures.cs", new[] { ArtFamily.Structures }),
 			("BiomeArtGenerator.Structures.cs", new[] { ArtFamily.Structures }),
-			// The cave kit's glow art, built in the structures' steps (2026-10-13).
+			// The cave kit's glow art, built in the structures' steps.
 			("CaveGlowMeshes.cs", new[] { ArtFamily.Structures }),
 			("ProceduralArtCatalogue.Cave.cs", new[] { ArtFamily.Structures }),
 			("BiomeArtGenerator.CaveGlow.cs", new[] { ArtFamily.Structures }),
-			// What hangs from a cave's roof and piles under it, built as the glow art (2026-10-20, caves livened).
+			// What hangs from a cave's roof and piles under it, built as the glow art (caves livened).
 			("CaveGlowMeshes.Hanging.cs", new[] { ArtFamily.Structures }),
-			// An ice cave's ice, built as the glow art (2026-10-20, caves livened).
+			// An ice cave's ice, built as the glow art (caves livened).
 			("CaveGlowMeshes.Ice.cs", new[] { ArtFamily.Structures }),
-			// The cave crystals' habits the biome drafts name, built as the glow art (2026-10-26, NEW-CRYSTALS).
+			// The cave crystals' habits the biome drafts name, built as the glow art.
 			("CaveGlowMeshes.Habits.cs", new[] { ArtFamily.Structures }),
-			// The run-time cave cover's mesh, built in the structures' steps (2026-10-20), and the type table outside the folder
+			// The run-time cave cover's mesh, built in the structures' steps, and the type table outside the folder
 			// whose order is its submeshes'.
 			("CaveCoverMeshes.cs", new[] { ArtFamily.Structures }),
 			("BiomeArtGenerator.CaveCover.cs", new[] { ArtFamily.Structures }),
 			("CaveCoverTypes.cs", new[] { ArtFamily.Structures }),
-			// The look arrays (2026-10-28): the rock, ice, structure and cave glow surfaces as Texture2DArrays, and the materials'
+			// The look arrays: the rock, ice, structure and cave glow surfaces as Texture2DArrays, and the materials'
 			// slices of them. The legacy stones' materials (the shared "Materials" step) wear the rock arrays too, so that step runs
 			// with any rebuild.
 			("ProceduralArtLookArrays.cs", new[] { ArtFamily.Rocks, ArtFamily.Structures }),

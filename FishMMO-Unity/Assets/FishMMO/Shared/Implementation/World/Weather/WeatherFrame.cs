@@ -121,7 +121,7 @@ namespace FishMMO.Shared.Weather
 			float wettingBefore = rain + hail;
 			this[WeatherChannel.RainWeight] = water * (1f - frozen);
 			this[WeatherChannel.SnowWeight] = water * frozen;
-			/* What the fall does to the ground follows it (2026-10-11): the wetness and snow rates were derived from
+			/* What the fall does to the ground follows it: the wetness and snow rates were derived from
 			 * the types before this, and DeriveSurfaceRates keeps the higher of old and new, so snow re-typed from rain
 			 * still soaked the ground as rain and rain re-typed from snow still whitened it. Scaled by how much the
 			 * share changed, so a scaling the air already made (a thin atmosphere's) is kept. */

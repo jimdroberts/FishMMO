@@ -6,7 +6,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// The core command line: with no chat window (the Chat module is not installed), the chat key opens an input dialog
 	/// for a slash command (/help, /unstuck, /leaveinstance, and every module's commands), sent the way the chat window
-	/// sends them. Plain text is not sent: there is nobody to talk to without chat. Added with the Chat module (2026-11-20).
+	/// sends them. Plain text is not sent: there is nobody to talk to without chat. Added with the Chat module.
 	/// </summary>
 	public static class CommandLine
 	{

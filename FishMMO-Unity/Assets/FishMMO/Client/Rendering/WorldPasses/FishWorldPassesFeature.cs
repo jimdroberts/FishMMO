@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// <remarks>
 	/// These were queued by <c>FishCloudsFeature</c>, the one feature every renderer happened to carry, so the clouds
 	/// owned the world's lighting: a game without the weather module would have lost its light table and shadow cache with
-	/// them. They are core now (Phase 4 of the core and modules plan, 2026-11-17), and the clouds draw clouds.
+	/// them. They are core now, and the clouds draw clouds.
 	/// </remarks>
 	public class FishWorldPassesFeature : ScriptableRendererFeature
 	{
@@ -26,7 +26,7 @@ namespace FishMMO.Client
 		public ComputeShader PassesCompute;
 
 		[Tooltip("FishMMO/World/Cave Skylight Shafts: the daylight's shafts and the dust motes in them under the openings in caves' " +
-			"roofs near the camera (CaveSkylights). Core lighting (Phase 4, 2026-11-18: moved off the terrain profile). Referenced " +
+			"roofs near the camera (CaveSkylights). Core lighting (moved off the terrain profile). Referenced " +
 			"here so a build carries it; empty, CaveSkylights finds it by name, which only works in the editor.")]
 		public Shader SkylightShaftsShader;
 

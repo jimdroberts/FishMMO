@@ -5,7 +5,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The inland water off property blocks (2026-10-28): every lake, river, fall curtain and fall spray drew with a
+	/// The inland water off property blocks: every lake, river, fall curtain and fall spray drew with a
 	/// <see cref="UnityEngine.MaterialPropertyBlock"/> of its own (the solved flow, the falls' foam trail, the biome looks, the
 	/// curtains' textures), and a renderer with a block is drawn outside the SRP Batcher, its whole shader state set up again
 	/// draw by draw. Each now draws with its own copy of its material (FishMMO.Shared.DrawMaterials) whose numbers sit in the

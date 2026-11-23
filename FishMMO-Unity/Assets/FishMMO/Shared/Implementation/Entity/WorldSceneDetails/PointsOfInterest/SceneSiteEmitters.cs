@@ -26,7 +26,7 @@ namespace FishMMO.Shared
 		public static int Version { get; private set; }
 
 		/// <summary>
-		/// Lights from outside any site (2026-10-25, I6i): a cloud world's bridge-end and landing-stage lights (SceneCloudWorld), which
+		/// Lights from outside any site: a cloud world's bridge-end and landing-stage lights (SceneCloudWorld), which
 		/// stand in no point of interest. Offered by <see cref="Near"/> after the sets', each read in full (a few dozen at most).
 		/// </summary>
 		private static readonly List<(Object Owner, IReadOnlyList<SceneEmitter> Emitters)> extra = new List<(Object, IReadOnlyList<SceneEmitter>)>();

@@ -1459,7 +1459,7 @@ namespace FishMMO.Shared
 		/// <b>Why applying would be wrong, not merely redundant.</b> The attribute broadcast an
 		/// observer already receives carries <c>ExternalModifier</c>, which is defined as the sum of
 		/// buff, equipment and region contributions. A buff applied locally on top of that counts
-		/// its own modifier twice — the same double-count the 2026-08-28 audit fixed on the spawn
+		/// its own modifier twice — the same double-count the audit fixed on the spawn
 		/// payload. The same argument covers periodic effects: a damage-over-time tick would drain a
 		/// peer's health locally while <c>CharacterResourcesBroadcast</c> is already delivering the
 		/// drained value.

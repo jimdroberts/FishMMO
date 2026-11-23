@@ -39,7 +39,7 @@ namespace FishMMO.Shared
 		public float Cooldown;
 
 		/// <summary>
-		/// Rules scaling the ability's numbers by the weather where it is cast (Q16). Aggregated
+		/// Rules scaling the ability's numbers by the weather where it is cast. Aggregated
 		/// with the parent template's.
 		/// </summary>
 		/// <remarks>

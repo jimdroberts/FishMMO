@@ -1,5 +1,5 @@
-// What lives on and in a cave's still water near the camera (CaveWaterLife, 2026-10-26, phase I2n-c; decision 86 (i) and its
-// leeches, decision 97), drawn with two materials of this shader from a few numbers a pool (SceneCaveWater.cs, number for number):
+// What lives on and in a cave's still water near the camera (CaveWaterLife; decision 86 (i) and its
+// leeches), drawn with two materials of this shader from a few numbers a pool (SceneCaveWater.cs, number for number):
 //
 // _Mode 0, the BEADS: marsh gas rising in trails from the drowned muck, each bead a speck of the light round it, and the ring it
 // sends over the surface as it breaks it. Every bead is the shared motion clock's (a pool's vents and bursts hashed from its

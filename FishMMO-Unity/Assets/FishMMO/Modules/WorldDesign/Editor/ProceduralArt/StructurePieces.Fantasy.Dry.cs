@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The fantasy wave's Dry pack: its new pieces (2026-10-27, poi-fantasy-wave/WAVE.md): the kraal's round hut, the baobab, the
+	/// The fantasy set's Dry pack: its new pieces: the kraal's round hut, the baobab, the
 	/// pyramid, the sphinx, and the four set into rock or hill (a rock-cut tomb front, a cliff palace's alcove, a mountain king's
 	/// carved gate, the colossal kings of a cliff relief).
 	/// </summary>

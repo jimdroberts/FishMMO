@@ -10,7 +10,7 @@ if [[ "${FISHMMO_WEBGPU_DEV_FEATURES:-}" == "1" ]]; then
     fish_webgpu_debug+=(--enable-webgpu-developer-features)
 fi
 # The display must stay awake while a measurement runs: once it sleeps the compositor paces the page at ~60 Hz, and every
-# frame time after reads ~17 ms (2026-11-04). The inhibitor is held exactly as long as the browser runs.
+# frame time after reads ~17 ms. The inhibitor is held exactly as long as the browser runs.
 fish_webgpu_awake=()
 if command -v kde-inhibit >/dev/null 2>&1; then
     fish_webgpu_awake=(kde-inhibit --power --screenSaver)

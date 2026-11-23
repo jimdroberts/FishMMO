@@ -255,7 +255,7 @@ namespace FishMMO.Client
 		/// grid is left. On a tier that rebuilds at four pixels a texel
 		/// (<see cref="CloudTierSettings.AutoPixelsPerTexel"/>) they are also the texel's sixteen pixels'
 		/// middles, so every pixel is looked through once a cycle by the ray a full-resolution march
-		/// would cast for it. The sixteen Halton (2, 3) places used until 2026-09-28 left two pixels of
+		/// would cast for it. The sixteen Halton (2, 3) places used formerly left two pixels of
 		/// every sixteen never looked through (two others twice).
 		/// </para>
 		/// <para>
@@ -307,7 +307,7 @@ namespace FishMMO.Client
 		public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
 		{
 			// The world's shared passes (depth pyramid, cascade culling, light table, shadow cache) are FishWorldPassesFeature's,
-			// on every renderer; this feature draws the clouds only (Phase 4, 2026-11-17).
+			// on every renderer; this feature draws the clouds only.
 			Material material = Resolve();
 			if (material == null || !SkySystem.CloudsReady || !SkySystem.DrawClouds)
 			{
@@ -733,7 +733,7 @@ namespace FishMMO.Client
 			/// Whether every pass that fills the cloud buffer has compiled. The editor compiles shaders in the
 			/// background, and a pass still compiling draws nothing, so the buffer kept whatever its target held —
 			/// zeros in a new one, which read as "nothing gets through": the water and the sky bodies lay the buffer
-			/// over themselves and turned black while the march compiled (2026-10-10). Until all of them are ready
+			/// over themselves and turned black while the march compiled. Until all of them are ready
 			/// the clouds are left out and nothing is published, so everything reads a frame without clouds (and the
 			/// fog falls back to the height and froxel passes). The ones not compiled are asked for here, every two
 			/// seconds, since nothing draws them meanwhile.
@@ -921,7 +921,7 @@ namespace FishMMO.Client
 				// place — the middle of one rebuilt pixel (SubPixel) — and is a point sample of the sky
 				// there; the steadying averages sixteen such places a texel, which is supersampling, and
 				// its tent is the only low-pass the picture should get. So what a ray stands for is that
-				// pixel's cone, exactly as a ray of a full-resolution march does. Taken at the marched texel (as it was, 2026-09-28) the
+				// pixel's cone, exactly as a ray of a full-resolution march does. Taken at the marched texel (as it was) the
 				// cone was four times too wide on Balanced, and the march drew a different cloud than
 				// the full-resolution march of the same sky: the eddies' finer octaves dropped
 				// (FishCloudDetailResolved), every edge's ramp four times as wide (FishCloudEdgeRampWidth),
@@ -1509,7 +1509,7 @@ namespace FishMMO.Client
 				// 4. God rays: shafts from the sun, or from around a body eclipsing it. The clouds
 				// are already in the frame, so they cast the shafts they should. Gathered at half the
 				// march's size as before: the rebuilt clouds are sharper than a shaft needs.
-				/* Not from under the water (2026-10-06: the sky's glow showed on things under the sea): the shafts rake
+				/* Not from under the water (the sky's glow showed on things under the sea): the shafts rake
 				 * out from the sun across the frame, and under the surface the water's own pass (FishMMO/Water/Underwater)
 				 * draws the sun's shafts as the water bends and scatters them. */
 				/* Nor when the gather would find nothing anywhere in the frame (GodRaysReachFrame): the light behind the camera, or
@@ -2093,7 +2093,7 @@ namespace FishMMO.Client
 	/// <item><b>A, smooth kernel</b> — the steadying's current estimate reads the nine texels round a
 	/// pixel through the quadratic B-spline (never negative, continuous where the nearest texel changes)
 	/// in place of the tent over the nearest four: smoother still, a little wider. Since the temporal
-	/// upsampler of 2026-09-28 (FishCloudResolve.hlsl) this is the only thing A changes.</item>
+	/// upsampler (FishCloudResolve.hlsl) this is the only thing A changes.</item>
 	/// <item><b>B, confidence blur</b> — belonged to the steadying the temporal upsampler replaced (a halo
 	/// lent to a pixel with few samples of its own); the steadying no longer reads it. Kept only so
 	/// the probes' lists still parse: delete it (and <see cref="BlurSigma2"/>) once no probe asks for it.</item>
@@ -2102,7 +2102,7 @@ namespace FishMMO.Client
 	/// grid can carry, Nyquist), where the share has been half a texel.</item>
 	/// <item><b>D, low-discrepancy jitter</b> — the rays' phase keeps its spatial pattern and moves on
 	/// in time stratified over a cycle and by the golden ratio between cycles (<see cref="JitterPhase"/>).
-	/// Always on since 2026-09-28; the letter is only printed. Delete it with B.</item>
+	/// Always on; the letter is only printed. Delete it with B.</item>
 	/// </list>
 	/// <para>
 	/// E (more rays: <c>FISHMMO_WEATHER_VARIANT=res=…</c>) and F (a longer probe settle:
@@ -2242,7 +2242,7 @@ namespace FishMMO.Client
 		/// since both already scale with it, so C needs no shader of its own.
 		/// </summary>
 		/// <remarks>
-		/// The cone is a rebuilt pixel's (FishCloudsFeature's spread, 2026-09-28: each ray answers for one
+		/// The cone is a rebuilt pixel's (FishCloudsFeature's spread: each ray answers for one
 		/// pixel), and C's floor is in marched texels, so the floor is taken across by
 		/// <see cref="FishCloudsFeature.PixelsPerMarchedTexel"/>. Without C the share is untouched.
 		/// </remarks>
@@ -2256,7 +2256,7 @@ namespace FishMMO.Client
 		/// The options as the cloud shader reads them (<c>_FishCloudOptions</c>): x A (the B-spline kernel),
 		/// y B, z D, each 1 on and 0 off — y and z are no longer read, only kept so the probes still print
 		/// what was asked; w the light march's phase on <paramref name="frame"/> (<see cref="JitterPhase"/>),
-		/// whatever the options: D's phase became the march's own on 2026-09-28.
+		/// whatever the options: D's phase became the march's own.
 		/// </summary>
 		public Vector4 ShaderVector(int frame)
 		{
@@ -2266,7 +2266,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The frame's phase for <paramref name="frame"/>, 0..1: what turns the rays' phase and the light march's
 		/// samples. The rays' per-texel part is blue noise (FishCloudRayPhase, FishCloudPhase.hlsl); over
-		/// interleaved gradient noise this same phase drew a lattice over every cloud base (audit 2026-10-09).
+		/// interleaved gradient noise this same phase drew a lattice over every cloud base.
 		/// </summary>
 		/// <remarks>
 		/// <para>
@@ -2283,7 +2283,7 @@ namespace FishMMO.Client
 		/// golden-ratio sequence, which stays evenly spread however many have been taken.
 		/// </para>
 		/// <para>
-		/// It was the place's value BIT-REVERSED over sixteen (until 2026-09-29), chosen so consecutive frames
+		/// It was the place's value BIT-REVERSED over sixteen (formerly), chosen so consecutive frames
 		/// were half a step apart. Bit-reversing the Bayer matrix gives a Morton ramp: 0 1 4 5 / 3 2 7 6 /
 		/// 12 13 8 9 / 15 14 11 10 — neighbouring places a sixteenth apart. Each pixel was then steadied from
 		/// samples of nearly one phase, its own, and the step error that phase leaves ramped smoothly across
@@ -2302,7 +2302,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The rays' phase as it was until 2026-09-29: the place's value bit-reversed, so neighbouring places
+		/// The rays' phase as it was formerly: the place's value bit-reversed, so neighbouring places
 		/// took nearly the same phase (see <see cref="JitterPhase"/>). For the diagnostics only.
 		/// </summary>
 		public static float JitterPhaseLegacy(int frame)
@@ -2345,7 +2345,7 @@ namespace FishMMO.Client
 		/// Option B's halo width, as a variance in pixels², for a pixel with <paramref name="confidence"/>
 		/// behind it when a marched texel spans <paramref name="perTexel"/> pixels: σ₀² plus the rest of the
 		/// way to perTexel²/2π — the width that gathers one sample's worth a frame — over 1 + confidence.
-		/// No longer read by the steadying (option B is inert since the temporal upsampler of 2026-09-28).
+		/// No longer read by the steadying (option B is inert since the temporal upsampler).
 		/// </summary>
 		public static float BlurSigma2(float confidence, float perTexel)
 		{
@@ -2357,7 +2357,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// How many of the sixteen places a cycle land in each pixel, never less than one: sixteen over
 		/// perTexel² pixels. It was what option A faded its fill out over, before the temporal upsampler of
-		/// 2026-09-28; the steadying no longer reads it.
+		/// the steadying no longer reads it.
 		/// </summary>
 		public static float FillCycleWeight(float perTexel)
 		{

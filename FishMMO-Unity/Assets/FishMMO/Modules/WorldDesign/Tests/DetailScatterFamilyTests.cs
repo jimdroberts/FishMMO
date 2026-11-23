@@ -15,7 +15,7 @@ using MaterialKeywords = FishMMO.Shared.WorldDesign.ProceduralArtVariants.Materi
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The scatter's material reduction (2026-11-04): identical materials share one clone (TerrainGpuRenderer.ContentKey), and the
+	/// The scatter's material reduction: identical materials share one clone (TerrainGpuRenderer.ContentKey), and the
 	/// alpha-tested vegetation kinds of one structure draw through one family material whose table holds each kind's scalars
 	/// (TerrainVegTableMath, FishVegetationPasses.hlsl FISH_VEG_TABLE), named per vertex by the pooled mesh's uv4.
 	/// </summary>

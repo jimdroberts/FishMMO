@@ -47,7 +47,7 @@ namespace FishMMO.Client
 		[Min(0f)] public float SwarmDensity = 1f;
 
 		[Header("Size")]
-		[Tooltip("Every animal drawn this many times its real size, so small birds and critters read at play distances (2026-10-10: 30-50% bigger). 1 is life size.")]
+		[Tooltip("Every animal drawn this many times its real size, so small birds and critters read at play distances (30-50% bigger). 1 is life size.")]
 		[Range(1f, 3f)] public float SizeScale = 1.4f;
 		[Tooltip("Each insect of a swarm drawn this many times its real size (a midge is 5 mm, a speck at any distance), so a swarm reads as a haze rather than a few stray pixels.")]
 		[Range(1f, 6f)] public float SwarmSpeckScale = 3f;

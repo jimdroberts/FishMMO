@@ -9,7 +9,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// Which region buffs a character standing at a point should have (N13).
+	/// Which region buffs a character standing at a point should have.
 	/// </summary>
 	/// <remarks>
 	/// <para>

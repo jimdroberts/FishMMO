@@ -168,7 +168,7 @@ namespace FishMMO.Shared
 		private float appliedOpacity = 1f;
 #endif
 
-		/// <summary>How opaque an invisible character is drawn: 80% gone (Jim, 2026-11-22).</summary>
+		/// <summary>How opaque an invisible character is drawn: 80% gone.</summary>
 		public const float ConcealedOpacity = 0.2f;
 
 		/// <summary>How opaque someone else's invisibility is to a viewer who sees invisible: plain to see, still marked.</summary>
@@ -225,6 +225,7 @@ namespace FishMMO.Shared
 			body?.SetPlaying(false);
 			// Forget the told movement mode when the object goes back to the pool.
 			observedModeKnown = false;
+			ridingWanted = false;
 			observedMode = 0;
 			faded = false;
 			fade.Restore();
@@ -277,6 +278,7 @@ namespace FishMMO.Shared
 				groundMask &= ~(1 << playerLayer);
 			}
 			RestorePoseForCurrentState();
+			body.SetRiding(ridingWanted, rideHipHeight);
 			if (poseHolds > 0)
 			{
 				body.SetPlaying(false);
@@ -391,6 +393,10 @@ namespace FishMMO.Shared
 
 		private byte observedMode;
 		private bool observedModeKnown;
+
+		// Riding (SetRiding), kept so a body built later (a model swap) sits on the saddle too.
+		private bool ridingWanted;
+		private float rideHipHeight;
 #endif
 
 		/// <summary>
@@ -418,6 +424,33 @@ namespace FishMMO.Shared
 			fedGrounded = grounded;
 			Fed();
 #endif
+		}
+
+		/// <summary>
+		/// Sits the figure astride a mount whose saddle puts the hip joints <paramref name="hipHeight"/> metres over the feet, or
+		/// takes it off (issue #109). Told every frame by the Mounts module's view on every client, from the mount buff each
+		/// already holds: nothing on the wire.
+		/// </summary>
+		public void SetRiding(bool riding, float hipHeight)
+		{
+#if !UNITY_SERVER
+			ridingWanted = riding;
+			rideHipHeight = hipHeight;
+			body?.SetRiding(riding, hipHeight);
+#endif
+		}
+
+		/// <summary>How far the figure is raised over its capsule's feet now, metres (on a saddle, over a wave); 0 without a body.</summary>
+		public float FigureLift
+		{
+			get
+			{
+#if !UNITY_SERVER
+				return body != null ? body.Lift : 0f;
+#else
+				return 0f;
+#endif
+			}
 		}
 
 		/// <inheritdoc />

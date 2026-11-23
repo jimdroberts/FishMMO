@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Wetlands</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Wetlands()
 		{
-			// The great reed marshes of the lower Tigris and Euphrates, the Batiha (biome round, approved 2026-10-18, authored 2026-10-26):
+			// The great reed marshes of the lower Tigris and Euphrates, the Batiha:
 			// horizons of five-metre giant reed and narrow-leaf cattail walling winding channels of startlingly clear jade water over
 			// white shell-marl, open lagoons red with Azolla and starred with floating-heart, buffalo wading neck-deep, salt-crusted
 			// levee backs, poplars and date palms on the built-up islands and the low tells of drowned cities shedding potsherds. Its
@@ -18,10 +18,10 @@ namespace FishMMO.Shared.WorldDesign
 			// every village's heart, tar-black canoes; their lords build baked-brick khans with turquoise tile bands. Cool band
 			// (t < 0.2): the same reed world as a Danube-delta winter marsh — white-willow galleries, dun reed, water soldier, no palms,
 			// rice or salt. Fantasy: the Abzu springs ringed by half-sunk winged bulls, fish-cloaked sages, glowing tablets, Abzulite.
-			// LATER (I9 T1): every ground and object texture as Wetlands' own variant of its recipe (decision 12); until then the grounds
+			// LATER: every ground and object texture as Wetlands' own variant of its recipe; until then the grounds
 			// are its own recipes, the stones, rocks and pieces the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Faience + Eveningstar.
-			// LATER (AMBIENT-LIFE): water buffalo herds wading and wallowing, pelican flotillas, flamingos over the sabkha (warm), purple
+			// LATER (no spec column yet): rare looks Faience + Eveningstar.
+			// LATER: water buffalo herds wading and wallowing, pelican flotillas, flamingos over the sabkha (warm), purple
 			// swamphens, otters, the reed-warbler chorus, whooper swans and booming bitterns in the cool reach, the apkallu at dawn.
 			return E("Wetlands", L(Ground.MudReedbedSilt,
 					// The reedbed: giant reed, the marsh's own litter, flowering rush; sweet flag and the delta's flowers in the cool reach;
@@ -76,7 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Bars(sand: Ground.SandShellHash, gravel: Ground.GravelShellBar)
 				// Gypsum (the Fars alabaster) accepted first, with the marl-limestone edge hills and the marl shale; the marsh floor is alluvium. Gypsum is
 				// a formations-only rock, so the limestone is the bluffs' own.
-				// LATER (I9): Gypsum's grey-white alabaster with green-grey and red marl interbeds as Wetlands' own look.
+				// LATER: Gypsum's grey-white alabaster with green-grey and red marl interbeds as Wetlands' own look.
 				.Accepts(RockTypes.Gypsum, RockTypes.Limestone, RockTypes.Shale)
 				.CaveShell(CaveForm.Cave, "Gypsum").CaveShell(CaveForm.Grotto, "Gypsum").CaveShell(CaveForm.Mine, "Gypsum")
 				.CaveShell(CaveForm.SeaCave, "Limestone").CaveShell(CaveForm.IceCave, "Ice").CaveShell(CaveForm.LavaTube, "Basalt")
@@ -117,7 +117,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Blades("FlowersDelta", t => WoodsBlade(t, "#4a6a34", "#6a8a44", 0.4f,
 					head: GrassBladeHead.Flower, sprinkle: 10f, headSize: 0.05f, heads: new[] { "#e8c830", "#b05a8a", "#7aa0e0", "#f0d040" }))
 				// Sites: fishing camps and reed isles first, ruins (the tells) and islands; the strongholds few, the ports none.
-				// LATER (I7): the named pieces — the mudhif guest hall on its arched reed ribs, the arched reed houses, the Isles layout, the
+				// LATER: the named pieces — the mudhif guest hall on its arched reed ribs, the arched reed houses, the Isles layout, the
 				// floating kibasha raft, tarada landings, hadhra weirs, reed yards, buffalo byres, the bitumen seep, the noria, the khan with
 				// its wind-catchers, the Emir's hold, tell ruins, the ziggurat, the Abzu spring, the fish-sage shrine, winged bulls, the ark
 				// ribs, the tablet house. The kit's variants below stand in (stilt houses for the reed isles).
@@ -130,7 +130,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Hermitage, 0.4f), (POIType.WitchHut, 0.3f), (POIType.RuinedTower, 0.3f), (POIType.Watermill, 0.3f), (POIType.Mine, 0.2f),
 					(POIType.Crypt, 0.2f), (POIType.AncientTree, 0.2f), (POIType.Monastery, 0.2f), (POIType.City, 0.1f), (POIType.Castle, 0.1f),
 					(POIType.Quarry, 0.1f), (POIType.Capital, 0.05f), (POIType.Fortress, 0.05f), (POIType.Bridge, 1f), (POIType.RiverMouth, 1f), (POIType.Cave, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HauntedManor, 0.6f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.Hamlet, 0.3f), (POIType.BurnedVillage, 0.3f), (POIType.WarbandCamp, 1f), (POIType.CultistHideout, 0.5f),
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.SunkenTemple, "Idol", 0f)
 				.Prefers(POIType.Ruins, "Excavation", 1.4f)
 				.Prefers(POIType.Ruins, "Stone", 1f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -181,15 +181,15 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.2f)
 				.Prefers(POIType.LizardfolkVillage, "Basking", 1.4f)
 				.Prefers(POIType.ReedVillage, "Marsh Town", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Favours(BiomeStructureStyle.Earth, 1.8f)
 				.Favours(BiomeStructureStyle.Stone, 0.6f)
 				.Favours(BiomeStructureStyle.Hide, 0.3f)
 				.Favours(BiomeStructureStyle.Timber, 0.2f)
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: reed, mud, palm wood, baked brick in bitumen, turquoise faience; no timber framing, no tile roofs. The
-				// houses' pointed arch is a 60-degree reed roof until the true barrel arches (I7).
-				// LATER (NEW-SURFACES U1/U6): QasabBundle, ReedLattice, Dibin, PalmTrunk, Kilim, BitumenBrick, Faience, GoatHair as
+				// houses' pointed arch is a 60-degree reed roof until the true barrel arches.
+				// LATER: QasabBundle, ReedLattice, Dibin, PalmTrunk, Kilim, BitumenBrick, Faience, GoatHair as
 				// surfaces of their own; the kit's reed, earth, stone, adobe and canvas, tinted, stand in.
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Wall, BiomeStructureMaterial.Reed, SeaHex("#c8b078"))
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Reed, SeaHex("#a89868"))
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.WorldDesign
 				.CropSurface("Detail_CropSugarcane", BiomeFieldSurface.RidgeAndFurrow)
 				.Orchards(new Entry.Orchard("DatePalm", 0.3f, 8f))
 				// Naphtha lamps in the villages, brass bracket lanterns on the khan walls, braziers at the holds, Abzulite posts at the
-				// springs and shrines. LATER (I7a): non-town site lights are laid once I7a places them; the NaphthaLamp is the kit's own.
+				// springs and shrines. LATER: non-town site lights are laid once a later pass places them; the NaphthaLamp is the kit's own.
 				.Lights(POIType.Village, BiomeWayLightKind.NaphthaLamp, 14f)
 				.Lights(POIType.StiltVillage, BiomeWayLightKind.NaphthaLamp, 14f)
 				.Lights(POIType.FishingCamp, BiomeWayLightKind.NaphthaLamp, 14f)

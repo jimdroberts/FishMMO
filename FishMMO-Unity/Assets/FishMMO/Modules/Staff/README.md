@@ -10,7 +10,7 @@ master presence (fly, invisibility), and `/report`, `/bug`, `/helpme`, `/tickets
 | **Depends on** | The core; Abilities and NPCs & AI (the simulated players' brains and kits) |
 | **Depended on by** | None. Modules that add commands (Housing, World Simulation) do it through the core's `OperatorCommandProvider`, so they compile without this module; their commands are simply not reachable. |
 | **Remove together with** | Nothing |
-| **Moved** | Phase 3 of the [core and modules plan](https://claude.ai/artifact/FwoyRum2ScqjbE1gm8sm9k), 2026-11-17. These were partials of `SceneServerSystem` and `ChatSystem`; they are one system now. |
+| **Moved** | Out of the core. These were partials of `SceneServerSystem` and `ChatSystem`; they are one system now. |
 
 ## Folders
 

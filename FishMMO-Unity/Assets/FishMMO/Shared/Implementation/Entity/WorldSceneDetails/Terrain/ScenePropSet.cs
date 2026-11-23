@@ -32,7 +32,7 @@ namespace FishMMO.Shared
 			[Tooltip("The layer the prop draws on; -1 keeps each renderer's own.")]
 			public int Layer;
 			/// <summary>
-			/// The materials the prefab is drawn in instead of its own, or empty for its own (2026-10-16): one per material slot of
+			/// The materials the prefab is drawn in instead of its own, or empty for its own: one per material slot of
 			/// every renderer, level by level in the LOD group's order (each level's renderers in order, each renderer's slots in
 			/// order). A structure piece is laid in its biome's structure palette this way: the kit's prefab, the palette's
 			/// materials, so a palette never needs a prefab of its own. A list of any other length is ignored.

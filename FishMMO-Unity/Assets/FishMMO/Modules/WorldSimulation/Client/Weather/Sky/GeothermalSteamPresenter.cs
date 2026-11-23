@@ -73,7 +73,7 @@ namespace FishMMO.Client
 		/// <summary>The plume shader's airless fountain (grains on ballistic arcs) and its frost collar (flakes lying round a lip).</summary>
 		private const int FountainPopulation = 3;
 		private const int CollarPopulation = 6;
-		/// <summary>An airless or thin-aired fume jet's frost collar (decision 84: SO₂ frost; water frost round an ice moon's jets).</summary>
+		/// <summary>An airless or thin-aired fume jet's frost collar (SO₂ frost; water frost round an ice moon's jets).</summary>
 		public static readonly Color FrostWhite = new Color(0.95f, 0.96f, 0.97f, 1f);
 		/// <summary>A jet's cone, rad: a fissure's narrow jet; a fumarole's wider fume.</summary>
 		private const float JetCone = 0.14f, FumeCone = 0.22f;
@@ -226,11 +226,11 @@ namespace FishMMO.Client
 				return;
 			}
 			PlanetAir planet = context.Sample.Planet;
-			// The vents' timing reads the shared clock and the sky the glows read (2026-10-25, I2q-b; VentTiming): the same for every player.
+			// The vents' timing reads the shared clock and the sky the glows read (VentTiming): the same for every player.
 			sky = VentSky.Of(motionSeconds, GlowSky.Current);
 			map = context.Settings != null ? context.Settings.BiomeMap() : null;
 			/* Steam is buoyant in air and seen by the air it mixes into: with none, nothing hangs. But a fumarole and a jet still throw
-			 * their gas out (2026-10-25, I2q-b, decision 84): in no air a short straight jet of grains that falls back, laying a frost
+			 * their gas out: in no air a short straight jet of grains that falls back, laying a frost
 			 * collar round its lip. */
 			bool rises = VolcanicPlume.CanRise(planet);
 			Vector3 viewer = camera.transform.position;
@@ -291,7 +291,7 @@ namespace FishMMO.Client
 			}
 		}
 
-		// ── Hearth smoke (2026-10-11) ────────────────────────────────
+		// ── Hearth smoke ────────────────────────────────
 
 		/// <summary>The most chimneys and fires smoking at once, the nearest.</summary>
 		public const int MaxHearths = 32;
@@ -324,7 +324,7 @@ namespace FishMMO.Client
 			SceneSiteEmitters.Near(viewer, HearthReach + Refind, k => k == SceneEmitterKind.Smoke || k == SceneEmitterKind.Fire, MaxHearths * 2, hearths);
 			// No smoke column off a fire underground (a camp in a cave's cavern): it would rise out through the hill. Nor off a
 			// fire indoors (a hall's fire pit, a temple's braziers): it rose through the roof; a building's smoke leaves by
-			// its chimney, whose top is a Smoke emitter of its own (2026-10-12).
+			// its chimney, whose top is a Smoke emitter of its own.
 			TerrainSet terrains = TerrainSet.Current;
 			hearths.RemoveAll(e => (terrains.TryHeight(e.Position.x, e.Position.z, out float ground) && e.Position.y < ground - 3f)
 				|| (e.Kind == SceneEmitterKind.Fire && SceneSiteEmitters.InRoom(e.Position)));
@@ -421,8 +421,8 @@ namespace FishMMO.Client
 				}
 				if (SurfaceWater.TryGetInlandSurfaceAt(site.Position.x, site.Position.y, out float lake) && lake > ground + 0.3f)
 				{
-					/* Unless the water is the spring's own pool, which the cut dug and flooded under it (2026-10-18, I2q,
-					 * GeothermalVents.PoolDepth), or a sulphur pond's melt (2026-10-25, I2q-b): then it fumes off the pool's surface. */
+					/* Unless the water is the spring's own pool, which the cut dug and flooded under it (
+					 * GeothermalVents.PoolDepth), or a sulphur pond's melt: then it fumes off the pool's surface. */
 					if (!GeothermalVents.IsPool(site.Kind) || lake > ground + GeothermalVents.PoolDepth(site) + OwnPoolSlack)
 					{
 						continue;
@@ -488,12 +488,12 @@ namespace FishMMO.Client
 			Color steam = SteamColour(site);
 			float radius = GeothermalVents.SourceRadius(site);
 			float spread = GeothermalVents.IsPool(site.Kind) ? PoolSpread : PlumeSpread;
-			// How strong it is now on its biome's timing (2026-10-25, I2q-b; 1 for every steady vent, as before).
+			// How strong it is now on its biome's timing (1 for every steady vent, as before).
 			float timed = Timed(site);
 
 			if (thin && (site.Kind == GeothermalKind.Fumarole || site.Kind == GeothermalKind.Jet))
 			{
-				/* Thin air (2026-10-25, I2q-b, decisions 53/84): a fume is a short straight jet that thins out within a few metres (a
+				/* Thin air: a fume is a short straight jet that thins out within a few metres (a
 				 * fissure's jet higher), leaning downwind as the thin wind takes it, and its gas freezes round the lip. */
 				float jet = FumeJetMetres(site);
 				DrawSteam(site, vent, jet, radius, 0.5f * PlumeSpread, GeothermalVents.RiseSpeed(site), air.Wind, 0.85f * timed, 0, steam, camera, material, profile, true);
@@ -525,7 +525,7 @@ namespace FishMMO.Client
 
 			if (site.Kind != GeothermalKind.Geyser)
 			{
-				// A sulphur pond fumes thinly off its melt (decision 84); a spring smokes; a vent, a jet or a smoker jets.
+				// A sulphur pond fumes thinly off its melt; a spring smokes; a vent, a jet or a smoker jets.
 				float strength = site.Kind == GeothermalKind.HotSpring ? 0.7f : site.Kind == GeothermalKind.SulphurPool ? 0.4f : 0.85f;
 				DrawSteam(site, vent, visible.Quiet, radius, spread, GeothermalVents.RiseSpeed(site), air.Wind, strength * timed, 0, steam, camera, material, profile, true);
 				return;
@@ -564,7 +564,7 @@ namespace FishMMO.Client
 				full / Mathf.Max(0.5f, rise));
 		}
 
-		// ── Vents' timing, airless fumes and frost collars (2026-10-25, phase I2q-b) ──
+		// ── Vents' timing, airless fumes and frost collars ──
 
 		private VentSky sky;
 		private SceneBiomeMap map;
@@ -590,7 +590,7 @@ namespace FishMMO.Client
 			return site.Substance != null ? site.Substance.Tint : SteamWhite;
 		}
 
-		/// <summary>How high an airless or thin-aired fume reaches, m (decision 84: a fumarole's 3–8 m; decision 53: a fissure's jet 20–60 m).</summary>
+		/// <summary>How high an airless or thin-aired fume reaches, m (a fumarole's 3–8 m; a fissure's jet 20–60 m).</summary>
 		public static float FumeJetMetres(in GeothermalSite site)
 		{
 			float u = Mathf.Clamp01(site.Size);

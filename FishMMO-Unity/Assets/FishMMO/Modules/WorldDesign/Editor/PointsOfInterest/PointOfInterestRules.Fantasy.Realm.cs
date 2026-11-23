@@ -7,13 +7,13 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public sealed partial class PointOfInterestRules
 	{
-		/// <summary>The fantasy wave's Realm pack (poi-fantasy-wave/WAVE.md): one row per kind, hosted by no biome by default.</summary>
+		/// <summary>The fantasy set's Realm pack: one row per kind, hosted by no biome by default.</summary>
 		private static IEnumerable<PointOfInterestKindRule> FantasyRealmRows()
 		{
 			return new List<PointOfInterestKindRule>
 			{
 				// ── Pack U ──
-				// (2026-10-27) Refined from the default fill: the lairs and landmarks stay rare (tier-1 ~0.02/km2, Max 1), the roadside
+				// Refined from the default fill: the lairs and landmarks stay rare (tier-1 ~0.02/km2, Max 1), the roadside
 				// kinds stand by the ways the path planner laid (OnWay / AtJunction: sited after the ways, PointOfInterestPlanner.PlaceBesideWays),
 				// a troll's bridge is sited exactly like a Bridge (where a river crosses the way between two settlements), a beacon on exposed ground.
 				Placed(POIType.DragonLair, 0.02f, 0, 1, 2500f).Footprint(16f, 24f, 24f).Only().AwayFromSettlements(900f).Races("Draconic"),

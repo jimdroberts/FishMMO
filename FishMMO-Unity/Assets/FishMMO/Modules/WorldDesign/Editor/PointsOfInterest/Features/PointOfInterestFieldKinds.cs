@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The kinds of field added on 2026-10-18 (phase I2j-b, decisions 23, 29, 31, 38) beyond what PointOfInterestFields lays itself:
+	/// The kinds of field beyond what PointOfInterestFields lays itself:
 	/// orchards' trees, corn hills' tilled earth, a garden's raised beds (cross paths and wattle edging), a marcita's flooded crown
 	/// rills, a baulatura's piantata along its ditches, and the old terraces round a hamlet.
 	/// </summary>
@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The scene ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// What a field's surface lays beyond its crop and furrows (2026-10-18, I2j-b): corn hills' tilled earth, a garden's cross paths and
+		/// What a field's surface lays beyond its crop and furrows: corn hills' tilled earth, a garden's cross paths and
 		/// wattle edging, a marcita's flooded crown rills, a baulatura's piantata. Returns the props laid; <paramref name="carved"/> gains the
 		/// samples a rill's carve moved.
 		/// </summary>
@@ -251,7 +251,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>An orchard's trees (2026-10-18, I2j-b): in rows along the field (or along the middles of its benches when terraced), its tree at its spacing. Returns the trees laid.</summary>
+		/// <summary>An orchard's trees: in rows along the field (or along the middles of its benches when terraced), its tree at its spacing. Returns the trees laid.</summary>
 		public static int LayOrchard(PointOfInterestSiteContext context, BiomeTemplate biome, BiomeOrchard orchard, Vector2 centre, float yaw, Vector2 size,
 			PointOfInterestFieldTerraces.Plan terraces, int siteSeed, int field, float headland)
 		{
@@ -289,7 +289,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The old terraces round a site (2026-10-18, I2j-b): up to its biome's flights, each on a slope about it its biome's band allows,
+		/// The old terraces round a site: up to its biome's flights, each on a slope about it its biome's band allows,
 		/// long side along the contour, clear of every field, way, water and keep-out, carved as a terraced field's, nothing sown, its
 		/// walls tumbled; each claims its ground (under a claim of its own, so no channel heads for it). Returns the flights laid.
 		/// </summary>
@@ -386,7 +386,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A marcita's crown rills (2026-10-18, I2j-b): one along each bed's crown, its standing pounds (PointOfInterestLinearFeatures.Pounds),
+		/// A marcita's crown rills: one along each bed's crown, its standing pounds (PointOfInterestLinearFeatures.Pounds),
 		/// the rill carved as a channel's trench (recorded for the restore) and each pound's water written as a lake. Returns the samples carved.
 		/// </summary>
 		private static int LayRills(PointOfInterestSiteContext context, Vector2 centre, float yaw, Vector2 size, float headland, int field, float band)

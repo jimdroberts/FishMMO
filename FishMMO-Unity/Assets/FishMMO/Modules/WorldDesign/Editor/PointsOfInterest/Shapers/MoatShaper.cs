@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Digs a moat round a keep, castle or fortress (2026-10-11: "motes, draw bridges, palisade, portcullis, walkable
+	/// Digs a moat round a keep, castle or fortress ("motes, draw bridges, palisade, portcullis, walkable
 	/// Castle walls"): a ring ditch just outside the site's footprint, crossed at each gate by a drawbridge
 	/// (PropsFeature.AddDrawbridges, built by PointOfInterestDoors).
 	/// </summary>
@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>A wet ditch.</b> A ring <see cref="Width"/> across with 45° banks (the NavMesh agent's limit, so it is a barrier to a
 	/// charge, not to a climb) down to one level floor, <see cref="Depth"/> under the lowest point of its rim: on a slope the
 	/// uphill side is dug deeper, so the whole ring holds water at one level, a little under that lowest point
-	/// (<see cref="AddWater"/>), frozen or left a dry ditch as the biome's template says (its Moat Water; until 2026-10-16
+	/// (<see cref="AddWater"/>), frozen or left a dry ditch as the biome's template says (its Moat Water; formerly
 	/// read from its climate: frozen where cold, dry where arid). The level is
 	/// measured again on the finished ground when the scene's water is saved (WaterSettle), so whatever later cut its rim,
 	/// the water stands under it. Not every stronghold has one: a fortress most often, a keep least, and none on ground too
@@ -41,7 +41,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static readonly MoatShaper Instance = new MoatShaper();
 
 		public const string ShaperName = "Moat";
-		/// <summary>2 (2026-10-18): the ring's inner reach per bearing follows <see cref="Values"/>[5…]; 1 was a circle.</summary>
+		/// <summary>2: the ring's inner reach per bearing follows <see cref="Values"/>[5…]; 1 was a circle.</summary>
 		private const int Format = 2;
 		/// <summary>Where a format-2 moat's inner reaches start in its values.</summary>
 		private const int InnerFrom = 5;
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 			values[1] = innerMost;
 			values[2] = width;
 			values[3] = depth;
-			// 0 dry, 1 water, 2 lava (2026-10-25, I2r: BiomeLavaChannels.MoatLavaFlag, read by the client's lava ribbons).
+			// 0 dry, 1 water, 2 lava (BiomeLavaChannels.MoatLavaFlag, read by the client's lava ribbons).
 			values[4] = wet ? 1f : LavaMoat(site) ? BiomeLavaChannels.MoatLavaFlag : 0f;
 			Array.Copy(innerReach, 0, values, InnerFrom, innerReach.Length);
 			context.AddShape(new PointOfInterestShape
@@ -223,15 +223,15 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			// What stands in it is the site biome's (its template's Moat Water, 2026-10-16), no longer worked out here from the
+			// What stands in it is the site biome's (its template's Moat Water), no longer worked out here from the
 			// template's climate envelope (which is what the authoring wrote onto every template).
 			BiomeMoatWater moat = BiomeTemplateArt.MoatWater(BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) ? biome : null);
-			// A lava moat (2026-10-25, I2r) is dug as a dry ditch; the client draws its lava (BiomeLavaChannels.MoatLines).
+			// A lava moat is dug as a dry ditch; the client draws its lava (BiomeLavaChannels.MoatLines).
 			if (moat == BiomeMoatWater.Dry || moat == BiomeMoatWater.Lava)
 			{
 				return false;
 			}
-			// Hot water never ices (2026-10-18, I2q): a moat in a biome whose water look is Hot stands open whatever its moat says.
+			// Hot water never ices: a moat in a biome whose water look is Hot stands open whatever its moat says.
 			bool frozen = moat == BiomeMoatWater.Frozen && !(biome != null && biome.WaterLook.Hot);
 			float level = float.MaxValue;
 			for (int i = 0; i < rimIn.Length; i++)
@@ -299,7 +299,7 @@ namespace FishMMO.Shared.WorldDesign
 			return true;
 		}
 
-		/// <summary>Whether a site's moat holds lava (its biome template's Moat Water, 2026-10-25, I2r).</summary>
+		/// <summary>Whether a site's moat holds lava (its biome template's Moat Water).</summary>
 		private static bool LavaMoat(PointOfInterestRecord site)
 		{
 			return BiomeTemplateArt.MoatWater(BiomeRegistry.TryGetByID(site.BiomeID, out BiomeTemplate biome) ? biome : null) == BiomeMoatWater.Lava;
@@ -435,7 +435,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Levels the far bank where each way crosses a moat to the height of the ditch's inner lip there (the drawbridge's hinge,
 		/// PropsFeature.AddDrawbridges): a lowered drawbridge lies level, and laid from a lip 3.7 m under the far bank it ran
-		/// into the bank (Flo Monolith's Mossy Elkring Keep, 2026-10-15). A landing <see cref="LandingMetres"/> out and the leaf's
+		/// into the bank (Flo Monolith's Mossy Elkring Keep). A landing <see cref="LandingMetres"/> out and the leaf's
 		/// width and <see cref="LandingSideMetres"/> each side across; past it the way ramps back to the ground at
 		/// <see cref="LandingRampGrade"/>, its sides at 45°. Cut or filled, the ditch itself untouched; idempotent (the lip's
 		/// height is read inside the ditch's inner rim, which this never reaches). Returns the crossings landed.

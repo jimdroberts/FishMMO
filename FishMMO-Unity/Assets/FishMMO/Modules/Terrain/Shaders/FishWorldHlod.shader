@@ -101,7 +101,7 @@ Shader "FishMMO/World HLOD"
         [HideInInspector][NoScaleOffset]unity_LightmapsInd("unity_LightmapsInd", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset]unity_ShadowMasks("unity_ShadowMasks", 2DArray) = "" {}
 
-        // FishMMO edit (2026-10-28): look arrays (_FISH_LOOK_ARRAY, FishWeatherLitInput.hlsl). The art generator writes a surface
+        // FishMMO edit: look arrays (_FISH_LOOK_ARRAY, FishWeatherLitInput.hlsl). The art generator writes a surface
         // family's maps as Texture2DArray assets (ProceduralArtLookArrays) and its materials name their slices here instead of 2D
         // maps (−1: the slot is empty); a GPU-driven look family's material (_FISH_LOOK_TABLE, TerrainGpuRenderer.Looks.cs) reads
         // its members' slices and scalars from the table instead, at the row its vertex (or, DOTS-instanced, its instance) names.
@@ -162,7 +162,7 @@ Shader "FishMMO/World HLOD"
             #pragma shader_feature_local_fragment _SPECULAR_SETUP
             // FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl; the plain shader's cave rock materials only).
             
-            // FishMMO edit (2026-10-28): the generated surface families' maps from their look arrays, at the material's own slices
+            // FishMMO edit: the generated surface families' maps from their look arrays, at the material's own slices
             // (_FISH_LOOK_ARRAY, ProceduralArtLookArrays); and a GPU-driven look family's draws (_FISH_LOOK_TABLE,
             // TerrainGpuRenderer.Looks.cs): slices and scalars from the family's table, the look per vertex (uv3.x) or per DOTS
             // instance (_FishLook). The table is ForwardLit's only: a family is opaque and unclipped, so its depth, shadow and

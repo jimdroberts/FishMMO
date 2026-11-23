@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A world's colours come from what it is made of and how warm it is (2026-10-14: "The generator needs to provide
+	/// A world's colours come from what it is made of and how warm it is ("The generator needs to provide
 	/// accurate color based on the atmospheric makeup, temperature and other factors"): BodyColours, checked against the
 	/// solar system's own worlds.
 	/// </summary>

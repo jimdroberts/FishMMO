@@ -8,7 +8,7 @@ using UnityEngine.AI;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Writes a cave's water (<see cref="CaveStreams.Plan"/>) into its scene's hydrology as lakes and rivers (2026-10-20, caves
+	/// Writes a cave's water (<see cref="CaveStreams.Plan"/>) into its scene's hydrology as lakes and rivers (caves
 	/// livened): so it is the game's one water everywhere. <see cref="FishMMO.Shared.Weather.WaterQuery"/> reports it (waded,
 	/// swum, breath), the inland water's renderer draws it (its falls with their sheets, spray and roar), and the world's water
 	/// sounds and life find it as they find any river.

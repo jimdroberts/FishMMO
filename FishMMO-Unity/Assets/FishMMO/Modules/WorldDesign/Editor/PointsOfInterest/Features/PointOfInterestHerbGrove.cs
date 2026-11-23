@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What makes a herb grove read as one (2026-10-12: "Herb Grove has no herbs?"): beds of its biome's herbs and
+	/// What makes a herb grove read as one ("Herb Grove has no herbs?"): beds of its biome's herbs and
 	/// flowers grown into the terrain's details round its gathering nodes.
 	/// </summary>
 	/// <remarks>
@@ -242,7 +242,7 @@ namespace FishMMO.Shared.WorldDesign
 					return 0;
 				}
 
-				// Each plant into its own biome's prototype on the tile, measured against the one it used to share (2026-10-16).
+				// Each plant into its own biome's prototype on the tile, measured against the one it used to share.
 				var layers = new PlantLayers[Species.Count];
 				for (int s = 0; s < Species.Count; ++s)
 				{
@@ -393,7 +393,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The two detail layers a point of interest paints one plant into on a tile (2026-10-16): its own (<see cref="Own"/>,
+		/// The two detail layers a point of interest paints one plant into on a tile: its own (<see cref="Own"/>,
 		/// the plant's prototype of the biome the site stands in) and the one it painted into before (<see cref="Base"/>: the
 		/// tile's first prototype of the plant, whose cover a site's growth is still measured against,
 		/// <see cref="TerrainDetailBiomes.SiteCover"/>). The same layer when the tile's first prototype of the plant is the site's
@@ -427,7 +427,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// plant, or adds one unrecorded, as before.
 		/// </summary>
 		/// <remarks>
-		/// Until 2026-10-16 (I3b) every site took the tile's first prototype of the plant, whichever biome's it was: a grove's
+		/// Formerly every site took the tile's first prototype of the plant, whichever biome's it was: a grove's
 		/// flowers on a tile a neighbouring meadow's rule also grew were drawn with the meadow's look, and two sites of
 		/// different biomes on one tile shared the first one's. Limits: each added prototype is one more detail layer on the
 		/// tile; a blade plant's own look is one more grass type in the scene (GrassTypeTable, 128: past them a look merges into

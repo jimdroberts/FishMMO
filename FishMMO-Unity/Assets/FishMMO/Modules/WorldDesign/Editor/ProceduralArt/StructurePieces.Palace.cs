@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A capital's palace (2026-10-19: "massive palace style castles with interiors (kings chair?) for capitals"): a compound of
+	/// A capital's palace ("massive palace style castles with interiors (kings chair?) for capitals"): a compound of
 	/// kit pieces the capital's inner ward lays together — the throne hall at the back of a court, a residential wing down each
 	/// side of it, the court's formal garden between them, and the gatehouse and towers of the walls (StructurePieces.Towers.cs)
 	/// round it — and the throne itself, the one piece of furniture the throne room is built round.
@@ -115,7 +115,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A capital's throne hall (2026-10-19): the palace's great hall, its front (−z) to the court up broad steps, its throne at
+		/// A capital's throne hall: the palace's great hall, its front (−z) to the court up broad steps, its throne at
 		/// the far end on a dais across the hall. One room, the throne room, down its whole length: the court stands in the nave
 		/// between two rows of piers (the aisles behind them, with benches along the walls), a runner leads from the door to the
 		/// dais, banners hang in the bays and iron chandeliers over the nave, and the cloth of estate hangs on the back wall over the
@@ -727,7 +727,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A palace's residential range (2026-10-19), two storeys of three rooms each, walked from its door to every room: the door
+		/// A palace's residential range, two storeys of three rooms each, walked from its door to every room: the door
 		/// in the middle of its long front (−z) into a porter's hall, the stair up its left cross wall to a landing at the back, a
 		/// doorway through each cross wall on both floors. Below, a council chamber (left) and the great chamber (right); above, the
 		/// bedchamber (left), the long gallery over the hall and the solar (right); a hearth against each end wall under its chimney.
@@ -1087,7 +1087,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Throne ────────────────────────────────────────────────────
 
 		/// <summary>
-		/// The king's chair (2026-10-19), its back to the wall (+z) and facing −z as all furniture does, its seat a step up: v0 a
+		/// The king's chair, its back to the wall (+z) and facing −z as all furniture does, its seat a step up: v0 a
 		/// high-backed carved oak throne, armrests on panelled sides, a dyed cushion and back panel, a gabled crest and metal-capped
 		/// finials on its back posts and arms; v1 a stone throne on a broad step, its tall back slab between two pillars under pyramid
 		/// finials, runes cut down it that glow (and pulse with the throne's own light). Its canopy is the hall's, not the chair's.
@@ -1171,7 +1171,7 @@ namespace FishMMO.Shared.WorldDesign
 		private const float GardenHalf = 10f, GardenWalk = 1.2f, GardenPlaza = 3.6f, GardenHedge = 0.55f, GardenHedgeThick = 0.45f;
 
 		/// <summary>
-		/// A palace court's formal garden (2026-10-19): a square of four parterre beds edged in clipped box between flagged walks in
+		/// A palace court's formal garden: a square of four parterre beds edged in clipped box between flagged walks in
 		/// a cross, the walks meeting at a square plaza round a basin, stone benches at the plaza's corners facing it. Everything a
 		/// person walks on is the ground or a flag 4 cm proud of it, and no solid stands on a walk: the beds' hedges, the basin, the
 		/// benches and the topiary all stand off them. The hedges are built in the palette's turf (the kit has no foliage of its

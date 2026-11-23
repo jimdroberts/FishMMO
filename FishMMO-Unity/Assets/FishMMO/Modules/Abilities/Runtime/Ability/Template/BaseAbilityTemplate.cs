@@ -60,7 +60,7 @@ namespace FishMMO.Shared
 		public float Cooldown;
 
 		/// <summary>
-		/// Rules scaling this ability's numbers by the weather where it is cast (Q16).
+		/// Rules scaling this ability's numbers by the weather where it is cast.
 		/// </summary>
 		/// <remarks>
 		/// Empty on almost everything, and free when it is: the controller asks whether any rule

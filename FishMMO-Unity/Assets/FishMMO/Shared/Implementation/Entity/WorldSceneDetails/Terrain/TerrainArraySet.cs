@@ -101,10 +101,10 @@ namespace FishMMO.Shared
 		[Tooltip("What each layer's ground is made of, from the biome slot it was painted from (TerrainTextureLayer.GroundMakeup): x living, y lichen, z mineral, w 1 where the slot had one (0: read from the layer's name). Written by the bake; not part of the content hash, refreshed in place when only it changed.")]
 		public Vector4[] LayerMakeup = new Vector4[0];
 
-		[Tooltip("How each layer glows, from the biome slot it was painted from (TerrainTextureLayer.glow, 2026-10-25, phase I2r; Biomes.BiomeGroundGlow.Pack): zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's glow row.")]
+		[Tooltip("How each layer glows, from the biome slot it was painted from (TerrainTextureLayer.glow; Biomes.BiomeGroundGlow.Pack): zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's glow row.")]
 		public Vector4[] LayerGlow = new Vector4[0];
 
-		[Tooltip("How each layer follows the shared clock, from the biome slot it was painted from (TerrainTextureLayer.clock, 2026-10-26, phase GROUND-BANDS; Biomes.BiomeGroundClock.Pack): x kind, y from, z to, w falloff; zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's clock row.")]
+		[Tooltip("How each layer follows the shared clock, from the biome slot it was painted from (TerrainTextureLayer.clock; Biomes.BiomeGroundClock.Pack): x kind, y from, z to, w falloff; zero for none. Written by the bake; not part of the content hash, refreshed in place when only it changed. Read into the layer table's clock row.")]
 		public Vector4[] LayerClock = new Vector4[0];
 
 		[Tooltip("Beside LayerClock: x the share a clocked layer keeps outside its window, y the scene layer its share goes to then (its biome's main ground; -1 none: the other layers there take it). Written by the bake, in place.")]
@@ -123,7 +123,7 @@ namespace FishMMO.Shared
 		/// <remarks>
 		/// <para>
 		/// From the biome slot each layer was painted from (<see cref="LayerMakeup"/>, baked from the template's
-		/// <see cref="Biomes.TerrainTextureLayer.GroundMakeup"/>; 2026-10-15). A layer with none — a set baked before then, or
+		/// <see cref="Biomes.TerrainTextureLayer.GroundMakeup"/>). A layer with none — a set baked before then, or
 		/// hand-made art whose slot has no makeup — is read from its name as it always was
 		/// (<see cref="Biomes.BiomeLooks.GroundShareOf"/>). For a generated ground (Ground_*) the name gives exactly what
 		/// authoring writes on its slot (pinned by BiomeTemplateLooksTests), so that fallback is silent; only hand-made

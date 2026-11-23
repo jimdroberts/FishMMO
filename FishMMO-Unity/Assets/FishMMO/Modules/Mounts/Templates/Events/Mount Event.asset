@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea7aee09008239645929137fb5b60abb, type: 3}
+  m_Name: Mount Event
+  m_EditorClassIdentifier: FishMMO.Abilities::FishMMO.Shared.AbilityOnHitEvent
+  TargetSelector:
+    rid: 4295713283179282432
+  Conditions: []
+  OnConditionsMetActions:
+  - rid: 4295713283179282433
+  OnConditionsNotMetActions: []
+  Verbose: 0
+  icon: {fileID: 21300000, guid: 4c0780088d48d0b8113a026e28027ebb, type: 3}
+  ActivationTime: 0
+  LifeTime: 0
+  Speed: 0
+  Cooldown: 0
+  Modifiers: []
+  Price: 0
+  references:
+    version: 2
+    RefIds:
+    - rid: -2
+      type: {class: , ns: , asm: }
+    - rid: 4295713283179282432
+      type: {class: InitiatorTargetSelector, ns: FishMMO.Shared, asm: FishMMO.Shared}
+      data:
+        Conditions: []
+    - rid: 4295713283179282433
+      type: {class: MountAction, ns: FishMMO.Shared, asm: FishMMO.Mounts}
+      data:
+        TargetSelector:
+          rid: -2
+        StopChainOnFailure: 0

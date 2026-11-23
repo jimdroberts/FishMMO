@@ -7,7 +7,7 @@ namespace FishMMO.Shared.Biomes
 	public static partial class BiomeLandforms
 	{
 		/// <summary>
-		/// The shapes and tuners added by the last landform-preset pass (2026-10-25, phase I2g-d, decisions 80–96): a breached rim
+		/// The shapes and tuners added by the last landform-preset pass: a breached rim
 		/// (craters, calderas, cones), treads down a table's flank and benches down a caldera's walls, a table's flank angle, the
 		/// canyon's head and its cyclic steps, the tessera weave, forked linear dunes and the dune-free wake behind an obstacle.
 		/// </summary>
@@ -35,7 +35,7 @@ namespace FishMMO.Shared.Biomes
 
 			/// <summary>
 			/// A table's flat top as a share of its radius: its Top (0.75 when unset), or, with a <see cref="BiomeLandform.Flank"/>
-			/// angle and a level, whatever leaves its flank that steep (2026-10-25: a guyot's 14–22°, a pancake dome's 30°).
+			/// angle and a level, whatever leaves its flank that steep (a guyot's 14–22°, a pancake dome's 30°).
 			/// </summary>
 			private float MesaTop()
 			{
@@ -101,7 +101,7 @@ namespace FishMMO.Shared.Biomes
 			}
 
 			/// <summary>
-			/// The share of its radius that is its top or floor, as an entry standing on it reads it (2026-10-25, I2g-d): a table's
+			/// The share of its radius that is its top or floor, as an entry standing on it reads it: a table's
 			/// flat top, a tower's cap, a mound's or bowl's Top, a crater's floor; a half for any other form.
 			/// </summary>
 			public float TopShare
@@ -150,7 +150,7 @@ namespace FishMMO.Shared.Biomes
 			}
 
 			/// <summary>
-			/// Cyclic steps along a stored line (decision 92), metres: sediment-wave crescents its Width apart, bowed down the line,
+			/// Cyclic steps along a stored line, metres: sediment-wave crescents its Width apart, bowed down the line,
 			/// on the floor its segments' half width spans; <paramref name="floorShare"/> that floor, <paramref name="crest"/> the crests.
 			/// </summary>
 			private float TreadsHeight(List<LineHit> hits, out float floorShare, out float crest)
@@ -188,7 +188,7 @@ namespace FishMMO.Shared.Biomes
 			// ── Waves: the tessera weave ─────────────────────────────
 
 			/// <summary>
-			/// A tessera weave's height at a point (decision 85), metres: fins along the field's strike crossed at 70° by flat-floored
+			/// A tessera weave's height at a point, metres: fins along the field's strike crossed at 70° by flat-floored
 			/// troughs; <paramref name="crest"/> the fins left standing, <paramref name="trough"/> the troughs.
 			/// </summary>
 			private float WeaveHeight(float x, float z, float lambda, out float crest, out float trough)
@@ -209,7 +209,7 @@ namespace FishMMO.Shared.Biomes
 				return Site.Height * crest - f.MoatDepth * trough;
 			}
 
-			// ── Dunes: forks and wakes (decision 91) ──────────────────
+			// ── Dunes: forks and wakes ──────────────────
 
 			/// <summary>
 			/// A linear dune field's crest share at (u along the wind, vv across it) with Y-junctions: each pair of neighbouring crests

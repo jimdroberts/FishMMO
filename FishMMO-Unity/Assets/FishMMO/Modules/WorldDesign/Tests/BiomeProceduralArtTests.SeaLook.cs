@@ -8,7 +8,7 @@ namespace FishMMO.UnitTests
 	public partial class BiomeProceduralArtTests
 	{
 		/// <summary>
-		/// I2h (2026-10-18): a template made before the sea look existed reads today's look; one authoring run writes and marks
+		/// A template made before the sea look existed reads today's look; one authoring run writes and marks
 		/// it, a second changes nothing, and a look edited by hand (a bog coast's peat-brown sea) is kept. Unity-only (it makes a
 		/// BiomeTemplate).
 		/// </summary>

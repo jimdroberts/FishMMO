@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// 2026-11-21 (Jim: "sample ground texture for wildlife spawns"): the wildlife spawners ask it so a deer appears on grass and
+	/// Ground texture sampled for wildlife spawns: the wildlife spawners ask it so a deer appears on grass and
 	/// forest floor, never on bare rock (<see cref="WildlifeRules.LivesOn"/>).
 	/// </para>
 	/// <para>

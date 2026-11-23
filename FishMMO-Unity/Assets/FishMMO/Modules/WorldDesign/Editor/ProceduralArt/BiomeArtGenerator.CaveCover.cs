@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The run-time cave cover's art (<see cref="CaveCoverMeshes"/>, 2026-10-20): one payload mesh, <c>CaveCover_Set</c>, every
+	/// The run-time cave cover's art (<see cref="CaveCoverMeshes"/>): one payload mesh, <c>CaveCover_Set</c>, every
 	/// cover type at every level of detail a submesh of it.
 	/// </summary>
 	/// <remarks>

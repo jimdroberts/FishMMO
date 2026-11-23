@@ -51,7 +51,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Changes whenever the static casters themselves may have changed (a layout or an instance upload) or this camera's
 		/// shadow work reaches an instance the cache's last redraw did not cull (<see cref="CoverageSerial"/>). Not the camera's
-		/// every move (2026-11-03): the cache culls them itself, from its own anchor and window (<see cref="RecordShadowCacheCull"/>),
+		/// every move: the cache culls them itself, from its own anchor and window (<see cref="RecordShadowCacheCull"/>),
 		/// so a moving camera no longer redraws every cascade every frame.
 		/// </summary>
 		public int ShadowContentVersion => HashCode.Combine(layoutSerial, flushSerial, CoverageSerial());

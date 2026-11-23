@@ -114,7 +114,7 @@ namespace FishMMO.UnitTests
 
 		/// <summary>
 		/// Every character prefab can lose health: its attribute controller resolves a health resource attribute. Every
-		/// character gets a damage controller (the Combat module's part, added as it wakes, 2026-11-20), so every character
+		/// character gets a damage controller (the Combat module's part, added as it wakes), so every character
 		/// prefab is checked, not only those that authored one.
 		/// </summary>
 		[Test]

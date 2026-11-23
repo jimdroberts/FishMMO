@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How a ground layer glows (2026-10-25, phase I2r "molten ground", decision 65 (a)): not at all, along the seams of a crust that
+	/// How a ground layer glows ("molten ground"): not at all, along the seams of a crust that
 	/// overturns on the shared clock (a lava lake's skin, a pāhoehoe sheet's cracks), or over the whole layer from the world's own
 	/// heat (a Venus plain's dull red at night). Drawn on the GPU by the terrain array shader (FishGroundGlow.hlsl) and written into
 	/// the lava's molten mask so its light and the heat shimmer see it (<see cref="FishMMO.Shared.Weather.GroundGlow"/> is the C# twin).
@@ -13,7 +13,7 @@ namespace FishMMO.Shared.Biomes
 	/// <remarks>APPEND-ONLY: the value is serialised on the templates and packed into the terrain's layer table.</remarks>
 	public enum BiomeGroundGlowMode : byte
 	{
-		/// <summary>No glow: every layer before 2026-10-25.</summary>
+		/// <summary>No glow: every layer formerly.</summary>
 		None = 0,
 		/// <summary>Glowing seams round crust plates, each plate overturning once a period at its own hashed moment (OVERTURN).</summary>
 		Seams = 1,

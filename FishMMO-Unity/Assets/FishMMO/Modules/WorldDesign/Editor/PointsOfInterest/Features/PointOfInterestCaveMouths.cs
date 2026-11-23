@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The growth round a natural cave's mouth (2026-10-12: "Cave entrances are a bit boring, just round rocky holes…
+	/// The growth round a natural cave's mouth ("Cave entrances are a bit boring, just round rocky holes…
 	/// Natural caves look way more overgrown and 'earthy'"): the turf pushed out over its lintel with roots hanging from
 	/// it, bushes and ferns crowding its flanks and the bank above it, creeper and grass right up to the rock, and
 	/// boulders and a fallen trunk half sunk in the ground beside it.
@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </para>
 	/// <para>
 	/// <b>No rocky border.</b> The mouth opens straight in the hillside, the ground before it graded to its floor
-	/// (CaveSystem.Approach); the notch, the block outcrop and the boulders heaped at its shoulders are gone (2026-10-18:
+	/// (CaveSystem.Approach); the notch, the block outcrop and the boulders heaped at its shoulders are gone (
 	/// "remove the rocky border and allow a smoother transition into the cave"). Now and then a boulder lies out on the
 	/// slope off to one side, and a fallen trunk beside it. The turf-and-roots lip once hung over the opening was taken out
 	/// ("look unnatural"); vines drape the lintel instead (VinePlacement).
@@ -32,7 +32,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// flanks' growth (the sea's edge); an ice cave and a mine nothing. Seeded by the system, so a repaint grows the same.
 	/// </para>
 	/// <para>
-	/// <b>Some are overgrown</b> (<see cref="Overgrown"/>, 2026-10-13): their mouths grow thicker, and the growth carries
+	/// <b>Some are overgrown</b> (<see cref="Overgrown"/>): their mouths grow thicker, and the growth carries
 	/// in over the cave's floor as far as the daylight reaches (PointOfInterestCaveDressing).
 	/// </para>
 	/// </remarks>
@@ -103,13 +103,13 @@ namespace FishMMO.Shared.WorldDesign
 
 			BiomeTemplate template = BiomeOf(context, system);
 			Growth growth = GrowthFor(template);
-			// The biome's vines (its template's, 2026-10-16), once for every mouth.
+			// The biome's vines (its template's), once for every mouth.
 			VineBiomes.Habitat vineHabitat = BiomeTemplateArt.Vines(template);
 
 			int props = 0, cells = 0, vines = 0;
 			var mouths = new List<Mouth>();
 			// The ground round the system and the holes cut at its mouths, as the cut meshed it: the vines find the rock round
-			// each mouth where the mesh has it. A 2 m sample without the cut's holes put the shell elsewhere (2026-10-19).
+			// each mouth where the mesh has it. A 2 m sample without the cut's holes put the shell elsewhere.
 			CaveGround ground = system.Form != CaveForm.SeaCave ? CaveShaper.GroundAsCut(system, context.GroundAt, context.Terrains, context.Tiles) : null;
 			foreach (CaveMouth mouth in system.Mouths)
 			{
@@ -236,7 +236,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Now and then a boulder or two lying out on the slope off to the side of the way in, and perhaps a fallen trunk; how
-		/// many. Never heaped at the opening's shoulders (2026-10-18: "remove the rocky border"): a ring of boulders round
+		/// many. Never heaped at the opening's shoulders ("remove the rocky border"): a ring of boulders round
 		/// the mouth framed it like a wall, where the hillside should run into it.
 		/// </summary>
 		private static int Strew(PointOfInterestSiteContext context, CaveSystem system, CaveMouth caveMouth, Mouth mouth, Growth growth, DeterministicRNG random, float lush)
@@ -336,7 +336,7 @@ namespace FishMMO.Shared.WorldDesign
 				return 0;
 			}
 			int count = growth.Species.Count;
-			// Each plant into its own biome's prototype on the tile, measured against the one it used to share (2026-10-16).
+			// Each plant into its own biome's prototype on the tile, measured against the one it used to share.
 			var layers = new PointOfInterestHerbGrove.PlantLayers[count];
 			var maps = new int[count][,];
 			var bases = new int[count][,];

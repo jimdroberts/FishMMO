@@ -9,7 +9,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Every biome has what the world builds from it beyond its ground art (audit 2026-10-11): the resources its gathering
+	/// Every biome has what the world builds from it beyond its ground art: the resources its gathering
 	/// sites draw, the way its ground wears, the animals that live on it, and POI templates that name only real biomes.
 	/// The biomes are the spec table's, which a guard elsewhere keeps equal to the biome assets.
 	/// </summary>
@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests
 			foreach (string biome in Biomes())
 			{
 				var families = new HashSet<GatheringFamily>();
-				// The kinds the biome hosts as the authoring writes them onto its template (2026-10-16: the template decides).
+				// The kinds the biome hosts as the authoring writes them onto its template (the template decides).
 				var hosted = new HashSet<FishMMO.Shared.NameGeneration.POIType>(BiomeArtSpec.For(biome).SiteKinds().Select(k => k.Kind));
 				foreach (PointOfInterestKindRule rule in rules.Ordered(PointOfInterestPlacement.Placed))
 				{
@@ -34,7 +34,7 @@ namespace FishMMO.UnitTests
 						families.UnionWith(GatheringResourceCatalogue.FamiliesFor(rule.Kind));
 					}
 				}
-				// The biome's offer as the authoring writes it onto its template (2026-10-16: the template, not the name, decides).
+				// The biome's offer as the authoring writes it onto its template (the template, not the name, decides).
 				List<string> offered = BiomeArtSpec.For(biome).GatheringResources();
 				if (families.Count > 0 && !GatheringResourceCatalogue.All.Any(r => families.Contains(r.Family) && offered.Contains(r.Node)))
 				{
@@ -74,7 +74,7 @@ namespace FishMMO.UnitTests
 			Assert.IsEmpty(unknown, "a weight for a biome that does not exist matches nothing: " + string.Join(", ", unknown));
 		}
 
-		// ── The template as the cut's one source (2026-10-15) ─────────
+		// ── The template as the cut's one source ─────────
 
 		/// <summary>
 		/// The spec's way and river-bar columns, unset, are exactly what the cut decided in code before the template carried
@@ -133,7 +133,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// PointOfInterestHerbGrove.FlowersFor before 2026-10-15.
+		// PointOfInterestHerbGrove.FlowersFor formerly.
 		private static List<string> OldFlowersFor(BiomeArtSpec.Entry entry)
 		{
 			var flowers = new List<string>();
@@ -158,7 +158,7 @@ namespace FishMMO.UnitTests
 			return flowers;
 		}
 
-		// PointOfInterestCaveMouths.GrowthFor before 2026-10-15, by name.
+		// PointOfInterestCaveMouths.GrowthFor formerly, by name.
 		private static void OldGrowthFor(BiomeArtSpec.Entry entry, out List<string> bushes, out List<string> ferns, out List<string> boulders, out List<string> logs)
 		{
 			bushes = new List<string>();
@@ -217,8 +217,8 @@ namespace FishMMO.UnitTests
 			foreach (string file in files)
 			{
 				string name = file.Replace('\\', '/');
-				// The terrain process button (a Dashboard maintenance tool, never run by the cut) assigns what each biome's file names
-				// since 2026-10-26 (CODE-TABLE CLEARANCE), as the authoring does.
+				// The terrain process button (a Dashboard maintenance tool, never run by the cut) assigns what each biome's file names,
+				// as the authoring does.
 				if (name.EndsWith("/Terrain/BiomeTemplateArt.cs", StringComparison.Ordinal) || name.EndsWith("/Terrain/TerrainProcessTable.cs", StringComparison.Ordinal))
 				{
 					continue;

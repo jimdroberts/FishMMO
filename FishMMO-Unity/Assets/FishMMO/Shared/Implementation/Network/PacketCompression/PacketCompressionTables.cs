@@ -7,7 +7,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// Trained 2026-11-14 on the 08:17 UTC simulate run (50 simulated players in a crowd, two real players, 60 s): 1,684
+	/// Trained on a simulate run (50 simulated players in a crowd, two real players, 60 s): 1,684
 	/// packets to clients (220,410 bytes) and 1,815 to the server (192,547 bytes). On that sample the codes shrink the bytes
 	/// to 84.6% and 61.9%, before the per-packet header. Retrain from a later run's histograms when the traffic mix
 	/// changes; any complete code decodes correctly, a better-fitted one only compresses more.

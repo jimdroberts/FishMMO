@@ -11,7 +11,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decisions 23 and 29 of the biome suite (2026-10-18, phase I2f): one linear-feature system for every biome (hedges, walls,
+	/// Decisions 23 and 29 of the biome suite: one linear-feature system for every biome (hedges, walls,
 	/// fences, rows of trees, water channels, clearance rows) laid round fields, along lanes, along woods' edges, round small sites,
 	/// as folds and along terraces. Every default is exactly what was cut before: no biome names a style, so fields keep the kit's
 	/// fence and nothing else is laid.
@@ -100,7 +100,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeLinearFeatures.FormsOf(BiomeLinearKind.Fence), Is.EqualTo(new[]
 			{
 				BiomeLinearForm.Rail, BiomeLinearForm.LeaningPole, BiomeLinearForm.Wattle, BiomeLinearForm.Picket, BiomeLinearForm.Slab, BiomeLinearForm.Palisade,
-				// The later drafts' (2026-10-26, I2f-b), appended within the fences' ten.
+				// The later drafts', appended within the fences' ten.
 				BiomeLinearForm.HandRope, BiomeLinearForm.PalmRib, BiomeLinearForm.BoughBreak,
 			}));
 		}
@@ -542,9 +542,9 @@ namespace FishMMO.UnitTests.WorldDesign
 		{
 			"LinearHedge", "LinearDrystone", "LinearMortared", "LinearEarthBank", "LinearSlabs", "LinearPoleFence", "LinearWattle", "LinearPickets",
 			"LinearSlabFence", "LinearGate", "LinearClearance", "ChannelSluice", "ChannelFlume", "ChannelBridge",
-			// The fences' closing post (2026-10-19), appended last.
+			// The fences' closing post, appended last.
 			"LinearPost",
-			// The later drafts' forms (2026-10-26, I2f-b, StructurePieces.LinearForms.cs), appended after it.
+			// The later drafts' forms (StructurePieces.LinearForms.cs), appended after it.
 			"LinearBrickBarrier", "LinearSnowWall", "LinearHandRope", "LinearPalmRib", "LinearBoughBreak", "LinearBrickFort",
 			"MarkerWand", "MarkerPost", "MarkerPole", "MarkerCairn", "ChannelBracketFlume", "ChannelHammer", "ChannelWeir", "QanatShaft", "QanatGallery",
 		};
@@ -553,7 +553,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		public void Pieces_AreLast_TaggedLinear_Hashed_AndNoTemplateQueriesThem()
 		{
 			IReadOnlyList<StructurePiece> all = StructurePieces.All;
-			// Registered after every family before them, in order; only the town's other buildings (2026-10-19) were appended
+			// Registered after every family before them, in order; only the town's other buildings were appended
 			// after them, and none of those is a linear piece.
 			int first = -1;
 			for (int i = 0; i < all.Count; i++)

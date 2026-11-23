@@ -3,7 +3,7 @@ using NUnit.Framework;
 
 namespace FishMMO.UnitTests
 {
-	/// <summary>Split from SurfaceShaderTests (Phase 4 of the core and modules plan, 2026-11-18): the World Simulation module's half.</summary>
+	/// <summary>Split from SurfaceShaderTests: the World Simulation module's half.</summary>
 	public class WeatherSurfaceShaderTests
 	{
 		[Test]
@@ -34,7 +34,7 @@ namespace FishMMO.UnitTests
 		public void TheMigration_LeavesCharactersAndPluginsAlone()
 		{
 			string source = Read(Migration);
-			StringAssert.Contains("\"/Models/\"", source, "character models must keep their own shaders (Q12)");
+			StringAssert.Contains("\"/Models/\"", source, "character models must keep their own shaders");
 			StringAssert.Contains("\"/Plugins/\"", source, "third-party content must keep its own shaders");
 			StringAssert.Contains("Universal Render Pipeline/Lit", source, "the migration only moves materials off URP's Lit");
 		}

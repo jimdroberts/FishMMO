@@ -9,7 +9,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The boats of a place on the water (2026-10-12: "We need docks (dockyards should be Points of interest), accurate
+	/// The boats of a place on the water ("We need docks (dockyards should be Points of interest), accurate
 	/// ships and boats"): cogs and smacks lying at a port's piers and in its roads, a fishing camp's boats off its beach and
 	/// one turned over on the shingle, a cove's ship at anchor.
 	/// </summary>
@@ -27,7 +27,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// water, it settles there heeled over (<see cref="FloatingBoats.Moored.Floor"/>).
 	/// </para>
 	/// <para>
-	/// <b>Ships on the open sea, each at its own pier</b> (2026-10-20: "Docks, shipyards, etc do not properly sit on the water with
+	/// <b>Ships on the open sea, each at its own pier</b> ("Docks, shipyards, etc do not properly sit on the water with
 	/// proper docks to each ship … Ships are only on seas and the FFT ocean."): a cog or a longship only on the sea the ocean
 	/// reaches (<see cref="PointOfInterestOpenSea"/>), never a lake, a river or a basin shut in from the ocean. At a harbour, a
 	/// town or a village every ship and smack lies alongside a pier: one the site's layout laid, else a jetty run out for it from

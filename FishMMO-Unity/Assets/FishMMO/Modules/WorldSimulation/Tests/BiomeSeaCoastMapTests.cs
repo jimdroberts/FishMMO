@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The coastal look kept with a scene's biome map (2026-10-18, phase I2k): baked from the grid as it stands, stored on the
+	/// The coastal look kept with a scene's biome map: baked from the grid as it stands, stored on the
 	/// asset, dropped whenever the grid is replaced. Needs Unity (a ScriptableObject); the bake itself is pure and tested in
 	/// BiomeSeaCoastAndFieldClaimTests.
 	/// </summary>

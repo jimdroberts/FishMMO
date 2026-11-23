@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Trees and bushes kept off building floors (2026-10-19, PointOfInterestTreeClearance): the floors are read from the same
+	/// Trees and bushes kept off building floors (PointOfInterestTreeClearance): the floors are read from the same
 	/// Floor yards the grass is kept out by, in the path field's own shape, and a plant stands off them by its crown's reach.
 	/// </summary>
 	[TestFixture]

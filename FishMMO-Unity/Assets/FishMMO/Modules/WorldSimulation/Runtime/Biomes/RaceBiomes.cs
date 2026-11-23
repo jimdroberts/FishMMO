@@ -3,7 +3,7 @@ using FishMMO.Shared;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// A race's biomes as templates (Phase 4 of the core and modules plan, 2026-11-18): the race template keeps its affinities as
+	/// A race's biomes as templates: the race template keeps its affinities as
 	/// biome ids, and the World Simulation module resolves them.
 	/// </summary>
 	public static class RaceBiomes

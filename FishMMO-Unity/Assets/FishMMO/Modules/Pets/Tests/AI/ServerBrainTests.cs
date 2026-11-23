@@ -81,7 +81,7 @@ namespace FishMMO.UnitTests.AI
 				.ToArray();
 			Assert.IsEmpty(leaked, "server-only AI or spawner types found in FishMMO.Shared");
 
-			// The NPCs module's server assembly since 2026-11-20 (it was the core FishMMO.Server's): still never a client's.
+			// The NPCs module's server assembly (it was the core FishMMO.Server's): still never a client's.
 			Assert.AreEqual("FishMMO.NPCs.Server", typeof(AIController).Assembly.GetName().Name);
 			Assert.AreEqual("FishMMO.NPCs.Server", typeof(ObjectSpawner).Assembly.GetName().Name);
 		}
@@ -186,7 +186,7 @@ namespace FishMMO.UnitTests.AI
 			Assert.That(serverGroupText, Does.Contain(aiSystemGuid), "the AI system must be in the server-only group");
 			Assert.That(serverGroupText, Does.Contain(spawnerSystemGuid), "the spawner system must be in the server-only group");
 
-			/* The scene server runs both: since 2026-11-20 they are the NPCs module's and it adopts them by the
+			/* The scene server runs both: they are the NPCs module's and it adopts them by the
 			 * SceneServer_Systems label rather than from its own list. */
 			foreach ((string guid, string what) in new[] { (aiSystemGuid, "AI system"), (spawnerSystemGuid, "spawner system") })
 			{

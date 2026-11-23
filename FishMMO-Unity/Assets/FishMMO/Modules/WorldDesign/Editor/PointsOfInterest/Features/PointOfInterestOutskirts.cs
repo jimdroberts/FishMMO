@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What stands out round a settlement beyond its houses and its farmsteads (2026-10-19: "beekeepers out in fields alone, and
+	/// What stands out round a settlement beyond its houses and its farmsteads ("beekeepers out in fields alone, and
 	/// other things"): its lone holdings beside its fields and at its woods' edge, its wayside crosses along the roads out, its
 	/// gallows on a rise by a road, and a city's cemetery outside its walls. Laid by PointOfInterestFields after its farmsteads.
 	/// </summary>
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Nothing that was laid moves.</b> Every draw is a hash of the site's seed and a salt of this file's own, never the site's
 	/// sequence; the fields and the farmsteads before are as they were. Each claims its ground (PointOfInterestFieldClaims) under the
 	/// farmsteads' claim (<see cref="PointOfInterestFarmsteads.ClaimSite"/>), so a later site's fields keep off it. A piece the kit
-	/// has no art for yet (its new holdings, 2026-10-19) is counted in the site's notes and left out; its ground is still claimed.
+	/// has no art for yet (its new holdings) is counted in the site's notes and left out; its ground is still claimed.
 	/// </para>
 	/// </remarks>
 	public static class PointOfInterestOutskirts
@@ -70,7 +70,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The open ground left round a holding's pieces inside its claim, metres, and the yard before them.</summary>
 		public const float Margin = 1.5f, Apron = 3f;
 
-		/// <summary>Where the kit has no piece yet, the footprints laid by (the pieces of 2026-10-19), metres.</summary>
+		/// <summary>Where the kit has no piece yet, the footprints laid by the earlier pieces, metres.</summary>
 		public static readonly Vector2 BothySize = new Vector2(5f, 4.5f), ShepherdHutSize = new Vector2(3.6f, 3.6f), SheepfoldSize = new Vector2(10f, 10f),
 			GallowsSize = new Vector2(4.5f, 4.5f), WaysideCrossSize = new Vector2(1.6f, 1.6f);
 
@@ -89,7 +89,7 @@ namespace FishMMO.Shared.WorldDesign
 					return village || town || city || monastery ? (1, 2) : (0, 0);
 				case Holding.Woodcutter:
 					return city ? (1, 2) : village || town || monastery ? (1, 1) : (0, 0);
-				// (2026-10-20) One or two to a settlement, as its other monuments (PointOfInterestStructureCaps).
+				// One or two to a settlement, as its other monuments (PointOfInterestStructureCaps).
 				case Holding.WaysideCross:
 					return village || town ? (1, 2) : city ? (2, 2) : (0, 0);
 				case Holding.Gallows:
@@ -795,7 +795,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				placed.Add((centre, yaw, size));
 				context.FieldClaims?.Add(PointOfInterestFarmsteads.ClaimSite(record.Id), centre, yaw, size);
-				// Its yard kept as a yard (2026-10-27, PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
+				// Its yard kept as a yard (PointOfInterestEnclosureClearance): the scatter's trees, bushes and rocks off it, its grass kept.
 				context.FieldClaims?.Enclose(centre, yaw, size, turf: true);
 			}
 
@@ -1226,7 +1226,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector2 tomb = FootprintOf("Mausoleum", new Vector2(5f, 7f)) * stature;
 				Vector2 lychgate = FootprintOf("Lychgate", PointOfInterestChurchyards.LychgateFallback) * stature;
 				int tombs = 1 + (int)(PointOfInterestPlanner.Hash(record.SiteSeed, CemeterySalt, 0, 3) % 3u);
-				// Only the mausoleums its churchyards left the settlement room for (2026-10-20, PointOfInterestStructureCaps): two in all.
+				// Only the mausoleums its churchyards left the settlement room for (PointOfInterestStructureCaps): two in all.
 				tombs = Mathf.Min(tombs, PointOfInterestStructureCaps.Tally.Of(context).Room(PointOfInterestChurchyards.MausoleumType));
 				Plan plan = CemeteryYard(size, grave, mound, tomb, lychgate, tombs, unchecked((int)PointOfInterestPlanner.Hash(record.SiteSeed, CemeterySalt, 0, 4)));
 				List<(List<Vector2> Line, ScenePath Path)> roads = Roads();

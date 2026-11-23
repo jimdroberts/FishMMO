@@ -12,7 +12,7 @@ namespace FishMMO.Client
 	/// casters a redraw culls depend on where the camera looks. Stable cascades do not turn with the camera, so a camera that
 	/// turns in place keeps every window and, before this, never redrew: props it turned towards were in neither the cache
 	/// (never culled into it) nor URP's map (the batch group leaves static casters out of it while the cache serves), and
-	/// their shadows were missing (browser, settlement close view, 2026-11-05). Now a frame whose shadow work reaches an
+	/// their shadows were missing (browser, settlement close view). Now a frame whose shadow work reaches an
 	/// instance the last redraw did not hold redraws (TerrainGpuRenderer.ShadowContentVersion).
 	/// </remarks>
 	public static class ShadowCasterCoverage

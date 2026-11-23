@@ -10,7 +10,7 @@ namespace FishMMO.Shared.Core
 	/// IAbilityKnowledgeController instead for better interface segregation.
 	/// </summary>
 	/// <remarks>
-	/// The core's view of a character's casting (2026-11-20): the Abilities module's controller implements it, and the core's
+	/// The core's view of a character's casting: the Abilities module's controller implements it, and the core's
 	/// movement, prediction and observer streaming read it without naming the module. Known abilities and their events are
 	/// the module's <c>IAbilityKnowledgeController</c>.
 	/// </remarks>

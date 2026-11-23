@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Water
 {
 	/// <summary>
-	/// The lava along a scene's molten landform lines and in its lava moats (2026-10-25, phase I2r "molten ground", decision 65 (c)
+	/// The lava along a scene's molten landform lines and in its lava moats (phase I2r "molten ground", decision 65 (c)
 	/// and 95): a ribbon of FishMMO/Water/Inland Lava along each stored lava line (<see cref="SceneBiomeMap.LavaLines"/>: a lava
 	/// channel, an ʻaʻā tongue's channel, a breakout, an ember rill) and round the floor of each moat its site's biome fills with lava
 	/// (the moat shape's lava flag), laid on the carved ground (<see cref="BiomeLavaChannels.Ribbon"/>). Client only, presentation

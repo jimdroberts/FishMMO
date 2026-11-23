@@ -44,11 +44,11 @@ namespace FishMMO.Shared
 		/// <c>MaxStacks</c> is the TOTAL number of applications, so this counts up to
 		/// <c>MaxStacks - 1</c>: the base application is the first, and each stack is one more.
 		/// <para>
-		/// Both halves of that were wrong until the 2026-08-29 audit, in the same direction. A
+		/// Both halves of that were wrong until the audit, in the same direction. A
 		/// freshly applied stacking buff ran the new-buff branch AND the stack branch, so it arrived
 		/// here reporting 1 while having applied its modifier twice; and the cap tested
 		/// <c>Stacks &lt; MaxStacks</c>, which let a <c>MaxStacks=3</c> buff reach four applications.
-		/// The first was fixed on 2026-08-28, the second on 2026-08-29 — see
+		/// Both are fixed — see
 		/// <c>BuffController.ApplyResolved</c>.
 		/// </para>
 		/// </remarks>

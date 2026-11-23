@@ -432,7 +432,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Asks for the plots for sale in the sender's scene (2026-11-22: the "Plot for sale" map markers). Sent by the client each
+	/// Asks for the plots for sale in the sender's scene (the "Plot for sale" map markers). Sent by the client each
 	/// time its character starts in a scene.
 	/// </summary>
 	public struct HousingPlotsForSaleRequestBroadcast : IBroadcast

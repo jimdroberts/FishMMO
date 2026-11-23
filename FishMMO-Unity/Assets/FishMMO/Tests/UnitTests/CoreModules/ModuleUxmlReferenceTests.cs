@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// Every stylesheet a module's window names must exist. A UXML moved into <c>Assets/FishMMO/Modules</c> keeps its
 	/// <c>&lt;Style src="../../FishMMO-Theme.uss"/&gt;</c>, which then points at nothing: the window loads, unthemed, and
-	/// nothing reports it (the friend list, party, guild, housing and staff windows did exactly this on 2026-11-17).
+	/// nothing reports it (the friend list, party, guild, housing and staff windows did exactly this).
 	/// Module windows name the theme by its absolute path, <c>/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss</c>.
 	/// </summary>
 	[TestFixture]

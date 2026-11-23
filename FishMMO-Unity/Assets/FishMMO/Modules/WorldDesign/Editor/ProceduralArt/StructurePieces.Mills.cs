@@ -35,14 +35,14 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Mills and the rural work round a settlement (2026-10-14: "Windmills, watermills, lumbermills, and more ... all
+	/// Mills and the rural work round a settlement ("Windmills, watermills, lumbermills, and more ... all
 	/// medieval fantasy"): a tower mill, its cap and sails, a watermill and its wheel, a water-powered sawmill, a saw pit, log
 	/// and plank stacks, a granary on staddles, a dovecote, bee skeps, a charcoal clamp, a lime kiln and a tanning yard.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// <b>Medieval forms only</b> (from the record): the stone tower mill (raised from the later 13th century; the post mill
-	/// is older, but its buck on a mound or an open trestle read as a box on a platform, 2026-10-15), its cap turned to the
+	/// is older, but its buck on a mound or an open trestle read as a box on a platform), its cap turned to the
 	/// wind by a tailpole, four common sails of canvas over a lattice spanning 15 m; the
 	/// watermill a stone ground floor under a timber loft with its wheel on the water side (undershot on a river, overshot
 	/// fed by a timber launder); the sawmill the water-driven sash saw Villard de Honnecourt drew about 1230, but most planks
@@ -192,7 +192,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static Vector3 TowerMillCapHub(int variant) => new Vector3(0f, 1.15f, -(TowerMillCurb(variant) + 1.25f));
 
 		/// <summary>
-		/// A medieval tower mill (2026-10-15: post mills "stand on weird platforms, unrealistic"): a battered round tower on its
+		/// A medieval tower mill (post mills "stand on weird platforms, unrealistic"): a battered round tower on its
 		/// own footing, a door into its meal floor and small windows up it, the curb on top that its cap (<c>MillCap</c>, a
 		/// turning part with the sails) turns on to face the wind. Stone-built tower mills were raised from the later 13th
 		/// century; v0 is rubble stone, v1 lime-washed and lower.
@@ -558,7 +558,7 @@ namespace FishMMO.Shared.WorldDesign
 				d.Add(StructureShapes.Beam(new Vector3(-halfW, eave, s * (halfD - 0.2f)), new Vector3(halfW, eave, s * (halfD - 0.2f)), 0.24f, 0.26f, StructureMaterial.Timber, 30 + (s > 0 ? 1 : 0)));
 			}
 			d.Add(StructureShapes.Box(new Vector3(0f, 1.05f, halfD - 0.2f), new Vector3(SawmillWidth - 0.4f, 1.3f, 0.1f), StructureMaterial.Timber, 32)).Grain = Vector3.right;
-			// At its palette's pitch, or a flat canopy (StructureRoofs, I6h).
+			// At its palette's pitch, or a flat canopy (StructureRoofs).
 			OwnGable(d, SawmillDepth, SawmillWidth, eave, 2f, 0.55f, 0.12f, d.Variant == 1 ? StructureMaterial.Thatch : StructureMaterial.Timber, 40,
 				Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one));
 			// The floor the carriage runs on: a plank deck the length of the shed.
@@ -737,7 +737,7 @@ namespace FishMMO.Shared.WorldDesign
 			d.Add(StructureShapes.Box(new Vector3(0f, floor - 0.08f, 0f), new Vector3(width + 0.1f, 0.2f, depth + 0.1f), StructureMaterial.Timber, 20)).Grain = Vector3.right;
 			Walls(d, Vector3.zero, width, depth, 0.1f, floor, floor + wall, StructureMaterial.Timber, 21);
 			const float rise = 1.9f;
-			// At its palette's pitch, its gable boards with it, or a flat canopy over the walls (StructureRoofs, I6h).
+			// At its palette's pitch, its gable boards with it, or a flat canopy over the walls (StructureRoofs).
 			OwnRoofPlan roof = OwnGable(d, width, depth, floor + wall, rise, 0.4f, d.Variant == 1 ? 0.12f : 0.3f, d.Variant == 1 ? StructureMaterial.Timber : StructureMaterial.Thatch, 30, Matrix4x4.identity);
 			if (!roof.Flat)
 			{
@@ -762,7 +762,7 @@ namespace FishMMO.Shared.WorldDesign
 			// A string course halfway, and the eaves' course.
 			d.Add(StructureShapes.Lathe(new[] { new Vector2(0f, 3f), new Vector2(outer + 0.1f, 3f), new Vector2(outer + 0.1f, 3.2f), new Vector2(0f, 3.2f) }, d.Seg(24, 12), StructureMaterial.Fieldstone, 20));
 			// The roof, a cone, and its louvre: a little timber lantern the birds come and go by. The thatched cone is at its palette's
-			// pitch (StructureRoofs, I6h), or flat with the louvre on its deck; the corbelled stone one is the stone's own.
+			// pitch (StructureRoofs), or flat with the louvre on its deck; the corbelled stone one is the stone's own.
 			float roofRise = thatch ? 3.4f : 3f;
 			bool flat = false;
 			if (thatch)

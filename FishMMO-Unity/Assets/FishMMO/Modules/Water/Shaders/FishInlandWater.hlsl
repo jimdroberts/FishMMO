@@ -13,7 +13,7 @@
 	#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareOpaqueTexture.hlsl"
 #endif
 // The weather's clouds and fog, laid over the frame before the water was drawn: the same as the sea's; faded under the hill
-// as the fog passes fade themselves (a cave's streams and pools, 2026-10-20: FishWaterFog.hlsl's FISH_WATER_OPEN_AIR).
+// as the fog passes fade themselves (a cave's streams and pools: FishWaterFog.hlsl's FISH_WATER_OPEN_AIR).
 #define FISH_WATER_OPEN_AIR 1
 #include "FishWaterFog.hlsl"
 #include "FishWaterSun.hlsl"
@@ -38,7 +38,7 @@ CBUFFER_START(UnityPerMaterial)
 	half _MaxAlpha;
 	float _FoamScale;
 	half4 _FoamColor;
-	/* Each surface's own (InlandWaterRenderer: every lake and river draws with a copy of the material, 2026-10-28), here
+	/* Each surface's own (InlandWaterRenderer: every lake and river draws with a copy of the material), here
 	 * rather than on a property block, which took each river's draw out of the SRP Batcher. All 0 on the shared material:
 	 * no solved flow, no falls, the material's own look. Loose vectors, not arrays: arrays in UnityPerMaterial are not known
 	 * to batch. */
@@ -52,10 +52,10 @@ CBUFFER_START(UnityPerMaterial)
 	float4 _RiverFall2;
 	float4 _RiverFall3;
 	float _RiverFallCount;
-	/// The body's water look by the biome of its shores (InlandWaterRenderer.Looks, 2026-10-16), read through
+	/// The body's water look by the biome of its shores (InlandWaterRenderer.Looks), read through
 	/// InlandLookVector: three looks of INLAND_LOOK_VECTORS vectors each, its own, the water it runs out of (its start) and
 	/// the water it runs into (its end), each x shallow rgb + w the silt moving water carries, deep rgb + w a MELT
-	/// (2026-10-25, I2q-b: molten sulphur, opaque, viscous, its colour drifting), absorption per metre rgb, silt rgb, foam rgb
+	/// (molten sulphur, opaque, viscous, its colour drifting), absorption per metre rgb, silt rgb, foam rgb
 	/// (colours linear, as the material's). _InlandLookOn 0: the material's own look, as every body had before.
 	float _InlandLookOn;
 	float4 _InlandLook0;
@@ -139,7 +139,7 @@ struct InlandLook
 	half melt;
 };
 
-/// A melt's colour drift (BiomeWaterLook.Melt, decision 84): once each 1250 s of the shared clock (it divides the wrap), phased over
+/// A melt's colour drift (BiomeWaterLook.Melt): once each 1250 s of the shared clock (it divides the wrap), phased over
 /// the surface in patches tens of metres across, toward its deep colour as hotter melt darkens to red.
 #define INLAND_MELT_DRIFT_SECONDS 1250.0
 
@@ -334,10 +334,10 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, float footpr
 				gradient += along * (cos(crestPhase) * ridge * 0.45 * saturate(1.0 - footprint * 4.0 / waveLength));
 				/* White only behind the larger stones, as a short pillow trailing downstream of the stone, not along the
 				 * V's arms: every stone's white V on a 2.2 m grid read from above as rows of ticks, fish scales over every
-				 * riffle (2026-10-07). The V stays in the surface's slope. */
+				 * riffle. The V stays in the surface's slope. */
 				/* Only a big stone in fast water breaks the surface white: a pebble bed at a metre a second ripples, it does
 				 * not foam. From half a metre a second every medium stone threw a pillow, and Flo Monolith's rivers, running
-				 * about a metre a second over shallow beds nearly everywhere, made foam along every reach (2026-10-13). */
+				 * about a metre a second over shallow beds nearly everywhere, made foam along every reach. */
 				if (h.z > 0.75)
 				{
 					float pillow = exp(-c * c / (radius * radius * 1.5)) * exp(-a / (radius * 4.0 + 0.3));
@@ -361,13 +361,13 @@ float2 BedStones(float2 xz, float2 along, float speed, float depth, float footpr
 /// lace's web of bubble walls. Those walls are a texel or three wide, and every cut under about a third covers little
 /// else, so a river's thin foam drew as hairlines, stretched along the current into rows of parallel dotted streaks
 /// (the cut keeps only the top of a texel-wide ridge, and that wanders as the wall crosses texel centres; seen in a
-/// close-up, 2026-10-09). Averaged over 4×4 texels a wall falls below any cut, while the patches and their holes stay.
+/// close-up). Averaged over 4×4 texels a wall falls below any cut, while the patches and their holes stay.
 /// </para>
 /// <para>
 /// A floor on the mip, not a bias: it was read two mips coarser than the pixel needed everywhere (a mip bias adds to
 /// the mip the pixel picks), so at a few metres off the lace was mip 5 or 6, its contrast gone. Cut there, a low
 /// coverage kept only the tops of the blurred patches, specks of foam scattered like static over every rapid and the
-/// trail below a fall, and a high one flat blobs with hard edges (2026-10-13). The mip is now the pixel's own, at least
+/// trail below a fall, and a high one flat blobs with hard edges. The mip is now the pixel's own, at least
 /// the floor, its contrast restored for the mip read (<see cref="FishFoamLaceRestore"/>) so the cut covers what it is
 /// asked; <paramref name="lod"/> returns it, for how far the cut is resolved (<see cref="FlowLaceResolved"/>).
 /// </para>
@@ -422,14 +422,14 @@ half StreakLace(float2 frame, float2 frameDx, float2 frameDy, float speed, float
 /// <remarks>
 /// Not world space turned to the flow's direction: river water lies hundreds of metres from the origin, and there the
 /// slightest turn of the flow slid the turned coordinate by metres from one pixel to the next. The texture was squeezed
-/// and aliased into rows of white ticks bending in arcs, and tore along triangle edges (screenshots, 2026-10-07).
+/// and aliased into rows of white ticks bending in arcs, and tore along triangle edges (screenshots).
 /// The river's frame bends with the river and turns nowhere.
 ///
 /// Nor is the frame ever scaled by anything that changes from pixel to pixel. The stretch once followed the local speed
 /// (frame.y / stretch(speed)), and metres along a river run to thousands: across a pixel the solved current changes a
 /// little, and that little times a thousand metres slid the lace by whole tiles. Its contour lines drew fingerprint whorls
 /// over every river, and its true footprint was far wider than the frame's derivatives said, so the mip read too fine and
-/// the cut sparkled as static (2026-10-13). Two fixed stretches instead, the short and the long, blended by the speed.
+/// the cut sparkled as static. Two fixed stretches instead, the short and the long, blended by the speed.
 /// </remarks>
 half StreakFoam(float2 frame, float2 frameDx, float2 frameDy, float speed, float scale, float cycle, out float lod)
 {
@@ -785,7 +785,7 @@ half StandingWaves(float2 riverUV, float2 flow, float speed, half broken, float 
 	/* Never the river's metres along over a length that changes from pixel to pixel: they run to thousands, so the
 	 * slightest change of the current across a pixel (the solved field changes everywhere) moved the phase by whole
 	 * waves, and its contours drew fingerprint whorls over every river, white where the crests fed the foam
-	 * (2026-10-13). The waves are laid out at fixed lengths, an octave apart (0.6, 1.2, 2.4, 4.8 m), and the two
+	 *. The waves are laid out at fixed lengths, an octave apart (0.6, 1.2, 2.4, 4.8 m), and the two
 	 * either side of the water's own length blended; the noise that places them is read at a fixed size. */
 	float octave = clamp(log2(wavelength / 0.6), 0.0, 2.999);
 	float octaveLow = floor(octave);
@@ -799,11 +799,11 @@ half StandingWaves(float2 riverUV, float2 flow, float speed, half broken, float 
 	half train = smoothstep(0.35, 0.75, cluster);
 	half wander = SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, clusterUV * 0.21 + float2(0.57, 0.29)).g;
 	/* Their spacing wandering more, and their lines bowed harder and broken by the cluster noise: a metre apart and
-	 * near-parallel they caught the light as rows of glints from above and dark dashes from a bank (2026-10-07). */
+	 * near-parallel they caught the light as rows of glints from above and dark dashes from a bank. */
 	float phaseLow = StandingWavePhase(riverUV, waveLow, wander, cluster);
 	float phaseHigh = StandingWavePhase(riverUV, 2.0 * waveLow, wander, cluster);
 	/* Short-crested: each crest a hump a wavelength or two across, not a ridge running on across the channel. Long, even
-	 * crests caught a low sun as rows of parallel white lines on the river (2026-10-07, at dusk); real standing waves
+	 * crests caught a low sun as rows of parallel white lines on the river (at dusk); real standing waves
 	 * are separate haystacks that rise and fall. The humps drift slowly so they come and go. */
 	float2 humpUV = float2(riverUV.x / 2.4, riverUV.y / 2.0) * 0.23 + float2(_FishInlandTime * 0.004, 0.0);
 	half hump = smoothstep(0.4, 0.85, SAMPLE_TEXTURE2D(_FoamTexture, sampler_FoamTexture, humpUV + float2(0.31, 0.47)).g);
@@ -898,7 +898,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	// Two scales: the current's own, and a finer one the air stirs that hardly moves. Faster water is
 	// rougher, broken water roughest.
 	half detailFade = saturate(1.0 - distanceToCamera / max(1.0, _NormalFadeDistance));
-	// A melt (2026-10-25, I2q-b) is viscous: a fifth of the ripples.
+	// A melt is viscous: a fifth of the ripples.
 	half meltRipple = _InlandLookOn < 0.5 ? 1.0 : lerp(1.0, 0.2, saturate(_InlandLook1.w));
 	detailFade *= meltRipple;
 	// Choppier along a shear line (the wavelets its turbulence raises), as well as duller (the roughness below).
@@ -972,7 +972,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	InlandLook look = InlandLookAt(input.look);
 	if (look.melt > 0.001)
 	{
-		// The melt's colour drifts on the shared clock (decision 84): the same for every player, seamless at the wrap.
+		// The melt's colour drifts on the shared clock: the same for every player, seamless at the wrap.
 		float phase = frac(_FishInlandTime / INLAND_MELT_DRIFT_SECONDS + frac(dot(positionWS.xz, float2(0.013, 0.021))));
 		half drift = 0.5 + 0.5 * sin(6.2831853 * phase);
 		look.shallow = lerp(look.shallow, look.deep, look.melt * 0.45 * drift);
@@ -1012,7 +1012,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		behind = refracted * bedTransmittance + bodyColor * (1.0 - transmittance);
 		alpha = 1.0;
 	#endif
-	// A melt is opaque: nothing behind it shows through (2026-10-25, I2q-b).
+	// A melt is opaque: nothing behind it shows through.
 	behind = lerp(behind, bodyColor, look.melt);
 	alpha = lerp(alpha, 1.0, look.melt);
 	/* The bubble plume under a plunge pool, seen through the water above it: a cloud of bubbles scatters the light
@@ -1028,7 +1028,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		half3 plumeTint = exp(-plumeDepth * (1.0 + 1.0 / max(0.25, mainLight.direction.y)) * look.density);
 		/* Lit only by what reaches it: the sun's light down through the water and the sky's. The water's own light
 		 * carries a floor (+0.12) that keeps a dark river from going black; on bubbles that scatter it all back up it
-		 * made every plunge pool glow turquoise at night (screenshot, 2026-10-08). */
+		 * made every plunge pool glow turquoise at night (screenshot). */
 		half3 plumeSource = lightColor * saturate(mainLight.direction.y) * 0.9 + _GlossyEnvironmentColor.rgb * 0.8;
 		half3 plumeLight = half3(0.80, 0.95, 0.93) * plumeTint * plumeSource;
 		behind = lerp(behind, plumeLight, plumeCover * 0.85);
@@ -1040,7 +1040,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	half fresnel = 0.02 + 0.98 * pow(1.0 - NdotV, 5.0);
 	/* Broken water is rough: the sun spreads over it as a broad sheen, not a sparkle on every ripple. At + broken × 0.2
 	 * each ripple of a rapid kept a pin-sharp glint, and the flow-mapped ripples lined them up: rows of white ticks
-	 * that read as foam from above (FISHMMO_INLAND_DEBUG=noglint took every one away, 2026-10-07). */
+	 * that read as foam from above (FISHMMO_INLAND_DEBUG=noglint took every one away). */
 	/* And where the current shears: the turbulence there chops the surface into small irregular wavelets, a duller
 	 * band along the edge of every jet, as on a real river, rather than a polished line catching the sun. Up to 0.12
 	 * at a shear of 2 per second (a metre a second across half a metre). */
@@ -1065,7 +1065,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	 *    fall's boil and the trail it sends downstream, and wakes ───────────────────────────────────────────────
 	 * Not on water for being fast, shallow or rippled: a river running smooth, however fast, is clear, and a riffle is a
 	 * broken surface, not a white one. Speed alone (from 1.2 m/s) and shallow moving water at the banks used to give
-	 * every quick reach a thin even foam, which the lace drew as streaks of white hairlines (2026-10-09: "rivers
+	 * every quick reach a thin even foam, which the lace drew as streaks of white hairlines ("rivers
 	 * don't typically have foam"). */
 	half foam = 0.0;
 	/* A river's foam in its own frame (riverUV: metres along, across); a lake's, whose water barely moves, in world xz
@@ -1086,7 +1086,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 			trail = FallTrail(input.riverUV, input.bank.x);
 			half rafts = FlowSample(TEXTURE2D_ARGS(_FoamTexture, sampler_FoamTexture), foamFrame, float2(0.0, foamSpeed), max(0.3, _FoamScale) * 3.0, _FlowCycle * 3.0, float2(0.29, 0.61)).g;
 			/* Gathered into rafts by a smooth modulation of how much foam there is, not a cut: cut, the broad noise drew
-			 * every raft as a puffy cloud lying on the water (screenshot, 2026-10-08). The lace makes the holes. */
+			 * every raft as a puffy cloud lying on the water (screenshot). The lace makes the holes. */
 			trail *= 0.35 + 0.65 * smoothstep(0.2, 0.75, rafts);
 		}
 		// Read carried coverage before paying for the legacy lace which it replaces in the window interior.
@@ -1117,9 +1117,9 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 		// whole pool read as churned as the impact, an even carpet of white to its edge.
 		/* White caps, not a carpet: a rapid's water is clear and smooth between its standing waves, and white only where a
 		 * wave's crest breaks. At half its brokenness everywhere (and the crests a third more) every rapid was a sheet of
-		 * foam forty metres long below every fall (2026-10-13: "rivers should look smooth with white caps on rapids").
+		 * foam forty metres long below every fall ("rivers should look smooth with white caps on rapids").
 		 * The crests are short-crested humps in trains (above), so the caps are patches, not the rows of white that
-		 * full-length crests drew across a rapid (fish scales from above, 2026-10-07).
+		 * full-length crests drew across a rapid (fish scales from above).
 		 * Rapids and falls only (SceneWaterBodies.Broken: rapid 0.6, fall 1): a riffle's 0.15 is broken but not white. */
 		half rapid = input.state.x * smoothstep(0.25, 0.55, input.state.x);
 		// A rapid whitens where it runs fast enough to break, not wherever the reach is steep enough to be called one.
@@ -1180,7 +1180,7 @@ half4 InlandFragment(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Targe
 	 * the shallow edge of the water, out to where the bank rises through it (the depth test hides it past that). Clipped
 	 * at its middle by the claim alone, the water stopped three quarters of a metre past the bank wherever the ground
 	 * there was still at the water's level, and left a dark band of bare ground between the river and its banks
-	 * (2026-10-13). Over ground far below (beside a fall, over a gorge) it is still never drawn: no sheet hangs in air. */
+	 *. Over ground far below (beside a fall, over a gorge) it is still never drawn: no sheet hangs in air. */
 	half claim = input.state.w;
 	#if defined(_WATER_DEPTH)
 		claim = max(claim, 1.0h - smoothstep(0.35h, 0.7h, (half)waterColumn));

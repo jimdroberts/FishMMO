@@ -236,7 +236,7 @@ namespace FishMMO.UnitTests
 				"private void AppendAbilityData(IPlayerCharacter character, List<CharacterAbilityData> abilities)",
 				"private void AppendPetData(");
 
-			/* Since 2026-11-20 the core save reaches abilities through IAbilityPersistence: the Abilities module's
+			/* The core save reaches abilities through IAbilityPersistence: the Abilities module's
 			 * controller hands over each dirty ability with its identity, and the save writes that identity. */
 			LogAssert.IsTrue(body.Contains("abilityController.CaptureDirtyAbilities((id, version, templateID, eventIds) =>") && body.Contains("id: id,"),
 				"a saved ability must carry the identity its row has, not a placeholder");
@@ -266,7 +266,7 @@ namespace FishMMO.UnitTests
 			}
 
 			/* The batch body lives behind both the ungated and the ownership-gated entry points
-			 * (PersistAsync and PersistOwnedAsync, 2026-09-25), so the pin reads the shared body. */
+			 * (PersistAsync and PersistOwnedAsync), so the pin reads the shared body. */
 			string source = ProjectFiles.ReadAllText(path).Replace("\r\n", "\n");
 			string body = MethodBody(source,
 				"private async Task<DatabaseResult<BulkWriteResult>> PersistBatchAsync(IEnumerable<CharacterAbilityData> abilities",

@@ -5,7 +5,7 @@ namespace FishMMO.Shared
 {
 	/// <summary>
 	/// On a core field typed as <see cref="CachedScriptableObject"/> or <see cref="ScriptableObject"/> (or a list of them): the template type the field holds,
-	/// named rather than referenced because it belongs to a module (2026-11-20). The inspector offers only assets of that
+	/// named rather than referenced because it belongs to a module. The inspector offers only assets of that
 	/// type (or a type deriving from it); with the module removed it accepts any cached template, and the field's existing
 	/// references load as missing.
 	/// </summary>

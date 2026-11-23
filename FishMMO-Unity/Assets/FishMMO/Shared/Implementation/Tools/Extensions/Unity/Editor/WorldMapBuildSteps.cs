@@ -7,7 +7,7 @@ using FishMMO.Shared.CustomBuildTool.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Core (Phase 4, 2026-11-18: split from the World Design module's terrain array and planet surface bake). Bakes the portal
+	/// Core (split from the World Design module's terrain array and planet surface bake). Bakes the portal
 	/// views and a map definition and image for each world scene that has none or has changed since, and rebuilds the
 	/// world scene details cache to reference them, before the addressables of a client build are
 	/// built. The maps are a gitignored per-machine cache (see

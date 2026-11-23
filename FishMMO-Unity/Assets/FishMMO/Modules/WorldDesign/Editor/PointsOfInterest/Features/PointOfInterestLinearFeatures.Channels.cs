@@ -7,12 +7,12 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Water channels (2026-10-18, phase I2f): irrigation leats, bisses and rogge carried at a gentle fall from a river or lake above a
+	/// Water channels: irrigation leats, bisses and rogge carried at a gentle fall from a river or lake above a
 	/// settlement's fields to them and along their head, and standing ditches along lanes.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>What a channel is (decided 2026-10-18, I2f).</b> Neither a river of the scene's hydrology (its carve, flow, falls and
+	/// <b>What a channel is.</b> Neither a river of the scene's hydrology (its carve, flow, falls and
 	/// settling are the cut's water stage, long done when the sites are placed, and a narrow leat is far finer than its grid) nor
 	/// paint alone (a painted strip has no water in it). It is a shallow trench carved into the terrain (PointOfInterestFieldCarve's
 	/// record and restore, as ridge and furrow and paddies are), its downhill bank raised of its own spoil, and its water a chain of
@@ -61,7 +61,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The most channels one scene carries.</summary>
 		public const int MaxChannels = 16;
 
-		/// <summary>How much of a channel's half width its pound's water mask covers (pure): 0.55, a great canal's 0.85 (2026-10-26, I2f-b).</summary>
+		/// <summary>How much of a channel's half width its pound's water mask covers (pure): 0.55, a great canal's 0.85.</summary>
 		public static float PoundCover(BiomeLinearForm form) => form == BiomeLinearForm.GreatCanal ? 0.85f : 0.55f;
 
 		/// <summary>A pound's lake id.</summary>
@@ -464,8 +464,8 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The scene's leats: from the water to the fields of each settlement whose biome waters its fields, in its channel style (the
-		/// first its draw admits): an earth or lined leat, a bisse, a roggia on the land's grid, a qanat gallery from a scarp's foot
-		/// (2026-10-26, I2f-b); the scene's one great canal first, its laterals watering the settlements it reaches.
+		/// first its draw admits): an earth or lined leat, a bisse, a roggia on the land's grid, a qanat gallery from a scarp's foot;
+		/// the scene's one great canal first, its laterals watering the settlements it reaches.
 		/// </summary>
 		private static int LayChannels(SceneScope scope)
 		{
@@ -585,7 +585,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// <see cref="TakeOff(SceneScope, Vector2, float, out Vector2, out float)"/>, a river's only where <paramref name="riverOnly"/> (a
 		/// great canal's weir), and the water point it was taken from (<paramref name="water"/>); its lattice 16 m past 1.2 km of reach
-		/// (2026-10-26, I2f-b: a bisse's or a canal's).
+		/// (a bisse's or a canal's).
 		/// </summary>
 		private static bool TakeOff(SceneScope scope, Vector2 head, float reach, bool riverOnly, out Vector2 source, out float surface, out Vector2 water)
 		{
@@ -734,7 +734,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			AddBed(scope, stations, half);
-			// Its line stored for the next repaint, which paints the biome's wet margin along it (2026-10-18, I2j-b, decision 38).
+			// Its line stored for the next repaint, which paints the biome's wet margin along it.
 			ChannelMarginPaint.Record(context, BiomeRegistry.IDOf(biome), half, stations.ConvertAll(st => (st.At, st.Part == ChannelPart.Cut)));
 
 			// The pieces: the head, a sluice at every step, the flumes, the crossings.
@@ -764,7 +764,7 @@ namespace FishMMO.Shared.WorldDesign
 			laid += LayRuns(context, palette, style, stations, ChannelPart.Flume, half, seed);
 			if (style.Form == BiomeLinearForm.Bisse && falling)
 			{
-				// Its water-hammer a few metres below the head, knocking while the water runs (2026-10-26, I2f-b).
+				// Its water-hammer a few metres below the head, knocking while the water runs.
 				laid += Hammer(context, palette, style, stations, seed);
 			}
 			if (falling)
@@ -812,7 +812,7 @@ namespace FishMMO.Shared.WorldDesign
 						Vector2 p0 = modules[k].At, p1 = modules[k + 1].At;
 						var mid = new Vector3(0.5f * (p0.x + p1.x), rim, 0.5f * (p0.y + p1.y));
 						var along = new Vector3(p1.x - p0.x, 0f, p1.y - p0.y);
-						// A bisse's flume hangs on brackets where a cliff stands over it (2026-10-26, I2f-b), its cliff side (−x) toward it.
+						// A bisse's flume hangs on brackets where a cliff stands over it, its cliff side (−x) toward it.
 						if (style.Form == BiomeLinearForm.Bisse && BracketSide(context, new Vector2(mid.x, mid.z), new Vector2(along.x, along.z), rim, out float turn))
 						{
 							GameObject hung = StructureKit.Prefab("ChannelBracketFlume", (int)(BiomeLinearFeatures.Hash(channelSeed, k, 0x4246, 0) & 1u));

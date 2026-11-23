@@ -39,7 +39,7 @@ float4 _FishFilletFade;                            // xyz the camera the fillets
 // which is FishWeatherLitInput.hlsl's layout.
 float4 _FishFilletMaps;
 
-// ── FishMMO edit (2026-10-28): the rock's maps as look array slices (ProceduralArtLookArrays: the generator writes the rock
+// ── FishMMO edit: the rock's maps as look array slices (ProceduralArtLookArrays: the generator writes the rock
 // surfaces as Texture2DArrays and the rock materials name slices, _FishLookSlices in UnityPerMaterial). All three arrays are
 // read with the colour array's sampler — every generated map is imported Repeat, trilinear, aniso 8 — so the pass needs one
 // sampler more, not three. The fillet shader never enables the look keyword, so it declares them itself. ──

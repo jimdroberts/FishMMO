@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests
 	/// The runtime contract every shipped ability template must meet to do anything at all.
 	/// </summary>
 	/// <remarks>
-	/// Written after the 2026-09-03 audit found "Lesser Fireball" with Speed 0 and no move event
+	/// Written after the audit found "Lesser Fireball" with Speed 0 and no move event
 	/// (a stationary ball), a hit event whose mana condition tested the VICTIM, and "Lesser
 	/// Flame" with no events whatsoever. Each rule below is one of those failures generalised.
 	/// Mock content under <c>Abilities/Mock</c> is excluded; it exercises the runtime, not players.

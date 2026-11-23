@@ -4,7 +4,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What the NPCs module's AI reads of a companion it drives (2026-11-20: pets are the Pets module's, which depends on
+	/// What the NPCs module's AI reads of a companion it drives (pets are the Pets module's, which depends on
 	/// this one): whom it follows and fights for, its stance and its movement order. The Pets module's <c>Pet</c>
 	/// implements it.
 	/// </summary>

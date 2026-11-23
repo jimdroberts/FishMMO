@@ -19,10 +19,10 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Proofs for the character persistence fixes of the 2026-09-25 server hot-path audit
+	/// Proofs for the character persistence fixes of the server hot-path audit
 	/// (H2, H4, M20–M23, L24): the rules that decide when a claim may be handed back and what a batch's
 	/// outcome means. The item half (what an item snapshot writes, the item write journal) moved with
-	/// the inventory system to the Items module's <c>ItemPersistenceHotPathTests</c> (2026-11-20).
+	/// the inventory system to the Items module's <c>ItemPersistenceHotPathTests</c>.
 	/// </summary>
 	/// <remarks>
 	/// The rules that could be written as pure functions are tested as such; the orderings that only a

@@ -10,7 +10,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A character can have several pets out (11-16): the Pet Slots character attribute (one unless an archetype, item or
+	/// A character can have several pets out: the Pet Slots character attribute (one unless an archetype, item or
 	/// buff raises it), each summon spell with its
 	/// own maximum, every command to all pets, every pet saved under its slot, and a row per pet in the panel that pins it.
 	/// </summary>
@@ -166,7 +166,7 @@ namespace FishMMO.UnitTests
 		{
 			string saving = Read(Scripts + "Server/Implementation/World/SceneServer/Character/CharacterSystem.Saving.cs");
 			int capture = saving.IndexOf("private void AppendPetData(IPlayerCharacter character, List<PetSnapshot> pets)", StringComparison.Ordinal);
-			// Through the core IPetRoster since 2026-11-20: every pet the roster holds, by index.
+			// Through the core IPetRoster: every pet the roster holds, by index.
 			int loop = saving.IndexOf("for (int i = 0; i < petController.PetSlotCount; ++i)", capture, StringComparison.Ordinal);
 			LogAssert.IsTrue(capture >= 0 && loop > capture, "the save captures every pet out");
 			LogAssert.IsTrue(saving.Contains("slot: pet.Slot,"), "a pet row is written under the pet's slot");

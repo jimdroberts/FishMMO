@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Bamboo Forest</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry BambooForest()
 		{
-			// The bamboo hills of the old capital and the eastern shogun's city (biome round, approved 2026-10-18, authored 2026-10-26):
+			// The bamboo hills of the old capital and the eastern shogun's city:
 			// towering groves of pale moso and gold-green madake over a floor of straw leaves and culm sheaths, dark sugi on the ridges
 			// and red pines on the crests, Japanese maples in the ravines, wild cherry clouding the slopes in spring, hydrangea-filled
 			// temple valleys, moss lawns under the maples, red spider lilies along the paddy bunds, andesite screens of cliff and moss-
@@ -18,9 +18,9 @@ namespace FishMMO.Shared.WorldDesign
 			// hill forts; its fantasy the moon-culm, the fox shrines, the tengu cedar, kodama and firefly glass. Reaches: CAPITAL
 			// (warmth below 0.55: madake as well as moso, maple, red pine) and LAUREL (0.55 and up: moso and the shii forest), the humid
 			// reach (0.5 and up) laying moss lawns.
-			// LATER (I9): every ground and object texture as Bamboo Forest's own variant of its recipe (decision 12).
-			// LATER (I9b `Running`): single leptomorph culms spaced through the stand; the clump form stands in for moso and madake.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Sumie + Kaguya (BiomeTemplate.rareLookA/B).
+			// LATER: every ground and object texture as Bamboo Forest's own variant of its recipe.
+			// LATER (`Running`): single leptomorph culms spaced through the stand; the clump form stands in for moso and madake.
+			// LATER (no spec column yet): rare looks Sumie + Kaguya (BiomeTemplate.rareLookA/B).
 			return E("Bamboo Forest", L(Ground.ForestFloorBambooGrove,
 					// The groves: moso everywhere, madake mixed in the cooler reach.
 					Band(Stand(Was(3f, 3f), 25f, W(0.7f, 0.5f, metres: 200f), "Moso", "Moso", "Madake"), -1f, 0.55f),
@@ -64,7 +64,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Ways(path: Ground.PathBambooLeaf, road: Ground.RoadMasa, cobbles: Ground.FlagstoneIshidatami)
 				.Bars(sand: Ground.SandMasaGrus, gravel: Ground.GravelArc)
 				// Own rock andesite (Byobu, Iwakura, Tateishi, Block, Platy, Talus); approved: accepts granite (masa), schist (green garden
-				// stone) and tuff (the green Kamakura stone); gneiss, limestone and basalt dropped. LATER (I9): the Komatsu look.
+				// stone) and tuff (the green Kamakura stone); gneiss, limestone and basalt dropped. LATER: the Komatsu look.
 				.Accepts(RockTypes.Andesite, RockTypes.Granite, RockTypes.Schist, RockTypes.Tuff)
 				.CaveShell(CaveForm.Cave, "Andesite").CaveShell(CaveForm.Grotto, "Tuff").CaveShell(CaveForm.Mine, "Andesite")
 				.Crystals((BiomeCaveCrystalKind.Twinquartz, 0.4f), (BiomeCaveCrystalKind.Jadeite, 0.3f), (BiomeCaveCrystalKind.Hotarubi, 0.3f))
@@ -73,9 +73,9 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Jungle)
 				// Approved: streams for the fireflies, macaques on the slopes; no jungle fauna.
 				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.Mountain | BiomeHabitat.FreshWater | BiomeHabitat.Settlement)
-				// LATER (AMBIENT-LIFE): Genji fireflies over streams and paddies, macaque troops, sika deer, tanuki, serow, herons and
+				// LATER: Genji fireflies over streams and paddies, macaque troops, sika deer, tanuki, serow, herons and
 				// cranes in the paddies, kites, bush warblers, cicada drone; foxfire wisps and kodama motes.
-				// LATER (RARE-LOOKS): Sumie and Kaguya.
+				// LATER: Sumie and Kaguya.
 				.Moat(BiomeMoatWater.Dry)
 				.Floats((BiomeFloatingPlantKind.SacredLotus, 0.6f), (BiomeFloatingPlantKind.WaterLily, 0.2f))
 				// Gin-clear mountain water tinted yellow-green by the grove overhead.
@@ -133,7 +133,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Rapids, 1f), (POIType.RiverMouth, 1f), (POIType.Delta, 1f), (POIType.Mesa, 1f), (POIType.Butte, 1f), (POIType.Island, 1f),
 					(POIType.Bay, 1f), (POIType.Headland, 1f), (POIType.NaturalArch, 1f), (POIType.SeaCave, 1f), (POIType.DungeonEntrance, 1f),
 					(POIType.BossLair, 1f), (POIType.Peak, 1f), (POIType.Overhang, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 1.2f), (POIType.GoblinWarren, 1.2f), (POIType.HauntedManor, 0.8f),
 					(POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.ManorHouse, 0.5f),
@@ -161,7 +161,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Waystation, "Inn", 1.6f)
 				.Prefers(POIType.Camp, "Crude", 1.4f)
 				.Prefers(POIType.Camp, "Yurts", 0f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Elven Hall", 1f)
 				.Prefers(POIType.Tower, "Elven Tower", 1f)
@@ -173,8 +173,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.4f)
 				.Prefers(POIType.Commandery, "Preceptory", 1.3f)
 				.Prefers(POIType.HangingMonastery, "Cliff Chapel", 1.3f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Bamboo Forest's signature pieces — minka and gassho houses, the shrine with its torii tunnel, the pagoda temple,
+				// (the fantasy set's variants end here)
+				// LATER: Bamboo Forest's signature pieces — minka and gassho houses, the shrine with its torii tunnel, the pagoda temple,
 				// the mountain hermitage, azekura stores, yagura tombs, the gorinto graveyard, jizo rows, the stone-lantern avenue, the hill fort,
 				// the charcoal kiln, the cutters' yard, bamboo flumes, the tea stall, the kofun with haniwa, the moon-culm, the fox shrine and
 				// the tengu cedar; until then the kit's variants below stand in.
@@ -185,7 +185,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Iron, 0f)
 				// The palette: ochre clay on bamboo lath under silvered sugi boards, deep miscanthus thatch, hinoki-bark shingle, andesite pad
 				// stones; white plaster, vermilion lacquer and grey fired tiles on the temples; split-culm fences, indigo noren, white banners.
-				// LATER (NEW-SURFACES U11): Tsuchikabe, Itabari, Kaya, Hiwada, Soseki, Itado, Takegaki, Azekura, Noren, Nobori, Shu, Kawara,
+				// LATER: Tsuchikabe, Itabari, Kaya, Hiwada, Soseki, Itado, Takegaki, Azekura, Noren, Nobori, Shu, Kawara,
 				// Kidan, Tsuijibei and Mushiro as Bamboo Forest's own surfaces; the shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, WoodsHex("#b8a07a"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Timber, WoodsHex("#8a7a66"))

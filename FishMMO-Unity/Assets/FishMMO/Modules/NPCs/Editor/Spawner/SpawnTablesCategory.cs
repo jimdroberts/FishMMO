@@ -13,7 +13,7 @@ using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The dashboard's Spawn Tables category (the NPCs module's since 2026-11-20): a read-only view of the server-only tables baked from the world
+	/// The dashboard's Spawn Tables category (the NPCs module's): a read-only view of the server-only tables baked from the world
 	/// scenes' spawners, and the button that rebakes them.
 	/// </summary>
 	/// <remarks>

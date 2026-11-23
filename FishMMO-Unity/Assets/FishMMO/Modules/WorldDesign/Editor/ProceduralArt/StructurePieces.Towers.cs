@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The fortifications walked floor over floor (2026-10-19, round 3: "Guard tower interiors are not always enterable from the
+	/// The fortifications walked floor over floor (round 3: "Guard tower interiors are not always enterable from the
 	/// top or bottom (inner facing?), nor are they walkable."): the wall tower, the timber watchtower and the gatehouse. Each
 	/// had floors with no way between them (a walk-level floor and a roof deck over a guard room with no stair, a platform
 	/// reached by a ladder of beams), and the wall pieces' doors faced the field.
@@ -424,7 +424,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 		}
 		d.Add(StructureShapes.Box(new Vector3(0f, eave + 0.15f, 0f), new Vector3(half * 2f + 0.5f, 0.3f, half * 2f + 0.5f), StructureMaterial.Stone, 7, StructureRole.Roof));
-		// The pyramid roof at its palette's pitch (StructureRoofs, I6h); flat, a timber deck.
+		// The pyramid roof at its palette's pitch (StructureRoofs); flat, a timber deck.
 		const float roofRise = 4.85f;
 		OwnRoofPlan roof = OwnRoof(d, StructureMaterial.Timber, roofRise, half + 0.5f);
 		using (d.Builds(RoofRoles))
@@ -445,7 +445,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Corner tower ──────────────────────────────────────────
 
 		/// <summary>
-		/// The corner tower (2026-10-19, for a square curtain such as a palace compound's): where two curtains meet at a right angle.
+		/// The corner tower (for a square curtain such as a palace compound's): where two curtains meet at a right angle.
 		/// Its frame: the origin on the joint of the two curtains' centre lines, the field the outer quadrant (−x and −z), the
 		/// bailey the inner (+x, +z). One curtain leaves its +x face as a module at yaw 0 (field −z), the other its +z face as a
 		/// module at yaw 90 (field −x); each walk door is centred on that curtain's walk line (z = +<see cref="CurtainWalkCentre"/>
@@ -715,7 +715,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			// The roof: a pyramid on the plate (its palette's pitch, or flat, where the palette asks: StructureRoofs, I6h).
+			// The roof: a pyramid on the plate (its palette's pitch, or flat, where the palette asks: StructureRoofs).
 			StructureMaterial roofMaterial = stoneBase ? StructureMaterial.Timber : StructureMaterial.Thatch;
 			const float roofRise = 1.8f, roofHalf = 2.5f;
 			OwnRoofPlan roof = OwnRoof(d, roofMaterial, roofRise, roofHalf);
@@ -879,7 +879,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 			}
-			// A torch each side of the gate on the towers' faces, lit day and night (2026-10-12: torches).
+			// A torch each side of the gate on the towers' faces, lit day and night (torches).
 			for (int s = -1; s <= 1; s += 2)
 			{
 				float x = s * (jamb + 0.85f);

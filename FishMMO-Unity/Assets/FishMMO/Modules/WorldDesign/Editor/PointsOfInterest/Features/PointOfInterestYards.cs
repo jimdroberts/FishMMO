@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The fences round the houses' yards (2026-10-19: "some houses should have fences around them with gates to the roads"): after the
+	/// The fences round the houses' yards ("some houses should have fences around them with gates to the roads"): after the
 	/// template's features, each yard the layout laid (PointOfInterestLayouts' Yards, carried out by PropsFeature with the house as it
 	/// was laid) is fenced round its front garden and the plot behind, a gate in the front fence on the line from the house's door to
 	/// the street (in the back fence, behind a shop).
@@ -24,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Where it may not stand.</b> The layout kept every run clear of the streets, the other buildings and plots, the other yards'
 	/// fences (a side alongside a neighbour's is that fence, shared) and the boundary, so laying each run module by module
-	/// (PointOfInterestLinearFeatures.LayAlong, planned) leaves out only a module over water or pitched too steep (2026-10-19: the
+	/// (PointOfInterestLinearFeatures.LayAlong, planned) leaves out only a module over water or pitched too steep (the
 	/// ways' own clearance, wider than the layout's and round a square's ends, cut front fences short); this leaves a gap before any
 	/// building's door the run passes. Every run of the site is joined up together (PointOfInterestLinearFeatures.Joins): a gap, a
 	/// run's end and a side stopping on a neighbour's fence each end on a post.
@@ -143,7 +143,7 @@ namespace FishMMO.Shared.WorldDesign
 				Vector3 middle = door.Hinge + door.Across * (door.Width * 0.5f) - door.Inward * DoorStep;
 				doors.Add(new Vector2(middle.x, middle.z));
 			}
-			// Every run of every yard joined up together (PointOfInterestLinearFeatures.Joins, 2026-10-19): a yard's corners, its sides
+			// Every run of every yard joined up together (PointOfInterestLinearFeatures.Joins): a yard's corners, its sides
 			// stopping on a neighbour's shared fence, the gate's and the doors' gaps each end on a post.
 			var joins = new PointOfInterestLinearFeatures.Joins();
 			BiomeStructurePalette gatePalette = StructurePieces.LinearPalette(BiomeTemplateArt.StructurePalette(biome), style, "LinearGate");

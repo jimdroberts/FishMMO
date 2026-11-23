@@ -11,7 +11,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 	/// <para>
 	/// Entered by <see cref="AIController"/> when the archetype's <see cref="AIShelterSettings"/>
 	/// says the weather at the NPC's own position is worth walking away from, and left again when it
-	/// is not. The state does the walking; the archetype decides whether it ever happens (Q15).
+	/// is not. The state does the walking; the archetype decides whether it ever happens.
 	/// </para>
 	/// <para>
 	/// A shelter is a WeatherVolume of kind Shelter (the World Simulation module; read through <see cref="ShelterQuery"/>) —

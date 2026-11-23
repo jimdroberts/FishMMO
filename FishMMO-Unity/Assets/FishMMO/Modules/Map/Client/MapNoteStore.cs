@@ -12,8 +12,9 @@ namespace FishMMO.Client
 	/// Reads and writes the notes a character has pinned to a scene's map.
 	/// </summary>
 	/// <remarks>
-	/// <para><b>Local, permanently.</b> Notes stay on the machine that wrote them, in the same
-	/// folder as the explored map. Sharing them would mean player-authored text travelling between
+	/// <para><b>Local, permanently.</b> Notes stay on the machine that wrote them, under
+	/// <c>&lt;install&gt;/Cartography/&lt;characterID&gt;/</c>. (Explored maps used to live beside them; now they
+	/// are account-wide and kept by the server.) Sharing them would mean player-authored text travelling between
 	/// clients, which needs server-side length limits, rate limits and a moderation story — a
 	/// large amount of work in service of a feature nobody has asked for yet. A note is a
 	/// reminder to yourself, and that is what this supports.</para>
@@ -24,9 +25,8 @@ namespace FishMMO.Client
 	/// Anything malformed is skipped rather than aborting the file, so one bad line costs one
 	/// note.</para>
 	///
-	/// <para><b>No signature, unlike the explored map.</b> There is nothing to protect: a forged
-	/// note draws a pin the player put there themselves. The fog file is signed because it is an
-	/// input to a progression system; this is not.</para>
+	/// <para><b>No signature.</b> There is nothing to protect: a forged note draws a pin the player put there
+	/// themselves.</para>
 	/// </remarks>
 	public static class MapNoteStore
 	{
@@ -55,13 +55,63 @@ namespace FishMMO.Client
 		/// <param name="characterID">The character's ID.</param>
 		/// <param name="sceneName">The scene's name.</param>
 		/// <returns>An absolute path. The file may not exist yet.</returns>
-		/// <remarks>
-		/// Derived from the explored map's path so the two cannot disagree about which folder a
-		/// character owns or how a scene name is made safe for a file system.
-		/// </remarks>
 		public static string FilePath(long characterID, string sceneName)
 		{
-			return Path.ChangeExtension(FogOfWarStore.FilePath(characterID, sceneName), FileExtension);
+			return Path.Combine(CharacterDirectory(characterID), SanitizeSceneName(sceneName) + FileExtension);
+		}
+
+		/// <summary>Folder, under the install directory, holding every character's map files.</summary>
+		public const string DirectoryName = "Cartography";
+
+		/// <summary>The folder holding one character's map files.</summary>
+		/// <param name="characterID">The character's ID.</param>
+		/// <returns>An absolute path. The folder may not exist yet.</returns>
+		public static string CharacterDirectory(long characterID)
+		{
+			return Path.Combine(FishMMO.Shared.Constants.GetWorkingDirectory(), DirectoryName, characterID.ToString());
+		}
+
+		/// <summary>Deletes every map file a character has on this machine.</summary>
+		/// <param name="characterID">The character's ID.</param>
+		public static void DeleteAll(long characterID)
+		{
+			string directory = CharacterDirectory(characterID);
+			try
+			{
+				if (Directory.Exists(directory))
+				{
+					Directory.Delete(directory, true);
+				}
+			}
+			catch (Exception exception)
+			{
+				Log.Warning("MapNoteStore", $"Could not delete map files in '{directory}': {exception.Message}.");
+			}
+		}
+
+		/// <summary>A scene name made safe for a file name.</summary>
+		private static string SanitizeSceneName(string sceneName)
+		{
+			if (string.IsNullOrWhiteSpace(sceneName))
+			{
+				return "unknown";
+			}
+
+			char[] characters = sceneName.ToCharArray();
+			char[] invalid = Path.GetInvalidFileNameChars();
+
+			for (int i = 0; i < characters.Length; ++i)
+			{
+				if (Array.IndexOf(invalid, characters[i]) >= 0 ||
+					characters[i] == Path.DirectorySeparatorChar ||
+					characters[i] == Path.AltDirectorySeparatorChar ||
+					characters[i] == '.')
+				{
+					characters[i] = '_';
+				}
+			}
+
+			return new string(characters);
 		}
 
 		/// <summary>

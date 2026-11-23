@@ -67,14 +67,14 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The finest level at or under this many triangles is the shape's field source (the coarsest when none is). The
 		/// fillets meet the rock as drawn near the camera, its finest level: a crag's field from its 972-triangle level stood
-		/// up to 0.9 m off its finest surface (p95 0.5 m), from that level itself p95 0.1–0.2 m (2026-10-21, offline).
+		/// up to 0.9 m off its finest surface (p95 0.5 m), from that level itself p95 0.1–0.2 m (offline).
 		/// </summary>
 		public const int TargetTriangles = 16000;
 
 		/// <summary>
 		/// Voxel–triangle tests drawn per frame while a field the grid can already read is built (its nearest rock within
 		/// <see cref="NearDistance"/>): the slices of a shape a frame takes are as many as fit (at least one). 48 M cost 5.7 ms
-		/// of GPU a frame in the browser (2026-11-04), so this is about 1.4 ms, and a shape (some 300 M tests) takes a third of
+		/// of GPU a frame in the browser, so this is about 1.4 ms, and a shape (some 300 M tests) takes a third of
 		/// a second.
 		/// </summary>
 		public const long BakeBudget = 12L * 1000 * 1000;
@@ -82,7 +82,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The same while every field wanted near the grid is drawn and those left are only in the margin
 		/// (<see cref="DemandMarginXZ"/>): about 0.5 ms. Of 127 shapes wanted round the settlement test camera
-		/// (2026-11-05) the grid itself held none.
+		/// the grid itself held none.
 		/// </summary>
 		public const long MarginBakeBudget = 4L * 1000 * 1000;
 
@@ -92,7 +92,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Metres past the grid (each side, across; <see cref="DemandMarginY"/> up and down) within which a rock's shape is
 		/// wanted: only those fields are drawn, nearest the camera first. The gather never reads a field of a rock whose box
-		/// misses the grid, and a scene registers hundreds of shapes (500 in the settlement test scene, 2026-11-04) of which
+		/// misses the grid, and a scene registers hundreds of shapes (500 in the settlement test scene) of which
 		/// the grid meets a few, so drawing every field cost 5.7 ms of GPU a frame for some 40 s after a scene loaded in the
 		/// browser. The wanted set is measured again once the camera has moved half a margin along any axis (the grid then
 		/// still lies inside the region it was measured for, so every field the gather can read is wanted), or the rocks
@@ -193,7 +193,7 @@ namespace FishMMO.Client
 		/// frames to gather it: the rocks never move, so the grid is the same until the camera crosses a cell, a renderer
 		/// uploads rocks or tags, a shape's field is built or the crevice width changes. Gathered twice on a change, so an
 		/// upload recorded later in the frame it was seen is read the frame after. Every frame it cost up to 2.3 ms of GPU
-		/// beside cliffs (ScenePerfProbe, 2026-10-13); a grid a frame never changes is the same list in the same cells.
+		/// beside cliffs (ScenePerfProbe); a grid a frame never changes is the same list in the same cells.
 		/// </summary>
 		private static Vector3 gatheredMin = new Vector3(float.NaN, float.NaN, float.NaN);
 		private static int gatheredKey, regathers;

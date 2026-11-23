@@ -213,7 +213,7 @@ namespace FishMMO.Shared.Celestial
 			// zenith's blue light turned again toward the eye by the same long path of air. Scattering once
 			// only, the sun's beam loses its blue on the way down while the view's path is already deep
 			// enough to saturate blue, so green came out on top — a mint horizon from about 15° to noon and a
-			// mint fog with it (2026-10-26), which no real clear sky shows and the painted Temperate Sky this
+			// mint fog with it, which no real clear sky shows and the painted Temperate Sky this
 			// model was fitted to never had (its horizon is 0.72, 0.80, 0.92 at 20°). Weighed by the dusk
 			// and taken out toward a sunset, where the sun's own light along the horizon is the whole of it,
 			// and at the horizon's own brightness, so only its colour moves.

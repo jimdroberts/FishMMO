@@ -19,8 +19,8 @@ namespace FishMMO.Shared.WorldDesign
 	/// world scene.
 	/// </summary>
 	/// <summary>
-	/// The solar system and world atlas assets' helpers (split from WorldEditorAssets, Phase 4 of the core and modules plan,
-	/// 2026-11-18): the example system, its folders and names, the atlas and its scene entries.
+	/// The solar system and world atlas assets' helpers (split from WorldEditorAssets):
+	/// the example system, its folders and names, the atlas and its scene entries.
 	/// </summary>
 	public static class WorldSystemAssets
 	{

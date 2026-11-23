@@ -252,7 +252,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(run.StepsPerSecond > walk.StepsPerSecond && run.LegSwing > walk.LegSwing, "faster, wider steps");
 			LogAssert.AreEqual(0f, dead.StepsPerSecond, "the dead do not walk");
 		}
-		// ── Ground: caves and painted textures (2026-11-21: deer and elk spawned in caves) ──────────────
+		// ── Ground: caves and painted textures (deer and elk spawned in caves) ──────────────
 
 		private static GroundReading Ground(bool underground, SurfaceKind? surface)
 		{

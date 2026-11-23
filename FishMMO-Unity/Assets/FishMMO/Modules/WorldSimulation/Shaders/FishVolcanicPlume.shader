@@ -8,9 +8,9 @@
 //     they entrain air, evaporating as they reach the length the air lets them be seen (SteamPhysics)
 //   5 a geyser's water column: every drop on its own parabola, launched at the speed the eruption had
 //     when it left the vent (GeothermalVents.ColumnEnvelope), so the column grows and sinks without a scrub
-//   6 a frost collar (2026-10-25, I2q-b, decision 84): flakes lying flat on the ground in a ring round an airless
+//   6 a frost collar: flakes lying flat on the ground in a ring round an airless
 //     fume jet's lip, where its gas freezes out (GeothermalSteamPresenter)
-//   7 a curtain of fire (2026-10-25, I2r, decision 65 (d)): incandescent lava clots thrown up along a stretch of a fissure,
+//   7 a curtain of fire: incandescent lava clots thrown up along a stretch of a fissure,
 //     each on its own parabola, as high as the stretch's fountain episode has it (LavaCurtains, on the shared clock)
 // The motion is VolcanicPlume's (Shared/Weather), the same functions the weather's ash falls by; the
 // steam's and the geyser's are SteamPhysics' and GeothermalVents'.

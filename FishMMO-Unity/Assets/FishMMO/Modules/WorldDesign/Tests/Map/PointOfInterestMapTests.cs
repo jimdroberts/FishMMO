@@ -16,7 +16,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Generated points of interest on the maps (2026-10-10): harvested into the scene details whether
+	/// Generated points of interest on the maps: harvested into the scene details whether
 	/// or not a map is baked, hidden until discovered, one marker type per kind styled and filtered by group.
 	/// </summary>
 	[TestFixture]
@@ -97,7 +97,7 @@ namespace FishMMO.UnitTests
 		[Test]
 		public void Harvest_DrawsEachWayIntoASite_AndADungeonAsOne()
 		{
-			// 2026-10-20: a cave's every mouth is its own entry; a site holding a dungeon is drawn as a dungeon entrance.
+			// a cave's every mouth is its own entry; a site holding a dungeon is drawn as a dungeon entrance.
 			Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 			var cave = new GameObject("Cave").AddComponent<ScenePointOfInterest>();
 			cave.Apply(new PointOfInterestRecord { Id = 3, Kind = POIType.Cave, Name = "Gloomhollow", Position = new Vector3(10f, 5f, 10f), DetailTier = 2, RequiresDiscovery = true });

@@ -36,20 +36,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>No way within this of the scene's edge, metres.</summary>
 		public float EdgeMarginMetres = 24f;
 		/// <summary>
-		/// The widest river a way of a class bridges before it takes a rope ferry, metres (<see cref="PathCrossings.FerryOverMetres"/>,
-		/// decision 35 (i)); null for none: every crossing a ford or a bridge, as before. Left unset until the ferry's pieces exist.
+		/// The widest river a way of a class bridges before it takes a rope ferry, metres (<see cref="PathCrossings.FerryOverMetres"/>);
+		/// null for none: every crossing a ford or a bridge, as before. Left unset until the ferry's pieces exist.
 		/// </summary>
 		public Func<ScenePathClass, float> FerryOver;
 		/// <summary>
-		/// The straight roads the biome at (east, north) lays (<see cref="PathStraightRoads"/>, 2026-10-26, phase I2l-b); null for none:
+		/// The straight roads the biome at (east, north) lays (<see cref="PathStraightRoads"/>); null for none:
 		/// every way routed round the ground, as before.
 		/// </summary>
 		public Func<float, float, BiomeStraightRoads> StraightRoadsAt;
-		/// <summary>The strike-slip traces the ways jog at (<see cref="PathJogs"/>, 2026-10-26, phase I2l-b); null or empty for none.</summary>
+		/// <summary>The strike-slip traces the ways jog at (<see cref="PathJogs"/>); null or empty for none.</summary>
 		public IReadOnlyList<PathJogs.Trace> Faults;
 
 		/// <summary>
-		/// Places that are not sites but still want a way to the nearest settlement's network (2026-11-15: the housing
+		/// Places that are not sites but still want a way to the nearest settlement's network (the housing
 		/// districts' lane ends and the countryside lots, HousingPlotStage): each gets a spur, as a mine or a shrine does.
 		/// </summary>
 		public IReadOnlyList<PathSpurEnd> ExtraSpurs = Array.Empty<PathSpurEnd>();
@@ -290,7 +290,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// By depth alone every road between settlements waded the streams of a hill country (3–8 m wide, about half a
 		/// metre at their deepest, a cart's ford depth), and which of them were bridged fell to where the way's points
-		/// happened to fall across the channel (Flo Monolith, 2026-10-13: 3 of its 12 crossings bridged).
+		/// happened to fall across the channel (Flo Monolith: 3 of its 12 crossings bridged).
 		/// </remarks>
 		public static bool Wades(ScenePathClass way, bool settlementsRoad, float deepest, float width)
 		{
@@ -312,7 +312,7 @@ namespace FishMMO.Shared.WorldDesign
 			for (int k = Mathf.Max(1, from + 1); k <= to; k++)
 			{
 				ScenePathPointFlags fa = path.FlagsAt(k - 1), fb = path.FlagsAt(k);
-				// A boardwalk's stretch (2026-10-18) is walked on its deck, which ramps and runs at its own gentle grade.
+				// A boardwalk's stretch is walked on its deck, which ramps and runs at its own gentle grade.
 				if ((fa & fb & (ScenePathPointFlags.Bridge | ScenePathPointFlags.Boardwalk | ScenePathPointFlags.Ferry)) != 0 || ((fa | fb) & ScenePathPointFlags.InSite) != 0)
 				{
 					continue;
@@ -408,7 +408,7 @@ namespace FishMMO.Shared.WorldDesign
 						router.MarkBlocked(moat.x, moat.z, MoatShaper.OuterOutline(shape), moatInner + moatWidth);
 					}
 				}
-				// An opening in a cave's roof (2026-10-20) is a pit in the hill: no way runs over it, not even its own cave's.
+				// An opening in a cave's roof is a pit in the hill: no way runs over it, not even its own cave's.
 				foreach ((Vector3 pit, float pitRadius) in CaveShaper.SkylightPits(input.Shapes))
 				{
 					router.MarkBlocked(pit.x, pit.z, pitRadius);
@@ -541,7 +541,7 @@ namespace FishMMO.Shared.WorldDesign
 					PointOfInterestRecord ra = settlements[a], rb = settlements[b];
 					End ea = EndFor(ra, new Vector2(rb.Position.x, rb.Position.z));
 					End eb = EndFor(rb, new Vector2(ra.Position.x, ra.Position.z));
-					// A straight road (2026-10-26, I2l-b): dead-straight from end to end where the line holds its grade, else routed.
+					// A straight road: dead-straight from end to end where the line holds its grade, else routed.
 					if (forms[li] != ScenePathForm.Routed && TryStraight(ea.Outer, eb.Outer, ra.Id, rb.Id, way, forms[li]))
 					{
 						var straightLine = new List<Vector2>();
@@ -581,7 +581,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 
-			// ── Straight roads (2026-10-26, phase I2l-b) ───────────
+			// ── Straight roads ───────────
 
 			/// <summary>Whether each sorted trunk link of the straight network wears ruts (<see cref="BiomeStraightRoads.Ruts"/>).</summary>
 			private bool[] straightRuts = Array.Empty<bool>();
@@ -692,7 +692,7 @@ namespace FishMMO.Shared.WorldDesign
 					c = p.distance.CompareTo(q.distance);
 					return c != 0 ? c : p.record.Id.CompareTo(q.record.Id);
 				});
-				// A cave through its hill has a mouth on each side (2026-10-18): the far one gets a spur of its own, after every other
+				// A cave through its hill has a mouth on each side: the far one gets a spur of its own, after every other
 				// site's (it may join the way laid to the first).
 				for (int i = 0, count = order.Count; i < count; i++)
 				{
@@ -856,7 +856,7 @@ namespace FishMMO.Shared.WorldDesign
 			private int caveMouthRank;
 
 			/// <summary>
-			/// A cave site's end (2026-10-18): at the mouth of its own nearest <paramref name="toward"/> (a cave through a hill
+			/// A cave site's end: at the mouth of its own nearest <paramref name="toward"/> (a cave through a hill
 			/// has one each side), out along the way it faces; for one behind a waterfall, on the bank its shelf lands on, the
 			/// shelf the rest of the way. None under water: those are dived to. False where the site has no mouth a way can end
 			/// at.
@@ -1047,7 +1047,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// A dungeon entrance is come to head-on (DungeonEntranceShaper, 2026-10-18): straight in along its door's heading,
+			/// A dungeon entrance is come to head-on (DungeonEntranceShaper): straight in along its door's heading,
 			/// from past its levelled forecourt to the forecourt's flagstones, whatever side the way comes from (from the hub's
 			/// bearing it once came down the cliff over the door). False for a site with no door plan.
 			/// </summary>
@@ -1182,7 +1182,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 				}
 				List<Vector2> smooth = Smooth(raw, pins, out List<bool> smoothPinned);
-				// Where it crosses a strike-slip trace, the way jogs along it for the slip (2026-10-26, I2l-b): never through a pinned point.
+				// Where it crosses a strike-slip trace, the way jogs along it for the slip: never through a pinned point.
 				if (input.Faults != null && input.Faults.Count > 0)
 				{
 					jogs += PathJogs.Apply(smooth, smoothPinned, input.Faults, WalkableLine);
@@ -1255,7 +1255,7 @@ namespace FishMMO.Shared.WorldDesign
 					ScenePathSurface surface = style.Surface;
 					if (ruts)
 					{
-						// A royal road's ox-cart ruts (decision 59) its whole length, a city's gates or not.
+						// A royal road's ox-cart ruts its whole length, a city's gates or not.
 						surface = ScenePathSurface.Track;
 					}
 					else if (way == ScenePathClass.Road && (paveFrom && along[i] < 250f || paveTo && total - along[i] < 250f))
@@ -1415,7 +1415,7 @@ namespace FishMMO.Shared.WorldDesign
 					}
 					float yr = acrossYaw * Mathf.Deg2Rad;
 					var axis = new Vector2(Mathf.Sin(yr), Mathf.Cos(yr));
-					// Wider than this way bridges: a rope ferry (decision 35 (i)), when the input asks for ferries.
+					// Wider than this way bridges: a rope ferry, when the input asks for ferries.
 					if (input.FerryOver != null && PathCrossings.Choose(false, width, input.FerryOver(style.Class)) == PathCrossingKind.Ferry)
 					{
 						Ferry(path, first, last, middle, axis, acrossYaw, width);
@@ -1591,7 +1591,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <remarks>
 			/// The bridge used to take the way's heading through the run of river and the run's length: a way crossing aslant,
 			/// or running beside a river and dipping into it, laid its bridge along the water, so its deck ran down the river or
-			/// off a fall's lip with one end over nothing (2026-10-12, Flo Monolith). The way is straightened onto the
+			/// off a fall's lip with one end over nothing (Flo Monolith). The way is straightened onto the
 			/// bridge's heading either side of it, so it turns to meet the deck square.
 			/// </remarks>
 			private void AcrossRiver(Vector2 at, float wayYaw, out float yaw, out Vector2 middle, out float width)
@@ -1695,7 +1695,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// <summary>
 			/// Lays the way straight along a bridge's axis over its deck and a few metres either side, easing back into its own
 			/// line beyond: a way that bends onto a bridge meets it at an angle, and the deck's railings stand across it
-			/// (2026-10-11). Flags the points on the deck as bridged and no others near it.
+			///. Flags the points on the deck as bridged and no others near it.
 			/// </summary>
 			/// <remarks>
 			/// Never steeper than the way was routed: the straight line onto a deck can run up a bank the route went round (a

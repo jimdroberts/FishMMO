@@ -7,7 +7,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Source pins for fixes made during the 2026-09-25 server hot-path fix pass that no
+	/// Source pins for fixes made during the server hot-path fix pass that no
 	/// behavioural test can reach without a server: an admission gate, a phase transition's
 	/// writes, and the dispatcher's isolation of each behaviour and callback.
 	/// </summary>

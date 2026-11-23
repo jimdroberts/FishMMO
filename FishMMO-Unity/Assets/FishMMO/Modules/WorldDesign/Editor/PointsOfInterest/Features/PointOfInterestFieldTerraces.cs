@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Terraced fields (2026-10-18, phase I2j-b, decisions 29 and 31): a hillside field cut into level benches along its contours, its
+	/// Terraced fields: a hillside field cut into level benches along its contours, its
 	/// steps faced in drystone (a wall laid along each), as an earth bund with a grassed lip, or as a grass bank, its crop sown on
 	/// the benches; a terraced paddy's every bench dug level, bunded and flooded; and the old, given-up flights round a hamlet.
 	/// </summary>

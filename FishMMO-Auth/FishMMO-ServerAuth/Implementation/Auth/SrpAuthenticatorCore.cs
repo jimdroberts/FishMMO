@@ -1136,8 +1136,8 @@ namespace FishMMO.Auth.Implementation
 			}
 
 			/* From here on the player is the account, not the spelling they typed. SRP has to prove
-			 * the exact identifier the verifier was derived from, so a name registered as "Jim" is
-			 * proven as "Jim" — but the account row stores its name lowercase, and every table keyed
+			 * the exact identifier the verifier was derived from, so a name registered as "Alice" is
+			 * proven as "Alice" — but the account row stores its name lowercase, and every table keyed
 			 * by account (auth_tokens, web_sessions, characters) references that row. The typed
 			 * spelling used to carry on into the token, whose hash then failed its foreign key: an
 			 * account registered with a capital letter could never sign in (issue #267). accountKey

@@ -92,14 +92,14 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Faces are sections</b> (2026-10-08: they replace the formation-shaped cliff rocks). A role
+	/// <b>Faces are sections</b> (they replace the formation-shaped cliff rocks). A role
 	/// picks the style of its size: titans the massif, the footing the bluff, the middle face walls and
 	/// pillars, fill the small block, the crest ledges. A section's mesh is the same for every type: the
 	/// rock it is made of is its material (<see cref="MaterialName"/>, from the biome's cliff), so a
 	/// sandstone canyon and a granite one share geometry and differ in stone.
 	/// </para>
 	/// <para>
-	/// <b>Talus is the wall fallen</b> (2026-10-08: the formation debris — round bedded "cake" slabs
+	/// <b>Talus is the wall fallen</b> (the formation debris — round bedded "cake" slabs
 	/// for sandstone — still read as the old cliffs): 3 m rubble and 7 m rockfall blocks cut by the same
 	/// joints, beds and bevels as the face, at a lighter triangle budget
 	/// (<see cref="CliffSections.DebrisLodTriangles"/>). LOD2 is the collider. Ice keeps its seracs and
@@ -110,7 +110,7 @@ namespace FishMMO.Shared.WorldDesign
 	public static class CliffRocks
 	{
 		/// <summary>Raise when the meshes change in a way the source text does not show.</summary>
-		/// <remarks>2: more variants per role (2026-10-04) and per-variant proportions (<see cref="Proportions"/>). 3: face rocks are cliff sections, granite roundness gone (2026-10-08). 4: talus too (2026-10-08).</remarks>
+		/// <remarks>2: more variants per role and per-variant proportions (<see cref="Proportions"/>). 3: face rocks are cliff sections, granite roundness gone. 4: talus too.</remarks>
 		public const int Version = 4;
 
 		/// <summary>The pseudo rock type of glacier-ice cliffs.</summary>
@@ -154,7 +154,7 @@ namespace FishMMO.Shared.WorldDesign
 				case "Chalk":
 				case "Conglomerate":
 				case "Tuff":
-				// The biomes' own bedded rocks (2026-10-25, RegionalRocks).
+				// The biomes' own bedded rocks (RegionalRocks).
 				case "Flysch":
 				case "Beachrock":
 				case "Marl":
@@ -211,7 +211,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <remarks>
 		/// Every role of a rock type is a section (<see cref="FaceShapes"/>), its talus too; ice keeps its own
 		/// shapes. Variant counts are what keeps a cliff from reading as one rock stamped along its
-		/// length (Baoakraal Hyena-den, 2026-10-04: 6,000 rocks of four meshes): every section style has
+		/// length (Baoakraal Hyena-den: 6,000 rocks of four meshes): every section style has
 		/// <see cref="CliffSections.VariantCount"/>, each at its own proportions.
 		/// </remarks>
 		public static CliffShape[] ShapesOf(string type, CliffRole role)
@@ -580,8 +580,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// accepts it (<see cref="Accepts"/>), else the biome's own (<see cref="OwnRock"/>). Ice stays ice.
 		/// </summary>
 		/// <remarks>
-		/// Geology alone (2026-10-05 … 10-08) walled a scene in its province's rock whatever grew there — sandstone under
-		/// a bog — and the biome alone would make every scene of a biome one rock. The two are taken together (2026-10-08).
+		/// Geology alone once walled a scene in its province's rock whatever grew there — sandstone under
+		/// a bog — and the biome alone would make every scene of a biome one rock. The two are taken together.
 		/// </remarks>
 		public static string RockFor(BiomeArtSpec.Entry entry, string geology)
 		{

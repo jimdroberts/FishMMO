@@ -16,7 +16,7 @@ namespace FishMMO.Shared.Weather
 		public float Emission;
 		/// <summary>A stable number for its look.</summary>
 		public uint Seed;
-		/// <summary>How its strength moves on the shared clock (its biome's <see cref="BiomeVents.Timing"/>, 2026-10-25, I2q-b; presentation only).</summary>
+		/// <summary>How its strength moves on the shared clock (its biome's <see cref="BiomeVents.Timing"/>; presentation only).</summary>
 		public BiomeVentTiming Timing;
 		/// <summary>The seed its timing draws from: its own, but the scene's first Strombolian vent takes the scene's (VentBursts.SceneSeed), which <c>_FishVentBurst</c> follows.</summary>
 		public uint TimingSeed;
@@ -73,12 +73,12 @@ namespace FishMMO.Shared.Weather
 			Find(area, seed, biomeAt, null, into, cellMetres);
 		}
 
-		/// <summary>The spacing of a plume along a stored fissure line, and along a ridge line, m (2026-10-25, I2q-b).</summary>
+		/// <summary>The spacing of a plume along a stored fissure line, and along a ridge line, m.</summary>
 		public const float FissureSpacing = 800f, RidgeSpacing = 1200f;
 
 		/// <summary>
-		/// <see cref="Find(Rect, uint, Func{Vector2, BiomeTemplate}, List{VentSite}, float)"/> with the scene's stored vent lines
-		/// (2026-10-25, phase I2q-b, decisions 53, 90, 95): a biome laid out on lines (<see cref="BiomeVents.Layout"/>) whose lines the
+		/// <see cref="Find(Rect, uint, Func{Vector2, BiomeTemplate}, List{VentSite}, float)"/> with the scene's stored vent lines:
+		/// a biome laid out on lines (<see cref="BiomeVents.Layout"/>) whose lines the
 		/// scene stores has no grid vent; its vents stand on its lines instead (a Fissures line one every <see cref="FissureSpacing"/> m,
 		/// a Ridges line every <see cref="RidgeSpacing"/> m, a Terrace line at its middle and on each pad), after the grid's, every vent
 		/// counted against <see cref="MaxVents"/> and its biome's own cap (<see cref="BiomeVents.MaxPlumes"/>). Null lines: the grid
@@ -128,7 +128,7 @@ namespace FishMMO.Shared.Weather
 					{
 						continue;
 					}
-					// A biome laid out on the scene's stored lines has its vents there (2026-10-25, I2q-b).
+					// A biome laid out on the scene's stored lines has its vents there.
 					if (lines != null && biome.Vents.Layout != BiomeVentLayout.Grid && IceStripes.HasBiome(lines, biome.ID))
 					{
 						continue;
@@ -208,7 +208,7 @@ namespace FishMMO.Shared.Weather
 
 		/// <summary>
 		/// Gives the first Strombolian vent of a scene's list the scene's own burst seed (VentBursts.SceneSeed), so the vent and the
-		/// glows that follow <c>_FishVentBurst</c> burst as one (2026-10-25, I2q-b; decision 95). Pure.
+		/// glows that follow <c>_FishVentBurst</c> burst as one. Pure.
 		/// </summary>
 		public static void SeedSceneBurst(List<VentSite> vents, string sceneName)
 		{

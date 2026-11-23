@@ -35,7 +35,7 @@ namespace FishMMO.Client
 		public const int TilesAcross = 8;
 		/// <summary>
 		/// Slices drawn a frame: the whole volume every 24 frames. At 8 a frame (every 6) the build cost 0.55 ms of GPU,
-		/// more than the light march saved in an overcast (ScenePerfProbe 2026-10-07); a cloud drifts a few metres in
+		/// more than the light march saved in an overcast (ScenePerfProbe); a cloud drifts a few metres in
 		/// 24 frames against texels of three hundred.
 		/// </summary>
 		public const int SlicesPerFrame = 2;

@@ -10,15 +10,15 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Forest</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Forest()
 		{
-			// Primeval temperate broadleaf-and-fir forest (biome round, approved 2026-10-16, authored 2026-10-26): a closed vault of
+			// Primeval temperate broadleaf-and-fir forest: a closed vault of
 			// tall beech on grey pillar boles over a bare copper leaf floor, veteran stag-headed oaks and small-leaved limes, dark
 			// silver fir and yew in the cool hollows and toward the top of its height band, ramsons and butterbur in the stream
 			// ravines, ash and alder by the water, mossy sandstone blocks heaped under it all, and deadwood everywhere. Its people
 			// are foresters, charcoal burners, bodgers and outlaws; its fantasy the green man and the fey (foxfire on rotten wood,
 			// faerie lights, wyrdstone). Taiga keeps the spruce, birch and fly agaric; Woodland the hazel, bramble and open oak.
-			// LATER (I9): every ground and object texture as Forest's own variant of its recipe (decision 12); until then the
+			// LATER: every ground and object texture as Forest's own variant of its recipe; until then the
 			// grounds below are Forest's own recipes and the stones, barks and leaves the catalogue's.
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Faerie + Witchmoss (BiomeTemplate.rareLookA/B), Moonbell only in them.
+			// LATER (no spec column yet): rare looks Faerie + Witchmoss (BiomeTemplate.rareLookA/B), Moonbell only in them.
 			return E("Forest", L(Ground.ForestFloorBeech,
 					// The closed vault: beech dominant with veteran oak and lime, crowns touching, few lone trees (stand of three equal
 					// shares: the stand field's species patches give beech its broad swathes).
@@ -31,12 +31,12 @@ namespace FishMMO.Shared.WorldDesign
 					Plants("DebrisBeechMast", 10f, 128), Plants("DebrisBranchMossy", 3f, 128), Plants("MushroomCep", 0.8f), Plants("MushroomCluster", 0.6f),
 					Bush("HollyForest", 0.5f), Bush("Elder", 0.2f), Bush("Spindle", 0.15f),
 					Logs("Fallen logs", 0.35f, 8f, Wood("FallenLog_Oak", "FallenLog_Beech", "Snag_Beech", "Stump_Bracket", "RootPlate")),
-					// LATER (I9b): a walk-in hollow oak (DeadwoodForm Hollow); the hollow veteran stump stands in.
+					// LATER: a walk-in hollow oak (DeadwoodForm Hollow); the hollow veteran stump stands in.
 					Logs("Hollow oaks", 0.01f, 60f, Wood("HollowOak")),
-					// LATER (I9): Forest's own sandstone and flint stones (decision 6/12); the catalogue's sandstone stands in.
+					// LATER: Forest's own sandstone and flint stones; the catalogue's sandstone stands in.
 					Stones(SmallRocks("Sandstone"), 0.5f),
 					Blocks("Sandstone blocks", 0.02f, 16f, F(RockTypes.Sandstone, "Block")),
-					// LATER (NEW-ROCK-TYPES): a "Chaos" shape (4–9 weathered cuboids heaped and tilted, Fontainebleau); tight heaps of
+					// LATER: a "Chaos" shape (4–9 weathered cuboids heaped and tilted, Fontainebleau); tight heaps of
 					// blocks and tilted slabs stand in.
 					With(Blocks("Sandstone chaos", 0.004f, 50f, F(RockTypes.Sandstone, "Block", "Tilted")), s => { s.ClusterMetres = 14f; s.ClusterSize = 7f; }),
 					Outcrops("Sandstone pedestals", 0.004f, 40f, F(RockTypes.Sandstone, "Pedestal")),
@@ -81,7 +81,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Forest)
 				// Approved: the streams' dippers, newts and dragonflies (FreshWater); chipmunks dropped creature-side.
 				.Wildlife(BiomeHabitat.Forest | BiomeHabitat.FreshWater)
-				// LATER (AMBIENT-LIFE): woodpecker, jay, wood pigeon, stag beetle, hedgehog, roe deer, faerie lights at dusk.
+				// LATER: woodpecker, jay, wood pigeon, stag beetle, hedgehog, roe deer, faerie lights at dusk.
 				.Moat(BiomeMoatWater.Wet)
 				.Blades("GrassWoodrush", t => WoodsBlade(t, "#2a4418", "#4e7028", 0.3f, density: 1f, stiffness: 0.8f, width: 1.2f, clump: 0.6f,
 					head: GrassBladeHead.Plume, headSize: 0.05f, headShare: 0.3f, heads: new[] { "#6a4a2a" }))
@@ -110,7 +110,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.AncientTree, 2.2f), (POIType.HerbGrove, 1.6f), (POIType.Dockyard, 0.6f), (POIType.Watermill, 0.6f),
 					(POIType.LumberMill, 1.5f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 1.2f), (POIType.GoblinWarren, 1.2f), (POIType.HauntedManor, 0.8f),
 					(POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.ManorHouse, 0.5f),
@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Timber", 1.2f)
 				.Prefers(POIType.Tower, "Stone", 0.8f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Elven Hall", 1.2f)
 				.Prefers(POIType.Tower, "Elven Tower", 1f)
 				.Prefers(POIType.TrollBridge, "Mossed Span", 1.4f)
@@ -170,8 +170,8 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.LostLibrary, "Moss Archive", 1.4f)
 				.Prefers(POIType.Commandery, "Preceptory", 1.3f)
 				.Prefers(POIType.TreeVillage, "Talan Town", 1.4f)
-				// (the fantasy wave's variants end here)
-				// LATER (I7): Forest's signature pieces — the treehouse hall (a Village variant and at Ancient Tree / Fey Ring sites,
+				// (the fantasy set's variants end here)
+				// LATER: Forest's signature pieces — the treehouse hall (a Village variant and at Ancient Tree / Fey Ring sites,
 				// approved), charcoal-burner's camp, cruck lodge, bodger's shelter, pannage pen, high seat, holy well, hollow-tree
 				// cell, sawpit, green-man stone; until then the kit's variants below stand in.
 				.Favours(BiomeStructureStyle.Timber, 1.6f)
@@ -180,7 +180,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Hide, 0.4f)
 				.Favours(BiomeStructureStyle.Iron, 0.2f)
 				// The palette: ochre wattle-and-daub in dark oak close-studding, bracken-brown thatch and riven-oak shingles, buff
-				// sandstone plinths and setts, Lincoln green cloth. LATER (NEW-SURFACES U11): split-oak slab logs, riven-oak shingle
+				// sandstone plinths and setts, Lincoln green cloth. LATER: split-oak slab logs, riven-oak shingle
 				// and sandstone stone-slate surfaces as Forest's own; the shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Plaster, WoodsHex("#d6c49a"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Plaster, WoodsHex("#d6c49a"))
@@ -203,7 +203,7 @@ namespace FishMMO.Shared.WorldDesign
 				.BuildsAll(BiomeStructureRole.Ironwork, BiomeStructureMaterial.Iron, WoodsHex("#2a2826"))
 				.BuildsAll(BiomeStructureRole.Cloth, BiomeStructureMaterial.Canvas, WoodsHex("#3e5a2e"))
 				.BuildsAll(BiomeStructureRole.Banner, BiomeStructureMaterial.Dyed, WoodsHex("#2a4e26"))
-				// Oats, spelt and field beans in the assarts (LATER (I7): stumps and brash at the field edges).
+				// Oats, spelt and field beans in the assarts (LATER: stumps and brash at the field edges).
 				.Crops(("Detail_GrassOats", 0.45f), ("Detail_GrassSpelt", 0.3f), ("Detail_FlowersFieldBean", 0.25f))
 				// The assarts' woodbanks: an earth bank with a laid hedge of the understorey's shrubs along its top.
 				.Lines(new Entry.Line("Clawdd", "HollyForest", "Elder", "Spindle"))
@@ -222,7 +222,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Lights(POIType.AncientTree, BiomeWayLightKind.Glowjar, 8f)
 				.CaveLight(BiomeCaveLightPlace.Route, BiomeWayLightKind.LanternPost)
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.WallTorch, 10f)
-				// LATER (I2f-b vine kinds / I9b strand leaf): HangingRoots root curtains at cave mouths and overhangs; ivy stands in.
+				// LATER (vine kinds / I9b strand leaf): HangingRoots root curtains at cave mouths and overhangs; ivy stands in.
 				.GrowsVines(0.9f, 0.95f, 0.35f, 0.3f, ("Ivy", 0.75f), ("Honeysuckle", 0.25f))
 				.Gathers("Iron Vein", "Silverleaf Patch", "Morel Cluster", "Ancient Oak", "Yew Heartwood", "Wild Garlic", "Truffle Patch", "Foxfire Wood")
 				.Herbs("Detail_FlowersRamsons", "Detail_Butterbur", "Detail_FernHartstongue", "Detail_HerbWoodBetony")

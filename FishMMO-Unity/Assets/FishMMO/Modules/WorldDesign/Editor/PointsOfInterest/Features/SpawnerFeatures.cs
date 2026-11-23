@@ -12,7 +12,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// A spawner for one NPC role at the site — service NPCs, guards, townsfolk, a hostile pack or its elite — filled
-	/// from <see cref="PointOfInterestNpcTable"/> by the site's race (2026-10-10: auto spawners).
+	/// from <see cref="PointOfInterestNpcTable"/> by the site's race (auto spawners).
 	/// </summary>
 	/// <remarks>
 	/// <para><b>Authoring only.</b> The spawner is an <see cref="ObjectSpawner"/> on an <c>EditorOnly</c> object: the spawn
@@ -95,7 +95,7 @@ namespace FishMMO.Shared.WorldDesign
 			RaceTemplate race = PointOfInterestFeatureKit.SiteRace(context);
 			PointOfInterestNpcTable table = PointOfInterestNpcTable.LoadOrDefaults();
 			List<PointOfInterestNpcChoice> choices = table.Resolve(race, Role, context.Notes);
-			/* Beasts (2026-11-22: the sites' generated monsters, WildlifeBuilder.Monster) are wildlife: each species is its own
+			/* Beasts (the sites' generated monsters, WildlifeBuilder.Monster) are wildlife: each species is its own
 			 * pack and hunts every other, so one spawner draws ONE species for its whole pack, and a beast keeps its own kind
 			 * rather than taking the site's race (a dire wolf is not an elf). */
 			bool beasts = AreBeasts(choices);
@@ -134,7 +134,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The world boss's spawner, EMPTY (2026-10-10: a designer assigns the boss), standing at the centre of an arena:
+	/// The world boss's spawner, EMPTY (a designer assigns the boss), standing at the centre of an arena:
 	/// a region over the lair's floor named "&lt;site&gt; Arena".
 	/// </summary>
 	/// <remarks>
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (spawner.TryGetComponent(out PendingSpawnerContent pending))
 			{
-				pending.Reason = $"The world boss of {PointOfInterestFeatureKit.SiteName(context)}, empty by design (2026-10-10): assign the boss NPC, then remove this.";
+				pending.Reason = $"The world boss of {PointOfInterestFeatureKit.SiteName(context)}, empty by design: assign the boss NPC, then remove this.";
 			}
 			EditorUtility.SetDirty(spawner);
 			PointOfInterestFeatureKit.Note(context, "its boss spawner is empty by design: assign the boss.");
@@ -209,7 +209,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para><b>One spawner per node, on the ground.</b> A spawner that scatters (<c>RandomSpawnPosition</c>) raises what it
 	/// spawns by its collider's whole height (SpawnableSettings.YOffset, sized for things that fall to the ground); a node's
 	/// pivot is its base and it never falls, so every node hovered its own height in the air (Flo Monolith's spawn table,
-	/// 2026-10-12: Mirewort 0.8 m, Iron Vein 1.2 m, the Ancient Oak 27 m). Each node therefore has a spawner of its own
+	/// Mirewort 0.8 m, Iron Vein 1.2 m, the Ancient Oak 27 m). Each node therefore has a spawner of its own
 	/// standing on its spot (spawned there exactly, no offset), drawn from the site's seed apart from the others, off the
 	/// props the site laid, out of the water (sea-floor nodes aside) and off steep ground.</para>
 	/// </remarks>
@@ -247,10 +247,10 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			// What the biome offers: its template's Gathering Resources (2026-10-16; the catalogue's rows named biomes before).
+			// What the biome offers: its template's Gathering Resources (the catalogue's rows named biomes before).
 			Biomes.BiomeTemplate template = context.BiomeAt != null ? context.BiomeAt(context.Record.Position.x, context.Record.Position.z) : null;
 			IReadOnlyList<string> offered = BiomeTemplateArt.Gathering(template);
-			// In a cave whose host links its form to a cave biome, its chamber's nodes are that biome's (2026-10-25, I2n).
+			// In a cave whose host links its form to a cave biome, its chamber's nodes are that biome's.
 			if (CaveShaper.TryForm(context.Record.Kind, out _))
 			{
 				CaveBiome caves = CaveInteriorArt.OfSite(context.Request, context.Record);

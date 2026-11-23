@@ -22,12 +22,12 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// <b>In the cave</b> is in one of its voids' boxes (its passages', chambers', chasms' and shafts', set by the cut) or near
-	/// one of its pieces' boxes. The pieces' boxes alone were not enough once halls grew to 160 m (2026-10-13): a piece is a
+	/// one of its pieces' boxes. The pieces' boxes alone were not enough once halls grew to 160 m: a piece is a
 	/// 32 m cube of the surface, so the air in the middle of a hall, a few metres over its floor, was in none of them, and the
 	/// far walls were switched off by distance while the camera stood inside.
 	/// </para>
 	/// <para>
-	/// <b>No finer culling inside (measured 2026-10-20, Moron 2's seven caves, chamber middles and passage nodes, 8 bearings).</b>
+	/// <b>No finer culling inside (Moron 2's seven caves, chamber middles and passage nodes, 8 bearings).</b>
 	/// The pieces are drawn by the GPU Resident Drawer with its occlusion culling, which already leaves 10k–19k triangles a view
 	/// on average of the 19k–59k in the frustum; culling to exactly the pieces a ray can reach would leave 7k–15k, and the
 	/// triangles past 60 m (a level of detail's share) are 1k–8k a view. Neither per-chamber visibility nor a far level of
@@ -38,7 +38,7 @@ namespace FishMMO.Shared
 	/// ask whether the camera is sealed in one (UndergroundView).
 	/// </para>
 	/// <para>
-	/// <b>Where the air is.</b> The cut also keeps the cave's columns (<see cref="CaveEnclosure"/>, 2026-10-21): what the lit
+	/// <b>Where the air is.</b> The cut also keeps the cave's columns (<see cref="CaveEnclosure"/>): what the lit
 	/// surfaces' underground darkness reads (CaveEnclosureMap, FishGroundMap.hlsl), and the sky's ambient at the eye
 	/// (<see cref="EnclosedAt"/>), so a hall under thin rock is as dark as one under a mountain.
 	/// </para>
@@ -81,7 +81,7 @@ namespace FishMMO.Shared
 		/// <summary>Counts the caves enabled and disabled: what a window of their columns (CaveEnclosureMap) is kept against.</summary>
 		public static int LiveVersion => liveVersion;
 
-		/// <summary>Where the cave's air is (null for a cave cut before 2026-10-21, until it is cut again).</summary>
+		/// <summary>Where the cave's air is (null for a cave cut by an older generator, until it is cut again).</summary>
 		public CaveEnclosure Enclosure => enclosed;
 
 		/// <summary>How far in any live cave a point is, 0..1 (<see cref="CaveEnclosure.At"/>): 0 outside them and at their mouths.</summary>
@@ -175,7 +175,7 @@ namespace FishMMO.Shared
 			Vector3 eye = camera.transform.position;
 			float reach2 = reach * reach;
 			// Inside the cave (in any of its pieces' boxes) every piece is drawn: a passage or a cavern is seen far along,
-			// and a piece switched off by distance left a hole onto the hillside's underside (2026-10-12).
+			// and a piece switched off by distance left a hole onto the hillside's underside.
 			bool inside = InVoid(eye);
 			for (int i = 0; i < boxes.Length && !inside; i++)
 			{

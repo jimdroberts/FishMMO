@@ -6,7 +6,7 @@ namespace FishMMO.Client
 	/// <summary>
 	/// A tree's trunk as the ambient life climbs it: its axis and radius up the lower trunk, measured from the tree's own
 	/// collision mesh, placed where the tree stands. A squirrel clinging to the bark sits on this surface, which is the
-	/// surface the trunk's collider has, rather than on a guess round the crown's middle (2026-10-11: "when they jump
+	/// surface the trunk's collider has, rather than on a guess round the crown's middle ("when they jump
 	/// onto trees they miss the colliders").
 	/// </summary>
 	public sealed class AmbientTrunk

@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>A cave system's water: whether it has any, whether it is frozen, and its bodies.</summary>
 	public sealed class CaveStreamPlan
 	{
-		/// <summary>A dry system: no water at all (as every cave but a grotto's pool was before 2026-10-20).</summary>
+		/// <summary>A dry system: no water at all (as every cave but a grotto's pool was formerly).</summary>
 		public static readonly CaveStreamPlan Dry = new CaveStreamPlan();
 
 		/// <summary>Whether the system holds water (frozen or not).</summary>
@@ -86,7 +86,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Water in the caves (2026-10-20, caves livened: "underground streams & waterfalls & pools"): which systems hold water and
+	/// Water in the caves (caves livened: "underground streams & waterfalls & pools"): which systems hold water and
 	/// where it lies in them — streams down passage floors fed by springs pouring out of the walls, falls over chasms' lips and
 	/// down from the roofs' avens into plunge pools, still pools in chambers, water standing in the basins and rimstone gours
 	/// the layout sank, a mine's flooded winzes, and the flooded dead ends of passages (sumps).

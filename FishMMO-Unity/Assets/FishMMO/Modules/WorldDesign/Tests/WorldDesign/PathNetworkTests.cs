@@ -317,7 +317,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// An escarpment: low ground south of z = 0, 60 m higher north of z = 6 (a wall of ten metres a metre), and east of
-		/// x = 340 a gentle ramp up it. Flo Monolith's falls are such a wall, and ways came down it (2026-10-12).
+		/// x = 340 a gentle ramp up it. Flo Monolith's falls are such a wall, and ways came down it.
 		/// </summary>
 		public static float Escarpment(float x, float z)
 		{
@@ -447,7 +447,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A street town's ways come in on their own bearings toward where they go (2026-10-18: the road decides the street),
+		/// A street town's ways come in on their own bearings toward where they go (the road decides the street),
 		/// each ending inside on that bearing <see cref="SiteEntrances.EntryDepth"/> of the town's reach in, where the layout's
 		/// street from that entrance passes.
 		/// </summary>
@@ -605,7 +605,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// <summary>
 		/// A stream 5 m wide and 0.3 m deep, which every class could wade: the road between the towns bridges it, and the
 		/// trail to a ruin across a second such stream wades it. By depth alone the roads of a hill country waded every
-		/// stream they met (Flo Monolith, 2026-10-13).
+		/// stream they met (Flo Monolith).
 		/// </summary>
 		[Test]
 		public void TheTownsRoadBridgesAStreamTheRuinsTrailWades()
@@ -688,7 +688,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// A river slanting 60° across the way: the bridge used to take the way's heading through the water, so its deck ran
-		/// aslant down the river and one end stood out over the falling bank (Flo Monolith, 2026-10-12). It turns to cross
+		/// aslant down the river and one end stood out over the falling bank (Flo Monolith). It turns to cross
 		/// square (as far as <c>BridgeTurnDegrees</c> allows), and the way eases onto it and off again without a jump.
 		/// </summary>
 		[Test]
@@ -702,7 +702,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			PathBridgeSite bridge = plan.Bridges[0];
 			ScenePath road = plan.Paths.Find(p => p.Id == bridge.PathId);
 			// The way's own heading over the river, from 40 m before the bridge to 40 m past it: the bridge turns from it toward
-			// square by as much as BridgeTurnDegrees (40°) allows. (Since 2026-10-18 the towns' ways come in on their own
+			// square by as much as BridgeTurnDegrees (40°) allows. (The towns' ways now come in on their own
 			// bearings, due east here, so the way meets the river 60° off square and the bridge turns the full 40°.)
 			Vector3 before = road.Points[0], after = road.Points[road.Count - 1];
 			float bestBefore = float.PositiveInfinity, bestAfter = float.PositiveInfinity;
@@ -736,7 +736,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// A town below an escarpment and one above it beyond a river along its top, and a waterfall's site at the cliff's
 		/// foot: every way goes round by the ramp, crosses on a bridge between banks at one height, and enters the fall's
 		/// site from ground a walker can stand on. In Flo Monolith a spur joined a way 60 m below across the cliff's edge,
-		/// a bridge was aimed up the fall, and its approach was straightened up the wall (2026-10-12).
+		/// a bridge was aimed up the fall, and its approach was straightened up the wall.
 		/// </summary>
 		[Test]
 		public void AWayNeverClimbsACliffToReachItsBridge()
@@ -888,7 +888,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 	/// <summary>
 	/// The river's level up its banks is smooth down a falling river: the bed paint and the plants' waterline used the
-	/// highest of the grid's samples about a point, which stepped at every sample and cut the banks into teeth (2026-10-11).
+	/// highest of the grid's samples about a point, which stepped at every sample and cut the banks into teeth.
 	/// </summary>
 	[TestFixture]
 	public class RiverBankLevelTests

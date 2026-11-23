@@ -10,7 +10,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// GPU plant capacity (2026-10-27, when the CPU chunk renderer was removed): every detail kind the catalogue makes routes
+	/// GPU plant capacity (when the CPU chunk renderer was removed): every detail kind the catalogue makes routes
 	/// to a GPU renderer; the caps hold the measured load with headroom; the scatter's sparse density keeps exactly what the
 	/// dense slices held (stored counts, bounds) and its painted-cell masks keep an instance on painted ground, while a
 	/// wholly painted block places exactly as before; the blade record carries 64 types without moving a bit of types
@@ -89,7 +89,7 @@ namespace FishMMO.UnitTests
 		// ── The caps ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// Measured 2026-10-27 over the TerrainData (painted, not listed): Moron 2 scene 38 blade prefabs / 84 mesh kinds, a
+		/// Measured over the TerrainData (painted, not listed): Moron 2 scene 38 blade prefabs / 84 mesh kinds, a
 		/// tile at most 29 blade prefabs / 63 mesh kinds; Moron 3 27 / 115, tiles 26 / 88. The audit's spec basis for the
 		/// busiest scene: 105 blade, 127 scatter + 127 other kinds.
 		/// </summary>

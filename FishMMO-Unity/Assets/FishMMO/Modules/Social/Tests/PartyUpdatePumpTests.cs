@@ -11,7 +11,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The party's half of the social update pump (moved from SocialUpdatePumpTests with the party, 2026-11-16): the
+	/// The party's half of the social update pump (moved from SocialUpdatePumpTests with the party): the
 	/// per-recipient buff ledger, the buff signature, and the pins on the party pump, vitals and panel.
 	/// </summary>
 	[TestFixture]

@@ -15,7 +15,7 @@ namespace FishMMO.Client
 	/// cascade's caster list, and URP's own cross-cascade culling is off (ShadowUtils sets shadowCascadeBlendCullingFactor
 	/// 1): every tree near the camera was drawn into all four cascades, its whole vertex stage run four times, and every far
 	/// one into the three maps that do not even cover it. The trees' shadows were 0.65 ms, all of it vertex work
-	/// (ScenePerfProbe, Flo Monolith's meadow, 2026-10-08).
+	/// (ScenePerfProbe, Flo Monolith's meadow).
 	/// </para>
 	/// <para>
 	/// The caster cannot cull without knowing which cascade it is drawing and where each one is. URP keeps both to itself

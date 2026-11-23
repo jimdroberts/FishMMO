@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Caves where their water is (2026-10-18: "Caves should be able to appear behind waterfalls and under water"): sited
+	/// Caves where their water is ("Caves should be able to appear behind waterfalls and under water"): sited
 	/// by the water itself, not by the faces a dry cave is looked for on, which keep off every river, lake and the sea.
 	/// </summary>
 	/// <remarks>

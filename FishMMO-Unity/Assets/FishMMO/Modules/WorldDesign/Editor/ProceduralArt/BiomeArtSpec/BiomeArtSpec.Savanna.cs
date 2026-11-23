@@ -10,17 +10,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Savanna</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Savanna()
 		{
-			// The Zimbabwe plateau and the Limpopo lowveld in the stone-house centuries (biome round, approved 2026-10-25, authored
-			// 2026-10-26): tall-grass parkland on granite, thatching grass head-high and gold in the dry season, red-oat flushing copper,
+			// The Zimbabwe plateau and the Limpopo lowveld in the stone-house centuries:
+			// tall-grass parkland on granite, thatching grass head-high and gold in the dry season, red-oat flushing copper,
 			// flat-topped umbrella thorns and grey baobabs standing apart, copper-leaved mopane on the grey clay lowlands, lime-barked
 			// fever trees round the vleis, red termite islands under their own thickets; the granite kopjes stacked and balanced,
 			// lichened orange and lime, low bare dwalas, wide sand rivers dry most of the year; and in the late dry season the veld
-			// BURNS (decision 75: the burn mosaic on the shared clock), flushes green and the fire lilies come up. Its people build
+			// BURNS (the burn mosaic on the shared clock), flushes green and the fire lilies come up. Its people build
 			// round daga houses under stepped thatch and curving drystone walls without mortar or corners. Invented names, no rites,
-			// gods or real faces. Humidity reaches (decision 29): h < 0.05 the mopane lowveld, h > 0.25 the tall veld.
-			// LATER (I9 T1): every ground and object texture as Savanna's own variant (Granite "Matopo", Schist "Greenstone", Sandstone
+			// gods or real faces. Humidity reaches: h < 0.05 the mopane lowveld, h > 0.25 the tall veld.
+			// LATER: every ground and object texture as Savanna's own variant (Granite "Matopo", Schist "Greenstone", Sandstone
 			// "Mapungubwe", Basalt "Dolerite", Termitaria "Lowveld", the umbrella thorn's and baobab's barks and leaves).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Ashflush V(0.32, 0.92, 0.58) and Birdstone V(0.44, 0.22, 0.58).
+			// LATER (no spec column yet): rare looks Ashflush V(0.32, 0.92, 0.58) and Birdstone V(0.44, 0.22, 0.58).
 			// LATER (I9b P29 / B10): the wet/dry season tints (resurrection bush greening, veld flowers wet only, mopane copper, the baobab
 			// leafless with pods in the dry season) and the baobab's flowers opening at dusk.
 			return E("Savanna", L(Ground.GrassDryTawnyVeld,
@@ -31,17 +31,17 @@ namespace FishMMO.Shared.WorldDesign
 					Moded(Grass("GrassWire", 8f, 180), BiomeScatterMode.NearSites("Village,Camp,Town", 80f)),
 					Moded(Grass("GrassStar", 6f, 200), BiomeScatterMode.NearSites("Village,Town", 40f)),
 					// Wet-season veld flowers; the fire lilies grow only where the burn passed one to four weeks before (their blade type's
-					// AfterBurn, decision 75); the flame lily scrambling on the termite islands.
+					// AfterBurn); the flame lily scrambling on the termite islands.
 					Plants("FlowersVeld", 2f), Plants("FlowersFireLily", 6f),
 					OnLandform(Plants("FlowersFlameLily", 1.5f), BiomeLandformPart.Whole, "TermiteIslands"),
 					// The parkland's trees: umbrella thorns in open stands, the plateau's baobabs standing apart, marula, leadwood alive and
-					// dead for centuries. LATER (I9b P25): the weaver nests on a third of the umbrella thorns.
+					// dead for centuries. LATER: the weaver nests on a third of the umbrella thorns.
 					Stand(Was(0.06f, 25f), 20f, W(0.2f, 0.12f, open: 0.3f), "UmbrellaThorn"), Trees(0.006f, 60f, 15f, "BaobabMapungubwe"),
 					Trees(0.004f, 40f, 18f, "Marula"), Trees(0.003f, 50f, 18f, "Leadwood"), Trees(0.002f, 60f, 20f, "LeadwoodDead"),
 					Bush("SickleBush", 0.4f), Plants("HerbWildSage", 0.5f),
-					// The termite islands (their landform's zone, decision 55): the island thicket of jackalberry, raisin bush, Guinea
+					// The termite islands (their landform's zone): the island thicket of jackalberry, raisin bush, Guinea
 					// grass and bowstring hemp, Podaxis after rain, and the chimney spires at their crowns.
-					// LATER (NEW-ROCK-TYPES): Termitaria "Lowveld" with its Spire and Island shapes; the catalogue's cathedral mound stands in.
+					// LATER: Termitaria "Lowveld" with its Spire and Island shapes; the catalogue's cathedral mound stands in.
 					OnLandform(Trees(0.02f, 12f, 15f, "Jackalberry"), BiomeLandformPart.Whole, "TermiteIslands"),
 					OnLandform(Bush("Grewia", 1f), BiomeLandformPart.Whole, "TermiteIslands"),
 					OnLandform(Plants("Sansevieria", 3f), BiomeLandformPart.Whole, "TermiteIslands"),
@@ -65,7 +65,7 @@ namespace FishMMO.Shared.WorldDesign
 						.Ways(road: Ground.PathGameTrail),
 					// d2: greenstone red earth over the schist belts: red-oat, veld flowers, sickle bush, fever-tea, quartz-reef float and
 					// the white reefs themselves, greenstone ridges, dolerite blocks.
-					// LATER (NEW-ROCK-TYPES): the Quartzite Reef shape (a gold-flecked white ridge 10–60 m) and Pebbles_Reef; quartzite
+					// LATER: the Quartzite Reef shape (a gold-flecked white ridge 10–60 m) and Pebbles_Reef; quartzite
 					// wedges and pebbles stand in.
 					D(Ground.SoilGreenstoneRed, 160f, 2.5f, 0f, 18f, Grass("GrassRedOat", 12f, 200), Plants("FlowersVeld", 4f), Bush("SickleBush", 0.8f),
 						Plants("HerbWildSage", 1f), Stones(Pebbles("Quartzite"), 2f),
@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 						Blocks("Dolerite blocks", 0.01f, 20f, F(RockTypes.Basalt, "Block"))),
 					// d3: dwala slab — the bare exfoliating granite of the dwalas and kopjes (their landforms paint it): resurrection
 					// bush and monkey's tail in the cracks, tree aloes, loose sheet spalls, balancing stacks. Ways climb it by pecked steps.
-					// LATER (I9 T1): Rocks_Matopo of its own; the granite's grey stones stand in.
+					// LATER: Rocks_Matopo of its own; the granite's grey stones stand in.
 					D(Ground.RockDwalaSlab, 96f, 3f, 15f, 45f, Plants("Myrothamnus", 3f), Plants("Xerophyta", 1.5f), Grass("GrassWire", 4f, 140),
 						Trees(0.02f, 12f, 45f, "TreeAloe"), Stones(SmallRocks("Grey"), 3f),
 						Blocks("Granite sheet spalls", 0.04f, 8f, F(RockTypes.Granite, "SheetSpall")),
@@ -93,22 +93,22 @@ namespace FishMMO.Shared.WorldDesign
 				.Moved("detail/1", "Boulders")
 				.Ways(path: Ground.PathSingleFile, road: Ground.PathCattleRoad, cobbles: Ground.FlagstoneDagaFloor)
 				.Bars(sand: Ground.SandPinkGruss, gravel: Ground.GravelReefIronstone)
-				// The veld burns every late dry season (decision 75, approved Q4): cells ignite at hashed times, fronts run downwind, the
+				// The veld burns every late dry season: cells ignite at hashed times, fronts run downwind, the
 				// grass burns to stubble and flushes green; the burnt veld is drawn by the burn on the GPU, never painted.
 				// LATER (I2t LEFT): the flame ribbon and smoke plume at the front, DebrisBurn only on burnt ground, firebreaks at the vleis,
 				// dwalas and island thickets.
 				.Burns(BiomeBurnRegime.Annual)
-				// Own rock granite (its formations; approved Q2), accepting the basement gneiss, the greenstone schist, the reef quartzite,
+				// Own rock granite (its formations), accepting the basement gneiss, the greenstone schist, the reef quartzite,
 				// the table hill's sandstone and the dolerite dykes' basalt; conglomerate and shale dropped.
 				.Accepts(RockTypes.Gneiss, RockTypes.Schist, RockTypes.Quartzite, RockTypes.Sandstone, RockTypes.Basalt)
 				.CaveShell(CaveForm.Cave, "Granite").CaveShell(CaveForm.Grotto, "Granite").CaveShell(CaveForm.Mine, "Schist")
 				.CaveShell(CaveForm.LavaTube, "Basalt").CaveShell(CaveForm.SeaCave, BiomeCaveShell.Ground).CaveShell(CaveForm.IceCave, "Ice")
-				// Reef gold, emerald in the schist, and rainglass, the fantasy prisms brightening before rain (decision 75's RAIN mode);
+				// Reef gold, emerald in the schist, and rainglass, the fantasy prisms brightening before rain (the RAIN mode);
 				// the Birdstones' eyes and the crystal posts glow by it too.
 				.Crystals((BiomeCaveCrystalKind.Reefgold, 0.5f), (BiomeCaveCrystalKind.Emerald, 0.3f), (BiomeCaveCrystalKind.Rainglass, 0.2f))
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.Rain)
 				.GlowMode(SceneGlowSource.Way, SceneGlowMode.Rain)
-				// The granite kopjes, low dwala pavements, seasonal pans, the termite islands and one cleft table hill (I2g-b presets).
+				// The granite kopjes, low dwala pavements, seasonal pans, the termite islands and one cleft table hill (presets).
 				.Landforms("Kopje", "Dwala", "Pan", "TermiteIslands", "TableHill")
 				.Look(BiomeLookClass.Arid)
 				.Blades("GrassThatch", t => AridBlade(t, "#5a5a2a", "#c8a858", 0.35f, head: GrassBladeHead.Plume, headSize: 0.12f, headShare: 0.6f,
@@ -132,8 +132,8 @@ namespace FishMMO.Shared.WorldDesign
 					heads: new[] { "#c8281a", "#f0c020" }))
 				.Blades("GrassPearlMillet", t => AridBlade(t, "#5a7a3a", "#8a8a50", 0.3f, width: 1.6f, head: GrassBladeHead.SeedHead, headSize: 0.14f, headShare: 0.8f,
 					heads: new[] { "#8a7a5a" }))
-				// Grassland, scrub, the homesteads and the fallen enclosures (approved Q8: 278568).
-				// LATER (AMBIENT-LIFE): elephant herds, giraffe, zebra and wildebeest, impala, kudu, sable, warthog, buffalo, lion prides,
+				// Grassland, scrub, the homesteads and the fallen enclosures (278568).
+				// LATER: elephant herds, giraffe, zebra and wildebeest, impala, kudu, sable, warthog, buffalo, lion prides,
 				// hyena, ground hornbills, secretary birds, vultures, weaver colonies, quelea at dusk, carmine bee-eaters at the burn
 				// fronts, hippo and crocodile in the sand-river pools, patched cattle at the kraals, dung beetles on the ways; the fantasy
 				// ember-termites round the Embermounds and the stormbird running ahead of the weather driver's storm fronts.
@@ -143,7 +143,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Gathers("Reef Gold", "Alluvial Gold", "Malachite Copper", "Ironstone", "Soapstone", "Baobab Fruit", "Baobab Bast", "Marula Fruit",
 					"Mopane Worms", "Thatchgrass", "Bowstring Hemp", "Resurrection Leaf", "Leadwood Charcoal", "Reefgold Crystal", "Emerald Prism", "Rainglass")
 				.Herbs(Det("Myrothamnus"), Det("HerbWildSage"))
-				// Dry moats (approved Q7); khaki, turbid water in the pans and sand-river pools, no floating plants.
+				// Dry moats; khaki, turbid water in the pans and sand-river pools, no floating plants.
 				.Moat(BiomeMoatWater.Dry)
 				.WaterTint(new BiomeWaterLook(ScrubHex("#8a7a52"), ScrubHex("#3a3222"), new Vector3(0.30f, 0.22f, 0.16f), 0.7f, ScrubHex("#a08a5a"), ScrubHex("#e8e0cc")))
 				.Describe("Head-high golden grass under flat-topped thorns and grey baobabs, granite kopjes stacked like giants' cairns, red termite spires, "
@@ -178,10 +178,10 @@ namespace FishMMO.Shared.WorldDesign
 				// Approved §7: homesteads, cattle posts, fallen enclosures, reef workings and the bead market; the plateau's kopjes, pans,
 				// waterholes and painted overhangs; no ports or coasts, wetland, mill, lumber, temple, monastery, barrow, ossuary, stone-circle,
 				// fey, dune, salt, oasis, glacier, ice or volcanic kinds. The river crossings and falls stay.
-				// LATER (I7): the named pieces — the Great Enclosure (an elliptical battered curtain with the chevron frieze, the parallel
-				// passage and the solid conical tower; ≤ 1 a scene), the hill complex woven through a kopje's corestones (I24), daga
-				// homesteads of round houses under stepped TierThatch (I28) joined by curved screen walls, boulder granaries, cattle kraals,
-				// smelting grounds, reef workings, the bead market, the Hill of the Gilt Rhino on the table hill's pad (I23), the Birdstones
+				// LATER: the named pieces — the Great Enclosure (an elliptical battered curtain with the chevron frieze, the parallel
+				// passage and the solid conical tower; ≤ 1 a scene), the hill complex woven through a kopje's corestones, daga
+				// homesteads of round houses under stepped TierThatch joined by curved screen walls, boulder granaries, cattle kraals,
+				// smelting grounds, reef workings, the bead market, the Hill of the Gilt Rhino on the table hill's pad, the Birdstones
 				// (eyes glowing on nights before rain, ≤ 2), the painted shelter, the Elder Baobab with a hall in its trunk, the ringing
 				// rocks, the waterhole hide, the fallen enclosure and the Embermound (amber Breath glow, ≤ 2). The kit's variants stand in.
 				.Sites((POIType.Camp, 1.2f), (POIType.Shrine, 0.4f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Clearing, 0.6f), (POIType.Spring, 1f),
@@ -195,7 +195,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.Capital, 0.3f), (POIType.Keep, 1f), (POIType.Castle, 0.3f), (POIType.Fortress, 0.3f), (POIType.TradingPost, 1f),
 					(POIType.Waystation, 0.6f), (POIType.Mine, 1.2f), (POIType.Quarry, 0.6f), (POIType.DungeonEntrance, 0.5f), (POIType.BossLair, 0.3f),
 					(POIType.OreVein, 0.8f), (POIType.CrystalFormation, 0.3f), (POIType.AncientTree, 1f), (POIType.HerbGrove, 0.6f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 0.6f), (POIType.GoblinWarren, 0.7f), (POIType.HangingTree, 0.6f),
 					(POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.WreckedCaravan, 1.2f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.BurnedVillage, 0.6f),
@@ -236,7 +236,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.HuntingLodge, "Hide Lodge", 1f)
 				.Prefers(POIType.Graveyard, "Earthen", 0f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 0f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.DragonLair, "Bone Roost", 1.2f)
 				.Prefers(POIType.GiantsSteading, "Bone Garth", 1.2f)
@@ -247,11 +247,11 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.TitansBones, "Sunken Skull", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.4f)
 				.Prefers(POIType.NomadCamp, "Felt Yurts", 1.4f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				// The round-plan villages (the kit's yurt camps) stand in for the daga homesteads, built of daga under thatch by the Hide
 				// style's palette below; the stone variants for the walled towns, enclosures and hill walls; no timber, longhouse,
 				// palisade, caravanserai, barrow or earthen-mound variants.
-				// Approved: Earth 2.0, Stone 1.4, Hide 1.0, Timber 0. LATER (I7): Earth-style templates of their own; until then the
+				// Approved: Earth 2.0, Stone 1.4, Hide 1.0, Timber 0. LATER: Earth-style templates of their own; until then the
 				// kit's Hide (round) and Stone templates carry the homesteads and enclosures, and Timber keeps a trace so no kind is left
 				// without a template.
 				.Favours(BiomeStructureStyle.Earth, 2f)
@@ -263,7 +263,7 @@ namespace FishMMO.Shared.WorldDesign
 				// platforms and floors, adze-hewn mukwa doors, mopane poles and palisades, forged black iron wound with copper wire,
 				// beaten bark cloth; the stone style's fire-split granite in level dry courses with the dark dolerite chevron frieze and
 				// soapstone carving; the cattle posts' sewn grass mats and patched hides.
-				// LATER (NEW-SURFACES U3/U8 + I6h/I28): Daga, TierThatch, DagaPlatform, MukwaDoor, MopanePalisade, BarkCloth,
+				// LATER: Daga, TierThatch, DagaPlatform, MukwaDoor, MopanePalisade, BarkCloth,
 				// ZimbabweCourse, DentelleBand, GrassMat and PatchHide as surfaces of their own; the kit's tinted materials stand in.
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Wall, BiomeStructureMaterial.Adobe, ScrubHex("#8a5a34"))
 				.Builds(BiomeStructureStyle.Earth, BiomeStructureRole.Roof, BiomeStructureMaterial.Thatch, ScrubHex("#b89a5a"), pitch: BiomeRoofPitch.Pitch45)
@@ -293,15 +293,15 @@ namespace FishMMO.Shared.WorldDesign
 				.Weathers(BiomeStructureFinish.Charred, 0.2f, 0f)
 				.Coated(BiomeStructureCoat.Termitecast, 0.5f, 1f)
 				// Field crops: pearl millet and Bambara groundnut in small irregular fields; Bambara in rows.
-				// LATER (I2j-b share): the draft's bottomland share (0.4 of fields as vlei gardens); LATER (I7): boulder granaries on half
+				// LATER (share): the draft's bottomland share (0.4 of fields as vlei gardens); LATER: boulder granaries on half
 				// the fields.
 				.Crops(("Detail_GrassPearlMillet", 0.6f), ("Detail_Bambara", 0.3f))
 				.CropRows("Detail_Bambara", 0.8f)
 				// Mopane palisades round the kraals; the battered Zimbabwe wall round the towns, cities and hill complexes.
-				// LATER (NEW-SURFACES): the MopanePalisade style's grey barked posts; the kit's palisade at the folds stands in.
+				// LATER: the MopanePalisade style's grey barked posts; the kit's palisade at the folds stands in.
 				.Lines(new Entry.Line(BiomeLinearForm.Palisade, BiomeLinearPlace.Folds), new Entry.Line("ZimbabweWall"))
 				// Soapstone fire-bowls on daga-and-granite pillars in the towns and cities, mopane-resin torches in the villages, braziers at
-				// the strongholds; the cattle posts unlit (their hearths). LATER (I7a): crystal posts at the Birdstones and Embermounds.
+				// the strongholds; the cattle posts unlit (their hearths). LATER: crystal posts at the Birdstones and Embermounds.
 				.Lights(POIType.Town, BiomeWayLightKind.SoapstoneBowl, 16f)
 				.Lights(POIType.City, BiomeWayLightKind.SoapstoneBowl, 14f)
 				.Lights(POIType.Capital, BiomeWayLightKind.SoapstoneBowl, 14f)

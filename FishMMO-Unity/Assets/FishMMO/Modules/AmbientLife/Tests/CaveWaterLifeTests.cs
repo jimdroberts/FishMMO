@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The drowned galleries' water life: leeches and beads (split from BiomeCaveDrownedGalleriesTests, Phase 4, 2026-11-17).
+	/// The drowned galleries' water life: leeches and beads (split from BiomeCaveDrownedGalleriesTests).
 	/// </summary>
 	[TestFixture]
 	public class CaveWaterLifeTests

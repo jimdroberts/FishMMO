@@ -12,7 +12,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// FALLING STONE (2026-10-25, phase I2u; decisions 79, 95, 97): the stones falling down the scene's stored chutes (its biome map's
+	/// FALLING STONE: the stones falling down the scene's stored chutes (its biome map's
 	/// <see cref="SceneBiomeMap.Chutes"/>, written by the cut), the Strombolian bombs of its vents rolling down its sciara, the fresh
 	/// scars each fall leaves and the breathing taluses' summer rime, mist and winter steam. Every fall is a pure function of the shared
 	/// clock (<see cref="Rockfall"/>: found here on the CPU in double for the near chutes, a few numbers each), its stones' paths hashed

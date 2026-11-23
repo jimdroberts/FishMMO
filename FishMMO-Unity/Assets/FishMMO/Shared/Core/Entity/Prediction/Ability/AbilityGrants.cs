@@ -5,7 +5,7 @@ namespace FishMMO.Shared.Core
 {
 	/// <summary>
 	/// Teaches a character abilities and ability events named by content the core or another module owns (a lore object's
-	/// reward, 2026-11-20): installed by the Abilities module, which skips what the character already knows, learns the
+	/// reward): installed by the Abilities module, which skips what the character already knows, learns the
 	/// rest and tells its client; and equips an NPC's authored abilities. Without the module nothing is learned.
 	/// </summary>
 	public static class AbilityGrants

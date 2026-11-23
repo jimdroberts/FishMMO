@@ -606,7 +606,7 @@ namespace FishMMO.Client
 			}
 			tooltip.Open(content, owner);
 
-			/* Time Left counts down while the pointer rests on the icon (2026-11-21: it froze at the value it opened with).
+			/* Time Left counts down while the pointer rests on the icon (it froze at the value it opened with).
 			 * Refreshed four times a second, and only while this icon still owns the tooltip. */
 			hoverRefresh?.Pause();
 			hoverRefresh = owner.schedule.Execute(() =>

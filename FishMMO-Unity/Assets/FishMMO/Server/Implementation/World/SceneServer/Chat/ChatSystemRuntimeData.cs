@@ -9,7 +9,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 {
 	/// <summary>
 	/// The core chat intake's runtime data: the lock-free queue of incoming lines and its size. The conversation state
-	/// lives in the Chat module (<c>ChatChannelRuntimeData</c>, split 2026-11-20).
+	/// lives in the Chat module (<c>ChatChannelRuntimeData</c>).
 	/// </summary>
 	public class ChatSystemRuntimeData : RuntimeDataContainer, IChatSystemRuntimeData
 	{

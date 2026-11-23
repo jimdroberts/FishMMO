@@ -13,7 +13,7 @@ using FishMMO.Shared.Core;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the invariants the 2026-09-07 persistence audit restored: factions and archetypes
+	/// Pins the invariants the persistence audit restored: factions and archetypes
 	/// carry a dirty mark and a version that advances on mutation, restored rows are clean, a
 	/// pooled attribute forgets its previous occupant's version stream, the faction reader
 	/// refuses a frame too short to hold its header, and the player prefab requires every
@@ -113,7 +113,7 @@ namespace FishMMO.UnitTests
 				if (attribute.m_Type2 != null) required.Add(attribute.m_Type2);
 			}
 
-			/* The item containers are the Items module's parts since 2026-11-20 (declared with [assembly: CharacterPart], so every
+			/* The item containers are the Items module's parts (declared with [assembly: CharacterPart], so every
 			 * player gets them as it wakes; pinned by ItemsModuleTests), not prefab components the player requires. */
 			foreach (System.Type type in new[]
 			{
@@ -129,7 +129,7 @@ namespace FishMMO.UnitTests
 		{
 			/* The save legs reach the ability and buff controllers through IAbilityPersistence and IBuffPersistence. A
 			 * player without one would silently lose that table, so both are parts every player gets as it wakes
-			 * (2026-11-21), and no prefab carries a copy of its own. */
+			 *, and no prefab carries a copy of its own. */
 			foreach (System.Type controllerType in new[] { typeof(AbilityController), typeof(BuffController), typeof(CooldownController) })
 			{
 				Assert.IsTrue(CharacterParts.PartsFor(typeof(PlayerCharacter)).Contains(controllerType), $"a player gets a {controllerType.Name}");

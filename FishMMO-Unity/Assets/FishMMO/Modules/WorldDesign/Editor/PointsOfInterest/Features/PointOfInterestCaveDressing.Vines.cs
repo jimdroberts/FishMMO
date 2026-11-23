@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Vines and roots inside the caves (2026-10-20: "More vines and stuff inside caves would be great too"): tree roots hanging
+	/// Vines and roots inside the caves ("More vines and stuff inside caves would be great too"): tree roots hanging
 	/// through the thin roof near a mouth, ivy and creeper matting the damp walls as far in as the daylight reaches (and the
 	/// floor green under an opening in the roof), and in the deep dark the fantasy glowroots hung from the halls' roofs and
 	/// glow-vines creeping over their wet walls. A mine has a few roots by its portal and nothing else.

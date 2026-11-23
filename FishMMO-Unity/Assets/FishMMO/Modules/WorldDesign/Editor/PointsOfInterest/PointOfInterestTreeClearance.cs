@@ -9,7 +9,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>
 	/// Takes the scatter's trees and bushes (the terrain's tree instances) off the sites' building floors: the floors the
 	/// grass is kept out of (<see cref="ScenePathPointFlags.Floor"/> yards, PropsFeature and PointOfInterestFarmsteads), so
-	/// nothing grows up through a house any more than a blade does (2026-10-19).
+	/// nothing grows up through a house any more than a blade does.
 	/// </summary>
 	/// <remarks>
 	/// <para>

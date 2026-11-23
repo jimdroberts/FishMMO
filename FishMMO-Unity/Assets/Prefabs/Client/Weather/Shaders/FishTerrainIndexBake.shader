@@ -6,7 +6,7 @@
 // Integer arithmetic throughout (weights are bytes), so this is TerrainIndexMap.BakeTexel exactly; the binder checks a
 // sample of texels against it in the editor ("[Terrain index] check").
 //
-// A tile that carries only the layers it paints (TerrainTileLayers, 2026-10-27) numbers its channels its own way: the ids are
+// A tile that carries only the layers it paints (TerrainTileLayers) numbers its channels its own way: the ids are
 // written as the scene's layers through _FishIndexRemap (TerrainTileLayerMap.BakeTable; identity for a tile carrying the whole
 // palette), after the four are chosen. Its channels are in scene order, so the choice between equal weights is the same.
 //

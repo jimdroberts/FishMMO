@@ -7,7 +7,7 @@ using UnityEngine.UIElements;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The NPCs module's dashboard hooks (2026-11-20): new AI assets file themselves by type, and a behaviour tree's
+	/// The NPCs module's dashboard hooks: new AI assets file themselves by type, and a behaviour tree's
 	/// inspector offers its graph editor.
 	/// </summary>
 	internal static class NpcDashboardHooks

@@ -23,7 +23,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Cold)
 				.Wildlife(BiomeHabitat.Forest)
 				.Moat(BiomeMoatWater.Wet)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its vines, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -42,7 +42,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.AncientTree, 1f), (POIType.HerbGrove, 1.5f), (POIType.Dockyard, 0.6f), (POIType.Watermill, 0.6f),
 					(POIType.LumberMill, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 0.5f), (POIType.TrollBridge, 1.2f), (POIType.GoblinWarren, 1.2f), (POIType.HauntedManor, 0.8f),
 					(POIType.HangingTree, 1f), (POIType.BuriedHoard, 0.5f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f), (POIType.ManorHouse, 0.5f),
@@ -72,7 +72,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Graveyard, "Earthen", 1.5f)
 				.Prefers(POIType.Ruins, "Burned", 1.5f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 1.2f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Elven Hall", 1f)
 				.Prefers(POIType.Tower, "Elven Tower", 1f)
 				.Prefers(POIType.DragonLair, "Bone Roost", 1.4f)
@@ -88,7 +88,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Commandery, "Preceptory", 1.2f)
 				.Prefers(POIType.RoyalMausoleum, "Barrowdown", 1.2f)
 				.Prefers(POIType.TreeVillage, "Taiga Lodge", 1.5f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.GrowsVines(0.35f, 0.25f, 0.06f, 0.02f, ("Creeper", 0.8f), ("Ivy", 0.2f))
 				.Gathers("Iron Vein", "Frostbloom Patch", "Morel Cluster", "Frostpine Elder")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 1f)

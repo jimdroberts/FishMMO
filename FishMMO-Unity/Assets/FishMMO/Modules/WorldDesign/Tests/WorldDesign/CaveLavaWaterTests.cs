@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Inland lava (2026-10-20, a lava tube's rivers and pits): the cave's lava written into its scene's hydrology as lakes and
+	/// Inland lava (a lava tube's rivers and pits): the cave's lava written into its scene's hydrology as lakes and
 	/// rivers flagged Lava (<see cref="CaveLavaWater"/>), answered by the simulation's water as <see cref="WaterBody.Lava"/>,
 	/// baked into the NavMesh's "Lava" area, and drawn by the inland lava shader. Pure: nothing here needs the engine's
 	/// native side (the scene-object half is <see cref="InlandLavaSceneTests"/>).

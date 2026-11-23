@@ -10,7 +10,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Scree</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry Scree()
 		{
-			// The moving stone of the summits (biome round, approved 2026-10-25, authored 2026-10-26), in the register of the old
+			// The moving stone of the summits, in the register of the old
 			// Diamond Mountains' travel records: pale granodiorite pinnacle ridges shedding blocks into every gully, a talus cone at
 			// the angle of rest under each (fine chip at the apex, cart-sized blocks at the toe), stone rivers of lichen-grey blocks
 			// down the valley sides, rock glaciers and protalus ramparts in the cold cirques, fell-field nets between, fresh white
@@ -19,18 +19,18 @@ namespace FishMMO.Shared.WorldDesign
 			// the cone toes (fire-field farmers in clay-chinked log steadings under bark roofs, stone-cutters, hermits) and on the
 			// ridges (fortress walls snaking over the slides, five-fire beacons); its fantasy the walking rocks still creeping toward
 			// the mountains that called them, goblin-fire on rainy nights, the goblins' unfinished bridge and the iron-eater's den.
-			// On thin-aired and airless worlds (decisions 41, 44) the summits are bare falling talus under a rust or black sky: the
+			// On thin-aired and airless worlds the summits are bare falling talus under a rust or black sky: the
 			// main ground gives way to the rust scree (Thin) and the vacuum talus (Airless), nothing grows, nobody lives there.
 			// Reaches: COLD t ≤ −0.3, CORE, WARM t ≥ 0.3, DRY h ≤ −0.3, WET h ≥ 0.3.
-			// LATER (I9): every ground and object texture as Scree's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Bisaek (kiln celadon) + Jindallae (azalea magenta).
+			// LATER: every ground and object texture as Scree's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Bisaek (kiln celadon) + Jindallae (azalea magenta).
 			// LATER (MOVEMENT M2): loose footing on the steep scree (own predicted phase).
 			return E("Scree", L(Ground.GravelFineScree,
 					// The fines between the talus: ridge reed and rock sedge, never off the living air.
 					OnWorlds(Band(Grass("GrassRidgeReed", 0.6f, 255, 28f), -0.3f, 1f), BiomeAtmosphereRequirement.Living),
 					OnWorlds(Grass("GrassRockSedge", 0.4f), BiomeAtmosphereRequirement.Living),
 					Stones(SmallRocks("Granodiorite"), 4f), Stones(Pebbles("Granodiorite"), 6f),
-					// Blocks graded down every cone: fine at the apex, coarse at the toe (I2u size grading).
+					// Blocks graded down every cone: fine at the apex, coarse at the toe (size grading).
 					TalusGraded(Blocks("Granodiorite blocks", 0.01f, 14f, F(RegionalRocks.Granodiorite, "Block"))),
 					TalusGraded(Boulders(0.1f, 8f, GranodioriteBoulders)),
 					// The odd rocking stone on a ledge.
@@ -67,7 +67,7 @@ namespace FishMMO.Shared.WorldDesign
 						Band(Trees(0.004f, 40f, 30f, "GhostFir"), -0.3f, 1f), Band(Trees(0.0005f, 80f, 35f, "ThousandYew"), -0.3f, 1f),
 						Plants("DebrisFirDrift", 1f, 128), Band(Grass("GrassRidgeReed", 0.6f), -0.3f, 1f),
 						Faced(Band(Plants("HerbMountainRoot", 0.05f), -0.3f, 1f), BiomeFacing.Poleward)).Air(BiomeAtmosphereRequirement.Living),
-					// d6: breathing talus round the ice caves' mouths (I2u: summer ice and winter steam from the shared clock).
+					// d6: breathing talus round the ice caves' mouths (summer ice and winter steam from the shared clock).
 					D(Ground.RockBreathingTalus, 40f, 3f, 20f, 50f, OnWorlds(Plants("ClubmossFir", 0.8f), BiomeAtmosphereRequirement.Living),
 						Stones(SmallRocks("Granodiorite"), 6f)).NearSites("IceCave", 60f),
 					// d7: wedge-split spoil round the quarries and the fortress walls.
@@ -98,7 +98,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The moving stone (I2g-b/c/f presets): cones under the cliffs (their coarse toe rims the openwork talus), the chutes
 				// above them (stored lines the falling stone runs down), protalus ramparts of blocks, nivation hollows floored with
 				// snow, the pinnacle ridges, the walking rock's tracks, and the re-tuned rock glaciers (cold), stone rivers, mudflow
-				// fans (wet) and boulder tracks (airless). LATER (I7): the Walking Rock itself (≤ 1 a scene) and the Ten Thousand Forms
+				// fans (wet) and boulder tracks (airless). LATER: the Walking Rock itself (≤ 1 a scene) and the Ten Thousand Forms
 				// landmark on the pinnacle ridge's pad.
 				.Landforms(BiomeLandformPresets.Named("ScreeCone").AtDensity(3f).Painted(1, BiomeLandformPart.Rim),
 					BiomeLandformPresets.Named("ScreeChutes"),
@@ -112,7 +112,7 @@ namespace FishMMO.Shared.WorldDesign
 					BiomeLandformPresets.Named("ScreeBoulderTracks"))
 				.Look(BiomeLookClass.Alpine)
 				.Wildlife(BiomeHabitat.Mountain)
-				// LATER (AMBIENT-LIFE): long-tailed goral bounding across the scree, musk deer at dusk by the fir edges, chipmunks
+				// LATER: long-tailed goral bounding across the scree, musk deer at dusk by the fir edges, chipmunks
 				// popping from the block gaps, the eagle-owl's dusk hoots; goblin-fire wisps over the talus on rainy nights (×2 wet).
 				// All need air. LATER (WEATHER/sound): the falling stone's clatter.
 				.Moat(BiomeMoatWater.Dry)
@@ -165,7 +165,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.NaturalArch, 0.3f), (POIType.Nest, 0.4f), (POIType.MonsterDen, 0.3f), (POIType.BossLair, 0.12f),
 					(POIType.CrystalFormation, 0.3f), (POIType.OreVein, 0.4f), (POIType.Mine, 0.2f), (POIType.DungeonEntrance, 0.4f),
 					(POIType.AncientRoad, 0.3f), (POIType.Graveyard, 0.2f), (POIType.HerbGrove, 0.3f), (POIType.AbandonedFarm, 0.2f), (POIType.FallenStar, 0.1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 1f), (POIType.GoblinWarren, 1f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.BoundaryStone, 0.6f),
 					(POIType.SignalBeacon, 1.2f), (POIType.Hamlet, 0.3f), (POIType.SiegeCamp, 0.4f), (POIType.BurnedVillage, 0.3f),
@@ -212,7 +212,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Bridge, "Timber", 0.4f)
 				.Prefers(POIType.DungeonEntrance, "Door", 0.6f)
 				.Prefers(POIType.DungeonEntrance, "Barrow", 0f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Keep, "Orc Hold", 1f)
 				.Prefers(POIType.Keep, "Ruined Keep", 1f)
 				.Prefers(POIType.Keep, "Dark Keep", 0.6f)
@@ -235,13 +235,13 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Grange, "Walled Barton", 1.3f)
 				.Prefers(POIType.MountainKingsHall, "Delving Hall", 1.2f)
 				.Prefers(POIType.DwarvenGate, "Rune Door", 1.3f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Air(POIType.Landmark, true).Air(POIType.Village, true).Air(POIType.Fortress, true).Air(POIType.Ruins, true).Air(POIType.Tower, true)
 				.Air(POIType.Waystation, true).Air(POIType.Hermitage, true).Air(POIType.Quarry, true).Air(POIType.Camp, true).Air(POIType.Bridge, true)
 				.Air(POIType.Nest, true).Air(POIType.MonsterDen, true).Air(POIType.BossLair, true).Air(POIType.Mine, true)
 				.Air(POIType.AncientRoad, true).Air(POIType.Graveyard, true).Air(POIType.HerbGrove, true).Air(POIType.AbandonedFarm, true)
 				.Water(POIType.Spring)
-				// LATER (I7): Scree's signature pieces and their variants — the bark-roof steading with its jar terrace and pine-knot niche
+				// LATER: Scree's signature pieces and their variants — the bark-roof steading with its jar terrace and pine-knot niche
 				// lamp (Village "Bark-roof Steading" 2.0), the bird-pole gate (Landmark "Sotdae Gate" 0.8), the ridge fortress on its
 				// SanseongWall stretch with chi bastions and a half-moon gate (Fortress "Ridge Fortress" 2.0, ≤ 2), the five-fire beacon
 				// lighting one to five pits by the shared clock (Tower "Five-fire Beacon" 1.6), the pass lodge (Waystation "Pass Won"
@@ -258,7 +258,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Hide, 0f)
 				// The palette: round red-pine logs with thick grey-white clay chinking under thick grey-brown bark-slab roofs held by
 				// poles and stones (pitch 30), granodiorite footings, paper-backed lattice doors, wrought iron; the fortresses of dry
-				// wedge ashlar with wedge-split flags. LATER (NEW-SURFACES U8/U11): ClayChinkLog, the Gulpi bark roof, GrusStone, Ttisal
+				// wedge ashlar with wedge-split flags. LATER: ClayChinkLog, the Gulpi bark roof, GrusStone, Ttisal
 				// lattice, Hanji paper, OilPaper floors and WedgeAshlar as Scree's own surfaces; the shared surfaces tinted stand in.
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.Wall, BiomeStructureMaterial.Log, UplandHex("#8a5a3a"))
 				.Builds(BiomeStructureStyle.Timber, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Log, UplandHex("#8a5a3a"))
@@ -290,10 +290,10 @@ namespace FishMMO.Shared.WorldDesign
 				.Crops(("Detail_CropPerilla", 1f))
 				// The ridge fortresses' wedge-ashlar curtain following the crests.
 				.Lines(new Entry.Line("SanseongWall"))
-				// The goblins' bridges of unmortared boulders where a span fits (I2l-b).
+				// The goblins' bridges of unmortared boulders where a span fits.
 				.Crosses(BiomeCrossingStyle.GoblinsBridge)
 				// Pine-knot niche lamps on the steading walls, pine-knot cressets at the lodges and fortresses, the five-pit beacons, a
-				// brazier at the stone-cutters' camp. Off the breathable air nothing burns (Glow only, decision 41: the authoring's rule).
+				// brazier at the stone-cutters' camp. Off the breathable air nothing burns (Glow only, the authoring's rule).
 				.Lights(POIType.Village, BiomeWayLightKind.Kokeul, 16f)
 				.Lights(POIType.Waystation, BiomeWayLightKind.Cresset, 18f)
 				.Lights(POIType.Fortress, BiomeWayLightKind.Cresset, 18f)
@@ -304,15 +304,15 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.WallTorch, 17f)
 				.CaveLight(BiomeCaveLightPlace.MineLamp, BiomeWayLightKind.Kokeul)
 				.NoVines()
-				// LATER (I7): Goblin's Club only at a Wrestling Stone (≤ 1 node a scene), Mountain Root ≤ 3 nodes, Summer Ice at the
+				// LATER: Goblin's Club only at a Wrestling Stone (≤ 1 node a scene), Mountain Root ≤ 3 nodes, Summer Ice at the
 				// Summer-ice Slopes; the catalogue rows stand in wherever the site kinds gather them.
 				.Gathers("Mountain Root", "Summer Ice", "Eonyang Amethyst", "Fir Resin", "Goblin's Club")
 				.Herbs("Detail_HerbMountainRoot", "Detail_FlowersDiamondBell")
 				.ErodesAs("Mountain");
 		}
 
-		/// <summary>The granodiorite boulders (I6b stones of the crust rock): round, slab and spire (the Scree file's).</summary>
-		/// <remarks>LATER (I6f): the draft's own Block, Sheet and Enclave boulder shapes.</remarks>
+		/// <summary>The granodiorite boulders (stones of the crust rock): round, slab and spire (the Scree file's).</summary>
+		/// <remarks>LATER: the draft's own Block, Sheet and Enclave boulder shapes.</remarks>
 		private static string[] GranodioriteBoulders => new[] { Boulder("Granodiorite", "Round"), Boulder("Granodiorite", "Slab"), Boulder("Granodiorite", "Spire") };
 	}
 }

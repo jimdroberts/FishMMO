@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Flooded paddy fields (2026-10-18, phase I2i, decision 27): a crop field whose surface is <see cref="BiomeFieldSurface.Paddy"/>
+	/// Flooded paddy fields: a crop field whose surface is <see cref="BiomeFieldSurface.Paddy"/>
 	/// is dug level, banked round with a low earth bund and flooded a hand's depth deep, its crop (rice) standing in the water.
 	/// </summary>
 	/// <remarks>
@@ -216,7 +216,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The scene's hydrology asset, made empty (at <paramref name="seaLevel"/>) when it has none, with the scene's Inland Water
 		/// object to read and draw it (SceneGenerator.EnsureInlandWater). A scene with no river or lake on its ground has no asset
-		/// after the cut saves its water (SceneGenerator.SaveWater), yet its sites lay water of their own (2026-10-27): hot spring
+		/// after the cut saves its water (SceneGenerator.SaveWater), yet its sites lay water of their own: hot spring
 		/// and sulphur pools, paddies, terraces, rills and leats, which until then stood dry ("no hydrology to hold their water")
 		/// unless a cave's water, placed later, happened to make one. Null where none may be made (<see cref="MayMakeHydrology"/>).
 		/// </summary>

@@ -4,7 +4,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// A sea hall's vents as every client draws them (2026-10-26, phase I2n-b, decision 83): each smoker's plume and its strength on
+	/// A sea hall's vents as every client draws them: each smoker's plume and its strength on
 	/// the plume tide, the smoke ceiling it spreads into under the water's surface (the Great Smoker's under the ice roof as well), the
 	/// flange mirrors on the chimneys, the carbon-dioxide beads off the white smokers, and the brinicles growing from the dome's roof
 	/// and snapping. Pure functions of the shared motion clock (WorldMotion.Seconds) and the hall's stored spots; FishSeaHallVents.shader
@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Strength (decision 83).</b> The plume tide of decision 53 (SceneGlowSky.PlumeTide, 0.3 … 1 over the host moon's orbit)
+	/// <b>Strength.</b> The plume tide of decision 53 (SceneGlowSky.PlumeTide, 0.3 … 1 over the host moon's orbit)
 	/// remapped to 0.75 … 1, times a flicker: one "on" span a slot of its own length (400–1250 s, each dividing the 10 000 s wrap), over
 	/// 85–100 % of the slot with 30 s ramps (EpisodeSlots). Smokers barely falter; the hall's Great Smoker never falls under 0.85.
 	/// </para>
@@ -29,7 +29,7 @@ namespace FishMMO.Shared
 		public const float Wrap = 10000f, BrinicleWrap = 129600f;
 		/// <summary>The flicker slots a smoker draws its length from (each divides <see cref="Wrap"/>; the draft's 300–1800 s).</summary>
 		public static readonly float[] FlickerSlots = { 400f, 500f, 625f, 1000f, 1250f };
-		/// <summary>A slot's least and most "on" share, its ramps (s), the tide's remap, the Great Smoker's floor (decision 83).</summary>
+		/// <summary>A slot's least and most "on" share, its ramps (s), the tide's remap, the Great Smoker's floor.</summary>
 		public const float FlickerLeast = 0.85f, FlickerMost = 1f, FlickerRamp = 30f, TideLow = 0.75f, GreatFloor = 0.85f;
 		/// <summary>SceneGlowSky.PlumeTide's own range (SceneGlowModes.PlumeTideOf: 0.3 … 1).</summary>
 		public const float SkyTideLow = 0.3f;
@@ -75,7 +75,7 @@ namespace FishMMO.Shared
 			return EpisodeSlots.At(wrappedSeconds, length, Mathf.Min(share, 0.995f) * length, FlickerRamp, h);
 		}
 
-		/// <summary>A smoker's plume strength now (decision 83): the remapped tide times its flicker; the Great Smoker never under 0.85.</summary>
+		/// <summary>A smoker's plume strength now: the remapped tide times its flicker; the Great Smoker never under 0.85.</summary>
 		public static float Strength(float skyTide, float wrappedSeconds, uint seed, bool great)
 		{
 			float s = Tide(skyTide) * Flicker(wrappedSeconds, seed);
@@ -147,7 +147,7 @@ namespace FishMMO.Shared
 		public static float BriniclePeriod(uint seed) => 3600f * BriniclePeriodsHours[(int)(Hash(seed, 31u, 0u) % (uint)BriniclePeriodsHours.Length)];
 
 		/// <summary>
-		/// A brinicle's length now (decision 83: L(t) = Lmax · frac(t / Tb + h), growing, snapping with a puff of ice and growing again):
+		/// A brinicle's length now (L(t) = Lmax · frac(t / Tb + h), growing, snapping with a puff of ice and growing again):
 		/// <paramref name="brinicleSeconds"/> is the motion clock wrapped at <see cref="BrinicleWrap"/> (taken in double where it is wrapped);
 		/// <paramref name="sinceSnap"/> the seconds since it last snapped.
 		/// </summary>

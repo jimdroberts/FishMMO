@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The Moron 2 round (2026-10-27): the fences laid along the high country's ways, and the ground the sites enclose. Alpine
+	/// The Moron 2 round: the fences laid along the high country's ways, and the ground the sites enclose. Alpine
 	/// Meadow's leaning-pole fence lines only its villages' drove lanes (the cart tracks and roads near a settlement), never the
 	/// pasture's footpaths and trails; a field, a fold, a farmstead or a holding is cleared of the scatter's trees, bushes and
 	/// boulders, a turf one of its wild details too, its grass kept (PointOfInterestEnclosureClearance).

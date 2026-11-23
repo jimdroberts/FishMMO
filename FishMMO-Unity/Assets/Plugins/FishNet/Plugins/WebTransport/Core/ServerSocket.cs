@@ -149,7 +149,7 @@ namespace FishNet.Transporting.WebTransport.Server
 		/// <remarks>
 		/// Datagrams are unreliable by contract, so over-budget ones are simply dropped. Kicking for
 		/// a burst punished honest clients: a browser that could not transmit for a while flushed
-		/// its queued datagrams at once, and the flood gate disconnected the player (2026-11-12).
+		/// its queued datagrams at once, and the flood gate disconnected the player.
 		/// Only a client that keeps sending far over budget is disconnected. Matches the native
 		/// library's WT_DGRAM_ABUSE_WINDOWS.
 		/// </remarks>

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A mine's clutter (2026-10-20, cave realism: "Caves of all types and mines look barren"): what a medieval working leaves
+	/// A mine's clutter (cave realism: "Caves of all types and mines look barren"): what a medieval working leaves
 	/// lying about, from the kit it already has — heaps of spoil at the stopes' walls, ore heaped against a breast-wall, spare
 	/// props and offcuts (a woodpile), crates, barrels (some on their sides), buckets, sacks of ore and tools against the rock;
 	/// in the wider places along the drifts a crate, a barrel or a little spoil; and on the rotting timber deep in, a few

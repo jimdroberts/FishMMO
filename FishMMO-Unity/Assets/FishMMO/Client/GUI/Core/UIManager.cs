@@ -199,7 +199,7 @@ namespace FishMMO.Client
 			 * the client above. Module windows (ModulePanelHost) are placed after an Addressables load, which can finish
 			 * after the player spawned; SetCharacter had already walked the registered controls, so such a window kept a
 			 * null character for the session and everything it subscribes to in OnPostSetCharacter never arrived: party
-			 * and guild invitations, and trade requests (the trade window drops one without a character), found 2026-11-17. */
+			 * and guild invitations, and trade requests (the trade window drops one without a character). */
 			if (characterControl != null && currentCharacter != null)
 			{
 				try

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Medieval ships and boats (2026-10-12: "We need docks…, accurate ships and boats"; "Shipwrecks don't have a wrecked
+	/// Medieval ships and boats ("We need docks…, accurate ships and boats"; "Shipwrecks don't have a wrecked
 	/// ship mesh?"): a rowboat, a fishing smack, a cog and a longship, built on lofted hulls (<see cref="Hull"/>), and the wrecks
 	/// of a cog and a longship. A floating ship stands at its waterline (y = 0, <see cref="StructureAnchor.Deck"/>), its keel
 	/// below; length along +x, bow at +x. A wreck and an upturned boat stand on the ground.

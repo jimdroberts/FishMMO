@@ -106,11 +106,11 @@ namespace FishMMO.Client
 		private readonly List<VolcanicPlume.Plume> plumes = new List<VolcanicPlume.Plume>();
 		private readonly List<(Vector3 vent, float emission, Color tint, float distance, float timed)> fountains = new List<(Vector3, float, Color, float, float)>();
 
-		/// <summary>The motion clock and the sky the vents' timing reads this frame (2026-10-25, I2q-b; VentTiming).</summary>
+		/// <summary>The motion clock and the sky the vents' timing reads this frame (VentTiming).</summary>
 		private VentSky ventSky;
 
 		/// <summary>
-		/// A scene vent's strength now on its biome's timing (2026-10-25, I2q-b; presentation only: the weather's plume and its fallout
+		/// A scene vent's strength now on its biome's timing (presentation only: the weather's plume and its fallout
 		/// never read it), by the vent the plume stands on (its seed); 1 for a steady vent and for an eruption cell's plume.
 		/// </summary>
 		private float Timed(uint seed, bool fromCell)
@@ -282,7 +282,7 @@ namespace FishMMO.Client
 			float reach = camera.farClipPlane * 1.5f + 20000f;
 			ventSky = VentSky.Of(WorldMotion.Seconds, GlowSky.Current);
 			drawSlot = 0;
-			// Curtains of fire along the scene's fissures (2026-10-25, I2r): lava, so drawn with air or without.
+			// Curtains of fire along the scene's fissures: lava, so drawn with air or without.
 			DrawCurtains(camera, material, profile, viewer2, reach);
 
 			WeatherSample sample = context.Sample;
@@ -341,14 +341,14 @@ namespace FishMMO.Client
 			float fallSeconds = plume.Umbrella / Mathf.Max(0.05f, plume.FallSpeed);
 			Color tint = plume.Substance != null ? plume.Substance.Tint : AshTint;
 			float glow = plume.Substance != null ? plume.Substance.Emission : 0f;
-			// Its vent's timing (2026-10-25, I2q-b): the plume tide, the sun, bursts, episodes, the kneading; steady as before.
+			// Its vent's timing: the plume tide, the sun, bursts, episodes, the kneading; steady as before.
 			float timed = Timed(plume.Seed, plume.FromCell);
 			if (timed <= 0.01f)
 			{
 				return;
 			}
 			float strength = (0.4f + 0.6f * plume.Emission) * timed;
-			// In thin air it rises on its heat and lies over downwind (decision 53: Triton's); elsewhere its own lean, as before.
+			// In thin air it rises on its heat and lies over downwind (Triton's); elsewhere its own lean, as before.
 			Vector2 topOffset = VolcanicPlume.DrawnTopOffset(plume, context.Sample.Planet.AirRelative);
 
 			var rise = new Vector4(plume.Top, plume.Umbrella, plume.Radius, riseSeconds);
@@ -407,12 +407,12 @@ namespace FishMMO.Client
 			float puff = Mathf.Clamp(height / 30f, 4f, 40f);
 			var bounds = new Bounds(vent + Vector3.up * (0.5f * height), new Vector3(2f * outer + 2f * puff, height + 2f * puff, 2f * outer + 2f * puff));
 			var ballistic = new Vector4(speed, gravity, VolcanicPlume.FountainConeDegrees * Mathf.Deg2Rad, VolcanicPlume.FountainInnerShare);
-			// Its vent's timing thins it (2026-10-25, I2q-b): the height stays its emission's, the grains fewer and fainter.
+			// Its vent's timing thins it: the height stays its emission's, the grains fewer and fainter.
 			Draw(material, profile, camera, bounds, vent, 3, timed >= 1f ? 1f : Mathf.Max(0.1f, timed), 0.14f * timed, new Vector4(puff, 0f, 0f, 0f), Vector4.zero, Vector4.zero, ballistic,
 				new Color(tint.r, tint.g, tint.b, 0.4f), Vector4.zero);
 		}
 
-		// ── Curtains of fire (2026-10-25, phase I2r, decision 65 (d)) ──
+		// ── Curtains of fire ──
 
 		/// <summary>The most curtain stretches drawn at once, the nearest.</summary>
 		public const int MaxCurtains = 6;

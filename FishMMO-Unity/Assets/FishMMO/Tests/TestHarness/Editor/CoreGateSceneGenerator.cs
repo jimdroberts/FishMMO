@@ -9,8 +9,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.TestHarness.Editor
 {
 	/// <summary>
-	/// Creates the Core Gate world: a small world scene made of core pieces only, for the Phase 4 gate of the core and modules
-	/// plan (2026-11-18): a project with every world module removed must still log a character into a world that is lit and
+	/// Creates the Core Gate world: a small world scene made of core pieces only, for the world-module gate: a project with every world module removed must still log a character into a world that is lit and
 	/// shadowed.
 	/// </summary>
 	/// <remarks>
@@ -53,7 +52,7 @@ namespace FishMMO.TestHarness.Editor
 		private const int HeightmapResolution = 257;
 
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Core Gate World", Section = "Test Scenes", Order = 5,
-			Tooltip = "The Phase 4 gate's core-only world: a lit, shadowed terrain with a character spawn, under Assets/Scenes/Test.",
+			Tooltip = "The world-module gate's core-only world: a lit, shadowed terrain with a character spawn, under Assets/Scenes/Test.",
 			Confirm = "Regenerate the Core Gate world scene?")]
 		public static void Generate()
 		{

@@ -3,7 +3,7 @@
 // bed and turned to the camera about the vertical, its height breathing on its own beat and its tip leaning downwind —
 // and the fragment shades as a flame: a teardrop torn at its top by noise scrolling up it, white-yellow at its heart,
 // orange, then red at its edges and tip. Added, never covering. Nothing is simulated and nothing is stored.
-// (2026-10-12: "Fire in houses looks terrible, just a bunch of little orange balls" — there were only the sparks.)
+// ("Fire in houses looks terrible, just a bunch of little orange balls" — there were only the sparks.)
 Shader "FishMMO/World/Site Flames"
 {
     Properties

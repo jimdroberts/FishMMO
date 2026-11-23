@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The run-time cave cover's art (2026-10-20): one small clump a <see cref="CaveCoverType"/> at each of three levels of detail
+	/// The run-time cave cover's art: one small clump a <see cref="CaveCoverType"/> at each of three levels of detail
 	/// — moss cushions, glow moss, a spread of pebbles or grit, a clump of mushrooms or glowcaps, bone fragments, a guano or
 	/// sulphur crust, cave pearls in their cup, a mud sheen, root litter, frost needles, basalt grit, ember glints, lichen,
 	/// glowing specks, a row of bracket fungi, mineral glints, a seep's wet streak, soda straws, hanging roots, glow-worm

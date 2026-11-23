@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// How tall a race stands, metres, and so how big the buildings of its settlements are (2026-10-11: "1 unit = 1 meter
+	/// How tall a race stands, metres, and so how big the buildings of its settlements are ("1 unit = 1 meter
 	/// and a 6-7 foot tall character is realistic. Giants will exist too and need their own house sizes. Other races too.").
 	/// </summary>
 	/// <remarks>

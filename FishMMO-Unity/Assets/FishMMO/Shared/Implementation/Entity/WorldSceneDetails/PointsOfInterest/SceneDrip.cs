@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	}
 
 	/// <summary>
-	/// Water dripping from a cave's roof (2026-10-20, caves livened; <see cref="SceneEmitterKind.Drip"/>): how often a drip falls,
+	/// Water dripping from a cave's roof (caves livened; <see cref="SceneEmitterKind.Drip"/>): how often a drip falls,
 	/// how its drops fall, when each lands, and how its seed carries the puddle under it. One definition read by the client's drops
 	/// and puddle rings (CaveDrips and its shader, which repeats <see cref="FallenMetres"/>, <see cref="JitterOf"/> and the ring
 	/// constants), its sound (CaveDripPresenter) and the cave dressing that bakes the drips.

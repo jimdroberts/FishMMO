@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <b>Prefabs.</b> Formations, ice boulders and seracs are tree-channel props like the legacy
 	/// boulders: a root <see cref="LODGroup"/> with a mesh collider from the last level (none for a
 	/// colliderless formation), one material per submesh. The mineral, ice and alien formations
-	/// (2026-10-10) are formations like any other; snow and ice types wear ice's material set-up. Icebergs, sea ice and pressure ridges are scene objects: a
+	/// are formations like any other; snow and ice types wear ice's material set-up. Icebergs, sea ice and pressure ridges are scene objects: a
 	/// root holding a still, non-convex <see cref="MeshCollider"/> from LOD1 (no rigidbody), and a
 	/// child "Visual" holding the <see cref="LODGroup"/>. A berg or floe root also carries a
 	/// <see cref="WaterFloater"/> whose body is LOD0's measured one and whose target is "Visual",
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static IEnumerable<string> RockSurfaceSteps(Context c)
 		{
 			yield return "Rock and ice surfaces";
-			// Written as the rock and ice look arrays (ProceduralArtLookArrays, 2026-10-28): every surface when its set's arrays are
+			// Written as the rock and ice look arrays (ProceduralArtLookArrays): every surface when its set's arrays are
 			// due, none when they are not.
 			bool rocks = LookArraysDue(c, ProceduralArtLookArrays.RockSetName);
 			foreach (RockType type in RockTypes.All)
@@ -213,7 +213,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Stones: each material's boulders, small rocks and pebbles ─
 
 		/// <summary>
-		/// A stone material's own shapes (<see cref="StoneStyles"/>, 2026-10-16): its three boulders, tree-channel props
+		/// A stone material's own shapes (<see cref="StoneStyles"/>): its three boulders, tree-channel props
 		/// with a mesh collider from the last level as before, and its small rocks and pebbles, one-mesh detail prefabs
 		/// casting no shadow as before. The prefab names are the ones they always had.
 		/// </summary>
@@ -238,7 +238,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				WriteProp(c, ProceduralArtCatalogue.BoulderPrefab(stone.Name, slot.Name), meshes, material);
 			}
-			// The small rocks and pebbles in every variant the stone cycles (RockVariantCounts.StoneDetails, 2026-10-26): variant 0 is
+			// The small rocks and pebbles in every variant the stone cycles (RockVariantCounts.StoneDetails): variant 0 is
 			// the mesh it always had, the rest bare-mesh children the GPU detail scatter picks one of per instance.
 			int variants = RockVariantCounts.StoneDetailsOf(stone.Name);
 			var rocks = new Mesh[variants];

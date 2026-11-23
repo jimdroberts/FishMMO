@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The run-time cave cover's choice for a cave (2026-10-20): which <see cref="CaveCoverType"/>s it grows, how thickly, how
+	/// The run-time cave cover's choice for a cave: which <see cref="CaveCoverType"/>s it grows, how thickly, how
 	/// strongly its glowing cover glows and in which colours. Decided at the cut, where the cave's biome and form are known, and
 	/// written onto the cave's client-only Visual as a <see cref="CaveCoverSite"/> (<see cref="Attach"/>), which the client's
 	/// cover renderer reads: at run time the client knows neither.
@@ -27,7 +27,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveCoverSite.Choice For(BiomeTemplate biome, CaveForm form, int seed) => For(new CaveBiome(biome, null), form, seed);
 
 		/// <summary>
-		/// The cover of a cave by its cave biomes (2026-10-25, I2n): its climate envelope the HOST's (the land over a cave is its air
+		/// The cover of a cave by its cave biomes: its climate envelope the HOST's (the land over a cave is its air
 		/// and water), its glow colours the dressing's for the same system, which reads the biome dressing the inside
 		/// (<see cref="CaveGlowPalettes.For(CaveForm, int, in CaveBiome)"/>).
 		/// </summary>
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 					choice.Glow = 0.8f;
 					break;
 				case CaveForm.SeaHall:
-					// The ledge's rime and frost (2026-10-26, I2n-b); the flooded floor's growth is the sea's (PointOfInterestCaveDressing.SeaHall.cs).
+					// The ledge's rime and frost; the flooded floor's growth is the sea's (PointOfInterestCaveDressing.SeaHall.cs).
 					choice.Types = CaveCoverTypes.Ice;
 					choice.Glow = 0.4f;
 					break;
@@ -138,7 +138,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public static GameObject Attach(GameObject caveRock, CaveSystem system, BiomeTemplate biome) => Attach(caveRock, system, new CaveBiome(biome, null));
 
-		/// <summary><see cref="Attach(GameObject, CaveSystem, BiomeTemplate)"/> by the cave's biomes (2026-10-25, I2n: host climate, interior palette).</summary>
+		/// <summary><see cref="Attach(GameObject, CaveSystem, BiomeTemplate)"/> by the cave's biomes (host climate, interior palette).</summary>
 		public static GameObject Attach(GameObject caveRock, CaveSystem system, in CaveBiome caves, CaveCoverBake bake = null)
 		{
 			if (caveRock == null || system == null)

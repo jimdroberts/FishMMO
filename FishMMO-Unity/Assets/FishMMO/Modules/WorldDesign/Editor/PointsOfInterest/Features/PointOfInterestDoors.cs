@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The doors of a site's buildings (2026-10-11): each doorway the structure kit leaves open
+	/// The doors of a site's buildings: each doorway the structure kit leaves open
 	/// (<see cref="StructureDraft.Door"/>) gets a real door, a scene object the server runs, not part of the baked building.
 	/// </summary>
 	/// <remarks>
@@ -113,7 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 			moverSerialized.FindProperty("solidWhenOpenToo").boolValue = bridge;
 			/* A drawbridge that starts down is saved down: raised in the scene until the game ran, the editor showed a door
 			 * standing at the ditch's inner lip and nothing over the moat, and the NavMesh (baked from the scene's colliders)
-			 * had no way across it (2026-10-15: "missing draw bridges"). Its closed pose is worked out from this one. */
+			 * had no way across it ("missing draw bridges"). Its closed pose is worked out from this one. */
 			if (bridge && door.StartsOpen)
 			{
 				leaf.transform.localRotation = Quaternion.Euler(moverSerialized.FindProperty("openRotationOffset").vector3Value);
@@ -170,12 +170,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// person's flight goes up beside them from the ground to the threshold.</item>
 		/// <item>A building on a slope is seated as much as its foundation allows below its centre's ground
 		/// (PropsFeature.SeatHeight), and its own steps start at its origin: on the downhill side their first riser stood as
-		/// much as 0.65 m off the ground, more than the controller's 0.25 m step (2026-10-15: "interiors aren't always fully
+		/// much as 0.65 m off the ground, more than the controller's 0.25 m step ("interiors aren't always fully
 		/// walkable"). A flight goes on from their foot down to the ground.</item>
 		/// </list>
 		/// </summary>
 		/// <remarks>
-		/// 2026-10-19 (round 3: "the stairs don't fit properly a lot of the time"): the building's own flight is found where it is
+		/// round 3: "the stairs don't fit properly a lot of the time": the building's own flight is found where it is
 		/// (<see cref="OwnFlight"/>: its foot and lowest tread read off the building's collider along the door's line) instead of
 		/// reckoned from a 0.45 m wall, which left a gap or an overlap of up to 0.3 m between the two flights on thinner or
 		/// thicker walls and missed a stilt deck's stair altogether; and the ground is measured again at the flight's own foot,

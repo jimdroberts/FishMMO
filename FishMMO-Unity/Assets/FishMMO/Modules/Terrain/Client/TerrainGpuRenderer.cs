@@ -213,7 +213,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Where the instance index carries the run's start (<see cref="InstanceIdCarriesBase"/>): the commands that share a
 		/// material, a view and their render parameters are drawn by one call over their pooled mesh (<see cref="MeshPool"/>),
-		/// so Unity sets the material up once for the lot instead of once a prototype and level (2026-10-13: ~275 calls a
+		/// so Unity sets the material up once for the lot instead of once a prototype and level (~275 calls a
 		/// camera at Flo Monolith's meadow, each its own SetPass, ~8 ms of the render's CPU). Off is one call a command
 		/// (probe variant `nobatch`). Elsewhere it is always one call a command.
 		/// </summary>
@@ -238,7 +238,7 @@ namespace FishMMO.Client
 		/// (CliffRockInstancing: one model's instances in a chunk; TerrainTreeField: main-view candidacy only), not its 64 m
 		/// chunk's. Every wanted command is a draw whether the kernel fills it or not, and on WebGPU each costs the CPU a
 		/// pipeline key and bind group (~5 µs): with the chunk's distances a lone building took every level the whole chunk
-		/// could reach, and its shadow commands every chunk within the shadow distance. Settlement view 2026-11-04 (editor
+		/// could reach, and its shadow commands every chunk within the shadow distance. Settlement view (editor
 		/// readback, ScenePerfProbe "props wanted"): 561 of 1310 camera commands and 366 of 466 shadow commands drew nothing.
 		/// Each decision stays a superset of the kernel's per instance (see the gatherers), so the same instances draw.
 		/// Off: the chunk's, as before (harness `runGather`).
@@ -250,7 +250,7 @@ namespace FishMMO.Client
 		/// TerrainGpuMath.RunCandidates) and its levels from its own reference point (TerrainGpuMath.InstanceLevelMask, its
 		/// distance ± the regather slack); the camera's levels only from instances that can show, the shadow's only from those
 		/// that can cast into the view. A run's box spans every instance, so a run of houses took every level and both views any
-		/// one of them could need and drew the rest empty. Settlement view 2026-11-05 (editor, Hi-Z off): 99 of 447 camera
+		/// one of them could need and drew the rest empty. Settlement view (editor, Hi-Z off): 99 of 447 camera
 		/// commands and 155 of 255 shadow commands drew nothing. Each decision a superset of the kernel's per instance
 		/// (RunGatherTests), so the same instances draw. Off: the run's box alone (harness `exactLevels`).
 		/// </summary>
@@ -351,7 +351,7 @@ namespace FishMMO.Client
 		/// The commands by model (<see cref="IndexCommands"/>): model m's command indices are commandsByModel[modelCommandStart[m]
 		/// .. modelCommandStart[m + 1]), ascending, with each command's batch, view and level bit alongside. A camera's wanted
 		/// commands are then found from the models its work reached, not by testing (and copying) every command of the layout:
-		/// 9,476 commands a camera for ~280 wanted at Moron 2 (2026-10-27).
+		/// 9,476 commands a camera for ~280 wanted at Moron 2.
 		/// </summary>
 		private int[] modelCommandStart = Array.Empty<int>();
 		private int[] commandsByModel = Array.Empty<int>();
@@ -372,7 +372,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Whether materials that draw identically (<see cref="ContentKey"/>: the same shader, keywords, queue, passes and every
-		/// property value) share one clone, so their commands batch into one call (2026-11-04). The art generator writes a
+		/// property value) share one clone, so their commands batch into one call. The art generator writes a
 		/// material per species: 134 Leaves_* materials hold two value sets, 121 Detail_Bush_* two, 678 Detail_* 195. Exact,
 		/// so the image is unchanged. Read when a model registers (off: a clone per source material, as before).
 		/// </summary>
@@ -386,7 +386,7 @@ namespace FishMMO.Client
 		/// render queue earlier, the lit pass's exact coverage), then its lit pass with depth writes off, which then shades
 		/// only the leaf in front at each pixel. A discarding shader that writes depth gets no early depth rejection, so
 		/// every layer of every crown ran the whole lit shader: ~2 ms of the trees' 2.9 ms lit pass at Flo Monolith's meadow
-		/// was pixels (ScenePerfProbe, 2026-10-08, from the pass's cost at half resolution). URP's own depth priming is off
+		/// was pixels (ScenePerfProbe, from the pass's cost at half resolution). URP's own depth priming is off
 		/// under MSAA, which the leaves' alpha-to-coverage edges need. Off is the old single draw (probe variant `noprime`).
 		/// </summary>
 		public static bool PrimeAlphaTested = true;
@@ -478,7 +478,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Whether this renderer's draws take the look of the patch each instance stands in (<see cref="FloraOnId"/>): 1 for
-		/// terrain details (the CPU chunk renderer's, removed 2026-10-27; the detail scatter sets the same flag on its own draws), 0 for trees and cliff rocks, whose
+		/// terrain details (the CPU chunk renderer's; the detail scatter sets the same flag on its own draws), 0 for trees and cliff rocks, whose
 		/// materials it must never touch. Set by the owner right after <see cref="TryCreate"/>, before any model is added;
 		/// written on its clones, their depth primes and every per-draw block.
 		/// </summary>
@@ -530,7 +530,7 @@ namespace FishMMO.Client
 			// The indirect twins' variants, compiled now rather than as the first tree of each kind comes into view. A
 			// player only: there the variants are prebuilt and warming creates their GPU programs, but the editor COMPILES
 			// every variant of each listed keyword set (crossed with every global multi_compile) synchronously, which
-			// held the first frame 5.7 s (StartupTimeline, 2026-10-08). The editor compiles them in the background as
+			// held the first frame 5.7 s (StartupTimeline). The editor compiles them in the background as
 			// they are first drawn instead.
 			// Unity's WebGPU collection warmup draws synthetic triangles with tiny dummy storage buffers
             // and a default color attachment, which are incompatible with these structured/depth variants.
@@ -1375,7 +1375,7 @@ namespace FishMMO.Client
 		/// <summary>
 		/// Wanted commands of a batch at most this many unwanted ones apart are drawn by the same call. Each command a call
 		/// covers is a GPU draw (an empty one where no work reached its level, still counted in the frame's draw calls),
-		/// while a further call of the same batch costs no material set-up: so none (2026-10-13, Flo Monolith meadow: a
+		/// while a further call of the same batch costs no material set-up: so none (Flo Monolith meadow: a
 		/// gap of 2 covered 383 commands for the 235 wanted, at no CPU gain).
 		/// </summary>
 		public static int BatchGap = 0;
@@ -1811,7 +1811,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Main-thread milliseconds a layout may spend merging pools (each a CombineMeshes over its parts): all of them at once
-		/// was a 0.5 s frame as a scene's props first came in (1.26 M vertices, 2026-10-13).
+		/// was a 0.5 s frame as a scene's props first came in (1.26 M vertices).
 		/// </summary>
 		public const double PoolBudgetMilliseconds = 4.0;
 		private int mergedSinceLog;

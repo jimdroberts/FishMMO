@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What a system is like as a whole (2026-10-13: "layouts are pretty predictable and no massive features"): drawn from
+	/// What a system is like as a whole ("layouts are pretty predictable and no massive features"): drawn from
 	/// its seed by form and size, it weights the planner's choices so two caves of a kind are not the same walk.
 	/// </summary>
 	public enum CaveCharacter : byte
@@ -38,17 +38,17 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>A ledge wound down the wall of a pit, walkable all the way.</summary>
 		Spiral,
 		/// <summary>
-		/// A terrace's slab (2026-10-20, <see cref="CaveTerrace"/>): a capsule in plan along A→B (its walking top on that line,
+		/// A terrace's slab (<see cref="CaveTerrace"/>): a capsule in plan along A→B (its walking top on that line,
 		/// <see cref="CaveSolid.Width"/> either side), its underside <see cref="CaveSolid.Depth"/> under its top.
 		/// </summary>
 		Terrace,
 		/// <summary>
-		/// A breakdown mound (2026-10-20): fallen blocks of the roof heaped on the floor at A, <see cref="CaveSolid.Width"/>
+		/// A breakdown mound: fallen blocks of the roof heaped on the floor at A, <see cref="CaveSolid.Width"/>
 		/// across its foot, <see cref="CaveSolid.Depth"/> high, its blocks drawn from <see cref="CaveSolid.Angle"/> (its salt).
 		/// </summary>
 		Rubble,
 		/// <summary>
-		/// A natural arch (2026-10-20): a rib of rock on a half-ellipse from its foot A to its foot B (on the floor), its
+		/// A natural arch: a rib of rock on a half-ellipse from its foot A to its foot B (on the floor), its
 		/// underside <see cref="CaveSolid.Depth"/> over them at its crown, the rib <see cref="CaveSolid.Width"/> round.
 		/// </summary>
 		Arch,
@@ -349,7 +349,7 @@ namespace FishMMO.Shared.WorldDesign
 					return true;
 				}
 			}
-			// The basins, trenches and raises the variety pass sank (2026-10-20).
+			// The basins, trenches and raises the variety pass sank.
 			if (Hollows.Count > 0 && NearHollow(p, margin))
 			{
 				return true;
@@ -532,7 +532,7 @@ namespace FishMMO.Shared.WorldDesign
 				b.Encapsulate(new Vector3(shaft.Bottom.x, shaft.Top + 1f, shaft.Bottom.z) + Origin);
 				boxes.Add(b);
 			}
-			// A skylight's shaft (2026-10-20), from the floor under it to a little under the ground: one standing in it is in the
+			// A skylight's shaft, from the floor under it to a little under the ground: one standing in it is in the
 			// cave, and its far walls stay drawn. Not the opening on the ground, where one stands outside.
 			foreach (CaveMouth m in Mouths)
 			{

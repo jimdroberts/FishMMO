@@ -15,7 +15,7 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// <b>In the editor outside play mode it reads the asset straight from the AssetDatabase</b> (<c>editorAsset</c>), at once,
-	/// and starts no Addressables operation (2026-11-21). An edit-mode load went through whatever runtime catalog the editor
+	/// and starts no Addressables operation. An edit-mode load went through whatever runtime catalog the editor
 	/// held, which is the last player build's: after a server build that catalog has no client groups, so every icon load
 	/// failed with InvalidKeyException. The failure arrived asynchronously, inside whichever test was running when it
 	/// completed, and failed that test instead of the one that cached the template. Editor tools (the dashboard's tooltips)

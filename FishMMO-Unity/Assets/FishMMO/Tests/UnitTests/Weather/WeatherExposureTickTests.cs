@@ -10,8 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The closed loop between the prediction replicate's tick and the tick the weather is read at
-	/// (N12).
+	/// The closed loop between the prediction replicate's tick and the tick the weather is read at.
 	/// </summary>
 	/// <remarks>
 	/// <para>

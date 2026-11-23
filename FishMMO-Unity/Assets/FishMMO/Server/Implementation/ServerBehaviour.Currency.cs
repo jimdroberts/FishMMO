@@ -19,7 +19,7 @@ namespace FishMMO.Server.Implementation
 	/// <remarks>
 	/// These were the merchant's (InteractableSystem.Merchant) and were borrowed by ability crafting
 	/// and corpse looting; with merchants and loot in the Commerce module and crafting in the core,
-	/// they live on the base so neither copies the other (2026-11-17).
+	/// they live on the base so neither copies the other.
 	/// </remarks>
 	public abstract partial class ServerBehaviour
 	{

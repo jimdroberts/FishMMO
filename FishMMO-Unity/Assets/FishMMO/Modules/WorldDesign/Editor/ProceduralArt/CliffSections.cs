@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		public bool ArchCentred;
 		/// <summary>
-		/// A perch (2026-10-14, "an actual perch on a cliff face"): a tongue of the cap rock jutting this far out over the
+		/// A perch ("an actual perch on a cliff face"): a tongue of the cap rock jutting this far out over the
 		/// front, metres, its top flush with the wall's top; 0 for none. <see cref="TongueWidth"/> is its width at the root
 		/// and <see cref="CapThickness"/> its thickness there (it thins to under half by the lip).
 		/// </summary>
@@ -170,7 +170,7 @@ namespace FishMMO.Shared.WorldDesign
 		};
 
 		/// <summary>
-		/// A cliff perch over a rock shelter for a point of interest (2026-10-14, replacing 2026-10-10's leaning wall,
+		/// A cliff perch over a rock shelter for a point of interest (replacing the leaning wall,
 		/// which read as "a rock sticking out of the ground"): a 30 m length of sheer bedded cliff whose cap rock juts out
 		/// in a tongue 7.5 m over the front, flat-topped and flush with the clifftop so it can be walked out on, thinning
 		/// toward its lip; under it the soft lower beds are worn back into a C-shaped shelter. Proportions from real ones:

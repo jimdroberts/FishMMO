@@ -10,7 +10,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// One or two of a type of structure to a settlement (2026-10-20: "There should only be one or two of the same type of structure in
+	/// One or two of a type of structure to a settlement ("There should only be one or two of the same type of structure in
 	/// a town, city, village, capital, etc.", PointOfInterestStructureCaps): one of a landmark, at most two of any other building, its
 	/// houses, walls and small things free; held where a template's counts are drawn, by the farmsteads, the churchyards, the cemetery
 	/// and the trades, every one of them from the site's one count of what it has laid. Pure: no scene, no art.

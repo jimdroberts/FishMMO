@@ -10,7 +10,7 @@ namespace FishMMO.UnitTests
 	/// <summary>
 	/// How the Ambient Life module reads a biome template's habitat (AmbientGating.HabitatOfTemplate): an authored habitat
 	/// with the Alien bit read live from the template's air, an unauthored one from the biome's name. (The World Design
-	/// module's BiomeAuthoringHabitatTests check what its authoring writes; split there, Phase 4, 2026-11-18.)
+	/// module's BiomeAuthoringHabitatTests check what its authoring writes; split there.)
 	/// </summary>
 	[TestFixture]
 	public class AmbientHabitatOfTemplateTests

@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I5 of the biome suite (2026-10-16): the points of interest a biome hosts, the template variants its sites are
+	/// The points of interest a biome hosts, the template variants its sites are
 	/// built as, how the weather finishes its buildings and what its fields grow moved off the biome's NAME onto the biome
 	/// template, and the template gained its structure palette. Every spec column the authoring copies onto the templates is
 	/// what the name (or the kit) gave before, for every biome, so authoring changes nothing; the cut reads the template and
@@ -29,10 +29,10 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static IEnumerable<BiomeArtSpec.Entry> Unauthored => BiomeArtSpec.Entries.Where(e => !BiomeAuthoredRounds.Contains(e.Biome));
 
 		/// <summary>
-		/// The fantasy wave's kinds and the keeps and towers it raised to 1 (2026-10-27): written into every file's .Sites and .Prefers
-		/// on purpose, not as the name tables had them, and pinned by FantasyWaveHostingTests.
+		/// The fantasy set's kinds and the keeps and towers it raised to 1: written into every file's .Sites and .Prefers
+		/// on purpose, not as the name tables had them, and pinned by FantasySetHostingTests.
 		/// </summary>
-		private static bool FantasyWave(POIType kind) => kind == POIType.Keep || kind == POIType.Tower || FantasyWaveKindsTests.Wave.Contains(kind.ToString());
+		private static bool FantasyWave(POIType kind) => kind == POIType.Keep || kind == POIType.Tower || FantasySetKindsTests.Wave.Contains(kind.ToString());
 
 		// ── Kinds ─────────────────────────────────────────────────────
 
@@ -85,18 +85,18 @@ namespace FishMMO.UnitTests.WorldDesign
 			Weight("Desert", POIType.NaturalArch, 1.5f);
 			Weight("Forest", POIType.HerbGrove, 1.5f);
 			Weight("Geyser Basin", POIType.HotSpring, 1f);
-			// The POI biome audit (2026-10-25): land-found kinds leave the sea floor, and kinds that stood on every biome keep to their families.
+			// The POI biome audit: land-found kinds leave the sea floor, and kinds that stood on every biome keep to their families.
 			Weight("Ocean", POIType.Waterfall, 0f);
 			Weight("Abyss", POIType.Peak, 0f);
 			Weight("Plains", POIType.Peak, 1f);
 			Weight("Forest", POIType.WitchHut, 0.5f);
 			Weight("Forest", POIType.HuntingLodge, 1.5f);
 			Weight("Desert", POIType.HuntingLodge, 0f);
-			// The Plains round (2026-10-26): no mills on the prairie.
+			// The Plains biome: no mills on the prairie.
 			AuthoredWeight("Plains", POIType.Windmill, 0f);
 			Weight("Desert", POIType.Windmill, 0f);
 			Weight("Jungle", POIType.StoneCircle, 0f);
-			// The Hills round (2026-10-26): few circles, the antas and castros instead.
+			// The Hills biome: few circles, the antas and castros instead.
 			AuthoredWeight("Hills", POIType.StoneCircle, 0.2f);
 			Weight("Swamp", POIType.Battlefield, 0f);
 			Weight("Plains", POIType.Overhang, 0f);
@@ -126,7 +126,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// A biome's file may give a kind its own weight (or none), over its Sites list (the rows' answer, written into every file by
-		/// phase CODE-TABLE CLEARANCE, 2026-10-26); a fresh entry names no kind at all, whatever its name.
+		/// phase CODE-TABLE CLEARANCE); a fresh entry names no kind at all, whatever its name.
 		/// </summary>
 		[Test]
 		public void SpecHosts_OverridesOneKind()
@@ -162,7 +162,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// The deterministic pick: for every biome, every kind with templates, every size class, a spread of site races and 24
 		/// seeds, the template drawn with the biome template's variant weights (the spec column the authoring writes, read as
 		/// the cut reads it: BiomeTemplateArt.SiteVariantWeight by the asset name's variant) is the template drawn by the
-		/// templates' own biome lists by the biome's name (PointOfInterestTemplate.WeightFor before 2026-10-16, copied here).
+		/// templates' own biome lists by the biome's name (PointOfInterestTemplate.WeightFor formerly, copied here).
 		/// The templates are the assets the authoring writes, split into size runs.
 		/// </summary>
 		[Test]
@@ -182,7 +182,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				differing += variants.Count;
 				foreach (KeyValuePair<POIType, List<PointOfInterestTemplateAuthoring.Planned>> kind in byKind)
 				{
-					// The keeps' and towers' holders are the wave's per biome (FantasyWaveHostingTests), not the templates' old lists.
+					// The keeps' and towers' holders are the wave's per biome (FantasySetHostingTests), not the templates' old lists.
 					if (kind.Key == POIType.Keep || kind.Key == POIType.Tower)
 					{
 						continue;
@@ -226,13 +226,13 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(differing, Is.GreaterThan(unauthored), "the biomes weigh variants of their own");
 			// Spot checks: what the spec writes, from the templates' biome lists.
 			Assert.That(BiomeArtSpec.For("Desert").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Stone", 2f)));
-			// The Desert round (2026-10-26) builds no timber villages (the lists gave it 0.1).
+			// The Desert round builds no timber villages (the lists gave it 0.1).
 			Assert.That(BiomeArtSpec.For("Desert").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Timber", 0f)));
-			// The Plains round (2026-10-26) weighs its own villages (the longhouse standing in for the earth lodge).
+			// The Plains round weighs its own villages (the longhouse standing in for the earth lodge).
 			Assert.That(BiomeArtSpec.For("Plains").SiteVariants(), Does.Contain(new BiomeSiteVariant(POIType.Village, "Longhouse", 1.2f)));
 		}
 
-		// PointOfInterestTemplate.WeightFor before 2026-10-16, on a planned asset (no race keys: the authoring writes none).
+		// PointOfInterestTemplate.WeightFor formerly, on a planned asset (no race keys: the authoring writes none).
 		private static float OldWeightFor(PointOfInterestTemplateAuthoring.Planned t, string biomeName, int sizeClass, string raceCategory)
 		{
 			bool size = sizeClass == 0 ? t.Small : sizeClass == 1 ? t.Medium : t.Large;
@@ -308,7 +308,7 @@ namespace FishMMO.UnitTests.WorldDesign
 
 		/// <summary>
 		/// The finish of every piece in every biome, for every kind, decay and roll, with the biome's weathering as the spec writes
-		/// it, is what PropsFeature.FinishFor gave it by the biome's name before 2026-10-16 (its code copied here); and with no biome.
+		/// it, is what PropsFeature.FinishFor gave it by the biome's name formerly (its code copied here); and with no biome.
 		/// </summary>
 		[Test]
 		public void SpecWeathering_FinishesEveryPieceAsTheNameDid()
@@ -356,10 +356,10 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(finishes, Is.EquivalentTo(Enum.GetValues(typeof(StructureFinish))), "every finish comes up");
 			Assert.That(BiomeArtSpec.For("Swamp").Weathering(), Is.EqualTo(new BiomeWeathering(BiomeStructureFinish.Algae, 0.3f, 0.6f)));
 			Assert.That(BiomeArtSpec.For("Desert").Weathering().Finish, Is.EqualTo(BiomeStructureFinish.None));
-			// The Forest round (2026-10-26): moss on 35 % of the sound pieces, more as they decay.
+			// The Forest biome: moss on 35 % of the sound pieces, more as they decay.
 			BiomeWeathering forest = BiomeArtSpec.For("Forest").Weathering();
 			Assert.That((forest.Finish, forest.Chance, forest.ChancePerDecay), Is.EqualTo((BiomeStructureFinish.Mossy, 0.35f, 1f)));
-			// The Plains round (2026-10-26): no moss, the Dusted coat in its place.
+			// The Plains biome: no moss, the Dusted coat in its place.
 			BiomeWeathering plains = BiomeArtSpec.For("Plains").Weathering();
 			Assert.That((plains.Finish, plains.Chance, plains.ChancePerDecay, plains.Coat), Is.EqualTo((BiomeStructureFinish.None, 0f, 0f, BiomeStructureCoat.Dusted)));
 		}
@@ -368,7 +368,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		private static readonly string[] OldDamp = { "Forest", "Woodland", "Jungle", "Rainforest", "Taiga", "Bamboo", "Valley", "Karst", "Temperate", "Lake", "River" };
 		private static readonly string[] OldDry = { "Desert", "Badlands", "Salt", "Arid", "Dust", "Wasteland", "Savanna", "Scrub", "Volcanic", "Molten", "Sulphur", "Oasis" };
 
-		// PropsFeature.FinishFor before 2026-10-16, word for word.
+		// PropsFeature.FinishFor formerly, word for word.
 		private static StructureFinish OldFinishFor(PointOfInterestFinish mode, float chance, POIType kind, string biome, float decay, float roll)
 		{
 			switch (mode)
@@ -576,9 +576,9 @@ namespace FishMMO.UnitTests.WorldDesign
 			string Code(string relative) => CodeOnly(ProjectFiles.ReadAllText(Path.Combine(poi, relative)));
 			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("BiomeTemplateArt.SiteKinds(biome, rules, breathable, liquidWater)"));
 			Assert.That(Regex.Matches(Code("PointOfInterestStage.cs"), Regex.Escape("library.Pick(record, BiomeTemplateArt.SiteVariantWeights(biome),")).Count, Is.EqualTo(1));
-			// 2026-10-25 (I2n): the planned sites' pick weighs a linked cave's two templates merged, every other site its biome's.
+			// The planned sites' pick weighs a linked cave's two templates merged, every other site its biome's.
 			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("Func<PointOfInterestTemplate, float> weights = BiomeTemplateArt.SiteVariantWeights(biome);"));
-			// 2026-10-25 (NEW-POI-KINDS, decision 96): a template needing liquid water drops out on a world with none.
+			// A template needing liquid water drops out on a world with none.
 			Assert.That(Code("PointOfInterestStage.cs"), Does.Contain("library.Pick(record, PointOfInterestTemplate.WaterFit(weights, liquidWater), RaceCategoryOf(record.Race))"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("BiomeTemplateArt.Weathering(siteBiome)"));
 			Assert.That(Code("PropsFeature.cs"), Does.Contain("{ Palette = palette }"));
@@ -614,7 +614,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			var naming = new HashSet<string> { "PointOfInterestNaming.cs" };
 			// The tables of biome names the authoring reads (the kinds' and variants' default biomes, the gathering catalogue's).
 			var tables = new HashSet<string> { "PointOfInterestRules.cs", "PointOfInterestTemplateSpecs.cs", "GatheringResourceCatalogue.cs" };
-			// The fantasy wave's parts of those two tables (2026-10-27: one file a pack).
+			// The fantasy set's parts of those two tables (one file a pack).
 			bool Table(string file) => tables.Contains(file) || file.StartsWith("PointOfInterestRules.Fantasy") || file.StartsWith("PointOfInterestTemplateSpecs.Fantasy");
 			var biomeNames = new HashSet<string>(Biomes.Select(e => e.Biome));
 			// A rock's broken shape and the cave shaper's own name share a word with a biome's.

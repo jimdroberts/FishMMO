@@ -71,7 +71,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The land flora's detail meshes added by the vegetation expansion (2026-10-10): broad herbs, pad and cholla
+	/// The land flora's detail meshes added by the vegetation expansion: broad herbs, pad and cholla
 	/// cacti, column clusters, rosettes, cushions, lichens, creepers, root knobs, mushrooms and the newer litter —
 	/// the <see cref="DetailKind"/> members from <see cref="DetailKind.BroadHerb"/> to <see cref="DetailKind.DebrisBamboo"/> —
 	/// and the newer forms of the legacy kinds (<see cref="FloraVariant"/>: headed grasses, rushes, the reed's plume,

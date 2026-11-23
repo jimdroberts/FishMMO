@@ -20,7 +20,7 @@ namespace FishMMO.Shared
 	/// <summary>
 	/// Reads the ground a ray struck, on the server as on the client: a terrain tile by its ground (<see cref="TerrainGroundKinds"/>),
 	/// a cave's rock as underground stone, any other collider by its names (<see cref="SurfaceNames"/>). Asked by the wildlife
-	/// spawners (2026-11-21), so a deer is never placed in a cave and a bat never out in a field.
+	/// spawners, so a deer is never placed in a cave and a bat never out in a field.
 	/// </summary>
 	/// <remarks>
 	/// <para>

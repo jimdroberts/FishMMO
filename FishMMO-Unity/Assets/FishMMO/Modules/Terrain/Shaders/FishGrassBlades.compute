@@ -38,7 +38,7 @@
 // Diagnostic (GrassBladeRenderer.SkipTerrainColour): the generate kernel without the terrain-colour textures, so it
 // binds exactly what it did before the tint (heightmap + two density maps). Bisects the OpenGL-only flicker.
 #pragma multi_compile_local __ GRASS_NO_TERRAIN_COLOUR
-// The 32-channel generate (2026-10-27): GrassBladeRenderer turns it on only while a terrain has more than 16 blade
+// The 32-channel generate: GrassBladeRenderer turns it on only while a terrain has more than 16 blade
 // channels (GrassTerrainAtlas.Tier 1), so a scene whose terrains fit sixteen runs the kernel, and the registers, it always did.
 // The 64-channel generate (GRASS_WIDEST, later that day: Moron 2's and 3's busiest tiles paint 46 and 48 blade types) only
 // while a terrain has more than 32 (Tier 2): it holds no channel in registers but walks the density maps the thread's
@@ -110,7 +110,7 @@ RWByteAddressBuffer _GrassArgs;              // IndirectDrawIndexedArgs, 5 uints
  * width and curl, so nothing new rides the record. The patch and salt must match GRASS_FLORA_PATCH / _SALT there. */
 #include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
 #include "Assets/FishMMO/Modules/Terrain/Shaders/FishGrassLookCache.hlsl"
-/* The burn mosaic (2026-10-25, I2t; FishBurn.hlsl, BurnMosaicTable.BindCompute): where a veld fire passed, blades stand as
+/* The burn mosaic (FishBurn.hlsl, BurnMosaicTable.BindCompute): where a veld fire passed, blades stand as
  * stubble and regrow through the green flush, and an after-burn type (fire lilies, GRASS_ROW_MORE w) grows only in its weeks.
  * The blade's colour tone rides three free bits of the colour word (GrassMath.WithBurnTone) for the vertex shader. Off
  * (_FishBurnInfo.x = 0): every blade exactly as before. */
@@ -260,7 +260,7 @@ void GrassLoadTerrain(uint terrain)
     _GrassChannels3 = asfloat(uint4(_GrassShared[at + 29u], _GrassShared[at + 30u], _GrassShared[at + 31u], _GrassShared[at + 32u]));
     _GrassDensityBase = _GrassShared[at + 33u];
 #if defined(GRASS_WIDE)
-    // Appended for the 32-channel terrains (2026-10-27).
+    // Appended for the 32-channel terrains.
     _GrassChannels4 = asfloat(uint4(_GrassShared[at + 34u], _GrassShared[at + 35u], _GrassShared[at + 36u], _GrassShared[at + 37u]));
     _GrassChannels5 = asfloat(uint4(_GrassShared[at + 38u], _GrassShared[at + 39u], _GrassShared[at + 40u], _GrassShared[at + 41u]));
     _GrassChannels6 = asfloat(uint4(_GrassShared[at + 42u], _GrassShared[at + 43u], _GrassShared[at + 44u], _GrassShared[at + 45u]));
@@ -792,7 +792,7 @@ float4 GrassTerrainColourAt(float2 local, float2 world, float share, FishFloraLo
 #endif
 
 // sRGB-ish (square root) 8:8:8: dark soils keep their steps (GrassMath.PackColour). Invalid is all zero and valid never
-// is (a black ground's blue is raised a step): bit 31, the valid flag until 2026-10-27, is the type's sixth bit now.
+// is (a black ground's blue is raised a step): bit 31, the valid flag formerly, is the type's sixth bit now.
 // Bits 29..30 are the record's head part (GrassWithHeadPart).
 uint GrassPackColour(float4 c)
 {
@@ -809,7 +809,7 @@ uint GrassWithHeadPart(uint colour, uint part)
 }
 
 // GrassMath.WithBurnTone: the burn's colour tone (FishBurnStage.tone, 0..1) in the colour word's bits 24..26, dithered to
-// eighths by the blade's own hash so a scar's edge mottles instead of banding (2026-10-25, I2t). 0 = the blade's own colour.
+// eighths by the blade's own hash so a scar's edge mottles instead of banding. 0 = the blade's own colour.
 uint GrassWithBurnTone(uint colour, float tone, float dither)
 {
     uint q = (uint)clamp((int)floor(saturate(tone) * 7.0 + dither), 0, 7);
@@ -870,7 +870,7 @@ uint2 GrassActiveChannelsAt(uint terrain, float2 local)
 
 // ── Culling ───────────────────────────────────────────────────────────
 
-// Last frame's depth pyramid (FishDepthPyramid, 2026-10-21): a blade wholly behind a hill, a rock or a wall is not drawn in
+// Last frame's depth pyramid (FishDepthPyramid): a blade wholly behind a hill, a rock or a wall is not drawn in
 // the camera's view; its shadow still is (only the main lists ask).
 #include "Assets/FishMMO/Shaders/FishHiZOcclusion.hlsl"
 
@@ -1244,7 +1244,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     float floraHeight = clamp(FishFloraGrowth(rootXZ, GRASS_FLORA_HEIGHT_SWELL, GRASS_FLORA_HEIGHT_SALT), GRASS_FLORA_MIN_HEIGHT, GRASS_FLORA_MAX_HEIGHT);
     float floraBend = clamp(FishFloraSwell(rootXZ, GRASS_FLORA_BEND_SWELL, GRASS_FLORA_BEND_SALT), GRASS_FLORA_MIN_BEND, GRASS_FLORA_MAX_BEND);
 
-    /* An early exit that keeps the field exactly as it was (2026-11-05): a third of the forest's candidates were found
+    /* An early exit that keeps the field exactly as it was: a third of the forest's candidates were found
      * buried only after every other test (the banks, the flora, the paths, the burn). The blade's height is at most `tallest`
      * (a path's flattening and a burn's regrowth only shorten it, below), and snow buries a shorter blade sooner
      * (GrassBuried's drawn height grows with it), so a candidate buried at its tallest is buried as it is, by the same test
@@ -1269,7 +1269,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
     }
     /* Nor leaning out over the water: a blade rooted on the bank within its own lean of the water's edge hangs over it.
      * Rooted only by its height above the water, the banks of a narrow stream or a fall's lip grew meadow up to the
-     * edge and laid it over the water, hiding the stream and the top of every fall (2026-10-13). The water line round
+     * edge and laid it over the water, hiding the stream and the top of every fall. The water line round
      * the root at the blade's reach, where any water is near (a wading type stands in it anyway). */
     float leanReach = typeShape.x * floraHeight * 0.6;
     if (freeboard + _GrassSea.z - typeShape.w < GRASS_FREEBOARD_RANGE - 0.01 && leanReach > 0.05)
@@ -1354,7 +1354,7 @@ void GrassCandidate(uint3 group, uint3 thread, out GrassBlade lit, out GrassBlad
      * a share of them for a tussock species with a head (feather grass's plumes, a rush's tufts, wheat's ears), which
      * would otherwise put three records on every blade of a dense lawn. */
     bool headed = head != 0u && GrassUnit(GrassMix(own ^ 0x3C6EF372u)) < GrassTypeRow(type, GRASS_ROW_MORE).x;
-    // Stubble and the regrowing flush carry no heads (2026-10-25, I2t).
+    // Stubble and the regrowing flush carry no heads.
     headed = headed && burnRegrow > 0.95;
     if (_GrassCacheFloraLooks != 0u && headed && head == 2u) blade.more = FishGrassPackBloom(blade.more,rootXZ,look);
 

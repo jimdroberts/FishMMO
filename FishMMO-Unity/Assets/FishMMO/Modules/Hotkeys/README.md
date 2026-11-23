@@ -8,10 +8,10 @@ the bindings and their persistence, and the bar on the HUD with its keys, stacke
 |---|---|
 | **Module id** | `hotkeys` (`HotkeyModule`) |
 | **Assemblies** | `FishMMO.Hotkeys`, `.Server`, `.Client`, `.Tests`, `.RenderScratch` |
-| **Depends on** | The core (items the bar names, the character persistence participants, the player controls); Abilities (abilities the bar names, since 2026-11-20) |
+| **Depends on** | The core (items the bar names, the character persistence participants, the player controls); Abilities (abilities the bar names,) |
 | **Depended on by** | None |
 | **Remove together with** | Nothing |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 

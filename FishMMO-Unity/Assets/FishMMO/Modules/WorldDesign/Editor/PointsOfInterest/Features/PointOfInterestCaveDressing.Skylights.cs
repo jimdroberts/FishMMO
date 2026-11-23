@@ -24,7 +24,7 @@ namespace FishMMO.Shared.WorldDesign
 			private bool holesRead;
 
 			/// <summary>
-			/// Daylight through the roof (2026-10-20, caves livened; CaveSystem.Skylights.cs): for each opening in a chamber's
+			/// Daylight through the roof (caves livened; CaveSystem.Skylights.cs): for each opening in a chamber's
 			/// roof, the light it lets in (a <see cref="SceneEmitterKind.Skylight"/> on the lit floor: the shaft, the motes, the
 			/// sky's share round it and a soft light off the sunlit floor, all the client's), and what grows and lies round it —
 			/// on the hill, a broken ring of boulders and the biome's ferns, bushes and creeper thick at the lip, so the pit is seen

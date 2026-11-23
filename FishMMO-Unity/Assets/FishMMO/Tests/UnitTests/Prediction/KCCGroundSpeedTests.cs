@@ -255,5 +255,40 @@ namespace FishMMO.UnitTests
 			Assert.That(sprint, Is.LessThanOrEqualTo(cap), $"Sprint reached {sprint}, past the {cap} cap.");
 			Assert.That(run, Is.LessThanOrEqualTo(cap), $"Run reached {run}, past the {cap} cap.");
 		}
-	}
+	
+		/// <summary>
+		/// A mount (issue #109) multiplies run and sprint alike, and stacks with Move Speed: a horse under a speed buff is
+		/// faster than either alone, and the sprint/run ratio holds.
+		/// </summary>
+		[Test]
+		public void Mount_MultipliesRunAndSprint_AndStacksWithMoveSpeed()
+		{
+			float run = controller.ResolveGroundSpeed(false, false, 1f, attributes, mountMultiplier: 1.7f);
+			float sprint = controller.ResolveGroundSpeed(false, true, 1f, attributes, mountMultiplier: 1.7f);
+			Assert.That(run, Is.EqualTo(Constants.Character.RunSpeed * 1.7f).Within(0.0001f));
+			Assert.That(sprint, Is.EqualTo(run * StockSprintRatio).Within(0.0001f));
+
+			ApplyMoveSpeedBuff(30);
+			float buffed = controller.ResolveGroundSpeed(false, false, 1f, attributes, mountMultiplier: 1.7f);
+			Assert.That(buffed, Is.EqualTo(Constants.Character.RunSpeed * 1.7f * 1.3f).Within(0.0001f),
+				"Move Speed multiplies the mount's speed; it used to REPLACE the multiplier read before it.");
+		}
+
+		/// <summary>A mount never lifts a speed past the exploit cap.</summary>
+		[Test]
+		public void Mount_CannotExceedTheExploitCap()
+		{
+			ApplyMoveSpeedBuff(200);
+			float sprint = controller.ResolveGroundSpeed(false, true, 1f, attributes, mountMultiplier: 3f);
+			Assert.That(sprint, Is.LessThanOrEqualTo(Constants.Character.SprintSpeed * 3.0f));
+		}
+
+		/// <summary>No multiplier (on foot) is the stock speed.</summary>
+		[Test]
+		public void NoMount_IsTheStockSpeed()
+		{
+			Assert.That(controller.ResolveGroundSpeed(false, false, 1f, attributes, mountMultiplier: 1f),
+				Is.EqualTo(Constants.Character.RunSpeed).Within(0.0001f));
+		}
+}
 }

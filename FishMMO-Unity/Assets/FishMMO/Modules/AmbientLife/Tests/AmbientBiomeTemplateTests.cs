@@ -11,7 +11,7 @@ using System;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The ambient creatures' country and the sea life's favourite waters on the biome template (split from BiomeTemplateLivingTests, Phase 4, 2026-11-17).
+	/// The ambient creatures' country and the sea life's favourite waters on the biome template (split from BiomeTemplateLivingTests).
 	/// </summary>
 	[TestFixture]
 	public class AmbientBiomeTemplateTests
@@ -34,11 +34,11 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Every biome template's habitat, with the Alien bit the client reads live from the template's air (I4b, 2026-10-16:
-		/// <see cref="BiomeTemplate.LiveHabitat"/>), is what the client read from its name before (AmbientGating.HabitatOfBiome:
+		/// Every biome template's habitat, with the Alien bit the client reads live from the template's air
+		/// (<see cref="BiomeTemplate.LiveHabitat"/>), is what the client read from its name before (AmbientGating.HabitatOfBiome:
 		/// the keywords of its asset name, then its display name, and alien ground under another world's air); Alien is never
 		/// stored, and the live reading is never None, which would send its animals to the climate. (Split at the template,
-		/// Phase 4, 2026-11-18: the World Design module's tests check its authoring writes the spec's habitat onto the template.)
+		/// The World Design module's tests check its authoring writes the spec's habitat onto the template.)
 		/// </summary>
 		[Test]
 		public void TemplateHabitat_WithTheLiveAlienBit_IsWhatTheNameGave_ForEveryBiomeAsset()
@@ -51,7 +51,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				AmbientHabitat old = AmbientGating.HabitatOfBiome(biome.name, biome.DisplayName, biome.Atmosphere);
 				BiomeHabitat live = biome.LiveHabitat;
 				// An authored round names its own country (legacy equality only; the invariants above and below still hold for it). The
-				// sea halls' phase (I2n-b, 2026-10-26) gave the Subsurface Ocean Vent its sea and its caves on purpose.
+				// sea halls' phase gave the Subsurface Ocean Vent its sea and its caves on purpose.
 				bool changed = BiomeAuthoredRounds.Contains(biome.name)
 					|| biome.name == "Subsurface Ocean Vent" && live == (BiomeHabitat.Sea | BiomeHabitat.Cave);
 				if ((int)live != (int)old && !changed)

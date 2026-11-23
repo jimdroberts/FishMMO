@@ -295,7 +295,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// Every outlined site's outline (2026-10-18: footprints not circles) is closed and drawn at every bearing, inside its
+		/// Every outlined site's outline (footprints not circles) is closed and drawn at every bearing, inside its
 		/// radius (the bounding reach), never under the least share of its drawn radius, and not a disc; its pad and keep-out
 		/// carry it (the keep-out grown by its margin), and the keep-out holds every point of it.
 		/// </summary>
@@ -334,7 +334,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A town on a steady hillside is terraced (2026-10-18: hill towns): two to four levels rising up the hill, each a
+		/// A town on a steady hillside is terraced (hill towns): two to four levels rising up the hill, each a
 		/// metre or more over the one below, a ramp up every bank at the ramp's grade, and the site standing at its centre's level.
 		/// </summary>
 		[Test]
@@ -430,7 +430,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A kind's count comes from the area its biomes hold, by their weights (2026-10-25), not the whole scene's: a kind no
+		/// A kind's count comes from the area its biomes hold, by their weights, not the whole scene's: a kind no
 		/// biome hosts counts nothing, one hosted at 0.2 a fifth, a favoured one more than the scene's area.
 		/// </summary>
 		[Test]

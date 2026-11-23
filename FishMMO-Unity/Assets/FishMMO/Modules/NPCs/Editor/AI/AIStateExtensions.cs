@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// AI state types other modules add to the NPCs module's editor tools (2026-11-20: the Pets module's pet states): the
+	/// AI state types other modules add to the NPCs module's editor tools (the Pets module's pet states): the
 	/// dashboard's AI States category lists them, groups and sorts them, and the asset organizer files them.
 	/// </summary>
 	public static class AIStateExtensions

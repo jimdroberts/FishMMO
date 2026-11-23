@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Decision 26 of the biome suite (2026-10-18, phase I2h): ridge and furrow carved into the terrain the same on every run
+	/// Decision 26 of the biome suite: ridge and furrow carved into the terrain the same on every run
 	/// (from the ground as it was, never on top of the last carve), waterfalls and their spray in the look of the water they
 	/// pour from, and the sea under its surface in the look of the coast round the eye. Every default is exactly what was drawn
 	/// before: today's water and sea looks for every biome, the falls' material colours, the scene's own sea.
@@ -248,7 +248,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(guard, Is.GreaterThan(0).And.LessThan(carve));
 			Assert.That(fields.IndexOf("PaintDetails(terrains, field, crop, biome, surface);", carve, StringComparison.Ordinal), Is.GreaterThan(carve), "the crop after the carve");
 			Assert.That(fields.IndexOf("AddFurrows(context, field, surface);", carve, StringComparison.Ordinal), Is.GreaterThan(carve));
-			// The fence's draws come from the site's sequence, or a shrunk field's own (2026-10-18, I2k): after the carve either way.
+			// The fence's draws come from the site's sequence, or a shrunk field's own: after the carve either way.
 			Assert.That(fields.IndexOf("Fence(context, field, site, abandoned, ", carve, StringComparison.Ordinal), Is.GreaterThan(carve));
 
 			string repaint = CodeOnly(Read(RepaintSource));
@@ -416,7 +416,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				Assert.That(entry, Is.Not.Null, name);
 				// An authored round gives its own sea look (legacy equality only; BiomeAuthoredRoundTests pins it).
 				Assert.That(entry.SeaLook().Signature(), Is.EqualTo(ExpectedSeaLook(name).Signature()), name);
-				// A biome file may mark its water hot (phase I2q, .HotWater()); the colours stay today's.
+				// A biome file may mark its water hot (.HotWater()); the colours stay today's.
 				BiomeWaterLook water = entry.WaterLook();
 				Assert.That(water.Signature(), Is.EqualTo(BiomeWaterLookAndFieldSurfaceTests.ExpectedAuthoredWater(name).Signature()), name);
 				count++;

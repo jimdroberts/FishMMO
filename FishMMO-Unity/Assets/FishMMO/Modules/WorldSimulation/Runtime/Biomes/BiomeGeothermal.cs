@@ -6,8 +6,8 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How a steaming biome's hot ground divides among the kinds of site (<see cref="BiomeTemplate.Geothermal"/>, 2026-10-18,
-	/// phase I2q, decision 47): the share of its sites that are geysers, hot springs, fumaroles and mud pots
+	/// How a steaming biome's hot ground divides among the kinds of site (<see cref="BiomeTemplate.Geothermal"/>):
+	/// the share of its sites that are geysers, hot springs, fumaroles and mud pots
 	/// (FishMMO.Shared.Weather.GeothermalVents). Read only for a biome whose ground steams (it emits a vapour); a volcanic
 	/// biome's vents are fumaroles whatever this says.
 	/// </summary>
@@ -32,15 +32,15 @@ namespace FishMMO.Shared.Biomes
 		[Min(0f)] public float HotSpring;
 		[Tooltip("Share that are fumaroles: steady jets of steam out of a crack.")]
 		[Min(0f)] public float Fumarole;
-		[Tooltip("Share that are mud pots: grey boiling mud that plops on the shared clock. 0 for none (every biome until 2026-10-18).")]
+		[Tooltip("Share that are mud pots: grey boiling mud that plops on the shared clock. 0 for none (every biome formerly).")]
 		[Min(0f)] public float MudPot;
-		[Tooltip("Share that are jets (2026-10-25, I2q-b, decision 53): a fissure's narrow jets of vapour and ice grains. 0 for none. Sites on stored fissure and ridge lines are jets whatever the split says.")]
+		[Tooltip("Share that are jets: a fissure's narrow jets of vapour and ice grains. 0 for none. Sites on stored fissure and ridge lines are jets whatever the split says.")]
 		[Min(0f)] public float Jet;
-		[Tooltip("Share that are sulphur pools (2026-10-25, I2q-b, decision 84): ponds of molten sulphur, dug and pooled as the springs are, wearing the biome's water look (a Melt look). 0 for none.")]
+		[Tooltip("Share that are sulphur pools: ponds of molten sulphur, dug and pooled as the springs are, wearing the biome's water look (a Melt look). 0 for none.")]
 		[Min(0f)] public float SulphurPool;
-		[Tooltip("The biome's own site rate (2026-10-25, I2q-b, decision 84): when above 0 its hot ground has every kind of this split at this rate (a site in that share of the 80 m cells, × 1.4), whatever it emits, so a biome whose emission is a deposit (sulphur dust) or a vented ash still has its fumaroles, pools and pots. 0 (every biome before): the rate follows the emission as it did.")]
+		[Tooltip("The biome's own site rate: when above 0 its hot ground has every kind of this split at this rate (a site in that share of the 80 m cells, × 1.4), whatever it emits, so a biome whose emission is a deposit (sulphur dust) or a vented ash still has its fumaroles, pools and pots. 0 (every biome before): the rate follows the emission as it did.")]
 		[Range(0f, 1f)] public float Rate;
-		[Tooltip("The colour its vents fume (2026-10-25, I2q-b, decision 84: a sulphur flat's yellow-white); alpha 0 for none (the steam's own colour, or a cloud's white).")]
+		[Tooltip("The colour its vents fume (a sulphur flat's yellow-white); alpha 0 for none (the steam's own colour, or a cloud's white).")]
 		public Color FumeTint;
 
 		public BiomeGeothermalShares(float geyser, float hotSpring, float fumarole, float mudPot)
@@ -55,7 +55,7 @@ namespace FishMMO.Shared.Biomes
 			FumeTint = default;
 		}
 
-		/// <summary>The split with jets and sulphur pools of their own (2026-10-25, I2q-b).</summary>
+		/// <summary>The split with jets and sulphur pools of their own.</summary>
 		public BiomeGeothermalShares WithMore(float jet, float sulphurPool)
 		{
 			BiomeGeothermalShares shares = this;
@@ -64,7 +64,7 @@ namespace FishMMO.Shared.Biomes
 			return shares;
 		}
 
-		/// <summary>The split with a site rate of its own (decision 84) and the colour its vents fume (alpha 0 for none).</summary>
+		/// <summary>The split with a site rate of its own and the colour its vents fume (alpha 0 for none).</summary>
 		public BiomeGeothermalShares WithRate(float rate, Color fumeTint = default)
 		{
 			BiomeGeothermalShares shares = this;
@@ -94,7 +94,7 @@ namespace FishMMO.Shared.Biomes
 		public bool OwnRate => Rate > 0f;
 
 		/// <summary>
-		/// The split as the authoring marks it: each share to 1/10 000, in a fixed order; the jets, pools, rate and tint (2026-10-25)
+		/// The split as the authoring marks it: each share to 1/10 000, in a fixed order; the jets, pools, rate and tint
 		/// only when set, so every mark written before reads the same.
 		/// </summary>
 		public string Signature()
@@ -130,7 +130,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// How fully something banded by the ground's HEAT is present (2026-10-18, phase I2q): a ground layer's heat band
+	/// How fully something banded by the ground's HEAT is present: a ground layer's heat band
 	/// (<see cref="TerrainTextureLayer.useHeatBand"/>) and a spawn rule's (<see cref="PrefabSpawnRule.useHeatBand"/>), read
 	/// against the scene's heat mask (0 cold ground … 1 the boiling throat of a spring; SceneBiomeMap.HeatAt, baked at the
 	/// cut from the same geothermal sites the client steams).
@@ -239,7 +239,7 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The ground's heat over a scene (2026-10-18, phase I2q, decision 47): a grid of bytes over the rectangle its geothermal
+	/// The ground's heat over a scene: a grid of bytes over the rectangle its geothermal
 	/// sites warm, 0 cold … 255 a spring's throat, baked at the cut from the very sites the client steams and stored in the
 	/// scene's biome map (<see cref="SceneBiomeMap.HeatAt"/>), where the splat's and the scatter's heat bands read it.
 	/// </summary>

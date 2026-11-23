@@ -12,7 +12,7 @@ namespace FishMMO.Shared
 	/// <remarks>
 	/// <para>
 	/// <b>Why not a trigger.</b> A <c>NetworkTrigger</c> would have been the obvious way to build
-	/// this and is the wrong one (N13). Trigger callbacks are raised by the physics scene in
+	/// this and is the wrong one. Trigger callbacks are raised by the physics scene in
 	/// <c>OnPostPhysicsSimulation</c> — outside the replicate, so they cannot be predicted; they are
 	/// not rolled back, so a reconcile leaves them stale; and they re-fire Enter and Exit on every
 	/// replayed tick, so one reconcile of thirty ticks would apply and remove the buff thirty times.
@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 		/// <para>
 		/// The whole verdict, in one pure pass over a position: no history, no enter/exit bookkeeping,
 		/// nothing carried from the previous tick. That is what makes a replayed tick reach the same
-		/// answer as the first run of it, and what a trigger could never have given (N13).
+		/// answer as the first run of it, and what a trigger could never have given.
 		/// </para>
 		/// <para>
 		/// Two volumes granting the same buff collapse to one entry, so overlapping regions do not

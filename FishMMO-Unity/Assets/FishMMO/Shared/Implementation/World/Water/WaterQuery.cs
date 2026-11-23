@@ -149,7 +149,7 @@ namespace FishMMO.Shared.Weather
 		public static WaterSample Sample(Scene scene, float x, float z, uint tick) => Sample(scene, x, float.PositiveInfinity, z, tick);
 
 		/// <summary>
-		/// The water a height stands in or over at a place in <paramref name="scene"/> at a synced server tick (2026-10-21): the
+		/// The water a height stands in or over at a place in <paramref name="scene"/> at a synced server tick: the
 		/// highest surface of the lakes and rivers whose floor lies under it (<see cref="SurfaceWater.IStackedAreaSource"/>), so a
 		/// swimmer in a cave's stream is not under a lava tube's river on the level over it. Positive infinity for
 		/// <paramref name="y"/> is the highest over the place.

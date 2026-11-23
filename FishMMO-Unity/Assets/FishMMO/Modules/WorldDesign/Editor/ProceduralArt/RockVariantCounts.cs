@@ -5,7 +5,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
 	/// How many seeded variants of each rock's formations the generator makes, and how many meshes each stone material's
-	/// small rocks and pebbles cycle through in the GPU detail scatter (2026-10-26, phase I6f of the biome suite, decision
+	/// small rocks and pebbles cycle through in the GPU detail scatter (of the biome suite, decision
 	/// 34). One table each, a row a rock or stone, so a biome round or the owner changes a count by editing one row.
 	/// </summary>
 	/// <remarks>

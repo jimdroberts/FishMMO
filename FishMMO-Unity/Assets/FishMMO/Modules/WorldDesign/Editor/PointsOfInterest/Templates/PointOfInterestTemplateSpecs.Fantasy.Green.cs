@@ -7,7 +7,7 @@ namespace FishMMO.Shared.WorldDesign
 {
 	public static partial class PointOfInterestTemplateSpecs
 	{
-		/// <summary>The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the templates of the Green pack's kinds (29).</summary>
+		/// <summary>The fantasy set: the templates of the Green pack's kinds (29).</summary>
 		private static void FantasyGreen(List<PointOfInterestTemplateSpec> a)
 		{
 			// The new pieces' ids (StructurePieces.Fantasy.Green.cs), laid by id.

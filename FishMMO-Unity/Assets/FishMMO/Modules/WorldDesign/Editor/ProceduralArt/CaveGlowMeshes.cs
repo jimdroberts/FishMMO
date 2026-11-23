@@ -6,9 +6,9 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The cave kit's glow art as meshes (<see cref="CaveGlowKind"/>, 2026-10-13): glowing crystal clusters and giant
-	/// columns, luminous fungi (Mycena tufts, giant glowcaps, Panellus brackets), glow-worm snares and ore seams; since
-	/// 2026-10-20 also mushroom trees to 15 m and glowcaps of 3–5 m, puffballs and morels, tall bracket tiers, glowroot
+	/// The cave kit's glow art as meshes (<see cref="CaveGlowKind"/>): glowing crystal clusters and giant
+	/// columns, luminous fungi (Mycena tufts, giant glowcaps, Panellus brackets), glow-worm snares and ore seams; also
+	/// mushroom trees to 15 m and glowcaps of 3–5 m, puffballs and morels, tall bracket tiers, glowroot
 	/// curtains, glow-vines and the tree roots that hang through a thin roof. Pure
 	/// geometry, three levels each; names, hues and materials are ProceduralArtCatalogue.Cave.cs's.
 	/// </summary>
@@ -62,7 +62,7 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveGlowKind.MagmaSeep: m = MagmaSeeps(variant, lod, s); break;
 				case CaveGlowKind.Lavacicle: m = Lavacicles(variant, lod, s); break;
 				case CaveGlowKind.LavaCrust: m = LavaCrusts(variant, lod, s); break;
-				// 2026-10-20 (caves livened, hanging): CaveGlowMeshes.Hanging.cs.
+				// caves livened, hanging: CaveGlowMeshes.Hanging.cs.
 				case CaveGlowKind.GlowSilk: m = GlowSilk(variant, lod, s); break;
 				case CaveGlowKind.TapRoots: m = TapRoots(variant, lod, s); break;
 				case CaveGlowKind.GuanoHeap: m = GuanoHeap(variant, lod, s); break;
@@ -758,7 +758,7 @@ namespace FishMMO.Shared.WorldDesign
 			return top[top.Length - 1].y;
 		}
 
-		// ── Towering fungi (2026-10-20) ───────────────────────────────
+		// ── Towering fungi ───────────────────────────────
 
 		/// <summary>The shape of a mushroom tree's cap.</summary>
 		private enum CapStyle
@@ -1077,7 +1077,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Towering glowcaps, mushroom trees of the deep (2026-10-20: "Largest mushrooms should get up to 15m tall"): v0 one
+		/// Towering glowcaps, mushroom trees of the deep ("Largest mushrooms should get up to 15m tall"): v0 one
 		/// 12 m dome on a stalk tiered with brackets, its veil hanging; v1 a stand of three (11, 7.5 and 5 m), the lesser
 		/// leaning out from under the greatest; v2 a 10 m parasol leaning 11°, four tiers of brackets up it; v3 a 14 m slender
 		/// bell, veiled, with a 4.5 m one at its foot. The dressing scales a piece so its tallest stands 5–15 m
@@ -1121,7 +1121,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Glowcaps of the middle size, 3–5 m (2026-10-20), as the mushroom trees are made: v0 one 4.4 m dome with a tier of
+		/// Glowcaps of the middle size, 3–5 m, as the mushroom trees are made: v0 one 4.4 m dome with a tier of
 		/// brackets, v1 a pair of parasols (4.2 and 3 m), v2 a clump of three bells (4, 3.3 and 2.6 m).
 		/// </summary>
 		private static MeshBuilder MidFungi(int variant, int lod, int seed)
@@ -1159,7 +1159,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Puffballs and morels of the cave floor (2026-10-20), fantasy-sized: v0 a cluster of seven puffballs (Calvatia), 0.25–0.9
+		/// Puffballs and morels of the cave floor, fantasy-sized: v0 a cluster of seven puffballs (Calvatia), 0.25–0.9
 		/// m across, to 0.6 m tall, glowing warts on their tops; v1 six morels, 0.3–0.8 m, their honeycombed heads pitted with glowing cells; v2 a
 		/// giant puffball burst open at its crown, its spores drifting glowing over it, three small ones at its foot.
 		/// </summary>
@@ -1276,7 +1276,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Tall tiers of great bracket fungi on a wall (2026-10-20; Ganoderma and Laetiporus grown fantasy-large): overlapping
+		/// Tall tiers of great bracket fungi on a wall (Ganoderma and Laetiporus grown fantasy-large): overlapping
 		/// shelves standing out along −z, their pores glowing underneath, their roots in the wall. v0 a column of ten 1.8 m tall,
 		/// v1 a staircase of twelve climbing 2.8 m, v2 a broad fan of fourteen over 2.4 by 1.6 m.
 		/// </summary>
@@ -1530,7 +1530,7 @@ namespace FishMMO.Shared.WorldDesign
 			return m;
 		}
 
-		// ── Roots and glow-vines (2026-10-20) ─────────────────────────
+		// ── Roots and glow-vines ─────────────────────────
 
 		/// <summary>Seating: how far a hanging root's top reaches up into the roof above the origin.</summary>
 		public const float RootSeat = 0.22f;
@@ -1590,7 +1590,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A glowroot curtain (fantasy, 2026-10-20: the deep dark's bioluminescent roots): strands hanging from a roof patch,
+		/// A glowroot curtain (fantasy: the deep dark's bioluminescent roots): strands hanging from a roof patch,
 		/// faint where they leave the rock and brightening down them, beaded with glowing nodules and ending in a bright
 		/// bulb; a few thick runners along the roof hold them. v0 a curtain 2 m across to 2.2 m long, v1 a deep one 3 m across
 		/// to 3.5 m, v2 a fringe along a 2.6 m line to 1.4 m. Fewer strands at each level, the longest kept.
@@ -1660,7 +1660,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Tree roots come down through a cave's thin roof near its mouth (2026-10-20), as they hang in shallow caves under a
+		/// Tree roots come down through a cave's thin roof near its mouth, as they hang in shallow caves under a
 		/// wood: a few thick roots kinking down from the rock, forking, thinning to a fringe of hair roots at their ends, and
 		/// runners along the roof. Not lit: the root material only (pale at the growing tips). v0 a few thick roots over 1.5 m,
 		/// to 1.6 m long; v1 a dense hairy curtain 2.5 m across, to 2.4 m; v2 one great root knot and its many fine rootlets.
@@ -1736,7 +1736,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A glow-vine on a wet wall (fantasy, 2026-10-20): creeping stems laid on the rock (along the wall's face, a little into
+		/// A glow-vine on a wet wall (fantasy): creeping stems laid on the rock (along the wall's face, a little into
 		/// it), meandering up and across it, set with small rounded leaves that glow, brightest at the growing tips. v0 a patch
 		/// 1.5 m across and tall, v1 a sheet 2.5 by 2 m, v2 a cascade hanging 2.4 m down from its top (origin at the top).
 		/// </summary>
@@ -1923,7 +1923,7 @@ namespace FishMMO.Shared.WorldDesign
 			return b;
 		}
 
-		// ── Cave crystals (2026-10-16, I6c) ───────────────────────────
+		// ── Cave crystals ───────────────────────────
 		//
 		// The cave-crystal catalogue's own habits (ProceduralArtCatalogue.CaveMinerals): every kind not already a rock formation's
 		// crystal, a mesh set a habit shared by the kinds that grow in it, as the glow art's hues share their meshes. Two submeshes:
@@ -1947,7 +1947,7 @@ namespace FishMMO.Shared.WorldDesign
 				case CaveMineralHabit.Shards: m = Shards(variant, lod, s); break;
 				case CaveMineralHabit.Nodules: m = Nodules(variant, lod, s); break;
 				case CaveMineralHabit.Blades: m = Blades(variant, lod, s); break;
-				// The drafts' habits (2026-10-26, NEW-CRYSTALS): CaveGlowMeshes.Habits.cs.
+				// The drafts' habits: CaveGlowMeshes.Habits.cs.
 				default: m = BuildHabit(habit, variant, lod, s); break;
 			}
 			m.RecalculateTangents();
@@ -2321,7 +2321,7 @@ namespace FishMMO.Shared.WorldDesign
 			return m;
 		}
 
-		// ── Cave lava (2026-10-20) ────────────────────────────────────
+		// ── Cave lava ────────────────────────────────────
 		//
 		// What a lava tube that still runs shows round its lava ("glowing floor/wall cracks, magma seeping from walls, glowing
 		// lavacicles"): fissures in a black crust glowing in their depths, runnels of magma down a wall, lava stalactites with

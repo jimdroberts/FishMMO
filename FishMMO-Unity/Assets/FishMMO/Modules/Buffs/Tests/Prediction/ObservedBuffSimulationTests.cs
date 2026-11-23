@@ -25,7 +25,7 @@ namespace FishMMO.UnitTests
 	/// The dangerous half is what an observer must NOT do. Its attribute broadcast already carries
 	/// every buff's contribution inside <c>ExternalModifier</c>, and its resource broadcast already
 	/// carries the result of every damage-over-time tick, so running the effects locally counts both
-	/// twice — the same double-count the 2026-08-28 audit fixed on the spawn payload.
+	/// twice — the same double-count the audit fixed on the spawn payload.
 	/// </para>
 	/// </remarks>
 	[TestFixture]
@@ -291,9 +291,9 @@ namespace FishMMO.UnitTests
 		/// </summary>
 		/// <remarks>
 		/// Two halves of one off-by-one. A fresh stacking buff used to run both the new-buff branch
-		/// and the stack branch, applying its modifier twice on the first cast — fixed 2026-08-28.
+		/// and the stack branch, applying its modifier twice on the first cast —.
 		/// The ceiling tested <c>Stacks &lt; MaxStacks</c>, which let Stacks REACH MaxStacks, so a
-		/// MaxStacks=3 buff still delivered four applications at full stacks — fixed 2026-08-29.
+		/// MaxStacks=3 buff still delivered four applications at full stacks —.
 		/// <c>ObservedBuffEntry.Stacks</c> documents the invariant: 0 means one application.
 		/// </remarks>
 		[Test]
@@ -370,7 +370,7 @@ namespace FishMMO.UnitTests
 		{
 			// predictedByThisPeer: false — these tests exercise the SERVER-DRIVEN apply funnel,
 			// which confirms rather than marks; the provisional path has its own fixture
-			// (CombatAudit20260831RecommendedFixTests).
+			// (CombatAudit3RecommendedFixTests).
 			typeof(BuffController)
 				.GetMethod("ApplyResolved", Private)
 				.Invoke(controller, new object[] { template, tick, null, false });

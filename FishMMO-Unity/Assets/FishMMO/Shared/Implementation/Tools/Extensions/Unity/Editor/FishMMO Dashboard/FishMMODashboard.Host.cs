@@ -6,7 +6,7 @@ using UnityEngine.UIElements;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What a module's category may do to the dashboard (2026-11-20, when the NPC prefab designer became the NPCs
+	/// What a module's category may do to the dashboard (when the NPC prefab designer became the NPCs
 	/// module's): draw into the inspector area, keep an editor alive with it, report a status, reload its list and select
 	/// an entry, and rescan when the project changes.
 	/// </summary>

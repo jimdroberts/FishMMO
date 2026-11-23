@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What a cave grows and how thickly (2026-10-20, cave realism: "more clusters of detail objects (mushrooms are great already
+	/// What a cave grows and how thickly (cave realism: "more clusters of detail objects (mushrooms are great already
 	/// but more and even larger ones)", "Largest mushrooms should get up to 15m tall", "More glow is good inside the caves",
 	/// "More vines and stuff inside caves"). Every 0..1 or multiplier is read by the dressing's passes; 0 turns a pass off.
 	/// </summary>
@@ -53,14 +53,14 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The ONE lookup of the dressing's per-biome and per-form choices (2026-10-20): what a cave of a form in a biome grows, how
+	/// The ONE lookup of the dressing's per-biome and per-form choices: what a cave of a form in a biome grows, how
 	/// big and how thickly. Pure (the template is read into <see cref="CaveBiomeTraits"/> first), so the biome suite can move the
 	/// choices into template fields later; plus the rules every towering fungus keeps (its height range and its room under the
 	/// roof).
 	/// </summary>
 	public static class CaveFungi
 	{
-		/// <summary>A mushroom tree stands 5–15 m (2026-10-20: "Largest mushrooms should get up to 15m tall").</summary>
+		/// <summary>A mushroom tree stands 5–15 m ("Largest mushrooms should get up to 15m tall").</summary>
 		public const float TowerMin = 5f, TowerMax = 15f;
 		/// <summary>The glowcaps of the middle size stand 3–5 m.</summary>
 		public const float MidMin = 3f, MidMax = 5f;
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines) => TraitsOf(biome, vines, null);
 
 		/// <summary>
-		/// What the plan reads of a cave's biome, its vines given, with the crystals its inside grows (2026-10-25, I2n: the vines, the
+		/// What the plan reads of a cave's biome, its vines given, with the crystals its inside grows (the vines, the
 		/// greenery at the mouth and the trees over it are the HOST's, the glowing crystals the interior's; null: the biome's own).
 		/// </summary>
 		public static CaveBiomeTraits TraitsOf(BiomeTemplate biome, VineBiomes.Habitat vines, IReadOnlyList<BiomeCaveCrystal> crystals)
@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// vines grow (as thickly as at its cave mouths), roots where something green grows above, fewer groves where its own
 		/// glowing crystals light the halls.
 		/// </summary>
-		/// <param name="rootsNearMouth">The biome's own roots near a mouth before the land over it is weighed (2026-10-25, I2n-c, its
+		/// <param name="rootsNearMouth">The biome's own roots near a mouth before the land over it is weighed (its
 		/// Cave Hangings entry, authored from <see cref="CodedRootsNearMouth"/>); negative for the form's own.</param>
 		public static CaveFungusPlan For(in CaveBiomeTraits biome, CaveForm form, float rootsNearMouth = -1f)
 		{
@@ -191,7 +191,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// Fungi, glow and rubble in plenty (2026-10-20, cave realism: "Caves of all types and mines look barren even with all the
+	/// Fungi, glow and rubble in plenty (cave realism: "Caves of all types and mines look barren even with all the
 	/// detail objects … more clusters of detail objects"): forests of mushroom trees to 15 m in the great halls whose roofs
 	/// allow them, glowcap groves in the rooms of every cave that grows fungi, fairy rings, denser clumps of glow over the rooms'
 	/// floors and along the ways, tall bracket tiers on the walls, and clusters of breakdown fallen from the roofs.
@@ -232,7 +232,7 @@ namespace FishMMO.Shared.WorldDesign
 						planMade = true;
 						// The mouth's vines and greenery and the trees over the cave are its host land's; the glowing crystals its inside's.
 						vines = host != null ? BiomeTemplateArt.Vines(host) : null;
-						// Its roots near a mouth the biome dressing the inside's (I2n-c, Cave Hangings), weighed by the land over it.
+						// Its roots near a mouth the biome dressing the inside's (Cave Hangings), weighed by the land over it.
 						plan = CaveFungi.For(CaveFungi.TraitsOf(host, vines, caves.Linked ? CaveInteriorArt.Crystals(in caves) : null), system.Form,
 							CaveHanging.Entry(biome, system.Form).RootsNearMouth);
 					}
@@ -511,7 +511,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Groves ────────────────────────────────────────────
 
 			/// <summary>
-			/// Glowcap groves in the rooms, caverns and halls of every cave that grows fungi (2026-10-20; before only a hall cave's
+			/// Glowcap groves in the rooms, caverns and halls of every cave that grows fungi (before only a hall cave's
 			/// halls had them): a middle glowcap or two where the roof allows, giant glowcaps round it, tufts and puffballs under.
 			/// </summary>
 			private void Groves(DeterministicRNG random, in CaveFungusPlan p)
@@ -740,7 +740,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			/// <summary>
-			/// Clumps at the walls' feet along every passage (2026-10-20; before only a crystal gallery's): every few metres, kept
+			/// Clumps at the walls' feet along every passage (before only a crystal gallery's): every few metres, kept
 			/// where the floor is rich, out of the mouths' daylight, a tuft or a crystal, a puffball now and then.
 			/// </summary>
 			private void WayClumps(DeterministicRNG random, in CaveFungusPlan p)
@@ -828,7 +828,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Terraces and pits ─────────────────────────────────
 
 			/// <summary>
-			/// The layout's terraces and pits (2026-10-20, its variety pass): glow along each terrace's lip (a hand in from its
+			/// The layout's terraces and pits (its variety pass): glow along each terrace's lip (a hand in from its
 			/// edge, off its walk) and clumps at its foot in the room, a bracket tier or a glow-vine up a tall one's riser; round
 			/// each pit's rim the breakdown it shed and clumps of glow, and on a dry sinkhole's floor the rock it settled with.
 			/// In a mine only the spoil (its clutter's pass lays the rest).
@@ -950,7 +950,7 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Rubble ────────────────────────────────────────────
 
 			/// <summary>
-			/// Clusters of breakdown (2026-10-20): a block or slab fallen from the roof and the lesser pieces it broke into, heaped
+			/// Clusters of breakdown: a block or slab fallen from the roof and the lesser pieces it broke into, heaped
 			/// toward a chamber's wall where the roof shed them, and now and then at a passage's wall; of the cave's own rock (a
 			/// mine's spoil is its clutter's).
 			/// </summary>

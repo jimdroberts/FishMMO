@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A scene on a gas giant is a cloud world (2026-10-14: "Cutting a scene on a gas giant shouldn't generate terrain…
+	/// A scene on a gas giant is a cloud world ("Cutting a scene on a gas giant shouldn't generate terrain…
 	/// It should just be a cloud system… small floating islands, flying ships, and maybe flying cities"): its islands,
 	/// their bridges and landing stages (CloudIslands), and the habitable layer its climate is asked about (CloudWorld).
 	/// </summary>
@@ -154,7 +154,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The turf meets the rock with no gap from any side (2026-10-15: "can we blend the rock and terrain properly? Be more
+		/// The turf meets the rock with no gap from any side ("can we blend the rock and terrain properly? Be more
 		/// thorough"): round every island, with the rim built as the cut builds it (CloudWorldCut.RimRing), no turf is drawn
 		/// past the rim (the terrain draws up to 0.6 of a cell past a solid cell either way, its filtered holes texture
 		/// compressed); the turf's drawn edge lies under the stone; and at the ledge's inner edge the turf is back over the
@@ -265,7 +265,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// A bridge lands on the grass and clears the rock (2026-10-15: "The bridges… no longer end properly on land, they also
+		/// A bridge lands on the grass and clears the rock ("The bridges… no longer end properly on land, they also
 		/// need to accommodate our world sim walker"): each end post on solid turf with its landing on the grass behind it,
 		/// flush within a step (0.25 m, the walker's and the players' KCC); the walk never in the grass or the rim's stone on its
 		/// way out; and no stretch of it steeper than a walker climbs.

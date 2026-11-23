@@ -9,7 +9,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The caves' light-makers (2026-10-20: "Bioluminescent creatures should also exist in caves"; <see cref="AmbientGlow"/>): that
+	/// The caves' light-makers ("Bioluminescent creatures should also exist in caves"; <see cref="AmbientGlow"/>): that
 	/// they live in an ordinary cave (its rock at the ground's year mean, about 8–12 °C) and in the forms they are of, that each
 	/// one's light is a pure function of the shared clock and its own seed, that nothing else glows, and that the cut gives them
 	/// homes low enough to be seen.
@@ -399,7 +399,7 @@ namespace FishMMO.UnitTests.Weather
 	}
 
 	/// <summary>
-	/// The light-makers' homes the cut bakes (<see cref="CaveLifeBake"/>, 2026-10-20): low glow air in a natural cave a person walks
+	/// The light-makers' homes the cut bakes (<see cref="CaveLifeBake"/>): low glow air in a natural cave a person walks
 	/// under (round-2's lesson: a roost 19 m up is never seen), the same for the same system, within the spot budget.
 	/// </summary>
 	[TestFixture]

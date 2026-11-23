@@ -25,8 +25,8 @@ namespace FishMMO.Shared
 	/// <item><see cref="RowPaths"/>: the slices of the layer's own biome's path ground, road ground and cobbles (−1 none).</item>
 	/// <item><see cref="RowBackdrop"/>: not a layer's but a backdrop channel's: the scene layer channel c of the backdrop's
 	/// control maps holds (<see cref="SceneBackdrop.ControlLayers"/>), c itself when the backdrop names none.</item>
-	/// <item><see cref="RowGlow"/>: the layer's glow (2026-10-25, phase I2r; <see cref="Biomes.BiomeGroundGlow.Pack"/>), zero for none.</item>
-	/// <item><see cref="RowClock"/>: how the layer follows the shared clock (2026-10-26, phase GROUND-BANDS; <see cref="Biomes.BiomeGroundClock.Pack"/>):
+	/// <item><see cref="RowGlow"/>: the layer's glow (<see cref="Biomes.BiomeGroundGlow.Pack"/>), zero for none.</item>
+	/// <item><see cref="RowClock"/>: how the layer follows the shared clock (<see cref="Biomes.BiomeGroundClock.Pack"/>):
 	/// x kind, y from, z to, w falloff; zero for none.</item>
 	/// <item><see cref="RowClockShare"/>: x the share a clocked layer keeps outside its window, y the layer that takes the rest (−1 none), w 1 in
 	/// every column when any layer of the scene follows a clock (the shader's one test before it reads more).</item>

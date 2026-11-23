@@ -16,7 +16,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	public class CharacterDamageController : CharacterPart, ICharacterDamageController
 	{
-		/* A part, not a NetworkBehaviour (2026-11-20, the Combat module): the character adds it as it wakes, players and NPCs
+		/* A part, not a NetworkBehaviour (the Combat module): the character adds it as it wakes, players and NPCs
 		 * alike, so the module's removal leaves every prefab whole. Its trigger lists are no longer authored per prefab: a
 		 * player's come from the module's PlayerCombatTriggers asset (the race prefabs' achievement counters). */
 		public override void InitializeOnce()

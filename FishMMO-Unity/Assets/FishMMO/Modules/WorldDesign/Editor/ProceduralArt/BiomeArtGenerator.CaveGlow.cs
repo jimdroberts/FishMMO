@@ -7,7 +7,7 @@ using UnityEngine.Rendering;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The cave kit's glow art (<see cref="CaveGlowMeshes"/>, ProceduralArtCatalogue.Cave.cs, 2026-10-13): its glow and ore
+	/// The cave kit's glow art (<see cref="CaveGlowMeshes"/>, ProceduralArtCatalogue.Cave.cs): its glow and ore
 	/// maps, a material a hue, and a prefab a variant of every kind in every hue.
 	/// </summary>
 	/// <remarks>
@@ -59,7 +59,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			int size = ProceduralArtCatalogue.CaveGlowTextureSize;
 			c.Report.TextureBytes += 3 * CompressedBytes(size, size);
-			// Written as the cave glow look array (ProceduralArtLookArrays, 2026-10-28): all three when it is due.
+			// Written as the cave glow look array (ProceduralArtLookArrays): all three when it is due.
 			if (!LookArraysDue(c, ProceduralArtLookArrays.CaveGlowSetName))
 			{
 				return;
@@ -90,7 +90,7 @@ namespace FishMMO.Shared.WorldDesign
 			foreach (CaveGlowFamily family in ProceduralArtCatalogue.CaveGlowFamilies)
 			{
 				bool isOre = IsOreSet(family.MaterialSet);
-				// The glow-worms too (2026-10-26, I2n-c, decision 86 (h)): marked as a steady crystal, so the crystals' glow mode of the
+				// The glow-worms too: marked as a steady crystal, so the crystals' glow mode of the
 				// biome over them (an EYELID, …) reaches them; unmoded, a −2 shines exactly as made.
 				bool isCrystal = family.MaterialSet == CrystalSet || family.MaterialSet == GlowWormSet;
 				foreach (CaveGlowHue h in family.Hues)
@@ -102,7 +102,7 @@ namespace FishMMO.Shared.WorldDesign
 						WriteMaterial(c, name, shader, m =>
 						{
 							CaveGlowLit(c, m, isOre ? ore : albedo, isOre ? ore : emission, in hue, isOre);
-							// A glowing crystal (2026-10-25, I6i): marked so its biome's glow mode reaches it (FishGlowModes.hlsl).
+							// A glowing crystal: marked so its biome's glow mode reaches it (FishGlowModes.hlsl).
 							if (isCrystal && hue.Emission.maxColorComponent > 0f)
 							{
 								m.SetFloat("_FishStructure", SteadyCrystalFlag);
@@ -113,7 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			CaveGlowHue gangue = ProceduralArtCatalogue.Gangue;
 			WriteMaterial(c, ProceduralArtCatalogue.CaveGangueMaterial, shader, m => CaveGlowLit(c, m, ore, ore, in gangue, true));
-			// The cave crystals' own (2026-10-16, I6c): through the glow ramps as the glow art's crystals, glowing only where the kind does.
+			// The cave crystals' own: through the glow ramps as the glow art's crystals, glowing only where the kind does.
 			foreach (CaveMineral mineral in ProceduralArtCatalogue.CaveMinerals)
 			{
 				if (!mineral.Formation)
@@ -123,7 +123,7 @@ namespace FishMMO.Shared.WorldDesign
 					WriteMaterial(c, ProceduralArtCatalogue.CaveMineralMaterial(mineral.Kind), shader, m =>
 					{
 						CaveGlowLit(c, m, albedo, emission, in hue, false);
-						// A crystal whose glow flickers (stormglass, 2026-10-18, decision 33): _FishStructure −1, not weathered as a
+						// A crystal whose glow flickers (stormglass): _FishStructure −1, not weathered as a
 						// building, its emission crackling with the light beside it (FishWeatherLitForwardPass.hlsl FishGlowFlicker).
 						if (flickers)
 						{
@@ -131,13 +131,13 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						else if (hue.Emission.maxColorComponent > 0f)
 						{
-							// A steady glowing crystal (2026-10-25, I6i): −2, shining as made unless its biome names a glow mode.
+							// A steady glowing crystal: −2, shining as made unless its biome names a glow mode.
 							m.SetFloat("_FishStructure", SteadyCrystalFlag);
 						}
 					});
 				}
 			}
-			// The biomes' own looks of shared kinds (2026-10-26, NEW-CRYSTALS): the kind's glow, the look's colour.
+			// The biomes' own looks of shared kinds: the kind's glow, the look's colour.
 			foreach (CaveMineralLook look in ProceduralArtCatalogue.CaveMineralLooks)
 			{
 				CaveGlowHue hue = ProceduralArtCatalogue.CaveMineralLookHue(in look);
@@ -158,7 +158,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The cave crystals (ProceduralArtCatalogue.CaveMinerals, 2026-10-16, I6c): each habit's meshes once, then a prefab a
+		/// The cave crystals (ProceduralArtCatalogue.CaveMinerals): each habit's meshes once, then a prefab a
 		/// variant of every kind built in its own habit, its rock on the kit's fieldstone and its crystal in the kind's material,
 		/// collided with as the glow art's crystals are. Selenite and frost crystal are the rock art's formations: nothing here.
 		/// </summary>
@@ -205,7 +205,7 @@ namespace FishMMO.Shared.WorldDesign
 					});
 				}
 			}
-			// A biome's own look of a shared kind (2026-10-26, NEW-CRYSTALS): its habit's meshes in its own material.
+			// A biome's own look of a shared kind: its habit's meshes in its own material.
 			foreach (CaveMineralLook look in ProceduralArtCatalogue.CaveMineralLooks)
 			{
 				Material crystal = MaterialOrNull(c, ProceduralArtCatalogue.CaveMineralLookMaterial(in look));
@@ -265,7 +265,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float FlickeringCrystalFlag = -1f;
 
 		/// <summary>
-		/// The <c>_FishStructure</c> mark of a steady glowing crystal's material (2026-10-25, I6i; FishWeatherLitForwardPass.hlsl: below
+		/// The <c>_FishStructure</c> mark of a steady glowing crystal's material (FishWeatherLitForwardPass.hlsl: below
 		/// −1.5): it shines as made (exactly as an unmarked one did) unless its biome names a glow mode for its crystals.
 		/// </summary>
 		public const float SteadyCrystalFlag = -2f;

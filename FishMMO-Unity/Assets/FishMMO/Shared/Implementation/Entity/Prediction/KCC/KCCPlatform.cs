@@ -238,7 +238,7 @@ namespace FishMMO.Shared
 				 * Characters live on the Player layer (BaseCharacter.Awake moves them there), and
 				 * a NetworkCollision whose Layers omits that bit polls forever and detects nobody
 				 * — SetPlatform never fires, SetPlatformVelocity stays zero, and a rider stands
-				 * still while the deck slides out from under them (reported live 2026-09-01: the
+				 * still while the deck slides out from under them (reported live: the
 				 * shipped platform's volume was authored Default-only). Forced here rather than
 				 * left to scene data, because the failure is silent and the requirement is
 				 * intrinsic to being a platform. */

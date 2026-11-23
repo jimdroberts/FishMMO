@@ -9,7 +9,7 @@ using FishMMO.Server.Implementation.World.SceneServer.Spawner;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// The content layer over the weather (Q16): what a designer can gate a spawn on, test in a
+	/// The content layer over the weather: what a designer can gate a spawn on, test in a
 	/// trigger, and scale an ability by.
 	/// </summary>
 	/// <remarks>
@@ -119,7 +119,7 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(freezing.Matches(Sample(temperature: 0.2f)), Is.False);
 		}
 
-		// ---- ability modifiers (Q16) ----
+		// ---- ability modifiers ----
 
 		[Test]
 		public void AnAbilityIsScaledAcrossTheBandItNames()
@@ -224,7 +224,7 @@ namespace FishMMO.UnitTests.Weather
 			Assert.That(silly.Evaluate(Rain(1f)), Is.GreaterThanOrEqualTo(0f));
 		}
 
-		// ---- weather-gated spawns (Q16) ----
+		// ---- weather-gated spawns ----
 
 		[Test]
 		public void ASpawnGateReadsTheKindsItNames()

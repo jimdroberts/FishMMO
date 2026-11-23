@@ -16,7 +16,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>The template decides (2026-10-15).</b> The cut once read these from the spec table (BiomeArtSpec: the biome's own
+	/// <b>The template decides.</b> The cut once read these from the spec table (BiomeArtSpec: the biome's own
 	/// rock, the rocks it accepts, each cliff's rock, a herb grove's flowers, a cave mouth's growth), from the main ground's
 	/// generated path ground (SurfaceCatalogue.PathGroundFor / RoadGroundFor, the same flagstones for every biome's cobbles),
 	/// and from two biomes by name (the desert's and the forest's riverbeds were every biome's river bars). Each is now a
@@ -171,7 +171,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Water and ice roles ───────────────────────────────────────
 
 		/// <summary>
-		/// The names the cut found its water and ice biomes by until the templates carried the role (2026-10-15): the fallback
+		/// The names the cut found its water and ice biomes by until the templates carried the role: the fallback
 		/// for a role no registered template holds yet.
 		/// </summary>
 		public static string LegacyWaterBiomeName(BiomeWaterRole role)
@@ -254,8 +254,8 @@ namespace FishMMO.Shared.WorldDesign
 				() => { ReadLegacyBars(); return legacyGravel; }, "the Forest biome's riverbed");
 
 			/// <summary>
-			/// The ways a biome's ground layers carry of their own (<see cref="TerrainTextureLayer.ways"/>, decision 19,
-			/// 2026-10-16): for its main layer and each detail layer that is painted, every way given a ground there, keyed
+			/// The ways a biome's ground layers carry of their own (<see cref="TerrainTextureLayer.ways"/>):
+			/// for its main layer and each detail layer that is painted, every way given a ground there, keyed
 			/// <see cref="BiomeLocalArt.WaySlot"/> (<c>detail/2/road</c>), as a texture layer for the palette to carry beside the
 			/// biome's own way grounds. Empty where none is set: such a ground's ways are the biome's (<see cref="Path"/>,
 			/// <see cref="Road"/>, <see cref="Cobbles"/>), as every ground's were before, which is no fallback but the field's
@@ -426,7 +426,7 @@ namespace FishMMO.Shared.WorldDesign
 			return PointOfInterestHerbGrove.Load(names);
 		}
 
-		// ── Gathering and vines (2026-10-16) ──────────────────────────
+		// ── Gathering and vines ──────────────────────────
 
 		/// <summary>
 		/// The gathering resources (node names) a biome's gathering sites draw from (BiomeTemplate.GatheringResources). None
@@ -509,7 +509,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		// ── Points of interest and structures (2026-10-16, phase I5) ──
+		// ── Points of interest and structures ──
 
 		/// <summary>
 		/// The point-of-interest kinds sited on a biome's ground and how gladly (BiomeTemplate.SiteKinds), as the planner reads
@@ -524,7 +524,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="SiteKinds(BiomeTemplate, PointOfInterestRules)"/> on a world whose air is or is not breathable
-		/// (BiomeAir.IsBreathable, decision 39, 2026-10-18): where it is not, every kind whose entry needs breathable air
+		/// (BiomeAir.IsBreathable): where it is not, every kind whose entry needs breathable air
 		/// (<see cref="BiomeSiteKind.NeedsBreathableAir"/>) weighs 0 there, so only natural sites and relics are placed. A template
 		/// never authored with its kinds takes BiomeSiteAir's default for each kind instead. Breathable air changes nothing.
 		/// </summary>
@@ -533,7 +533,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// <see cref="SiteKinds(BiomeTemplate, PointOfInterestRules, bool)"/> on a world that has (<paramref name="liquidWater"/>) or
-		/// lacks liquid water on its surface (decision 68): where it lacks it, every kind whose entry needs it
+		/// lacks liquid water on its surface: where it lacks it, every kind whose entry needs it
 		/// (<see cref="BiomeSiteKind.NeedsLiquidWater"/>) weighs 0 too. No kind needs it by default, so liquid water or none changes
 		/// nothing until a biome's file says so.
 		/// </summary>
@@ -560,7 +560,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach ((POIType kind, float weight) in (rules ?? PointOfInterestRules.Default()).KindWeightsFor(biome.name))
 			{
-				// The defaults' water rule too: only the biome rounds' own wet kinds have one (2026-10-25), and no row hosts them.
+				// The defaults' water rule too: only the biomes' own wet kinds have one, and no row hosts them.
 				kinds[kind] = (breathable || !BiomeSiteAir.NeedsAirByDefault(kind)) && (liquidWater || !BiomeSiteAir.NeedsWaterByDefault(kind)) ? weight : 0f;
 			}
 			Fallback(biome, "Point of Interest Kinds", "the point-of-interest catalogue's rows that name it");
@@ -573,7 +573,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// elsewhere) times its style's (BiomeTemplate.SiteStyles; a style not listed at 1). Null with no biome (every template
 		/// at its weight elsewhere, as before). A template never authored with its variant weights takes each template's own
 		/// biome list by the biome's name, as the pick did before, and warns. Not <paramref name="styled"/>: the variant weights alone,
-		/// every style at 1 (the stage's second pick where the styles weigh every template a site could have at 0, 2026-10-27).
+		/// every style at 1 (the stage's second pick where the styles weigh every template a site could have at 0).
 		/// </summary>
 		public static Func<PointOfInterestTemplate, float> SiteVariantWeights(BiomeTemplate biome, bool styled = true)
 		{
@@ -598,7 +598,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A template's weight in a biome from the biome's lists (pure): its variant's entry (<see cref="BiomeSiteVariant.TryWeight"/>),
 		/// else <paramref name="elsewhere"/> (the template's weight in a biome that does not weigh it), times its style's
 		/// (<see cref="BiomeSiteStyle.WeightOf"/>; a template with no style of its own at 1); a variant the biome names keeps its own
-		/// weight under a style weighed 0 (<see cref="BiomeSiteStyle.Apply"/>, 2026-10-27).
+		/// weight under a style weighed 0 (<see cref="BiomeSiteStyle.Apply"/>).
 		/// </summary>
 		public static float SiteVariantWeight(IReadOnlyList<BiomeSiteVariant> variants, IReadOnlyList<BiomeSiteStyle> styles, POIType kind,
 			string variant, string style, float elsewhere)
@@ -628,7 +628,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// True when a biome is authored to sow nothing (decision 25, 2026-10-25, <see cref="BiomeFieldCrops.SowsNothing"/>): its
+		/// True when a biome is authored to sow nothing (<see cref="BiomeFieldCrops.SowsNothing"/>): its
 		/// Field Crops marked with no entry weighing anything, and no orchard (<see cref="Orchards"/>). False with no biome and for a
 		/// template never authored with crops (it grows wheat, <see cref="FieldCrops"/>).
 		/// </summary>
@@ -685,7 +685,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What stands in a stronghold's moat in a biome (BiomeTemplate.MoatWater, 2026-10-16, I5b). With no biome, water, as
+		/// What stands in a stronghold's moat in a biome (BiomeTemplate.MoatWater). With no biome, water, as
 		/// before; a template never authored with it (no mark, still Wet) takes what its climate envelope gave the moat shaper
 		/// before (<see cref="BiomeMoatWaters.FromClimate"/>) and warns.
 		/// </summary>
@@ -705,7 +705,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The colour and clarity of a biome's fresh water at the cut (BiomeTemplate.WaterLook, 2026-10-16, I2e). With no biome,
+		/// The colour and clarity of a biome's fresh water at the cut (BiomeTemplate.WaterLook). With no biome,
 		/// the inland water's own look (<see cref="BiomeWaterLooks.Today"/>); a template whose look is not filled in takes it too
 		/// and warns. The running game reads it the same way (<see cref="BiomeWaterLooks.Of"/>, InlandWaterRenderer).
 		/// </summary>
@@ -724,7 +724,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a biome lights one kind of settlement's streets (BiomeTemplate.WayLights, 2026-10-16, I5b): false where the kind is
+		/// How a biome lights one kind of settlement's streets (BiomeTemplate.WayLights): false where the kind is
 		/// not lit there. With no biome, the props' old rule by kind (<see cref="BiomeWayLights.Default"/>); a template never
 		/// authored with its lights (no mark, empty list) takes that rule too and warns.
 		/// </summary>
@@ -744,7 +744,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a biome lights one place in its caves and mines (BiomeTemplate.CaveLights, 2026-10-16, I6c): false where the place
+		/// How a biome lights one place in its caves and mines (BiomeTemplate.CaveLights): false where the place
 		/// is not lit there. With no biome, the cave dressing's old rule (<see cref="BiomeCaveLights.Default"/>) silently; a
 		/// template never authored with its cave lights (no mark, empty list) takes that rule too and warns.
 		/// </summary>
@@ -763,7 +763,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The crystals a biome's caves grow (BiomeTemplate.CaveCrystals, 2026-10-16, I6c). With no biome, selenite (what every
+		/// The crystals a biome's caves grow (BiomeTemplate.CaveCrystals). With no biome, selenite (what every
 		/// cave grew before) silently; a template never authored with them (no mark, empty list) takes its spec's (selenite unless
 		/// its file names its own) and warns. An authored empty list grows none.
 		/// </summary>
@@ -785,10 +785,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The crystal a biome's crystal way-light posts carry (<see cref="BiomeCaveCrystals.PostCrystal"/> of its cave crystals).</summary>
 		public static BiomeCaveCrystalKind PostCrystal(BiomeTemplate biome) => BiomeCaveCrystals.PostCrystal(CaveCrystals(biome));
 
-		// ── Cave interiors (2026-10-25, phase I2n) ────────────────────
+		// ── Cave interiors ────────────────────
 
 		/// <summary>
-		/// A host's cave-interior links (BiomeTemplate.CaveInteriors, 2026-10-25, I2n; read through CaveInteriorArt). None with no host;
+		/// A host's cave-interior links (BiomeTemplate.CaveInteriors; read through CaveInteriorArt). None with no host;
 		/// a template never authored with them takes its spec's (the Cave, Ice Cave and Lava Tube by default) and warns.
 		/// </summary>
 		public static IReadOnlyList<BiomeCaveInterior> CaveInteriors(BiomeTemplate host)
@@ -862,7 +862,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a biome's caves stand in the water table by form (BiomeTemplate.CaveFloods, 2026-10-25, I2n-c; read through
+		/// How a biome's caves stand in the water table by form (BiomeTemplate.CaveFloods; read through
 		/// CaveInteriorArt). None with no biome; a template never authored with them takes its spec's (warning only when it names any).
 		/// </summary>
 		public static IReadOnlyList<BiomeCaveFlood> CaveFloods(BiomeTemplate biome)
@@ -885,7 +885,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// What hangs from a biome's caves' roofs by form (BiomeTemplate.CaveHangings, 2026-10-25, I2n-c; read through
+		/// What hangs from a biome's caves' roofs by form (BiomeTemplate.CaveHangings; read through
 		/// CaveInteriorArt). Null with no biome (the dressing's own by form); a template never authored with them takes its spec's,
 		/// with a warning.
 		/// </summary>
@@ -905,7 +905,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The tea ring a biome's cave water leaves by form (BiomeTemplate.CaveStains, 2026-10-25, I2n-c; read through CaveInteriorArt).
+		/// The tea ring a biome's cave water leaves by form (BiomeTemplate.CaveStains; read through CaveInteriorArt).
 		/// None with no biome; a template never authored with them takes its spec's (warning only when it names any).
 		/// </summary>
 		public static IReadOnlyList<BiomeCaveStain> CaveStains(BiomeTemplate biome)
@@ -928,7 +928,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The plants a biome's still water carries (BiomeTemplate.FloatingPlants, 2026-10-18, I2i). With no biome, none; a template
+		/// The plants a biome's still water carries (BiomeTemplate.FloatingPlants). With no biome, none; a template
 		/// never authored with them (no mark, empty list) takes its spec's and warns when the spec names any. An authored empty list
 		/// carries none, which is every biome's default.
 		/// </summary>
@@ -951,7 +951,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The landforms the cut sculpts into a biome's ground (BiomeTemplate.Landforms, 2026-10-18, I2g). With no biome, none; a template
+		/// The landforms the cut sculpts into a biome's ground (BiomeTemplate.Landforms). With no biome, none; a template
 		/// never authored with them (no mark, empty list) takes its spec's and warns when the spec names any. An authored empty list
 		/// carves none, which is every biome's default.
 		/// </summary>
@@ -974,7 +974,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Which of a biome's ways are raised boardwalks (BiomeTemplate.Boardwalks, 2026-10-18, I2i). With no biome, none; a template
+		/// Which of a biome's ways are raised boardwalks (BiomeTemplate.Boardwalks). With no biome, none; a template
 		/// never authored with it takes its spec's and warns when that raises any.
 		/// </summary>
 		public static BiomeBoardwalks Boardwalks(BiomeTemplate biome)
@@ -996,7 +996,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a biome's raised routed ways are built (BiomeTemplate.BoardwalkStyle, 2026-10-25, I2i-b). With no biome, planked; a
+		/// How a biome's raised routed ways are built (BiomeTemplate.BoardwalkStyle). With no biome, planked; a
 		/// template never authored with it takes its spec's and warns when that names another.
 		/// </summary>
 		public static BiomeBoardwalkStyle BoardwalkStyle(BiomeTemplate biome)
@@ -1018,7 +1018,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// How a biome's ways bridge its rivers (BiomeTemplate.CrossingStyle, 2026-10-26, I2l-b). With no biome, the kit's bridge; a
+		/// How a biome's ways bridge its rivers (BiomeTemplate.CrossingStyle). With no biome, the kit's bridge; a
 		/// template never authored with it takes its spec's and warns when that names a style.
 		/// </summary>
 		public static BiomeCrossingStyle CrossingStyle(BiomeTemplate biome)
@@ -1040,7 +1040,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A biome's straight roads (BiomeTemplate.StraightRoads, 2026-10-26, I2l-b). With no biome, none; a template never authored
+		/// A biome's straight roads (BiomeTemplate.StraightRoads). With no biome, none; a template never authored
 		/// with them takes its spec's and warns when that lays some.
 		/// </summary>
 		public static BiomeStraightRoads StraightRoads(BiomeTemplate biome)
@@ -1062,7 +1062,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A biome's hedges, walls, fences, tree rows, channels and clearance rows (BiomeTemplate.LinearFeatures, 2026-10-18, I2f). With no
+		/// A biome's hedges, walls, fences, tree rows, channels and clearance rows (BiomeTemplate.LinearFeatures). With no
 		/// biome, none; a template never authored with them (no mark, empty list) takes its spec's, its species loaded from the generated
 		/// prefabs, and warns when the spec names any. An authored empty list lays none, which is every biome's default.
 		/// </summary>
@@ -1087,7 +1087,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A biome's orchards (BiomeTemplate.Orchards, 2026-10-18, I2j-b): its entries with a tree and a weight, in order. With no biome,
+		/// A biome's orchards (BiomeTemplate.Orchards): its entries with a tree and a weight, in order. With no biome,
 		/// none; a template never authored with them (no mark, empty list) takes its spec's, its prefabs loaded from the generated art,
 		/// with a warning only when the spec names any (none did before).
 		/// </summary>
@@ -1125,7 +1125,7 @@ namespace FishMMO.Shared.WorldDesign
 			return orchards;
 		}
 
-		/// <summary>How a biome lays its fields out (BiomeTemplate.FieldLayout, 2026-10-18, I2j-b): anywhere, as drawn, with no biome; a template never authored with it takes its spec's (a warning only when that says anything).</summary>
+		/// <summary>How a biome lays its fields out (BiomeTemplate.FieldLayout): anywhere, as drawn, with no biome; a template never authored with it takes its spec's (a warning only when that says anything).</summary>
 		public static BiomeFieldLayout FieldLayout(BiomeTemplate biome)
 		{
 			if (biome == null)
@@ -1144,7 +1144,7 @@ namespace FishMMO.Shared.WorldDesign
 			return spec;
 		}
 
-		/// <summary>The old terraces round a biome's settlements (BiomeTemplate.AbandonedTerraces, 2026-10-18, I2j-b): none with no biome; a template never authored with them takes its spec's (a warning only when that names any).</summary>
+		/// <summary>The old terraces round a biome's settlements (BiomeTemplate.AbandonedTerraces): none with no biome; a template never authored with them takes its spec's (a warning only when that names any).</summary>
 		public static BiomeAbandonedTerraces AbandonedTerraces(BiomeTemplate biome)
 		{
 			if (biome == null)
@@ -1163,7 +1163,7 @@ namespace FishMMO.Shared.WorldDesign
 			return spec;
 		}
 
-		/// <summary>The ground a biome paints along its channels (BiomeTemplate.ChannelMargin, 2026-10-18, I2j-b): none with no biome; a template never authored with it takes its spec's (a warning only when that names one).</summary>
+		/// <summary>The ground a biome paints along its channels (BiomeTemplate.ChannelMargin): none with no biome; a template never authored with it takes its spec's (a warning only when that names one).</summary>
 		public static BiomeChannelMargin ChannelMargin(BiomeTemplate biome)
 		{
 			if (biome == null)

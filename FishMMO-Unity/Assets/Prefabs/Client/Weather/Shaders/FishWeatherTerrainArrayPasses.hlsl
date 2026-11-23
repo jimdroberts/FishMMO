@@ -32,9 +32,9 @@
 // FishMMO edit: the ground reflects the sky on the true curve, not URP's (FishGroundLighting.hlsl).
 #include "Assets/FishMMO/Shaders/Surface/FishGroundLighting.hlsl"
 #if !defined(FISH_TERRAIN_BACKDROP)
-// FishMMO edit (2026-10-25, I2t): the burn mosaic's ground (burnt veld, flame line, brimstone's blue fire; FishBurn.hlsl).
+// FishMMO edit: the burn mosaic's ground (burnt veld, flame line, brimstone's blue fire; FishBurn.hlsl).
 #include "FishBurn.hlsl"
-// FishMMO edit (2026-10-25, I2r): a ground layer's glow (crust seams on the shared clock, or the world's heat; FishGroundGlow.hlsl).
+// FishMMO edit: a ground layer's glow (crust seams on the shared clock, or the world's heat; FishGroundGlow.hlsl).
 #include "FishGroundGlow.hlsl"
 #endif
 
@@ -358,7 +358,7 @@ void SplatmapFragment(
     albedo *= sward;
     smoothness *= sward;
 
-    // FishMMO edit (2026-10-25, I2t): the burn mosaic (FishBurn.hlsl, BurnMosaicTable): the burnt-veld tint and its ash rings, the
+    // FishMMO edit: the burn mosaic (FishBurn.hlsl, BurnMosaicTable): the burnt-veld tint and its ash rings, the
     // flame line and embers, the brimstone's blue fire; never on a way (the paths' own wear). Off: nothing changes.
     float3 burnEmission = float3(0.0, 0.0, 0.0);
 #if !defined(FISH_TERRAIN_BACKDROP)
@@ -368,7 +368,7 @@ void SplatmapFragment(
         FishPathWearAt(inputData.positionWS.xz, burnTrodden, burnFlattened);
         burnEmission = FishBurnGround(inputData.positionWS, inputData.normalWS, burnTrodden, albedo, smoothness);
     }
-    // FishMMO edit (2026-10-25, I2r): a glowing ground layer's light (FishGroundGlow.hlsl, GroundGlowTable), added with the burn's
+    // FishMMO edit: a glowing ground layer's light (FishGroundGlow.hlsl, GroundGlowTable), added with the burn's
     // after lighting in both passes; less on a way's trodden ground and on steep faces. Off: nothing changes.
     [branch] if (_FishGroundGlowInfo.x > 0.5)
     {

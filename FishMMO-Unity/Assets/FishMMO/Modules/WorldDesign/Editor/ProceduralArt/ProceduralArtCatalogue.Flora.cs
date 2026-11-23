@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The land flora added by the vegetation expansion (2026-10-10): its detail plants (built by
+	/// The land flora added by the vegetation expansion: its detail plants (built by
 	/// <see cref="FloraMeshes"/>), the traits of the detail kinds it owns, and the names and paths of the deadwood
 	/// props (<see cref="DeadwoodMeshes"/>, written by BiomeArtGenerator.Deadwood.cs).
 	/// </summary>
@@ -209,7 +209,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("MushroomCave", DetailKind.Mushroom, 9, 0.12f, 0.022f, 0.25f, "#e8e4d4", "#d8d2bc", accents: A("#f0ecdc", "#f2eee4"), snowBury: 1f,
 					variant: FloraVariant.MushroomCave, groupMetres: 4f, groupSize: 5f, sink: new Vector2(0.005f, 0.015f)),
 
-				// ── Forest (biome round, 2026-10-26): the primeval beech-and-fir forest's own plants, on the existing kinds ──
+				// ── Forest: the primeval beech-and-fir forest's own plants, on the existing kinds ──
 				// Great wood-rush (Luzula sylvatica): glossy shade tussocks, chestnut flower heads.
 				D("GrassWoodrush", DetailKind.Grass, 14, 0.35f, 0.02f, 0.25f, "#2a4418", "#4e7028", lean: 0.5f, accents: A("#6a4a2a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
@@ -237,7 +237,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Forest ivy carpeting the floor under beech, darker than the hedgerow's.
 				D("IvyForest", DetailKind.Creeper, 100, 0.05f, 0.13f, 0.7f, "#142e12", "#22401a", accents: A("#3a3424"), snowBury: 1f,
 					variant: FloraVariant.CreeperIvy, groupMetres: 5f, groupSize: 10f, sink: new Vector2(0.005f, 0.015f)),
-				// Serpent roots: grey surface roots of the old beeches, mossed on top. LATER (I9b): serpentine 2–4 m roots of their
+				// Serpent roots: grey surface roots of the old beeches, mossed on top. LATER: serpentine 2–4 m roots of their
 				// own form; low root knobs stand in (a tint on the knobs' bark).
 				D("SerpentRoots", DetailKind.RootKnobs, 4, 0.18f, 0f, 1.5f, "#8a8478", "#b0aa9a", snowBury: 0.6f,
 					variant: FloraVariant.CypressKnees, groupMetres: 5f, groupSize: 4f, sink: new Vector2(0.03f, 0.06f)),
@@ -253,11 +253,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Porcelain fungus: glossy translucent white caps on beech logs.
 				D("MushroomPorcelain", DetailKind.Mushroom, 9, 0.06f, 0.03f, 0.2f, "#f2f0ea", "#e8e6de", accents: A("#f6f4ee", "#ece8e0"), snowBury: 1f,
 					variant: FloraVariant.MushroomCave, groupMetres: 3f, groupSize: 4f, sink: new Vector2(0.005f, 0.015f)),
-				// Foxfire: honey fungus on rotten wood, its mycelium glowing at night. LATER (I9b): night emission on a land detail;
+				// Foxfire: honey fungus on rotten wood, its mycelium glowing at night. LATER: night emission on a land detail;
 				// pale greenish honey-fungus clusters stand in.
 				D("MushroomFoxfire", DetailKind.Mushroom, 10, 0.08f, 0.03f, 0.15f, "#a89a5a", "#9aa860", accents: A("#c8e0a0", "#a8c890"), snowBury: 1f,
 					variant: FloraVariant.MushroomCluster, groupMetres: 3f, groupSize: 4f, sink: new Vector2(0.005f, 0.015f)),
-				// Butterbur: round leaves 0.7 m across along the streams. LATER (I9b): its pink flower spikes.
+				// Butterbur: round leaves 0.7 m across along the streams. LATER: its pink flower spikes.
 				D("Butterbur", DetailKind.BroadHerb, 6, 1f, 0.5f, 0.15f, "#3a6a2a", "#5a8a34", segments: 3, snowBury: 0.2f,
 					groupMetres: 5f, groupSize: 6f, sink: new Vector2(0.03f, 0.06f)),
 				// Wood betony, a herb grove's: leafy stems under purple flower spikes.
@@ -271,7 +271,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("FlowersFieldBean", DetailKind.Flowers, 6, 0.9f, 0.06f, 0.3f, "#5a7a5a", "#7a9a70", accents: A("#f2f0ea", "#2a2626"), snowBury: 0.4f,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.01f, 0.03f)),
 
-				// ── Woodland (biome round, 2026-10-26): the managed lowland wood's own plants ──
+				// ── Woodland: the managed lowland wood's own plants ──
 				// Grazed red fescue and common bent: short downland turf, purple-brown panicles.
 				D("GrassPasture", DetailKind.Grass, 16, 0.12f, 0.02f, 0.4f, "#3e5a24", "#7a9a44", lean: 0.3f,
 					groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
@@ -330,7 +330,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Wood spurge: dark leaves under lime-green bracts in the sunlit coppice.
 				D("WoodSpurge", DetailKind.Shrub, 6, 0.5f, 0.12f, 0.25f, "#3a5a2a", "#4a6a32", accents: A("#c8d850"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.05f)),
-				// Lords-and-ladies (Arum): arrow leaves at the hedge feet. LATER (I9b): its red berry spike.
+				// Lords-and-ladies (Arum): arrow leaves at the hedge feet. LATER: its red berry spike.
 				D("LordsAndLadies", DetailKind.BroadHerb, 5, 0.3f, 0.2f, 0.1f, "#2e5a22", "#3e6a2a", segments: 3, snowBury: 0.5f,
 					groupMetres: 3f, groupSize: 4f, sink: new Vector2(0.02f, 0.04f)),
 				// Herb grove herbs: agrimony's slender yellow spikes, wild marjoram's pink-purple heads on the chalk.
@@ -338,7 +338,7 @@ namespace FishMMO.Shared.WorldDesign
 					variant: FloraVariant.ShrubHerb, groupMetres: 4f, groupSize: 6f, sink: new Vector2(0.02f, 0.05f)),
 				D("HerbWildMarjoram", DetailKind.Shrub, 7, 0.4f, 0.1f, 0.25f, "#4a6a30", "#5a7a38", accents: A("#c080a8"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 4f, groupSize: 6f, sink: new Vector2(0.02f, 0.05f)),
-				// ── Tundra (biome round, 2026-10-26): the treeless arctic's own plants, on the existing kinds ──
+				// ── Tundra: the treeless arctic's own plants, on the existing kinds ──
 				// Pendant grass (Arctophila fulva): orange-red stems and nodding plumes in the polygon troughs and thaw-lake shallows.
 				D("GrassPendant", DetailKind.Grass, 12, 0.6f, 0.008f, 0.2f, "#4a6a3a", "#c06a2a", lean: 0.5f, accents: A("#a05a30"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
@@ -372,11 +372,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Rough-stalk boletes (Leccinum) standing above the dwarf-birch mat: brown caps, scaly grey-white stems.
 				D("MushroomRoughStalk", DetailKind.Mushroom, 4, 0.12f, 0.05f, 0.25f, "#8a5a30", "#a06a3a", accents: A("#e0dcd0", "#c8c4bc", "#3a3028", "#d8ccb0"),
 					snowBury: 1f, variant: FloraVariant.MushroomForest, groupMetres: 4f, groupSize: 3f, sink: new Vector2(0.005f, 0.015f)),
-				// Shed caribou antlers and bleached bones (a bone tint on the branch's bark). LATER (I9b): antler, rib and skull meshes of their own.
+				// Shed caribou antlers and bleached bones (a bone tint on the branch's bark). LATER: antler, rib and skull meshes of their own.
 				D("DebrisAntler", DetailKind.DebrisBranch, 3, 1f, 0.03f, 0.5f, "#e8e2d4", "#c8bca8", snowBury: 1f,
 					groupMetres: 6f, groupSize: 3f, sink: new Vector2(0f, 0.02f)),
 
-				// ── Ice Sheet (biome round, 2026-10-26): the nunataks' lichens and the petrels' stone-oil, the only life on the cap ──
+				// ── Ice Sheet: the nunataks' lichens and the petrels' stone-oil, the only life on the cap ──
 				// Stone-oil (mumiyo): black-amber waxy crusts and dribbles laid down by ages of petrels, white feathers in it.
 				D("LichenStoneOil", DetailKind.Lichen, 2, 0.05f, 0.01f, 0.15f, "#1e140c", "#4a2a10", accents: A("#ece8dc"), snowBury: 1f,
 					variant: FloraVariant.LichenLava, groupMetres: 3f, groupSize: 8f, sink: new Vector2(0.005f, 0.015f)),
@@ -393,7 +393,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("CushionMossSeep", DetailKind.Cushion, 72, 0.08f, 0.09f, 0.2f, "#3a4a2a", "#4a5a32", accents: A("#b8c0b0"), snowBury: 1f,
 					variant: FloraVariant.CushionMoss, groupMetres: 3f, groupSize: 6f, sink: new Vector2(0.01f, 0.02f)),
 
-				// ── Glacier (biome round, 2026-10-26): the forefield's pioneers, the moraine herbs and the ice's own life ──
+				// ── Glacier: the forefield's pioneers, the moraine herbs and the ice's own life ──
 				// Spike trisetum (Trisetum spicatum): stiff tufts with shining silver-purple spikes, the moraine's first grass.
 				D("GrassTrisetum", DetailKind.Grass, 12, 0.25f, 0.004f, 0.15f, "#4a5a3a", "#8a9a6a", lean: 0.25f, accents: A("#9a8aa8"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
@@ -403,7 +403,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Snowmelt primulas (Primula rosea) and marsh marigold: vivid rose and gold cups beside the melt.
 				D("FlowersSnowmeltPrimula", DetailKind.Flowers, 7, 0.12f, 0.05f, 0.25f, "#3a5a2a", "#4e6e34", accents: A("#e04a8a", "#f0c020"),
 					snowBury: 1f, groupMetres: 3f, groupSize: 10f, sink: new Vector2(0.01f, 0.02f)),
-				// Himalayan rhubarb (Rheum webbianum): crinkled round leaves on red stalks, a cream panicle. LATER (I9b): the panicle.
+				// Himalayan rhubarb (Rheum webbianum): crinkled round leaves on red stalks, a cream panicle. LATER: the panicle.
 				D("RhubarbHimalayan", DetailKind.BroadHerb, 5, 0.8f, 0.45f, 0.2f, "#4a6a2a", "#5e7e34", segments: 3, accents: A("#a02a2a"), snowBury: 0.4f,
 					groupMetres: 5f, groupSize: 4f, sink: new Vector2(0.03f, 0.06f)),
 				// Dhoop (Jurinea): a flat silver rosette with a stemless purple thistle head, the incense root.
@@ -418,7 +418,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Map lichen (Rhizocarpon): chartreuse areolae bounded by black lines, the lichen that dates the moraines.
 				D("LichenMap", DetailKind.Lichen, 2, 0.015f, 0.005f, 0.12f, "#b8c838", "#c8d448", accents: A("#1a1a1a"), snowBury: 1f,
 					variant: FloraVariant.LichenLava, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.005f, 0.015f)),
-				// Cryoconite holes: black-brown sludge under azure water in the bare ice. LATER (I9): a flat colliderless decal of its own;
+				// Cryoconite holes: black-brown sludge under azure water in the bare ice. LATER: a flat colliderless decal of its own;
 				// a flat dark crust with an azure accent stands in.
 				D("LichenCryoconite", DetailKind.Lichen, 2, 0.01f, 0.01f, 0.2f, "#2a2420", "#3a3028", accents: A("#5ab0e0"), snowBury: 1f,
 					variant: FloraVariant.LichenLava, groupMetres: 5f, groupSize: 10f, sink: new Vector2(0.005f, 0.015f)),
@@ -426,7 +426,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisGlacier", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#8a8a84", "#c4ccc0", accents: A("#d8d0c0", "#c87a1a", "#3a3a3a"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 8f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Alpine Meadow (biome round, 2026-10-26): the Carpathian high pastures' own plants, on the existing kinds ──
+				// ── Alpine Meadow: the Carpathian high pastures' own plants, on the existing kinds ──
 				// Common and rock bent (Agrostis): fine blades under an airy purple cloud of panicles, the polonyna's mauve haze.
 				D("GrassBent", DetailKind.Grass, 20, 0.25f, 0.0025f, 0.25f, "#4a5a2a", "#8a9a50", lean: 0.35f, accents: A("#8a5a7a"),
 					healthy: H("#e8ecd8"), dry: H("#c8b48a"), variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
@@ -486,14 +486,14 @@ namespace FishMMO.Shared.WorldDesign
 				// Fairy-ring champignons: tan caps on a dark-green ring band (rings from the FairyRings scatter mode).
 				D("FairyRing", DetailKind.Mushroom, 8, 0.06f, 0.03f, 0.2f, "#c8a878", "#b8986a", accents: A("#e8dcc0", "#2e4a1a"), snowBury: 1f,
 					variant: FloraVariant.MushroomCluster, groupMetres: 3f, groupSize: 6f, sink: new Vector2(0.005f, 0.015f)),
-				// A marmot burrow's spoil: grey stone fan and flattened turf. LATER (I9b): a burrow-mouth mound of its own; flat spoil stands in.
+				// A marmot burrow's spoil: grey stone fan and flattened turf. LATER: a burrow-mouth mound of its own; flat spoil stands in.
 				D("DebrisMarmotSpoil", DetailKind.DebrisNeedle, 10, 0f, 0.3f, 0.6f, "#8a8a80", "#6a6c5e", accents: A("#9a9a90", "#4a5a2a"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 4f, sink: new Vector2(0f, 0.01f)),
 				// The litter of a grazed summer: wool on twigs, sheep and cow dung, hay wisps, chewed stone-pine cone scales.
 				D("DebrisPasture", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#e8e0d0", "#2a2218", accents: A("#3a3020", "#c8b878", "#6a3a24"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Mountain Slope (biome round, 2026-10-26): the Afromontane cloud forest's own plants, on the existing kinds ──
+				// ── Mountain Slope: the Afromontane cloud forest's own plants, on the existing kinds ──
 				// Kikuyu grass: the highland pasture's dense low mat.
 				D("GrassKikuyu", DetailKind.Grass, 18, 0.12f, 0.005f, 0.3f, "#3a5a24", "#6a9a3a", lean: 0.3f, healthy: H("#e8f0d8"), dry: H("#c8c08a"),
 					groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
@@ -523,7 +523,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Enset, the false banana of the homestead gardens: a fat pseudostem under huge paddle leaves with red midribs.
 				D("Enset", DetailKind.BroadHerb, 6, 4f, 1.2f, 0.4f, "#3a6a2a", "#4a7a34", segments: 3, accents: A("#8a2a2a"), snowBury: 0.1f,
 					groupMetres: 6f, groupSize: 6f, sink: new Vector2(0.04f, 0.08f)),
-				// Giant lobelia: a rosette of straps under a felted spike of blue bracts and grey hair. LATER (I9b): the 3–5 m spike;
+				// Giant lobelia: a rosette of straps under a felted spike of blue bracts and grey hair. LATER: the 3–5 m spike;
 				// the tower-of-jewels rosette stands in.
 				D("GiantLobelia", DetailKind.Rosette, 18, 1.2f, 0.08f, 0.5f, "#4a6a4a", "#6a8a6a", segments: 3, accents: A("#4a5aa8", "#b8bcc8"), snowBury: 0.2f,
 					variant: FloraVariant.RosetteEchium, groupMetres: 8f, groupSize: 3f, sink: new Vector2(0.03f, 0.06f)),
@@ -549,7 +549,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisFig", DetailKind.DebrisNeedle, 10, 0f, 0.25f, 0.6f, "#6a5030", "#8a6a40", accents: A("#8a4a3a", "#a8201a"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Scree (biome round, 2026-10-26): the talus's own sparse plants, lichens and litter ──
+				// ── Scree: the talus's own sparse plants, lichens and litter ──
 				// Ridge reed (Calamagrostis): feathery purple-tan panicles in the fines.
 				D("GrassRidgeReed", DetailKind.Grass, 14, 0.6f, 0.008f, 0.25f, "#4a5a2a", "#a8a060", lean: 0.4f, accents: A("#9a7a6a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
@@ -590,7 +590,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisFirDrift", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#4a3a2a", "#5a4a34", accents: A("#4a2a4a", "#6a5a40"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Scrubland (biome round, 2026-10-26): the Sonoran bajadas' own plants, on the existing kinds ──
+				// ── Scrubland: the Sonoran bajadas' own plants, on the existing kinds ──
 				// Bush muhly (Muhlenbergia porteri): wiry grey tufts growing up inside the shrubs, an airy purple-pink cloud.
 				D("GrassBushMuhly", DetailKind.Grass, 16, 0.6f, 0.008f, 0.3f, "#6a6a4a", "#a8a080", lean: 0.4f, accents: A("#c8a0a8"),
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 3f, groupSize: 6f, sink: new Vector2(0.02f, 0.04f)),
@@ -627,7 +627,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Engelmann prickly pear: round blue-green pads, yellow cups, purple tunas (a tint on the cactus bark).
 				D("PadCactusEngelmann", DetailKind.PadCactus, 1, 1.1f, 0.24f, 0.35f, "#b8ccc0", "#c8d8cc", accents: A("#6a2050"), snowBury: 0f,
 					groupMetres: 6f, groupSize: 4f, sink: new Vector2(0.04f, 0.08f)),
-				// The canal builders' agave: green-grey 0.7 m rosettes. LATER (I9b): the 3 m bulbil stalk on one in six.
+				// The canal builders' agave: green-grey 0.7 m rosettes. LATER: the 3 m bulbil stalk on one in six.
 				D("AgaveHohokam", DetailKind.Rosette, 18, 0.7f, 0.12f, 0.1f, "#6a8a7a", "#8aa098", segments: 3, snowBury: 0.2f,
 					variant: FloraVariant.RosetteAgave, groupMetres: 6f, groupSize: 4f, sink: new Vector2(0.03f, 0.06f)),
 				// Organ pipe of the frost-free reach: grey-green columns, pink night flowers, red fruit (a tint on the cactus bark).
@@ -636,11 +636,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Pincushion (Mammillaria): a 10 cm globe of white radials under a ring of pink cups, in the shade of a shrub.
 				D("CactusPincushion", DetailKind.BarrelCactus, 1, 0.12f, 0f, 0.06f, "#7a9a6a", "#90aa80", accents: A("#e080b0"), snowBury: 0f,
 					groupMetres: 3f, groupSize: 4f, sink: new Vector2(0.01f, 0.02f)),
-				// Queen of the night (Peniocereus): grey four-angled dead-looking sticks inside the shrubs. LATER (I9b P29): the opened
+				// Queen of the night (Peniocereus): grey four-angled dead-looking sticks inside the shrubs. LATER: the opened
 				// state, its 15 cm white flowers on the one bloom night of the shared clock's year.
 				D("QueenOfTheNight", DetailKind.Shrub, 5, 0.5f, 0.02f, 0.12f, "#7a7468", "#8a8478", accents: A("#f8f6f0"), snowBury: 0.2f,
 					variant: FloraVariant.ShrubHorsetail, groupMetres: 3f, groupSize: 3f, sink: new Vector2(0.02f, 0.05f)),
-				// Spikemoss (Selaginella): grey-brown curled resurrection rosettes in the north-facing crevices. LATER (I9b P29): green after rain.
+				// Spikemoss (Selaginella): grey-brown curled resurrection rosettes in the north-facing crevices. LATER: green after rain.
 				D("Spikemoss", DetailKind.Cushion, 60, 0.04f, 0.06f, 0.15f, "#6a5a44", "#7a6a4a", snowBury: 1f,
 					variant: FloraVariant.CushionMoss, groupMetres: 3f, groupSize: 8f, sink: new Vector2(0.01f, 0.02f)),
 				// Chia (Salvia columbariae): stacked blue-purple whorls on grey-green stems, a seed herb of the roadsides.
@@ -669,7 +669,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("GrassLittleBarley", DetailKind.Grass, 12, 0.4f, 0.012f, 0.2f, "#8a9a5a", "#d0b870", lean: 0.2f, accents: A("#d8b860"), snowBury: 0.4f,
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassEar, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.02f, 0.04f)),
 
-				// ── Savanna (biome round, 2026-10-26): the Zimbabwe plateau's veld, kopje and termite-island plants ──
+				// ── Savanna: the Zimbabwe plateau's veld, kopje and termite-island plants ──
 				// Thatching grass (Hyparrhenia filipendula): head-high swathes, loose drooping rust-gold panicles.
 				D("GrassThatch", DetailKind.Grass, 18, 2f, 0.03f, 0.45f, "#5a5a2a", "#c8a858", lean: 0.45f, accents: A("#b0703a"), snowBury: 0.3f,
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 6f, groupSize: 12f, sink: new Vector2(0.03f, 0.06f)),
@@ -702,7 +702,7 @@ namespace FishMMO.Shared.WorldDesign
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassEar, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.03f, 0.06f)),
 				D("Bambara", DetailKind.Shrub, 6, 0.25f, 0.1f, 0.25f, "#4a7a2e", "#5a8a34", snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.02f, 0.04f)),
-				// Resurrection bush (Myrothamnus): 0.4 m grey-brown dead-looking fans in the dwala cracks. LATER (I9b P29): green after rain.
+				// Resurrection bush (Myrothamnus): 0.4 m grey-brown dead-looking fans in the dwala cracks. LATER: green after rain.
 				D("Myrothamnus", DetailKind.Shrub, 7, 0.4f, 0.1f, 0.2f, "#6a5a48", "#7a6a54", snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 3f, groupSize: 6f, sink: new Vector2(0.02f, 0.05f)),
 				// Monkey's tail (Xerophyta): 0.8 m black fibrous stems with grass-leaf tufts and mauve stars on the granite domes.
@@ -720,14 +720,14 @@ namespace FishMMO.Shared.WorldDesign
 				// The veld's litter: mopane pod pairs, marula stones, porcupine quills, guineafowl feathers, dung balls.
 				D("DebrisVeld", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#8a6a3a", "#a08048", accents: A("#c8b070", "#e8e4dc", "#3a2a1a"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
-				// ── Grassland (biome round, 2026-10-26): the Pannonian puszta's own grasses, forbs, crops and litter, on the existing kinds ──
+				// ── Grassland: the Pannonian puszta's own grasses, forbs, crops and litter, on the existing kinds ──
 				// Upright and smooth brome (Bromus erectus / inermis), the base sward: nodding straw panicles.
 				D("GrassBrome", DetailKind.Grass, 14, 0.6f, 0.008f, 0.2f, "#4a6a2a", "#8aa048", lean: 0.3f, accents: A("#8a7a4a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 6f, groupSize: 12f, sink: new Vector2(0.02f, 0.04f)),
 				// Goldbeard (Chrysopogon gryllus), the puszta's signature: tall leaning tussocks under bronze-purple panicles with gold hairs.
 				D("GrassGoldbeard", DetailKind.Grass, 12, 1.3f, 0.006f, 0.25f, "#5a6a3a", "#a89a5a", lean: 0.35f, accents: A("#7a4a5a", "#c8a050"), snowBury: 0.3f,
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 8f, groupSize: 16f, sink: new Vector2(0.03f, 0.06f)),
-				// Red beard-grass (Bothriochloa ischaemum): fine blades with copper-red tips, red digitate heads. LATER (I9b): a digitate head.
+				// Red beard-grass (Bothriochloa ischaemum): fine blades with copper-red tips, red digitate heads. LATER: a digitate head.
 				D("GrassRedBeard", DetailKind.Grass, 12, 0.5f, 0.004f, 0.18f, "#6a6a3a", "#a0603a", lean: 0.3f, accents: A("#8a3a3a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
 				// Sand fescue (Festuca vaginata): tight glaucous tussocks with bare sand between, sparse straw heads.
@@ -760,7 +760,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Hemp: 2 m palmate fibre crop, retting pools beside its fields.
 				D("CropHemp", DetailKind.Shrub, 6, 2f, 0.25f, 0.3f, "#4a7a2c", "#5a8a34", accents: A("#8a9a5a"), snowBury: 0.3f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.03f, 0.06f)),
-				// A melon patch: sprawling broad leaves, yellow flowers, striped melons. LATER (I9b): the fruit on the runners.
+				// A melon patch: sprawling broad leaves, yellow flowers, striped melons. LATER: the fruit on the runners.
 				D("CropMelon", DetailKind.BroadHerb, 5, 0.3f, 0.22f, 0.35f, "#3a5a2a", "#4e6e32", segments: 3, accents: A("#9ab060", "#f0d040"), snowBury: 0.5f,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.01f, 0.03f)),
 				// Sea wormwood (Artemisia santonicum): low silver-grey feathery cushions on the alkali puszta, faint gold sprays.
@@ -784,27 +784,27 @@ namespace FishMMO.Shared.WorldDesign
 				// The litter of a grass sea: wind-laid straw culms, blown seed-heads, white banded snail shells, a bleached rib now and then.
 				D("DebrisSteppe", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#c8b078", "#a89060", accents: A("#ece4d4", "#d8c088", "#e8e2d4"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
-				// A suslik colony's spoil: fans of yellow loess on black earth round the burrow mouths. LATER (I9b): a burrow-mouth mound.
+				// A suslik colony's spoil: fans of yellow loess on black earth round the burrow mouths. LATER: a burrow-mouth mound.
 				D("DebrisSuslikSpoil", DetailKind.DebrisNeedle, 10, 0f, 0.3f, 0.6f, "#b8a070", "#a08a5a", accents: A("#d8c08a", "#1e1a14"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 4f, sink: new Vector2(0f, 0.01f)),
 				// Puszta chamomile (Matricaria): feathery leaves, white rays round gold domes; the herb grove's.
 				D("HerbChamomile", DetailKind.Shrub, 6, 0.3f, 0.1f, 0.25f, "#5a8a3a", "#6a9a44", accents: A("#f6f6f0", "#f0c020"), snowBury: 0.5f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 4f, groupSize: 6f, sink: new Vector2(0.02f, 0.04f)),
-				// ── Plains (biome round, 2026-10-26): the High Plains prairie's own grasses, forbs, crops and litter, on the existing kinds ──
+				// ── Plains: the High Plains prairie's own grasses, forbs, crops and litter, on the existing kinds ──
 				// Western wheatgrass (Pascopyrum smithii), the blue-grey base: stiff glaucous blades, slim spikes.
 				D("GrassWheatgrass", DetailKind.Grass, 14, 0.6f, 0.006f, 0.2f, "#5a6a5a", "#9aaa9e", lean: 0.2f, accents: A("#8a8a6a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 6f, groupSize: 12f, sink: new Vector2(0.02f, 0.04f)),
 				// Little bluestem: blue-green bunches turning copper-mahogany, fluffy silver seed tufts.
 				D("GrassLittleBluestem", DetailKind.Grass, 14, 0.7f, 0.004f, 0.18f, "#4a6a5a", "#a0603a", lean: 0.3f, accents: A("#e0dccc"),
 					variant: FloraVariant.GrassPlume, groupMetres: 5f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
-				// Blue grama: curly basal leaves under one-sided eyelash flags, purple going straw. LATER (I9b): the one-sided comb head.
+				// Blue grama: curly basal leaves under one-sided eyelash flags, purple going straw. LATER: the one-sided comb head.
 				D("GrassGrama", DetailKind.Grass, 14, 0.35f, 0.003f, 0.15f, "#5a6a4a", "#8a9070", lean: 0.3f, accents: A("#7a4a6a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.01f, 0.03f)),
 				// Buffalograss: a dense curly grey-green stolon sod, no heads.
 				D("GrassBuffalo", DetailKind.Grass, 18, 0.1f, 0.003f, 0.15f, "#5a6a48", "#8a9068", lean: 0.4f,
 					groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.005f, 0.015f)),
 				// Big bluestem (turkey-foot): tall blue stems turning bronze-red under wine-purple three-branched heads, gold Indiangrass among it.
-				// LATER (I9b): the digitate head.
+				// LATER: the digitate head.
 				D("GrassBigBluestem", DetailKind.Grass, 10, 2f, 0.01f, 0.3f, "#3e5a3a", "#7a6a4a", lean: 0.2f, accents: A("#6a2a4a", "#c89a3a"), snowBury: 0.2f,
 					variant: FloraVariant.GrassPlume, groupMetres: 8f, groupSize: 16f, sink: new Vector2(0.03f, 0.06f)),
 				// Switchgrass: an airy red-purple panicle haze.
@@ -834,7 +834,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Flint corn of the Three-Sisters hills: tall stems, gold tassels, ears red, blue and yellow, beans twining.
 				D("GrassFlintCorn", DetailKind.Grass, 6, 1.8f, 0.05f, 0.25f, "#3e6a2a", "#8a9a4a", lean: 0.1f, accents: A("#d8b860"), snowBury: 0.4f,
 					variant: FloraVariant.GrassEar, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.03f, 0.06f)),
-				// Squash sprawling between the corn hills: broad leaves, gold trumpets, orange and striped squash. LATER (I9b): the fruit.
+				// Squash sprawling between the corn hills: broad leaves, gold trumpets, orange and striped squash. LATER: the fruit.
 				D("CropSquash", DetailKind.BroadHerb, 5, 0.4f, 0.35f, 0.35f, "#3a5a2a", "#4e6e32", segments: 3, accents: A("#f0b020", "#d87a20"), snowBury: 0.5f,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.01f, 0.03f)),
 				// The field sunflower: one great head on a 2.5 m stalk.
@@ -858,7 +858,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Prairie turnip (Pediomelum): hairy palmate leaves, blue-violet spikes over the gathered tuber.
 				D("HerbPrairieTurnip", DetailKind.Shrub, 6, 0.3f, 0.1f, 0.25f, "#6a7a5a", "#7a8a6a", accents: A("#6a5ab8"), snowBury: 0.5f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 4f, groupSize: 6f, sink: new Vector2(0.02f, 0.04f)),
-				// Giant puffballs: white spheres on the prairie, old ones brown and split. LATER (I9b): a sphere fungus form.
+				// Giant puffballs: white spheres on the prairie, old ones brown and split. LATER: a sphere fungus form.
 				D("MushroomPuffball", DetailKind.Mushroom, 3, 0.2f, 0.2f, 0.3f, "#f2f0e8", "#e8e4d8", accents: A("#f2f0e8", "#a08a6a"), snowBury: 1f,
 					variant: FloraVariant.MushroomCluster, groupMetres: 6f, groupSize: 3f, sink: new Vector2(0.03f, 0.06f)),
 				// The herd's passage: buffalo chips, shed winter wool, a sun-bleached skull now and then.
@@ -868,11 +868,11 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisCottonwood", DetailKind.DebrisNeedle, 12, 0f, 0.25f, 0.5f, "#d8b030", "#a88a40", accents: A("#f2f0ea", "#6a5a3a"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
 				// A prairie-dog crater cone: a rim of packed earth round the hole (colonies from the ClusteredFields scatter mode).
-				// LATER (I9b): a crater-cone mound of its own; flat spoil stands in.
+				// LATER: a crater-cone mound of its own; flat spoil stands in.
 				D("DebrisDogtownMound", DetailKind.DebrisNeedle, 10, 0f, 0.3f, 0.6f, "#6e5a42", "#8a745a", accents: A("#5a4632", "#1e1a14"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 4f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Desert (biome round, 2026-10-26): the Saharan erg and reg's own sparse plants and the caravans' litter ──
+				// ── Desert: the Saharan erg and reg's own sparse plants and the caravans' litter ──
 				// Drinn (Stipagrostis pungens): stiff rolled glaucous tussocks under feathery silver plumes, the dune grass that builds nebkha.
 				D("GrassDrinn", DetailKind.Grass, 14, 1.2f, 0.008f, 0.4f, "#6a7a68", "#c8bc94", lean: 0.25f, accents: A("#ece6d6"),
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 5f, groupSize: 6f, sink: new Vector2(0.03f, 0.06f)),
@@ -903,7 +903,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Colocynth: runners over the sand, deeply lobed grey-green leaves, yellow bells, striped green-and-gold gourds.
 				D("Colocynth", DetailKind.Creeper, 30, 0.1f, 0.09f, 1f, "#6a8a5a", "#7a9a68", accents: A("#4a7a3a", "#d8b040"), snowBury: 0.9f,
 					variant: FloraVariant.CreeperBeachVine, groupMetres: 6f, groupSize: 5f, sink: new Vector2(0.005f, 0.015f)),
-				// Rose of Jericho: grey fist-size curled dry balls lodged against the stones. LATER (I9b P29): its opened green state in the
+				// Rose of Jericho: grey fist-size curled dry balls lodged against the stones. LATER: its opened green state in the
 				// rain cells.
 				D("RoseOfJericho", DetailKind.DryShrub, 14, 0.12f, 0.14f, 0.1f, "#9a9080", "#aaa090", snowBury: 0.6f,
 					variant: FloraVariant.DryShrubBall, groupMetres: 3f, groupSize: 4f, sink: new Vector2(0.005f, 0.02f)),
@@ -911,14 +911,14 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisCamel", DetailKind.DebrisNeedle, 10, 0f, 0.2f, 0.5f, "#5a4430", "#6a5038", accents: A("#a8845a", "#4a3828"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 8f, sink: new Vector2(0f, 0.01f)),
 				// The toll of the crossing: a bleached camel's ribs and vertebrae, sand-scoured (pale bone on the branch's bark).
-				// LATER (I9b): a skull and rib mesh of its own (the Bone family's meshes); pale sticks stand in.
+				// LATER: a skull and rib mesh of its own (the Bone family's meshes); pale sticks stand in.
 				D("DebrisBones", DetailKind.DebrisBranch, 5, 0.9f, 0.03f, 0.5f, "#ece4d4", "#d8cebc", snowBury: 1f,
 					groupMetres: 5f, groupSize: 3f, sink: new Vector2(0f, 0.02f)),
 				// The green Sahara's surface scatter: quern slabs and handstones, polished axes, comb-marked sherds, ostrich-shell beads.
 				D("DebrisNeolithic", DetailKind.DebrisNeedle, 10, 0f, 0.18f, 0.5f, "#8a5a3a", "#9a7a5a", accents: A("#4a4a42", "#f0e8d6", "#b8a888"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 6f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Badlands (biome round, 2026-10-26): the Cappadocian plateau's own steppe grasses, flowers, cushions, crops and litter ──
+				// ── Badlands: the Cappadocian plateau's own steppe grasses, flowers, cushions, crops and litter ──
 				// Bulbous meadow-grass: fine spring-green tufts that brown by midsummer, purple viviparous bulbil heads.
 				D("GrassBulbousPoa", DetailKind.Grass, 16, 0.2f, 0.004f, 0.15f, "#5a6a48", "#9aa070", lean: 0.3f, accents: A("#7a5a6a"),
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassEar, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.01f, 0.03f)),
@@ -983,7 +983,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisVinePrunings", DetailKind.DebrisBranch, 8, 0.8f, 0.025f, 0.4f, "#4a3424", "#5a4030", snowBury: 1f,
 					groupMetres: 4f, groupSize: 4f, sink: new Vector2(0f, 0.02f)),
 				// The wash plots' crops: ungrafted ground-trained bush vines in low bowls, sprawling pumpkins, bushy blue-green chickpeas.
-				// LATER (I9b): the vines' autumn wine-red and purple-black clusters, the pumpkins' gourds; leaves and accents stand in.
+				// LATER: the vines' autumn wine-red and purple-black clusters, the pumpkins' gourds; leaves and accents stand in.
 				D("CropBushVine", DetailKind.Shrub, 7, 0.6f, 0.4f, 0.4f, "#4a6a2a", "#5a7a34", accents: A("#2a1a3a", "#8a2a2a"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.03f, 0.06f)),
 				D("CropPumpkin", DetailKind.Creeper, 30, 0.4f, 0.2f, 0.9f, "#4a6a2a", "#5a7a34", accents: A("#f0c020", "#e0802a"), snowBury: 0.9f,
@@ -991,7 +991,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("CropChickpea", DetailKind.Shrub, 6, 0.5f, 0.12f, 0.25f, "#6a8a7a", "#7a9a88", accents: A("#d8c8a0"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.02f, 0.04f)),
 
-				// ── Salt Flat (biome round, 2026-10-26): the brine edge's and lava rim's few plants, the hoppers and the trade's litter ──
+				// ── Salt Flat: the brine edge's and lava rim's few plants, the hoppers and the trade's litter ──
 				// Odyssea: stiff spiny glaucous salt-flat grass, mat-forming.
 				D("GrassOdyssea", DetailKind.Grass, 14, 0.35f, 0.006f, 0.2f, "#5e5c48", "#c4bc98", lean: 0.15f, accents: A("#a89670"),
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassEar, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.01f, 0.03f)),
@@ -1022,7 +1022,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The bar trade's litter: off-cuts and broken bars, brown-banded trim chips, doum-fibre bindings, donkey dung.
 				D("DebrisAmole", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#ece8e0", "#d8d0c0", accents: A("#8a7458", "#c8b088", "#4a3e30"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 8f, sink: new Vector2(0f, 0.01f)),
-				// ── Steppe (biome round, 2026-10-26): the Sary-Arka's own grasses, forbs, crops and litter, on the existing kinds ──
+				// ── Steppe: the Sary-Arka's own grasses, forbs, crops and litter, on the existing kinds ──
 				// Tyrsa (Stipa capillata): hair-awned feather grass without plumes, late-summer gold.
 				D("GrassTyrsa", DetailKind.Grass, 12, 0.6f, 0.003f, 0.2f, "#6a6236", "#b0a060", lean: 0.3f, accents: A("#c8a860"),
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 5f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
@@ -1032,7 +1032,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Chiy (Achnatherum splendens): the giant saline-lowland tussock, silver-purple open panicles, by sors, wells and springs.
 				D("GrassChiy", DetailKind.Grass, 14, 2f, 0.008f, 0.4f, "#6a6a46", "#b8b088", lean: 0.15f, accents: A("#a08a9a"), snowBury: 0.2f,
 					healthy: paleHealthy, dry: paleDry, variant: FloraVariant.GrassPlume, groupMetres: 8f, groupSize: 6f, sink: new Vector2(0.03f, 0.06f)),
-				// Zhitnyak (Agropyron cristatum): crested-wheatgrass comb spikes. LATER (I9b): the flat comb head.
+				// Zhitnyak (Agropyron cristatum): crested-wheatgrass comb spikes. LATER: the flat comb head.
 				D("GrassZhitnyak", DetailKind.Grass, 12, 0.5f, 0.004f, 0.18f, "#4e6036", "#8a9a5a", lean: 0.25f, accents: A("#a8a070"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
 				// Schrenk's tulips: the April steppe red, yellow, white and rose for two weeks, two broad grey leaves each.
@@ -1077,11 +1077,11 @@ namespace FishMMO.Shared.WorldDesign
 				// Shed feather-grass awns windrowed into silver mats, straw.
 				D("DebrisAwns", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#e0dccc", "#c8bc98", accents: A("#d8cc98", "#b8a878"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
-				// A bleached saiga skull with amber lyre horns, now and then a horse's (a bone tint on the branch's bark). LATER (I9b): skull meshes.
+				// A bleached saiga skull with amber lyre horns, now and then a horse's (a bone tint on the branch's bark). LATER: skull meshes.
 				D("DebrisSaigaSkull", DetailKind.DebrisBranch, 2, 0.3f, 0.02f, 0.25f, "#e8e2d4", "#c8a868", snowBury: 1f,
 					groupMetres: 6f, groupSize: 2f, sink: new Vector2(0f, 0.02f)),
 
-				// ── Estuary (biome round, 2026-10-26): the Frisian Wadden's saltings, on the existing kinds in the draft's colours ──
+				// ── Estuary: the Frisian Wadden's saltings, on the existing kinds in the draft's colours ──
 				// Small cordgrass (Spartina maritima): stiff tussocks on the pioneer mud, paired erect spikes.
 				D("GrassCordgrass", DetailKind.Grass, 12, 0.4f, 0.012f, 0.2f, "#4a6a4a", "#7a947a", lean: 0.15f, accents: A("#8a7a4a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.02f, 0.04f)),
@@ -1142,7 +1142,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Madder (Rubia): sprawling whorled leaves, tiny yellow-green flowers, red root-crowns at the soil.
 				D("CropMadder", DetailKind.Shrub, 6, 1f, 0.2f, 0.3f, "#4a6a34", "#5e7e40", accents: A("#a8b050", "#a03a2a"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 16f, sink: new Vector2(0.02f, 0.05f)),
-				// ── Beach (biome round, 2026-10-26): the Baltic amber strand's own grasses, flowers, runners, cushions, litter and drift,
+				// ── Beach: the Baltic amber strand's own grasses, flowers, runners, cushions, litter and drift,
 				// cool band (grey dune) and warm band (sea-oats and sea-grape), on the existing kinds ──
 				// Marram (Ammophila): rolled, stiff, sharp grey-green blades in tussocks, the straw spike.
 				D("GrassMarram", DetailKind.Grass, 14, 0.9f, 0.004f, 0.3f, "#6a7a5a", "#a8b090", lean: 0.25f, accents: A("#c8b890"),
@@ -1196,7 +1196,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Fallen coconut fronds and husks under the palms.
 				D("DebrisCoconut", DetailKind.DebrisPalm, 3, 2.5f, 0.6f, 1f, "#8a7a4a", "#a89a60", accents: A("#6a4a2a", "#7a5a34"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 4f, sink: new Vector2(0f, 0.01f)),
-				// ── Hills (biome round, 2026-10-26): the terraced schist hill country's own grasses, forbs, herbs, crops and litter ──
+				// ── Hills: the terraced schist hill country's own grasses, forbs, herbs, crops and litter ──
 				// Sheep's fescue hill turf, burning tawny in summer.
 				D("GrassSheepFescue", DetailKind.Grass, 18, 0.15f, 0.003f, 0.15f, "#4a5a2a", "#8a9048", lean: 0.3f, accents: A("#8a7a5a"),
 					variant: FloraVariant.GrassPlume, groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.01f, 0.03f)),
@@ -1258,7 +1258,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisHill", DetailKind.DebrisNeedle, 12, 0f, 0.2f, 0.5f, "#8a6a3a", "#6a7458", accents: A("#7e7a6c", "#ece4d4", "#e8e0d0"), snowBury: 1f,
 					groupMetres: 6f, groupSize: 10f, sink: new Vector2(0f, 0.01f)),
 
-				// ── Wetlands (biome round, 2026-10-26): the Batiha reed marsh's own plants, on the existing kinds in the draft's colours ──
+				// ── Wetlands: the Batiha reed marsh's own plants, on the existing kinds in the draft's colours ──
 				// Qasab, the giant reed: culms of 4–5 m, leaves flagging sideways, purple-brown plumes silvering with age.
 				D("ReedsQasab", DetailKind.Reeds, 14, 4.5f, 0.025f, 0.4f, "#8a9a5a", "#5e7a3a", lean: 0.25f, accents: A("#6a4a5a", "#c8c0b8"),
 					variant: FloraVariant.ReedsPlume, groupMetres: 6f, groupSize: 20f, sink: new Vector2(0.03f, 0.06f)),
@@ -1327,7 +1327,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("CropSugarcane", DetailKind.Shrub, 6, 3f, 0.2f, 0.3f, "#6a4a5a", "#7a9a4a", accents: A("#6a9a3a"), snowBury: 0.3f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 16f, sink: new Vector2(0.02f, 0.05f)),
 
-				// ── Jungle (biome round, 2026-10-26): the Edo-Yoruba rainforest's own plants, on the existing kinds in the draft's colours ──
+				// ── Jungle: the Edo-Yoruba rainforest's own plants, on the existing kinds in the draft's colours ──
 				// Shade grass (Olyra type): short bamboo-like lance blades on wiry stems, sparse.
 				D("GrassForestBroad", DetailKind.Grass, 12, 0.45f, 0.012f, 0.25f, "#2a4a1e", "#4a7a2e", lean: 0.4f,
 					groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.02f, 0.04f)),
@@ -1358,7 +1358,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Spikemoss mats with a blue-green iridescent sheen on the wet rock and the ravine floor.
 				D("Selaginella", DetailKind.Creeper, 80, 0.04f, 0.12f, 0.7f, "#2a5a5a", "#3e7a6a", snowBury: 1.0f, variant: FloraVariant.CreeperIvy,
 					groupMetres: 4f, groupSize: 8f, sink: new Vector2(0.005f, 0.015f)),
-				// Cubitermes termite mounds: grey-brown clay stalks under stacked caps. LATER (I9b): a mound mesh of its own; stalked caps stand in.
+				// Cubitermes termite mounds: grey-brown clay stalks under stacked caps. LATER: a mound mesh of its own; stalked caps stand in.
 				D("TermiteCaps", DetailKind.Mushroom, 4, 0.45f, 0.1f, 0.3f, "#5a4a3a", "#7a6a52", accents: A("#6a5a48", "#8a7a62"), snowBury: 1.0f, variant: FloraVariant.MushroomCluster,
 					groupMetres: 6f, groupSize: 3f, sink: new Vector2(0.005f, 0.015f)),
 				// Termitomyces: tall pointed-umbo caps on white stems, rainy-season food.
@@ -1385,7 +1385,7 @@ namespace FishMMO.Shared.WorldDesign
 				// African rice (Oryza glaberrima): red-brown hulls on the bottomland.
 				D("CropRiceAfrican", DetailKind.Grass, 10, 1.1f, 0.02f, 0.2f, "#7a9a5a", "#c8b070", lean: 0.2f, accents: A("#8a4a2a"), variant: FloraVariant.GrassEar,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.02f, 0.04f)),
-				// ── Bamboo Forest (biome round, 2026-10-26): the Heian bamboo hills' own plants, on the existing kinds in the draft's colours ──
+				// ── Bamboo Forest: the Heian bamboo hills' own plants, on the existing kinds in the draft's colours ──
 				// Susuki (Miscanthus): arching clumps, silver-pink plumes turning white in autumn.
 				D("GrassSusuki", DetailKind.Grass, 14, 1.6f, 0.01f, 0.3f, "#3e5a2a", "#8a9a5a", lean: 0.6f, accents: A("#d8c8c0"), variant: FloraVariant.GrassPlume,
 					groupMetres: 6f, groupSize: 12f, sink: new Vector2(0.03f, 0.06f)),
@@ -1407,7 +1407,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Dogtooth violet: nodding reflexed pink-purple over mottled leaves, a spring-only ravine flower.
 				D("FlowersKatakuri", DetailKind.Flowers, 14, 0.15f, 0.04f, 0.3f, "#4a6a3a", "#5a7a44", accents: A("#c86aa8"), snowBury: 0.4f,
 					groupMetres: 5f, groupSize: 14f, sink: new Vector2(0.01f, 0.02f)),
-				// Bamboo shoots: brown-spotted sheath cones 0.2-1.2 m, the grove's spring. LATER (I9b P29): season fade.
+				// Bamboo shoots: brown-spotted sheath cones 0.2-1.2 m, the grove's spring. LATER: season fade.
 				D("Takenoko", DetailKind.DebrisBamboo, 8, 0.7f, 0.12f, 0.4f, "#8a6a40", "#6a4a2a", snowBury: 0.6f,
 					groupMetres: 5f, groupSize: 5f, sink: new Vector2(0f, 0.02f)),
 				// Moso culm sheaths: big papery tan blades blotched dark brown, curled.
@@ -1437,7 +1437,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Matsutake: stout brown-capped stems in rings under the red pines.
 				D("MushroomMatsutake", DetailKind.Mushroom, 6, 0.12f, 0.07f, 0.3f, "#7a5a3a", "#9a7a52", accents: A("#c8b490", "#e8dcc0"), snowBury: 1.0f, variant: FloraVariant.MushroomForest,
 					groupMetres: 4f, groupSize: 5f, sink: new Vector2(0.005f, 0.015f)),
-				// Shiitake: brown cracked caps shelved on fallen logs. LATER (I9b): LogShelf placement; ground clusters stand in.
+				// Shiitake: brown cracked caps shelved on fallen logs. LATER: LogShelf placement; ground clusters stand in.
 				D("MushroomShiitake", DetailKind.Mushroom, 8, 0.06f, 0.04f, 0.2f, "#7a5a3a", "#9a7a52", accents: A("#b89a72", "#e8dcc0"), snowBury: 1.0f, variant: FloraVariant.MushroomCluster,
 					groupMetres: 3f, groupSize: 5f, sink: new Vector2(0.005f, 0.015f)),
 				// Cushion moss domes on stones, roots and lantern bases, the moss garden's look.
@@ -1452,7 +1452,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Hemp: tall palmate stems grown for fibre.
 				D("CropAsa", DetailKind.Shrub, 7, 2.0f, 0.12f, 0.2f, "#4a6a2a", "#6a8a3a", snowBury: 0.4f, variant: FloraVariant.ShrubHerb,
 					groupMetres: 8f, groupSize: 20f, sink: new Vector2(0.02f, 0.05f)),
-				// ── Mangrove (biome round, 2026-10-26): the Swahili coast's mangal, on the existing kinds in the draft's colours ──
+				// ── Mangrove: the Swahili coast's mangal, on the existing kinds in the draft's colours ──
 				// Saltcouch (Sporobolus virginicus): stiff distichous creeping couch on the ukanda rims.
 				D("GrassSaltCouch", DetailKind.Grass, 12, 0.3f, 0.008f, 0.2f, "#5a7a5a", "#9aaa88", lean: 0.2f, accents: A("#a89a70"),
 					variant: FloraVariant.GrassPlume, groupMetres: 5f, groupSize: 12f, sink: new Vector2(0.01f, 0.03f)),
@@ -1505,7 +1505,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Flood rice of the cleared back mangal (the wet reach), tall on its mud bunds.
 				D("CropRiceMangrove", DetailKind.Shrub, 10, 1.4f, 0.04f, 0.25f, "#5a8a3a", "#7a9a48", accents: A("#c8a050"), snowBury: 0.4f,
 					variant: FloraVariant.ShrubHerb, groupMetres: 8f, groupSize: 24f, sink: new Vector2(0.02f, 0.05f)),
-				// ── Lake and River (biome round, 2026-10-26): the clear lake's strand and the Rhenish river's margin, on the existing kinds ──
+				// ── Lake and River: the clear lake's strand and the Rhenish river's margin, on the existing kinds ──
 				// Shoreweed (Littorella): stiff awl-leaf lawns on the wave-washed sand, and the hair-fine needle spike-rush.
 				D("GrassShoreweed", DetailKind.Grass, 14, 0.08f, 0.004f, 0.25f, "#3e5a2e", "#6a8a44", lean: 0.1f,
 					groupMetres: 3f, groupSize: 12f, sink: new Vector2(0.01f, 0.02f)),
@@ -1523,7 +1523,7 @@ namespace FishMMO.Shared.WorldDesign
 				// The strandline wrack: reed chaff, needles, bark strips and gull feathers.
 				D("DebrisDriftLine", DetailKind.DebrisNeedle, 12, 0f, 0.25f, 0.5f, "#a08a5a", "#4a3a26", accents: A("#a08a5a", "#4a3a26", "#e8e4dc"), snowBury: 1f,
 					groupMetres: 5f, groupSize: 12f, sink: new Vector2(0f, 0.01f)),
-				// Rotted oak pile heads of the drowned pile-towns, black with sponge and moss caps. LATER (I7): fields of 20-200 at 1 m spacing.
+				// Rotted oak pile heads of the drowned pile-towns, black with sponge and moss caps. LATER: fields of 20-200 at 1 m spacing.
 				D("PileStumps", DetailKind.RootKnobs, 4, 0.3f, 0f, 1.2f, "#1e1a14", "#3a3a2a", snowBury: 0.6f,
 					variant: FloraVariant.CypressKnees, groupMetres: 12f, groupSize: 6f, sink: new Vector2(0.03f, 0.06f)),
 				// Galingale (Cyperus fuscus): the mud annual, dark brown spikelet clusters.
@@ -1540,7 +1540,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Flood brash: twigs, reed stems and bark lodged against the stones, bleached.
 				D("DebrisBrash", DetailKind.DebrisBranch, 5, 0.9f, 0.02f, 0.6f, "#a89a80", "#c8bc9c", snowBury: 1f,
 					groupMetres: 6f, groupSize: 6f, sink: new Vector2(0f, 0.02f)),
-				// ── Rocky Terrain (biome round, 2026-10-26) ── The Pamir's sparse cover: hummock sedge on the salt-ringed pamir floors,
+				// ── Rocky Terrain ── The Pamir's sparse cover: hummock sedge on the salt-ringed pamir floors,
 				// hard steel-blue fescue tussocks, woolly rosettes, silver locoweed cushions, yellow and white crust lichens, dragonhead,
 				// star asters, a bleached argali skull, and the mineral stonewool of the airless and thin-aired talus.
 				D("GrassPamirSedge", DetailKind.Grass, 14, 0.08f, 0.005f, 0.2f, "#3a3424", "#8a8452", lean: 0.3f, accents: A("#4a3a24"),
@@ -1564,7 +1564,7 @@ namespace FishMMO.Shared.WorldDesign
 				D("DebrisArgaliSkull", DetailKind.DebrisBranch, 3, 0.5f, 0.05f, 0.5f, "#ece4d4", "#d8cebc", snowBury: 1f,
 					groupMetres: 8f, groupSize: 3f, sink: new Vector2(0f, 0.02f)),
 
-				// ── Geyser Basin (biome round, 2026-10-26) ── The hot ground's own cover: the warm halo's bent lawn, hot-spring panic grass,
+				// ── Geyser Basin ── The hot ground's own cover: the warm halo's bent lawn, hot-spring panic grass,
 				// fell rush, monkeyflower, fringed gentian, campion, thermal moss, adder's-tongue, moonwort, crottle lichen, the microbial
 				// mats and splash sinter, mud spatter, a film of sulphur at the vent lips, wool and horse litter.
 				D("GrassThermalBent", DetailKind.Grass, 16, 0.12f, 0.003f, 0.2f, "#2e5a1e", "#8ac44a", lean: 0.2f, healthy: new Color(0.7f, 1f, 0.55f), dry: new Color(0.7f, 1f, 0.55f),
@@ -1728,14 +1728,14 @@ namespace FishMMO.Shared.WorldDesign
 						new DeadwoodSpecies { Name = "RootPlate", Form = DeadwoodForm.RootPlate, Length = 3.2f, Radius = 0.35f, BarkFamily = Bark.Brown,
 							BarkTint = H("#9a8a7a"), WoodA = H("#4a3a28"), WoodB = H("#7a6448"), Stubs = 12,
 							Bands = new[] { H("#8a8a84"), H("#6a6a64") } },
-						// Tundra (biome round, 2026-10-26): a whole rafted spruce trunk, sanded silver, half buried on the bars and coasts.
+						// Tundra: a whole rafted spruce trunk, sanded silver, half buried on the bars and coasts.
 						new DeadwoodSpecies { Name = "DriftwoodTrunk", Form = DeadwoodForm.Driftwood, Length = 10f, Radius = 0.35f, BarkFamily = Bark.Dead,
 							BarkTint = H("#f0ece4"), WoodA = H("#c8c2b6"), WoodB = H("#a8a296"), Stubs = 6 },
-						// Glacier (biome round, 2026-10-26): avalanche-snapped birch, the bark half stripped.
+						// Glacier: avalanche-snapped birch, the bark half stripped.
 						new DeadwoodSpecies { Name = "FallenLog_AvalancheBirch", Form = DeadwoodForm.FallenLog, Length = 4.5f, Radius = 0.15f, BarkFamily = Bark.Birch,
 							BarkTint = H("#e8d0c0"), WoodA = H("#c8b090"), WoodB = H("#8a6e50"), Stubs = 2 },
-						// Forest (biome round, 2026-10-26): a fallen grey beech, a beech snag shelved with tinder-fungus hooves, and the
-						// hollow veteran oak. LATER (I9b): a Hollow deadwood form (3 m, walk-in, open on one side); a broad shelved stump stands in.
+						// Forest: a fallen grey beech, a beech snag shelved with tinder-fungus hooves, and the
+						// hollow veteran oak. LATER: a Hollow deadwood form (3 m, walk-in, open on one side); a broad shelved stump stands in.
 						new DeadwoodSpecies { Name = "FallenLog_Beech", Form = DeadwoodForm.FallenLog, Length = 12f, Radius = 0.45f, BarkFamily = Bark.Smooth,
 							BarkTint = H("#e0e0d8"), WoodA = H("#d0b890"), WoodB = H("#8a7050"), Stubs = 4 },
 						new DeadwoodSpecies { Name = "Snag_Beech", Form = DeadwoodForm.Stump, Length = 6f, Radius = 0.5f, BarkFamily = Bark.Smooth,
@@ -1744,8 +1744,8 @@ namespace FishMMO.Shared.WorldDesign
 						new DeadwoodSpecies { Name = "HollowOak", Form = DeadwoodForm.Stump, Length = 3f, Radius = 0.8f, BarkFamily = Bark.Brown,
 							BarkTint = H("#d8d0c8"), WoodA = H("#6a4e30"), WoodB = H("#3a2a1c"), Brackets = 2,
 							Bands = new[] { H("#c8b890"), H("#8a6a48"), H("#5a4630") } },
-						// Woodland (biome round, 2026-10-26): a shed pollard limb, dry and grey; a cut coppice stool's pale faces; an oak
-						// stump with beefsteak fungus. LATER (I9b): the stool's ring of 12–20 cut stubs; a broad sawn stump stands in.
+						// Woodland: a shed pollard limb, dry and grey; a cut coppice stool's pale faces; an oak
+						// stump with beefsteak fungus. LATER: the stool's ring of 12–20 cut stubs; a broad sawn stump stands in.
 						new DeadwoodSpecies { Name = "FallenLimb_Oak", Form = DeadwoodForm.FallenLog, Length = 6f, Radius = 0.25f, BarkFamily = Bark.Dead,
 							BarkTint = H("#c8c0b0"), WoodA = H("#c8b08a"), WoodB = H("#8a7458"), Stubs = 3 },
 						new DeadwoodSpecies { Name = "Stump_Coppice", Form = DeadwoodForm.Stump, Length = 0.35f, Radius = 0.45f, BarkFamily = Bark.Brown,
@@ -1753,58 +1753,58 @@ namespace FishMMO.Shared.WorldDesign
 						new DeadwoodSpecies { Name = "Stump_Beefsteak", Form = DeadwoodForm.Stump, Length = 0.6f, Radius = 0.4f, BarkFamily = Bark.Brown,
 							BarkTint = H("#d8d0c8"), WoodA = H("#a88a62"), WoodB = H("#6a4e30"), Brackets = 3,
 							Bands = new[] { H("#c04a3a"), H("#8a2a22"), H("#6a2018") } },
-						// Alpine Meadow (biome round, 2026-10-26): the cut grey stubs of the dwarf pine along the lanes hacked through it.
+						// Alpine Meadow: the cut grey stubs of the dwarf pine along the lanes hacked through it.
 						new DeadwoodSpecies { Name = "Stump_Mugo", Form = DeadwoodForm.Stump, Length = 0.3f, Radius = 0.09f, BarkFamily = Bark.Pine,
 							BarkTint = H("#a8a098"), WoodA = H("#c8b8a0"), WoodB = H("#8a7a68"), Sawn = true },
-						// Mountain Slope (biome round, 2026-10-26): the nurse log, a fallen yellowwood moss-sleeved its whole length, ferns
+						// Mountain Slope: the nurse log, a fallen yellowwood moss-sleeved its whole length, ferns
 						// sprouting from it (no stumps: the sacred forests are not felled).
 						new DeadwoodSpecies { Name = "FallenLog_Podocarp", Form = DeadwoodForm.FallenLog, Length = 14f, Radius = 0.5f, BarkFamily = Bark.MossSleeve,
 							BarkTint = H("#e8f0d8"), WoodA = H("#c8a070"), WoodB = H("#8a6440"), Stubs = 4 },
-						// Scrubland (biome round, 2026-10-26): a standing saguaro skeleton, its wooden ribs bare, tatters of skin and the
-						// woodpeckers' boots; a fallen ironwood, silver outside, iron-dark at the core. LATER (I9b): the rib cage form; a pale
+						// Scrubland: a standing saguaro skeleton, its wooden ribs bare, tatters of skin and the
+						// woodpeckers' boots; a fallen ironwood, silver outside, iron-dark at the core. LATER: the rib cage form; a pale
 						// tall stump stands in.
 						new DeadwoodSpecies { Name = "Snag_Saguaro", Form = DeadwoodForm.Stump, Length = 5f, Radius = 0.3f, BarkFamily = Bark.Dead,
 							BarkTint = H("#d8c8a8"), WoodA = H("#a08a68"), WoodB = H("#5a4a38"),
 							Bands = new[] { H("#a08a68"), H("#5a4a38"), H("#c0a888") } },
 						new DeadwoodSpecies { Name = "FallenLog_Ironwood", Form = DeadwoodForm.FallenLog, Length = 5f, Radius = 0.25f, BarkFamily = Bark.ShredGrey,
 							BarkTint = H("#e0dcd4"), WoodA = H("#6a4a3a"), WoodB = H("#2e2220"), Stubs = 4 },
-						// Savanna (biome round, 2026-10-26): a fallen leadwood, silver and termite-galleried; a mopane snapped and stripped by
+						// Savanna: a fallen leadwood, silver and termite-galleried; a mopane snapped and stripped by
 						// elephants.
 						new DeadwoodSpecies { Name = "FallenLog_Leadwood", Form = DeadwoodForm.FallenLog, Length = 9f, Radius = 0.4f, BarkFamily = Bark.SnakeSkin,
 							BarkTint = H("#e0dcd4"), WoodA = H("#b0a898"), WoodB = H("#7a3a24"), Stubs = 4 },
 						new DeadwoodSpecies { Name = "Stump_ElephantBroken", Form = DeadwoodForm.Stump, Length = 1.4f, Radius = 0.3f, BarkFamily = Bark.Fibrous,
 							BarkTint = H("#d8d0c8"), WoodA = H("#d8c098"), WoodB = H("#8a6844"), Brackets = 0,
 							Bands = new[] { H("#e8d8b8"), H("#a88a62"), H("#6a4e30") } },
-						// Grassland (biome round, 2026-10-26): a lightning-split lone pear standing dead and silver, the one deadwood of a treeless plain.
+						// Grassland: a lightning-split lone pear standing dead and silver, the one deadwood of a treeless plain.
 						new DeadwoodSpecies { Name = "Snag_Pear", Form = DeadwoodForm.Stump, Length = 6f, Radius = 0.3f, BarkFamily = Bark.Checker,
 							BarkTint = H("#c8c4bc"), WoodA = H("#c8bca8"), WoodB = H("#8a7a64"), Brackets = 0,
 							Bands = new[] { H("#a89a84"), H("#7a6a58"), H("#5a4c40") } },
-						// Plains (biome round, 2026-10-26): bleached cottonwood driftwood on the bars, a lightning-split cottonwood snag in the galleries.
+						// Plains: bleached cottonwood driftwood on the bars, a lightning-split cottonwood snag in the galleries.
 						new DeadwoodSpecies { Name = "FallenLog_Cottonwood", Form = DeadwoodForm.Driftwood, Length = 9f, Radius = 0.4f, BarkFamily = Bark.Dead,
 							BarkTint = H("#ece8e0"), WoodA = H("#c8c2b6"), WoodB = H("#a8a296"), Stubs = 6 },
 						new DeadwoodSpecies { Name = "Snag_Cottonwood", Form = DeadwoodForm.Stump, Length = 7f, Radius = 0.6f, BarkFamily = Bark.CottonwoodRidge,
 							BarkTint = H("#d8d4cc"), WoodA = H("#c8bca8"), WoodB = H("#8a7a64"), Brackets = 0,
 							Bands = new[] { H("#a89a84"), H("#7a6a58"), H("#5a4c40") } },
-						// Steppe (biome round, 2026-10-26): a twisted grey saxaul standing dead on the kum, a fallen elm bough in the dry valleys.
+						// Steppe: a twisted grey saxaul standing dead on the kum, a fallen elm bough in the dry valleys.
 						new DeadwoodSpecies { Name = "Snag_Saxaul", Form = DeadwoodForm.Stump, Length = 2.5f, Radius = 0.15f, BarkFamily = Bark.SaxaulTwist,
 							BarkTint = H("#c8c0b0"), WoodA = H("#b8a888"), WoodB = H("#7a6a54"), Brackets = 0,
 							Bands = new[] { H("#a89a84"), H("#7a6a58"), H("#5a4c40") } },
 						new DeadwoodSpecies { Name = "FallenLimb_Elm", Form = DeadwoodForm.FallenLog, Length = 4f, Radius = 0.15f, BarkFamily = Bark.Karagach,
 							BarkTint = H("#e0d8d0"), WoodA = H("#c8a878"), WoodB = H("#8a6844"), Stubs = 3 },
-						// Estuary (biome round, 2026-10-26): the rotted oak stakes of a lost revetment, weed-skirted, in lines along the old dike.
+						// Estuary: the rotted oak stakes of a lost revetment, weed-skirted, in lines along the old dike.
 						new DeadwoodSpecies { Name = "DikeStakes", Form = DeadwoodForm.Stump, Length = 0.7f, Radius = 0.08f, BarkFamily = Bark.Dead,
 							BarkTint = H("#a8a498"), WoodA = H("#8a8478"), WoodB = H("#5a5648") },
-						// Beach (biome round, 2026-10-26): sand-blasted silver logs on the wrack line, the snags of a forest a walking dune buried.
+						// Beach: sand-blasted silver logs on the wrack line, the snags of a forest a walking dune buried.
 						new DeadwoodSpecies { Name = "Driftwood_Silver", Form = DeadwoodForm.Driftwood, Length = 5f, Radius = 0.2f, BarkFamily = Bark.Dead,
 							BarkTint = H("#c8c4b8"), WoodA = H("#c0bcb0"), WoodB = H("#a0a094"), Stubs = 3 },
 						new DeadwoodSpecies { Name = "DuneSnag", Form = DeadwoodForm.Stump, Length = 3f, Radius = 0.25f, BarkFamily = Bark.Dead,
 							BarkTint = H("#c8c4b8"), WoodA = H("#b8b4a8"), WoodB = H("#8a867a"), Brackets = 0,
 							Bands = new[] { H("#b0aca0"), H("#8a867a"), H("#6a665c") } },
-						// Coral Reef (biome round, 2026-10-26): coconut trunks and husks sunk on the shelf, shipworm-bored.
+						// Coral Reef: coconut trunks and husks sunk on the shelf, shipworm-bored.
 						new DeadwoodSpecies { Name = "DriftPalm", Form = DeadwoodForm.Driftwood, Length = 7f, Radius = 0.18f, BarkFamily = Bark.Palm,
 							BarkTint = H("#a8a090"), WoodA = H("#8a7a5a"), WoodB = H("#6a5a40"), Stubs = 2 },
-						// Abyss (biome round, 2026-10-26): a sunk log bored to honeycomb and pickled black; a leviathan's rib arc and vertebra.
-						// LATER (I7): the leviathan fall as a piece (skull, vertebral row, rib vault, bone-worm plumes).
+						// Abyss: a sunk log bored to honeycomb and pickled black; a leviathan's rib arc and vertebra.
+						// LATER: the leviathan fall as a piece (skull, vertebral row, rib vault, bone-worm plumes).
 						new DeadwoodSpecies { Name = "BoredWood", Form = DeadwoodForm.FallenLog, Length = 4f, Radius = 0.3f, BarkFamily = Bark.Dead,
 							BarkTint = H("#2a2622"), WoodA = H("#1a1612"), WoodB = H("#0e0c0a"), Stubs = 2 },
 						new DeadwoodSpecies { Name = "LeviathanRib", Form = DeadwoodForm.Driftwood, Length = 9f, Radius = 0.35f, BarkFamily = Bark.Dead,
@@ -1812,15 +1812,15 @@ namespace FishMMO.Shared.WorldDesign
 						new DeadwoodSpecies { Name = "LeviathanVertebra", Form = DeadwoodForm.Stump, Length = 1.2f, Radius = 0.7f, BarkFamily = Bark.Dead,
 							BarkTint = H("#d8ccb0"), WoodA = H("#c8bc9c"), WoodB = H("#8a7e64"), Brackets = 0,
 							Bands = new[] { H("#c02020"), H("#d8ccb0"), H("#a89c84") } },
-						// Jungle (biome round, 2026-10-26): a fallen giant on its plank buttresses, moss-grown and shelved with bracket fungi; an
-						// iroko killed by lightning, silver, hornbill-holed. LATER (I9b): the buttressed root end and the Lampcap clusters.
+						// Jungle: a fallen giant on its plank buttresses, moss-grown and shelved with bracket fungi; an
+						// iroko killed by lightning, silver, hornbill-holed. LATER: the buttressed root end and the Lampcap clusters.
 						new DeadwoodSpecies { Name = "FallenLog_Buttressed", Form = DeadwoodForm.FallenLog, Length = 16f, Radius = 0.9f, BarkFamily = Bark.Olive,
 							BarkTint = H("#e0e8d0"), WoodA = H("#c8a070"), WoodB = H("#8a5a3a"), Stubs = 6, Brackets = 4 },
 						new DeadwoodSpecies { Name = "Snag_Iroko", Form = DeadwoodForm.Stump, Length = 9f, Radius = 0.7f, BarkFamily = Bark.Dead,
 							BarkTint = H("#c8c4bc"), WoodA = H("#c8bca8"), WoodB = H("#8a7a64"), Brackets = 0,
 							Bands = new[] { H("#a89a84"), H("#7a6a58"), H("#5a4c40") } },
-						// Bamboo Forest (biome round, 2026-10-26): a mossy fallen cedar with shiitake shelves, a silver red-pine snag, culms
-						// collapsed criss-cross. LATER (I9b): a collapsed-culm cluster form; a lone fallen culm stands in.
+						// Bamboo Forest: a mossy fallen cedar with shiitake shelves, a silver red-pine snag, culms
+						// collapsed criss-cross. LATER: a collapsed-culm cluster form; a lone fallen culm stands in.
 						new DeadwoodSpecies { Name = "FallenLog_Sugi", Form = DeadwoodForm.FallenLog, Length = 14f, Radius = 0.6f, BarkFamily = Bark.Fibrous,
 							BarkTint = H("#e0e8d0"), WoodA = H("#d8a878"), WoodB = H("#9a5a3a"), Stubs = 3, Brackets = 3 },
 						new DeadwoodSpecies { Name = "Snag_Akamatsu", Form = DeadwoodForm.Stump, Length = 7f, Radius = 0.3f, BarkFamily = Bark.Dead,
@@ -1828,49 +1828,49 @@ namespace FishMMO.Shared.WorldDesign
 							Bands = new[] { H("#a89a84"), H("#7a6a58"), H("#5a4c40") } },
 						new DeadwoodSpecies { Name = "Culm_Fallen", Form = DeadwoodForm.FallenLog, Length = 7f, Radius = 0.07f, BarkFamily = Bark.Bamboo,
 							BarkTint = H("#c8c08a"), WoodA = H("#d8cc90"), WoodB = H("#a89a5a"), Stubs = 0 },
-						// Desert (biome round, 2026-10-26): a dead desert date scoured silver on its deflated mound (a tall stump stands in for the
-						// snag form: LATER (I9b)); the Ténéré's fossil wood, honey-brown and black agatised, broken in rounds.
+						// Desert: a dead desert date scoured silver on its deflated mound (a tall stump stands in for the
+						// snag form: LATER); the Ténéré's fossil wood, honey-brown and black agatised, broken in rounds.
 						new DeadwoodSpecies { Name = "Snag_Balanites", Form = DeadwoodForm.Stump, Length = 3.5f, Radius = 0.22f, BarkFamily = Bark.Dead,
 							BarkTint = H("#e0dcd4"), WoodA = H("#c8c2b6"), WoodB = H("#8a8478"),
 							Bands = new[] { H("#c8c2b6"), H("#a8a296"), H("#d8d2c6") } },
 						new DeadwoodSpecies { Name = "PetrifiedLog_Tenere", Form = DeadwoodForm.PetrifiedLog, Length = 5f, Radius = 0.35f, BarkFamily = Bark.Dead,
 							BarkTint = H("#a87a50"), WoodA = H("#8a5a30"), WoodB = H("#2a1e18"),
 							Bands = new[] { H("#8a5a30"), H("#2a1e18"), H("#c89a5a"), H("#5a3a22"), H("#e0c090") } },
-						// Badlands (biome round, 2026-10-26): a silver peeling oleaster snag in the washes; the hollow stump of a fallen plane in a gorge.
+						// Badlands: a silver peeling oleaster snag in the washes; the hollow stump of a fallen plane in a gorge.
 						new DeadwoodSpecies { Name = "Snag_Oleaster", Form = DeadwoodForm.Stump, Length = 3f, Radius = 0.2f, BarkFamily = Bark.OleasterStrip,
 							BarkTint = H("#d8d4cc"), WoodA = H("#c0b8a8"), WoodB = H("#7a6e5e"),
 							Bands = new[] { H("#c0b8a8"), H("#9a8e7e"), H("#d0c8b8") } },
 						new DeadwoodSpecies { Name = "Stump_PlaneHollow", Form = DeadwoodForm.Stump, Length = 2.2f, Radius = 0.9f, BarkFamily = Bark.PlaneFlake,
 							BarkTint = H("#e8e4dc"), WoodA = H("#6a4e30"), WoodB = H("#3a2a1c"), Brackets = 2,
 							Bands = new[] { H("#c8b890"), H("#8a6a48"), H("#5a4630") } },
-						// Salt Flat (biome round, 2026-10-26): a dead acacia on an old shoreline, silver-grey, salt wicked white up its foot.
+						// Salt Flat: a dead acacia on an old shoreline, silver-grey, salt wicked white up its foot.
 						new DeadwoodSpecies { Name = "Snag_SaltedAcacia", Form = DeadwoodForm.Stump, Length = 2.5f, Radius = 0.15f, BarkFamily = Bark.Dead,
 							BarkTint = H("#e8e6e0"), WoodA = H("#c8c4b8"), WoodB = H("#8a8478"),
 							Bands = new[] { H("#f2f0ea"), H("#c8c4b8"), H("#a8a296") } },
-						// Hills (biome round, 2026-10-26): a cut gnarled olive stump throwing sucker shoots on the terraces.
+						// Hills: a cut gnarled olive stump throwing sucker shoots on the terraces.
 						new DeadwoodSpecies { Name = "Stump_Olive", Form = DeadwoodForm.Stump, Length = 0.6f, Radius = 0.4f, BarkFamily = Bark.Olive,
 							BarkTint = H("#e0dcd0"), WoodA = H("#c8a878"), WoodB = H("#8a6844"), Sawn = true },
-						// Wetlands (biome round, 2026-10-26): a drowned palm standing in the water, a hollow pollard willow log.
+						// Wetlands: a drowned palm standing in the water, a hollow pollard willow log.
 						new DeadwoodSpecies { Name = "Snag_DrownedPalm", Form = DeadwoodForm.Stump, Length = 4f, Radius = 0.18f, BarkFamily = Bark.Dead,
 							BarkTint = H("#8a8678"), WoodA = H("#a89a80"), WoodB = H("#6a5e4a"), Brackets = 0 },
 						new DeadwoodSpecies { Name = "FallenLog_Willow", Form = DeadwoodForm.FallenLog, Length = 5f, Radius = 0.25f, BarkFamily = Bark.Dead,
 							BarkTint = H("#a8a498"), WoodA = H("#b8a888"), WoodB = H("#7a6a50"), Stubs = 4 },
-						// Mangrove (biome round, 2026-10-26): a silver-grey die-back Rhizophora skeleton on its prop-root cage, and the cut-pole
+						// Mangrove: a silver-grey die-back Rhizophora skeleton on its prop-root cage, and the cut-pole
 						// stumps of the coppiced coupes with their red heartwood faces.
 						new DeadwoodSpecies { Name = "Snag_Mangrove", Form = DeadwoodForm.Stump, Length = 3.5f, Radius = 0.22f, BarkFamily = Bark.Dead,
 							BarkTint = H("#a8a8a0"), WoodA = H("#b8b0a0"), WoodB = H("#7a7468"), Brackets = 0 },
 						new DeadwoodSpecies { Name = "PoleStumps", Form = DeadwoodForm.Stump, Length = 0.6f, Radius = 0.1f, BarkFamily = Bark.Brown,
 							BarkTint = H("#8a5a44"), WoodA = H("#a8503a"), WoodB = H("#6a3a24"), Sawn = true },
-						// Lake (biome round, 2026-10-26): a bark-stripped log lying drowned in the silt, a dugout half sunk, the stumps of a forest a
-						// rise drowned. LATER (I9b): the logboat's hollowed form; a long black log stands in.
+						// Lake: a bark-stripped log lying drowned in the silt, a dugout half sunk, the stumps of a forest a
+						// rise drowned. LATER: the logboat's hollowed form; a long black log stands in.
 						new DeadwoodSpecies { Name = "Log_Sunken", Form = DeadwoodForm.FallenLog, Length = 10f, Radius = 0.3f, BarkFamily = Bark.Dead,
 							BarkTint = H("#4a4a40"), WoodA = H("#5a5a4e"), WoodB = H("#3a3a30"), Stubs = 1 },
 						new DeadwoodSpecies { Name = "Logboat_Wreck", Form = DeadwoodForm.FallenLog, Length = 7f, Radius = 0.45f, BarkFamily = Bark.Dead,
 							BarkTint = H("#1e1a14"), WoodA = H("#2a241c"), WoodB = H("#14100c"), Stubs = 0 },
 						new DeadwoodSpecies { Name = "DrownedStump", Form = DeadwoodForm.Stump, Length = 1f, Radius = 0.5f, BarkFamily = Bark.Dead,
 							BarkTint = H("#3a3a30"), WoodA = H("#4a4a3e"), WoodB = H("#2a2a22"), Brackets = 0 },
-						// River (biome round, 2026-10-26): a whole uprooted tree stranded on a bar, silver-stripped, its root fan upstream; the
-						// tangle of a log jam; a waterlogged trunk on the run bed; a beaver's gnawed cone stump. LATER (I9b): the jam as one piece of
+						// River: a whole uprooted tree stranded on a bar, silver-stripped, its root fan upstream; the
+						// tangle of a log jam; a waterlogged trunk on the run bed; a beaver's gnawed cone stump. LATER: the jam as one piece of
 						// 5-12 logs with brash (a heaped root plate stands in).
 						new DeadwoodSpecies { Name = "Snag_Uprooted", Form = DeadwoodForm.RootPlate, Length = 3f, Radius = 0.4f, BarkFamily = Bark.Dead,
 							BarkTint = H("#a8a090"), WoodA = H("#b8b0a0"), WoodB = H("#7a7468"), Stubs = 10,

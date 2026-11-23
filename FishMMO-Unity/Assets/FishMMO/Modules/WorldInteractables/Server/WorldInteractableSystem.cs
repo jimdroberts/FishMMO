@@ -12,7 +12,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 {
 	/// <summary>
-	/// The World Interactables module's server system (2026-11-20): dialogue sessions and their persisted choices
+	/// The World Interactables module's server system: dialogue sessions and their persisted choices
 	/// (<c>WorldInteractableSystem.Dialogue.cs</c>) and taking items out of containers (<c>WorldInteractableSystem.Container.cs</c>).
 	/// Moved out of the core <see cref="InteractableSystem"/>, which keeps the interaction request itself.
 	/// </summary>

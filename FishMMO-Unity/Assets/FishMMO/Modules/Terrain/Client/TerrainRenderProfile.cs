@@ -7,7 +7,7 @@ namespace FishMMO.Client
 	/// The client's terrain look: the GPU-driven terrain objects, the ground under and around them, rock seams, the heightmap draw, moss, grass, detail scatter, cave cover and trails.
 	/// </summary>
 	/// <remarks>
-	/// Client-only; loaded with the client's static assets. The terrain's own profile (Phase 4 of the core and modules plan, 2026-11-17): these settings were part of <see cref="WeatherRenderProfile"/>, and the asset was split field for field.
+	/// Client-only; loaded with the client's static assets. The terrain's own profile: these settings were part of <see cref="WeatherRenderProfile"/>, and the asset was split field for field.
 	/// </remarks>
 	[CreateAssetMenu(fileName = "Terrain Render Profile", menuName = "FishMMO/World/Terrain Render Profile", order = 21)]
 	public class TerrainRenderProfile : CachedScriptableObject<TerrainRenderProfile>, ICachedObject
@@ -98,7 +98,7 @@ namespace FishMMO.Client
 		public TerrainHeightmapSettings TerrainHeightmap = new TerrainHeightmapSettings();
 
 		[Header("Moss (rock, cliffs, caves, stone, timber and deadwood)")]
-		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). A waterfall's spray grows it at this strength whatever the climate, on that rock and on the ground round the fall. 0 turns it off everywhere. Live (2026-10-12).")]
+		[Tooltip("How much moss the world grows, times each scene's dampness (MossClimate: the biome under the camera — swamp and forest a lot, desert, volcanic and ice next to none) and each material's own Moss amount (_FishMoss, set by the art generator). A waterfall's spray grows it at this strength whatever the climate, on that rock and on the ground round the fall. 0 turns it off everywhere. Live.")]
 		[Range(0f, 2f)] public float MossStrength = 1f;
 		[Tooltip("Metres one tile of the moss texture covers (projected in world space, so the same on every rock and wall).")]
 		[Range(0.25f, 8f)] public float MossTileMetres = 2f;

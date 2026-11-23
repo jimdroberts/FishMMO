@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// What others left in the caves and mines (2026-10-20, caves livened: "story props"): the remains of those who never came
+	/// What others left in the caves and mines (caves livened: "story props"): the remains of those who never came
 	/// out (an adventurer slumped against the rock with a rusted sword across the knees, one fallen face down reaching for a
 	/// sword dropped out of reach, a miner by his pick), carvings cut and pictures drawn on smooth walls by those who were
 	/// there long before, the snapped timbers of a drift that fell in, and a strongbox hidden in a nook.

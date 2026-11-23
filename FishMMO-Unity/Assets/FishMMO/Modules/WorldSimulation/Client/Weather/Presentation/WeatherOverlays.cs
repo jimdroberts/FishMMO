@@ -21,8 +21,7 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// The overlays modules add to the weather's presentation (<see cref="IWeatherOverlay"/>), by id (Phase 4 of the core and
-	/// modules plan, 2026-11-17). The weather names none of them.
+	/// The overlays modules add to the weather's presentation (<see cref="IWeatherOverlay"/>), by id. The weather names none of them.
 	/// </summary>
 	public static class WeatherOverlays
 	{

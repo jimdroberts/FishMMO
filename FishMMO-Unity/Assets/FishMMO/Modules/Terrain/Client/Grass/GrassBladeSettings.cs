@@ -9,7 +9,7 @@ namespace FishMMO.Client
 	/// grass"); read every frame, so changes apply while playing.
 	/// </summary>
 	/// <remarks>
-	/// <b>Engine-wide settings only (2026-10-15).</b> How each blade TYPE looks — its shape, heads, colours and how much of the
+	/// <b>Engine-wide settings only.</b> How each blade TYPE looks — its shape, heads, colours and how much of the
 	/// ground's colour it takes — is the biome's: <see cref="FishMMO.Shared.Biomes.BiomeTemplate.GrassTypes"/>, one entry per
 	/// blade prefab per biome, so one prefab can look different in two biomes. The profile's old per-prefix Types list and its
 	/// one Terrain Texture Tint for every type were removed from here (their values are BiomeGrassDefaults, which the
@@ -119,7 +119,7 @@ namespace FishMMO.Client
 
 		[Header("Terrain texture colour")]
 		// How much each blade takes of the terrain texture's colour under its root is its type's, per biome
-		// (BiomeGrassType.GroundTint; every type took 0.85 here before 2026-10-15).
+		// (BiomeGrassType.GroundTint; every type took 0.85 here formerly).
 		[Tooltip("The terrain colour's brightness on the blades: below 1 because lit, translucent blades read lighter than the soil they grow from.")]
 		[Range(0.3f, 1.5f)] public float TerrainTextureBrightness = 0.85f;
 		[Tooltip("The ground's colour outright at the very root, easing off over the root ground height.")]

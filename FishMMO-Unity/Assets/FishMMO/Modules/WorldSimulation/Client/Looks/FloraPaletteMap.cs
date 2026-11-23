@@ -259,7 +259,7 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Biomes register as their assets load, which can be after the scene's first frame: a palette built before then
-		/// resolved none of the map's biomes and drew every patch in a stand-in look (2026-10-15, "[Flora] 0 biome(s) … grid
+		/// resolved none of the map's biomes and drew every patch in a stand-in look ("[Flora] 0 biome(s) … grid
 		/// 200×266"). A change in the registry rebuilds it.
 		/// </summary>
 		private static void OnBiomesChanged() => dirty = true;
@@ -419,12 +419,12 @@ namespace FishMMO.Client
 			paletteTexture.SetPixels(pixels);
 			paletteTexture.Apply(false, false);
 			BuildCoats(world.Atmosphere, w, h);
-			// How the cold glows move, biome by biome (2026-10-25, I6i): the same rows and grid.
+			// How the cold glows move, biome by biome: the same rows and grid.
 			GlowModeTable.Build(rowBiomes, indices, w, h, rect, body != null && body.CloudWorldStructures != null ? body.CloudWorldStructures.GlowModes : null);
 			GlowModeTable.Place(settings);
-			// How the biomes burn on the shared clock (2026-10-25, I2t): the same rows.
+			// How the biomes burn on the shared clock: the same rows.
 			BurnMosaicTable.Build(rowBiomes, settings);
-			// Which ground layers glow, and the world's heat (2026-10-25, I2r): the same rows.
+			// Which ground layers glow, and the world's heat: the same rows.
 			GroundGlowTable.Build(rowBiomes, system, body);
 
 			gridIndices = indices;
@@ -445,7 +445,7 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
-		/// The coat table (2026-10-25, FishStructureCoat.hlsl): per palette row the coat its biome's weathering lays over buildings
+		/// The coat table (FishStructureCoat.hlsl): per palette row the coat its biome's weathering lays over buildings
 		/// (<see cref="BiomeStructureCoats.Texels"/>, the parts that need air dropped on this world), <see cref="BiomeStructureCoats.TexelsPerBiome"/>
 		/// texels a row. <c>_FishCoatInfo</c> = (on, rows, grid w, grid h); on only when some biome here has a coat, so a scene whose biomes
 		/// name none draws every building as before. Follows the build, not <see cref="Enabled"/> (the looks' A/B): a coat is weathering.

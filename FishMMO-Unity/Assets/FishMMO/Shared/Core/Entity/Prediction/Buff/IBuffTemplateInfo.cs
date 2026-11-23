@@ -3,7 +3,7 @@ using UnityEngine;
 namespace FishMMO.Shared.Core
 {
 	/// <summary>
-	/// What the core reads of a buff template (2026-11-20: buff templates are the Buffs module's): its identity, how long
+	/// What the core reads of a buff template (buff templates are the Buffs module's): its identity, how long
 	/// it lasts, whether it is a debuff, whether a player may dismiss it, whether it is permanent (the environment's), and
 	/// its icon. The target frame's strip, weather exposure and the evade rule read buffs through it.
 	/// </summary>

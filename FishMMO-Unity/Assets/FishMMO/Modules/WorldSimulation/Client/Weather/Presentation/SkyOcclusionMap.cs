@@ -101,8 +101,8 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// Tells the shaders where the open water is: x its still level, y 1 when there is any, z the
-		/// significant height of its waves, w how fast the sea dims the daylight with depth per metre (FishSeaDaylight; 0 none,
-		/// 2026-10-25). Every frame, because the tide never stops.
+		/// significant height of its waves, w how fast the sea dims the daylight with depth per metre (FishSeaDaylight; 0 none).
+		/// Every frame, because the tide never stops.
 		/// </summary>
 		public static void BindWater()
 		{

@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The landmarks on a settlement's streets (2026-10-19): a city's cathedral, 22 m across and 39 m deep, found no frontage deep
+	/// The landmarks on a settlement's streets: a city's cathedral, 22 m across and 39 m deep, found no frontage deep
 	/// enough behind a radial city's square in small and medium cities, and so was never laid there; a landmark deeper than any
 	/// frontage leaves it is now tried turned a quarter, its long side to the street, when it found no place square to one.
 	/// </summary>

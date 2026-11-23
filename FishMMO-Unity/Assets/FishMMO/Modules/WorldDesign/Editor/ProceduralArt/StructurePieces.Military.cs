@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"): the garrison's barracks,
+	/// The town's other buildings ("more structure types for towns, villages, and cities"): the garrison's barracks,
 	/// archery range and training yard, and their furniture.
 	/// </summary>
 	/// <remarks>
@@ -133,7 +133,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The watch's house by a gate (2026-10-19): one guard room (StructureRoomKind.Guard) where the men on the gate keep
+		/// The watch's house by a gate: one guard room (StructureRoomKind.Guard) where the men on the gate keep
 		/// warm, rack their arms and sleep in turn; its lantern lit all night and, on the stone house, a brazier at the door.
 		/// </summary>
 		private static void GuardHouse(StructureDraft d)
@@ -271,7 +271,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Archery range ─────────────────────────────────────────────
 
 		/// <summary>
-		/// The butts (2026-10-19): the shooting line at the front, the bosses 22 m on, the open ground between them clear of every
+		/// The butts: the shooting line at the front, the bosses 22 m on, the open ground between them clear of every
 		/// solid. A medieval range was a pair of earthen butts with the marks pinned before them; here the bosses stand before a
 		/// turf bank (v0) or hang on a frame before a plank backstop (v1) that stops what misses.
 		/// </summary>
@@ -512,7 +512,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Training yard ─────────────────────────────────────────────
 
 		/// <summary>
-		/// The garrison's practice yard (2026-10-19): sand over the ground so a man thrown lands soft and the footing does not cut
+		/// The garrison's practice yard: sand over the ground so a man thrown lands soft and the footing does not cut
 		/// up, a low fence round it with the way in at the front. v0 drills on foot: pells hacked by sword practice (a post a man's
 		/// height a recruit learned his cuts on), straw men on crossed poles, a rack of shields. v1 drills the horse: a quintain in
 		/// the middle, its arm turning on its post when the lance strikes the shield, the sandbag coming round at the rider's back.

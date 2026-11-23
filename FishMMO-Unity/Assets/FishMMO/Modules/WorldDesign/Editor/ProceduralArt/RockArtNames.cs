@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// Granite wears <c>Rock_Grey</c>, and Sandstone, Basalt and Limestone their own names. A shape may
 	/// wear another surface (<see cref="FormationShape.Dress"/>) and carry a second body in another
 	/// (<see cref="FormationShape.Cap"/>): <see cref="FormationMaterials"/>. The mineral, ice and alien
-	/// types (2026-10-10: Halite, Gypsum, Sulphur, Sinter, Scoria, Breccia, Anorthosite, Sulphide, Pyrite,
+	/// types (Halite, Gypsum, Sulphur, Sinter, Scoria, Breccia, Anorthosite, Sulphide, Pyrite,
 	/// DarkLag, Termitaria, Firn, WaterIce) are named the same way; none is called Ice, Nodule or Coral,
 	/// whose <c>Rock_</c> names belong to small-rock materials.
 	/// </para>
@@ -39,7 +39,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Rock formations ───────────────────────────────────────────
 
 		/// <summary>
-		/// A formation's prefab. The variant wraps round the rock's own count (<see cref="RockVariantCounts.Of"/>, 2026-10-26):
+		/// A formation's prefab. The variant wraps round the rock's own count (<see cref="RockVariantCounts.Of"/>):
 		/// a caller drawing in 0..<see cref="RockTypes.VariantCount"/>−1 (a cave's dressing) always names one the generator makes.
 		/// </summary>
 		public static string FormationPrefab(string type, string shape, int variant) => $"Formation_{type}_{shape}_{RockVariantCounts.Wrap(type, variant)}";
@@ -97,7 +97,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Newer small-rock materials that wear a rock type's surface: the ice cobbles (<see cref="ProceduralArtCatalogue.IceRockMaterials"/>)
 		/// are water ice, the same stone as the ice formations, rather than the Ice ground family's sheet ice. Flint
-		/// (2026-10-16) wears obsidian's dark glassy surface, the nearest there is to a broken flint's; river cobbles
+		/// wears obsidian's dark glassy surface, the nearest there is to a broken flint's; river cobbles
 		/// quartzite's, the hardest and commonest cobble of a river's gravel. Each keeps a material of its own, so either can
 		/// take a surface of its own later without touching the rock it borrows from.
 		/// </summary>
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 					return type;
 				}
 			}
-			// The biome suite's named stone sets (2026-10-26, StoneStyles.Named.cs), each over its rock's surface.
+			// The biome suite's named stone sets (StoneStyles.Named.cs), each over its rock's surface.
 			string named = StoneStyles.NamedStoneSurface(legacyMaterial);
 			if (named != null)
 			{

@@ -1533,7 +1533,7 @@ namespace FishMMO.TestHarness.World.Editor
 			var pipeline = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
 			if (variant == "before-frames")
 			{
-				// The look before 2026-10-09's frame changes: native resolution, MSAA 4x, no STP, the clouds marched in full to 20 km.
+				// The look formerly's frame changes: native resolution, MSAA 4x, no STP, the clouds marched in full to 20 km.
 				var asset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
 				float scaleWas = asset.renderScale;
 				UpscalingFilterSelection filterWas = asset.upscalingFilter;
@@ -1570,7 +1570,7 @@ namespace FishMMO.TestHarness.World.Editor
 				case "grassflat":
 				case "grassold":
 				{
-					// The grass as it was: "grassflat" without the top-down lay-over and edge-on thickening (2026-10-07),
+					// The grass as it was: "grassflat" without the top-down lay-over and edge-on thickening,
 					// "grassold" also with the old rings and metre-only widening.
 					GrassBladeSettings g = TerrainRenderProfile.Active != null ? TerrainRenderProfile.Active.Grass : null;
 					if (g == null)
@@ -1926,7 +1926,7 @@ namespace FishMMO.TestHarness.World.Editor
 				}
 				case "waterblocks":
 				{
-					// The inland water as it was drawn before its surfaces had copies of their own (2026-10-28): each lake, river,
+					// The inland water as it was drawn before its surfaces had copies of their own: each lake, river,
 					// curtain and spray back on its shared material with its numbers on a property block (outside the SRP Batcher).
 					var put = new List<(MeshRenderer Renderer, Material Copy)>();
 					foreach (InlandWaterRenderer inland in UnityEngine.Object.FindObjectsByType<InlandWaterRenderer>(FindObjectsInactive.Exclude))
@@ -2190,7 +2190,7 @@ namespace FishMMO.TestHarness.World.Editor
 		/// saved): res=× (march resolution), steps=× (march steps), light=n (light-march steps), lightmarch=0,
 		/// maxdist=metres, stepscale=×, detail=0…1 (the tier's), growth=0 (no distance step growth), exit=0.001…0.5,
 		/// clip=γ (history clip), historyclip=0, blur=pixels, maxod=τ (max step optical depth), lightphase=0 stratified / 1 fixed.
-		/// legacy=1 (the march as before the 2026-10-13 cuts: pixel cone, probe field reuse, far-depth skip all off),
+		/// legacy=1 (the march as before the cuts: pixel cone, probe field reuse, far-depth skip all off),
 		/// oldcadence=1 (imposter rows, light volume bands and cloud-shadow redraws per frame, as before).
 		/// </summary>
 		private static Action Cloud(string setting)

@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The later drafts' channel forms (2026-10-26, phase I2f-b) on the I2f channel machinery: a bisse's bracketed flumes and its
+	/// The later drafts' channel forms on the channel machinery: a bisse's bracketed flumes and its
 	/// water-hammer, a roggia laid on the land's grid with its partition, the scene's one great canal off a river weir with its
 	/// laterals, a qanat gallery carried underground from a scarp's foot.
 	/// </summary>
@@ -25,7 +25,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// settlement naming it whose fields' head lies within <see cref="LateralMetres"/> of it and below its water.
 	/// </para>
 	/// <para>
-	/// <b>Qanat gallery (decision 67).</b> Its head the nearest scarp foot (ground at least <see cref="GalleryRiseMetres"/> over the
+	/// <b>Qanat gallery.</b> Its head the nearest scarp foot (ground at least <see cref="GalleryRiseMetres"/> over the
 	/// fields' head, steeper there than <see cref="ScarpDegrees"/>; else the nearest such rise) within reach (2 km); carried from there
 	/// underground (no trench) on the shortest way round water, keep-outs and other fields, a shaft mouth every 15–20 m over it (a
 	/// windlass on every fourth); daylighting <see cref="DaylightMetres"/> before the fields' head at an arched gallery mouth set in a
@@ -53,7 +53,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── Pure ──────────────────────────────────────────────────────
 
 		/// <summary>
-		/// The lattice a channel's route is found on, metres (pure): the I2f forms' 4 m always; the later forms' 4 m too, coarser where the
+		/// The lattice a channel's route is found on, metres (pure): the forms' 4 m always; the later forms' 4 m too, coarser where the
 		/// route's box would pass the lattice's limit (a bisse's or a canal's kilometres).
 		/// </summary>
 		public static float RouteCell(BiomeLinearForm form, Vector2 from, Vector2 to)
@@ -549,7 +549,7 @@ namespace FishMMO.Shared.WorldDesign
 		// ── The scene: the qanat gallery ──────────────────────────────
 
 		/// <summary>
-		/// A settlement's qanat (decision 67): its head at a scarp's foot, its gallery carried underground with a shaft mouth every
+		/// A settlement's qanat: its head at a scarp's foot, its gallery carried underground with a shaft mouth every
 		/// 15–20 m, daylighting at its gallery mouth into a lined channel the last <see cref="DaylightMetres"/> to the fields. Returns the
 		/// props laid; at most four a scene.
 		/// </summary>

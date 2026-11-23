@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The water channels the last placing of a scene's sites carried (2026-10-18, phase I2j-b, decision 38): each channel's line,
+	/// The water channels the last placing of a scene's sites carried: each channel's line,
 	/// its half width and the biome it was laid in, so the next repaint can paint that biome's wet margin along it (the channels are
 	/// laid after the ground is painted, so a cut or repaint cannot paint along the channels it is about to lay).
 	/// </summary>

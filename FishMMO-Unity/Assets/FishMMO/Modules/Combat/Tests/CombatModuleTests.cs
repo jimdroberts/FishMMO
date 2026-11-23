@@ -12,7 +12,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Combat module (2026-11-20): every character's damage controller is a part (no prefab authors one), players take
+	/// The Combat module: every character's damage controller is a part (no prefab authors one), players take
 	/// their combat triggers from the module's asset, the scene server adopts the combat system by label and the character
 	/// system no longer handles a death itself, and the client's death dialog and combat text are the module's.
 	/// </summary>

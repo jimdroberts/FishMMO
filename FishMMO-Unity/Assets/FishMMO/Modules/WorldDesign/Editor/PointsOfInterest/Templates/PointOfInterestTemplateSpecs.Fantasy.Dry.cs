@@ -18,7 +18,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static readonly string[] DryDesert = { "Desert", "High Desert", "Oasis" };
 		private static readonly string[] DryHigh = { "Alpine", "Mountain Slope", "Scree", "Rocky Terrain", "Hills", "Alpine Meadow" };
 
-		/// <summary>The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the templates of the Dry pack's kinds (30; the three carved kinds are the Shapes agent's).</summary>
+		/// <summary>The fantasy set: the templates of the Dry pack's kinds (30; the three carved kinds are the Shapes agent's).</summary>
 		private static void FantasyDry(List<PointOfInterestTemplateSpec> a)
 		{
 			// ── Pack G: open lands ───────────────────────────────────

@@ -4,7 +4,7 @@ using FishMMO.Shared.Biomes;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// The burn mosaic (2026-10-25, phase I2t, decisions 75, 82 and 84): where and when a biome's ground burns, a pure function of the
+	/// The burn mosaic: where and when a biome's ground burns, a pure function of the
 	/// shared world clock, the world's season and the scene, so every player sees the same fire line cross the same hill at the same
 	/// moment and a late joiner finds the same black ground. The C# twin of FishBurn.hlsl, constant for constant: the client draws it
 	/// on the GPU (the terrain's burnt-veld tint and flame line, the blade grass cut to stubble, the green flush, the fire lilies);

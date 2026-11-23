@@ -14,7 +14,7 @@ namespace FishMMO.Client
 	/// Unity refuses a dispatch with a zero (or negative) group count and logs "Thread group size must be above zero" for it,
 	/// every time. A grid worked out as (count + 63) / 64 is empty whenever the count is: nothing to do, which skipping does
 	/// exactly. The message names nothing (a web player's console shows no managed stack), and a player on Firefox had it
-	/// repeat without end (2026-11-11), so the first skip from each call site is reported once, by file and line, with the
+	/// repeat without end, so the first skip from each call site is reported once, by file and line, with the
 	/// counts it was given: what makes it empty there can then be looked at.
 	/// </remarks>
 	public static class GpuDispatch

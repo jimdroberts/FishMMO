@@ -9,8 +9,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.Weather
 {
 	/// <summary>
-	/// A cave's low glow air and the glow patches by it, as the dressing places them (split from AmbientGlowLifeTests,
-	/// Phase 4, 2026-11-18).
+	/// A cave's low glow air and the glow patches by it, as the dressing places them (split from AmbientGlowLifeTests).
 	/// </summary>
 	[TestFixture]
 	public class CaveGlowAirTests

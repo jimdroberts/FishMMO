@@ -72,7 +72,7 @@ namespace FishMMO.Shared.Biomes
 		/// season when <see cref="ClimateSample.SeasonKnown"/>.
 		/// </summary>
 		/// <remarks>
-		/// <b>The summer is part of the envelope (2026-10-10).</b> The yearly temperature alone cannot
+		/// <b>The summer is part of the envelope.</b> The yearly temperature alone cannot
 		/// tell an ice cap from a taiga: a scene at 72° south on Arthis read −15 °C, inside Peat Bog's
 		/// and Taiga's envelopes, and was painted a bog with trees beside its own sea ice, under a
 		/// summer of −6 °C that thaws nothing. A biome whose warmest-season range the sample falls
@@ -122,7 +122,7 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		/// <remarks>
 		/// <para>
-		/// <b>Any-elevation biomes compete in every tier (2026-10-02).</b> They used to be offered
+		/// <b>Any-elevation biomes compete in every tier.</b> They used to be offered
 		/// only in pass 1, so on a world with a biome for every tier they could never win however
 		/// well they fit — Io, the most tidally flexed body there is, drew tidal fractures only on
 		/// the 2% of its ground no other biome claimed — and on a world without one they won the

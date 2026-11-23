@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The straight-road way class (2026-10-26, phase I2l-b; decisions 50, 56, 87, 89): which trunk ways are laid dead-straight, to which
+	/// The straight-road way class: which trunk ways are laid dead-straight, to which
 	/// profile, and whether a straight line between two ends can hold its grade. Pure: the planner (<see cref="PathNetworkPlanner"/>)
 	/// asks it, the carve (<see cref="PathCarver"/>) builds what it decided.
 	/// </summary>
@@ -29,7 +29,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// </remarks>
 	public static class PathStraightRoads
 	{
-		/// <summary>The most cut roads (vie cave) one scene's network sinks (decision 87).</summary>
+		/// <summary>The most cut roads (vie cave) one scene's network sinks.</summary>
 		public const int MaxCutWays = 2;
 
 		/// <summary>The longest flight of stairs a straight road climbs a cliff by, metres along it.</summary>

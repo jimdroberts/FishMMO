@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8218f9b645c38b742a5d094500a7c0bc, type: 3}
+  m_Name: Stablemaster
+  m_EditorClassIdentifier: FishMMO.Commerce::FishMMO.Shared.MerchantTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Saddles for every mount, the knack of riding them, and a trick for unseating someone else.
+  Abilities: []
+  AbilityEvents:
+  - {fileID: 11400000, guid: 6dc4effdddc13000fbc95bc0743a0392, type: 2}
+  Items:
+  - {fileID: 11400000, guid: ba5af9f0f153f8b9a950e8aed207bd1f, type: 2}
+  - {fileID: 11400000, guid: 2be55f6fa958fb9369f3a077918fe8ef, type: 2}
+  - {fileID: 11400000, guid: 27627d61d9695fba499af4daf1e80b02, type: 2}
+  - {fileID: 11400000, guid: 653fc6bad131e9110b4aa66bdafb3b8b, type: 2}
+  - {fileID: 11400000, guid: 6e7944b10e5580c63aa224d95a13b72d, type: 2}
+  PremadeAbilities:
+  - {fileID: 11400000, guid: fb3ab9dad2b474a3288ce930db0095a8, type: 2}
+  BuysItems: 1
+  SellPriceMultiplier: 0.25

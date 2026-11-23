@@ -793,7 +793,7 @@ void wt_stream_manager_shutdown(wt_stream_manager_t* mgr)
     if (!mgr) return;
 
     /*
-     * SAFE_SHUTDOWN_V2 (2026-07-25):
+     * SAFE_SHUTDOWN_V2:
      *
      * Production crash (LoginServer rc=134 / SIGABRT):
      *   PEER H3_FRAME_UNEXPECTED → connection SHUTDOWN_COMPLETE →

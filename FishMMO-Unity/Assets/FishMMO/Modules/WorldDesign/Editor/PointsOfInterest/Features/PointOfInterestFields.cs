@@ -9,14 +9,14 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The farmland round a settlement (2026-10-11): fields of wheat, ploughed plots and fenced pasture on the gentle,
+	/// The farmland round a settlement: fields of wheat, ploughed plots and fenced pasture on the gentle,
 	/// dry ground outside it, clear of its ways, the water and every other site.
 	/// </summary>
 	/// <remarks>
 	/// <para>
 	/// <b>Crops are grown, not placed.</b> A field's ground has its other details cleared and its crop's detail painted in,
 	/// edge to edge but a headland at its rim, so the procedural grass draws the crop with the same wind, light and season as
-	/// the meadow beside it. The crop is one of its biome's (BiomeTemplate.FieldCrops, 2026-10-16), drawn by the site and the
+	/// the meadow beside it. The crop is one of its biome's (BiomeTemplate.FieldCrops), drawn by the site and the
 	/// field when the biome grows more than one; until then every field grew wheat (Detail_GrassWheat, the grass blades'
 	/// hand-masked crop), which the authoring writes as every biome's. A ploughed plot is cleared and laid as bare yard earth
 	/// (the path overlay's tilled soil); pasture keeps its grass and is only fenced.
@@ -26,11 +26,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// An abandoned farm's fields are fallow (their grass let back in) and its fences broken.
 	/// </para>
 	/// <para>
-	/// <b>Ridge and furrow is carved</b> (2026-10-18): its broad ridges raised into the terrain (<see cref="CarveRaise"/>,
+	/// <b>Ridge and furrow is carved</b>: its broad ridges raised into the terrain (<see cref="CarveRaise"/>,
 	/// PointOfInterestFieldCarve), its furrows painted; lazy beds are painted only.
 	/// </para>
 	/// <para>
-	/// <b>Never over another site's fields</b> (2026-10-18): the fields a site laid claim their ground (PointOfInterestFieldClaims),
+	/// <b>Never over another site's fields</b>: the fields a site laid claim their ground (PointOfInterestFieldClaims),
 	/// and a later site's field that would lie over one is shrunk about its middle or left out, deterministically, nothing else moved.
 	/// </para>
 	/// <para>Seeded by the site: a re-cut lays the same fields.</para>
@@ -55,13 +55,13 @@ namespace FishMMO.Shared.WorldDesign
 			public float Yaw;
 			public Vector2 Size;
 			public FieldKind Kind;
-			/// <summary>Its crop is laid on terraces (2026-10-18, I2j-b): it may stand on a slope a flat field may not.</summary>
+			/// <summary>Its crop is laid on terraces: it may stand on a slope a flat field may not.</summary>
 			public bool Terraced;
-			/// <summary>As laid (2026-10-18, I2j-b): its benches (null for an untouched field), the metres between its crop's rows (0 edge to edge), and whether its crop is a plant drawn by the detail scatter (not blades).</summary>
+			/// <summary>As laid: its benches (null for an untouched field), the metres between its crop's rows (0 edge to edge), and whether its crop is a plant drawn by the detail scatter (not blades).</summary>
 			public PointOfInterestFieldTerraces.Plan Terraces;
 			public float Rows;
 			public bool Mesh;
-			/// <summary>The share of its crop's coverage it is painted at (2026-10-19: a reaped field's stubble, PointOfInterestFarmsteads); 0 the whole crop.</summary>
+			/// <summary>The share of its crop's coverage it is painted at (a reaped field's stubble, PointOfInterestFarmsteads); 0 the whole crop.</summary>
 			public float Cover;
 		}
 
@@ -108,7 +108,7 @@ namespace FishMMO.Shared.WorldDesign
 			var ways = context.Points != null && context.Points.Paths != null ? new PathExclusion(context.Points.Paths) : null;
 			var site = new Vector2(record.Position.x, record.Position.z);
 			BiomeTemplate siteBiome = context.BiomeAt != null ? context.BiomeAt(site.x, site.y) : null;
-			/* A biome authored to sow nothing (decision 25, 2026-10-25: its Field Crops written empty, or every crop weighed 0, and no
+			/* A biome authored to sow nothing (its Field Crops written empty, or every crop weighed 0, and no
 			 * orchard) lays no fields at all: no plots, pasture, fences or farmsteads. Only its old terraces, a channel of their own on
 			 * draws of their own. A template never authored with crops still grows wheat (BiomeTemplateArt.FieldCrops). */
 			if (BiomeTemplateArt.SowsNothing(siteBiome))
@@ -120,7 +120,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 			var fields = new List<Field>();
-			/* How the site's biome lays its fields out (2026-10-18, I2j-b): kept to the bottomland near its rivers and lakes, set
+			/* How the site's biome lays its fields out: kept to the bottomland near its rivers and lakes, set
 			 * square to a centuriation grid. Neither (every biome until a round names them): fields are drawn as they always were. */
 			BiomeFieldLayout layout = BiomeTemplateArt.FieldLayout(siteBiome);
 			int sceneSeed = layout.Centuriation > 0f && context.Request != null ? unchecked((int)SceneGenerator.SceneSeed(context.Request)) : 0;
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (fields.Count == 0)
 			{
-				// Steep country where no field fits may still have its old terraces (2026-10-18, I2j-b).
+				// Steep country where no field fits may still have its old terraces.
 				int none = 0, alone = 0;
 				int lone = PointOfInterestFieldKinds.LayAbandonedTerraces(context, ways, ref none, ref alone);
 				if (lone > 0)
@@ -167,7 +167,7 @@ namespace FishMMO.Shared.WorldDesign
 				return;
 			}
 
-			/* Off every other site's fields (2026-10-18, I2k, PointOfInterestFieldClaims): a field that would lie over one is shrunk
+			/* Off every other site's fields (PointOfInterestFieldClaims): a field that would lie over one is shrunk
 			 * about its middle until it clears, inside the ground already found fit, or left out. Tested after every field was drawn,
 			 * as they always were, so this site's other fields lie where they did; the fences' draws are kept in step below. */
 			var laid = new Field?[fields.Count];
@@ -180,7 +180,7 @@ namespace FishMMO.Shared.WorldDesign
 					left++;
 					continue;
 				}
-				// A garden of raised beds is laid at a garden's size about its middle (2026-10-18, I2j-b).
+				// A garden of raised beds is laid at a garden's size about its middle.
 				Vector2 claimed = fitted;
 				fitted = GardenSize(context, drawn, f, fitted);
 				Field field = drawn;
@@ -197,7 +197,7 @@ namespace FishMMO.Shared.WorldDesign
 
 			List<Terrain> terrains = TerrainsOf(context);
 			int crops = 0, carved = 0, paddies = 0, terraced = 0, orchards = 0, pieces = 0;
-			// Every field as laid, for the farmsteads and the dressing laid after them all (2026-10-19, PointOfInterestFarmsteads).
+			// Every field as laid, for the farmsteads and the dressing laid after them all (PointOfInterestFarmsteads).
 			var laidFields = new List<PointOfInterestFarmsteads.LaidField>();
 			for (int f = 0; f < fields.Count; f++)
 			{
@@ -217,18 +217,18 @@ namespace FishMMO.Shared.WorldDesign
 				bool drawnFenced = !same && !WouldFlood(context, drawn, f);
 				bool flooded = false;
 				bool benched = false;
-				// What it is used for, for the farmsteads and the dressing (2026-10-19): a grain crop is found below as it is sown.
+				// What it is used for, for the farmsteads and the dressing: a grain crop is found below as it is sown.
 				PointOfInterestFarmsteads.FieldUse use = field.Kind == FieldKind.Pasture ? PointOfInterestFarmsteads.FieldUse.Pasture
 					: field.Kind == FieldKind.Fallow ? PointOfInterestFarmsteads.FieldUse.Fallow
 					: field.Kind == FieldKind.Ploughed ? PointOfInterestFarmsteads.FieldUse.Ploughed : PointOfInterestFarmsteads.FieldUse.Crop;
 				bool reaped = false, inOrchard = false;
-				// Whether its details were laid as its crop's (below); else it is kept as turf (2026-10-27, PointOfInterestEnclosureClearance).
+				// Whether its details were laid as its crop's (below); else it is kept as turf (PointOfInterestEnclosureClearance).
 				bool painted = false;
 				if (field.Kind == FieldKind.Wheat || field.Kind == FieldKind.Ploughed)
 				{
-					// The crop is one of the biome's its field lies in, and takes that biome's look (2026-10-16).
+					// The crop is one of the biome's its field lies in, and takes that biome's look.
 					CropOf(context, field, f, out BiomeTemplate biome, out GameObject crop, out BiomeFieldSurface surface, out BiomeFieldCrop picked, out BiomeOrchard? orchard);
-					/* Terraces (2026-10-18, I2j-b): benches stepped into the slope along its contours, carved from the restored ground as
+					/* Terraces: benches stepped into the slope along its contours, carved from the restored ground as
 					 * ridge and furrow is; a terraced paddy's every bench dug, bunded and flooded. Laid flat where the ground is too gentle
 					 * to step (a paddy then as a paddy). Its steps faced in its biome's wall style or left as turfed banks. */
 					BiomeTerraceRiser riser = BiomeTerraces.RiserOf(surface, picked.Riser);
@@ -256,14 +256,14 @@ namespace FishMMO.Shared.WorldDesign
 							surface = BiomeTerraces.TreadSurface(surface);
 						}
 					}
-					/* Ridge and furrow is in the ground too (2026-10-18): carved from the ground as it lay before any field was,
+					/* Ridge and furrow is in the ground too: carved from the ground as it lay before any field was,
 					 * which the repaint and Regenerate POIs put back first (PointOfInterestFieldCarve), so it is the same on every
 					 * run. Before the crop, the furrows and the fence are laid, so each stands on the ground as carved. */
 					if (BiomeFieldSurfaces.Carved(surface))
 					{
 						carved += PointOfInterestFieldCarve.Carve(context, field.Centre, field.Yaw, field.Size, surface);
 					}
-					/* A paddy (2026-10-18, I2i): dug level and bunded from the same restored ground, then flooded with a lake of the
+					/* A paddy: dug level and bunded from the same restored ground, then flooded with a lake of the
 					 * scene's (PointOfInterestPaddies); sown flat where the ground would need too deep a cut or fill. */
 					if (BiomeFieldSurfaces.Flooded(surface))
 					{
@@ -274,15 +274,15 @@ namespace FishMMO.Shared.WorldDesign
 						}
 						paddies += flooded ? 1 : 0;
 					}
-					/* An orchard (2026-10-18, I2j-b): its understorey sown edge to edge (none: the meadow left as it grows), its trees in
-					 * rows; a non-grass crop drawn by the detail scatter, in rows where its entry sows it so (2026-10-18, I2j-b). */
+					/* An orchard: its understorey sown edge to edge (none: the meadow left as it grows), its trees in
+					 * rows; a non-grass crop drawn by the detail scatter, in rows where its entry sows it so. */
 					if (orchard.HasValue)
 					{
 						crop = orchard.Value.Understorey;
 					}
 					field.Rows = orchard.HasValue ? 0f : picked.Rows;
 					field.Mesh = crop != null && !BiomeGrassDefaults.IsBlade(crop.name);
-					/* A grain crop the blades draw is reaped in some fields (2026-10-19: "fenced areas but they aren't really farm land"):
+					/* A grain crop the blades draw is reaped in some fields ("fenced areas but they aren't really farm land"):
 					 * painted as its stubble, a share of the crop, and stood in stooks after every field (PointOfInterestFarmsteads.Dress),
 					 * by a hash of its own, so nothing else changes. */
 					if (field.Kind == FieldKind.Wheat && crop != null && !field.Mesh && !orchard.HasValue && !flooded && !benched)
@@ -321,23 +321,23 @@ namespace FishMMO.Shared.WorldDesign
 				// A paddy's bund is its bound: no fence round it.
 				if (!flooded && benched)
 				{
-					// Its steps are its bounds (2026-10-18, I2j-b): no edge style, the kit fence's draws still made (dry), as a lined field's.
+					// Its steps are its bounds: no edge style, the kit fence's draws still made (dry), as a lined field's.
 					Fence(context, field, site, abandoned, same ? context.Random : new DeterministicRNG(unchecked((int)PointOfInterestPlanner.Hash(record.SiteSeed, 0x46454E, f, 0))), dry: true);
 				}
 				else if (!flooded)
 				{
-					/* Bounded in its biome's field-edge style (2026-10-18, I2f: a hedge, a wall, a row of trees…, PointOfInterestLinearFeatures)
+					/* Bounded in its biome's field-edge style (a hedge, a wall, a row of trees…, PointOfInterestLinearFeatures)
 					 * where it names one the field's draw admits, on draws of its own; the kit's fence's draws are still made (dry), so
 					 * every later field's fence lies as it did. */
 					bool lined = PointOfInterestLinearFeatures.LayFieldEdges(context, field.Centre, field.Yaw, field.Size, site, abandoned, f);
 					Fence(context, field, site, abandoned, same ? context.Random : new DeterministicRNG(unchecked((int)PointOfInterestPlanner.Hash(record.SiteSeed, 0x46454E, f, 0))), dry: lined);
 				}
 				laidFields.Add(new PointOfInterestFarmsteads.LaidField { Centre = field.Centre, Yaw = field.Yaw, Size = field.Size, Use = use, Reaped = reaped, Index = f, Orchard = inOrchard });
-				/* Its ground cleared of the scatter's trees, bushes and boulders once every site is built (2026-10-27: "Trees, bushes, and
+				/* Its ground cleared of the scatter's trees, bushes and boulders once every site is built ("Trees, bushes, and
 				 * other details spawn inside it"), a pasture's, a fallow's or an unsown orchard's wild details with them, its grass kept. */
 				context.FieldClaims?.Enclose(field.Centre, field.Yaw, field.Size, turf: !painted);
 			}
-			/* The old terraces round a hamlet (2026-10-18, I2j-b): flights of benches on the slopes about it, carved as a terraced field's,
+			/* The old terraces round a hamlet: flights of benches on the slopes about it, carved as a terraced field's,
 			 * nothing sown, their walls tumbled; on draws of their own after every field, so the fields lie as before. */
 			int flights = PointOfInterestFieldKinds.LayAbandonedTerraces(context, ways, ref carved, ref pieces);
 			int kept = fields.Count - left;
@@ -349,7 +349,7 @@ namespace FishMMO.Shared.WorldDesign
 				(pieces > 0 ? $", {pieces} wall, tree and edging piece(s)" : string.Empty) +
 				(left + shrunk > 0 ? $", {shrunk} shrunk and {left} left out off another site's fields" : string.Empty) +
 				(carved > 0 ? $", ridge and furrow, terraces or paddy bunds carved into {carved:N0} heightmap sample(s)." : "."));
-			/* Worked farmland (2026-10-19, PointOfInterestFarmsteads): stooks on the reaped corn, ricks, scarecrows and troughs, then the
+			/* Worked farmland (PointOfInterestFarmsteads): stooks on the reaped corn, ricks, scarecrows and troughs, then the
 			 * farmsteads beside the fields, each on draws of its own after everything above, so the fields, fences and terraces lie as
 			 * they did; then the outskirts' lone holdings, wayside crosses, gallows and cemetery (PointOfInterestOutskirts), after those. */
 			PointOfInterestFarmsteads.Dress(context, laidFields, abandoned);
@@ -358,14 +358,14 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The crop a sown field grows and how it lies: one of the biome its middle lies in (with that biome's look, 2026-10-16), drawn
+		/// The crop a sown field grows and how it lies: one of the biome its middle lies in (with that biome's look), drawn
 		/// by the site and the field's index; none for a ploughed plot or a biome growing none, when it lies flat.
 		/// </summary>
 		private static void CropOf(PointOfInterestSiteContext context, Field field, int index, out BiomeTemplate biome, out GameObject crop, out BiomeFieldSurface surface)
 			=> CropOf(context, field, index, out biome, out crop, out surface, out _, out _);
 
 		/// <summary>
-		/// The crop (or orchard, 2026-10-18, I2j-b) a sown field grows, with its whole entry: the biome's orchards are drawn in the same
+		/// The crop (or orchard) a sown field grows, with its whole entry: the biome's orchards are drawn in the same
 		/// draw as its crops, after them (<see cref="BiomeOrchards.AsCrop"/>), so a biome planting none draws exactly as before. For an
 		/// orchard <paramref name="crop"/> is its tree and <paramref name="orchard"/> the orchard.
 		/// </summary>
@@ -376,7 +376,7 @@ namespace FishMMO.Shared.WorldDesign
 			crop = null;
 			picked = default;
 			orchard = null;
-			// How the crop's fields lie (2026-10-16): flat as every field was, or in lazy beds or ridge and furrow.
+			// How the crop's fields lie: flat as every field was, or in lazy beds or ridge and furrow.
 			surface = BiomeFieldSurface.Flat;
 			if (field.Kind == FieldKind.Wheat)
 			{
@@ -398,7 +398,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/// <summary>True when a field as drawn would be laid on terraces (2026-10-18, I2j-b): its crop's riser, at the field's index when drawn.</summary>
+		/// <summary>True when a field as drawn would be laid on terraces: its crop's riser, at the field's index when drawn.</summary>
 		private static bool TerracedAt(PointOfInterestSiteContext context, Field field, int index)
 		{
 			if (field.Kind != FieldKind.Wheat)
@@ -409,7 +409,7 @@ namespace FishMMO.Shared.WorldDesign
 			return BiomeTerraces.RiserOf(surface, picked.Riser) != BiomeTerraceRiser.None;
 		}
 
-		/// <summary>A garden of raised beds' size (2026-10-18, I2j-b): no larger than <see cref="BiomeFieldSurfaces.RaisedBedGarden"/>, its long side along the field's; any other field's as fitted.</summary>
+		/// <summary>A garden of raised beds' size: no larger than <see cref="BiomeFieldSurfaces.RaisedBedGarden"/>, its long side along the field's; any other field's as fitted.</summary>
 		private static Vector2 GardenSize(PointOfInterestSiteContext context, Field field, int index, Vector2 fitted)
 		{
 			if (field.Kind != FieldKind.Wheat)
@@ -426,7 +426,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// True when a river or a lake lies within <paramref name="reach"/> metres of a point (2026-10-18, I2j-b; the bottomland a biome
+		/// True when a river or a lake lies within <paramref name="reach"/> metres of a point (the bottomland a biome
 		/// keeps its fields to): searched outward on an 8 m lattice, ring by ring, stopping at the first.
 		/// </summary>
 		private static bool NearWater(PointOfInterestSiteContext context, Vector2 p, float reach)
@@ -471,7 +471,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return false;
 			}
-			// A terraced paddy (2026-10-18, I2j-b) as its build lays it: flooded where its benches are cut and hold water, else as a paddy.
+			// A terraced paddy as its build lays it: flooded where its benches are cut and hold water, else as a paddy.
 			BiomeTerraceRiser riser = BiomeTerraces.RiserOf(surface, picked.Riser);
 			if (riser != BiomeTerraceRiser.None)
 			{
@@ -586,7 +586,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					return false;
 				}
-				// A terraced field stands on a slope a flat one may not (2026-10-18, I2j-b), its mean no steeper than benches are cut.
+				// A terraced field stands on a slope a flat one may not, its mean no steeper than benches are cut.
 				if (context.SlopeAt != null && context.SlopeAt(p.x, p.y) > (field.Terraced ? BiomeTerraces.MaxSlopeDegrees : MaxSlopeDegrees))
 				{
 					return false;
@@ -712,7 +712,7 @@ namespace FishMMO.Shared.WorldDesign
 				int wheatLayer = crop != null ? CropLayer(terrain, crop, biome) : -1;
 				int layers = data.detailPrototypes.Length;
 				/* The fields laid as before take the old path below to the bit; terraced, rowed, corn-hill, raised-bed and scatter-drawn
-				 * crops (2026-10-18, I2j-b) their share of the texel (CropShare), a scatter plant's in the scatter's units. */
+				 * crops their share of the texel (CropShare), a scatter plant's in the scatter's units. */
 				bool plain = !field.Mesh && field.Rows <= 0f && field.Terraces == null && surface != BiomeFieldSurface.CornHills && surface != BiomeFieldSurface.RaisedBeds;
 				float unit = field.Mesh ? Mathf.Max(1, data.maxDetailScatterPerRes) / 255f : 1f;
 				int maxValue = field.Mesh ? Mathf.Max(1, data.maxDetailScatterPerRes) : int.MaxValue;
@@ -745,7 +745,7 @@ namespace FishMMO.Shared.WorldDesign
 								float share = sown ? CropShare(surface, field.Size, u, v, texel, field.Rows, field.Terraces, world) : 0f;
 								value = Mathf.Clamp(Mathf.RoundToInt(WheatCoverage * share * unit), 0, maxValue);
 							}
-							// A reaped field's stubble (2026-10-19): a share of the standing crop.
+							// A reaped field's stubble: a share of the standing crop.
 							if (field.Cover > 0f && field.Cover < 1f)
 							{
 								value = Mathf.RoundToInt(value * field.Cover);
@@ -773,7 +773,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		private static int CropLayer(Terrain terrain, GameObject crop, BiomeTemplate biome)
 		{
-			// A crop the detail scatter draws (enset, tea, vines, cabbages: no blades; 2026-10-18, I2j-b) takes a scattered plant's prototype.
+			// A crop the detail scatter draws (enset, tea, vines, cabbages: no blades) takes a scattered plant's prototype.
 			if (!BiomeGrassDefaults.IsBlade(crop.name))
 			{
 				return PointOfInterestHerbGrove.LayersOf(terrain, crop, biome).Own;
@@ -820,12 +820,12 @@ namespace FishMMO.Shared.WorldDesign
 
 		private static int SownCoverage(BiomeFieldSurface surface, Field field, float u, float v, float texel) => SownCoverage(surface, field.Size, u, v, texel);
 
-		/// <summary>The share of a rowed crop's spacing each row takes (2026-10-18, I2j-b): a clipped tea row 1.8 m apart is about a metre thick.</summary>
+		/// <summary>The share of a rowed crop's spacing each row takes: a clipped tea row 1.8 m apart is about a metre thick.</summary>
 		public const float RowShare = 0.6f;
 
 		/// <summary>
 		/// How much of a texel <paramref name="texel"/> metres across at (<paramref name="u"/>, <paramref name="v"/>) along a field's own
-		/// axes a crop covers (pure; 2026-10-18, I2j-b): on a terraced field (<paramref name="terraces"/>) its benches' sown ground
+		/// axes a crop covers (pure): on a terraced field (<paramref name="terraces"/>) its benches' sown ground
 		/// (sampled four times in the texel round <paramref name="world"/>), else the ridges' share (<see cref="BiomeFieldSurfaces.SownShare"/>),
 		/// a garden's beds along (<see cref="BiomeFieldSurfaces.BedShareAlong"/>) and corn hills (<see cref="BiomeFieldSurfaces.HillShare"/>);
 		/// times its rows' share where it is sown in rows <paramref name="rows"/> apart (along the field, or along each bench).
@@ -921,7 +921,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// Painted on every ridged field: the terrain's samples (about two metres apart) cannot hold a metre-wide furrow, nor a
-		/// lazy bed's 1.8 m ridges at all. Ridge and furrow's broad ridges are carved into the ground besides (2026-10-18,
+		/// lazy bed's 1.8 m ridges at all. Ridge and furrow's broad ridges are carved into the ground besides (
 		/// <see cref="CarveRaise"/>, PointOfInterestFieldCarve), from the ground as it was before, so a repaint carves the same.
 		/// </remarks>
 		private static void AddFurrows(PointOfInterestSiteContext context, Field field, BiomeFieldSurface surface)
@@ -1033,10 +1033,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The fence round a field: module by module along each side, a gap in the side nearest the settlement, its modules drawn
 		/// from <paramref name="random"/>. <paramref name="dry"/> makes every draw and lays nothing: a field left out or shrunk off
-		/// another site's keeps the site's sequence where it was for the fences after it (2026-10-18).
+		/// another site's keeps the site's sequence where it was for the fences after it.
 		/// </summary>
 		/// <remarks>
-		/// Joined up (2026-10-19: "fences aren't fully connecting in some cases"; PointOfInterestLinearFeatures.Joins): each module is laid
+		/// Joined up ("fences aren't fully connecting in some cases"; PointOfInterestLinearFeatures.Joins): each module is laid
 		/// between its two ends on the ground, pitched to the chord (it was laid level at its middle's ground, so on a slope its rails
 		/// stepped at every post), round the field the same way so each corner takes exactly one module's post (one corner had none, the
 		/// opposite two), a closing post wherever a run stops with no post (a module left in the water, a break, the gate's sides when

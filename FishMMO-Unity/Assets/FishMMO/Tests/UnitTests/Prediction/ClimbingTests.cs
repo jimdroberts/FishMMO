@@ -11,7 +11,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The climbing movement mode (2026-10-13: caves and mines get ladders and ropes as a real climbing interaction):
+	/// The climbing movement mode (caves and mines get ladders and ropes as a real climbing interaction):
 	/// its rules run with no motor, a tick at a time, the feet moved by the velocity each tick returns, as the KCC moves
 	/// them when nothing is in the way. Taking hold, climbing along the line, stepping off and on at the top, letting go at
 	/// the bottom and by a jump, and the same inputs giving the same climb (what prediction and replay need).

@@ -22,7 +22,7 @@ namespace FishMMO.Shared.WorldDesign
 		public float Collar, CollarLow;
 		/// <summary>The shell's thickness at this mouth.</summary>
 		public float Shell;
-		/// <summary>How the mouth is come to (2026-10-18): over the ground before it, by diving, or along a shelf behind a waterfall.</summary>
+		/// <summary>How the mouth is come to: over the ground before it, by diving, or along a shelf behind a waterfall.</summary>
 		public CaveMouthKind Kind;
 		/// <summary>The water's surface over a <see cref="CaveMouthKind.Submerged"/> mouth, world y; unused otherwise.</summary>
 		public float Water;
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Behind a waterfall's curtain, along a shelf over its pool from the dry bank beside it.</summary>
 		Shelf,
 		/// <summary>
-		/// Not a way in (2026-10-20): an opening in a great chamber's roof up to the ground over it, where the daylight falls
+		/// Not a way in: an opening in a great chamber's roof up to the ground over it, where the daylight falls
 		/// through (CaveSystem.Skylights.cs). Its floor is the floor under the opening, its landing the opening on the ground.
 		/// </summary>
 		Skylight,
@@ -77,7 +77,7 @@ namespace FishMMO.Shared.WorldDesign
 		Alcove,
 		/// <summary>A mine's worked-out stope.</summary>
 		Stope,
-		/// <summary>One lobe of an enormous hall (2026-10-13), or a natural cavern a mine broke into.</summary>
+		/// <summary>One lobe of an enormous hall, or a natural cavern a mine broke into.</summary>
 		Hall,
 	}
 
@@ -105,7 +105,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// A cave system (2026-10-11: "caves should go very deep, open up into chambers, connect to each other"): from each
+	/// A cave system ("caves should go very deep, open up into chambers, connect to each other"): from each
 	/// mouth a trunk passage descends deep under the hill, opening into rooms along the way and into a great cavern at its
 	/// bottom; side passages wander off the rooms to alcoves and dead ends; and the systems of two caves near each other are
 	/// joined deep down by a link passage, so one can be entered by one mouth and left by the other. Mines are the same
@@ -131,11 +131,11 @@ namespace FishMMO.Shared.WorldDesign
 	public sealed partial class CaveSystem
 	{
 		/// <summary>
-		/// 7 (2026-10-20): a personality (<see cref="Traits"/>) and what it lays — hollows (basins, domes, keyhole trenches,
-		/// raises), terraces, rubble, arches, pits — stored after the climbs (a cave stored before is cut again). 6 (2026-10-18,
+		/// 7: a personality (<see cref="Traits"/>) and what it lays — hollows (basins, domes, keyhole trenches,
+		/// raises), terraces, rubble, arches, pits — stored after the climbs (a cave stored before is cut again). 6 (
 		/// later): each mouth's kind, water and landing (mouths under water and behind waterfalls, second mouths
-		/// through a hill). 5 (2026-10-18): mouths' floors at the ground's own height with the approach graded to them, no outcrop or notch, and
-		/// greater halls (a cave stored before is cut again: its floor stood a rim over the ground). 4 (2026-10-13): characters,
+		/// through a hill). 5: mouths' floors at the ground's own height with the approach graded to them, no outcrop or notch, and
+		/// greater halls (a cave stored before is cut again: its floor stood a rim over the ground). 4: characters,
 		/// solids, rifts, shafts, crossings, climbs, tall nodes, rough chambers.
 		/// </summary>
 		public const int Format = 7;
@@ -163,7 +163,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The slope a mine's decline is sunk at where there is no face to drive an adit into, degrees.</summary>
 		public const float DeclinePitch = 15f;
 		/// <summary>
-		/// The steepest a chamber's floor runs, rise over run (about 22°: <see cref="WalkPitch"/>'s own, 2026-10-20). It was 0.33
+		/// The steepest a chamber's floor runs, rise over run (about 22°: <see cref="WalkPitch"/>'s own). It was 0.33
 		/// (18°), and a room on a trunk falling at the walk's full 22° had its floor clamped shallower than the passage it opens
 		/// off: the plane fell away under the passage at the room's entrance, a 1.3 m drop in 1.5 m (48°).
 		/// </summary>
@@ -212,7 +212,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The forms at their sizes: a grotto a short passage into one chamber; caves 90–480 m of trunk falling 20–140 m below
 		/// their mouths through two to five rooms to a cavern, with side passages (rooms and caverns a third greater since
-		/// 2026-10-18, "Caves need even bigger hallows": a large cave's cavern up to eight bores, ~110 m across); ice caves a little smaller and smoother; lava
+		/// "Caves need even bigger hallows": a large cave's cavern up to eight bores, ~110 m across); ice caves a little smaller and smoother; lava
 		/// tubes long, low, wide and nearly level; sea caves at the waterline and shallow; mines straight, level adits with
 		/// drifts at right angles and stopes.
 		/// </summary>
@@ -265,14 +265,14 @@ namespace FishMMO.Shared.WorldDesign
 		/// Plans a system from a mouth into the slope behind it. Null, with <paramref name="problem"/> saying why, where the rock
 		/// is too thin or too low. Deterministic in its inputs.
 		/// </summary>
-		/// <param name="opening">How the mouth is come to when not over the ground before it (2026-10-18): dived to under a lake
+		/// <param name="opening">How the mouth is come to when not over the ground before it: dived to under a lake
 		/// or the sea (a sump rising from it to dry chambers), or behind a waterfall on a shelf over its pool. Either is a
 		/// classic system (one line), its bore no wider than its water hides.</param>
-		/// <param name="depthLeast">The least depth under the mouth the scene asks of its caves, metres (its pre-cut prompt's range,
-		/// 2026-10-21); the rolled depth is drawn within it and the mouth's height over the sea still caps it.</param>
+		/// <param name="depthLeast">The least depth under the mouth the scene asks of its caves, metres (its pre-cut prompt's range);
+		/// the rolled depth is drawn within it and the mouth's height over the sea still caps it.</param>
 		/// <param name="depthMost">The most depth the scene allows, metres.</param>
 		/// <param name="flood">How far under the water the floors of a drowned natural cave lie, or how deep a grotto's lie under its
-		/// pool, metres (2026-10-25, phase I2n-c, decision 86 (a): the cave biome's Cave Floods, BiomeCaveWaters.DepthOf); NaN for as
+		/// pool, metres (the cave biome's Cave Floods, BiomeCaveWaters.DepthOf); NaN for as
 		/// before (every natural cave dry, a grotto's floors <see cref="AwashDepth"/> under its pool). A drowned cave is laid as a grotto
 		/// is: its water stands <see cref="BiomeCaveWaters.MouthDrop"/> under its mouth's floor, every floor within the depth under it,
 		/// one line of galleries level at the water table (a classic system).</param>
@@ -325,7 +325,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 			}
 			float foot = ground.At(mx, mz);
-			// The floor at the ground's own height (2026-10-18): it stood a rim over it, a step up at the threshold. The ground
+			// The floor at the ground's own height: it stood a rim over it, a step up at the threshold. The ground
 			// before the mouth is graded to meet it (Approach), so the way in runs on from the terrain onto the floor level.
 			float floor0 = shelf ? opening.Floor : foot;
 			if (submerged)
@@ -353,8 +353,8 @@ namespace FishMMO.Shared.WorldDesign
 				floor0 = seaLevel - 0.4f;
 			}
 			// A grotto opens at the water's edge, its floor awash through the mouth and its chamber half flooded
-			// (2026-10-11): the sea's own surface fills it at the coast, a pool of the lake's or river's level inland.
-			// A natural cave drowned by its water table (2026-10-25, I2n-c) is awash as a grotto is, its water just under its threshold.
+			//: the sea's own surface fills it at the coast, a pool of the lake's or river's level inland.
+			// A natural cave drowned by its water table is awash as a grotto is, its water just under its threshold.
 			// Never where its drowned floors would lie under the sea's level (the ocean fills whatever lies under it): a dry cave there.
 			bool drowned = form == CaveForm.Cave && !float.IsNaN(flood) && flood > 0f && opening.Kind == CaveMouthKind.Ground
 				&& BiomeCaveWaters.LevelUnder(floor0) - Mathf.Min(flood, BiomeCaveWaters.MaxDepth) >= seaLevel + 0.5f * AboveSea;
@@ -376,7 +376,7 @@ namespace FishMMO.Shared.WorldDesign
 				floor0 = waterLevel - 0.6f;
 			}
 			system.WaterLevel = awash ? water : submerged ? opening.Water : float.NaN;
-			// Every other cave keeps its floors over the sea, all of them (2026-10-11): the sea's surface stands at its
+			// Every other cave keeps its floors over the sea, all of them: the sea's surface stands at its
 			// level everywhere, so a passage under it would be a flooded one. A submerged mouth's system keeps them over its
 			// own water too, all but its sump (Walker.RiseTo): the ocean fills whatever lies under the sea, and a lake's pool
 			// is written over whatever of the system lies under the lake (CaveShaper.WritePool).
@@ -398,7 +398,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The trunk: level through the mouth, then down toward its depth, rooms along it, the cavern at its end.
 			float trunkLength = rng.Range(pf.TrunkMin, pf.TrunkMax);
 			float depth = rng.Range(pf.DepthMin, pf.DepthMax);
-			// Its depth from a heavy-tailed roll of its own (2026-10-21, DepthFor): most caves tens of metres deep, some a pocket a
+			// Its depth from a heavy-tailed roll of its own (DepthFor): most caves tens of metres deep, some a pocket a
 			// few metres under the hill, a rare few hundreds. The profile's draw above stays drawn, so the stream's later draws hold.
 			bool rolled = opening.Kind == CaveMouthKind.Ground && RollsDepth(form) && !drowned;
 			if (rolled)
@@ -418,7 +418,7 @@ namespace FishMMO.Shared.WorldDesign
 				// One line cannot fall that far at a walk: a deep system is laid as a graph of levels, its character rolled again.
 				system.Character = DeepCharacter(form, size, seed);
 			}
-			// And its personality on top of it (2026-10-20: "We want caves to feel unique"), laid last on streams of its own.
+			// And its personality on top of it ("We want caves to feel unique"), laid last on streams of its own.
 			system.Traits = TraitsFor(form, size, system.Character, seed);
 			bool graph = form != CaveForm.Mine && system.Character != CaveCharacter.Classic;
 			if (system.Character == CaveCharacter.Abyss)
@@ -430,7 +430,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// No deeper than the sea lets it (a cave whose mouth stands low stays shallower) nor than the deepest a system goes.
 				RangeOf(form, depthLeast, depthMost, out _, out float deepest);
-				// A scene that asks for less than the form's deepest (2026-10-21, its range) has its deepest as a floor nothing goes
+				// A scene that asks for less than the form's deepest (its range) has its deepest as a floor nothing goes
 				// under, as the sea's is: the levels keep to the roll, but side branches and their alcoves dip a few metres under the
 				// deepest level's floor. The full range leaves the plan as it was.
 				if (deepest < MaxDepthOf(form))
@@ -835,7 +835,7 @@ namespace FishMMO.Shared.WorldDesign
 			/// metres of rock between its vault and a passage over it): sampled through its volume and over its vault, a point
 			/// in the void whose floor is not this chamber's own there is a crossing. A chamber opening on a passage at its own
 			/// floor is a junction, and allowed; so is whatever <paramref name="exempt"/> lets be. With halls 250 m across
-			/// (2026-10-18), a hall at a trunk's foot reached back under the trunk's first stretch and its vault broke up through
+			///, a hall at a trunk's foot reached back under the trunk's first stretch and its vault broke up through
 			/// the trunk's floor beside the mouth.
 			/// </summary>
 			public bool Crosses(Vector3 centre, float floor, float yaw, Vector3 radii, float slope, Func<Vector3, bool> exempt)
@@ -1085,7 +1085,7 @@ namespace FishMMO.Shared.WorldDesign
 		public bool GradesApproach => float.IsNaN(WaterLevel) || Drowned || Form == CaveForm.SeaHall;
 
 		/// <summary>
-		/// True for a natural cave drowned by its water table (2026-10-25, phase I2n-c, decision 86 (a)): its water stands just under
+		/// True for a natural cave drowned by its water table: its water stands just under
 		/// its threshold and its galleries wade (a pool is written over them as a grotto's is). Read from what is stored (a natural
 		/// cave's water level is set only so, or under a submerged mouth), so a stored system needs no new value.
 		/// </summary>
@@ -1110,7 +1110,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The ground's height at (x, z) (world metres) with the approach before a mouth graded into it, given its height
-		/// <paramref name="h"/> there now (2026-10-18: "allow a smoother transition into the cave itself"): level with the
+		/// <paramref name="h"/> there now ("allow a smoother transition into the cave itself"): level with the
 		/// mouth's floor over a lane straight out from the opening, as wide as the arch's foot and running past the cut, then
 		/// ramping back to the ground at <see cref="ApproachGrade"/>, its sides at <see cref="ApproachSideGrade"/>. Cut where
 		/// the ground stood over the floor and filled where it fell away (a talus apron), never more than
@@ -1302,7 +1302,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The terrain cut away at one mouth as a signed distance in plan (negative inside the cut, metres; the system's frame),
-		/// on a fine grid: so the collar can follow the cut's own outline (2026-10-12: "We have the exact cave entrance
+		/// on a fine grid: so the collar can follow the cut's own outline ("We have the exact cave entrance
 		/// dimensions 'paint hole?', make it look interesting without leaving gaps").
 		/// </summary>
 		private sealed class HoleMap
@@ -1443,7 +1443,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// </summary>
 		/// <remarks>
 		/// The mouths' outcrops (a mound of coursed blocks the opening was set in) and notches (a slot cut out over the apron,
-		/// rock walls either side of it) are gone (2026-10-18: "Caves entrances need to remove the rocky border and allow a
+		/// rock walls either side of it) are gone ("Caves entrances need to remove the rocky border and allow a
 		/// smoother transition into the cave itself"): the hillside runs into the opening itself, and the ground before it is
 		/// graded to the mouth's floor (<see cref="Approach"/>).
 		/// </remarks>
@@ -1734,7 +1734,7 @@ namespace FishMMO.Shared.WorldDesign
 				}
 				float w = 1f - Mathf.Clamp01((inward - candidate.Zone * 0.5f) / Mathf.Max(1f, reach - candidate.Zone * 0.5f));
 				w = w * w * (3f - 2f * w);
-				// Faded to nothing before the cut-off round the mouth, and along its face past the bore's own reach (2026-10-21):
+				// Faded to nothing before the cut-off round the mouth, and along its face past the bore's own reach:
 				// held whole to the cut-off, a point 30 m along the face from a narrow mouth was drawn in 6 m toward it and let go
 				// a step further on, so the field jumped there; a passage beside a second mouth was cut off short, its wall left a
 				// metre of skin with nothing behind it, torn into a hole a player saw the world through (Moron 2's lava tube, "We
@@ -1756,7 +1756,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The point the bore's field is read at near a mouth: drawn in across the mouth's face, most at its floor and none
 		/// at its roof, so the opening is a low arch, broad at its foot, rather than the round bore of the passage behind it
-		/// (2026-10-12: "Cave entrances are a bit boring, just round rocky holes"). Height is untouched, so floors and
+		/// ("Cave entrances are a bit boring, just round rocky holes"). Height is untouched, so floors and
 		/// headroom are the passage's own; only void is added. Everything that reads the field (the holes, the collar, the
 		/// mesher, the dressing) reads it through here, so they agree.
 		/// </summary>
@@ -1837,7 +1837,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				// The rock put back keeps its walking top exact; under it, its sides are as rough as the walls round it.
 				float below = top == float.MaxValue ? 1f : Mathf.Clamp01((top - p.y) / 1.5f);
-				// The variety's terraces, mounds and arches (2026-10-20) are stilled by a climb laid against them, as the walls are.
+				// The variety's terraces, mounds and arches are stilled by a climb laid against them, as the walls are.
 				float grain = solidKind >= CaveSolidKind.Terrace ? SolidGrain(solidKind) * (1f - quiet) : 1f;
 				v = Mathf.Max(v, -(solid - 0.4f * Amp * rough * below * noise * grain));
 			}
@@ -1962,7 +1962,7 @@ namespace FishMMO.Shared.WorldDesign
 				bool skylight = mouth.Kind == CaveMouthKind.Skylight;
 				float lip = Mathf.Clamp01(smooth / (skylight ? SkylightLipBand : LipBand));
 				float rim = Mathf.Lerp(skylight ? SkylightRim : Rim, FlushRim, lip * lip * (3f - 2f * lip));
-				// Flush wherever the ground stands at the mouth's floor (2026-10-18: "allow a smoother transition into the
+				// Flush wherever the ground stands at the mouth's floor ("allow a smoother transition into the
 				// cave itself"): that is where the way in crosses from the terrain onto the rock, and a lip there was a step to
 				// climb at the threshold. The lip stands only up the opening's sides and over its brow.
 				// An awash mouth is waded into at its water, not at its floor under it.

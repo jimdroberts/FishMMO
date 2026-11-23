@@ -13,12 +13,12 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The carved kinds that are ground, not structures (no Structure trait), and still lay a template's props on what their shaper
-		/// cut (2026-10-27): a cenote's ledge altar, the bones round a sandworm's funnel.
+		/// cut: a cenote's ledge altar, the bones round a sandworm's funnel.
 		/// </summary>
 		public static bool CarvedGround(POIType kind) => kind == POIType.Cenote || kind == POIType.SandwormPit;
 
 		/// <summary>
-		/// The fantasy wave (2026-10-27, poi-fantasy-wave/WAVE.md): the templates of the five carved kinds, whose ground their shapers cut
+		/// The fantasy set: the templates of the five carved kinds, whose ground their shapers cut
 		/// (Shapers/FantasyShapers.cs; DungeonEntranceShaper for the dwarven gate).
 		/// </summary>
 		private static void FantasyShapes(List<PointOfInterestTemplateSpec> a)

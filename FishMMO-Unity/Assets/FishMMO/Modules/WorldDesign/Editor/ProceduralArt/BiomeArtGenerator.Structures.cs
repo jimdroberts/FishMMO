@@ -55,7 +55,7 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			yield return "Structure materials";
 			WriteStructureMaterials(c);
-			// The house roofs the palettes in use build at another pitch than the kit's (StructureRoofs, 2026-10-18, I6e), each once:
+			// The house roofs the palettes in use build at another pitch than the kit's (StructureRoofs), each once:
 			// written with their piece.
 			List<StructureRoofVariant> roofs = StructureRoofs.Needed(PalettesInUse());
 			if (roofs.Count > 0)
@@ -74,7 +74,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				yield return step;
 			}
-			// The run-time cave cover's one mesh (BiomeArtGenerator.CaveCover.cs, 2026-10-20).
+			// The run-time cave cover's one mesh (BiomeArtGenerator.CaveCover.cs).
 			foreach (string step in CaveCoverSteps(c))
 			{
 				yield return step;
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 				string normal = ProceduralArtCatalogue.StructureTexture(surface, "Normal");
 				string mask = ProceduralArtCatalogue.StructureTexture(surface, "Mask");
 				c.Report.TextureBytes += (3 + StructurePieces.Finishes.Length - 1) * CompressedBytes(size, size);
-				// Written as the structure look arrays (ProceduralArtLookArrays, 2026-10-28): every surface when they are due.
+				// Written as the structure look arrays (ProceduralArtLookArrays): every surface when they are due.
 				if (!due)
 				{
 					continue;
@@ -124,7 +124,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				WriteStructureMaterial(c, shader, StructureSurfaceKey.Kit(m));
 			}
-			// The structure palettes' own materials (2026-10-16, I6a): one a key (material, tint, surface variant) and finish that
+			// The structure palettes' own materials: one a key (material, tint, surface variant) and finish that
 			// any palette lays, deduplicated: every spec palette's (what authoring writes onto the templates) and every template's
 			// as it stands (a hand edit's too). No prefab or mesh is made per palette: the cut lays the kit's prefabs in these.
 			List<StructureSurfaceKey> keys = StructurePalettes.KeysOf(PalettesInUse());
@@ -143,14 +143,14 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Every structure palette a cut may lay: each spec entry's, then each biome template's in the project, then each world
-		/// body's cloud-world palette (its sky docks, airships and rope bridges, 2026-10-18).
+		/// body's cloud-world palette (its sky docks, airships and rope bridges).
 		/// </summary>
 		private static IEnumerable<FishMMO.Shared.Biomes.BiomeStructurePalette> PalettesInUse()
 		{
 			foreach (BiomeArtSpec.Entry entry in BiomeArtSpec.Entries)
 			{
 				yield return entry.StructurePalette();
-				// The linear features that name their own material (2026-10-18, I2f): their walls', fences' and gates' keys.
+				// The linear features that name their own material: their walls', fences' and gates' keys.
 				foreach (FishMMO.Shared.Biomes.BiomeStructurePalette linear in StructurePieces.LinearPalettes(entry.LinearFeatures(null)))
 				{
 					yield return linear;
@@ -189,7 +189,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static void WriteStructureMaterial(Context c, Shader shader, StructureSurfaceKey key)
 		{
 			StructureMaterial material = key.Material;
-			// The surface variant (I9's per-biome texture variants) names the material; until those textures exist it is drawn
+			// The surface variant (the later per-biome texture variants) names the material; until those textures exist it is drawn
 			// with the surface every biome shares.
 			string surface = StructureSurfaces.SurfaceOf(material);
 			// The maps by their payload paths: slices of the structure look arrays (SetSurfaceMap).
@@ -227,7 +227,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A lantern's lit pane (<see cref="StructureMaterial.Lamplight"/>, 2026-10-13): the plain surface's own albedo as its
+		/// A lantern's lit pane (<see cref="StructureMaterial.Lamplight"/>): the plain surface's own albedo as its
 		/// emission map, so the glow is a little uneven as horn is, in a warm HDR colour, lit always. Emission is added after
 		/// the lighting (and after the cave darkness's occlusion), so it reads as a light deep underground where the sky's
 		/// ambient is all but gone; in every finish the plain albedo, so a charred or mossy ruin's lamp burns as bright.
@@ -243,7 +243,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A cold glow's part (a rune stone's runes, a glowjar's mote; 2026-10-18, I6g): lit as a lamp's pane by its emission, in
+		/// A cold glow's part (a rune stone's runes, a glowjar's mote): lit as a lamp's pane by its emission, in
 		/// its glow's own cool colour (SceneGlow.Colour) a little over one, which the shader scales by the very pulse and dusk
 		/// fade its piece's light has (_FishStructure = 3, FishStructureWeathering.hlsl FishStructureGlowLight): dark by day,
 		/// faint from before dusk, full at night and underground.
@@ -260,7 +260,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A window pane you can see through (2026-10-11): alpha-blended, no depth written and no shadow cast, so a lit
+		/// A window pane you can see through: alpha-blended, no depth written and no shadow cast, so a lit
 		/// room shows through it and the GPU occlusion (built from the opaque depth) still sees the room behind it — what is
 		/// inside draws when a window or a door shows it and is culled when the walls hide it. Its night glow is unchanged.
 		/// </summary>
@@ -300,7 +300,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// of its houses that <paramref name="roofs"/> names (StructureRoofs), each the same in every way but its roof.
 		/// </summary>
 		/// <summary>
-		/// Every level of a structure casts, its last too (2026-11-06). The rocks' rule (<see cref="LodShadows"/>: all but the
+		/// Every level of a structure casts, its last too. The rocks' rule (<see cref="LodShadows"/>: all but the
 		/// last) suits a boulder, whose last level starts past the shadow distance; a house is many small pieces, and a small
 		/// piece reaches its last level well inside it (a 3 m wall at ≈ 50 m at a LOD bias of 1), so near houses drew no shadow
 		/// while the cached main-light shadows (CachedMainLightShadows) drew theirs. Each level casts with the mesh it draws.

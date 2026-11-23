@@ -10,7 +10,7 @@ using MaterialKeywords = FishMMO.Shared.WorldDesign.ProceduralArtVariants.Materi
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Look families (2026-10-28, TerrainGpuRenderer.Looks.cs): the props' many array-backed Weather Lit materials (their maps
+	/// Look families (TerrainGpuRenderer.Looks.cs): the props' many array-backed Weather Lit materials (their maps
 	/// slices of the generated look arrays, ProceduralArtLookArrays) drawn through one family material each, their slices and
 	/// scalars as a table row, the look named per vertex of the merged meshes — with no texture copied. Pure parts
 	/// (TerrainLookMath), the shader's side of the contract, the variant collection, and the renderer's hooks.
@@ -185,7 +185,7 @@ namespace FishMMO.UnitTests
 		{
 			// URP's material validation drops _NORMALMAP/_METALLICSPECGLOSSMAP/_OCCLUSIONMAP from an array-backed material (its 2D
 			// slots are empty), and without them a generated surface drew at _Smoothness 1, flat and unoccluded: the structures'
-			// sky sheen (2026-11-02). Every look variant reads all three maps; an empty slot gives what no map gives.
+			// sky sheen. Every look variant reads all three maps; an empty slot gives what no map gives.
 			string code = SourceScanPins.ReadCode(Shaders + "FishWeatherLitInput.hlsl");
 			Ordered(code, "#define FISH_LOOK_ARRAYS 1",
 				"#ifndef _NORMALMAP\n    #define _NORMALMAP 1\n#endif",

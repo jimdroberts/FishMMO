@@ -10,9 +10,9 @@ blocks), and the client's buff and debuff strips.
 | **Module id** | `buffs` (`BuffsModule`) |
 | **Assemblies** | `FishMMO.Buffs`, `.Client`, `.Editor`, `.Tests`, `.RenderScratch` |
 | **Depends on** | The core only |
-| **Depended on by** | Abilities, Achievements, Archetypes, NPCs & AI, Pets, Social (the party frame's buffs), World Interactables (shrines); and through them every module that depends on those |
+| **Depended on by** | Abilities, Achievements, Archetypes, NPCs & AI, Pets, Social (the party frame's buffs), World Interactables (shrines), Mounts (a mount is a buff: LastsUntilRemoved); and through them every module that depends on those |
 | **Remove together with** | Every module above |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5) |
+| **Moved** | Out of the core |
 
 ## Folders
 
@@ -49,10 +49,10 @@ The wire shapes: `BuffReconcileEntry` (in the owner's reconcile payload), `Obser
 (what observers see), `DismissBuffBroadcast` and its handler; `ShieldVolume`; `ModifierSource.Buff` (an attribute
 modifier's source kind); the contracts above; and `CharacterEvade.RefusesBuff`.
 
-## Crowd control and charm (2026-11-22)
+## Crowd control and charm
 
 - **Stun and freeze** are `StateBuffTemplate`s (`IsStunned`, `IsFrozen`): `CharacterIncapacitation` stops a player's input,
-  casting and item use, and since 2026-11-22 an NPC's walking and turning too (`AIController.StepAgent`). A freeze's effect
+  casting and item use, and an NPC's walking and turning too (`AIController.StepAgent`). A freeze's effect
   carries `FXFreezePose`, which holds the body's animation still on every client that shows the ice.
 - **Charm** (`CharmBuffTemplate`, the Mesmerize ability) hands a charmable NPC's server brain to the buff's caster through the
   core seam `INPCCharm` (the NPCs module's `AIController.Charm`): `NPC.CharmedBy` makes the harm rule, kill credit and threat

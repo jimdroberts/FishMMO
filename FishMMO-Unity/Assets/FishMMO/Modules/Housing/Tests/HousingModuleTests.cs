@@ -9,7 +9,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Housing module (Phase 3, 2026-11-17): the housing system, its windows, its operator commands and the bank's
+	/// The Housing module: the housing system, its windows, its operator commands and the bank's
 	/// vault link live in <c>Assets/FishMMO/Modules/Housing</c>; the plot foundations in the world scenes stay in the core.
 	/// </summary>
 	[TestFixture]

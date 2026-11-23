@@ -76,7 +76,7 @@ namespace FishMMO.Shared
 		private CompanionVisibility companion;
 
 		/// <summary>
-		/// The distance rule, except that a pet's owner observes it at any distance (2026-11-21: flying away despawned it).
+		/// The distance rule, except that a pet's owner observes it at any distance (flying away despawned it).
 		/// </summary>
 		public override bool ConditionMet(NetworkConnection connection, bool currentlyAdded, out bool notProcessed)
 		{

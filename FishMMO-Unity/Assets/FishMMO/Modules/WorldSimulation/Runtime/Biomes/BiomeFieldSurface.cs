@@ -4,12 +4,12 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// How a crop's field is laid out on the ground (<see cref="BiomeFieldCrop.Surface"/>, 2026-10-16, phase I2e). Values are
+	/// How a crop's field is laid out on the ground (<see cref="BiomeFieldCrop.Surface"/>). Values are
 	/// stored by number: append only.
 	/// </summary>
 	public enum BiomeFieldSurface : byte
 	{
-		/// <summary>Sown edge to edge on the level, as every field was until 2026-10-16.</summary>
+		/// <summary>Sown edge to edge on the level, as every field was formerly.</summary>
 		Flat = 0,
 		/// <summary>
 		/// Lazy beds: narrow raised ridges about 1.2 m wide, dug up from the turf and heaped with the spoil of the trenches
@@ -23,13 +23,13 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		RidgeAndFurrow = 2,
 		/// <summary>
-		/// A paddy (2026-10-18, phase I2i): a level field flooded a hand's depth deep inside a low earth bund, the crop (rice) standing
+		/// A paddy: a level field flooded a hand's depth deep inside a low earth bund, the crop (rice) standing
 		/// in the water. The cut digs the floor level and raises the bund (<see cref="BiomeFieldSurfaces.PaddyGround"/>, carved and put
 		/// back like ridge and furrow) and lays the water as a small lake of the scene's hydrology.
 		/// </summary>
 		Paddy = 3,
 		/// <summary>
-		/// Terraced (2026-10-18, phase I2j-b, decision 29): a hillside cut into level benches along its contours, each bench (tread)
+		/// Terraced: a hillside cut into level benches along its contours, each bench (tread)
 		/// sown flat, each step (riser) faced as the crop's <see cref="BiomeFieldCrop.Riser"/> says (drystone when it says none). The cut
 		/// carves the benches (BiomeTerraces, PointOfInterestFieldTerraces) and takes them out again as ridge and furrow's; a terraced
 		/// field is laid on slopes a flat field is not (<see cref="BiomeTerraces.MaxSlopeDegrees"/>), and lies flat where its ground is
@@ -37,23 +37,23 @@ namespace FishMMO.Shared.Biomes
 		/// </summary>
 		Terraced = 4,
 		/// <summary>
-		/// Corn hills (2026-10-18, I2j-b): the Three Sisters' planting, maize, beans and squash sown in low mounds a metre across on a
+		/// Corn hills: the Three Sisters' planting, maize, beans and squash sown in low mounds a metre across on a
 		/// 1.3 m grid (<see cref="CornHillSpacing"/>) over tilled earth. Painted: far finer than the heightmap.
 		/// </summary>
 		CornHills = 5,
 		/// <summary>
-		/// Baulatura (2026-10-18, I2j-b): the Po plain's wide cambered wheat beds, 24 m across between 1.5 m ditches, 0.6 m high at the
+		/// Baulatura: the Po plain's wide cambered wheat beds, 24 m across between 1.5 m ditches, 0.6 m high at the
 		/// crown, a row of trained trees (the biome's piantata) along each ditch bank. Carved, as ridge and furrow.
 		/// </summary>
 		Baulatura = 6,
 		/// <summary>
-		/// Marcita (2026-10-18, I2j-b): a water meadow of 8 m cambered beds with a feeder rill of standing water dug along each crown,
+		/// Marcita: a water meadow of 8 m cambered beds with a feeder rill of standing water dug along each crown,
 		/// kept green through winter. The beds are carved as ridge and furrow's; the rills are carved and flooded as a standing ditch's
 		/// pounds (PointOfInterestLinearFeatures.Pounds).
 		/// </summary>
 		Marcita = 7,
 		/// <summary>
-		/// Raised beds (2026-10-18, I2j-b): a kitchen garden's or herber's wattle-edged beds 1.2 m by 6 m with 0.5 m paths between them
+		/// Raised beds: a kitchen garden's or herber's wattle-edged beds 1.2 m by 6 m with 0.5 m paths between them
 		/// both ways; such a field is a garden (<see cref="RaisedBedGarden"/> at most). Painted, the edging laid as low wattle.
 		/// </summary>
 		RaisedBeds = 8,
@@ -66,8 +66,8 @@ namespace FishMMO.Shared.Biomes
 	/// the nominal width stretched to fit, so a field's two edges lie in furrows against its headland.
 	/// </summary>
 	/// <remarks>
-	/// The cut lays a field's ridges as rows of its crop with the furrows bare between them (PointOfInterestFields), and since
-	/// 2026-10-18 (phase I2h) also carves ridge and furrow into the terrain by <see cref="CarvedHeight"/> (<see cref="Carved"/>;
+	/// The cut lays a field's ridges as rows of its crop with the furrows bare between them (PointOfInterestFields), and
+	/// also carves ridge and furrow into the terrain by <see cref="CarvedHeight"/> (<see cref="Carved"/>;
 	/// PointOfInterestFieldCarve): the furrows' crisp lines stay painted, the broad swell of the ridges is in the ground.
 	/// </remarks>
 	public static class BiomeFieldSurfaces
@@ -197,10 +197,10 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// True for a surface the cut also carves into the terrain (2026-10-18, phase I2h): ridge and furrow, whose ridges, about
+		/// True for a surface the cut also carves into the terrain: ridge and furrow, whose ridges, about
 		/// seven metres from furrow to furrow, the heightmap's samples (about two metres apart) can hold. Lazy beds stay painted
 		/// only: under two samples to a ridge, carved they would alias into a ripple that wanders across the field. Baulatura's 25 m
-		/// beds and a marcita's 9 m ones are carved the same way (2026-10-18, I2j-b); corn hills and raised beds are far too fine.
+		/// beds and a marcita's 9 m ones are carved the same way; corn hills and raised beds are far too fine.
 		/// </summary>
 		public static bool Carved(BiomeFieldSurface surface) => surface == BiomeFieldSurface.RidgeAndFurrow || surface == BiomeFieldSurface.Baulatura
 			|| surface == BiomeFieldSurface.Marcita;
@@ -237,7 +237,7 @@ namespace FishMMO.Shared.Biomes
 			return t * t * (3f - 2f * t);
 		}
 
-		// ── Paddies (2026-10-18, I2i) ─────────────────────────────────
+		// ── Paddies ─────────────────────────────────
 
 		/// <summary>True for a surface flooded behind a bund (<see cref="BiomeFieldSurface.Paddy"/>).</summary>
 		public static bool Flooded(BiomeFieldSurface surface) => surface == BiomeFieldSurface.Paddy;
@@ -335,7 +335,7 @@ namespace FishMMO.Shared.Biomes
 			return ground;
 		}
 
-		// ── Corn hills and raised beds (2026-10-18, I2j-b) ────────────
+		// ── Corn hills and raised beds ────────────
 
 		/// <summary>How far apart corn hills stand, metres, both ways.</summary>
 		public const float CornHillSpacing = 1.3f;

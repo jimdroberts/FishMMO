@@ -13,7 +13,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why a surface and not pieces (2026-10-15).</b> Sea ice was placed as separate floating prefabs, capped at 35% cover
+	/// <b>Why a surface and not pieces.</b> Sea ice was placed as separate floating prefabs, capped at 35% cover
 	/// and 600 pieces of at most 18 m: on a sea the climate froze solid, about one percent of it was ever white, and the
 	/// globe drew a closed cap over a scene of open water. The pack is the ice at its real concentration; the loose
 	/// pieces remain for the thin ice at its edge and the bergs.

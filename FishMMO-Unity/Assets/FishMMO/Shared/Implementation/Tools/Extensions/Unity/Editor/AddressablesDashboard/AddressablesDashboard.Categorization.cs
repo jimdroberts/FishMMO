@@ -166,7 +166,7 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Whether an asset type is a biome template (the World Simulation module's BiomeTemplate), named rather than referenced
-		/// so this dashboard does not need the module (Phase 4 of the core and modules plan, 2026-11-18).
+		/// so this dashboard does not need the module.
 		/// </summary>
 		private static bool IsBiomeTemplate(Type type)
 		{
@@ -680,7 +680,7 @@ namespace FishMMO.Shared
 			EditorUtility.SetDirty(group);
 		}
 
-		/// <summary>True for a module's template data: Assets/FishMMO/Modules/&lt;Module&gt;/Templates/… (2026-11-20).</summary>
+		/// <summary>True for a module's template data: Assets/FishMMO/Modules/&lt;Module&gt;/Templates/….</summary>
 		private static bool IsModuleTemplatePath(string normalized)
 		{
 			const string modules = "Assets/FishMMO/Modules/";

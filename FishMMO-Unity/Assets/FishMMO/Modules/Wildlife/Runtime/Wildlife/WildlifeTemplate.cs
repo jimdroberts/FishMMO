@@ -121,7 +121,7 @@ namespace FishMMO.Shared
 		[Tooltip("Head length (with the muzzle).")] public float HeadLength;
 		[Tooltip("Head height and width.")] public float HeadSize;
 		[Tooltip("Ear length.")] public float EarSize;
-		[Tooltip("Horns: none, antlers (deer), broad antlers (elk), tusks (boar).")] public WildlifeHorns Horns;
+		[Tooltip("Horns: none, antlers (deer), broad antlers (elk), tusks (boar), horns (cow).")] public WildlifeHorns Horns;
 		[Tooltip("Horn or antler size.")] public float HornSize;
 		[Tooltip("Tail length.")] public float TailLength;
 		[Tooltip("Tail angle up from hanging, degrees (a fox's brush is near level).")] public float TailRaise;
@@ -150,5 +150,7 @@ namespace FishMMO.Shared
 		Antlers = 1,
 		BroadAntlers = 2,
 		Tusks = 3,
+		/// <summary>Two short horns curving out and up (a cow, a dragon mount).</summary>
+		Horns = 4,
 	}
 }

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Mine pieces (2026-10-11: "Mines should be shafts that you can actually enter"): the timber sets that hold up an
+	/// Mine pieces ("Mines should be shafts that you can actually enter"): the timber sets that hold up an
 	/// adit's roof, the portal at its mouth, the track down it and an ore cart. Built for a 4 m bore (CaveSystem's mine
 	/// form, 1.9–2.3 m radius) and scaled to the bore where they stand (PointOfInterestCaveDressing); across is x, along
 	/// the adit z, floor at y = 0.

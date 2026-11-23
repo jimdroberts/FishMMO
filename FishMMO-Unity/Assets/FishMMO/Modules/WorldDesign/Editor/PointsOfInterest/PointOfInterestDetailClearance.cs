@@ -10,11 +10,11 @@ namespace FishMMO.Shared.WorldDesign
 	/// Empties every terrain detail layer (grass, flowers, ferns, herbs, litter, bushes) under the sites' buildings: their floors
 	/// (<see cref="ScenePathPointFlags.Floor"/> yards, as <see cref="PointOfInterestTreeClearance"/> reads them, with a floor
 	/// written under every ground-storey room no yard floored, <see cref="AddRoomFloors"/>), each grown by how far a plant rooted
-	/// beside the wall reaches over it (2026-10-27, Moron 2: "houses don't occlude grass/flowers/details").
+	/// beside the wall reaches over it (Moron 2: "houses don't occlude grass/flowers/details").
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why in the data.</b> Since 2026-10-13 a building was kept clear only at draw time, by the path field its floor is
+	/// <b>Why in the data.</b> Formerly a building was kept clear only at draw time, by the path field its floor is
 	/// written to (FishGroundPaths.hlsl), and only two of the three detail renderers read that field: the blade grass and the
 	/// GPU scatter. The CPU chunk renderer (TerrainDetailField) never did, and it draws every mesh detail neither GPU renderer
 	/// takes: each kind outside their prefixes (ferns, herbs, mushrooms, lichens, cushions), every bush and litter type past the

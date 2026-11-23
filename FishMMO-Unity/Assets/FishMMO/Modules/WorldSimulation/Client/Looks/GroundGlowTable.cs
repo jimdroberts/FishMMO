@@ -8,7 +8,7 @@ using UnityEngine;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The glowing ground's globals (2026-10-25, phase I2r "molten ground", decision 65 (a); FishGroundGlow.hlsl, <see cref="GroundGlow"/>):
+	/// The glowing ground's globals ("molten ground"; FishGroundGlow.hlsl, <see cref="GroundGlow"/>):
 	/// whether any biome on the scene has a glowing ground layer, and the world's mean surface temperature the Whole mode reads. The
 	/// layers' own glows ride the terrain's layer table (TerrainArraySet.LayerGlow, its glow row); the clock is the shared motion clock
 	/// every terrain pixel already has. And the glowing ground's share of the lava's molten mask (<see cref="GroundGlowMask"/>), so the
@@ -68,7 +68,7 @@ namespace FishMMO.Client
 					}
 				}
 			}
-			/* And a climate variant's ground override (2026-10-26, GROUND-BANDS; I2r LEFT (a)): the bake already reads an override slot's
+			/* And a climate variant's ground override (I2r LEFT (a)): the bake already reads an override slot's
 			 * glow (TerrainArrayBaker.GlowOf resolves variant slots), so a glowing override must switch the table on too. */
 			if (biome.ClimateVariants != null)
 			{

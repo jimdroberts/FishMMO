@@ -29,8 +29,8 @@ namespace FishMMO.Shared.CustomBuildTool
 		/// keyword is unused as well. FISH_INDIRECT_FIRST_INSTANCE is a WebGPU device feature: every other player keeps it
 		/// globally off (WebGpuDrawCapabilities), and FishIndirectInstancing.hlsl reads it under SHADER_API_WEBGPU only, so off
 		/// WebGPU its two states are the same program and the enabled one is never requested.
-		/// On WebGPU the rule covers the two indirect shaders as before; natively (2026-11-03, a strict-variant-matching
-		/// player, the 2026-11-03 measurements) it covers all three twins.
+		/// On WebGPU the rule covers the two indirect shaders as before; natively (a strict-variant-matching
+		/// player, the measurements) it covers all three twins.
 		/// </summary>
 		public static bool IsUnusedTwinVariant(bool webGpu, bool indirect, bool twin, bool procedural, bool dots, bool lodGroupFade, bool firstInstance)
 		{

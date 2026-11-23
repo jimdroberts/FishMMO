@@ -9,7 +9,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The guards added after every generated material and terrain layer was written with empty
-	/// texture slots (2026-10-02: grey slab trees, flat ground): the empty-slot rule and its YAML scan,
+	/// texture slots (grey slab trees, flat ground): the empty-slot rule and its YAML scan,
 	/// the payload textures imported as 2D textures, the verification step before any wrapper, every
 	/// asset-editing batch closed in a finally, and the vegetation fades in every shader pass.
 	/// </summary>
@@ -39,7 +39,7 @@ namespace FishMMO.UnitTests
 		public void MaterialYaml_AnEmptyBaseMap_IsMissing_WhateverTheKeywords()
 		{
 			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords: []\n", "{fileID: 0}", "{fileID: 0}")),
-				Is.EqualTo(new[] { "_BaseMap" }), "what 2026-10-02's materials looked like");
+				Is.EqualTo(new[] { "_BaseMap" }), "what the materials looked like");
 			Assert.That(ProceduralArtWrapperCheck.MissingInMaterialYaml(MaterialYaml("  m_ValidKeywords: []\n", Texture, "{fileID: 0}")),
 				Is.Empty, "no normal-map keyword: an empty _BumpMap is not sampled");
 		}
@@ -129,7 +129,7 @@ namespace FishMMO.UnitTests
 				c => SourceScanPins.InOrder(SourceScanPins.Body(c, "private static IEnumerable<string> StepsOf(Context c)"),
 					"ImportPendingTextures(c);", "VerifyTextures(c);", "WriteTerrainLayers(c);", "WriteMaterials(c);"),
 				SourceScanPins.Replace("\t\t\tVerifyTextures(c);\n", string.Empty),
-				"the wrappers built straight after the import, as on 2026-10-02");
+				"the wrappers built straight after the import, as");
 		}
 
 		[Test]

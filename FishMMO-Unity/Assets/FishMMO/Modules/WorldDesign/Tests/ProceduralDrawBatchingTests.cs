@@ -6,7 +6,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The client's procedural draws off property blocks (2026-10-27): a <see cref="UnityEngine.MaterialPropertyBlock"/> takes a draw
+	/// The client's procedural draws off property blocks: a <see cref="UnityEngine.MaterialPropertyBlock"/> takes a draw
 	/// out of the SRP Batcher, and URP then sets up its whole shader state on the CPU (StdRender.ApplyShader). Each moved system now
 	/// draws with a material of its own (a DrawMaterials copy, or the runtime material it already made) whose per-draw numbers sit
 	/// in the shader's UnityPerMaterial, or (ambient and sea life) from an instance buffer; the backdrop's rings draw in play with a

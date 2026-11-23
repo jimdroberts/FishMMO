@@ -10,7 +10,7 @@ Shader "FishMMO/Water/Ocean"
         _DeepColor ("Deep", Color) = (0.06, 0.24, 0.35, 1)
         _ShoreColor ("Shore sediment", Color) = (0.55, 0.66, 0.52, 1)
         _ScatterColor ("Sub-surface scatter", Color) = (0.12, 0.45, 0.35, 1)
-        // In the cbuffer since the rebuild and missing from here since 2026-09-24, so every material
+        // In the cbuffer since the rebuild and missing from here, so every material
         // read it as black: the white caps and the surf drew as dark lace. A UnityPerMaterial member
         // that is not declared here is never filled from the material. FishWaterMaterialTests guards it.
         _FoamColor ("Foam", Color) = (0.95, 0.98, 1, 1)

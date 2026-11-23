@@ -12,7 +12,7 @@ using System.Linq;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A cave spot's habitat for the ambient cave life (split from BiomeCaveInteriorTests, Phase 4, 2026-11-17).
+	/// A cave spot's habitat for the ambient cave life (split from BiomeCaveInteriorTests).
 	/// </summary>
 	[TestFixture]
 	public class AmbientCaveHabitatTests
@@ -28,7 +28,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(BiomeCaveInteriors.LinkedHabitat(volcanic, barren, barren), Is.EqualTo(0), "the Lava Tube's own Barren is its lava fields'");
 			Assert.That(BiomeCaveInteriors.LinkedHabitat(ice | barren, cave, barren), Is.EqualTo(cave | barren), "barren land over it stays barren");
 			Assert.That(BiomeCaveInteriors.LinkedHabitat(volcanic, cave | ice, barren), Is.EqualTo(cave | ice));
-			// A spot of no interior keeps the land's (every spot baked before 2026-10-25).
+			// A spot of no interior keeps the land's (every spot baked formerly).
 			var spot = new SceneCaveLifeSpot { Kind = SceneCaveLifeKind.Floor };
 			Assert.That(AmbientCaveLife.SpotHabitat(in spot, AmbientHabitat.Volcanic | AmbientHabitat.Barren), Is.EqualTo(AmbientHabitat.Volcanic | AmbientHabitat.Barren));
 			spot.Biome = 123456789;

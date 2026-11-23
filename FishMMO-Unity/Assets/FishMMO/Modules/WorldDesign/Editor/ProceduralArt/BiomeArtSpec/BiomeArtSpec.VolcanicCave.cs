@@ -21,7 +21,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Volcanic)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Volcanic)
 				.Moat(BiomeMoatWater.Dry)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 1f),
 					(POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -35,10 +35,10 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.PirateCove, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f),
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.HerbGrove, 1f))
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.DragonLair, "Hoard", 1.4f)
 				.Prefers(POIType.WarbandCamp, "Black Host", 1.4f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Gathers("Emberglass Cluster", "Lumen Quartz Cluster", "Glowcap Cluster")
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.ErodesAs("Volcanic");

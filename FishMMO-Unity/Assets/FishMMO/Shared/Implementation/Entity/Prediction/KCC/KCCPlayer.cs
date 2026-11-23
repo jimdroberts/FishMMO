@@ -321,7 +321,7 @@ namespace FishMMO.Shared
 			if (!base.IsOwner || CharacterCamera != null) return;
 
 			/* The camera with a KCCCamera, not merely Camera.main: a world scene that brings its own active "Main Camera"
-			 * (the re-cut Moron 1 and 2 on 11-16) can win Camera.main, and adopting that one left the player camera
+			 * (the re-cut Moron 1 and 2) can win Camera.main, and adopting that one left the player camera
 			 * unbound for the whole session. Client.DisableStrayMainCameras switches such a camera off on load. */
 			KCCCamera found = null;
 			Camera mc = Camera.main;
@@ -898,7 +898,7 @@ namespace FishMMO.Shared
 			}
 			else
 			{
-				/* A ship under way (2026-10-12: "Solid sailing ships needs to be done."). Its hull is a pure function
+				/* A ship under way ("Solid sailing ships needs to be done."). Its hull is a pure function
 				 * of the synced tick and is already standing where this tick puts it (FloatingBoats poses every ship before
 				 * any replicate of the tick, live and in each replayed tick), so the carry is worked out from the same tick
 				 * this input reads the water at: the deck point under the rider's feet, moved rigidly from the last tick's

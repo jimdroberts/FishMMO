@@ -6,7 +6,7 @@ using FishMMO.Client;
 namespace FishMMO.RenderScratch
 {
 	/// <summary>
-	/// The Combat module's part of the panel render rig (moved with the module, 2026-11-20): the death dialog in the
+	/// The Combat module's part of the panel render rig (moved with the module): the death dialog in the
 	/// all-panels render.
 	/// </summary>
 	public static class CombatRenderScratch

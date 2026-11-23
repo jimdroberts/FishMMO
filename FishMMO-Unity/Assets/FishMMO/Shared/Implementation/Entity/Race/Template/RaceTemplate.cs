@@ -160,7 +160,7 @@ namespace FishMMO.Shared
 		public List<BiomeAffinity> BiomeAffinities = new List<BiomeAffinity>();
 
 		/// <summary>
-		/// Damage this race takes none of, whatever its resistances: a fire race's fire, lava included (2026-10-05:
+		/// Damage this race takes none of, whatever its resistances: a fire race's fire, lava included (
 		/// fire races are fire immune, and a city under the lava should be possible).
 		/// </summary>
 		[Header("Environment")]
@@ -409,8 +409,7 @@ namespace FishMMO.Shared
 		public static readonly HashSet<RaceTemplate> Loaded = new HashSet<RaceTemplate>();
 
 		/// <summary>
-		/// Raised when a race is loaded and unloaded. The Naming module's race registry follows these (Phase 4 of the core and
-		/// modules plan, 2026-11-18): the core names nothing of the name generator.
+		/// Raised when a race is loaded and unloaded. The Naming module's race registry follows these: the core names nothing of the name generator.
 		/// </summary>
 		public static event Action<RaceTemplate> RaceLoaded, RaceUnloaded;
 

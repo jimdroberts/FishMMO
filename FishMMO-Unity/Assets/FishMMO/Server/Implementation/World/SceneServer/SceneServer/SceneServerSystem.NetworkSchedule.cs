@@ -37,7 +37,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Keyed by the connection OBJECT, not its value: FishNet resets a connection's ClientId to -1 when it disconnects, and
 		/// NetworkConnection's hash and equality follow the ClientId, so a disconnected entry could no longer be found by its
 		/// own key — not read, not removed — and every tick threw KeyNotFoundException for 'Id [-1]' from then on (live,
-		/// 2026-11-18, after a client closed its session). Identity keeps the entry reachable until it is removed.
+		/// after a client closed its session). Identity keeps the entry reachable until it is removed.
 		/// </remarks>
 		private readonly Dictionary<NetworkConnection, (IPlayerCharacter Character, uint EngagedTick)> scheduledPlayers =
 			new Dictionary<NetworkConnection, (IPlayerCharacter, uint)>(ConnectionIdentityComparer.Instance);

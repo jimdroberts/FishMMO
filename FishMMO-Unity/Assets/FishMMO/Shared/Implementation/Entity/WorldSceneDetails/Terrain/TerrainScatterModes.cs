@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The scatter modes a terrain's prototypes carry to the client (2026-10-26, phase SCATTER-MODES, decision 34), beside the terrain
+	/// The scatter modes a terrain's prototypes carry to the client, beside the terrain
 	/// (written by the scene cut's scatter, TerrainScatter, only when some rule of the scene names a mode; a scene without one has no
 	/// record at all, so nothing in it changes): a detail prototype's facing, lean and power-law size for the GPU detail scatter, and a tree
 	/// prototype's lean for the tree renderer (a tree instance has no tilt of its own). Each is two words

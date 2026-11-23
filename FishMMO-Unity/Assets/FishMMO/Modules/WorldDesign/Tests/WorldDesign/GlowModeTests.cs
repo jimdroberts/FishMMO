@@ -15,11 +15,11 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The glow modes (2026-10-25, phase I6i; decisions 33, 40, 43, 46, 53, 56–59, 61, 64, 65, 68–76, 81, 83, 86, 89, 90, 92, 93, 95):
+	/// The glow modes:
 	/// every mode a pure function of the shared clock (and the published sky), meeting itself across the 10 000 s wrap, mirrored in
 	/// FishGlowModes.hlsl; every name a draft gave a mode resolves; the shared episode slot function (fountains, vents) and the
 	/// turbidity schedule; the template, spec, authoring and cloud-world plumbing; and every biome naming no mode glows exactly as
-	/// before (the old code paths kept word for word, nothing authored names one). Since I6i-b: TRAIL, KNEADING and EPISODE read the
+	/// before (the old code paths kept word for word, nothing authored names one). Now: TRAIL, KNEADING and EPISODE read the
 	/// stored lines and vents (SceneGlowPlaces), a light and its stone one row across a biome edge, nothing stored = the old stand-ins.
 	/// </summary>
 	[TestFixture]
@@ -99,7 +99,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				}
 				if (mode == SceneGlowMode.Flicker)
 				{
-					// The stormglass crackles by design (decision 33; SceneGlowAndWallLightTests holds its own continuity).
+					// The stormglass crackles by design (SceneGlowAndWallLightTests holds its own continuity).
 					continue;
 				}
 				// Through time, a hundredth of a second a step: no step jumps further than its fastest wave allows.
@@ -368,7 +368,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		[Test]
 		public void EveryDraftsNamedMode_Resolves()
 		{
-			// The names the drafts gave (decisions 33, 40, 43/46/69 warm, 53, 56–59, 61, 64, 65, 68, 70–72, 74–76, 81, 83, 86, 89, 90, 92, 93, 95).
+			// The names the drafts gave (43/46/69 warm, 53, 56–59, 61, 64, 65, 68, 70–72, 74–76, 81, 83, 86, 89, 90, 92, 93, 95).
 			(string name, SceneGlowMode mode)[] drafts =
 			{
 				("FLICKER", SceneGlowMode.Flicker), ("CAUSTIC", SceneGlowMode.Caustic), ("caustic pulse", SceneGlowMode.Caustic), ("STEP", SceneGlowMode.Step),
@@ -628,7 +628,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			StringAssert.Contains("into.Add(set < active.Count ? active[set].Emitters[found[i].index] : extra[set - active.Count].Emitters[found[i].index]);", emitters);
 		}
 
-		// ── I6i-b: the stand-ins switched to the stored data (decision 34) ──
+		// ── The stand-ins switched to the stored data ──
 
 		/// <summary>An L-shaped rille (300 m east, then 400 m north) of one line, and a short line far away.</summary>
 		private static List<VentLine> Rille() => new List<VentLine>

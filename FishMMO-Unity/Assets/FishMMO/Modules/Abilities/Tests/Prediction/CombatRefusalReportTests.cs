@@ -284,7 +284,7 @@ namespace FishMMO.UnitTests
 			int evade = knockback.IndexOf("CharacterEvade.RefusesHostileEffects(target, initiator)", StringComparison.Ordinal);
 			int impulse = knockback.IndexOf("motor.BaseVelocity = currentVelocity", StringComparison.Ordinal);
 			LogAssert.IsTrue(evade >= 0 && impulse > evade, "an evading NPC is never displaced");
-			// Written as an early return since 2026-11-18: an immortal defender is still never displaced.
+			// Written as an early return: an immortal defender is still never displaced.
 			LogAssert.IsTrue(knockback.Contains("defenderDamageController.Immortal)") && !knockback.Contains("!defenderDamageController.Immortal"),
 				"and Immortal keeps exactly the meaning it had");
 		}

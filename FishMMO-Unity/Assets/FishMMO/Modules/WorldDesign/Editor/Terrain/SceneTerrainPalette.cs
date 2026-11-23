@@ -17,8 +17,8 @@ namespace FishMMO.Shared.WorldDesign
 		Cliff,
 		/// <summary>
 		/// Ground under water: the biome's lakebed (under a lake or the sea), its riverbed (under a river) and its extra bed layers by
-		/// depth (<see cref="SceneTerrainPalette.SlotBed"/>), told apart by <see cref="SceneTerrainPalette.Entry.Slot"/> (decision 35,
-		/// 2026-10-18; before, the riverbed was painted only when a biome had no lakebed, so every river lay on the lakebed).
+		/// depth (<see cref="SceneTerrainPalette.SlotBed"/>), told apart by <see cref="SceneTerrainPalette.Entry.Slot"/>
+		/// (before, the riverbed was painted only when a biome had no lakebed, so every river lay on the lakebed).
 		/// </summary>
 		Submerged,
 		/// <summary>
@@ -43,7 +43,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <c>terrainLayers</c> as it stands while the cut paints, so channel <i>i</i> of every tile's
 	/// alphamap means the same ground to the painter, the scatter and the cliffs, and the
 	/// texture-array slice <i>i</i> is that ground's art. At the very end of the cut each tile keeps
-	/// only the layers it paints (TerrainTileLayerSync.Compact, 2026-10-27: Moron 2's tiles carried
+	/// only the layers it paints (TerrainTileLayerSync.Compact: Moron 2's tiles carried
 	/// 210 layers, 53 control maps, to paint at most 62), every weight unchanged; the scene's order
 	/// stays the numbering everything counts by, each tile records which scene layer its channels
 	/// hold (TerrainTileLayers), and the few readers that turn a channel into a slice rename it
@@ -58,7 +58,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <para>
 	/// <b>Capped at <see cref="MaximumLayers"/></b>, the most the terrain's index map can name (a byte per
 	/// layer; TerrainIndexMap) and a texture array every target API holds. It was 32 (eight control maps of
-	/// four channels, all read per pixel) until 2026-10-16. Past the cap the least-covering biomes' detail layers go
+	/// four channels, all read per pixel) formerly. Past the cap the least-covering biomes' detail layers go
 	/// first, then their cliffs; a biome's main layer is never dropped while another biome's
 	/// detail layer is kept, because a biome without its base ground is unreadable and one without
 	/// its variation is merely plainer. What was dropped is reported, never silent.
@@ -75,7 +75,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const string SlotCliff = "cliff/";
 		public const string SlotLakebed = "lakebed";
 		public const string SlotRiverbed = "riverbed";
-		/// <summary>The prefix of a biome's extra bed layers by depth (<c>bed/0</c> …; BiomeLocalArt.BedSlot), 2026-10-18.</summary>
+		/// <summary>The prefix of a biome's extra bed layers by depth (<c>bed/0</c> …; BiomeLocalArt.BedSlot).</summary>
 		public const string SlotBed = BiomeLocalArt.SlotBed;
 		/// <summary>The river sediment slots: the sand and gravel a biome's bars are painted with, its Bar Sand and Bar Gravel.</summary>
 		public const string SlotSand = BiomeLocalArt.SlotBarSand;
@@ -113,7 +113,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			if (slot.StartsWith(BiomeLocalArt.SlotVariant, StringComparison.Ordinal) || slot.StartsWith(SlotBed, StringComparison.Ordinal))
 			{
-				// A climate variant's ground override (variant/frozen/main), or a bed layer by depth (bed/0), 2026-10-18.
+				// A climate variant's ground override (variant/frozen/main), or a bed layer by depth (bed/0).
 				return BiomeLocalArt.CommittedLayer(biome, slot);
 			}
 			return null;
@@ -146,8 +146,8 @@ namespace FishMMO.Shared.WorldDesign
 			/// </summary>
 			public int Ground = -1;
 			/// <summary>
-			/// The climate variant whose ground override this entry is (<see cref="BiomeClimateVariant.TextureLayerOverrides"/>,
-			/// 2026-10-18), or null for the biome's own layer: within the variant's envelope it takes the share of
+			/// The climate variant whose ground override this entry is (<see cref="BiomeClimateVariant.TextureLayerOverrides"/>),
+			/// or null for the biome's own layer: within the variant's envelope it takes the share of
 			/// <see cref="Ground"/> the biome's own layer gives up (BiomeSplatPainter).
 			/// </summary>
 			public BiomeClimateVariant Variant;
@@ -252,11 +252,11 @@ namespace FishMMO.Shared.WorldDesign
 		/// </param>
 		/// <param name="worldAir">
 		/// The air of the scene's world (BiomeAir.MaskOf its atmosphere), for the ground layers' air bands
-		/// (<see cref="TerrainTextureLayer.airBand"/>, decision 44, 2026-10-18): a main, detail or cliff layer banded to other airs is
+		/// (<see cref="TerrainTextureLayer.airBand"/>): a main, detail or cliff layer banded to other airs is
 		/// left out, and a main layer so left out hands its place to the first air-banded detail layer that names the world's air
 		/// (<see cref="AirStandIn"/>). None (unknown) passes every band; no layer banded, nothing changes.
 		/// </param>
-		/// <param name="world">The scene's world for the world bands (<see cref="TerrainTextureLayer.worldBand"/>, decision 68); null (unknown) passes every band.</param>
+		/// <param name="world">The scene's world for the world bands (<see cref="TerrainTextureLayer.worldBand"/>); null (unknown) passes every band.</param>
 		public static SceneTerrainPalette Build(SceneBiomeField field,
 			Func<BiomeTemplate, string, TerrainTextureLayer, TerrainLayer> resolveSlot, Func<BiomeTemplate, TerrainLayer> placeholder,
 			Func<BiomeTemplate, IReadOnlyList<(string slot, TerrainTextureLayer source)>> sediment = null,
@@ -281,14 +281,14 @@ namespace FishMMO.Shared.WorldDesign
 			for (int b = 0; b < field.Biomes.Count; b++)
 			{
 				BiomeTemplate biome = field.Biomes[b];
-				/* The main ground for the world's air (decision 44): a main layer banded to other airs gives its place to the first
+				/* The main ground for the world's air: a main layer banded to other airs gives its place to the first
 				 * air-banded detail layer that names this one, painted as the main ground under its own slot's art and rules (the
 				 * Dust Sea's grey moondust on an airless moon, its rust dust under a thin sky). Without such a detail, or with no art
 				 * for it, the main layer stays: a biome is never left without its ground. */
 				TerrainTextureLayer mainSource = biome.MainTextureLayer;
 				string mainSlot = SlotMain;
 				int standIn = mainSource != null && !mainSource.AdmitsAir(worldAir) ? AirStandIn(biome, worldAir) : -1;
-				// A main layer banded to other worlds (decision 68), or an air stand-in that is, hands its place the same way: to the first
+				// A main layer banded to other worlds, or an air stand-in that is, hands its place the same way: to the first
 				// air- or world-banded detail this world admits. No world band set, nothing changes.
 				if (mainSource != null && !(standIn >= 0 ? biome.DetailTextureLayers[standIn] : mainSource).AdmitsWorld(world))
 				{
@@ -320,7 +320,7 @@ namespace FishMMO.Shared.WorldDesign
 					candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = mainSource, Role = PaletteRole.Main, Slot = mainSlot, Placeholder = mainPlaceholder, Ground = 0 }, main, 0));
 				}
 
-				/* Under water (decision 35 (h), 2026-10-18): the lakebed under a lake or the sea, the riverbed under a river, each its
+				/* Under water: the lakebed under a lake or the sea, the riverbed under a river, each its
 				 * own entry (BiomeSplatPainter shares the bed between them by the water over it). The riverbed was a candidate only when
 				 * a biome had no lakebed, so it was never painted: every river lay on its biome's lakebed. Where both are one terrain
 				 * layer they are one channel and the splat is what it was. */
@@ -334,7 +334,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					candidates.Add((new Entry { BiomeIndex = b, Biome = biome, Source = biome.RiverbedTextureLayer, Role = PaletteRole.Submerged, Slot = SlotRiverbed }, riverbedLayer, 1));
 				}
-				// The extra beds by depth (decision 35 (b)), kept or dropped with the details: a lake without its deeps is plainer, not unreadable.
+				// The extra beds by depth, kept or dropped with the details: a lake without its deeps is plainer, not unreadable.
 				int beds = biome.BedTextureLayers != null ? Math.Min(biome.BedTextureLayers.Count, BiomeTemplate.MaximumBedLayers) : 0;
 				for (int k = 0; k < beds; k++)
 				{
@@ -365,7 +365,7 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					foreach ((string slot, TerrainTextureLayer source) in biomePaths)
 					{
-						// The ways of a ground this world does not paint (decision 44) are not its ways either: no channel spent on them.
+						// The ways of a ground this world does not paint are not its ways either: no channel spent on them.
 						if (BiomeLocalArt.TryParseWaySlot(slot, out string wayGround, out _) && (!PaintsGround(biome, wayGround, standIn, worldAir) || !GroundOfWorld(biome, wayGround, standIn, world)))
 						{
 							continue;
@@ -385,13 +385,13 @@ namespace FishMMO.Shared.WorldDesign
 					for (int c = 0; c < biome.CliffTextureLayers.Count; c++)
 					{
 						CliffTextureLayer cliff = biome.CliffTextureLayers[c];
-						// A cliff banded to other airs than the world's is not this world's rock face (decision 44); one banded to
-						// the biome's caves alone is their inner wall, not the terrain's (2026-10-25, I2n).
+						// A cliff banded to other airs than the world's is not this world's rock face; one banded to
+						// the biome's caves alone is their inner wall, not the terrain's.
 						if (cliff != null && (!cliff.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(cliff.underground)))
 						{
 							continue;
 						}
-						// A rock face banded to other worlds is not this world's (decision 68).
+						// A rock face banded to other worlds is not this world's.
 						if (cliff != null && !cliff.AdmitsWorld(world))
 						{
 							continue;
@@ -408,13 +408,13 @@ namespace FishMMO.Shared.WorldDesign
 					for (int d = 0; d < biome.DetailTextureLayers.Count; d++)
 					{
 						TerrainTextureLayer detail = biome.DetailTextureLayers[d];
-						// The main ground's stand-in is painted as the main; a detail banded to other airs is not this world's (decision 44).
-						// A detail banded to the biome's caves alone floors them, never the terrain (2026-10-25, I2n).
+						// The main ground's stand-in is painted as the main; a detail banded to other airs is not this world's.
+						// A detail banded to the biome's caves alone floors them, never the terrain.
 						if (d == standIn || detail != null && (!detail.AdmitsAir(worldAir) || !BiomeUndergrounds.OnSurface(detail.underground)))
 						{
 							continue;
 						}
-						// A ground banded to other worlds is not this world's either (decision 68).
+						// A ground banded to other worlds is not this world's either.
 						if (detail != null && !detail.AdmitsWorld(world))
 						{
 							continue;
@@ -426,7 +426,7 @@ namespace FishMMO.Shared.WorldDesign
 						}
 					}
 				}
-				/* The biome's climate variants' ground overrides (decision 29, 2026-10-18): each one with art is a layer of the
+				/* The biome's climate variants' ground overrides: each one with art is a layer of the
 				 * scene, painted in the variant's envelope in place of the slot it stands in for. Kept or dropped with the details
 				 * (a biome without its frozen look is plainer, not unreadable); none listed, none added, and the palette is as it was. */
 				if (biome.ClimateVariants != null)
@@ -504,8 +504,8 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The detail layer that stands in for a biome's main ground on a world whose air the main layer's band does not name
-		/// (decision 44, 2026-10-18): the first detail layer with an air band (<see cref="TerrainTextureLayer.airBand"/>) that names
+		/// The detail layer that stands in for a biome's main ground on a world whose air the main layer's band does not name:
+		/// the first detail layer with an air band (<see cref="TerrainTextureLayer.airBand"/>) that names
 		/// <paramref name="worldAir"/>; −1 when none does (the main layer then stays). A detail without a band never stands in: it
 		/// is ground of every world, not the other world's main.
 		/// </summary>
@@ -552,7 +552,7 @@ namespace FishMMO.Shared.WorldDesign
 			return -1;
 		}
 
-		/// <summary>The detail that stands in for a main ground refused by the world's air or its world band (decisions 44, 68): the first air- or world-banded surface detail admitting both; −1 for none.</summary>
+		/// <summary>The detail that stands in for a main ground refused by the world's air or its world band: the first air- or world-banded surface detail admitting both; −1 for none.</summary>
 		public static int StandIn(IReadOnlyList<TerrainTextureLayer> details, BiomeAtmosphereRequirement worldAir, BiomeWorldConditions? world)
 		{
 			if (details == null)
@@ -586,7 +586,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The fallback path slices: x earth, y road, z cobbles (the most-covering biome's of each), −1 for one the palette
 		/// lacks. Where a pixel's ground has its own biome's earth, road or cobbles, <see cref="PathLayerMap"/> wins (the
-		/// cobbles have had their own map since 2026-10-15, so each biome's streets are paved with its template's Cobbles
+		/// cobbles have had their own map, so each biome's streets are paved with its template's Cobbles
 		/// layer; before, this one slice paved every biome's).
 		/// </summary>
 		public Vector4 PathLayers(float[] coverage)
@@ -614,7 +614,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// most-covering one when biomes share it), for one path slot; −1 where none. What lets the shader wear a path
 		/// through a desert into packed sand and through a forest into a littered track, by the ground under each pixel.
 		/// A ground layer that carries a way of its own gives that instead (<see cref="WayLayer"/>: a Taiga bog layer's
-		/// corduroy road, the rest of the Taiga's gravel), 2026-10-16.
+		/// corduroy road, the rest of the Taiga's gravel).
 		/// </summary>
 		public float[] PathLayerMap(string slot, float[] coverage)
 		{
@@ -652,7 +652,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The slice one way (<paramref name="waySlot"/>: <see cref="SlotPathEarth"/>, <see cref="SlotPathGravel"/>,
 		/// <see cref="SlotPathStone"/>) is drawn with across one of a biome's grounds (<paramref name="groundSlot"/>), among
 		/// that biome's entries: the ground layer's own way when it carries one (<c>detail/2/road</c>,
-		/// TerrainTextureLayer.ways, 2026-10-16), else the biome's (<c>road</c>); −1 when the palette has neither.
+		/// TerrainTextureLayer.ways), else the biome's (<c>road</c>); −1 when the palette has neither.
 		/// </summary>
 		public static int WayLayer(IReadOnlyList<Entry> biomeEntries, string groundSlot, string waySlot)
 		{

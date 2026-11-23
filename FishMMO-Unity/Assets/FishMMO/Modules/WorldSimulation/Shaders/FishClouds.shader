@@ -21,7 +21,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             // Vulkan through DXC, not FXC + HLSLcc: this pass inlines the whole march (a dozen copies of the
             // density), about 32 000 instructions, and HLSLcc took a minute a pass to turn that into 3 MB of
             // GLSL for glslang to compile again — the editor sat on "compiling" for many minutes after any
-            // cloud edit (2026-10-10). DXC goes to SPIR-V in about a second and a half. Other APIs unchanged.
+            // cloud edit. DXC goes to SPIR-V in about a second and a half. Other APIs unchanged.
             #pragma use_dxc vulkan
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -405,7 +405,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // answer, a long march full of scattered light, while the post's own pixels hold almost
                 // none. Bilinear taps at offsets, weighed by the depth at the TAP (not at the texel the
                 // tap mostly reads), blended the sky's texel in before any weight could keep it out: pale
-                // blocks round every leaf against the sky at a low march (ScenePerfProbe, 2026-10-07).
+                // blocks round every leaf against the sky at a low march (ScenePerfProbe).
                 float2 size = rcp(_FishCloudComposite.xy);
                 float rawHere = SampleSceneDepth(input.uv);
                 float here = LinearEyeDepth(rawHere, _ZBufferParams);
@@ -499,7 +499,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             float _FishFallingFog;
             // That fog's colour: RenderSettings.fogColor as SkySystem publishes it for the sky (rgb). Not unity_FogColor,
             // which a full-screen pass is not handed (it read black: the sky under falling rain went to black at the
-            // horizon above a lit sea, 2026-10-26).
+            // horizon above a lit sea).
             float4 _FishSkyFogColor;
             // The march's own globals this pass reads (FishCloudVolume.hlsl, which this pass does not include): the
             // shown rain (y) and its extinction (w), the cloud base over the viewer (z, m), the ground map, and the deck.
@@ -537,7 +537,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             // How much of a sky ray's view the low deck would fill past where the march stops drawing it, 0..1. A deck is a
             // level sheet: in perspective its base runs down onto the horizon and never stops short of it. The march draws
             // it out to its draw distance and thins it away over the last three tenths, so under a heavy deck a strip of
-            // bare dome showed between the deck's edge and the horizon (2026-10-26). Past that distance the deck is behind
+            // bare dome showed between the deck's edge and the horizon. Past that distance the deck is behind
             // so much air that it is the haze's colour (the march fades its last stretch to exactly that), so the rest of
             // it is that colour by the low band's cover — none on a clear day, all under an overcast. The world's curve is
             // in: a ray at or below the level still reaches the base's height once the ground has curved away under it.
@@ -629,7 +629,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 // HERE, at the screen's own pixels and by this pixel's own depth — the depth the ground's fog is drawn
                 // by — and not in the march: laid into the low-resolution buffer, the sky's texels held the fog and the
                 // ridge's texels did not, and the upscale, which takes far ground and sky for one surface, swapped them
-                // along every far ridge (a dotted bright line, bare sky round the silhouettes, 2026-10-26).
+                // along every far ridge (a dotted bright line, bare sky round the silhouettes).
                 #if UNITY_REVERSED_Z
                     bool isSky = rawDepth <= 1e-6;
                 #else
@@ -660,14 +660,14 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     {
                         // In the deck or over it the falling air is below, past the cloud the ray goes through first: behind
                         // the clouds. In front, it drew a pale strip between the level and the ground across the inside of
-                        // a cloud, where every direction should be the cloud's own grey (2026-10-26).
+                        // a cloud, where every direction should be the cloud's own grey.
                         clouds = float4(clouds.rgb + clouds.a * (1.0 - fallingThrough) * _FishSkyFogColor.rgb, clouds.a * fallingThrough);
                     }
                     // And the air in front of it all, as the ground and the sea take it (FishAerialThrough, after their own
                     // distance fog): out to where the ray reaches the low deck's base, under the deck's share of the sky —
                     // the open sky is the clear air's own colour already. In front of the deck, as the falling fog is: the
                     // deck is the farthest thing on the ray. So at the horizon the sky under a deck, the far sea and the
-                    // far ground end on one colour, the haze, laid last over each (2026-10-26).
+                    // far ground end on one colour, the haze, laid last over each.
                     float3 skyRay = normalize(toSurface);
                     float baseAbove = _FishCloudShear.z - _WorldSpaceCameraPos.y;
                     if (baseAbove > 0.0 && _FishCloudHaze.a > 0.0)
@@ -1018,7 +1018,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     bool isSky = rawDepth >= 1.0 - 1e-6;
                 #endif
                 float air = isSky ? 1.0 : 1.0 - exp(-LinearEyeDepth(rawDepth, _ZBufferParams) / max(1.0, _FishGodRayAir.y));
-                // Not in a cave's air (2026-10-21): with no sky in view the gather takes every way as lit, and the air's
+                // Not in a cave's air: with no sky in view the gather takes every way as lit, and the air's
                 // depth then glowed the far walls toward the sun and let them go dark as they were walked up to.
                 float3 surface = ComputeWorldSpacePosition(input.uv, rawDepth, UNITY_MATRIX_I_VP);
                 rays *= air * FishOpenAir(GetCameraPositionWS(), surface);
@@ -1239,7 +1239,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         }
 
         // ── 10: the far band, in four slices, one marched a frame ──
-        // Two thirds of a fair sky's march was cloud past ten kilometres (ScenePerfProbe 2026-10-07), and the march is
+        // Two thirds of a fair sky's march was cloud past ten kilometres (ScenePerfProbe), and the march is
         // as slow as its longest rays: marching a quarter of the texels in turn saved nothing, since each still walked
         // the whole far band. So the far band is cut into four slices by distance (_FishCloudFarBounds) and every texel
         // marches ONE of them a frame, in turn — every ray a quarter as long, and all the GPU's threads in step. Each
@@ -1247,7 +1247,7 @@ Shader "Hidden/FishMMO/Weather/Clouds"
         // (at infinity: a camera moving at 50 m/s shifts a cloud five kilometres off by under a pixel in three frames);
         // where it cannot be — off that view's screen, its ray now ending elsewhere — it is marched at once. A slice
         // behind a near band and nearer slices that already let nothing through is not marched at all. Writes near and
-        // far together, which the steadying reads in place of pass 0's march. 2026-10-07: distant clouds may be
+        // far together, which the steadying reads in place of pass 0's march. Distant clouds may be
         // softer for this.
         Pass
         {

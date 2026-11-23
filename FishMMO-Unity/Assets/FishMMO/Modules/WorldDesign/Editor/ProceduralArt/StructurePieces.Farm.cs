@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"): the farm's barns, ricks, stooks, scarecrows, sties and hen houses.
+	/// The town's other buildings ("more structure types for towns, villages, and cities"): the farm's barns, ricks, stooks, scarecrows, sties and hen houses.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -91,7 +91,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			// The roof: thatch at 50°, its ridge along the barn, the gables under it at each end; at its palette's pitch, or a flat
-			// canopy over the walls (StructureRoofs, I6h).
+			// canopy over the walls (StructureRoofs).
 			Matrix4x4 ridgeAlongX = Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(0f, 90f, 0f), Vector3.one);
 			const float rise = 6.5f, overhang = 0.7f;
 			OwnRoofPlan roof = OwnGable(d, depth, width, top, rise, overhang, 0.32f, StructureMaterial.Thatch, 20, ridgeAlongX);

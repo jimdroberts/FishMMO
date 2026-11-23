@@ -13,7 +13,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Pins the client GC pass of 2026-10-27: nothing the client runs every frame makes garbage. The profiler then showed a
+	/// Pins the client GC pass: nothing the client runs every frame makes garbage. The profiler then showed a
 	/// steady ~9 KB a frame, nearly half of it from one getter (the "Active" profile lookups, ~110 calls a frame at 40 bytes
 	/// each), the rest from strings formatted in render passes, setting names rebuilt per read and terrain arrays.
 	/// </summary>
@@ -194,7 +194,7 @@ namespace FishMMO.UnitTests
 		}
 
 
-		// ── Follow-up pass (2026-10-27, allocation callstacks) ──────
+		// ── Follow-up pass (allocation callstacks) ──────
 
 		[Test]
 		public void GrassAndAmbient_MakeNoDelegatesOrSortersPerFrame()

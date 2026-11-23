@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// What the run-time cave cover reads of a cave's rock (2026-11-03), baked at the cut beside its pieces in the scene's caves
+	/// What the run-time cave cover reads of a cave's rock, baked at the cut beside its pieces in the scene's caves
 	/// asset and named on its <see cref="CaveCoverSite"/>: per piece, its vertices cut down to the four attributes
 	/// FishCaveCover.compute reads (position, normal, colour, TEXCOORD3, each in the piece's own format, so the cover lands bit
 	/// for bit where the mesh would put it) and its first submesh's indices.

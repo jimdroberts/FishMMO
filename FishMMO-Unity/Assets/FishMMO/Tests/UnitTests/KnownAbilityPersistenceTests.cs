@@ -129,8 +129,8 @@ namespace FishMMO.UnitTests
 		{
 			/* Base abilities and effects share character_known_ability, keyed by template id, and
 			 * they live in different caches. Asking only one of them dropped the other. */
-			/* The core load hands the rows to the Abilities module's controller (IAbilityPersistence.RestoreKnowledge,
-			 * 2026-11-20), which resolves them. */
+			/* The core load hands the rows to the Abilities module's controller (IAbilityPersistence.RestoreKnowledge),
+			 * which resolves them. */
 			LogAssert.IsTrue(ReadSource(LoadingPath).Contains("abilityController.RestoreKnowledge(templateIDs, unknown);"),
 				"the core load must hand every known row to the controller");
 			string source = ReadSource(ControllerPersistencePath);

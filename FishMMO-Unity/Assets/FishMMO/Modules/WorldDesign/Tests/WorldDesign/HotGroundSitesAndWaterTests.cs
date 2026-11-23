@@ -13,7 +13,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The Moron 2 round of 2026-10-27: (1) a scene with no river or lake on its ground is given a hydrology asset for the water its
+	/// The Moron 2 round: (1) a scene with no river or lake on its ground is given a hydrology asset for the water its
 	/// sites lay (hot spring and sulphur pools, paddies, rills), which until then stood dry; (2) the hot ground's dug sites are points
 	/// of interest (GeothermalPointsOfInterest: geysers, hot springs, mud pots, fumaroles, sulphur pools, the Great Spout); (3) a
 	/// biome's structure styles never strand a sited kind without a template (Earth 0 had made every cave, ice cave, nest and bone
@@ -52,7 +52,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		}
 
 		/// <summary>
-		/// The cause (run 2026-10-27: Moron 2's 6 and Ithaewyn 1's 5 pools "left dry"): a re-cut deletes the terrain folder, the cut
+		/// The cause (one run: Moron 2's 6 and Ithaewyn 1's 5 pools "left dry"): a re-cut deletes the terrain folder, the cut
 		/// saves a hydrology asset only for a river or lake on the ground, and the pools were written before a cave's water made one.
 		/// Now the pools' and the paddies' writers make it, at the sea's level the place stage read before letting a dry scene's water go.
 		/// </summary>
@@ -81,7 +81,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			POIType[] kinds = { POIType.Geyser, POIType.MudPot, POIType.Fumarole, POIType.SulphurPool };
 			Assert.That((int)POIType.Geyser, Is.EqualTo((int)POIType.SeaHall + 1), "appended");
 			Assert.That((int)POIType.SulphurPool, Is.EqualTo((int)POIType.Geyser + 3), "in that order");
-			// Only the fantasy wave follows them (2026-10-27, FantasyWaveKindsTests pins the rest).
+			// Only the fantasy set follows them (FantasySetKindsTests pins the rest).
 			Assert.That((int)POIType.DragonLair, Is.EqualTo((int)POIType.SulphurPool + 1));
 			PointOfInterestRules rules = PointOfInterestRules.Default();
 			string sheet = Code("Assets/FishMMO/Modules/Map/Client/UIMapPOI.uss");

@@ -5,7 +5,7 @@ using FishMMO.Core;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// The World Interactables module (2026-11-20): the furniture of a world a player uses. Containers, NPC dialogue,
+	/// The World Interactables module: the furniture of a world a player uses. Containers, NPC dialogue,
 	/// gathering nodes, lore objects, shrines, capture points, switches and bindstones, each with its ECA action, its
 	/// window and, for dialogue and containers, the server system that answers their follow-up requests.
 	/// </summary>

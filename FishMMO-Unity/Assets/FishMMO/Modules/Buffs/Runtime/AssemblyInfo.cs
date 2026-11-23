@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-// Module test assemblies and the test harness (2026-11-20: the core tests that exercise buffs moved with them).
+// Module test assemblies and the test harness (the core tests that exercise buffs moved with them).
 [assembly: InternalsVisibleTo("FishMMO.Buffs.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.Abilities.Tests")]
 [assembly: InternalsVisibleTo("FishMMO.NPCs.Tests")]
@@ -13,3 +13,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("FishMMO.TestHarness.Server")]
 [assembly: InternalsVisibleTo("FishMMO.TestHarness.Editor")]
 [assembly: InternalsVisibleTo("FishMMO.UnitTests")]
+[assembly: InternalsVisibleTo("FishMMO.Mounts.Tests")]

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The town's other buildings (2026-10-19: "more structure types for towns, villages, and cities"): the trades' houses and yards: healer, bakery, workshops, dye works, kilns, brewhouse.
+	/// The town's other buildings ("more structure types for towns, villages, and cities"): the trades' houses and yards: healer, bakery, workshops, dye works, kilns, brewhouse.
 	/// </summary>
 	/// <remarks>
 	/// <para>

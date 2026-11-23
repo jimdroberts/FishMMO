@@ -6,14 +6,14 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// The plants a biome's still fresh water carries on its surface (<see cref="BiomeTemplate.FloatingPlants"/>, 2026-10-18, phase
-	/// I2i, decision 27): duckweed carpets, water-lily pads and their flowers, water hyacinth mats, frogbit rosettes, laid on the
+	/// The plants a biome's still fresh water carries on its surface (<see cref="BiomeTemplate.FloatingPlants"/>, phase
+	/// I2i): duckweed carpets, water-lily pads and their flowers, water hyacinth mats, frogbit rosettes, laid on the
 	/// lakes, ponds, moats and slack river pools whose water lies in the biome. Append-only (stored by value); each kind is drawn
 	/// by the biome art generator as a detail mesh of its own (FloatingPlantMeshes) and laid by the cut as a baked prop at the
 	/// water's surface (FloatingPlants).
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-18 no water carried anything on its surface; an empty list (every biome's default, and what the authoring
+	/// Formerly no water carried anything on its surface; an empty list (every biome's default, and what the authoring
 	/// writes until a biome's file names its own with <c>.Floats(...)</c>) keeps it so.
 	/// </remarks>
 	public enum BiomeFloatingPlantKind : byte
@@ -27,7 +27,7 @@ namespace FishMMO.Shared.Biomes
 		/// <summary>Frogbit: small kidney-shaped floating leaves in rosettes, three-petalled white flowers, in the shallow sheltered margins.</summary>
 		Frogbit = 3,
 
-		// The kinds the biome drafts name (2026-10-25, phase I2i-b), appended in the order the infrastructure map lists them.
+		// The kinds the biome drafts name, appended in the order the infrastructure map lists them.
 		/// <summary>Tasselweed (Ruppia): fine thread leaves just under the surface of brackish pannes, its seed tassels floating on it.</summary>
 		Tasselweed = 4,
 		/// <summary>Sacred lotus (Nelumbo nucifera): round blue-green leaves lying on the water and raised over it, pink-white cup flowers, seed pods.</summary>
@@ -260,7 +260,7 @@ namespace FishMMO.Shared.Biomes
 		private const float Deep = 10000f;
 
 		/// <summary>
-		/// How a kind appended since I2i grows (2026-10-25, I2i-b): <see cref="Cover"/> is <see cref="Peak"/> × shelter ^
+		/// How a kind appended later grows: <see cref="Cover"/> is <see cref="Peak"/> × shelter ^
 		/// <see cref="ShelterPower"/> × <see cref="DepthBand"/>(depth, <see cref="Depth"/>), thinning to nothing from
 		/// <see cref="ShoreFall"/>.x to .y metres out from the shore (none when .y is 0), and a little shy of the very edge over
 		/// <see cref="EdgeMetres"/> (a rooted plant's stalk needs water under it).
@@ -284,7 +284,7 @@ namespace FishMMO.Shared.Biomes
 		}
 
 		/// <summary>
-		/// The habit of a kind appended since I2i (pure); false for the first four (their rules are written out in <see cref="Cover"/>)
+		/// The habit of a kind appended later (pure); false for the first four (their rules are written out in <see cref="Cover"/>)
 		/// and for a value no kind has. Free-floating kinds pile up in shelter near a shore; rooted ones hold a band of depth.
 		/// </summary>
 		public static bool TryHabit(BiomeFloatingPlantKind kind, out Habit habit)

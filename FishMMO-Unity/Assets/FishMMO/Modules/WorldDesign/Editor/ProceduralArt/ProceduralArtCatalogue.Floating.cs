@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The plants floating on still fresh water (2026-10-18, phase I2i, decision 27): their detail entries (built by
+	/// The plants floating on still fresh water: their detail entries (built by
 	/// <see cref="FloatingPlantMeshes"/>), their kinds' traits, and the prefab each <see cref="BiomeFloatingPlantKind"/> is laid as.
 	/// </summary>
 	/// <remarks>
@@ -49,7 +49,7 @@ namespace FishMMO.Shared.WorldDesign
 					accents: new[] { H("#f8f6ee"), H("#f0d040") },
 					groupMetres: 4f, groupSize: 10f, sink: new Vector2(0.002f, 0.006f)),
 
-				// The drafts' kinds (2026-10-25, I2i-b), in BiomeFloatingPlantKind's order from Tasselweed. Colours from the drafts.
+				// The drafts' kinds, in BiomeFloatingPlantKind's order from Tasselweed. Colours from the drafts.
 				// Ruppia: thread leaves under the surface, the seed tassels on it (accent).
 				Afloat("PondTasselweed", DetailKind.Tasselweed, 50, 0.03f, 0.28f, 0.9f, "#4a6a3a", "#5e7a42", 0.006f, H("#8a8a5a")),
 				// Nelumbo nucifera: blue-green leaves 0.6 m across, pink-white flowers, a gold heart, a seed pod.
@@ -107,7 +107,7 @@ namespace FishMMO.Shared.WorldDesign
 			};
 		}
 
-		/// <summary>A floating detail's entry (I2i-b): still, unbent, never snow-buried, grouped as the first four, its own sink.</summary>
+		/// <summary>A floating detail's entry: still, unbent, never snow-buried, grouped as the first four, its own sink.</summary>
 		private static DetailSpec Afloat(string name, DetailKind kind, int count, float height, float width, float radius, string a, string b, float sink,
 			params Color[] accents)
 		{
@@ -127,7 +127,7 @@ namespace FishMMO.Shared.WorldDesign
 					traits.TintPatchMetres = 9f;
 					break;
 				case DetailKind.WaterHyacinth:
-				// The drafts' kinds that stand up out of the water or ride half sunk (I2i-b) cast shadows; the rest lie flat.
+				// The drafts' kinds that stand up out of the water or ride half sunk cast shadows; the rest lie flat.
 				case DetailKind.SacredLotus:
 				case DetailKind.AmericanLotus:
 				case DetailKind.WaterLettuce:
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 				case BiomeFloatingPlantKind.WaterHyacinth: return DetailPrefab("PondHyacinth");
 				case BiomeFloatingPlantKind.Frogbit: return DetailPrefab("PondFrogbit");
 				default:
-					// The drafts' kinds (I2i-b): "Pond" and the kind's own name, as FloatingDetails names them.
+					// The drafts' kinds: "Pond" and the kind's own name, as FloatingDetails names them.
 					return kind >= BiomeFloatingPlantKind.Tasselweed && System.Enum.IsDefined(typeof(BiomeFloatingPlantKind), kind) ? DetailPrefab("Pond" + kind) : null;
 			}
 		}

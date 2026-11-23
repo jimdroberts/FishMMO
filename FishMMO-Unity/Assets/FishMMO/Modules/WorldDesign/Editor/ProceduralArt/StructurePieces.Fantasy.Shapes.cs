@@ -9,13 +9,13 @@ namespace FishMMO.Shared.WorldDesign
 	{
 		/// <summary>
 		/// How high a hanging monastery's deck stands over its origin, and how far behind the origin the rock face is at that height
-		/// (2026-10-27): FaceSnapShaper sets the site so the face at <see cref="HangingDeckHeight"/> stands <see cref="HangingBackReach"/>
+		///: FaceSnapShaper sets the site so the face at <see cref="HangingDeckHeight"/> stands <see cref="HangingBackReach"/>
 		/// behind it, and the deck's back edge meets the rock there, its beams running on into it.
 		/// </summary>
 		public const float HangingDeckHeight = 6.5f, HangingBackReach = 1.5f;
 
 		/// <summary>
-		/// The fantasy wave's Shapes pieces (2026-10-27, poi-fantasy-wave/WAVE.md): laid by id (=HangingCloister); the one tag,
+		/// The fantasy set's Shapes pieces: laid by id (=HangingCloister); the one tag,
 		/// "monument", no template's query draws, so no older pick moves.
 		/// </summary>
 		private static void AddFantasyShapes(List<StructurePiece> list)

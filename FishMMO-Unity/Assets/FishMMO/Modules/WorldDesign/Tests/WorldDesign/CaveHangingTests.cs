@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// What hangs from a cave's roof and piles under it (2026-10-20, caves livened): the plan each form gets, the rules the
+	/// What hangs from a cave's roof and piles under it (caves livened): the plan each form gets, the rules the
 	/// roots and the guano keep, and the art (glow-worm silk, tap roots, guano heaps) as long, as seated and as cheap as it says.
 	/// </summary>
 	[TestFixture]

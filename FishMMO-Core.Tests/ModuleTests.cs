@@ -301,7 +301,7 @@ namespace FishMMO.Core.Tests
 		public override void Install(ModuleBuilder builder) { }
 	}
 
-	/// <summary>The phase 1c gate: Core names no feature, engine or network library.</summary>
+	/// <summary>The core boundary gate: Core names no feature, engine or network library.</summary>
 	public class CoreBoundaryTests
 	{
 		[Test]

@@ -28,7 +28,7 @@ namespace FishMMO.Shared.Biomes
 	/// vine climbs.
 	/// </summary>
 	/// <remarks>
-	/// Until 2026-10-16 the scene cut read this from a table keyed by the biome's name (VineBiomes); the biome art authoring
+	/// Formerly the scene cut read this from a table keyed by the biome's name (VineBiomes); the biome art authoring
 	/// now writes that table's row onto every template, so a re-cut grows the same vines until a template is changed. No
 	/// species: the biome grows no vines anywhere (deserts, ice, the sea floor, the airless plains).
 	/// </remarks>

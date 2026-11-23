@@ -13,7 +13,7 @@
 // URP's inline samplers (sampler_LinearClamp): every texture here other than _FishGroundColour itself is read through
 // one, never through sampler_FishGroundColour. A pass that reads only the normal map or the heights (a shadow or depth
 // pass running the skirt) has _FishGroundColour stripped, and its sampler then matches no texture: Vulkan and D3D
-// reject the shader ("Unrecognized sampler 'sampler_fishgroundcolour'", 2026-10-08).
+// reject the shader ("Unrecognized sampler 'sampler_fishgroundcolour'").
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/GlobalSamplers.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishGroundHeightLoads.hlsl"
 
@@ -154,7 +154,7 @@ float4 FishContactParams()
 //
 // Every loop over tiles or control maps here is UNITY_LOOP with a runtime bound and no return inside: FXC (Unity's
 // HLSL compiler) otherwise tries to unroll a constant-bound loop with early exits and texture reads in full, at every
-// call site, in every variant — the vegetation and rock shaders' compile stalled at 84% (2026-10-08).
+// call site, in every variant — the vegetation and rock shaders' compile stalled at 84%.
 int FishGroundTileAt(float2 xz, out float2 t)
 {
     t = float2(0.0, 0.0);
@@ -176,7 +176,7 @@ int FishGroundTileAt(float2 xz, out float2 t)
 
 // No check of the traced ground against the instance's root: cliff rocks are pushed INTO the slope at placement (up to
 // 85 % of their thickness, CliffRockPlacement), so a root metres from the surface is normal, and such a check switched
-// the blend off for them and painted a flat-plane band halfway up instead (2026-10-08). The trace is safe without it:
+// the blend off for them and painted a flat-plane band halfway up instead. The trace is safe without it:
 // what stands above the ground measures far above it, and what is buried is hidden by the terrain.
 
 // A slice's texel-centre coordinate for a 0..1 tile position: texel 0 on the tile's edge, as the terrain addresses
@@ -465,7 +465,7 @@ struct FishGroundSite
 // The band reads as a skirt of ground drawn up over the object's foot: solid terrain over its lower third, fading
 // into the object above (the profile's strength scales the fade, never the solid foot). Every orientation takes it —
 // walls, trunks and the rounded underside of a rock's bevel just above the ground, which faces DOWN and was skipped as
-// an "overhang": that bare, self-shadowed lip was the hard dark line under every rock (2026-10-08).
+// an "overhang": that bare, self-shadowed lip was the hard dark line under every rock.
 //
 // A wall cannot read the terrain's texture where the terrain reads it, straight down: every texel of the ground line
 // would streak up the wall. The band instead UNFOLDS the ground up the wall: a pixel h metres up reads the ground h

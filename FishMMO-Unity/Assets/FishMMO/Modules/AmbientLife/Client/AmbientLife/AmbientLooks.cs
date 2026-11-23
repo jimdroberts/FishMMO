@@ -29,7 +29,7 @@ namespace FishMMO.Client
 	}
 
 	/// <summary>
-	/// The ambient animals dressed for the biome under them (2026-10-15: "Grass, flowers, critters, and other detail objects
+	/// The ambient animals dressed for the biome under them ("Grass, flowers, critters, and other detail objects
 	/// look identical on all biomes and/or planets"). Each group, when placed, takes one of its biome's twelve looks
 	/// (<see cref="FloraPaletteMap.LookAt"/>) by a weighted pick from its own seed, so the same group wears the same coat
 	/// for every player and every frame; its members all wear it, each a little lighter or darker by its own tint.
@@ -91,7 +91,7 @@ namespace FishMMO.Client
 				case AmbientShape.Snail:
 				case AmbientShape.Worm:
 					return Mix(0.7f, 0.4f, 0.8f, 0.2f, 1f);
-				// The water's: a fish's and a jelly's pale tones keep more of their own (the caves' never wear a look: 2026-10-20).
+				// The water's: a fish's and a jelly's pale tones keep more of their own (the caves' never wear a look).
 				case AmbientShape.Fish:
 				case AmbientShape.Jelly:
 					return Mix(0.65f, 0.3f, 0.5f, 0.3f, 1f);

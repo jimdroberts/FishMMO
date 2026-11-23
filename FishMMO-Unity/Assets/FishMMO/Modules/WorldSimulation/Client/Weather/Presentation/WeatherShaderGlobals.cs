@@ -95,7 +95,7 @@ namespace FishMMO.Client
 			// whole bands (FishWindTravel), so nothing scrubs as the wind eases and the bands agree.
 			// The pace is the scene's wind at the window's start (AirDrift: the wind the weather reports, with what the
 			// scene's author and its runtime air add), the same number on every machine wherever its player stands
-			// (2026-10-15: it was the wind at each player's own camera, sampled on that client's own cadence, so two
+			// (it was the wind at each player's own camera, sampled on that client's own cadence, so two
 			// players saw a meadow's gust bands in different places, and one who joined mid-window another again).
 			double into = WorldMotion.Window(WindHoldSeconds, out long window);
 			double windowStart = window * WindHoldSeconds;

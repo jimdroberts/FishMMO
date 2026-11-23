@@ -101,7 +101,7 @@ typedef struct {
      * budget they are dropped; that alone never disconnects, because
      * datagrams are unreliable by contract and an honest client can
      * deliver a burst (a browser flushing datagrams it queued while it
-     * could not transmit got players flood-kicked, 2026-11-12).  Only
+     * could not transmit got players flood-kicked).  Only
      * WT_DGRAM_ABUSE_WINDOWS consecutive one-second windows each with
      * at least `rate` refusals (the client sending twice its budget)
      * set kick_pending.  Same single-writer rule as above.

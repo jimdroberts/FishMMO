@@ -268,7 +268,7 @@ namespace FishMMO.UnitTests.Weather
 					Assert.That(kind.Flies, Is.False, $"{kind.Name} flies in air too thin to beat a wing in");
 				}
 			}
-			Assert.That(earthly, Is.EqualTo(62), "forty-four of the land and air, eighteen of the caves (ten of them the light-makers, 2026-10-20)");
+			Assert.That(earthly, Is.EqualTo(62), "forty-four of the land and air, eighteen of the caves (ten of them the light-makers)");
 			Assert.That(thin, Is.GreaterThanOrEqualTo(3));
 			Assert.That(frozen, Is.GreaterThanOrEqualTo(3));
 		}
@@ -331,7 +331,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void NightCritters_KeepToTheNight()
 		{
-			// 2026-10-14: the night's animals are the night's. A third of the rats and mice used to be out by day.
+			// the night's animals are the night's. A third of the rats and mice used to be out by day.
 			AmbientConditions mildNoon = At(0.5, true, 18f);
 			AmbientConditions warmNight = At(0.0, false, 20f);
 			float day = AmbientGating.Activity(Kind("Rat"), mildNoon);
@@ -390,7 +390,7 @@ namespace FishMMO.UnitTests.Weather
 		[Test]
 		public void Swarms_AnOrdinaryDayHasItsBugs()
 		{
-			// 2026-10-14: a mild drizzly noon (12 °C, rain 0.11) had no insects about at all.
+			// a mild drizzly noon (12 °C, rain 0.11) had no insects about at all.
 			AmbientConditions mildDrizzle = At(0.5, true, 12f, rain: 0.11f);
 			Assert.That(AmbientGating.Activity(Kind("Gnat cloud"), mildDrizzle), Is.GreaterThan(0.5f), "gnats in the drizzle");
 			Assert.That(AmbientGating.Activity(Kind("Fly swarm"), mildDrizzle), Is.GreaterThan(0.2f), "and flies");

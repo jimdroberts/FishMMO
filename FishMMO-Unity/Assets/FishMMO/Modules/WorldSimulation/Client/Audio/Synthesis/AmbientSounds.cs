@@ -22,7 +22,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Fitted to recordings (2026-10-19).</b> Each bed is a <see cref="Bed"/> measured from field recordings (Wikimedia
+	/// <b>Fitted to recordings.</b> Each bed is a <see cref="Bed"/> measured from field recordings (Wikimedia
 	/// Commons): its octave spectrum; how much it swells with the gusts and how fast; how much it flutters within them;
 	/// and its events — the drops, knocks, hailstones, bubbles and leaves breaking — with a spread of loudness that gives
 	/// the recording's peakiness (a light rain is a few loud drops over a quiet bed; a downpour, a steady roar). The first

@@ -29,7 +29,7 @@ namespace FishMMO.UnitTests
         [Test]
         public void AllOwnedWeatherAndWaterFogPragmasUseTheDynamicConfiguration()
         {
-            // The core's ground shaders and every installed module's (the weather's and the water's moved into modules, Phase 4).
+            // The core's ground shaders and every installed module's (the weather's and the water's moved into modules).
             foreach (string folder in new[] { "Assets/Prefabs/Client/Weather/Shaders", "Assets/FishMMO/Modules/WorldSimulation/Shaders", "Assets/FishMMO/Modules/Water/Shaders" })
             foreach (string path in Directory.Exists(System.IO.Path.Combine(Directory.GetCurrentDirectory(), folder)) ? Directory.GetFiles(folder, "*.shader") : System.Array.Empty<string>())
             {

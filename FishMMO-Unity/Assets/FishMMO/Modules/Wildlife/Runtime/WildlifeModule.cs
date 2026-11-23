@@ -5,7 +5,7 @@ using FishMMO.Shared;
 
 namespace FishMMO.Shared
 {
-	/// <summary>The Wildlife module (2026-11-20). See the module's README.</summary>
+	/// <summary>The Wildlife module. See the module's README.</summary>
 	public sealed class WildlifeModule : GameModule
 	{
 		/// <summary>The module's id.</summary>

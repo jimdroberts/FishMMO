@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// A cave piece's collider mesh (2026-10-20, <see cref="CaveMesher.ColliderOf"/>): the piece's own triangles on welded
+	/// A cave piece's collider mesh (<see cref="CaveMesher.ColliderOf"/>): the piece's own triangles on welded
 	/// positions only, so the surface a player walks on, bumps into and is stopped by is exactly the drawn rock, closed where
 	/// it was closed, at a fraction of the render layout's memory.
 	/// </summary>

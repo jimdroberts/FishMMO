@@ -10,20 +10,20 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The <c>Rocky Terrain</c> biome's entry (<see cref="Entries"/>, by its asset's name).</summary>
 		private static Entry RockyTerrain()
 		{
-			// The shattered high cold desert of the Pamir (biome round, approved 2026-10-25, authored 2026-10-26), in the register of
+			// The shattered high cold desert of the Pamir, in the register of
 			// the Pamir principalities of Wakhan, Shughnan and Badakhshan: dark blue-black hornstone baked by old granites and frost-split
 			// into knife-edged combs, needle spires and block fields; white marble bands where lapis lies in blue veins; broad flat pamirs
 			// between the ranges, sedge turf ringed with salt round milky streams and still lakes; teresken gravel and silver cushions
 			// on the slopes, rock glaciers in the shaded cirques; not a tree in the east, a line of crooked birch and wild rose along
 			// each stream in the Wakhan; lamp-lit flat-roofed stone houses on the alluvial fans, led channels watering bearded red
 			// wheat; its fantasy the dragon of the lake, the silent-trade stone tower, the night-lamp gem of the ruby mountain.
-			// On thin-aired and airless worlds (decisions 41, 44) the frost-shattered rock stays but nothing alive does: the main ground
+			// On thin-aired and airless worlds the frost-shattered rock stays but nothing alive does: the main ground
 			// gives way to the rust-lee hornstone (Thin) and the zap-shattered rock (Airless), a rigid mineral wool stands where the
 			// grass would, nobody lives there and nothing burns.
 			// Reaches: COLD t ≤ −0.2 (the treeless eastern Pamir), MID, WARM t ≥ 0.4 (the Badakhshan sun-slopes).
-			// LATER (I9): every ground and object texture as Rocky Terrain's own variant of its recipe (decision 12).
-			// LATER (RARE-LOOKS, no spec column yet): rare looks Dragonlake + Kuhilal.
-			// LATER (I9b): the Tien Shan birch stream strip (the kit's birch stands in), the birch drift deadwood, the stone roof roller
+			// LATER: every ground and object texture as Rocky Terrain's own variant of its recipe.
+			// LATER (no spec column yet): rare looks Dragonlake + Kuhilal.
+			// LATER: the Tien Shan birch stream strip (the kit's birch stands in), the birch drift deadwood, the stone roof roller
 			// and horn finials, the dung-cake stacks at the camps; the sorted stripes on the regs.
 			return E("Rocky Terrain", L(Ground.RockHornstoneShatter,
 					// The pamirs' and slopes' sparse cover, never off the living air.
@@ -89,7 +89,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Lapis in the marble, the night-lamp gem warm after sunset.
 				.Crystals((BiomeCaveCrystalKind.Lajvard, 0.7f), (BiomeCaveCrystalKind.Shabchiragh, 0.25f))
 				.GlowMode(SceneGlowSource.Crystal, SceneGlowMode.AfterSunset, warm: true)
-				// The roof of the world (I2g-c presets): flat pamir floors, serrated combs, the fans at the gorge mouths, rock glaciers in the
+				// The roof of the world (presets): flat pamir floors, serrated combs, the fans at the gorge mouths, rock glaciers in the
 				// shaded cirques, a salt pan on a dry pamir floor.
 				.Landforms(BiomeLandformPresets.Named("Pamir").Painted(2, BiomeLandformPart.Floor).Capped(0, 2),
 					BiomeLandformPresets.Named("ShatterComb").Painted(1, BiomeLandformPart.Whole),
@@ -98,7 +98,7 @@ namespace FishMMO.Shared.WorldDesign
 					BiomeLandformPresets.Named("SaltPan").Painted(2, BiomeLandformPart.Floor).Capped(1, 1))
 				.Look(BiomeLookClass.Alpine)
 				.Wildlife(BiomeHabitat.Mountain | BiomeHabitat.Barren)
-				// LATER (AMBIENT-LIFE): argali herds (moving up at noon on the shared clock), manul at dusk on the block fields, chukar
+				// LATER: argali herds (moving up at noon on the shared clock), manul at dusk on the block fields, chukar
 				// coveys, bar-headed geese over the passes in the spring and autumn halves of the year, a pair of Pamir wolves at dawn, the
 				// dragon-horse in the Dragon Lake shallows on moonlit nights, the Pari herders at dawn on their fold. All need air.
 				.Moat(BiomeMoatWater.Dry)
@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.TradingPost, 0.4f), (POIType.Watermill, 0.4f), (POIType.Camp, 0.6f), (POIType.BanditCamp, 0.4f), (POIType.HuntingLodge, 0.3f),
 					(POIType.Nest, 0.4f), (POIType.MonsterDen, 0.3f), (POIType.FallenStar, 0.2f), (POIType.Portal, 0.05f), (POIType.DungeonEntrance, 0.3f),
 					(POIType.HerbGrove, 0.3f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 1f), (POIType.GoblinWarren, 1f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 1.2f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f),
@@ -187,7 +187,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Timber", 0f)
 				.Prefers(POIType.Hermitage, "Stone", 1.6f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Dwarven Hold", 1.2f)
 				.Prefers(POIType.Tower, "Dwarven Tower", 1f)
@@ -205,7 +205,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.MountainKingsHall, "Kings Before the Gate", 1.2f)
 				.Prefers(POIType.SilverMineTown, "Stone Delving", 1.3f)
 				.Prefers(POIType.DwarvenGate, "Deep Gate", 1.2f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				// The natural kinds keep their air flag off (the approved draft): Belron 1 and Ithaewyn 1 keep their peaks, combs, caves,
 				// landmarks, fallen stars and ore veins.
 				.Air(POIType.Village, true).Air(POIType.Town, true).Air(POIType.City, true).Air(POIType.Keep, true)
@@ -216,7 +216,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Air(POIType.MonsterDen, true).Air(POIType.AncientRoad, true).Air(POIType.Graveyard, true).Air(POIType.Barrow, true)
 				.Air(POIType.StoneCircle, true).Air(POIType.Battlefield, true).Air(POIType.HerbGrove, true)
 				.Water(POIType.Spring).Water(POIType.Lake).Water(POIType.HotSpring)
-				// LATER (I7): Rocky Terrain's signature pieces and their variants — the chid hamlet with its five-pillared hall and
+				// LATER: Rocky Terrain's signature pieces and their variants — the chid hamlet with its five-pillared hall and
 				// lantern ceiling (Village 2.0), the fort-town, the spur fort (Keep/Fortress), the crag citadel (Castle ≤ 1), the round
 				// watch-tower, the pass refuge and the Stone Tower (Waystation/TradingPost), the oston shrine, the exile's cave, the
 				// lajvard mine, the horizontal mill, the grotto bath, the Saka rings, the old-faith terraces, the sangar, the shpun, the
@@ -225,7 +225,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Favours(BiomeStructureStyle.Earth, 0.8f)
 				.Favours(BiomeStructureStyle.Timber, 0.1f)
 				// The palette: mud-laid hornstone rubble walls, flat earth roofs, hornfels plinths, chip-carved birch trim, fort-street
-				// paving, undyed homespun and a single long white pennant. LATER (NEW-SURFACES): Mud-laid hornstone, Pamir earth roof,
+				// paving, undyed homespun and a single long white pennant. LATER: Mud-laid hornstone, Pamir earth roof,
 				// Chip-carved birch, Wakhi homespun and Alam pennant as Rocky Terrain's own surfaces; the shared ones tinted stand in.
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.Wall, BiomeStructureMaterial.Fieldstone, UplandHex("#4a444a"))
 				.Builds(BiomeStructureStyle.Stone, BiomeStructureRole.UpperWall, BiomeStructureMaterial.Fieldstone, UplandHex("#4a444a"))
@@ -250,12 +250,12 @@ namespace FishMMO.Shared.WorldDesign
 				.Weathers(BiomeStructureFinish.None, 0f, 0f)
 				.Coated(BiomeStructureCoat.Sunfrost, 0.5f, 0.8f)
 				// Red-beard wheat and a grass-pea stand-in on the fan fields behind their clearance rows.
-				// LATER (I9b): Detail_CropRedBeardWheat and Detail_CropGrassPea as their own crops.
+				// LATER: Detail_CropRedBeardWheat and Detail_CropGrassPea as their own crops.
 				.Crops(("Detail_CropBarleySixRow", 0.6f), ("Detail_CropChickpea", 0.4f))
 				.Lines(new Entry.Line("ClearanceRow"))
 				.Crosses(BiomeCrossingStyle.Cantilever)
 				// The lamp-bowls on rubble pillars and in wall niches, small and dim; the lapis mine and the ruby mountain by crystal
-				// post. Off the breathable air nothing burns (Glow only, decision 41).
+				// post. Off the breathable air nothing burns (Glow only).
 				.Lights(POIType.Village, BiomeWayLightKind.Chiragh, 18f)
 				.Lights(POIType.Town, BiomeWayLightKind.Chiragh, 14f)
 				.Lights(POIType.City, BiomeWayLightKind.Chiragh, 13f)
@@ -268,13 +268,13 @@ namespace FishMMO.Shared.WorldDesign
 				.CaveLight(BiomeCaveLightPlace.MineDrift, BiomeWayLightKind.Chiragh, 15f)
 				.CaveLight(BiomeCaveLightPlace.MineStope, BiomeWayLightKind.CrystalPost)
 				.NoVines()
-				// LATER (I7): Shabchiragh only at the ruby mountain, Allardia and Dragonhead near the herb groves.
+				// LATER: Shabchiragh only at the ruby mountain, Allardia and Dragonhead near the herb groves.
 				.Gathers("Lajvard", "Shabchiragh", "Teresken", "Pamir Hips", "Dragonhead", "Allardia", "Hornstone")
 				.Herbs("Detail_HerbDracocephalum", "Detail_FlowersAllardia")
 				.ErodesAs("Mountain");
 		}
 
-		/// <summary>The hornfels boulders (I6b stones of the crust rock): round, slab and spire (the Rocky Terrain file's).</summary>
+		/// <summary>The hornfels boulders (stones of the crust rock): round, slab and spire (the Rocky Terrain file's).</summary>
 		private static string[] HornfelsBoulders => new[] { Boulder("Hornfels", "Round"), Boulder("Hornfels", "Slab"), Boulder("Hornfels", "Spire") };
 	}
 }

@@ -6,14 +6,14 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// A ship adrift on the open sea (2026-10-25, phase I2p, decision 42): a weed-locked derelict, or the whaler towing her prize,
+	/// A ship adrift on the open sea: a weed-locked derelict, or the whaler towing her prize,
 	/// laid as one hull moored on the water with no floor (never aground) through <see cref="FloatingBoats"/>, exactly as a harbour
 	/// moors its boats: the root and its collider rise and fall only with the tide (the server keeps it, so she can be boarded), the
 	/// drawn hull under it bobs on the swell on the client. Sails furled, or a longship's oars shipped: nobody is sailing her.
 	/// </summary>
 	/// <remarks>
 	/// The sites are hosted by no biome until a round names them (PointOfInterestRules: <c>.Adrift(50, 1000).Only()</c>), so this
-	/// builds nothing in any scene today. The whale fall, the barnacle log and the longline have no pieces yet (with the I7 vessels and
+	/// builds nothing in any scene today. The whale fall, the barnacle log and the longline have no pieces yet (with the vessels and
 	/// props): their sites are named and discoverable, with nothing laid.
 	/// </remarks>
 	[InitializeOnLoad]

@@ -3,7 +3,7 @@ mergeInto(LibraryManager.library, {
         The game loop on the browser's animation frames, with the frame-rate cap as "every Nth display frame".
 
         With Application.targetFrameRate set, Unity's web player schedules each frame with setTimeout (Emscripten's
-        timing mode 0), out of step with the display. In Firefox (159, 2026-11-11) that showed as the picture snapping
+        timing mode 0), out of step with the display. In Firefox (159) that showed as the picture snapping
         back: recorded at 40 fps, ten frames were pixel-identical to the frame two or three before while differing from
         the one just before, so the canvas was presenting textures out of order, and the camera, the character and
         everything else jumped back about 80 ms and forward again. Drawing inside the browser's own frame update (mode 1,

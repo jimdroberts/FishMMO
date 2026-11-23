@@ -20,7 +20,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Look(BiomeLookClass.Alpine)
 				.Wildlife(BiomeHabitat.Mountain)
 				.Moat(BiomeMoatWater.Frozen)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Tower, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f),
 					(POIType.Cave, 1f), (POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f),
@@ -37,7 +37,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.PirateCove, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f), (POIType.SunkenCity, 1f),
 					(POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f), (POIType.CrystalFormation, 1f),
 					(POIType.HerbGrove, 1f), (POIType.Dockyard, 0.2f), (POIType.Watermill, 0.2f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.DragonLair, 1.2f), (POIType.TrollBridge, 1.2f), (POIType.GiantsSteading, 1f), (POIType.GoblinWarren, 1f),
 					(POIType.HangingTree, 0.6f), (POIType.BuriedHoard, 0.8f), (POIType.AmbushSite, 0.8f), (POIType.Crossroads, 1f),
 					(POIType.BoundaryStone, 0.6f), (POIType.SignalBeacon, 1.2f), (POIType.TollGate, 0.8f), (POIType.Hamlet, 1f),
@@ -63,7 +63,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.Tower, "Observatory", 2f)
 				.Prefers(POIType.Hermitage, "Stone", 2f)
 				.Prefers(POIType.DungeonEntrance, "Door", 1.4f)
-				// The fantasy wave (2026-10-27): its variants here, and who holds the keeps and towers.
+				// The fantasy set: its variants here, and who holds the keeps and towers.
 				.Prefers(POIType.Tower, "Wizard", 0.5f)
 				.Prefers(POIType.Keep, "Dwarven Hold", 1.2f)
 				.Prefers(POIType.Tower, "Dwarven Tower", 1f)
@@ -81,7 +81,7 @@ namespace FishMMO.Shared.WorldDesign
 				.Prefers(POIType.MountainKingsHall, "King's Gate", 1.3f)
 				.Prefers(POIType.SilverMineTown, "Stone Delving", 1.3f)
 				.Prefers(POIType.DwarvenGate, "Deep Gate", 1.2f)
-				// (the fantasy wave's variants end here)
+				// (the fantasy set's variants end here)
 				.Gathers("Silver Vein", "Starsilver Vein", "Frostbloom Patch", "Frostpine Elder")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)
 				.ErodesAs("Mountain");

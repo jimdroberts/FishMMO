@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Water in a cave (2026-10-20, caves livened, <see cref="CaveStreams"/>): where it lies (<see cref="PlanStreams"/>, read
+	/// Water in a cave (caves livened, <see cref="CaveStreams"/>): where it lies (<see cref="PlanStreams"/>, read
 	/// only from the system's shapes) and the bed the field cuts for it — a stream's channel under the bench beside a passage's
 	/// way, a pool's bowl, a fall's plunge pool — unioned into the void beside the lava's (the Tube hook in CaveSystem.cs), so
 	/// everything that reads the field (the mesher, the dressing, the walk checks) sees one cave.
@@ -404,7 +404,7 @@ namespace FishMMO.Shared.WorldDesign
 					continue;
 				}
 				bool welling = float.IsNaN(carried) || i - lastEnd > 15 || samples[i].Bank - carried > CaveStreams.MaxSink;
-				// Run on from the run before only where its water went on under the rock (2026-10-21: it sank in its bed a pace or
+				// Run on from the run before only where its water went on under the rock (it sank in its bed a pace or
 				// two from this one's head); anywhere else this one wells up afresh.
 				Vector3 under = new Vector3(samples[i].At.x, Mathf.Min(carried, samples[i].Bank - CaveStreams.Drop), samples[i].At.z);
 				if (!welling && (lastBody < 0 || !UnderRock(plan.Bodies[lastBody].Path[plan.Bodies[lastBody].Path.Length - 1], under, 0.3f, 0.5f * width)))
@@ -504,7 +504,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Every stream that still sinks into its bed where other water lies near its end, no higher than it (another stream's
-		/// channel, a pool): run on into it (<see cref="RunOnTo"/>), nearest first (2026-10-21: two passages' streams came to a
+		/// channel, a pool): run on into it (<see cref="RunOnTo"/>), nearest first (two passages' streams came to a
 		/// junction at one level and one sank there a few paces from the other; a chamber's stream sank beside the trunk's).
 		/// </summary>
 		private void SinksRunOn(CaveStreamPlan plan)
@@ -850,7 +850,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A spring pouring out of a crack in the wall over a stream's head into it: from as high as the wall stands over the
 		/// channel (the fall at least <see cref="CaveStreams.MinFall"/>, drawn as one), landing on the stream's line a little way
-		/// down it, where the water thrown out of the crack comes down (2026-10-21: <see cref="Thrown"/>; set by geometry alone,
+		/// down it, where the water thrown out of the crack comes down (<see cref="Thrown"/>; set by geometry alone,
 		/// the curtain the inland water traces came down on the bench beside the stream). The run before the landing is dropped,
 		/// so no dry channel lies upstream of the water. Nothing where the head lies in a room, out from its walls.
 		/// </summary>
@@ -1674,7 +1674,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Water falling from the roof's avens (2026-10-20: an aven is where water once fell in down a joint; in a wet cave it
+		/// Water falling from the roof's avens (an aven is where water once fell in down a joint; in a wet cave it
 		/// still does), by the seed: out of a crack in the aven's wall partway up it, into a pool on the floor round where the
 		/// water thrown out of the crack comes down (<see cref="Thrown"/>). Where no pool fits under an aven (most stand over a
 		/// way), a thin shower instead, laid once every other body is (<see cref="Showers"/>): the avens that shower, their cracks
@@ -1757,7 +1757,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// The showers (<see cref="AvenFalls"/>), laid once every other body is so each comes down in water: out of a crack on
 		/// whichever side of its aven throws it into a stream's channel (on the channel's line, at its surface: CaveStreamWater
 		/// joins it to the stream) or a pool under it; else into a small plunge pool of its own beside the way; else into the
-		/// splash basin its water wore in the floor (<see cref="SplashFits"/>); else none (2026-10-21: a shower used to come down on
+		/// splash basin its water wore in the floor (<see cref="SplashFits"/>); else none (a shower used to come down on
 		/// the bare floor and sink, beside a stream as often as not).
 		/// </summary>
 		private void Showers(CaveStreamPlan plan, List<(int aven, Vector3 crack, float turn)> showers)
@@ -2035,7 +2035,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// Whether a fall from a lip to its landing is open the whole way down on the rough field (2026-10-21: a shower down an
+		/// Whether a fall from a lip to its landing is open the whole way down on the rough field (a shower down an
 		/// aven's wall ran through a knob of it halfway down).
 		/// </summary>
 		private bool FallOpen(Vector3 lip, Vector3 landing)
@@ -2052,7 +2052,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Where water leaves a crack in an aven's wall: out from the aven's middle to the smooth wall's face, then back off it
-		/// until the rough field (as the mesher cuts the rock) is open there too (2026-10-21: a knob of the wall stood 0.3 m
+		/// until the rough field (as the mesher cuts the rock) is open there too (a knob of the wall stood 0.3 m
 		/// proud of the smooth face, and the crack was set inside it).
 		/// </summary>
 		private Vector3 CrackLip(Vector3 crack, Vector3 dir, float reach)

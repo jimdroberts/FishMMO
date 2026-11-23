@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// Keeps the ground round every cave opening bare of what would stand over it (2026-10-27, Moron 2: "we need to ensure they
+	/// Keeps the ground round every cave opening bare of what would stand over it (Moron 2: "we need to ensure they
 	/// are proper cave entrances/holes and the ground details don't overlap the hole itself"): every detail layer (grass, flowers,
 	/// ferns, litter, scattered stones and bushes) emptied within <see cref="DetailMargin"/> of an opening's edge, and every
 	/// scattered tree, bush and boulder (the terrain's tree instances) whose crown would reach within <see cref="TreeMargin"/> of

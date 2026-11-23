@@ -67,7 +67,7 @@ namespace FishMMO.Client
 		/// <para>
 		/// Not scaled by the field of view. It was, by tan(fov/2) against a 73.74-degree reference, to keep the picture
 		/// moving the same at any view: at the camera's 60 degrees that turned 23% less per count than the same number
-		/// elsewhere, and a player's usual sensitivity felt slow (2026-11-11), so the scale is the plain one.
+		/// elsewhere, and a player's usual sensitivity felt slow, so the scale is the plain one.
 		/// </para>
 		/// </remarks>
 		public static float MouseDegreesPerCount => LookSensitivity * DegreesPerCount;

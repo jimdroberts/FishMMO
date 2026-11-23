@@ -1532,7 +1532,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Spawner
 
 		/// <summary>
 		/// True when the ground a cast struck suits the species (<see cref="WildlifeRules.LivesOn"/>): under the sky or in a cave as
-		/// its shelter says (2026-11-21: deer and elk spawned in caves, the cast falling through a cave mouth's terrain hole onto
+		/// its shelter says (deer and elk spawned in caves, the cast falling through a cave mouth's terrain hole onto
 		/// its floor), and on one of its grounds by the painted texture (<see cref="GroundQuery"/>).
 		/// </summary>
 		private bool GroundSuits(IWildlifeSpecies species, in RaycastHit hit)

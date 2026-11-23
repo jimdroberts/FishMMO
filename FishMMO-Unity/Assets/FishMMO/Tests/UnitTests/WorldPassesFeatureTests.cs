@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The world's shared render passes are core (Phase 4 of the core and modules plan, 2026-11-17): the depth pyramid, the
+	/// The world's shared render passes are core: the depth pyramid, the
 	/// shadow cascade bounds, the WebGPU light table and the cached main-light shadows are queued by FishWorldPassesFeature
 	/// on every renderer, not by the clouds, so a game without the weather module keeps its lighting and shadows.
 	/// </summary>
@@ -31,7 +31,7 @@ namespace FishMMO.UnitTests
 				LogAssert.IsTrue(renderer.Contains("  - {fileID: " + doc.Groups[1].Value + "}\n"), $"and lists it among its features ({tier})");
 				LogAssert.IsTrue(doc.Value.Contains("  m_Active: 1\n"), $"active ({tier})");
 				LogAssert.IsTrue(doc.Value.Contains("PassesCompute: {fileID: 7200000, guid: " + compute), $"with its core compute, so a build carries it ({tier})");
-				// The caves' skylight shafts are core lighting (Phase 4, 2026-11-18): their shader rides on the core feature.
+				// The caves' skylight shafts are core lighting: their shader rides on the core feature.
 				LogAssert.IsTrue(doc.Value.Contains("SkylightShaftsShader: {fileID: 4800000, guid: " + shafts), $"and the skylight shafts' shader ({tier})");
 			}
 		}

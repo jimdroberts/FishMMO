@@ -11,7 +11,7 @@ namespace FishMMO.Shared
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Baked, not built.</b> The cut routes, carves and rasterises the paths (2026-10-10: "paths should be baked into
+	/// <b>Baked, not built.</b> The cut routes, carves and rasterises the paths ("paths should be baked into
 	/// the cut"); this only binds the two textures it wrote and the numbers that address them.
 	/// </para>
 	/// <para>
@@ -65,7 +65,7 @@ namespace FishMMO.Shared
 		/// <summary>
 		/// The enabled binder in a scene, or null. From the enabled list, not the scene's roots: a terrain binds while its
 		/// scene is still loading (OnEnable), when the scene does not yet count as loaded and its roots cannot be asked
-		/// — which left every tile with no path slices (2026-10-10: paths drawn cyan in the debug view).
+		/// — which left every tile with no path slices (paths drawn cyan in the debug view).
 		/// </summary>
 		private static ScenePathSurfaceBinder Of(Scene scene)
 		{

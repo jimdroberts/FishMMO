@@ -1,4 +1,4 @@
-// The run-time cave cover (CaveCoverRenderer, FishMMO.Client/World/Caves/Cover, 2026-10-20): the cave's counterpart of the
+// The run-time cave cover (CaveCoverRenderer, FishMMO.Client/World/Caves/Cover): the cave's counterpart of the
 // surface's blade grass and detail scatter. Every frame around each camera it scatters small, dense cover (moss, glow moss,
 // gravel and grit, mushrooms and glowcaps, bones, guano, pearls, mud, litter, frost, basalt grit, sulphur, embers, lichen,
 // glowing specks, bracket fungi, mineral glints, seeps, soda straws, roots, glow-worm threads; a mine's timber, iron, ore

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The structure palette's own surfaces (2026-10-16, I6a: "new surfaces such as log, shingle, slate, adobe, sandstone,
+	/// The structure palette's own surfaces ("new surfaces such as log, shingle, slate, adobe, sandstone,
 	/// bamboo, marble, ice block, bone, reed"): what a biome's palette builds a role of where the kit's nine will not do.
 	/// </summary>
 	/// <remarks>

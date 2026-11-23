@@ -155,7 +155,7 @@ namespace FishMMO.Client
 			values.BaseMapST = new Vector4(scale.x, scale.y, offset.x, offset.y);
 			// As the material would have them: Unity hands a shader its Color properties in linear space when the project is
 			// (it is), but GetColor returns them as authored. Stored raw, a look family's tinted members drew brighter than their
-			// own materials did (2026-11-05). The table is a linear texture, read as it is (FishWeatherLitInput.hlsl FishLookSetup).
+			// own materials did. The table is a linear texture, read as it is (FishWeatherLitInput.hlsl FishLookSetup).
 			values.BaseColor = AsShaderSees(ColorOf(clone, "_BaseColor", Color.white));
 			values.SpecColor = AsShaderSees(ColorOf(clone, "_SpecColor", new Color(0.2f, 0.2f, 0.2f, 1f)));
 			values.EmissionColor = AsShaderSees(ColorOf(clone, "_EmissionColor", Color.black));

@@ -137,7 +137,7 @@ namespace FishMMO.UnitTests
 			}
 		}
 
-		// ── Any-elevation (tier 9) biomes compete in every tier (2026-10-02) ──
+		// ── Any-elevation (tier 9) biomes compete in every tier ──
 
 		[Test]
 		public void Resolver_AnAnyElevationBiomeThatFits_BeatsATierBiomeThatDoesNot()

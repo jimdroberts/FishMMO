@@ -102,15 +102,15 @@ namespace FishMMO.Shared.WorldDesign
 		public Func<float, float, float> SlopeAt;
 		/// <summary>The biome at (east, north); may answer null.</summary>
 		public Func<float, float, BiomeTemplate> BiomeAt;
-		/// <summary>The fields every site laid before this one in this placing (2026-10-18), shared by all of them; null in a harness (no other sites).</summary>
+		/// <summary>The fields every site laid before this one in this placing, shared by all of them; null in a harness (no other sites).</summary>
 		public PointOfInterestFieldClaims FieldClaims;
 
 		private BiomeStructurePalette palette;
 		private bool paletteRead;
 
 		/// <summary>
-		/// What the site's biome builds its structures of (its template's structure palette, BiomeTemplateArt.StructurePalette,
-		/// 2026-10-16): every kit piece laid through <see cref="AddProp"/> is laid in it (StructurePaletteDressing), and the
+		/// What the site's biome builds its structures of (its template's structure palette, BiomeTemplateArt.StructurePalette):
+		/// every kit piece laid through <see cref="AddProp"/> is laid in it (StructurePaletteDressing), and the
 		/// features that make scene objects of kit pieces (doors, moored boats) dress them in it. Read once from the biome at the
 		/// site's anchor; null (the kit's own materials) without a biome lookup. Settable for a harness.
 		/// </summary>
@@ -122,8 +122,8 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					paletteRead = true;
 					palette = BiomeAt != null && Record != null ? BiomeTemplateArt.StructurePalette(BiomeAt(Record.Position.x, Record.Position.z)) : null;
-					// A cave site whose template the cave biome inside it named (not its host) builds in that biome's palette (2026-10-25,
-					// I2n, decision 51: "pieces take the palette of the template that named their variant").
+					// A cave site whose template the cave biome inside it named (not its host) builds in that biome's palette (
+					// "pieces take the palette of the template that named their variant").
 					if (Record != null && Template != null && CaveShaper.TryForm(Record.Kind, out _))
 					{
 						CaveBiome caves = CaveInteriorArt.OfSite(Request, Record);
@@ -146,7 +146,7 @@ namespace FishMMO.Shared.WorldDesign
 		private bool postCrystalRead;
 
 		/// <summary>
-		/// The crystal the site's crystal posts carry (2026-10-16, I6c): its biome's (BiomeTemplateArt.PostCrystal, the heaviest
+		/// The crystal the site's crystal posts carry: its biome's (BiomeTemplateArt.PostCrystal, the heaviest
 		/// glowing kind of its Cave Crystals, else the heaviest), read once at the site's anchor; selenite without a biome lookup.
 		/// Settable for a harness.
 		/// </summary>
@@ -159,7 +159,7 @@ namespace FishMMO.Shared.WorldDesign
 					postCrystalRead = true;
 					BiomeTemplate biome = BiomeAt != null && Record != null ? BiomeAt(Record.Position.x, Record.Position.z) : null;
 					postCrystal = BiomeTemplateArt.PostCrystal(biome);
-					// In the look the biome grows it in (2026-10-26, NEW-CRYSTALS; 0 the kind's own).
+					// In the look the biome grows it in (0 the kind's own).
 					postCrystalLook = BiomeCaveCrystals.LookOf(BiomeTemplateArt.CaveCrystals(biome), postCrystal);
 				}
 				return postCrystal;
@@ -305,9 +305,9 @@ namespace FishMMO.Shared.WorldDesign
 					Vector3 world = position + rotation * Vector3.Scale(at, scale);
 					Points.Emitters ??= new System.Collections.Generic.List<SceneEmitter>();
 					uint seed = PointOfInterestPlanner.Hash(Record != null ? Record.Id : 0, Mathf.RoundToInt(world.x * 10f), Mathf.RoundToInt(world.z * 10f), (int)kind);
-					// A cold glow's tint (2026-10-18, I6g): a crystal post's its crystal's hue (the site biome's crystal, 2026-10-16),
-					// a rune stone's and a glowjar's their own; it flickers only where the post's crystal does (stormglass,
-					// decision 33), else it pulses (the bit always written, never the hash's).
+					// A cold glow's tint: a crystal post's its crystal's hue (the site biome's crystal),
+					// a rune stone's and a glowjar's their own; it flickers only where the post's crystal does (stormglass),
+					// else it pulses (the bit always written, never the hash's).
 					if (kind == SceneEmitterKind.Glow)
 					{
 						SceneGlowHue? own = StructurePieces.GlowHueOf(piece.Id);
@@ -316,7 +316,7 @@ namespace FishMMO.Shared.WorldDesign
 						seed = own.HasValue ? SceneGlow.WithHue(seed, own.Value) : SceneGlow.WithCrystalHue(seed, cradled ? postMineral.LightHue : -1);
 						seed = SceneGlow.WithFlicker(seed, cradled && postMineral.Flickers);
 					}
-					// A way light's own fire (2026-10-26, ScenePyre): a beacon's kindled at dusk, a brimstone lamp's blue (both bits
+					// A way light's own fire (ScenePyre): a beacon's kindled at dusk, a brimstone lamp's blue (both bits
 					// always written, never the hash's).
 					else if (kind == SceneEmitterKind.Pyre)
 					{
@@ -377,7 +377,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// How far in from the scene's edge whatever a site lays out past its own outline (its fields, farmsteads, yards and their
 		/// bounds) keeps, metres. <see cref="GroundAt"/> answers past the edge too, where only the backdrop is drawn, so nothing
-		/// else stopped a field there (2026-10-22). The site itself keeps further in (PointOfInterestPlanInput.EdgeMarginMetres).
+		/// else stopped a field there. The site itself keeps further in (PointOfInterestPlanInput.EdgeMarginMetres).
 		/// </summary>
 		public const float SceneEdgeMarginMetres = 12f;
 

@@ -13,7 +13,7 @@ namespace FishMMO.UnitTests.Weather
 	/// the moving average, and the reprojection of a cloud carried by its own band's drift.
 	/// </summary>
 	/// <remarks>
-	/// Issue #238, 2026-09-28: in the editor, on a real GPU with the camera moving, the steadying that
+	/// Issue #238: in the editor, on a real GPU with the camera moving, the steadying that
 	/// handed each sample only to the pixel it fell in showed a crosshatch and dark blocky specks under an
 	/// overcast (single rays, history dropped), and long smears along the wind at night (the middle and
 	/// high bands' history reprojected with the low band's drift). These hold the replacement to the
@@ -261,7 +261,7 @@ namespace FishMMO.UnitTests.Weather
 			// from texel to texel widens that box and is averaged away; a noise all nine share moves the
 			// box with it, and the history — which had averaged it — is clipped back onto it every frame,
 			// so it comes through nearly whole. That is why the light march's phase is each pixel's own
-			// (FishCloudVolume.hlsl; until 2026-09-29 it was one phase for the whole screen, whose error
+			// (FishCloudVolume.hlsl; formerly it was one phase for the whole screen, whose error
 			// every texel shared: flicker and sparkle on bright, smooth cloud).
 			float shared = SharedNoise(0.02f, 0.0005f);
 			float own = SharedNoise(0f, 0.02f);

@@ -7,7 +7,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// Decision 35 (2026-10-18, phase I2l): a biome's extra bed layers by depth and its riverbed rules, written by the authoring from
+	/// A biome's extra bed layers by depth and its riverbed rules, written by the authoring from
 	/// the spec, and the palette carrying the riverbed beside the lakebed. Unity-only: templates and terrain layers are native objects
 	/// (the pure parts are WorldDesign.BiomeLakeRiverPlacesTests).
 	/// </summary>
@@ -86,7 +86,7 @@ namespace FishMMO.UnitTests
 					slots.Add(e.Slot);
 				}
 			}
-			Assert.That(slots, Is.EqualTo(new[] { "lakebed", "riverbed", "bed/0" }), "the riverbed is painted though the lakebed exists (decision 35 (h))");
+			Assert.That(slots, Is.EqualTo(new[] { "lakebed", "riverbed", "bed/0" }), "the riverbed is painted though the lakebed exists");
 			Assert.That(palette.Layers.Count, Is.EqualTo(4));
 		}
 	}

@@ -12,7 +12,7 @@
 		/// while a write was in flight keeps the row dirty. Loaded from the database row on login.
 		/// </summary>
 		/// <remarks>
-		/// Before 2026-09-07 nothing advanced this and nothing wrote factions back at all: every
+		/// Formerly nothing advanced this and nothing wrote factions back at all: every
 		/// kill credit and quest reward was lost on logout. The mutation-side bump is load-bearing
 		/// for the same reason it is on <c>Achievement</c> — a version advanced only by the
 		/// snapshot cannot guard an in-flight change.

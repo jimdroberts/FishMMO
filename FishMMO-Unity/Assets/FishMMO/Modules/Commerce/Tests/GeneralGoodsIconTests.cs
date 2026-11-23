@@ -11,7 +11,7 @@ namespace FishMMO.UnitTests
 	/// </summary>
 	/// <remarks>
 	/// The two kinds hold their icon differently: an ability an <c>AssetReferenceSprite</c> (loaded into the cache), an effect
-	/// (<see cref="AbilityEvent"/>, a Trigger) a direct <see cref="Sprite"/>. On 2026-11-21 the icon generator wrote an
+	/// (<see cref="AbilityEvent"/>, a Trigger) a direct <see cref="Sprite"/>. The icon generator once wrote an
 	/// AssetReference block into the 36 effects; Unity read it as no sprite and the Effects tab drew none.
 	/// </remarks>
 	[TestFixture]

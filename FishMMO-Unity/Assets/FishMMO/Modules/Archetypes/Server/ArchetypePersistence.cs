@@ -16,7 +16,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// Loads and saves a character's archetype (one row per character, versioned) through the character save.
 	/// </summary>
 	/// <remarks>
-	/// Moved from <c>CharacterSystem.Loading</c> and <c>Saving</c> with the archetype (2026-11-17), unchanged: the row is
+	/// Moved from <c>CharacterSystem.Loading</c> and <c>Saving</c> with the archetype, unchanged: the row is
 	/// written when the archetype changed since the database last confirmed it, and the dirty mark is cleared only by a
 	/// write that landed.
 	/// </remarks>

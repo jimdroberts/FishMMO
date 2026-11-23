@@ -8,7 +8,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Ambient Life module (Phase 4 of the core and modules plan, 2026-11-17): every ambient system lives in
+	/// The Ambient Life module: every ambient system lives in
 	/// <c>Assets/FishMMO/Modules/AmbientLife</c> and plugs in through the core's seams; the weather, the terrain and the
 	/// test beds name none of it.
 	/// </summary>

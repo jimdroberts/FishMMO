@@ -1,7 +1,7 @@
 #ifndef FISHMMO_SEA_FLOATS_INCLUDED
 #define FISHMMO_SEA_FLOATS_INCLUDED
 
-// FishMMO/Sea Floats (SeaFloatSystem, FishMMO.Client/World/SeaFloats, 2026-10-25, phase I2p): what drifts on the open sea, each
+// FishMMO/Sea Floats (SeaFloatSystem, FishMMO.Client/World/SeaFloats): what drifts on the open sea, each
 // instance a 32-byte record FishSeaFloats.compute wrote this frame into its kind's slot, the mesh SeaFloatMeshes' one mesh with
 // a submesh a kind. Drawn only with Graphics.RenderMeshIndirect, one command per kind.
 //

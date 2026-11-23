@@ -410,7 +410,7 @@ namespace FishMMO.Shared.Biomes
 		/// moon past the frost line temperature −1 — keeps choosing exactly as before, by weight.
 		/// </para>
 		/// <para>
-		/// <b>Measured</b> (2026-10-02, 200,000 points a world, the <c>BiomeSpecTable</c> envelopes): the
+		/// <b>Measured</b> (200,000 points a world, the <c>BiomeSpecTable</c> envelopes): the
 		/// choice changes on 9.6% of an Earth-like world and 12.4% of Arthis, about 3% of a dead moon;
 		/// no biome's share of any of the twenty worlds moves by more than 0.66 points (the largest is
 		/// the 4 km abyssal edge, Deep Ocean ↔ Ocean); no biome chosen anywhere before stops being
@@ -498,7 +498,7 @@ namespace FishMMO.Shared.Biomes
 		/// every scene cut from a continent would come out named for a mountain it is not on.
 		/// </para>
 		/// <para>
-		/// <b>Above water, the tiers are landform bands at physical altitudes (2026-10-02).</b> Land
+		/// <b>Above water, the tiers are landform bands at physical altitudes.</b> Land
 		/// used to be spread evenly from the water line to the summit, so on an Earth-sized world the
 		/// coast tier ran from 0 to 460 m and a third of all land could only ever be beach, estuary
 		/// or rocky coast. Now each tier edge stands at a real altitude

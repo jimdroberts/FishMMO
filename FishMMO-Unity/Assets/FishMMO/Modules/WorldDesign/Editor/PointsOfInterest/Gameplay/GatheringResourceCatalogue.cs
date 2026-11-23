@@ -17,7 +17,7 @@ namespace FishMMO.Shared.WorldDesign
 		Wood = 4,
 		/// <summary>What grows or lies on the sea floor (and a lake's): gathered round sunken sites.</summary>
 		Marine = 5,
-		/// <summary>Bones, antler and ivory from old kills and middens (decision 25, 2026-10-25): no site kind gathers them yet (FamiliesFor) and no row stocks them.</summary>
+		/// <summary>Bones, antler and ivory from old kills and middens: no site kind gathers them yet (FamiliesFor) and no row stocks them.</summary>
 		Bone = 6,
 	}
 
@@ -46,8 +46,8 @@ namespace FishMMO.Shared.WorldDesign
 		public int MinAmount = 1;
 		public int MaxAmount = 2;
 		/// <summary>
-		/// Biome asset names the resource belongs in; empty for every biome. Since 2026-10-16 the sites read the templates'
-		/// Gathering Resources; since 2026-10-26 (phase CODE-TABLE CLEARANCE, decision 1) each biome's spec file names its own
+		/// Biome asset names the resource belongs in; empty for every biome. The sites read the templates'
+		/// Gathering Resources; each biome's spec file names its own
 		/// (<see cref="BiomeArtSpec.Entry.Gathers"/>, written from these lists), so these lists are only the cut's fallback for a
 		/// template never authored (BiomeTemplateArt.Gathering). Change a biome's resources in its file.
 		/// </summary>
@@ -76,7 +76,7 @@ namespace FishMMO.Shared.WorldDesign
 	}
 
 	/// <summary>
-	/// The generated resources (2026-10-10: generate GatheringNodeTemplates and node prefabs, none existed; placeholder
+	/// The generated resources (generate GatheringNodeTemplates and node prefabs, none existed; placeholder
 	/// items). <see cref="GatheringContentGenerator"/> turns each row into assets; <see cref="GatheringFeature"/> picks one per
 	/// site with <see cref="Pick"/>.
 	/// </summary>
@@ -93,16 +93,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Where the visuals come from.</summary>
 		public const string VisualFolder = "Assets/Prefabs/Shared/Biomes/Generated/Prefabs";
 
-		// Geyser Basin (its round, 2026-10-26) gathers its own glass (raven-flint): the volcanic list without it.
+		// Geyser Basin (its round) gathers its own glass (raven-flint): the volcanic list without it.
 		private static readonly string[] Volcanic = { "Volcanic", "Lava Tube", "Volcanic Cave", "Molten Surface", "Sulphur Flats", "Volcanic Temple", "Crater" };
 		private static readonly string[] Caves = { "Cave", "Ice Cave", "Swamp Cave", "Volcanic Cave", "Lava Tube", "Karst" };
 		private static readonly string[] Alien = { "Impact Basin", "Radiation Plain", "Regolith Plain", "Tholin Plain", "Nitrogen Ice Field", "Methane Lake", "Cryovolcanic Plain", "Ice Geyser Field", "Tidal Fracture", "Dust Sea", "Runaway Greenhouse Plain", "Sulphuric Cloud Deck", "Rille", "Subsurface Ocean Vent" };
 		// The strongholds and palaces stand in temperate country; their gardens and moats grow its herbs.
-		// Grassland, Plains, Hills, Steppe and Alpine Meadow (their rounds, 2026-10-26) gather their own herbs: the list without them.
+		// Grassland, Plains, Hills, Steppe and Alpine Meadow (their rounds) gather their own herbs: the list without them.
 		private static readonly string[] Temperate = { "Farmland", "Woodland", "Forest", "Valley", "Forest Ruins", "Castle", "Fortress", "Marble Palace" };
-		// Alpine Meadow, Glacier, Mountain Slope and Ice Sheet (their rounds, 2026-10-26) gather their own: the cold list without them.
+		// Alpine Meadow, Glacier, Mountain Slope and Ice Sheet (their rounds) gather their own: the cold list without them.
 		private static readonly string[] Cold = { "Alpine", "Tundra", "Taiga", "Snow", "Permanent Ice", "Ice Shelf", "Ice Palace", "Ice Ruin" };
-		// Wetlands, Estuary and Mangrove (their rounds, 2026-10-26) gather their own: the bog and swamp list without them.
+		// Wetlands, Estuary and Mangrove (their rounds) gather their own: the bog and swamp list without them.
 		private static readonly string[] Wet = { "Swamp", "Peat Bog", "Swamp Ruins", "Swamp Temple" };
 		private static readonly string[] Tropical = { "Jungle Ruins", "Jungle Temple" };
 
@@ -111,28 +111,28 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Ore ──────────────────────────────────────────────────
 			new GatheringResource { Node = "Copper Lode", Item = "Copper Ore", Family = GatheringFamily.Ore, Tier = 1, Visual = "Boulder_Sandstone_Round",
 				Tint = new Color(0.86f, 0.52f, 0.32f), Size = 1.6f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
-				// Not Hills', Rocky Terrain's, Plains' or Steppe's since their rounds (2026-10-26): they mine their own.
+				// Not Hills', Rocky Terrain's, Plains' or Steppe's since their rounds: they mine their own.
 				Biomes = new[] { "Desert", "High Desert", "Scrubland", "Valley", "Wasteland" },
 				Description = "Green-stained copper ore from soft sedimentary rock." },
 			new GatheringResource { Node = "Iron Vein", Item = "Iron Ore", Family = GatheringFamily.Ore, Tier = 1, Visual = "Boulder_Basalt_Round",
 				Tint = new Color(0.62f, 0.34f, 0.26f), Size = 1.7f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
-				// Not Mountain Slope's, Rocky Terrain's, Scree's or Tundra's since their rounds (2026-10-26).
+				// Not Mountain Slope's, Rocky Terrain's, Scree's or Tundra's since their rounds.
 				Biomes = new[] { "Hills", "Volcanic", "Taiga", "Forest", "Valley", "Rocky Coast", "Wasteland", "Castle", "Fortress" },
 				Description = "Rust-red iron ore, found wherever the rock is hard — and as black sand on the beach." },
 			new GatheringResource { Node = "Silver Vein", Item = "Silver Ore", Family = GatheringFamily.Ore, Tier = 2, Visual = "Formation_Granite_Corestone_0",
 				Tint = new Color(0.82f, 0.87f, 0.94f), Size = 1.8f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
-				// Not Mountain Slope's, Hills', Scree's, Glacier's or Ice Sheet's since their rounds (2026-10-26).
+				// Not Mountain Slope's, Hills', Scree's, Glacier's or Ice Sheet's since their rounds.
 				Biomes = new[] { "Alpine", "Karst", "Tundra", "Ice Palace", "Ice Ruin" },
 				Description = "Bright silver ore from the granite of the high country." },
 			new GatheringResource { Node = "Gold Vein", Item = "Gold Ore", Family = GatheringFamily.Ore, Tier = 3, Visual = "Formation_Quartzite_Block_0",
 				Tint = new Color(1.0f, 0.82f, 0.34f), Size = 1.7f, MaxUses = 3, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
-				// The Hills round (2026-10-26) mines it in the schist; not Mountain Slope's since its round.
+				// The Hills round mines it in the schist; not Mountain Slope's since its round.
 				Biomes = new[] { "High Desert", "Valley", "Hills", "Marble Palace" },
 				Description = "Gold in white quartz, where old rivers and dry ranges cut deep." },
 			new GatheringResource { Node = "Starsilver Vein", Item = "Starsilver Ore", Family = GatheringFamily.Ore, Tier = 4, Visual = "Formation_Gneiss_Boulder_0",
 				Tint = new Color(0.58f, 0.86f, 1.0f), Size = 1.9f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				// Fallen stars lie where nothing buries them: the ice sheets keep every meteorite that lands on them.
-				// Not Mountain Slope's, Glacier's or Ice Sheet's since their rounds (2026-10-26): the ice sheet keeps its star-stones.
+				// Not Mountain Slope's, Glacier's or Ice Sheet's since their rounds: the ice sheet keeps its star-stones.
 				Biomes = new[] { "Alpine", "Impact Basin", "Crater", "Ice Shelf" },
 				Description = "A pale, impossibly light ore. Rare beyond telling." },
 
@@ -157,7 +157,7 @@ namespace FishMMO.Shared.WorldDesign
 				Biomes = Cold, Description = "A flower that blooms only in the cold." },
 			new GatheringResource { Node = "Sunpetal Patch", Item = "Sunpetal", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_FlowersDesert",
 				Tint = new Color(1.0f, 0.86f, 0.52f), Size = 0.7f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
-				// Scrubland, Savanna and Steppe (their rounds, 2026-10-26) gather their own herbs: the dry list without them, so the fallback is their files.
+				// Scrubland, Savanna and Steppe (their rounds) gather their own herbs: the dry list without them, so the fallback is their files.
 				Biomes = new[] { "High Desert", "Oasis", "Wasteland" },
 				Description = "Hardy petals that store the desert's heat." },
 			new GatheringResource { Node = "Mirewort Patch", Item = "Mirewort", Family = GatheringFamily.Herb, Tier = 2, Visual = "Detail_PitcherPlant",
@@ -177,7 +177,7 @@ namespace FishMMO.Shared.WorldDesign
 				Biomes = Caves, Description = "A cave mushroom that glows in the dark." },
 			new GatheringResource { Node = "Morel Cluster", Item = "Forest Morel", Family = GatheringFamily.Fungus, Tier = 1, Visual = "Detail_MushroomForest",
 				Tint = new Color(0.88f, 0.78f, 0.62f), Size = 0.5f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
-				// Not Woodland's since its round (2026-10-26): its chanterelles took the morels' place.
+				// Not Woodland's since its round: its chanterelles took the morels' place.
 				Biomes = new[] { "Forest", "Taiga", "Forest Ruins", "Valley" },
 				Description = "An honest woodland mushroom." },
 			new GatheringResource { Node = "Bog Puffball Cluster", Item = "Bog Puffball", Family = GatheringFamily.Fungus, Tier = 1, Visual = "Detail_MushroomSwamp",
@@ -187,22 +187,22 @@ namespace FishMMO.Shared.WorldDesign
 			// ── Wood ─────────────────────────────────────────────────
 			new GatheringResource { Node = "Ancient Oak", Item = "Ancient Heartwood", Family = GatheringFamily.Wood, Tier = 3, Visual = "Tree_Oak",
 				Tint = new Color(1.0f, 0.95f, 0.86f), Size = 0.0f, Footprint = 0.18f, MaxUses = 5, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 2,
-				// Not Woodland's, Hills', Grassland's or Plains' since their rounds (2026-10-26): Woodland has its own King Oak.
+				// Not Woodland's, Hills', Grassland's or Plains' since their rounds: Woodland has its own King Oak.
 				Biomes = new[] { "Forest", "Forest Ruins", "Valley" },
 				Description = "Heartwood from an oak older than any kingdom." },
 			new GatheringResource { Node = "Elder Ironbark", Item = "Ironbark Heartwood", Family = GatheringFamily.Wood, Tier = 3, Visual = "Tree_Baobab",
 				Tint = new Color(0.92f, 0.86f, 0.8f), Size = 0.0f, Footprint = 0.3f, MaxUses = 5, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 2,
-				// Not Steppe's since its round (2026-10-26): it burns saxaul.
+				// Not Steppe's since its round: it burns saxaul.
 				Biomes = new[] { "Scrubland", "Oasis" },
 				Description = "Wood so dense it sinks." },
 			new GatheringResource { Node = "Frostpine Elder", Item = "Frostpine Heartwood", Family = GatheringFamily.Wood, Tier = 3, Visual = "Tree_Spruce",
 				Tint = new Color(0.86f, 0.95f, 1.0f), Size = 0.0f, Footprint = 0.15f, MaxUses = 5, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 2,
-				// Not Tundra's (treeless) or Mountain Slope's since their rounds (2026-10-26).
+				// Not Tundra's (treeless) or Mountain Slope's since their rounds.
 				Biomes = new[] { "Taiga", "Alpine", "Snow" },
 				Description = "Pale, resinous wood from the oldest pines." },
 
 			// ── Marine ───────────────────────────────────────────────
-			// Gathered round the sunken sites (FamiliesFor): the sea floor and a lake's bed had no nodes at all (audit 2026-10-11).
+			// Gathered round the sunken sites (FamiliesFor): the sea floor and a lake's bed had no nodes at all.
 			new GatheringResource { Node = "Pearl Oyster Bed", Item = "Pearl", Family = GatheringFamily.Marine, Tier = 2, Visual = "Detail_MusselBedOyster",
 				Tint = new Color(0.92f, 0.9f, 0.86f), Size = 1.2f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 1,
 				// Freshwater pearl mussels in the lakes and the clean rivers.
@@ -225,7 +225,7 @@ namespace FishMMO.Shared.WorldDesign
 				Biomes = new[] { "Subsurface Ocean Vent" },
 				Description = "A pearl grown in the heat of a black smoker." },
 
-			// ── Coastal Water (biome round, 2026-10-26): the Celtic shelf's harvest; its pearl oysters and reef coral went to the
+			// ── Coastal Water: the Celtic shelf's harvest; its pearl oysters and reef coral went to the
 			// warm reef (they were never this sea's). ──
 			new GatheringResource { Node = "Flat Oyster Bed", Item = "Flat Oyster", Family = GatheringFamily.Marine, Tier = 1, Visual = "Detail_MusselBedFlatOyster",
 				Tint = new Color(0.9f, 0.88f, 0.86f), Size = 1.2f, MaxUses = 4, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 3,
@@ -249,14 +249,14 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.55f, 0.48f, 1.0f), Size = 1.4f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Coastal Water" }, Description = "Violet-blue hollow prisms that ring like a drowned city's bells when touched." },
 
-			// ── Ocean (biome round, 2026-10-26): the slope sea's harvest; its pearls and kelp were the shelf's. ──
+			// ── Ocean: the slope sea's harvest; its pearls and kelp were the shelf's. ──
 			new GatheringResource { Node = "Lophelia Coral", Item = "Lime-coral", Family = GatheringFamily.Marine, Tier = 2, Visual = "Detail_Lophelia",
 				Tint = new Color(1.0f, 0.94f, 0.9f), Size = 1.3f, MaxUses = 3, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Ocean" }, Description = "White branches of cold-water coral, burnt for mortar and carved for charms." },
 			new GatheringResource { Node = "Bubblegum Coral", Item = "Rose Coral", Family = GatheringFamily.Marine, Tier = 3, Visual = "Detail_BubblegumCoral",
 				Tint = new Color(1.0f, 0.78f, 0.8f), Size = 1.6f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Ocean" }, Description = "Knobbed rose-red coral from the mound crests, prized by jewellers." },
-			// LATER (I7, Bone sites): no site kind gathers the Bone family yet; the whale tow will.
+			// LATER (Bone sites): no site kind gathers the Bone family yet; the whale tow will.
 			new GatheringResource { Node = "Baleen Plate", Item = "Baleen", Family = GatheringFamily.Bone, Tier = 2, Visual = "Formation_Moundstone_Slabs_0",
 				Tint = new Color(0.3f, 0.28f, 0.26f), Size = 1.4f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Ocean" }, Description = "Whalebone plates cut from a right whale's jaw, for stays, bows and combs." },
@@ -266,12 +266,12 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Galerna-stone", Item = "Galerna-stone", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_WaterIce_Crystal_0",
 				Tint = new Color(0.62f, 0.5f, 0.72f), Size = 1.5f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Ocean" }, Description = "Smoky storm-violet quartz whose ember core brightens before the sudden storm." },
-			// LATER (I7): only at the lamiak's grotto, one to a site; the shrine's own nodes stand in.
+			// LATER: only at the lamiak's grotto, one to a site; the shrine's own nodes stand in.
 			new GatheringResource { Node = "Lamia Comb", Item = "Lamia Comb", Family = GatheringFamily.Marine, Tier = 4, Visual = "Detail_ShellsAtlantic",
 				Tint = new Color(1.0f, 0.84f, 0.4f), Size = 0.8f, MaxUses = 1, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Ocean" }, Description = "A golden comb left on a grotto ledge; its owner will want it back." },
-			// ── Tundra (biome round, 2026-10-26) ── Tusk weathering out of the thaw slumps, roseroot and snow lichen, labradorite in the
-			// outcrops, sky-iron where a star fell. LATER (I7): no site kind gathers Bone yet (FamiliesFor), so the ivory waits for one.
+			// ── Tundra ── Tusk weathering out of the thaw slumps, roseroot and snow lichen, labradorite in the
+			// outcrops, sky-iron where a star fell. LATER: no site kind gathers Bone yet (FamiliesFor), so the ivory waits for one.
 			new GatheringResource { Node = "Mammoth Ivory", Item = "Mammoth Ivory", Family = GatheringFamily.Bone, Tier = 3, Visual = "Deadwood_Driftwood",
 				Tint = new Color(1.0f, 0.95f, 0.84f), Size = 1.8f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Tundra" }, Description = "A frozen giant's tusk weathering out of a thaw slump, yellowed and cracked." },
@@ -288,8 +288,8 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.52f, 0.5f, 0.54f), Size = 1.2f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Tundra" }, Description = "Iron that fell from the sky, cold-hammered into blades by the herders." },
 
-			// ── Ice Sheet (biome round, 2026-10-26) ── Stone-oil from the petrel ledges, breath-ice from the blue-ice fields, star-stones,
-			// blue quartz, and horn-ice at the Winter Bull's horns. LATER (I7): Nest and Landmark sites gather nothing yet (FamiliesFor);
+			// ── Ice Sheet ── Stone-oil from the petrel ledges, breath-ice from the blue-ice fields, star-stones,
+			// blue quartz, and horn-ice at the Winter Bull's horns. LATER: Nest and Landmark sites gather nothing yet (FamiliesFor);
 			// stone-oil rides the Ore family (caves), horn-ice the Crystal family, one to a scene only once the Horns piece exists.
 			new GatheringResource { Node = "Stone-oil Crust", Item = "Stone-oil", Family = GatheringFamily.Ore, Tier = 3, Visual = "Formation_Charnockite_Ledges_0",
 				Tint = new Color(0.36f, 0.24f, 0.14f), Size = 1.6f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
@@ -307,7 +307,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.7f, 0.86f, 1.0f), Size = 1.6f, MaxUses = 1, GatherSeconds = 5.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Ice Sheet" }, Description = "A splinter of the Winter Bull's shed horn, ringed like a ram's, cold enough to burn." },
 
-			// ── Glacier (biome round, 2026-10-26) ── The scribes' birch bark, incense and rhubarb roots, ant-gold from the outwash,
+			// ── Glacier ── The scribes' birch bark, incense and rhubarb roots, ant-gold from the outwash,
 			// sapphire from the nunataks' pegmatites, old snout ice for the cellars, and the serpent-jewel of the ice caves.
 			new GatheringResource { Node = "Bhojpatra Bark", Item = "Bhojpatra Bark", Family = GatheringFamily.Wood, Tier = 2, Visual = "Tree_Bhojpatra",
 				Tint = new Color(1.0f, 0.92f, 0.86f), Size = 0.0f, Footprint = 0.2f, MaxUses = 4, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
@@ -330,7 +330,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Nagamani Cluster", Item = "Nagamani", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_WaterIce_Crystal_0",
 				Tint = new Color(0.42f, 0.88f, 0.75f), Size = 1.2f, MaxUses = 1, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Glacier" }, Description = "A water-clear serpent-jewel with a sea-green heart that glows in the dark." },
-			// ── Forest (biome round, 2026-10-26) ── Yew for bow staves, wild garlic from the ravines, truffles under the oaks, and the
+			// ── Forest ── Yew for bow staves, wild garlic from the ravines, truffles under the oaks, and the
 			// foxfire of the deep wood's rotten logs.
 			new GatheringResource { Node = "Yew Heartwood", Item = "Yew Stave", Family = GatheringFamily.Wood, Tier = 2, Visual = "Tree_Yew",
 				Tint = new Color(1.0f, 0.9f, 0.84f), Size = 0.0f, Footprint = 0.25f, MaxUses = 4, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
@@ -344,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Foxfire Wood", Item = "Foxfire Wood", Family = GatheringFamily.Fungus, Tier = 3, Visual = "Detail_MushroomFoxfire",
 				Tint = new Color(0.82f, 1.0f, 0.72f), Size = 0.9f, MaxUses = 2, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Forest" }, Description = "Rotten wood laced with honey-fungus threads that glow green in the dark." },
-			// ── Woodland (biome round, 2026-10-26) ── The wood's own king oak, the coppice's nuts and chestnuts, chanterelles, flint from
+			// ── Woodland ── The wood's own king oak, the coppice's nuts and chestnuts, chanterelles, flint from
 			// the chalk, woad for the dyers, and the golden mistletoe cut with a gold sickle.
 			new GatheringResource { Node = "King Oak", Item = "King Oak Heartwood", Family = GatheringFamily.Wood, Tier = 3, Visual = "Tree_OakWoodland",
 				Tint = new Color(1.0f, 0.96f, 0.86f), Size = 0.0f, Footprint = 0.2f, MaxUses = 5, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 2,
@@ -364,12 +364,12 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Woad Patch", Item = "Woad Leaves", Family = GatheringFamily.Herb, Tier = 2, Visual = "Detail_FlowersWoad",
 				Tint = new Color(0.9f, 1.0f, 0.92f), Size = 0.8f, MaxUses = 3, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Woodland" }, Description = "Blue-green woad leaves, crushed and balled for the dyers' vats." },
-			// LATER (I9b): the mistletoe clump on its host; a round evergreen bush tinted gold stands in.
+			// LATER: the mistletoe clump on its host; a round evergreen bush tinted gold stands in.
 			new GatheringResource { Node = "Golden Mistletoe", Item = "Golden Mistletoe", Family = GatheringFamily.Herb, Tier = 3, Visual = "Detail_Bush_Box",
 				Tint = new Color(1.0f, 0.86f, 0.42f), Size = 0.0f, Footprint = 0.12f, MaxUses = 1, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Woodland" }, Description = "A ball of mistletoe that glows faint gold at dusk, cut only with a golden sickle." },
 
-			// ── Alpine Meadow (biome round, 2026-10-26) ── The pastures' herbs, the fairy-ring champignons, stone-pine heartwood for
+			// ── Alpine Meadow ── The pastures' herbs, the fairy-ring champignons, stone-pine heartwood for
 			// carving, antimony needles from the mining hills' andesite, and stormglass from the tarns and caves.
 			new GatheringResource { Node = "Arnica Bloom", Item = "Arnica", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_HerbArnica",
 				Tint = new Color(1.0f, 0.82f, 0.5f), Size = 0.7f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
@@ -396,7 +396,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.6f, 0.6f, 0.78f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Alpine Meadow" }, Description = "Smoky violet spheres full of cloud, threads of lightning flickering in them." },
 
-			// ── Jungle (biome round, 2026-10-26) ── The forest kingdoms' gifts: kola, palm oil and wine, the market herbs, camwood, iroko, raffia,
+			// ── Jungle ── The forest kingdoms' gifts: kola, palm oil and wine, the market herbs, camwood, iroko, raffia,
 			// laterite iron for the bloomeries, tourmaline and leafglass from the caves, termite mushrooms in the rains.
 			new GatheringResource { Node = "Kola Nuts", Item = "Kola Nut", Family = GatheringFamily.Herb, Tier = 1, Visual = "Tree_Kola",
 				Tint = new Color(1.0f, 0.9f, 0.8f), Size = 0.0f, Footprint = 0.12f, MaxUses = 3, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 3,
@@ -444,7 +444,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.9f, 0.85f, 0.75f), Size = 0.6f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
 				Biomes = new[] { "Jungle" }, Description = "Tall rain-season caps that rise from the mounds." },
 
-			// ── Bamboo Forest (biome round, 2026-10-26) ── Culms and spring shoots, matsutake and shiitake, tea, kudzu starch, ferns, andesite
+			// ── Bamboo Forest ── Culms and spring shoots, matsutake and shiitake, tea, kudzu starch, ferns, andesite
 			// and tile clay, jadeite, twinned quartz and firefly glass.
 			new GatheringResource { Node = "Bamboo Culm", Item = "Bamboo Culm", Family = GatheringFamily.Wood, Tier = 1, Visual = "Tree_Moso",
 				Tint = new Color(0.9f, 1.0f, 0.7f), Size = 0.0f, Footprint = 0.1f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
@@ -483,8 +483,8 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.8f, 1.0f, 0.4f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Bamboo Forest" }, Description = "Firefly glass: a clear druse full of drifting yellow-green pinpoints." },
 
-			// ── Mountain Slope (biome round, 2026-10-26) ── Laterite ironstone from the road cuts, opal and moonstone from the cliff bands,
-			// kosso blossom, wild coffee and gesho, termite mushrooms, ancient yellowwood, and wild honey. LATER (I7): Wild Honey Hive
+			// ── Mountain Slope ── Laterite ironstone from the road cuts, opal and moonstone from the cliff bands,
+			// kosso blossom, wild coffee and gesho, termite mushrooms, ancient yellowwood, and wild honey. LATER: Wild Honey Hive
 			// at the tree hives only; the meeting fig stands in as its visual.
 			new GatheringResource { Node = "Laterite Ironstone", Item = "Bog Iron", Family = GatheringFamily.Ore, Tier = 1, Visual = "Formation_Phonolite_Rind_0",
 				Tint = new Color(0.72f, 0.4f, 0.28f), Size = 1.3f, MaxUses = 3, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
@@ -514,8 +514,8 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(1.0f, 0.9f, 0.6f), Size = 0.0f, Footprint = 0.15f, MaxUses = 2, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Mountain Slope" }, Description = "Dark honey from a bark hive slung high in a fig's limbs, for the mead." },
 
-			// ── Scree (biome round, 2026-10-26) ── Wild mountain root at the fir edges, summer ice from the breathing talus, pale amethyst,
-			// fir resin, and the goblin's dropped club. LATER (I7): the club only at a Wrestling Stone (one a scene), the root ≤ 3 nodes,
+			// ── Scree ── Wild mountain root at the fir edges, summer ice from the breathing talus, pale amethyst,
+			// fir resin, and the goblin's dropped club. LATER: the club only at a Wrestling Stone (one a scene), the root ≤ 3 nodes,
 			// the ice at the Summer-ice Slopes; Summer Ice needs breathable air (a site kind's air rule).
 			new GatheringResource { Node = "Mountain Root", Item = "Mountain Root", Family = GatheringFamily.Herb, Tier = 4, Visual = "Detail_HerbMountainRoot",
 				Tint = new Color(1.0f, 0.9f, 0.8f), Size = 0.6f, MaxUses = 1, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 1,
@@ -532,9 +532,9 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Goblin's Club", Item = "Goblin's Club", Family = GatheringFamily.Wood, Tier = 4, Visual = "Deadwood_Stump_Broken",
 				Tint = new Color(0.9f, 0.82f, 0.72f), Size = 0.8f, MaxUses = 1, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Scree" }, Description = "A knobbed club left by a goblin at dawn; whoever holds it hears it ask to go home." },
-			// ── Scrubland (biome round, 2026-10-26) ── The canal builders' harvest: saguaro fruit, mesquite pods, cholla buds, roasted agave
+			// ── Scrubland ── The canal builders' harvest: saguaro fruit, mesquite pods, cholla buds, roasted agave
 			// hearts, chia, creosote resin and desert tobacco, the cereus tuber dug on the bloom night, agave fibre, carrizo cane and canal
-			// cotton, ironwood, red ochre, caliche nodules, peridot and sunshell. LATER (I9b P29): the fruit and buds only in their season.
+			// cotton, ironwood, red ochre, caliche nodules, peridot and sunshell. LATER: the fruit and buds only in their season.
 			new GatheringResource { Node = "Saguaro Fruit", Item = "Saguaro Fruit", Family = GatheringFamily.Herb, Tier = 1, Visual = "Tree_Saguaro",
 				Tint = new Color(1.0f, 0.82f, 0.78f), Size = 0f, Footprint = 0.15f, MaxUses = 3, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 3,
 				Biomes = new[] { "Scrubland" }, Description = "Red split fruit knocked down from the saguaro crowns with a rib pole in early summer." },
@@ -583,8 +583,8 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Sunshell Scatter", Item = "Sunshell", Family = GatheringFamily.Crystal, Tier = 3, Visual = "Formation_Caliche_Plate_0",
 				Tint = new Color(1.0f, 0.86f, 0.6f), Size = 1.3f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Scrubland" }, Description = "An iridescent spiral shell-crystal that keeps the day's light for a while after sunset." },
-			// ── Savanna (biome round, 2026-10-26) ── The plateau's gold, copper, iron and soapstone, the baobab's fruit and bast, marula,
-			// mopane worms, thatching grass, bowstring hemp, resurrection leaf, leadwood charcoal and the three crystals. LATER (I9b P29):
+			// ── Savanna ── The plateau's gold, copper, iron and soapstone, the baobab's fruit and bast, marula,
+			// mopane worms, thatching grass, bowstring hemp, resurrection leaf, leadwood charcoal and the three crystals. LATER:
 			// mopane worms only early in the wet season.
 			new GatheringResource { Node = "Reef Gold", Item = "Reef Gold", Family = GatheringFamily.Ore, Tier = 3, Visual = "Formation_Quartzite_Wedge_0",
 				Tint = new Color(1.0f, 0.86f, 0.42f), Size = 1.7f, MaxUses = 3, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 2,
@@ -634,8 +634,8 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Rainglass", Item = "Rainglass", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_Granite_Corestone_0",
 				Tint = new Color(0.6f, 0.95f, 0.85f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Savanna" }, Description = "Blue-green prisms that brighten on the nights before rain." },
-			// ── Grassland (biome round, 2026-10-26) ── The puszta's own: chamomile, soda bloom scraped from the szik, thatching reed, the
-			// wild pear's fall, steppe peony root, field-mushroom rings, and the Turul's feather. LATER (I7): the feather only at the Turul
+			// ── Grassland ── The puszta's own: chamomile, soda bloom scraped from the szik, thatching reed, the
+			// wild pear's fall, steppe peony root, field-mushroom rings, and the Turul's feather. LATER: the feather only at the Turul
 			// shrines and kunhalom tops; a rare herb node on the grassland stands in.
 			new GatheringResource { Node = "Chamomile Patch", Item = "Chamomile", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_HerbChamomile",
 				Tint = new Color(1.0f, 0.98f, 0.9f), Size = 0.6f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
@@ -658,8 +658,8 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Turul Feather", Item = "Turul Feather", Family = GatheringFamily.Herb, Tier = 3, Visual = "Detail_GrassGoldbeard",
 				Tint = new Color(1.0f, 0.82f, 0.36f), Size = 0.8f, MaxUses = 1, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Grassland" }, Description = "A golden flight feather of the great falcon, found at dawn on a mound top." },
-			// ── Plains (biome round, 2026-10-26) ── The prairie's own: prairie turnip, coneflower root, bergamot, groundnut, the bowyer's
-			// Osage stave, cottonwood driftwood, the buffalo jump's bone bed, red ochre, rose rocks, thunder-glass, sunspoke. LATER (I7):
+			// ── Plains ── The prairie's own: prairie turnip, coneflower root, bergamot, groundnut, the bowyer's
+			// Osage stave, cottonwood driftwood, the buffalo jump's bone bed, red ochre, rose rocks, thunder-glass, sunspoke. LATER:
 			// the bone bed waits for a site kind that gathers Bone (FamiliesFor); thunder-glass only round the thunder-stones.
 			new GatheringResource { Node = "Prairie Turnip", Item = "Prairie Turnip", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_HerbPrairieTurnip",
 				Tint = new Color(0.9f, 0.88f, 1.0f), Size = 0.6f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
@@ -694,8 +694,8 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Sunspoke Cluster", Item = "Sunspoke", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_Quartzite_Block_0",
 				Tint = new Color(1.0f, 0.86f, 0.42f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Plains" }, Description = "Clear quartz shot with golden needles like wheel spokes, warm at dawn and dusk." },
-			// ── Steppe (biome round, 2026-10-26) ── White-earth wormwood and the homing wormwood, chiy stems, manna lichen, saxaul wood, sor
-			// salt, steppe copper, dioptase, wolf's-eye, saiga horn. LATER (I7): the homing wormwood near the Singing Tomb and Wolf Ridge,
+			// ── Steppe ── White-earth wormwood and the homing wormwood, chiy stems, manna lichen, saxaul wood, sor
+			// salt, steppe copper, dioptase, wolf's-eye, saiga horn. LATER: the homing wormwood near the Singing Tomb and Wolf Ridge,
 			// saiga horn once a site kind gathers Bone (FamiliesFor), copper and dioptase at the copper pits.
 			new GatheringResource { Node = "White-earth Wormwood", Item = "Wormwood", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_WormwoodWhiteEarth",
 				Tint = new Color(0.9f, 0.94f, 0.88f), Size = 0.6f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
@@ -728,7 +728,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(1.0f, 0.92f, 0.76f), Size = 0.8f, MaxUses = 2, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Steppe" }, Description = "Amber lyre-shaped horn from a bleached saiga skull." },
 
-			// ── Estuary (biome round, 2026-10-26): the Wadden's harvest; its samphire, mirewort and puffballs went to the other salt and bog biomes. ──
+			// ── Estuary: the Wadden's harvest; its samphire, mirewort and puffballs went to the other salt and bog biomes. ──
 			new GatheringResource { Node = "Glasswort", Item = "Glasswort", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_Glasswort",
 				Tint = new Color(0.8f, 0.95f, 0.65f), Size = 0.8f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
 				Biomes = new[] { "Estuary" }, Description = "Jointed green marsh-asparagus, pickled for the winter and boiled down to soda for the glassmakers." },
@@ -762,7 +762,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Ebbspar", Item = "Ebbspar", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_Gypsum_Crystal_0",
 				Tint = new Color(0.6f, 0.95f, 0.85f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Estuary" }, Description = "Water-clear rhombs that glow green-grey only while the tide is out." },
-			// ── Coral Reef (biome round, 2026-10-26): the atoll shelf's harvest — the masons' coral-stone, the cowrie currency, the black
+			// ── Coral Reef: the atoll shelf's harvest — the masons' coral-stone, the cowrie currency, the black
 			// coral, and the island phosphorite and lagoon glass of its caves. Its generic Living Coral went with the generic coral. ──
 			new GatheringResource { Node = "Hirigaa Block", Item = "Coral-stone", Family = GatheringFamily.Ore, Tier = 2, Visual = "Detail_PoritesBoulder",
 				Tint = new Color(0.94f, 0.9f, 0.78f), Size = 1.2f, MaxUses = 3, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
@@ -780,7 +780,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.3f, 0.85f, 0.82f), Size = 1.4f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Coral Reef" }, Description = "Turquoise blades that hold the lagoon's light and ripple it on the cave walls." },
 
-			// ── Beach (biome round, 2026-10-26): the amber strand's harvest. Its iron sand and samphire went to the rocky coasts and marshes. ──
+			// ── Beach: the amber strand's harvest. Its iron sand and samphire went to the rocky coasts and marshes. ──
 			new GatheringResource { Node = "Strand Amber", Item = "Amber", Family = GatheringFamily.Crystal, Tier = 2, Visual = "Detail_AmberDrift",
 				Tint = new Color(1.0f, 0.72f, 0.24f), Size = 0.8f, MaxUses = 3, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Beach" }, Description = "Honey and cherry pebbles in the wrack after an autumn storm; the reeves hold the right to them." },
@@ -800,8 +800,8 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.96f, 0.84f, 0.92f), Size = 1.4f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Beach" }, Description = "Nacreous plates in the sea caves, shimmering in pastel pinks and greens." },
 
-			// ── Abyss (biome round, 2026-10-26): the hadal trench's harvest; its manganese nodules, glass sponge and vent clams are the plain's,
-			// the deep ocean's and the vents'. LATER (I7, Bone sites): no site kind gathers the Bone family yet; the leviathan fall will. ──
+			// ── Abyss: the hadal trench's harvest; its manganese nodules, glass sponge and vent clams are the plain's,
+			// the deep ocean's and the vents'. LATER (Bone sites): no site kind gathers the Bone family yet; the leviathan fall will. ──
 			new GatheringResource { Node = "Seep Mussel Bed", Item = "Brine Pearl", Family = GatheringFamily.Marine, Tier = 3, Visual = "Detail_SeepMussel",
 				Tint = new Color(0.7f, 0.62f, 0.46f), Size = 1.2f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Abyss" }, Description = "Brown mussels crowding a brine lake's shore; a pearl in one shell in a thousand, pickled black." },
@@ -817,10 +817,10 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Hadalite", Item = "Hadalite", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_WaterIce_Crystal_0",
 				Tint = new Color(0.45f, 0.4f, 1.0f), Size = 1.5f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Abyss" }, Description = "Violet-black prisms with a slow cold heartbeat that no hand can warm." },
-			// ── Desert (biome round, 2026-10-26) ── The erg's harvest: sunglass from the glass fields, malachite from the copper mines, Ténéré
+			// ── Desert ── The erg's harvest: sunglass from the glass fields, malachite from the copper mines, Ténéré
 			// fossil wood, ostrich shell, colocynth, desert hyacinth, the resurrection plant, desert truffles after rain, desert dates, markh
 			// rope fibre, toothbrush sticks and the bones along the ways. (Mineral rows are Ore, food and fibre Herb: the catalogue's families.)
-			// LATER (I9b P29): the truffles only after rain, the rose of Jericho opened in water.
+			// LATER: the truffles only after rain, the rose of Jericho opened in water.
 			new GatheringResource { Node = "Sunglass Lump", Item = "Sunglass", Family = GatheringFamily.Crystal, Tier = 3, Visual = "Detail_Pebbles_Quartzite",
 				Tint = new Color(1.0f, 0.96f, 0.7f), Size = 1.2f, MaxUses = 2, GatherSeconds = 3.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Desert" }, Description = "Pale lemon-green desert glass that drinks the day and glows faintly after dusk." },
@@ -857,7 +857,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Camel Bone", Item = "Camel Bone", Family = GatheringFamily.Bone, Tier = 1, Visual = "Detail_DebrisBones",
 				Tint = new Color(1.0f, 0.98f, 0.94f), Size = 1.0f, MaxUses = 3, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Desert" }, Description = "Bleached bone from the caravan ways, the toll of the crossing." },
-			// ── Badlands (biome round, 2026-10-26) ── Fire opal from the vesicles, the peris' perilight, obsidian cores, pumice blocks, geven
+			// ── Badlands ── Fire opal from the vesicles, the peris' perilight, obsidian cores, pumice blocks, geven
 			// gum, harmal seed, salep tubers, gundelia gum, madder root for red dye, apricots and grapes from the wash plots, and the dovecotes'
 			// guano for the vineyards.
 			new GatheringResource { Node = "Fire Opal Nodule", Item = "Fire Opal", Family = GatheringFamily.Crystal, Tier = 3, Visual = "Formation_Tuff_Tafoni_0",
@@ -896,7 +896,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Pigeon Guano", Item = "Pigeon Guano", Family = GatheringFamily.Ore, Tier = 1, Visual = "Detail_DebrisPigeon",
 				Tint = new Color(1.0f, 1.0f, 0.96f), Size = 1.0f, MaxUses = 4, GatherSeconds = 1.5f, MinAmount = 1, MaxAmount = 3,
 				Biomes = new[] { "Badlands" }, Description = "Guano swept from the dovecote ledges: the vineyards' fertiliser." },
-			// ── Salt Flat (biome round, 2026-10-26) ── Amole bars from the cuts, brine salt from the pans, sylvite and halite from the caves,
+			// ── Salt Flat ── Amole bars from the cuts, brine salt from the pans, sylvite and halite from the caves,
 			// hopper crystals off the brine rims, saltwort ash for glass and soap, myrrh, dobera seed (the famine food), desert-cotton wool,
 			// aloe sap and the fantasy embersalt.
 			new GatheringResource { Node = "Amole Bar", Item = "Amole Bar", Family = GatheringFamily.Ore, Tier = 2, Visual = "Formation_Saltrock_Bedded_0",
@@ -932,8 +932,8 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Embersalt", Item = "Embersalt", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_Saltrock_Diapir_0",
 				Tint = new Color(1.0f, 0.75f, 0.6f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Salt Flat" }, Description = "Amber-rose salt cubes that glow warm from dusk, said to hold the noon." },
-			// ── Hills (biome round, 2026-10-26) ── Saffron from the terraces, cork, wild lavender, capers from the walls, mica books for
-			// lantern panes, heath-briar burl, and the moura's golden comb. LATER (I7): the comb only at the mouras' springs and the
+			// ── Hills ── Saffron from the terraces, cork, wild lavender, capers from the walls, mica books for
+			// lantern panes, heath-briar burl, and the moura's golden comb. LATER: the comb only at the mouras' springs and the
 			// castros, at dawn; a rare herb node stands in.
 			new GatheringResource { Node = "Saffron Crocus Patch", Item = "Saffron", Family = GatheringFamily.Herb, Tier = 2, Visual = "Detail_FlowersSaffron",
 				Tint = new Color(0.9f, 0.82f, 1.0f), Size = 0.5f, MaxUses = 2, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 2,
@@ -957,7 +957,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(1.0f, 0.84f, 0.4f), Size = 0.6f, MaxUses = 1, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Hills" }, Description = "A golden comb left on a spring's stone at midsummer dawn; its owner will come for it." },
 
-			// ── Wetlands (biome round, 2026-10-26): the Batiha's harvest; its mirewort and puffballs went to the bogs. ──
+			// ── Wetlands: the Batiha's harvest; its mirewort and puffballs went to the bogs. ──
 			new GatheringResource { Node = "Qasab Sheaf", Item = "Qasab Reed", Family = GatheringFamily.Herb, Tier = 1, Visual = "Detail_ReedSheaves",
 				Tint = new Color(1.0f, 0.92f, 0.7f), Size = 1.2f, MaxUses = 4, GatherSeconds = 2.0f, MinAmount = 2, MaxAmount = 4,
 				Biomes = new[] { "Wetlands" }, Description = "Cut stems of the giant reed, bundled for house-ribs, mats and boats." },
@@ -983,7 +983,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.7f, 0.85f, 1.0f), Size = 0.9f, MaxUses = 1, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Wetlands" }, Description = "A thorned blue-white flower said to bloom only under the sweet-water springs." },
 
-			// ── Mangrove (biome round, 2026-10-26): the mangal's harvest; its mirewort, bloodroot, samphire and puffballs went to other biomes. ──
+			// ── Mangrove: the mangal's harvest; its mirewort, bloodroot, samphire and puffballs went to other biomes. ──
 			new GatheringResource { Node = "Boriti Poles", Item = "Boriti Pole", Family = GatheringFamily.Wood, Tier = 2, Visual = "Deadwood_PoleStumps",
 				Tint = new Color(1.0f, 0.7f, 0.6f), Size = 1.2f, MaxUses = 4, GatherSeconds = 3.0f, MinAmount = 2, MaxAmount = 4,
 				Biomes = new[] { "Mangrove" }, Description = "Straight red-hearted mangrove poles, the coast's great export, cut for the roofs of stone towns." },
@@ -1021,7 +1021,7 @@ namespace FishMMO.Shared.WorldDesign
 				Tint = new Color(0.5f, 0.95f, 1.0f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.0f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "Mangrove" }, Description = "Milky blue-white blades that sparkle like disturbed seafire in the rag caves." },
 
-			// ── Lake and River (biome round, 2026-10-26): the clear lake's and the Rhenish river's harvest; the pearl beds and the river's gold vein went elsewhere. ──
+			// ── Lake and River: the clear lake's and the Rhenish river's harvest; the pearl beds and the river's gold vein went elsewhere. ──
 			new GatheringResource { Node = "Lake Ore", Item = "Lake Ore", Family = GatheringFamily.Ore, Tier = 1, Visual = "Detail_Pebbles_Furrow",
 				Tint = new Color(0.54f, 0.29f, 0.13f), Size = 1.2f, MaxUses = 4, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 3,
 				Biomes = new[] { "Lake" }, Description = "Limonite discs and pea-ore dredged from the shelf, the lake-folk's iron." },
@@ -1055,7 +1055,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Rhinegold Seam", Item = "Rhinegold", Family = GatheringFamily.Crystal, Tier = 4, Visual = "Formation_Gypsum_Crystal_0",
 				Tint = new Color(0.85f, 0.66f, 0.22f), Size = 1.4f, MaxUses = 2, GatherSeconds = 4.5f, MinAmount = 1, MaxAmount = 1,
 				Biomes = new[] { "River" }, Description = "Old-gold threads in milky quartz that shimmer like light through moving water." },
-			// ── Rocky Terrain (biome round, 2026-10-26) ── The Pamir's lapis and night-lamp gem, fuel, hips, herbs and whetstone hornstone.
+			// ── Rocky Terrain ── The Pamir's lapis and night-lamp gem, fuel, hips, herbs and whetstone hornstone.
 			new GatheringResource { Node = "Lajvard", Item = "Lajvard Lump", Family = GatheringFamily.Crystal, Tier = 3, Visual = "Formation_Hornfels_Block_0",
 				Tint = new Color(0.7f, 0.8f, 1.0f), Size = 1.2f, MaxUses = 2, GatherSeconds = 3.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Rocky Terrain" }, Description = "Deep ultramarine lapis cut from the white marble bands, flecked with gold pyrite." },
@@ -1077,7 +1077,7 @@ namespace FishMMO.Shared.WorldDesign
 			new GatheringResource { Node = "Hornstone", Item = "Hornstone Whetstone", Family = GatheringFamily.Ore, Tier = 1, Visual = "Formation_Hornfels_Block_0",
 				Tint = new Color(0.8f, 0.8f, 0.9f), Size = 1.2f, MaxUses = 3, GatherSeconds = 2.5f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Rocky Terrain" }, Description = "Fine flinty hornstone split into whetstones." },
-			// ── Geyser Basin (biome round, 2026-10-26) ── The hot ground's sinter, mat, alum, bole, raven-flint, spar, zeolite and sun-spar, and its herbs.
+			// ── Geyser Basin ── The hot ground's sinter, mat, alum, bole, raven-flint, spar, zeolite and sun-spar, and its herbs.
 			new GatheringResource { Node = "Geyserite Nodule", Item = "Geyserite Nodule", Family = GatheringFamily.Ore, Tier = 1, Visual = "Formation_Sinter_Cone_0",
 				Tint = new Color(0.95f, 0.95f, 0.92f), Size = 1.0f, MaxUses = 3, GatherSeconds = 2.0f, MinAmount = 1, MaxAmount = 2,
 				Biomes = new[] { "Geyser Basin" }, Description = "Beaded grey-white silica knobs broken from the geyser aprons." },
@@ -1183,8 +1183,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// authoring order.</para>
 		/// <para>Off-biome rows used to stay in the draw at a twentieth of the weight. With five other herbs beside the one a
 		/// forest grows, that drew a stranger at one site in five: Flo Monolith's forest herb grove Bri Wortgarth grew bog
-		/// Mirewort (2026-10-12).</para>
-		/// <para>Until 2026-10-16 the biome was given by its name, matched against each row's <see cref="GatheringResource.Biomes"/>
+		/// Mirewort.</para>
+		/// <para>Formerly the biome was given by its name, matched against each row's <see cref="GatheringResource.Biomes"/>
 		/// (<see cref="Pick(GatheringFamily, string, DeterministicRNG)"/>, kept for what the rows say themselves); the authoring
 		/// now writes those rows' answer onto every template, and the draw is the same for the same offer.</para>
 		/// </remarks>

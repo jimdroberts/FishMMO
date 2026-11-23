@@ -12,7 +12,7 @@ using UnityEngine;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// Phase I2n-c "drowned galleries" (2026-10-25, decision 86): the water table (caveFlood), the interior's water look, floats on
+	/// The water table (caveFlood), the interior's water look, floats on
 	/// cave water, caveHanging (authored from the dressing's own per-form lookups), glow-worm hue and mount, root windows, the tea
 	/// ring (caveStain). Every default leaves every cave as it was.
 	/// </summary>
@@ -197,7 +197,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			Assert.That(shaper, Does.Contain("float flood = FloodOf(context, site, form, opening, in planned);"));
 			Assert.That(shaper, Does.Contain("depths.x, depths.y, flood);"));
 			Assert.That(shaper, Does.Contain("TryRootWindows(context, site, system, ground, in planned);"));
-			Assert.That(shaper, Does.Contain("&& !system.Drowned && !hall ||"), "a drowned cave's pool is written as a grotto's (and a sea hall's, I2n-b)");
+			Assert.That(shaper, Does.Contain("&& !system.Drowned && !hall ||"), "a drowned cave's pool is written as a grotto's (and a sea hall's)");
 			Assert.That(shaper, Does.Contain("look = CaveRockLayers.WithStain(look, in caves, system.Form, system.WaterLevel);"));
 			Assert.That(shaper, Does.Contain("StampWaterLook(context, site, CaveInteriorArt.LookBiome(CaveInteriorArt.Of(context.Request, site, system)));"));
 			string hanging = Code(World + "PointsOfInterest/Features/PointOfInterestCaveDressing.Hanging.cs");
@@ -226,7 +226,7 @@ namespace FishMMO.UnitTests.WorldDesign
 				"an unringed cave's material keeps its bytes");
 		}
 
-		// ── 2026-10-26: the rest of decision 86 (finish) ──────────────
+		// ── The rest of decision 86 (finish) ──────────────
 
 		[Test]
 		public void TheFloodsMarks_KeepTheirOldText_AndTheLeechesComeLast()

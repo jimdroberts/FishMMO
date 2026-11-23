@@ -11,7 +11,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>How far below the ground line a building's plinth reaches, so it sits on a slope without a gap.</summary>
 		public const float FoundationDepth = 0.5f;
 
-		// ── Palette roles the builders name (StructureDraft.Builds, 2026-10-16, I6a) ──
+		// ── Palette roles the builders name (StructureDraft.Builds) ──
 		// Each list is a preference: a solid plays the first whose kit material is its own (StructureParts), so plaster walls are
 		// the Wall, a timber house's planks its LogWall, a stone ground floor under a framed storey its GroundFloor, turf Turf.
 
@@ -27,9 +27,9 @@ namespace FishMMO.Shared.WorldDesign
 		internal static readonly BiomeStructureRole[] StepRoles = { BiomeStructureRole.Paving, BiomeStructureRole.Floor };
 		internal static readonly BiomeStructureRole[] DoorRoles = { BiomeStructureRole.Door };
 		internal static readonly BiomeStructureRole[] FenceRoles = { BiomeStructureRole.Fence };
-		/// <summary>The frame's own timber: a turf roof's ridge beam (2026-10-16).</summary>
+		/// <summary>The frame's own timber: a turf roof's ridge beam.</summary>
 		internal static readonly BiomeStructureRole[] TrimRoles = { BiomeStructureRole.Trim };
-		/// <summary>A walking deck: a pier's, a bridge's, a rope walk's planks (2026-10-16: the deck is the floor, not the trim).</summary>
+		/// <summary>A walking deck: a pier's, a bridge's, a rope walk's planks (the deck is the floor, not the trim).</summary>
 		internal static readonly BiomeStructureRole[] DeckRoles = { BiomeStructureRole.Floor };
 
 		/// <summary>A gable roof's two slabs, ridge along z, over a span of <paramref name="span"/> (x) and <paramref name="length"/> (z), centred on the origin.</summary>
@@ -78,7 +78,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A roof a piece builds for itself follows its palette (2026-10-18, I6h: "all roofed pieces follow the palette's roof
+		/// A roof a piece builds for itself follows its palette ("all roofed pieces follow the palette's roof
 		/// pitch too, not only houses"): the rise its builder gives it (<paramref name="kitRise"/> over the run
 		/// <paramref name="half"/>: half a gable's span, a pyramid's apothem, a cone's radius) in every kit build; at a pitch
 		/// a palette asked for (StructureDraft.RoofPitch) the rise StructureRoofs.Rise gives, or flat. Recorded on the draft so
@@ -101,7 +101,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A flat roof on posts or low walls (2026-10-18, I6h: a piece's own roof where its palette roofs flat, as mud and timber
+		/// A flat roof on posts or low walls (a piece's own roof where its palette roofs flat, as mud and timber
 		/// roofs of the dry lands are): a deck of the roof's material over the gable roof's footprint (<paramref name="span"/> +
 		/// overhang across, <paramref name="length"/> + overhang along, in the roof's frame <paramref name="place"/>), its foot at
 		/// <paramref name="eaveY"/>, and from the middle level in a timber fascia round its edge.
@@ -344,7 +344,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The part from angle <paramref name="from"/> to <paramref name="to"/> of the ring block <paramref name="a0"/>..<paramref name="a1"/>,
-		/// its faces on that block's flat faces (2026-10-19: the jambs and sills either side of a hole were whole ring blocks of their
+		/// its faces on that block's flat faces (the jambs and sills either side of a hole were whole ring blocks of their
 		/// own narrower span, so their outer faces stood out toward the circle, ~0.24 m proud of an octagon's facet beside a door).
 		/// The whole span is the block itself.
 		/// </summary>
@@ -494,8 +494,8 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			int key = h.Key;
 			float floor = h.Floor + h.Plinth;
-			// The roof a palette asks for (StructureRoofs, 2026-10-18, I6e: "roof geometry follows the palette's roof material"):
-			// a house roof of thatch, timber planks or (I6h) turf laid at another pitch, or flat behind a parapet. Null in every
+			// The roof a palette asks for (StructureRoofs, "roof geometry follows the palette's roof material"):
+			// a house roof of thatch, timber planks or turf laid at another pitch, or flat behind a parapet. Null in every
 			// kit build, which then lays exactly the roof it always has.
 			bool follows = StructureRoofs.Follows(h.RoofMaterial);
 			StructureRoofPitch kitPitch = StructureRoofs.PitchOf(h.RoofMaterial);
@@ -533,7 +533,7 @@ namespace FishMMO.Shared.WorldDesign
 				for (int i = 0; i < h.Windows; i++)
 				{
 					// Spread across the front, skipping the door, and never quite in a row: a medieval front was opened where a
-					// room wanted light, not to a grid (2026-10-12: "Are these proper medieval fantasy houses?").
+					// room wanted light, not to a grid ("Are these proper medieval fantasy houses?").
 					float t = (i + 0.5f) / h.Windows;
 					float x = Mathf.Lerp(-h.Width * 0.5f + 0.8f, h.Width * 0.5f - 0.8f, t) + (d.Rand(key + 600, i) - 0.5f) * 0.5f;
 					float sill = floor + h.DoorHeight * 0.62f + (d.Rand(key + 601, i) - 0.5f) * 0.16f;
@@ -618,7 +618,7 @@ namespace FishMMO.Shared.WorldDesign
 					soft = StructureRoofs.Soft(repitched.Value);
 					roof.Ridge = top + rise;
 					// A steeper roof's bargeboards lean further out at the eaves (half their depth times the slope's sine): its overhang
-					// is drawn in by as much, so the house stands on the kit's footprint (2026-10-18, I6h: the 60° shake roofs).
+					// is drawn in by as much, so the house stands on the kit's footprint (the 60° shake roofs).
 					overhang -= Mathf.Max(0f, BargeboardDepth * 0.5f * (Mathf.Sin(Mathf.Atan2(rise, span * 0.5f)) - Mathf.Sin(Mathf.Atan2(kitRise, span * 0.5f))));
 				}
 				GableRoof(d, span, length, top, rise, overhang, soft ? 0.32f : 0.14f, h.RoofMaterial, key + 10, place, soft);
@@ -642,7 +642,7 @@ namespace FishMMO.Shared.WorldDesign
 			if (d.Fine && !flat)
 			{
 				// The ridge piece: a beam along the top, under the thatch's crown or the shingles' cap. Under turf it is the frame's
-				// own timber, seen along the turf's crest (2026-10-16: trim, not the shingles a shingled roof's timber ridge is).
+				// own timber, seen along the turf's crest (trim, not the shingles a shingled roof's timber ridge is).
 				var r0 = new Vector3(0f, top + rise + 0.1f, -length * 0.5f - h.Overhang);
 				var r1 = new Vector3(0f, top + rise + 0.1f, length * 0.5f + h.Overhang);
 				using (d.Builds(h.RoofMaterial == StructureMaterial.Earth ? TrimRoles : RoofRoles))
@@ -698,7 +698,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A flat roof (2026-10-18, I6e: mud brick and packed earth, as the houses of the dry south and the pueblos are roofed):
+		/// A flat roof (mud brick and packed earth, as the houses of the dry south and the pueblos are roofed):
 		/// the walls run on up past the roof as its parapet, flush with their faces; the deck of the roof's material within them,
 		/// on beams whose ends stand out of the front and back walls under it; spouts through the parapet's foot at the back and
 		/// sides to throw the rain clear. Over <paramref name="width"/> × <paramref name="depth"/> (an upper storey's, jettied, when
@@ -770,16 +770,16 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// The least pitch a roof of a material is built to, degrees: thatch steepest (it sheds water only when steep),
 		/// shingles and planks steep, turf low (it slides off a steep roof). The houses were pitched at 30–40°, which read as
-		/// modern (2026-10-12: "Are these proper medieval fantasy houses?").
+		/// modern ("Are these proper medieval fantasy houses?").
 		/// </summary>
 		/// <remarks>
-		/// The palette's surfaces (2026-10-16, I6a), from how medieval roofs were laid: reed is thatch and wants thatch's pitch;
+		/// The palette's surfaces, from how medieval roofs were laid: reed is thatch and wants thatch's pitch;
 		/// riven shingles shed water only when steep (45°, as planks); stone slates and split slate are heavy and hold at 40°;
 		/// sandstone slabs and ice blocks lie heavier still (35°); bamboo half-culms and log roofs hang lower (30°), as do
 		/// marble slabs, laid as a temple's low gable is; bone lashed under hides wants a hide roof's steepness (45°); mud
 		/// brick roofs are flat. Every material before them is as it was.
 		/// <para>
-		/// Packed earth (2026-10-18, I6h: "earth roofs are pitched sod/turf, only adobe gives flat roofs") is sod laid on boards
+		/// Packed earth ("earth roofs are pitched sod/turf, only adobe gives flat roofs") is sod laid on boards
 		/// and birch bark, as the turf roofs of the north are, at 35°: steep enough to shed water, low enough that the turf holds.
 		/// No kit roof is built lower for it: the turf longhouse's own rise (42°) is the larger. No material wants 60° of itself
 		/// (StructureRoofPitch.Pitch60 is a palette's to name: the Carpathian shake roofs).
@@ -891,7 +891,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal const float StairHeadroom = 2.05f;
 
 		/// <summary>
-		/// A house's jettied upper storey (2026-10-12: "2 story buildings have no stairways up and the second floor is
+		/// A house's jettied upper storey ("2 story buildings have no stairways up and the second floor is
 		/// empty?"): the floor over the ground floor with a well cut through it, a stair up the left wall to it, a rail round
 		/// the well, walls with windows, and the room it is (<see cref="House.UpperRoomKind"/>) for the interior to furnish.
 		/// The floor used to be one solid slab, with nothing up to it and nothing on it. Returns the storey's top; widens
@@ -925,7 +925,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The flight up to an upper storey on a side wall: its x span, its foot and head along z, and its treads. A house too
-		/// shallow for full treads with room at both ends gets shallower ones (2026-10-19, round 3: "the stairs don't fit properly"
+		/// shallow for full treads with room at both ends gets shallower ones (round 3: "the stairs don't fit properly"
 		/// — a watermill 7 m deep put the foot of its 17-step flight 0.4 m from the front wall, too tight to stand in, and the
 		/// second riser stopped anyone stepping on from the side, so its upper floor could not be reached).
 		/// </summary>
@@ -967,7 +967,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// The wall the stair up to an upper storey climbs: the left (−1), or the right (+1) when on the left its foot would
-		/// stand in the front door's way and the right is free of the door and the chimney (2026-10-15: "interiors aren't
+		/// stand in the front door's way and the right is free of the door and the chimney ("interiors aren't
 		/// always fully walkable" — a watermill 7 m deep put its stair's foot 0.4 m in from its door, leaving 0.3 m of the
 		/// doorway clear of it).
 		/// </summary>
@@ -1032,7 +1032,7 @@ namespace FishMMO.Shared.WorldDesign
 			// The stair: solid steps from the ground floor up to the top step, which is the upper floor at the well's head.
 			Steps(d, new Vector3((x0 + x1) * 0.5f, 0f, head), Vector3.back, StairWidth, upper0, StructureMaterial.Timber, key + 7000, floor, tread);
 			{
-				// A handrail up the flight's open side, on posts at its foot and its head. At every level (2026-10-19, round 3: it
+				// A handrail up the flight's open side, on posts at its foot and its head. At every level (round 3: it
 				// was LOD0-1 only, so the collider let a climber step off the flight's open side halfway up, 1.1 m over the floor).
 				var railFoot = new Vector3(open, floor + 0.9f + rise / steps, foot);
 				var railHead = new Vector3(open, upper0 + 0.9f, head);
@@ -1104,7 +1104,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				d.Room(new Vector3(0f, floor, 0f), new Vector2(width - 2f * h.Wall, h.Depth - 2f * h.Wall), h.WallHeight, h.RoomKind);
 				d.RoomClear(new Vector2(side < 0 ? x0 : x0 - 0.35f, foot - 1f), new Vector2(side < 0 ? x1 + 0.35f : x1, head));
-				// And the way to its foot from the room, a body's width and more beside the flight's first steps (2026-10-19: a bed
+				// And the way to its foot from the room, a body's width and more beside the flight's first steps (a bed
 				// against the front wall shut off the floor before a foot laid near that wall).
 				d.RoomClear(new Vector2(side < 0 ? x0 : x0 - 1f, foot - 1f), new Vector2(side < 0 ? x1 + 1f : x1, foot + 0.6f));
 			}
@@ -1115,7 +1115,7 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// A house's chimney (2026-10-12: "where are the chimneys??"): a stone stack centred on a gable wall — the back
+		/// A house's chimney ("where are the chimneys??"): a stone stack centred on a gable wall — the back
 		/// gable, or the right one when the ridge runs along the front — half proud of it, from the floor to clear of the
 		/// ridge, with a cap and pots; its smoke from the top and nowhere else; and its breast inside the room the hearth is
 		/// built against (<see cref="StructureDraft.RoomHearth"/>). It used to be a pillar standing in the room with the fire
@@ -1210,7 +1210,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Handrails up the sides of a flight laid by <see cref="Steps"/> with the same edge, way out, width, rise and treads: a
-		/// rail 0.95 m over the treads just inside each side, on a post at the foot. At every level (2026-10-19, round 3: "you just
+		/// rail 0.95 m over the treads just inside each side, on a post at the foot. At every level (round 3: "you just
 		/// fall off"): the last level is the collider, and a flight a metre and more up with open sides is a ledge to walk off.
 		/// </summary>
 		internal static void StepRails(StructureDraft d, Vector3 edge, Vector3 outward, float width, float toY, StructureMaterial material, int key, float fromY = 0f,
@@ -1273,7 +1273,7 @@ namespace FishMMO.Shared.WorldDesign
 		internal static void Window(StructureDraft d, Vector3 at, Vector3 outward, int key) => Window(d, at, outward, -0.04f, key);
 
 		/// <remarks>
-		/// Medieval, not Georgian (2026-10-12: "Are these proper medieval fantasy houses?"): a timber surround and a
+		/// Medieval, not Georgian ("Are these proper medieval fantasy houses?"): a timber surround and a
 		/// mullion splitting it into two lights, and by the window's own draw either leaded lights (the glass crossed by
 		/// its cames), shutters swung open against the wall, or shutters closed over it, barred. The glass stays behind every
 		/// one (a closed window still shows its light round the shutters at night, and from inside).

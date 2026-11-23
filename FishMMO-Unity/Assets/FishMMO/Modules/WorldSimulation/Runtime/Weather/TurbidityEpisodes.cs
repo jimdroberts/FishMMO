@@ -3,7 +3,7 @@ using System;
 namespace FishMMO.Shared.Weather
 {
 	/// <summary>
-	/// A scene's turbidity episodes (2026-10-25, I6i; decision 92: a canyon's turbidity currents, the sea floor's slides): now and
+	/// A scene's turbidity episodes (a canyon's turbidity currents, the sea floor's slides): now and
 	/// then, for a fixed while, the floor stirs. A pure function of the world clock and the scene, in double precision, so every
 	/// player sees the same episode at the same moment, a rejoin lands in it, and the later turbidity effect (silt clouds down the
 	/// canyon) reads exactly the same schedule as the glows that tremble with it (Glow TREMOR, <see cref="SceneGlowMode.Tremor"/>).

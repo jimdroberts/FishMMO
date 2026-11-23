@@ -35,7 +35,7 @@ namespace FishMMO.UnitTests.WorldDesign
 		/// past that: at a critical brink the jet's Froude number is the same at every discharge, so Castillo's length grows
 		/// as the jet's thickness, q^⅔, and Horeni's fit as q^0.32. The two cannot agree within two over the hundredfold
 		/// range 0.05–5 m²/s this asked for at any one turbulence (at 0.013 the ratio runs 0.54 … 2.65), and never did; q 5 is
-		/// held to Castillo's own scaling instead (2026-10-12).
+		/// held to Castillo's own scaling instead.
 		/// </summary>
 		[Test]
 		public void BreakUpLengthAgreesWithHoreniAcrossTrickleToRiver()

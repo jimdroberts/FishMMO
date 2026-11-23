@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Installs the core's <see cref="AbilityGrants"/> (2026-11-20): content that names abilities without referencing this
+	/// Installs the core's <see cref="AbilityGrants"/>: content that names abilities without referencing this
 	/// module (a lore object's reward) teaches them here. Skips what the character already knows, learns the rest through
 	/// its <see cref="IAbilityKnowledgeController"/>, and tells its client (<see cref="KnownAbilityAddBroadcast"/>,
 	/// <see cref="KnownAbilityEventAddBroadcast"/>), as the lore action did itself.

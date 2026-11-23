@@ -5,9 +5,9 @@ using UnityEngine;
 namespace FishMMO.Shared.Biomes
 {
 	/// <summary>
-	/// One named linear style (<see cref="BiomeLinearStyles"/>, 2026-10-26, phase I2f-b): the drafts' own names for the hedges, walls,
+	/// One named linear style (<see cref="BiomeLinearStyles"/>): the drafts' own names for the hedges, walls,
 	/// fences, marker lines and channels they ask for (a Clawdd, a Kershef wall, a SergeLine, a qanat Gallery), each a
-	/// <see cref="BiomeLinearStyle"/> on the I2f model with its form, height, spacing, breaks, side and material set, and the plants it
+	/// <see cref="BiomeLinearStyle"/> on the model with its form, height, spacing, breaks, side and material set, and the plants it
 	/// is grown of by species name.
 	/// </summary>
 	public readonly struct BiomeNamedLinearStyle
@@ -78,8 +78,8 @@ namespace FishMMO.Shared.Biomes
 	}
 
 	/// <summary>
-	/// The drafts' named linear styles (2026-10-26, phase I2f-b; decisions 46, 49, 64, 67, 70, 77, 81, 89, 93, 96 and the styles the
-	/// earlier rounds named on the I2f forms), as data: each is a <see cref="BiomeLinearStyle"/> preset a biome's file lays by name
+	/// The drafts' named linear styles (96 and the styles the
+	/// earlier rounds named on the forms), as data: each is a <see cref="BiomeLinearStyle"/> preset a biome's file lays by name
 	/// (<c>.Lines(new Entry.Line("Kershef"), new Entry.Line("Gallery"))</c>). Pure; nothing here is laid until a biome names it, so
 	/// no scene changes.
 	/// </summary>

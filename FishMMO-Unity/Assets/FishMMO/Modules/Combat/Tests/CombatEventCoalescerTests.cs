@@ -9,8 +9,8 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The combat report's coalescer and what a refused hit reports: the pins of the observer messaging proofs and the
-	/// combat audits (2026-08-31 and their follow-ups) that drive the Combat module's types, moved out of the core fixtures
-	/// with the damage controller (2026-11-20). The core fixtures keep the delivery rules and the source pins.
+	/// combat audits (and their follow-ups) that drive the Combat module's types, moved out of the core fixtures
+	/// with the damage controller. The core fixtures keep the delivery rules and the source pins.
 	/// </summary>
 	[TestFixture]
 	public class CombatEventCoalescerTests
@@ -194,7 +194,7 @@ namespace FishMMO.UnitTests
 
 		#endregion
 
-		#region Kinds and overflow (combat audit 2026-08-31 and its third round)
+		#region Kinds and overflow (combat audit and its third round)
 
 		/// <summary>
 		/// A DoT tick and a direct hit of the same type from the same source must never merge:

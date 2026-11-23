@@ -133,9 +133,9 @@ namespace FishMMO.Shared.WorldDesign
 		}
 
 		/// <summary>
-		/// The project's substance of a shipped name, created (and registered) from the shipped table when the project lacks it
-		/// (2026-10-18, phase I2q): Author biome art calls this for a biome whose file says what its ground emits, so a substance
-		/// added to the table after this generator was last run (Steam, 2026-10-10: every geyser basin went without sites until it
+		/// The project's substance of a shipped name, created (and registered) from the shipped table when the project lacks it:
+		/// Author biome art calls this for a biome whose file says what its ground emits, so a substance
+		/// added to the table after this generator was last run (Steam: every geyser basin went without sites until it
 		/// existed) is made by the authoring that needs it. Null for a name the table does not ship; nothing else is created.
 		/// </summary>
 		public static WeatherSubstance EnsureShipped(string name)
@@ -179,7 +179,7 @@ namespace FishMMO.Shared.WorldDesign
 			public float GrainMetres = 1e-4f;
 			public float GrainDensity = 2500f;
 			public bool Vapour;
-			/// <summary>Thrown up by vents (WeatherSubstance.Vented): set at creation and by the refresh (2026-10-25, I2q-b; Volcanic Ash and Cryo Tephra carried it by hand before).</summary>
+			/// <summary>Thrown up by vents (WeatherSubstance.Vented): set at creation and by the refresh (Volcanic Ash and Cryo Tephra carried it by hand before).</summary>
 			public bool Vented;
 		}
 
@@ -197,7 +197,7 @@ namespace FishMMO.Shared.WorldDesign
 		private static SubstanceSpec Vapour(string name)
 			=> new SubstanceSpec { Name = name, Vapour = true, GrainMetres = 1e-5f, GrainDensity = 1000f };
 
-		/// <summary>Something vents throw up (2026-10-25, I2q-b): it rises in a plume over the vent and falls out of it downwind (VolcanicPlume).</summary>
+		/// <summary>Something vents throw up: it rises in a plume over the vent and falls out of it downwind (VolcanicPlume).</summary>
 		private static SubstanceSpec Vented(SubstanceSpec spec)
 		{
 			spec.Vented = true;
@@ -247,14 +247,14 @@ namespace FishMMO.Shared.WorldDesign
 			With(Vapour("Steam"), "Water vapour off hot springs, fumaroles and geysers: white where it mixes into colder air, gone again once the drier air has evaporated it. It never falls and never lies.",
 				C(0.96f, 0.97f, 0.98f), C(0.86f, 0.88f, 0.9f), 1f, 1f, 0f, WeatherCoverKind.None, Color.white, 2f, true, 0.1f),
 
-			/* The vent rounds' substances (2026-10-25, phase I2q-b; each written onto its biome by its spec's Emits column, which makes
-			 * it here when the project lacks it). Plume frost (decision 53): the ice grains an ice moon's jets throw up, five microns of
-			 * water ice, falling back as the brightest snow there is. Plume soot (decision 66): Triton's geysers' dark dust, ten microns
-			 * of tholin carried up in nitrogen gas and laid as streaks downwind. Vog (decision 93): the volcanic smog of an effusive
+			/* The vent rounds' substances (each written onto its biome by its spec's Emits column, which makes
+			 * it here when the project lacks it). Plume frost: the ice grains an ice moon's jets throw up, five microns of
+			 * water ice, falling back as the brightest snow there is. Plume soot: Triton's geysers' dark dust, ten microns
+			 * of tholin carried up in nitrogen gas and laid as streaks downwind. Vog: the volcanic smog of an effusive
 			 * field, sulphate aerosol of a micron, blue-grey, which never lies; vented, so it hangs as plumes over the vents and drifts
-			 * downwind rather than everywhere (not a vapour: a vapour's ground is set with geysers). Acid fog (decision 85): sulphuric
-			 * acid droplets of the Venus highlands' cloud base, pooling in the graben. Kiln haze (decision 89): the dense carbon dioxide
-			 * of the Venus lowlands thick with fine dust, ground-hugging. Methane mist (decision 62): a low shore fog of methane
+			 * downwind rather than everywhere (not a vapour: a vapour's ground is set with geysers). Acid fog: sulphuric
+			 * acid droplets of the Venus highlands' cloud base, pooling in the graben. Kiln haze: the dense carbon dioxide
+			 * of the Venus lowlands thick with fine dust, ground-hugging. Methane mist: a low shore fog of methane
 			 * droplets over a methane lake. */
 			With(Frozen(Vented(Grain("Plume Frost", 5e-6f, 920f))), "Ice grains thrown up by an ice moon's jets and falling back as the brightest snow in the sky.",
 				C(0.95f, 0.97f, 0.98f), C(0.82f, 0.86f, 0.9f), 0.5f, 1f, 0.02f, WeatherCoverKind.Snow, C(0.97f, 0.98f, 0.99f), -0.5f, false, 0.6f),
@@ -383,8 +383,8 @@ namespace FishMMO.Shared.WorldDesign
 			}
 		}
 
-		/* What a biome's ground gives the air is its spec file's word (BiomeArtSpec.Entry.Loose and Emits). Until 2026-10-26 a table
-		 * here, keyed by biome asset name, said it; phase CODE-TABLE CLEARANCE wrote each row into its biome's file (decision 1), and the
+		/* What a biome's ground gives the air is its spec file's word (BiomeArtSpec.Entry.Loose and Emits). Formerly a table
+		 * here, keyed by biome asset name, said it; a later pass wrote each row into its biome's file, and the
 		 * biome art authoring writes the same two columns onto the template (marked). A biome whose file says neither is rock, soil,
 		 * vegetation, ice or water, and gives the air nothing of its own: that is nearly all of them.
 		 *
@@ -402,7 +402,7 @@ namespace FishMMO.Shared.WorldDesign
 
 		/// <summary>
 		/// Where a biome's ground comes from: the World Design module's biome spec files (BiomeArtSpec), installed by that module
-		/// (Phase 4, 2026-11-18). Without it the substances are still made and no biome's ground is filled.
+		///. Without it the substances are still made and no biome's ground is filled.
 		/// </summary>
 		public static BiomeGroundLookup BiomeGround { get; set; }
 

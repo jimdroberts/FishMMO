@@ -7,7 +7,7 @@ namespace FishMMO.UnitTests
 {
 	/// <summary>
 	/// The client's numbers for the cave drips' shader (<see cref="CaveDripField.Fill"/>) agree with the drop's beat
-	/// (<see cref="SceneDrip"/>). Split from CaveDripsTests (the World Design module's), Phase 4, 2026-11-18.
+	/// (<see cref="SceneDrip"/>). Split from CaveDripsTests (the World Design module's).
 	/// </summary>
 	[TestFixture]
 	public class CaveDripFieldTests

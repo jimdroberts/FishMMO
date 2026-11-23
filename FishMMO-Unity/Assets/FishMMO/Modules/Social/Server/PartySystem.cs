@@ -3108,7 +3108,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 		/// <summary>
 		/// Tells the inviter what became of an invitation: sent, or why not. An invitation that ended in silence was
-		/// indistinguishable from one the target ignored (2026-11-17).
+		/// indistinguishable from one the target ignored.
 		/// </summary>
 		private void SendInviteToast(NetworkConnection conn, string text, ToastSeverity severity)
 		{

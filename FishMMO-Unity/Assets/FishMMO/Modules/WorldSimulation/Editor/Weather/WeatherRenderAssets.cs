@@ -181,8 +181,8 @@ namespace FishMMO.Client
 		public static int LastModuleProblems { get; private set; }
 
 		/// <summary>
-		/// Registers a module's render profile to be filled whenever the weather's is (Phase 4 of the core and modules plan,
-		/// 2026-11-17): the fill makes or loads its asset (<see cref="EnsureProfile{T}"/>), assigns what a client build must
+		/// Registers a module's render profile to be filled whenever the weather's is:
+		/// the fill makes or loads its asset (<see cref="EnsureProfile{T}"/>), assigns what a client build must
 		/// ship, registers it as an addressable and returns how many problems it found. Registering an id again replaces it.
 		/// </summary>
 		public static void RegisterModuleProfile(string id, Func<int> fill)

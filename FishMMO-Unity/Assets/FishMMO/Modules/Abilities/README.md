@@ -10,9 +10,9 @@ forgetting abilities, the known-abilities login send), and the client's ability 
 | **Module id** | `abilities` (`AbilitiesModule`) |
 | **Assemblies** | `FishMMO.Abilities`, `.Server`, `.Client`, `.Editor`, `.Tests`, `.RenderScratch` |
 | **Depends on** | The core; Combat (damage and heal actions act through the damage controller); World Simulation (`WeatherAbilityModifier`); Buffs (abilities apply and read buffs) |
-| **Depended on by** | Ability Crafting, Achievements (tier rewards), Archetypes, Commerce (premade abilities, knowledge sales), Hotkeys, Items (consumable casts), NPCs & AI, Pets, Wildlife, Staff, World Interactables (lore rewards); and through them Matchmaking, Social, World Design |
+| **Depended on by** | Ability Crafting, Achievements (tier rewards), Archetypes, Commerce (premade abilities, knowledge sales), Hotkeys, Items (consumable casts), NPCs & AI, Pets, Wildlife, Staff, World Interactables (lore rewards), Mounts (the Mount ability, AbilityPressOverrides); and through them Matchmaking, Social, World Design |
 | **Remove together with** | Every module above |
-| **Moved** | Out of the core, 2026-11-20 (Phase 5: the core is shrunk to login, world and scene) |
+| **Moved** | Out of the core (the core is shrunk to login, world and scene) |
 
 ## Folders
 
@@ -29,7 +29,7 @@ Assets/FishMMO/Modules/Abilities/
 ├── Client/               FishMMO.Abilities.Client  UITKAbilities, UITKCastBar (+ prefabs, uxml, uss), ClientCastNameplateDisplay
 ├── Editor/               FishMMO.Abilities.Editor  Dashboard entries (Abilities, Ability Events), MockConsumableBuilder (the
 │                                                   potions and scrolls); RenderScratch/ (cast bar, ability tooltips, panels)
-├── Templates/            Types/, Events/ (the ability and ability event assets; the Mock/ set was deleted 2026-11-22)
+├── Templates/            Types/, Events/ (the ability and ability event assets; the Mock/ set was deleted)
 └── Tests/                FishMMO.Abilities.Tests   The activation, prediction, persistence and wire tests that exercise abilities
 ```
 

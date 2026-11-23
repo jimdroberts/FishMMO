@@ -430,7 +430,7 @@ namespace FishMMO.Shared.WorldDesign
 			// Its own coast calving: the source is here and no month thaws, so the ice sheet reaches this sea.
 			climate.CalvingFront = climate.HasCalvingSource && drift < SourceStepDegrees && climate.AirWarmestC <= 0f
 				&& BiomeTemplateArt.WaterBiome(BiomeWaterRole.IceSheet) != null;
-			// The open shelf (decision 68) is terrain above the sea, so the shore field already keeps every piece off it.
+			// The open shelf is terrain above the sea, so the shore field already keeps every piece off it.
 			climate.FastIce = new SceneAltitude(request).IceShelf != null;
 			return climate;
 		}

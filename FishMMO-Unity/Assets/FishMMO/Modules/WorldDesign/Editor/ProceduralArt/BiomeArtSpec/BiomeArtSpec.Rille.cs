@@ -23,7 +23,7 @@ namespace FishMMO.Shared.WorldDesign
 				// Alien ground alone: the client reads that live from the template's air (BiomeHabitats.Live), never stored.
 				.Wildlife(BiomeHabitat.None)
 				.Moat(BiomeMoatWater.Dry)
-				// What the code tables decided by its name until 2026-10-26, written here by phase CODE-TABLE CLEARANCE (decision 1):
+				// What the code tables once decided by its name:
 				// the sites it hosts and their variants, its gathering, weathering and terrain process, and what its ground gives the air.
 				.Sites((POIType.Camp, 1f), (POIType.Shrine, 1f), (POIType.Bridge, 1f), (POIType.Spring, 1f), (POIType.Cave, 1f),
 					(POIType.Monument, 1f), (POIType.Wreck, 1f), (POIType.Waterfall, 1f), (POIType.Rapids, 1f), (POIType.River, 1f),
@@ -36,7 +36,7 @@ namespace FishMMO.Shared.WorldDesign
 					(POIType.SmugglersCove, 1f), (POIType.PirateCove, 1f), (POIType.SunkenShip, 1f), (POIType.SunkenRuins, 1f),
 					(POIType.SunkenCity, 1f), (POIType.DungeonEntrance, 1f), (POIType.BossLair, 1f), (POIType.OreVein, 1f),
 					(POIType.CrystalFormation, 1f), (POIType.HerbGrove, 1f),
-					// The fantasy wave (2026-10-27): its kinds here, and keeps and towers at least 1.
+					// The fantasy set: its kinds here, and keeps and towers at least 1.
 					(POIType.ElderMonolith, 0.6f), (POIType.WaygateRing, 0.3f))
 				.Gathers("Voidstone Cluster")
 				.Weathers(BiomeStructureFinish.Mossy, 0f, 0.5f)

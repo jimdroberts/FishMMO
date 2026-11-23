@@ -11,7 +11,7 @@ namespace FishMMO.Client
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Fitted to recordings (2026-10-19).</b> Every ground is a <see cref="Surface"/> measured from real footsteps on
+	/// <b>Fitted to recordings.</b> Every ground is a <see cref="Surface"/> measured from real footsteps on
 	/// it (OpenGameArt's CC0/CC-BY foley and Wikimedia Commons field recordings): its octave spectrum from 63 Hz to 16 kHz,
 	/// how long the step takes to build (the weight rolling from heel to ball: tens of milliseconds on stone, a tenth of a
 	/// second and more in snow or gravel), how long it lasts to 35 dB down, and how many small transients it holds — the

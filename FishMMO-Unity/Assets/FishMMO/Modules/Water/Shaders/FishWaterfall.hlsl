@@ -14,7 +14,7 @@ CBUFFER_START(UnityPerMaterial)
     half _Opacity;
     half _Breakup;
     /* The look of the water a fall pours from (InlandWaterRenderer.Looks ApplyFallLooks, on each fall's own copy of the
-     * material, 2026-10-28: on a property block it kept the curtain out of the SRP Batcher): its biome's water look carried
+     * material: on a property block it kept the curtain out of the SRP Batcher): its biome's water look carried
      * into the curtain's own colours. _FallLookOn 0 (the shared material, or water of the inland water's own look): the
      * material's colours and nothing more absorbed, as every fall was drawn before. Colours linear, as the material's are. */
     float _FallLookOn;
@@ -296,7 +296,7 @@ FallSurface EvaluateFall(Varyings input, float3 view, float3 normalWS, float dis
     aeration = 1.0 - (1.0 - aeration) * (1.0 - aeration);
     /* White by degrees, with the streaks in it: aerated water is a mass of bubbles in water, densest in the jets and
      * thinner between them, never one flat sheet of white. The narrower ramp it had went white wherever the water had
-     * taken in air at all, and read as painted (2026-10-08). */
+     * taken in air at all, and read as painted. */
     half white = smoothstep(0.45 - 0.4 * aeration, 1.05 - 0.25 * aeration, strand + 0.2 * aeration);
     white = max(white, churned * smoothstep(0.1, 0.75, strand + 0.25 * churned));
     white *= lerp(0.6, 0.95, strand);
@@ -325,7 +325,7 @@ FallSurface EvaluateFall(Varyings input, float3 view, float3 normalWS, float dis
      * face (a horsetail), white and whole. */
     /* Below its break-up length the ropes carry the detail, but the water is still a mass falling there: the sheet stays as
      * its body, thinner and aerated, under the ropes. Faded out entirely it left the fall's lower part as a few edge-on
-     * bands with nothing between them (2026-10-08). Water riding rock stays whole down the face (a horsetail). */
+     * bands with nothing between them. Water riding rock stays whole down the face (a horsetail). */
     half keep = max(max(lerp(1.0, 0.6, smoothstep(0.85, 1.6, breakup)), saturate(churned * 1.2) * (1.0 - airborne * 0.3)), far * 0.85);
     alpha *= keep;
 

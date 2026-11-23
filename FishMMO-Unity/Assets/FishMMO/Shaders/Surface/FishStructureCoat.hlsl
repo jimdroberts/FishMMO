@@ -1,4 +1,4 @@
-// FishMMO: the coat a biome's weather lays over its buildings (2026-10-25; BiomeStructureCoat / BiomeStructureCoats, published by
+// FishMMO: the coat a biome's weather lays over its buildings (BiomeStructureCoat / BiomeStructureCoats, published by
 // FloraPaletteMap): lichen, rime, salt bloom, soot, a tide-mark… drawn where a piece stands, from the biome under its origin, on top of
 // the weathering every building already wears (FishStructureWeathering.hlsl). No textures but the small table; no keywords.
 //
@@ -9,7 +9,7 @@
 //   1 the sea's low water, 2 the local water: any water within 6 m of the piece on the fine ground map), scale m, foot wind ·
 //   8 uphill (the main colour on the faces toward the slope above), uphill foot bias, foot spread (per piece), year fade ·
 //   9 scour (windward polish), scour top m (0 the whole wall), faults (+ vertical strike-slip, − dipping along the contour), growth
-//   below m (under the sea; above it only a film of the second colour). Zero in 8.zw and 9 draws exactly as before 2026-10-25 (I2g-e).
+//   below m (under the sea; above it only a film of the second colour). Zero in 8.zw and 9 draws exactly as formerly.
 // _FishCoatInfo = (on, rows, grid w, grid h): x 0 when no biome on the scene has a coat, and every building draws as before.
 //
 // Only the indirect twin's pass includes it (FishWeatherLitIndirect.shader, FXC on purpose: its procedural setup writes the per-draw

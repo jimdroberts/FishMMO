@@ -9,11 +9,11 @@ using UnityEngine.Rendering;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// The detail scatter's BatchRendererGroup path (2026-11-04, the harness setting `scatterBrg`), as the props' (TerrainGpuRenderer.Brg.cs):
+	/// The detail scatter's BatchRendererGroup path (the harness setting `scatterBrg`), as the props' (TerrainGpuRenderer.Brg.cs):
 	/// the same generated instances, culled lists and indirect args, submitted as <see cref="BatchDrawCommandIndirect"/>s of one batch
 	/// group instead of a <see cref="Graphics.RenderMeshIndirect"/> call each. The draws then render through the SRP Batcher (the
 	/// twins' DOTS_INSTANCING_ON variants): a material change within a variant is a constant-buffer bind, not a full material
-	/// set-up, and on WebGPU a RenderMeshIndirect submission re-applies its whole pass (measured 2026-11-01).
+	/// set-up, and on WebGPU a RenderMeshIndirect submission re-applies its whole pass .
 	/// </summary>
 	/// <remarks>
 	/// <para>

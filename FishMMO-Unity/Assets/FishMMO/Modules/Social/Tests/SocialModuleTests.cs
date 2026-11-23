@@ -13,7 +13,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// The Social module (Phase 3, 2026-11-16), friends first: everything the friend list is lives in
+	/// The Social module, friends first: everything the friend list is lives in
 	/// <c>Assets/FishMMO/Modules/Social</c>, and the core names none of it.
 	/// </summary>
 	[TestFixture]

@@ -9,7 +9,7 @@ using FishMMO.Shared.WorldDesign;
 namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
-	/// The trades a settlement's shop-houses are let to (2026-10-19, PointOfInterestTrades): the same shops always get the same
+	/// The trades a settlement's shop-houses are let to (PointOfInterestTrades): the same shops always get the same
 	/// trades whatever order they were laid in, neighbours never share one, a settlement keeps its own kinds of trade, and
 	/// every trade's shop furnishes with its own bench.
 	/// </summary>

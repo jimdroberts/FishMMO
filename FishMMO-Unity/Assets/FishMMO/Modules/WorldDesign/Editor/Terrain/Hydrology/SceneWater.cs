@@ -446,7 +446,7 @@ namespace FishMMO.Shared.WorldDesign
 				/* The lower of its two banks, where the water meets them: at the channel's edge, and a little way out,
 				 * whichever is lower. Read only a way out (as it was, 3 m and more past the edge), a river in a V or a
 				 * gorge took its banks from up the valley's sides or its walls and stood its surface there, over the
-				 * ground at its own edge: water hanging in the air, metres above its banks (2026-10-06: "the
+				 * ground at its own edge: water hanging in the air, metres above its banks ("the
 				 * pools are floating"; Flo Monolith had a quarter of a river's length over air, up to 13.6 m). */
 				float reach = half + Mathf.Max(3f, half);
 				float edge = half + 0.25f;
@@ -822,7 +822,7 @@ namespace FishMMO.Shared.WorldDesign
 			/* Into a river: no wider than the stretch of it that stands at the mouth's level. The mouth is flat water at the
 			 * level it meets, and flared along a river falling past the junction its downstream half stood over that river's
 			 * lower water and banks: Flo Monolith's pond outlet, 19.5 m wide on a river dropping 2 m in 26 m, a sheet hung a
-			 * metre over the grass beside the rapids below the junction (2026-10-15). */
+			 * metre over the grass beside the rapids below the junction. */
 			float room = joined != null ? MouthRoom(joined, path.X[last], path.Z[last], path.Surface[last]) : float.PositiveInfinity;
 			float mouthDepth = lake ? Mathf.Clamp(path.Surface[last] - lakeFloor, path.Depth[last], Mathf.Max(1.5f, 4f * path.Depth[last])) : 0f;
 			for (int i = last; i >= 0; i--)
@@ -1104,7 +1104,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// A perennial river's surface where its centre line comes nearest to a scene position, if that is within its
 		/// banks and <see cref="RiverSurfaceReachMetres"/>; negative infinity otherwise. Smooth along the river, unlike
 		/// <see cref="SurfaceAt"/>, which takes the highest of the grid's samples about a point: down a falling river that
-		/// steps at every sample, and the bed paint up the banks came out as a row of teeth (2026-10-11). Safe from
+		/// steps at every sample, and the bed paint up the banks came out as a row of teeth. Safe from
 		/// the scatter's worker threads.
 		/// </summary>
 		public float RiverSurfaceNear(float east, float north) => RiverSurfaceNear(east, north, RiverSurfaceReachMetres);
@@ -1146,7 +1146,7 @@ namespace FishMMO.Shared.WorldDesign
 		public const float MouthBlendWidths = 2f;
 
 		/// <summary>
-		/// How much of the water at a scene position is a perennial river's, for its bed (decision 35 (h), 2026-10-18): x 1 within its
+		/// How much of the water at a scene position is a perennial river's, for its bed: x 1 within its
 		/// banks and <see cref="RiverSurfaceReachMetres"/> past them, easing to 0 over its last <see cref="MouthBlendWidths"/> widths
 		/// (at least <see cref="MouthBlendMetres"/>) where it ends in a lake or the sea, so the riverbed runs out into the lakebed as
 		/// a delta's sediment does rather than stopping at a line; y the river's current there (m/s, <see cref="RiverPath.SpeedAt"/>
@@ -1517,7 +1517,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// Where a lake's water stands, from the grid it was flooded on, as one bit per <see cref="LakeMaskCell"/>
 		/// cell: set where any sample in the cell is under it. Empty when there is no grid to read. With the finished
-		/// <paramref name="ground"/>, also its floor: the lowest ground under it (2026-10-21), so a cave's water under the lake
+		/// <paramref name="ground"/>, also its floor: the lowest ground under it, so a cave's water under the lake
 		/// is not taken for the lake's.
 		/// </summary>
 		private void WriteMask(SceneHydrology.Lake entry, int lakeId, Func<float, float, float> ground = null)
@@ -1595,7 +1595,7 @@ namespace FishMMO.Shared.WorldDesign
 				int n = river.Points != null ? river.Points.Length : 0;
 				/* Lava (a lava tube's river, CaveLavaWater) is its cave's, written again when the cave is built: never part of the
 				 * water the ground is marked, carved and painted by (it runs underground, under the hillside's own ground). A cave's
-				 * stream likewise (CaveStreamWater, 2026-10-20). */
+				 * stream likewise (CaveStreamWater). */
 				if (n < 2 || river.Lava || CaveStreamWater.IsCaveStream(river.Id))
 				{
 					continue;
@@ -1639,7 +1639,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			foreach (SceneHydrology.Lake lake in asset.Lakes)
 			{
-				/* A paddy's water is its field's (2026-10-18, PointOfInterestPaddies): laid again with the field in the place stage, never
+				/* A paddy's water is its field's (PointOfInterestPaddies): laid again with the field in the place stage, never
 				 * part of the water the cut measures, settles and keeps the sites off (the field would refuse its own ground). A lava
 				 * lake is its cave's likewise (CaveLavaWater), written again when the cave is built. */
 				if (lake == null || PointOfInterestPaddies.IsPaddy(lake.Id) || lake.Lava || CaveStreamWater.IsCaveStream(lake.Id))

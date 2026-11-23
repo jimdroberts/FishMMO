@@ -20,8 +20,8 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>True only in a scene stored under Assets/LOCAL (LocalArtScope): LOCAL stand-ins may then replace generated pieces.</summary>
 		public bool AllowLocal;
 		/// <summary>
-		/// What the site's biome builds each part of a building in (its template's structure palette, BiomeTemplateArt.StructurePalette,
-		/// 2026-10-16); null for the structure kit's own materials. The kit's source answers the kit's prefab whatever it is
+		/// What the site's biome builds each part of a building in (its template's structure palette, BiomeTemplateArt.StructurePalette);
+		/// null for the structure kit's own materials. The kit's source answers the kit's prefab whatever it is
 		/// (<see cref="StructureKitPieceSource.PrefabFor"/>); the site lays it in the palette's materials (StructurePaletteDressing).
 		/// </summary>
 		public BiomeStructurePalette Palette;
@@ -116,7 +116,7 @@ namespace FishMMO.Shared.WorldDesign
 
 	/// <summary>
 	/// The procedural structure kit (<see cref="StructureKit"/>) as a piece source for the POI templates: the lowest
-	/// priority, so a LOCAL or hand-made source registered above it wins for whatever it has (2026-10-10).
+	/// priority, so a LOCAL or hand-made source registered above it wins for whatever it has.
 	/// </summary>
 	/// <remarks>
 	/// <para>
@@ -125,7 +125,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// wall tower, a keep and a lighthouse), so templates narrow them rather than the kit growing a tag per use.
 	/// </para>
 	/// <para>
-	/// <b>Variants</b> (2026-10-19: a village's chapel, a town's parish church, a fountain on the market rather than its cross).
+	/// <b>Variants</b> (a village's chapel, a town's parish church, a fountain on the market rather than its cross).
 	/// Any query may end in <c>#</c> and one digit per variant it allows (<see cref="Pins"/>): <c>=Church#1</c> is always the
 	/// chapel, <c>=Church#1110</c> the chapel three times in four and the parish church the fourth, drawn by the piece's seed as
 	/// the kit's own pick is. With no pin the kit's seeded pick is taken (StructureKit.PickVariant), as before. The pin is no part
@@ -182,13 +182,13 @@ namespace FishMMO.Shared.WorldDesign
 			return prefab;
 		}
 
-		// ── The structure palette (2026-10-16) ───────────────────────
+		// ── The structure palette ───────────────────────
 
 		/// <summary>
 		/// The prefab of a piece's variant in a finish, for a biome's structure palette: the kit's (or its LOCAL stand-in, which
 		/// always wins), or for a house whose palette roofs it in a material of another pitch, that roof's variant
-		/// (StructureRoofs, 2026-10-18, I6e: a reed roof steep, a mud one flat). Beyond the roof a palette makes no prefab of its
-		/// own (I6a): the piece is laid in the palette's materials when it is added to the scene, the prefab with a material per
+		/// (StructureRoofs, a reed roof steep, a mud one flat). Beyond the roof a palette makes no prefab of its
+		/// own: the piece is laid in the palette's materials when it is added to the scene, the prefab with a material per
 		/// submesh (StructurePaletteDressing, through PointOfInterestSiteContext.AddProp, which picks the roof variant again for
 		/// the site's own palette, and the features that make scene objects of pieces), so the art grows by materials and the few
 		/// roofs palettes ask for, never by pieces × palettes.
@@ -307,7 +307,7 @@ namespace FishMMO.Shared.WorldDesign
 			{
 				return list;
 			}
-			// The variant pin is no part of the tags (2026-10-19).
+			// The variant pin is no part of the tags.
 			query = BaseQuery(query.Trim()).Trim();
 			if (query.Length == 0)
 			{

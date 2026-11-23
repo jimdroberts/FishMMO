@@ -91,7 +91,7 @@ namespace FishMMO.UnitTests
 			List<string> members = PerMaterial(hlsl);
 			LogAssert.IsTrue(members.Count > 10, $"the scan found only {members.Count} constants; its pattern is stale");
 			HashSet<string> declared = Properties(shader);
-			/* Textures are properties outside the material block, as they are for the lava (the river flow field, 2026-11-19,
+			/* Textures are properties outside the material block, as they are for the lava (the river flow field,
 			 * among them): each must be sampled instead. */
 			HashSet<string> textures = TextureProperties(shader);
 			string missing = string.Join(", ", members.Where(m => !declared.Contains(m)));

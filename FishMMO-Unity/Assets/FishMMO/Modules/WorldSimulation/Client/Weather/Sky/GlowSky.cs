@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Client
 {
 	/// <summary>
-	/// What the glow modes read of the sky and the weather (2026-10-25, I6i; <see cref="SceneGlowSky"/>), worked out once a frame
+	/// What the glow modes read of the sky and the weather (<see cref="SceneGlowSky"/>), worked out once a frame
 	/// from the sky's own celestial state and the scene's weather and handed to the shaders (<c>_FishGlowSkyA..D</c>,
 	/// <c>_FishPlumeTide</c>, <c>_FishTidalStress</c>; FishGlowModes.hlsl) and to the site lights (<see cref="Current"/>).
 	/// </summary>
@@ -33,7 +33,7 @@ namespace FishMMO.Client
 		/// <summary>The knots the weather is read on, seconds: wind and fog, and the rain to come and the sea.</summary>
 		public const double FineKnotSeconds = 60.0, CoarseKnotSeconds = 3600.0;
 
-		/// <summary>How far ahead the rain is read (decision 75), and how far back the sea's wind, seconds.</summary>
+		/// <summary>How far ahead the rain is read, and how far back the sea's wind, seconds.</summary>
 		public const double RainAheadSeconds = 6.0 * 3600.0, SeaBackSeconds = 3.0 * 3600.0;
 
 		/// <summary>The wind that counts as full, m/s (the WindSpeed channel is 0..1 of 30 m/s).</summary>
@@ -74,11 +74,11 @@ namespace FishMMO.Client
 			Shader.SetGlobalFloat(PlumeTideId, sky.PlumeTide);
 			Shader.SetGlobalVector(TidalStressId, sky.TidalStress);
 			Shader.SetGlobalFloat(VentBurstId, sky.VentBurst);
-			// The clocks a clocked ground layer follows (2026-10-26, GROUND-BANDS; FishGroundClock.hlsl): the local year and hour.
+			// The clocks a clocked ground layer follows (FishGroundClock.hlsl): the local year and hour.
 			Shader.SetGlobalVector(GroundClockId, GroundClockOf(state));
-			// The glow table's anchors as the scene's lights come and go (2026-10-25, I6i-b): a light and its stone on one biome's row.
+			// The glow table's anchors as the scene's lights come and go: a light and its stone on one biome's row.
 			GlowModeTable.Refresh();
-			// The burn mosaic's clock, wind and night (2026-10-25, I2t), at the same moment and the same prevailing way.
+			// The burn mosaic's clock, wind and night, at the same moment and the same prevailing way.
 			BurnMosaicTable.Frame(in sky, state != null ? state.Hours * 3600.0 : weather.WorldHours * 3600.0);
 		}
 
@@ -141,7 +141,7 @@ namespace FishMMO.Client
 			sky.WayZ = way.y;
 			SceneHandle scene = weather.Scene.IsValid() ? weather.Scene.handle : SceneHandle.None;
 			sky.Turbidity = weather.Scene.IsValid() ? TurbidityEpisodes.Strength(TurbidityEpisodes.SeedOf(FishMMO.Shared.SceneNames.Of(weather.Scene)), worldSeconds) : 0f;
-			// The scene's own vent (decision 95): on the motion clock, as the glows and the later vent effect read it.
+			// The scene's own vent: on the motion clock, as the glows and the later vent effect read it.
 			sky.VentBurst = weather.Scene.IsValid() ? VentBursts.At(WorldMotion.Wrapped(WorldMotion.ShaderWrapSeconds), VentBursts.SceneSeed(FishMMO.Shared.SceneNames.Of(weather.Scene))) : 0f;
 			if (weather.Timeline == null || weather.Settings == null)
 			{

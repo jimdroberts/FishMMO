@@ -11,7 +11,7 @@ using Object = UnityEngine.Object;
 namespace FishMMO.Shared.WorldDesign
 {
 	/// <summary>
-	/// The spawn rules' SCATTER MODES in the cut's scatter (2026-10-26, phase SCATTER-MODES, decision 34; PrefabSpawnRule.scatterMode,
+	/// The spawn rules' SCATTER MODES in the cut's scatter (PrefabSpawnRule.scatterMode,
 	/// BiomeScatterMode). A rule with every mode off gets no <see cref="ScatterModeRun"/> and takes none of the paths below: the same
 	/// cells, the same draws, the same instances as before the modes existed.
 	/// </summary>

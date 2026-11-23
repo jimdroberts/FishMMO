@@ -11,7 +11,7 @@ namespace FishMMO.Shared.Weather
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <b>Why this can be predicted (Q16).</b> The weather is a pure function of a tick and a
+	/// <b>Why this can be predicted.</b> The weather is a pure function of a tick and a
 	/// position; the tick is mapped through <see cref="WeatherExposureTick"/> and the position
 	/// already reconciles. So the owner computes the same multiplier the server will, and a replay
 	/// of that tick computes it again identically. Nothing is sent, and the cast bar the player sees

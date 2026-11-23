@@ -5,7 +5,7 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// A new character takes its account's access level (2026-11-17, Jim): a staff account's characters are staff
+	/// A new character takes its account's access level: a staff account's characters are staff
 	/// characters. Before, every character was created at Player whatever its account was.
 	/// </summary>
 	[TestFixture]
