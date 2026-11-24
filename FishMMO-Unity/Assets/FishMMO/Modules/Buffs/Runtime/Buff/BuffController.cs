@@ -2042,13 +2042,16 @@ namespace FishMMO.Shared
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
 			reconcileData.Buffs = CreateReconcileSnapshot();
+		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
 			/* Push the observer-facing buff list here rather than from OnReplicate. This runs once
-			 * per tick, only on the server (CharacterPredictionController.CreateReconcile gates on
-			 * IsServerStarted && IsSpawned), and — critically — OUTSIDE the [Replicate] method, so
-			 * the RPC is never dispatched from inside a replay of a past tick. Coalescing to one
-			 * push per tick matters: a dispel, a boss phase change or a re-application cascade can
-			 * add and remove several buffs within a single tick. */
+			 * per tick, only on the server, for players and NPCs alike, and — critically — OUTSIDE the
+			 * step, so the broadcast is never dispatched from inside a replay of a past tick. Coalescing
+			 * to one push per tick matters: a dispel, a boss phase change or a re-application cascade
+			 * can add and remove several buffs within a single tick. */
 			if (ShouldPushObservedBuffs())
 			{
 				PushObservedBuffs();

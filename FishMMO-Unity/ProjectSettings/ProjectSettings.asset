@@ -873,7 +873,7 @@ PlayerSettings:
     Standalone: 1
     WebGL: 1
   il2cppCodeGeneration:
-    Server: 1
+    Server: 0
     Standalone: 1
     WebGL: 0
   il2cppLTOMode: {}

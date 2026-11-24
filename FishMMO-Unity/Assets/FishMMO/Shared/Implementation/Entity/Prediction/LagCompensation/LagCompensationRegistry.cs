@@ -88,39 +88,321 @@ namespace FishMMO.Shared
 		public static int RegisteredIn(Scene scene)
 			=> byScene.TryGetValue(scene.handle, out List<CharacterPositionHistory> list) ? list.Count : 0;
 
+		#region Recorded grid
+
 		/// <summary>
-		/// True when any character registered in <paramref name="scene"/> stands within <paramref name="reach"/> metres of
-		/// <paramref name="point"/> across the ground (x and z): what lets something that only matters to a character near it
-		/// (a ship's hull collider, FloatingBoats) stand down where none is. Its current transform, never a rewound one.
+		/// How far a recorded character may have moved since the last recording pass, metres: the grid is one tick old when a
+		/// ship, a region or a bounded rewind reads it, and this covers a tick's travel at any speed a character runs, rides or
+		/// flies with room to spare.
+		/// </summary>
+		public const float RecordedSlack = 4f;
+
+		/// <summary>Each scene's recorded characters, as of the last recording pass.</summary>
+		private static readonly Dictionary<SceneHandle, RecordedGrid> gridByScene = new Dictionary<SceneHandle, RecordedGrid>();
+
+		/// <summary>
+		/// Where the characters of one scene stood at the last recording pass, bucketed across the ground: a ship asking whether
+		/// anyone is near reads a few cells instead of every character's transform (it read thousands, per ship, per tick).
+		/// </summary>
+		internal sealed class RecordedGrid
+		{
+			/// <summary>Cell edge, metres: a ship's reach (~100 m) spans a handful, a region or a rewind one to four.</summary>
+			public const float CellSize = 32f;
+
+			private readonly Dictionary<long, int> heads = new Dictionary<long, int>();
+			private Vector3[] positions = new Vector3[64];
+			private CharacterPositionHistory[] histories = new CharacterPositionHistory[64];
+			private bool[] players = new bool[64];
+			private int[] next = new int[64];
+
+			/// <summary>Characters in the grid.</summary>
+			public int Count { get; private set; }
+
+			/// <summary>The recorded character at <paramref name="index"/>.</summary>
+			public CharacterPositionHistory HistoryAt(int index) => histories[index];
+
+			/// <summary>Where the character at <paramref name="index"/> was recorded.</summary>
+			public Vector3 PositionAt(int index) => positions[index];
+
+			public void Clear()
+			{
+				if (Count == 0)
+				{
+					return;
+				}
+				heads.Clear();
+				System.Array.Clear(histories, 0, Count);
+				Count = 0;
+			}
+
+			public void Add(CharacterPositionHistory history, Vector3 position, bool player)
+			{
+				if (Count == positions.Length)
+				{
+					int size = Count * 2;
+					System.Array.Resize(ref positions, size);
+					System.Array.Resize(ref histories, size);
+					System.Array.Resize(ref players, size);
+					System.Array.Resize(ref next, size);
+				}
+				int index = Count++;
+				positions[index] = position;
+				histories[index] = history;
+				players[index] = player;
+				long key = Key(Cell(position.x), Cell(position.z));
+				next[index] = heads.TryGetValue(key, out int head) ? head : -1;
+				heads[key] = index;
+			}
+
+			private static int Cell(float value) => Mathf.FloorToInt(value / CellSize);
+
+			private static long Key(int x, int z) => ((long)x << 32) | (uint)z;
+
+			/// <summary>
+			/// True when a recorded character (a player, when <paramref name="playersOnly"/>) lies inside the box
+			/// [<paramref name="min"/>, <paramref name="max"/>]; with <paramref name="radius"/> above zero, only one within that
+			/// distance of <paramref name="center"/> across the ground counts as well.
+			/// </summary>
+			public bool Any(Vector3 min, Vector3 max, bool playersOnly, Vector3 center, float radius)
+			{
+				if (Count == 0)
+				{
+					return false;
+				}
+				float radiusSquared = radius * radius;
+				int x0 = Cell(min.x), x1 = Cell(max.x), z0 = Cell(min.z), z1 = Cell(max.z);
+				long cells = (long)(x1 - x0 + 1) * (z1 - z0 + 1);
+				if (cells > Count)
+				{
+					// A query wider than the crowd: the packed list is cheaper than its cells.
+					for (int i = 0; i < Count; i++)
+					{
+						if (Matches(i, min, max, playersOnly, center, radiusSquared))
+						{
+							return true;
+						}
+					}
+					return false;
+				}
+				for (int x = x0; x <= x1; x++)
+				{
+					for (int z = z0; z <= z1; z++)
+					{
+						if (!heads.TryGetValue(Key(x, z), out int i))
+						{
+							continue;
+						}
+						for (; i >= 0; i = next[i])
+						{
+							if (Matches(i, min, max, playersOnly, center, radiusSquared))
+							{
+								return true;
+							}
+						}
+					}
+				}
+				return false;
+			}
+
+			private bool Matches(int i, Vector3 min, Vector3 max, bool playersOnly, Vector3 center, float radiusSquared)
+			{
+				if (playersOnly && !players[i])
+				{
+					return false;
+				}
+				Vector3 p = positions[i];
+				if (p.x < min.x || p.x > max.x || p.y < min.y || p.y > max.y || p.z < min.z || p.z > max.z)
+				{
+					return false;
+				}
+				if (radiusSquared > 0f)
+				{
+					float dx = p.x - center.x, dz = p.z - center.z;
+					return dx * dx + dz * dz <= radiusSquared;
+				}
+				return true;
+			}
+		}
+
+		/// <summary>Empties every scene's grid: the start of a recording pass.</summary>
+		internal static void BeginRecordingPass()
+		{
+			foreach (KeyValuePair<SceneHandle, RecordedGrid> pair in gridByScene)
+			{
+				pair.Value.Clear();
+			}
+		}
+
+		/// <summary>Puts a character just recorded into its scene's grid.</summary>
+		internal static void NoteRecorded(CharacterPositionHistory history, SceneHandle scene, Vector3 position)
+		{
+			if (!gridByScene.TryGetValue(scene, out RecordedGrid grid))
+			{
+				grid = new RecordedGrid();
+				gridByScene[scene] = grid;
+			}
+			grid.Add(history, position, history.IsPlayer);
+		}
+
+		/// <summary>The scene's grid, or null when nothing has been recorded there.</summary>
+		internal static RecordedGrid GridOf(Scene scene)
+			=> gridByScene.TryGetValue(scene.handle, out RecordedGrid grid) && grid.Count > 0 ? grid : null;
+
+		/// <summary>
+		/// The shared recording pass of one TimeManager: every character a client can aim at (observed, and every player) has its
+		/// tick recorded and its place noted in its scene's grid, in one walk on <c>OnPostTick</c>.
+		/// </summary>
+		internal sealed class Recorder
+		{
+			private static readonly Dictionary<FishNet.Managing.Timing.TimeManager, Recorder> byTimeManager
+				= new Dictionary<FishNet.Managing.Timing.TimeManager, Recorder>();
+
+			/// <summary>Every registered history: walked instead of <see cref="recorded"/> while a synthetic claim aims at anything.</summary>
+			private readonly List<CharacterPositionHistory> all = new List<CharacterPositionHistory>();
+
+			/// <summary>The histories a client can aim at: observed characters, and every player.</summary>
+			private readonly List<CharacterPositionHistory> recorded = new List<CharacterPositionHistory>();
+
+			public static Recorder For(FishNet.Managing.Timing.TimeManager timeManager)
+			{
+				if (!byTimeManager.TryGetValue(timeManager, out Recorder recorder))
+				{
+					// A destroyed TimeManager (a finished play-mode run) leaves its entry behind; drop those first.
+					List<FishNet.Managing.Timing.TimeManager> dead = null;
+					foreach (FishNet.Managing.Timing.TimeManager key in byTimeManager.Keys)
+					{
+						if (key == null)
+						{
+							(dead ??= new List<FishNet.Managing.Timing.TimeManager>()).Add(key);
+						}
+					}
+					if (dead != null)
+					{
+						foreach (FishNet.Managing.Timing.TimeManager key in dead)
+						{
+							byTimeManager.Remove(key);
+						}
+					}
+					recorder = new Recorder();
+					byTimeManager[timeManager] = recorder;
+					timeManager.OnPostTick += recorder.PostTick;
+				}
+				return recorder;
+			}
+
+			public void Add(CharacterPositionHistory history)
+			{
+				if (history.RecorderAllIndex >= 0)
+				{
+					return;
+				}
+				history.RecorderAllIndex = all.Count;
+				all.Add(history);
+			}
+
+			public void Remove(CharacterPositionHistory history)
+			{
+				SetRecorded(history, false);
+				int index = history.RecorderAllIndex;
+				if (index < 0)
+				{
+					return;
+				}
+				int last = all.Count - 1;
+				CharacterPositionHistory moved = all[last];
+				all[index] = moved;
+				moved.RecorderAllIndex = index;
+				all.RemoveAt(last);
+				history.RecorderAllIndex = -1;
+			}
+
+			public void SetRecorded(CharacterPositionHistory history, bool recordedNow)
+			{
+				int index = history.RecorderRecordedIndex;
+				if (recordedNow)
+				{
+					if (index < 0)
+					{
+						history.RecorderRecordedIndex = recorded.Count;
+						recorded.Add(history);
+					}
+					return;
+				}
+				if (index < 0)
+				{
+					return;
+				}
+				int last = recorded.Count - 1;
+				CharacterPositionHistory moved = recorded[last];
+				recorded[index] = moved;
+				moved.RecorderRecordedIndex = index;
+				recorded.RemoveAt(last);
+				history.RecorderRecordedIndex = -1;
+			}
+
+			private void PostTick()
+			{
+				BeginRecordingPass();
+				List<CharacterPositionHistory> list = LagCompensationTick.ClaimOverride != null ? all : recorded;
+				for (int i = 0; i < list.Count; i++)
+				{
+					CharacterPositionHistory history = list[i];
+					if (history == null)
+					{
+						continue;
+					}
+					try
+					{
+						history.RecordTick();
+					}
+					catch (Exception ex)
+					{
+						Log.Error("LagCompensationRegistry", $"Recording a character's tick failed. {ex}");
+					}
+				}
+			}
+		}
+
+		#endregion
+
+		/// <summary>
+		/// True when any recorded character in <paramref name="scene"/> stood within <paramref name="reach"/> metres of
+		/// <paramref name="point"/> across the ground (x and z) at the last recording pass: what lets something that only
+		/// matters to a character near it (a ship's hull collider, FloatingBoats) stand down where none is. Recorded means a
+		/// character a client can see (observed, or a player): one nobody observes moves for nobody, and is met again, as
+		/// before, the tick a player comes near enough to see it. The grid is a tick old, which the caller's own reach covers.
 		/// </summary>
 		public static bool AnyWithin(Scene scene, Vector3 point, float reach)
 		{
-			if (!byScene.TryGetValue(scene.handle, out List<CharacterPositionHistory> list))
+			RecordedGrid grid = GridOf(scene);
+			if (grid == null || !(reach >= 0f))
 			{
 				return false;
 			}
-			float reachSquared = reach * reach;
-			for (int i = 0; i < list.Count; i++)
+			Vector3 extent = new Vector3(reach, float.PositiveInfinity, reach);
+			return grid.Any(point - extent, point + extent, false, point, Mathf.Max(reach, 1e-3f));
+		}
+
+		/// <summary>
+		/// True when a player stood within <paramref name="bounds"/> grown by <paramref name="margin"/> at the last recording
+		/// pass: what lets a region's trigger skip its physics overlap while no player can be inside it.
+		/// </summary>
+		public static bool AnyPlayerWithin(Scene scene, Bounds bounds, float margin)
+		{
+			RecordedGrid grid = GridOf(scene);
+			if (grid == null)
 			{
-				CharacterPositionHistory history = list[i];
-				if (history == null)
-				{
-					continue;
-				}
-				Vector3 at = history.transform.position;
-				float dx = at.x - point.x, dz = at.z - point.z;
-				if (dx * dx + dz * dz <= reachSquared)
-				{
-					return true;
-				}
+				return false;
 			}
-			return false;
+			Vector3 grow = new Vector3(margin, margin, margin);
+			return grid.Any(bounds.min - grow, bounds.max + grow, true, default, 0f);
 		}
 
 		/// <summary>Clears the registry. For test teardown.</summary>
 		internal static void Clear()
 		{
 			byScene.Clear();
+			gridByScene.Clear();
 			rewound.Clear();
 			scopeOpen = false;
 		}
@@ -165,7 +447,11 @@ namespace FishMMO.Shared
 				return default;
 			}
 
-			if (!byScene.TryGetValue(scene.handle, out List<CharacterPositionHistory> list) || list.Count == 0)
+			/* Only the characters recorded at the last pass: they are the ones with a live ring (an unobserved NPC's ring is
+			 * stale, and rewinding it would stand it where it was when last seen). The grid holds them packed with the place
+			 * they were recorded, so a bounded rewind discards the far ones without reading a transform. */
+			RecordedGrid grid = GridOf(scene);
+			if (grid == null)
 			{
 				return default;
 			}
@@ -175,6 +461,8 @@ namespace FishMMO.Shared
 			bool bounded = !float.IsInfinity(radius) && !float.IsNaN(radius);
 			float reach = bounded ? radius + RewindReach : 0f;
 			float reachSqr = reach * reach;
+			float recordedReach = reach + RecordedSlack;
+			float recordedReachSqr = recordedReach * recordedReach;
 
 			/* A throw part-way through leaves everything displaced SO FAR stranded in the past with no
 			 * scope to restore it — the characters simply stay where they were half a second ago, for
@@ -182,9 +470,13 @@ namespace FishMMO.Shared
 			 * caller still sees the throw. */
 			try
 			{
-				for (int i = 0; i < list.Count; i++)
+				for (int i = 0; i < grid.Count; i++)
 				{
-					CharacterPositionHistory history = list[i];
+					if (bounded && (grid.PositionAt(i) - center).sqrMagnitude > recordedReachSqr)
+					{
+						continue;
+					}
+					CharacterPositionHistory history = grid.HistoryAt(i);
 					if (history == null || history.transform == excludeTransform)
 					{
 						continue;

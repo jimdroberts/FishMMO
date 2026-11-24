@@ -1054,6 +1054,8 @@ namespace FishNet.Component.Transforming
 
         public override void OnStartServer()
         {
+            // FISHMMO EDIT: see _skipPostTickWhileUnobserved. A client started on this peer turns it back off.
+            _skipPostTickWhileUnobserved = !IsClientStarted && NetworkObject != null && NetworkObject.gameObject == gameObject;
             _lastReceivedClientTransformData = ObjectCaches<TransformData>.Retrieve();
             InitializeFields(true);
             SetDefaultGoalData();
@@ -1077,6 +1079,8 @@ namespace FishNet.Component.Transforming
 
         public override void OnStartClient()
         {
+            // FISHMMO EDIT: see _skipPostTickWhileUnobserved; only a server-only peer skips.
+            _skipPostTickWhileUnobserved = false;
             _lastReceivedServerTransformData = ObjectCaches<TransformData>.Retrieve();
             ChangeUpdateSubscription(subscribe: true);
             ConfigureComponents();
@@ -1291,8 +1295,22 @@ namespace FishNet.Component.Transforming
         /// <summary>
         /// Called when a tick occurs.
         /// </summary>
+        /// <summary>
+        /// FISHMMO EDIT: (upstream PR feat/networktransform-skip-unobserved) true on a server-only peer for a transform on
+        /// its object's root. While the object has no observers, its post tick returns at once: there is nobody to send
+        /// to, and a new observer gets the root's current transform in the spawn message. A child transform keeps running,
+        /// because a new observer only gets its latest values through _changedSinceStart (OnSpawnServer), which the post
+        /// tick sets.
+        /// </summary>
+        private bool _skipPostTickWhileUnobserved;
+
         private void TimeManager_OnPostTick()
         {
+            // FISHMMO EDIT: see _skipPostTickWhileUnobserved. A client-authoritative transform with an owner keeps running:
+            // the owner observes it, and the server moves it toward what the owner sent.
+            if (_skipPostTickWhileUnobserved && NetworkObject.Observers.Count == 0 && !(_clientAuthoritative && Owner.IsValid))
+                return;
+
             using (_pm_OnPostTick.Auto())
             {
                 //If to force send via tick delay do so and reset force send tick.

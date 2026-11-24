@@ -1,4 +1,5 @@
-﻿using FishNet.Object;
+﻿using FishMMO.Shared.Core;
+using FishNet.Object;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -80,11 +81,29 @@ namespace FishMMO.Shared
 		private Quaternion restoreRotation;
 		private bool isRewound;
 
+		/// <summary>True after a tick skipped because nobody observed the character; the next recorded tick starts a fresh ring.</summary>
+		private bool unobservedGap;
+
 		/// <summary>Scene handle this history is registered under. See <see cref="EnsureSceneRegistration"/>.</summary>
 		private SceneHandle registeredSceneHandle;
 
 		/// <summary>True while this character's collider is displaced by a rewind.</summary>
 		public bool IsRewound => isRewound;
+
+		/// <summary>True for a player character: always recorded, and what regions wake for (LagCompensationRegistry.AnyPlayerWithin).</summary>
+		internal bool IsPlayer { get; private set; }
+
+		/// <summary>This history's place in its recorder's every-member list; -1 when not in it.</summary>
+		internal int RecorderAllIndex = -1;
+
+		/// <summary>This history's place in its recorder's recorded list (observed, or a player); -1 when not in it.</summary>
+		internal int RecorderRecordedIndex = -1;
+
+		/// <summary>The shared recorder this history is in, or null.</summary>
+		private LagCompensationRegistry.Recorder recorder;
+
+		/// <summary>True while subscribed to the NetworkObject's observers-active event.</summary>
+		private bool observersHooked;
 
 		public override void OnStartServer()
 		{
@@ -93,21 +112,40 @@ namespace FishMMO.Shared
 			double tickDelta = base.TimeManager != null ? base.TimeManager.TickDelta : 1.0 / 30.0;
 			AllocateBuffer(Mathf.CeilToInt(maximumRewindMilliseconds / 1000f / (float)tickDelta));
 
+			IsPlayer = GetComponent<IPlayerCharacter>() != null;
 			registeredSceneHandle = gameObject.scene.handle;
 			LagCompensationRegistry.Register(this);
 
+			/* One shared pass per TimeManager instead of a tick subscription per character. A thousand-strong multicast cost a
+			 * call and a cache miss for every character every tick even when nearly all of them were out of sight and returned at
+			 * once; the pass walks only the characters a client can aim at (observed, and every player, who always observes
+			 * itself), and the whole roster only while a synthetic claim (the combat harness's ClaimOverride) aims at anything. */
 			if (base.TimeManager != null)
 			{
-				base.TimeManager.OnPostTick += RecordTick;
+				recorder = LagCompensationRegistry.Recorder.For(base.TimeManager);
+				recorder.Add(this);
+				NetworkObject networkObject = base.NetworkObject;
+				if (networkObject != null)
+				{
+					networkObject.OnObserversActive += NetworkObject_OnObserversActive;
+					observersHooked = true;
+				}
+				recorder.SetRecorded(this, IsPlayer || (networkObject != null && networkObject.Observers.Count > 0));
 			}
 		}
 
 		public override void OnStopServer()
 		{
-			if (base.TimeManager != null)
+			if (observersHooked)
 			{
-				base.TimeManager.OnPostTick -= RecordTick;
+				observersHooked = false;
+				if (base.NetworkObject != null)
+				{
+					base.NetworkObject.OnObserversActive -= NetworkObject_OnObserversActive;
+				}
 			}
+			recorder?.Remove(this);
+			recorder = null;
 
 			LagCompensationRegistry.Unregister(this);
 
@@ -115,8 +153,25 @@ namespace FishMMO.Shared
 			count = 0;
 			writeIndex = 0;
 			isRewound = false;
+			unobservedGap = false;
 
 			base.OnStopServer();
+		}
+
+		/// <summary>Joins the recorded list when the first observer arrives; leaves it (a player never does) when the last goes.</summary>
+		private void NetworkObject_OnObserversActive(NetworkObject networkObject)
+		{
+			if (recorder == null)
+			{
+				return;
+			}
+			bool observed = networkObject != null && networkObject.Observers.Count > 0;
+			if (!observed)
+			{
+				// The next recorded tick starts a fresh ring, as RecordTick's own gap check does.
+				unobservedGap = true;
+			}
+			recorder.SetRecorded(this, IsPlayer || observed);
 		}
 
 		/// <summary>
@@ -128,7 +183,7 @@ namespace FishMMO.Shared
 		/// the position the character held <i>before</i> this tick's movement and shift the whole
 		/// history one tick into the past.
 		/// </remarks>
-		private void RecordTick()
+		internal void RecordTick()
 		{
 			// Never record while displaced — that would persist a rewound position as if it were
 			// real, and every later rewind would compound the error. Checked first because it is
@@ -142,13 +197,35 @@ namespace FishMMO.Shared
 				return;
 			}
 
+			/* Nobody observes it, so no client can aim at it: a hit claim names what the shooter saw,
+			 * and an empty history already resolves to the present. Thousands of NPCs stand out of
+			 * every player's sight on a loaded scene, and recording them all every tick was pure cost.
+			 * Coming back into view clears the ring, because a sample from before the gap would be
+			 * interpolated straight across it. A synthetic claim (the combat harness's ClaimOverride,
+			 * null in production) aims at clientless NPCs, so it keeps every ring recording. */
+			NetworkObject networkObject = base.NetworkObject;
+			if (!IsPlayer && networkObject != null && networkObject.Observers.Count == 0 && LagCompensationTick.ClaimOverride == null)
+			{
+				unobservedGap = true;
+				return;
+			}
+			if (unobservedGap)
+			{
+				unobservedGap = false;
+				count = 0;
+				writeIndex = 0;
+			}
+
 			EnsureSceneRegistration();
 
 			Transform t = transform;
+			t.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
 			/* Keyed through the shared helper, not base.TimeManager.LocalTick directly. The rewind
 			 * side measures its target back from the same call, so the two cannot be edited into
 			 * different tick domains — the failure that made every rewind decline silently. */
-			Record(LagCompensationTick.ServerTickDomain(base.TimeManager), t.position, t.rotation);
+			Record(LagCompensationTick.ServerTickDomain(base.TimeManager), position, rotation);
+			// This tick's scene grid: what ships, regions and bounded rewinds ask instead of reading every transform.
+			LagCompensationRegistry.NoteRecorded(this, registeredSceneHandle, position);
 		}
 
 		/// <summary>

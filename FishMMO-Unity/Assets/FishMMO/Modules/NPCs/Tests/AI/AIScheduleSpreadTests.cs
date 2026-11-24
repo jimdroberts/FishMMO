@@ -139,6 +139,25 @@ namespace FishMMO.UnitTests.AI
 		}
 
 		/// <summary>
+		/// A Dormant NPC's agent leaves Unity's crowd only after it has stood idle a while, and a dormant walk ends
+		/// after a bounded time, so a stuck walker or a partial path cannot keep an agent stepping forever.
+		/// </summary>
+		[Test]
+		public void AgentParking_OnlyForALingeringIdleDormantNpc()
+		{
+			int park = AIController.ParkAfterIdleTicks;
+			Assert.IsTrue(AIController.ShouldParkAgent(true, false, park), "idle and dormant long enough");
+			Assert.IsFalse(AIController.ShouldParkAgent(true, false, park - 1), "not on the first idle tick: a stray query must not thrash it");
+			Assert.IsFalse(AIController.ShouldParkAgent(true, true, park * 10), "never while it still has a path");
+			Assert.IsFalse(AIController.ShouldParkAgent(false, false, park * 10), "never above Dormant");
+
+			int walk = AIController.DormantWalkLimitTicks;
+			Assert.IsTrue(AIController.ShouldEndDormantWalk(true, true, walk), "a dormant walk ends at the limit");
+			Assert.IsFalse(AIController.ShouldEndDormantWalk(true, true, walk - 1), "and not before");
+			Assert.IsFalse(AIController.ShouldEndDormantWalk(false, true, walk * 10), "a watched NPC walks as long as it likes");
+		}
+
+		/// <summary>
 		/// A standing NPC whose agent already sits on its transform writes neither.
 		/// </summary>
 		[Test]

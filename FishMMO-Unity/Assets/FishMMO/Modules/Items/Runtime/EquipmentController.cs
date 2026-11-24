@@ -316,6 +316,11 @@ namespace FishMMO.Shared
 			data.Equipment = cachedEquipmentSnapshot;
 		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
+		}
+
 		/// <inheritdoc />
 		public void OnReconcile(CharacterReconcileData data, Channel channel)
 		{

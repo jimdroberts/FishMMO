@@ -238,6 +238,11 @@ namespace FishMMO.Shared
 			reconcileData.Cooldowns = CreateReconcileSnapshot();
 		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
+		}
+
 		/// <summary>
 		/// Restores cooldowns from authoritative reconcile state.
 		/// </summary>

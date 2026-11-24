@@ -25,7 +25,7 @@ namespace FishMMO.Shared
 	/// <c>BaseCharacter.Awake</c> takes part (the Items module's equipment). Components added
 	/// later than that do not participate in the prediction pipeline.
 	/// </remarks>
-	public class CharacterPredictionController : NetworkBehaviour
+	public class CharacterPredictionController : NetworkBehaviour, IServerStepped
 	{
 		/// <summary>
 		/// Snapshot of the current LocalTick (TimeManager.LocalTick) captured at the start of the
@@ -36,7 +36,12 @@ namespace FishMMO.Shared
 		/// Used by external consumers (e.g., <see cref="AbilityObject"/>) to avoid subscription-order drift
 		/// between tick callbacks.
 		/// </summary>
-		public uint CurrentLocalTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
+		public uint CurrentLocalTickSnapshot
+		{
+			get => IsNapping ? LiveTick : currentLocalTickSnapshot;
+			private set => currentLocalTickSnapshot = value;
+		}
+		private uint currentLocalTickSnapshot = TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// Snapshot of the replicate input tick captured at the start of the current
@@ -55,7 +60,18 @@ namespace FishMMO.Shared
 		/// own <see cref="TimeManager_OnTick"/> subscription and would otherwise observe
 		/// the previous tick's <see cref="CurrentReplicateTickSnapshot"/>.
 		/// </summary>
-		public uint PendingReplicateTickSnapshot { get; private set; } = TimeManager.UNSET_TICK;
+		/// <remarks>A napping NPC (<see cref="ServerStepSchedule"/>) answers the live tick: it is the tick its next step
+		/// would run, exactly what its pre-tick would have published, so a buff landing on it is stamped as it would be on
+		/// an awake one.</remarks>
+		public uint PendingReplicateTickSnapshot
+		{
+			get => IsNapping ? LiveTick : pendingReplicateTickSnapshot;
+			private set => pendingReplicateTickSnapshot = value;
+		}
+		private uint pendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+
+		/// <summary>The server's tick now, or unset without a TimeManager.</summary>
+		private uint LiveTick => base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
 
 		/// <summary>
 		/// The view offset carried by the most recent replicate input — how many ticks behind
@@ -155,6 +171,7 @@ namespace FishMMO.Shared
 
 			// An NPC — monster, townsperson or pet — is driven by the server's brain on every peer.
 			serverDrivenInput = GetComponent<NPC>() != null;
+			TryGetComponent(out simulatedCharacter);
 		}
 
 		/// <summary>True once the controllers were found again after every Awake on the object (see <see cref="OnStartNetwork"/>).</summary>
@@ -216,6 +233,13 @@ namespace FishMMO.Shared
 					"the NetworkObject's Prediction settings.");
 			}
 
+			/* An NPC builds no reconcile (see SimulateOnServer), so its observers must take its state from the broadcasts:
+			 * forwarding off, whatever its prefab says. Both peers decide it from the character's type, so they agree. */
+			if (serverDrivenInput && base.NetworkObject != null && base.NetworkObject.EnableStateForwarding)
+			{
+				base.NetworkObject.SetStateForwarding(false);
+			}
+
 			ApplyObserverTransportMode();
 
 			/* An AI character must be ownerless so the server is FishNet's controller for it.
@@ -232,7 +256,19 @@ namespace FishMMO.Shared
 					"character will never act. Spawn AI characters without an owner.");
 			}
 
-			if (base.TimeManager != null)
+			/* An NPC on the server steps from the shared schedule, which can let it nap while nobody sees it and it has
+			 * nothing to do; everything else keeps its own subscriptions. */
+			if (serverDrivenInput && base.IsServerStarted)
+			{
+				stepSchedule = ServerStepSchedule.For(base.TimeManager);
+			}
+			if (stepSchedule != null)
+			{
+				idleStepStreak = 0;
+				napPhase = base.NetworkObject != null ? base.NetworkObject.ObjectId : 0;
+				stepSchedule.Add(this);
+			}
+			else if (base.TimeManager != null)
 			{
 				base.TimeManager.OnPreTick += TimeManager_OnPreTick;
 				base.TimeManager.OnTick += TimeManager_OnTick;
@@ -250,12 +286,22 @@ namespace FishMMO.Shared
 			{
 				ObserverStreamingRegistry.Register(base.NetworkObject, character);
 			}
+			if (stepSchedule != null && base.NetworkObject != null && !observersHooked)
+			{
+				base.NetworkObject.OnObserversActive += NetworkObject_OnObserversActive;
+				observersHooked = true;
+			}
 		}
 
 		/// <summary>Removes this character from per-observer streaming.</summary>
 		public override void OnStopServer()
 		{
 			ObserverStreamingRegistry.Unregister(base.NetworkObject);
+			if (observersHooked && base.NetworkObject != null)
+			{
+				base.NetworkObject.OnObserversActive -= NetworkObject_OnObserversActive;
+			}
+			observersHooked = false;
 			base.OnStopServer();
 		}
 
@@ -264,7 +310,12 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStopNetwork()
 		{
-			if (base.TimeManager != null)
+			if (stepSchedule != null)
+			{
+				stepSchedule.Remove(this);
+				stepSchedule = null;
+			}
+			else if (base.TimeManager != null)
 			{
 				base.TimeManager.OnPreTick -= TimeManager_OnPreTick;
 				base.TimeManager.OnTick -= TimeManager_OnTick;
@@ -452,9 +503,65 @@ namespace FishMMO.Shared
 			return predictionMovesThisCharacter && stateForwardingEnabled;
 		}
 
+		/// <summary>How this peer runs this character each tick (see <see cref="ResolveTickMode"/>).</summary>
+		public enum TickMode
+		{
+			/// <summary>FishNet prediction: the owner predicts itself, the server runs the owner's input and reconciles.</summary>
+			Predicted,
+			/// <summary>The server alone simulates it: an NPC. No replicate, no reconcile.</summary>
+			ServerSimulated,
+			/// <summary>Nothing to simulate here: a character this client does not own, shown by NetworkTransform and broadcasts.</summary>
+			Observed,
+		}
+
 		/// <summary>
-		/// Called on each tick. Populates input for the owning client, runs <see cref="Replicate"/>,
-		/// and creates reconcile data on the server.
+		/// Who simulates a character on this peer.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Prediction is the owning client's feature. An NPC has no owner, and nobody predicts it: its brain and every
+		/// controller run on the server only, so the server steps it directly, without FishNet's replicate (input queue,
+		/// history) or reconcile. Observers see it as they see another player: position through the NetworkTransform,
+		/// state through the controllers' observer broadcasts (<see cref="IPredictableController.OnServerTick"/>).
+		/// </para>
+		/// <para>
+		/// A client runs nothing for a character it does not own while state forwarding is off: FishNet's
+		/// non-authoritative replicate would return at once. With forwarding on (a match that hands observers the owner's
+		/// input), the observed character is predicted again.
+		/// </para>
+		/// </remarks>
+		internal static TickMode ResolveTickMode(bool isServerStarted, bool serverDrivenInput, bool isOwner, bool stateForwarding)
+		{
+			if (serverDrivenInput)
+			{
+				return isServerStarted ? TickMode.ServerSimulated : TickMode.Observed;
+			}
+			if (isServerStarted || isOwner || stateForwarding)
+			{
+				return TickMode.Predicted;
+			}
+			return TickMode.Observed;
+		}
+
+		/// <summary>The controllers' once-a-tick server work, after the character's step.</summary>
+		private void RunServerTickHooks()
+		{
+			for (int i = 0; i < controllers.Length; i++)
+			{
+				try
+				{
+					controllers[i].OnServerTick();
+				}
+				catch (Exception ex)
+				{
+					ReportReplicateFailure(controllers[i], ex);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Called on each tick. Runs this character the way <see cref="ResolveTickMode"/> says: predicted, simulated by
+		/// the server alone, or not at all.
 		/// </summary>
 		private void TimeManager_OnTick()
 		{
@@ -463,6 +570,19 @@ namespace FishMMO.Shared
 			// or after this method. Using CurrentLocalTickSnapshot avoids one-tick subscription-order drift.
 			CurrentLocalTickSnapshot = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
 			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+
+			switch (ResolveTickMode(base.IsServerStarted, serverDrivenInput, base.IsOwner,
+				base.NetworkObject != null && base.NetworkObject.EnableStateForwarding))
+			{
+				case TickMode.ServerSimulated:
+					SimulateOnServer();
+					return;
+				case TickMode.Observed:
+					// What the empty replicate left behind: no replicate tick, and the pending one spent.
+					PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+					return;
+			}
+
 			CharacterReplicateData input = default;
 			if (HasInputAuthority)
 			{
@@ -475,6 +595,180 @@ namespace FishMMO.Shared
 			Replicate(input);
 			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
 			CreateReconcile();
+		}
+
+		/// <summary>
+		/// Whether an NPC's step can be skipped this tick: nobody observes it AND it is idle. Idle means its brain asked
+		/// for nothing (inert input), no cast of its is running or in flight, and it is out of combat. An NPC fighting
+		/// out of every player's sight (another NPC, a pet's target) keeps stepping, so the fight resolves.
+		/// </summary>
+		/// <remarks>Only an inert input is ever dropped: the brain's queued request is drained by PopulateInput, so
+		/// skipping a tick that carried one would lose it.</remarks>
+		internal static bool CanSkipServerStep(bool observed, bool inertInput, bool castActive, bool inCombat)
+		{
+			return !observed && inertInput && !castActive && !inCombat;
+		}
+
+		// ───── Server step schedule (NPCs on the server) ─────────────────────
+
+		/// <summary>The schedule this NPC steps from on the server; null for every other character and peer.</summary>
+		private ServerStepSchedule stepSchedule;
+
+		/// <summary>Whether <see cref="NetworkObject_OnObserversActive"/> is subscribed.</summary>
+		private bool observersHooked;
+
+		/// <summary>Steps skipped in a row as idle and unseen (<see cref="CanSkipServerStep"/>).</summary>
+		private int idleStepStreak;
+
+		/// <summary>This NPC's nap bucket phase: its object id, so a scene's NPCs spread over every tick.</summary>
+		private int napPhase;
+
+		/// <summary>Skipped steps in a row before an idle, unseen NPC naps out of the tick: one second at 30 Hz.</summary>
+		internal const int NapAfterIdleSteps = 30;
+
+		/// <summary>Whether an NPC that has skipped <paramref name="idleStreak"/> steps in a row should nap.</summary>
+		internal static bool ShouldNap(int idleStreak) => idleStreak >= NapAfterIdleSteps;
+
+		/// <summary>True while this NPC sleeps out of the server's tick (<see cref="ServerStepSchedule"/>).</summary>
+		public bool IsNapping => stepSchedule != null && ((IServerStepped)this).ScheduleSlot >= 0;
+
+		int IServerStepped.ScheduleSlot { get; set; } = ServerStepSchedule.Unscheduled;
+		int IServerStepped.AwakeIndex { get; set; }
+		int IServerStepped.NapPhase => napPhase;
+
+		void IServerStepped.ServerPreTick()
+		{
+			TimeManager_OnPreTick();
+		}
+
+		bool IServerStepped.ServerStep()
+		{
+			// The ServerSimulated branch of TimeManager_OnTick, without re-deciding a mode an NPC on the server always has.
+			CurrentLocalTickSnapshot = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			SimulateOnServer();
+			return !ShouldNap(idleStepStreak);
+		}
+
+		void IServerStepped.OnNapped()
+		{
+			// What the skipped step left: no replicate tick. The two others answer the live tick while it naps.
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+		}
+
+		void IServerStepped.OnWoken()
+		{
+			// What its pre-tick would have published, for the rest of this tick (woken mid-tick, it steps this tick or next).
+			uint now = LiveTick;
+			CurrentLocalTickSnapshot = now;
+			CurrentReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			PendingReplicateTickSnapshot = now;
+		}
+
+		/// <summary>
+		/// Server: an NPC napping out of the tick steps again from now on. Call it when something gives the NPC work its
+		/// step must do: its brain queued a cast, it entered combat. Does nothing for an awake NPC or any other character.
+		/// </summary>
+		/// <remarks>The nap's own once-a-second look catches anything that does not call this, a second late at worst.</remarks>
+		public void WakeServerStep()
+		{
+			if (stepSchedule != null && IsNapping)
+			{
+				idleStepStreak = 0;
+				stepSchedule.Wake(this);
+			}
+		}
+
+		/// <summary>Takes this NPC out of the server step schedule for good (until its next spawn): nothing steps it.</summary>
+		/// <remarks>For the combat sim's probe, which drives a fighter's ticks by hand.</remarks>
+		private void LeaveStepSchedule()
+		{
+			if (stepSchedule != null)
+			{
+				stepSchedule.Remove(this);
+				stepSchedule = null;
+			}
+		}
+
+		/// <summary>An NPC a player can now see steps every tick again.</summary>
+		private void NetworkObject_OnObserversActive(NetworkObject networkObject)
+		{
+			if (networkObject != null && networkObject.Observers.Count > 0)
+			{
+				WakeServerStep();
+			}
+		}
+
+		/// <summary>The character this controller steps, for the idle test (<see cref="CanSkipServerStep"/>).</summary>
+		private ICharacter simulatedCharacter;
+
+		/// <summary>NPC steps skipped because nobody observed the NPC, since the process started (for reports).</summary>
+		public static long UnobservedStepsSkipped;
+
+		/// <summary>The replicate state an NPC's step runs with: a fresh tick of real (server-made) input, never a replay.</summary>
+		internal const ReplicateState ServerStepState = ReplicateState.Ticked | ReplicateState.Created;
+
+		/// <summary>
+		/// One tick of an NPC, on the server: its brain's input, then every controller's step, then their observer pushes.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// What FishNet's authoritative replicate did for an ownerless object, minus what only prediction needs: the input
+		/// queue and history, and the reconcile nobody receives. The input tick is the server's own tick, as it always was
+		/// for an ownerless object (its replicate domain IS the server tick).
+		/// </para>
+		/// <para>
+		/// <b>Nobody observing it and idle, nothing to do</b> (<see cref="CanSkipServerStep"/>). An idle NPC no player can see
+		/// (a scene waiting to unload, the far side of a map) skips the step; one fighting out of sight keeps it. What the
+		/// skipped step would have advanced is tick-scheduled and
+		/// catches up when it is next seen: a buff runs every tick it missed, regeneration fires its missed pulses one per
+		/// tick, a cooldown or cast compares ticks. Lag-compensation history records on its own (post-tick) as before.
+		/// </para>
+		/// </remarks>
+		private void SimulateOnServer()
+		{
+			if (!base.IsSpawned || base.TimeManager == null)
+			{
+				PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+				return;
+			}
+			uint tick = base.TimeManager.LocalTick;
+			CharacterReplicateData input = default;
+			for (int i = 0; i < controllers.Length; i++)
+			{
+				controllers[i].PopulateInput(ref input);
+			}
+			input.SetTick(tick);
+
+			/* The cheap facts first. An observed NPC, or one whose brain asked for something, steps without the
+			 * cast, live-object and combat questions being asked at all. */
+			bool observed = base.NetworkObject.Observers.Count > 0;
+			if (!observed && IsInertInput(input) &&
+				CanSkipServerStep(observed, true, CastInProgress || HasLiveAbilityObjects,
+					simulatedCharacter != null && simulatedCharacter.IsFlagged(CharacterFlags.IsInCombat)))
+			{
+				UnobservedStepsSkipped++;
+				++idleStepStreak;
+				PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+				return;
+			}
+
+			idleStepStreak = 0;
+			CurrentReplicateTickSnapshot = tick;
+			PendingReplicateTickSnapshot = TimeManager.UNSET_TICK;
+			for (int i = 0; i < controllers.Length; i++)
+			{
+				// One controller's failure stays its own, as in the replicate.
+				try
+				{
+					controllers[i].OnReplicate(ref input, ServerStepState, Channel.Unreliable);
+				}
+				catch (Exception ex)
+				{
+					ReportReplicateFailure(controllers[i], ex);
+				}
+			}
+			RunServerTickHooks();
 		}
 
 		/// <summary>
@@ -605,11 +899,12 @@ namespace FishMMO.Shared
 			if (base.IsServerStarted && base.IsSpawned)
 			{
 				CharacterReconcileData data = default;
-				// Every tick, sent or not: several controllers do their once-a-tick server work here (observer pushes).
 				for (int i = 0; i < controllers.Length; i++)
 				{
 					controllers[i].OnCreateReconcile(ref data);
 				}
+				// Every tick, sent or not: the controllers' once-a-tick server work (observer pushes).
+				RunServerTickHooks();
 				uint tick = base.TimeManager.LocalTick;
 				if (!ShouldSendReconcile(data.UnpackFlags, tick,
 						base.NetworkManager.TransportManager.GetSendInterval(base.Owner)))

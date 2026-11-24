@@ -187,6 +187,11 @@ namespace FishMMO.Shared
 			// Nothing to send: see the class remarks.
 		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
+		}
+
 		/// <inheritdoc />
 		public void OnReconcile(CharacterReconcileData rd, Channel channel)
 		{

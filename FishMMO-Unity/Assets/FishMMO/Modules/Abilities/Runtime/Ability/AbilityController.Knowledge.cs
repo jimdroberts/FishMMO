@@ -271,6 +271,7 @@ namespace FishMMO.Shared
 			}
 			KnownAbilities[ability.ID] = ability;
 			longestKnownAbilityRangeDirty = true;
+			knownAbilityListDirty = true;
 
 			// Update reverse index for O(1) KnowsLearnedAbility lookups.
 			if (ability.Template != null)
@@ -351,6 +352,7 @@ namespace FishMMO.Shared
 			templateToAbilityID ??= new Dictionary<int, long>();
 			templateToAbilityID[template.ID] = abilityID;
 			longestKnownAbilityRangeDirty = true;
+			knownAbilityListDirty = true;
 		}
 
 		/// <summary>
@@ -390,6 +392,7 @@ namespace FishMMO.Shared
 			 * ability survives, if any. */
 			KnownAbilities.TryGetValue(referenceID, out Ability removedAbility);
 			longestKnownAbilityRangeDirty = true;
+			knownAbilityListDirty = true;
 			if (!KnownAbilities.Remove(referenceID))
 			{
 				// Nothing was bound to that ID; do not raise a removal nobody can act on.

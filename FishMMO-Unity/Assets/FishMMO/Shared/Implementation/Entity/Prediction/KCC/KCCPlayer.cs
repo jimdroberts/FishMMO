@@ -1013,11 +1013,16 @@ namespace FishMMO.Shared
 		/// <inheritdoc/>
 		public void OnCreateReconcile(ref CharacterReconcileData reconcileData)
 		{
-			// Once a server tick, outside the replicate: observers learn the movement mode from here.
-			PublishMovementMode();
 			KinematicCharacterMotorState motorState = CharacterController.GetState();
 			motorState.CurrentPlatformID = currentPlatform != null ? currentPlatform.ID : 0;
 			reconcileData.MotorState = motorState;
+		}
+
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
+			// Once a server tick, outside the replicate: observers learn the movement mode from here.
+			PublishMovementMode();
 		}
 
 		/// <inheritdoc/>

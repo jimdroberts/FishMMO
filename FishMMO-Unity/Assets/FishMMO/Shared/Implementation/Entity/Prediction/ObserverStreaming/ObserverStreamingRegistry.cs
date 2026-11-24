@@ -42,6 +42,8 @@ namespace FishMMO.Shared
 		private static readonly List<ObserverStreamingEntry> entries = new List<ObserverStreamingEntry>();
 		private static readonly Dictionary<SceneHandle, List<ObserverStreamingEntry>> entriesByScene = new Dictionary<SceneHandle, List<ObserverStreamingEntry>>();
 		private static readonly Dictionary<long, int> cellCounts = new Dictionary<long, int>();
+		/// <summary>Per occupied cell, the crowd in it and its eight neighbours (one density pass).</summary>
+		private static readonly Dictionary<long, int> neighbourhoodCounts = new Dictionary<long, int>();
 		private static readonly List<Candidate> candidates = new List<Candidate>();
 
 		/// <summary>Cached once: passing the method group to Sort allocated a delegate per viewer per pass.</summary>
@@ -781,6 +783,7 @@ namespace FishMMO.Shared
 		{
 			float cellSize = Mathf.Max(1f, ObserverStreamingPolicy.DensityRadius);
 			cellCounts.Clear();
+			neighbourhoodCounts.Clear();
 			for (int i = 0; i < sceneEntries.Count; ++i)
 			{
 				/* Only characters are crowd. Items and waypoints are in this list to be budgeted,
@@ -805,17 +808,25 @@ namespace FishMMO.Shared
 
 				int cx = Mathf.FloorToInt(entry.Position.x / cellSize);
 				int cz = Mathf.FloorToInt(entry.Position.z / cellSize);
-				int neighbours = -1; // exclude self
-				for (int dx = -1; dx <= 1; ++dx)
+				/* Everyone in a cell has the same 3x3 sum, and spawners pack NPCs into few cells: summed once
+				 * per occupied cell, not nine probes per character. */
+				long cellKey = CellKey(cx, cz);
+				if (!neighbourhoodCounts.TryGetValue(cellKey, out int neighbourhood))
 				{
-					for (int dz = -1; dz <= 1; ++dz)
+					neighbourhood = 0;
+					for (int dx = -1; dx <= 1; ++dx)
 					{
-						if (cellCounts.TryGetValue(CellKey(cx + dx, cz + dz), out int count))
+						for (int dz = -1; dz <= 1; ++dz)
 						{
-							neighbours += count;
+							if (cellCounts.TryGetValue(CellKey(cx + dx, cz + dz), out int count))
+							{
+								neighbourhood += count;
+							}
 						}
 					}
+					neighbourhoodCounts.Add(cellKey, neighbourhood);
 				}
+				int neighbours = neighbourhood - 1; // exclude self
 
 				float range = ObserverStreamingPolicy.ScaledRange(entry.BaseRange, Mathf.Max(0, neighbours));
 

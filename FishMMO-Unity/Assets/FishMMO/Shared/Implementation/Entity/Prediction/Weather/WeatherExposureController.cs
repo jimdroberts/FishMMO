@@ -445,6 +445,11 @@ namespace FishMMO.Shared
 			reconcileData.Exposure = CreateReconcileSnapshot();
 		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
+		}
+
 		/// <summary>
 		/// The levels as they go on the wire, sorted by template ID and quantised.
 		/// </summary>

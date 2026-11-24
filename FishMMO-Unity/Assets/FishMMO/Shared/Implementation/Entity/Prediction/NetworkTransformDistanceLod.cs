@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using FishNet.Component.Transforming;
 using FishNet.Connection;
+using FishNet.Managing.Timing;
 using FishNet.Object;
 using FishNet.Observing;
 using FishNet.Transporting;
@@ -224,9 +225,16 @@ namespace FishMMO.Shared
 			evaluateIntervalTicks = ResolveEvaluateIntervalTicks();
 			nextEvaluateTick = 0u;
 
-			if (base.TimeManager != null)
+			/* Only while someone observes it: with no observers there is nobody to band. The object joins the shared
+			 * post-tick list when it gains its first observer and leaves when it loses its last. */
+			if (base.NetworkObject != null)
 			{
-				base.TimeManager.OnPostTick += TimeManager_OnPostTick;
+				base.NetworkObject.OnObserversActive += NetworkObject_OnObserversActive;
+				observersHooked = true;
+				if (base.NetworkObject.Observers.Count > 0)
+				{
+					ObservedLodList.Join(this);
+				}
 			}
 
 			/* Objects that are not characters never get an ObserverStreamingEntry, so this is the
@@ -241,10 +249,12 @@ namespace FishMMO.Shared
 
 		public override void OnStopServer()
 		{
-			if (base.TimeManager != null)
+			ObservedLodList.Leave(this);
+			if (observersHooked && base.NetworkObject != null)
 			{
-				base.TimeManager.OnPostTick -= TimeManager_OnPostTick;
+				base.NetworkObject.OnObserversActive -= NetworkObject_OnObserversActive;
 			}
+			observersHooked = false;
 			if (base.NetworkObject != null && ReferenceEquals(base.NetworkObject.ObserverSendFilter, this))
 			{
 				base.NetworkObject.ObserverSendFilter = null;
@@ -271,6 +281,100 @@ namespace FishMMO.Shared
 			}
 			int ticks = Mathf.RoundToInt(evaluateInterval / (float)tickDelta);
 			return ticks < 1 ? 1u : (uint)ticks;
+		}
+
+		/// <summary>Whether <see cref="NetworkObject_OnObserversActive"/> is subscribed.</summary>
+		private bool observersHooked;
+
+		/// <summary>The list this object is on (<see cref="ObservedLodList"/>), or null.</summary>
+		private ObservedLodList lodList;
+
+		/// <summary>Index in <see cref="lodList"/>, for removal in constant time.</summary>
+		private int lodListIndex;
+
+		/// <summary>An object gained its first observer (bands at once) or lost its last (forgets every band).</summary>
+		private void NetworkObject_OnObserversActive(NetworkObject networkObject)
+		{
+			if (networkObject != null && networkObject.Observers.Count > 0)
+			{
+				nextEvaluateTick = 0u;
+				ObservedLodList.Join(this);
+			}
+			else
+			{
+				ObservedLodList.Leave(this);
+				lodByClientId.Clear();
+			}
+		}
+
+		/// <summary>
+		/// The server's observed objects, re-banded from one post-tick subscription.
+		/// </summary>
+		/// <remarks>
+		/// Each object used to hold its own subscription, so every object in a loaded scene was called every tick even
+		/// with nobody in the scene to band. An object joins when it gains its first observer and leaves when it loses
+		/// its last, which happens often as players move; a list costs nothing to join or leave, where adding to or
+		/// removing from a tick event copies all of its thousands of subscribers.
+		/// </remarks>
+		private sealed class ObservedLodList
+		{
+			private static readonly Dictionary<TimeManager, ObservedLodList> lists = new Dictionary<TimeManager, ObservedLodList>();
+
+			private readonly List<NetworkTransformDistanceLod> members = new List<NetworkTransformDistanceLod>();
+
+			public static void Join(NetworkTransformDistanceLod lod)
+			{
+				if (lod.lodList != null)
+				{
+					return;
+				}
+				TimeManager timeManager = lod.TimeManager;
+				if (timeManager == null)
+				{
+					return;
+				}
+				if (!lists.TryGetValue(timeManager, out ObservedLodList list))
+				{
+					list = new ObservedLodList();
+					lists[timeManager] = list;
+					timeManager.OnPostTick += list.PostTick;
+				}
+				lod.lodList = list;
+				lod.lodListIndex = list.members.Count;
+				list.members.Add(lod);
+			}
+
+			public static void Leave(NetworkTransformDistanceLod lod)
+			{
+				ObservedLodList list = lod.lodList;
+				if (list == null)
+				{
+					return;
+				}
+				lod.lodList = null;
+				int index = lod.lodListIndex;
+				int last = list.members.Count - 1;
+				if (index < 0 || index > last || !ReferenceEquals(list.members[index], lod))
+				{
+					return;
+				}
+				if (index != last)
+				{
+					NetworkTransformDistanceLod moved = list.members[last];
+					list.members[index] = moved;
+					moved.lodListIndex = index;
+				}
+				list.members.RemoveAt(last);
+			}
+
+			private void PostTick()
+			{
+				// Nothing joins or leaves from inside a pass: banding changes no observer set.
+				for (int i = 0; i < members.Count; i++)
+				{
+					members[i].TimeManager_OnPostTick();
+				}
+			}
 		}
 
 		/// <summary>
@@ -300,6 +404,35 @@ namespace FishMMO.Shared
 			nextEvaluateTick = localTick + evaluateIntervalTicks;
 
 			Evaluate();
+		}
+
+		/// <summary>The observer whose engagement range was resolved last, and on which tick.</summary>
+		private static NetworkObject lastRangeObserver;
+		private static uint lastRangeTick = TimeManager.UNSET_TICK;
+		private static float lastEngagementRange;
+
+		/// <summary>
+		/// The observer's engagement range, resolved once per observer per tick.
+		/// </summary>
+		/// <remarks>
+		/// Every object a player can see re-bands that player on the same tick, and each one did its own
+		/// <c>TryGetComponent</c> on the player's object: one native component search per watched NPC.
+		/// </remarks>
+		private float ObserverEngagementRange(NetworkObject observerObject)
+		{
+			uint tick = base.TimeManager != null ? base.TimeManager.LocalTick : TimeManager.UNSET_TICK;
+			if (tick != TimeManager.UNSET_TICK && tick == lastRangeTick && ReferenceEquals(observerObject, lastRangeObserver))
+			{
+				return lastEngagementRange;
+			}
+			float range = ObserverStreamingPolicy.ResolveEngagementRange(
+				observerObject.TryGetComponent(out IAbilityController observerAbilities)
+					? observerAbilities.LongestKnownAbilityRange
+					: 0f);
+			lastRangeObserver = observerObject;
+			lastRangeTick = tick;
+			lastEngagementRange = range;
+			return range;
 		}
 
 		/// <summary>
@@ -344,10 +477,7 @@ namespace FishMMO.Shared
 					/* The radius comes from the OBSERVER's reach, not this object's: the question is
 					 * whether that client could attack this character, and so whether its view of it
 					 * has to be tick-exact. */
-					float engagementRange = ObserverStreamingPolicy.ResolveEngagementRange(
-						observerObject.TryGetComponent(out IAbilityController observerAbilities)
-							? observerAbilities.LongestKnownAbilityRange
-							: 0f);
+					float engagementRange = ObserverEngagementRange(observerObject);
 
 					BandObserver(connection.ClientId,
 						(observerObject.transform.position - position).sqrMagnitude,

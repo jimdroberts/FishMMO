@@ -136,6 +136,8 @@ namespace FishMMO.Shared
 		private bool sitting;
 		// Astride a mount (issue #109): the Ride clip, the hips set on the saddle (SetRiding).
 		private bool riding;
+		/// <summary>Got off a saddle and not yet back down on the capsule's feet (<see cref="Place"/>).</summary>
+		private bool offSaddle;
 		private float saddleHeight;
 		private bool onSeat;
 		private float seatHeight;
@@ -337,7 +339,15 @@ namespace FishMMO.Shared
 			}
 			if (armsMask != null)
 			{
-				UnityEngine.Object.Destroy(armsMask);
+				// Edit mode (tests, render probes) has no deferred Destroy.
+				if (Application.isPlaying)
+				{
+					UnityEngine.Object.Destroy(armsMask);
+				}
+				else
+				{
+					UnityEngine.Object.DestroyImmediate(armsMask);
+				}
 				armsMask = null;
 			}
 			if (shown != null)
@@ -467,6 +477,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public void SetRiding(bool ride, float hipHeight)
 		{
+			offSaddle = !ride && (riding || offSaddle);
 			riding = ride;
 			saddleHeight = Mathf.Max(0f, hipHeight);
 			if (ride)
@@ -491,6 +502,7 @@ namespace FishMMO.Shared
 			pendingLand = pendingRung = false;
 			pendingSwim = null;
 			lift = 0f;
+			offSaddle = false;
 			pitch = 0f;
 			armsTime = -1f;
 			climbPhase = 0f;
@@ -813,6 +825,19 @@ namespace FishMMO.Shared
 			{
 				// Its death was keyed lying on the ground it fell on.
 				lift = Mathf.Lerp(lift, 0f, ease);
+			}
+			else if (offSaddle && !swimming && !climbing)
+			{
+				/* Just off a saddle, the figure is lifted further than the feet's ground probe reaches (GroundReach): the feet
+				 * find no ground under them and would leave it hanging at the saddle's height (and only the seen, grounded
+				 * figure's feet are probed at all). It comes back down to the capsule's feet, seen or not, grounded or falling;
+				 * there the feet take over again. */
+				lift = Mathf.Lerp(lift, 0f, ease);
+				if (Mathf.Abs(lift) < 0.005f)
+				{
+					lift = 0f;
+					offSaddle = false;
+				}
 			}
 			else if (grounded && feet[0] != null && feet[1] != null && Visible())
 			{

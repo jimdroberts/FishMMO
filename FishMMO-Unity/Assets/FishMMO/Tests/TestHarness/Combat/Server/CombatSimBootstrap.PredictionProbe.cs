@@ -267,6 +267,8 @@ namespace FishMMO.TestHarness
 			{
 				time.OnTick -= (Action)Delegate.CreateDelegate(typeof(Action), prediction, onTick);
 			}
+			// An NPC on the server steps from the shared schedule, not its own subscriptions.
+			typeof(CharacterPredictionController).GetMethod("LeaveStepSchedule", Private)?.Invoke(prediction, null);
 			if (fighter.Ai != null)
 			{
 				fighter.Ai.enabled = false;

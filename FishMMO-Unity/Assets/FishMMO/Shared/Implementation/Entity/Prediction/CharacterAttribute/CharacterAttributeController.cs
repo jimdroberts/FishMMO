@@ -3236,11 +3236,14 @@ namespace FishMMO.Shared
 		{
 			reconcileData.ResourceState = GetResourceState();
 			reconcileData.Attributes = CreateAttributeSnapshot();
+		}
 
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
 			/* Observers receive resources through their own rate-limited RPC rather than through
-			 * this reconcile, because the reconcile stops reaching them once state forwarding is
-			 * disabled. Pushed from here for the same reason BuffController pushes here: it is once
-			 * per tick, server only, and outside the [Replicate] method. */
+			 * a reconcile, because the reconcile never reaches them with state forwarding off (and an
+			 * NPC builds none). Once per tick, server only, outside the step. */
 			MaybePushObservedResources();
 			MaybePushObservedAttributes();
 		}

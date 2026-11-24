@@ -1787,6 +1787,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			behaviorTreeTimer = 0f;
 			lodReevaluateTimer = 0f;
 			currentLodTier = AILodTier.Active;
+			WakeAgent();
+			dormantWalkTicks = 0;
 
 			/* Out of the pack, not merely forgetting it: the pack still listed this brain, and would
 			 * have counted it, read its health and alerted it into its next occupant's life. The
@@ -1853,7 +1855,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * second for every dormant NPC in the process was the whole of its cost. One with a
 			 * path keeps walking, so it arrives where it was going rather than freezing mid-stride.
 			 * The path is only asked about when Dormant; every other tier steps regardless. */
-			if (ShouldStepBody(currentLodTier, currentLodTier == AILodTier.Dormant && AgentHasSomewhereToGo()))
+			bool dormant = currentLodTier == AILodTier.Dormant;
+			bool hasSomewhereToGo = dormant && AgentHasSomewhereToGo();
+			UpdateAgentParking(dormant, hasSomewhereToGo);
+			if (ShouldStepBody(currentLodTier, hasSomewhereToGo))
 			{
 				// An agent off the mesh cannot step, path or arrive. Put it back before anything asks it to.
 				RecoverIfOffMesh(networkTickDelta);
@@ -1917,6 +1922,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 					// Handle tier transitions (e.g., disengage combat when going to Far).
 					if (previousTier != currentLodTier)
 					{
+						// Back in the crowd before the transition below (a leash reset) asks anything of it.
+						if (currentLodTier != AILodTier.Dormant)
+						{
+							WakeAgent();
+						}
 						OnLodTierChanged(previousTier, currentLodTier);
 
 						/* Nothing refreshes the separation push below the Nearby tier, so it is
@@ -2013,7 +2023,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// </summary>
 		private bool AgentHasSomewhereToGo()
 		{
-			return AgentIsUsable() && (Agent.hasPath || Agent.isOnOffMeshLink);
+			// A query, not a use: asking must not wake a parked agent.
+			return !agentParked && AgentIsUsable() && (Agent.hasPath || Agent.isOnOffMeshLink);
 		}
 
 		/// <summary>
@@ -2825,7 +2836,110 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool AgentIsUsable()
 		{
+			// Everything that uses the agent asks this first, so a parked one comes back for whoever wants it.
+			if (agentParked)
+			{
+				WakeAgent();
+			}
 			return Agent != null && Agent.isActiveAndEnabled && Agent.isOnNavMesh;
+		}
+
+		/// <summary>True while this Dormant NPC's agent is switched off, out of Unity's crowd (<see cref="UpdateAgentParking"/>).</summary>
+		public bool AgentParked => agentParked;
+
+		private bool agentParked;
+
+		/// <summary>Consecutive network ticks spent Dormant with nothing to walk.</summary>
+		private int dormantIdleTicks;
+
+		/// <summary>Consecutive network ticks a Dormant NPC has spent walking out the path it had.</summary>
+		private int dormantWalkTicks;
+
+		/// <summary>Two seconds Dormant and idle before the agent is parked, so a stray query cannot make it thrash.</summary>
+		public const int ParkAfterIdleTicks = 60;
+
+		/// <summary>Thirty seconds: long enough for any wander or walk home, short enough that a stuck walker stops.</summary>
+		public const int DormantWalkLimitTicks = 900;
+
+		/// <summary>Whether a Dormant NPC's agent should leave the crowd. Pure, so the rule can be pinned without an agent.</summary>
+		public static bool ShouldParkAgent(bool dormant, bool hasSomewhereToGo, int dormantIdleTicks)
+		{
+			return dormant && !hasSomewhereToGo && dormantIdleTicks >= ParkAfterIdleTicks;
+		}
+
+		/// <summary>Whether a Dormant NPC has walked long enough to give up its path (stuck, or a partial path it never ends).</summary>
+		public static bool ShouldEndDormantWalk(bool dormant, bool hasSomewhereToGo, int dormantWalkTicks)
+		{
+			return dormant && hasSomewhereToGo && dormantWalkTicks >= DormantWalkLimitTicks;
+		}
+
+		/// <summary>
+		/// Takes a Dormant NPC's agent out of Unity's crowd once it has nothing to do, and ends a dormant walk that never
+		/// arrives.
+		/// </summary>
+		/// <remarks>
+		/// Unity's crowd updates every enabled agent on every frame, twice a tick on the scene server, moving or not: with
+		/// two large scenes loaded and no players, thousands of idle agents were most of the server's navigation cost. A
+		/// Dormant NPC has nobody within the Far band and its brain does not run, so its agent has nothing to do until it
+		/// wakes. Waking is on demand: a tier change, a state change, or anything asking <see cref="AgentIsUsable"/>.
+		/// Enabling the agent re-seats it on the NavMesh at the body's position, as a spawn does.
+		/// </remarks>
+		private void UpdateAgentParking(bool dormant, bool hasSomewhereToGo)
+		{
+			if (!dormant)
+			{
+				dormantIdleTicks = 0;
+				dormantWalkTicks = 0;
+				return;
+			}
+
+			if (hasSomewhereToGo)
+			{
+				dormantIdleTicks = 0;
+				if (ShouldEndDormantWalk(dormant, hasSomewhereToGo, ++dormantWalkTicks) && !IsClimbingLink)
+				{
+					ClearPath();
+					dormantWalkTicks = 0;
+				}
+				return;
+			}
+
+			dormantWalkTicks = 0;
+			if (agentParked)
+			{
+				return;
+			}
+			if (ShouldParkAgent(dormant, hasSomewhereToGo, ++dormantIdleTicks))
+			{
+				ParkAgent();
+			}
+		}
+
+		private void ParkAgent()
+		{
+			// Only a seated agent: one off the mesh would fail to re-seat, and warn, on every wake.
+			if (Agent == null || !Agent.enabled || !Agent.isOnNavMesh || IsClimbingLink)
+			{
+				return;
+			}
+			Agent.enabled = false;
+			agentParked = true;
+			dormantIdleTicks = 0;
+		}
+
+		/// <summary>Puts a parked agent back in the crowd, seated where the body stands.</summary>
+		private void WakeAgent()
+		{
+			if (!agentParked)
+			{
+				return;
+			}
+			agentParked = false;
+			dormantIdleTicks = 0;
+			if (Agent != null && !Agent.enabled)
+			{
+				Agent.enabled = true;
+			}
 		}
 
 		/// <summary>
@@ -3473,6 +3587,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			}
 
 			//Log.Debug($"{this.gameObject.name} Transitioning to: {newState.GetType().Name}");
+
+			// States set the agent's speed and stop it without asking AgentIsUsable; a hit can start one on a Dormant NPC.
+			WakeAgent();
 
 			CurrentState = newState;
 			if (CurrentState != null)

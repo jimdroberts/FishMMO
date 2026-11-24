@@ -31,9 +31,18 @@ namespace FishMMO.Shared
 
 		/// <summary>
 		/// Writes this controller's authoritative state into the reconcile data (server only).
-		/// Called once per tick after <see cref="OnReplicate"/>.
+		/// Called once per tick after <see cref="OnReplicate"/>, for a predicted (player) character only.
 		/// </summary>
+		/// <remarks>Fill the data and nothing else: once-a-tick server work belongs in <see cref="OnServerTick"/>, which
+		/// also runs for characters that build no reconcile (NPCs).</remarks>
 		void OnCreateReconcile(ref CharacterReconcileData reconcileData);
+
+		/// <summary>
+		/// Once-a-tick server work after this character's step: pushing its state to observers (resources, attributes,
+		/// buffs). Called on the server for every character it simulates, players and NPCs alike, after
+		/// <see cref="OnCreateReconcile"/> where there is one.
+		/// </summary>
+		void OnServerTick();
 
 		/// <summary>
 		/// Restores this controller's state from the server's authoritative reconcile data.

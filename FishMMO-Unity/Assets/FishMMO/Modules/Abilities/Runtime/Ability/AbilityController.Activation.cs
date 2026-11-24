@@ -2705,6 +2705,7 @@ namespace FishMMO.Shared
 			{
 				queuedAbilityID = consumable.ID;
 				localInputFlags.EnableBit(AbilityActivationFlags.IsConsumable);
+				predictionController?.WakeServerStep();
 			}
 		}
 
@@ -2793,6 +2794,7 @@ namespace FishMMO.Shared
 
 				case InterruptDisposition.Queued:
 					localInputFlags.EnableBit(AbilityActivationFlags.Interrupt);
+					predictionController?.WakeServerStep();
 					return;
 
 				default:
@@ -2931,6 +2933,8 @@ namespace FishMMO.Shared
 			{
 				localInputFlags.DisableBit(AbilityActivationFlags.IsHeld);
 			}
+			// A brain's cast is taken by its NPC's next step: one napping out of the tick (unseen, idle) steps again.
+			predictionController?.WakeServerStep();
 			return true;
 		}
 

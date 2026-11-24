@@ -1063,7 +1063,13 @@ namespace FishMMO.UnitTests
 
 		private static void SetAutoProperty<T>(object instance, string propertyName, T value)
 		{
-			SetPrivateField(instance, $"<{propertyName}>k__BackingField", value);
+			// An auto-property's backing field, or the private setter of a property with its own field.
+			if (instance.GetType().GetField($"<{propertyName}>k__BackingField", PrivateInstanceFlags) != null)
+			{
+				SetPrivateField(instance, $"<{propertyName}>k__BackingField", value);
+				return;
+			}
+			instance.GetType().GetProperty(propertyName).SetValue(instance, value);
 		}
 
 		private static void InvokePrivateMethod(object instance, string methodName, int tickOffset)

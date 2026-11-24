@@ -331,9 +331,14 @@ namespace FishMMO.Shared
 					changed = true;
 				}
 
-				if (PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.Server) != Il2CppCodeGeneration.OptimizeSize)
+				/* Speed, not size. OptimizeSize turns on full generic sharing: every value-type generic
+				 * (Dictionary<long, int>, List<struct>, the per-character lookups) runs through one shared,
+				 * runtime-invoked body. Profiled live, that shared dictionary code was the scene server's
+				 * single largest cost with two big scenes loaded. A server's main thread is its capacity;
+				 * a bigger binary and a longer IL2CPP build cost nothing that matters. */
+				if (PlayerSettings.GetIl2CppCodeGeneration(NamedBuildTarget.Server) != Il2CppCodeGeneration.OptimizeSpeed)
 				{
-					PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Server, Il2CppCodeGeneration.OptimizeSize);
+					PlayerSettings.SetIl2CppCodeGeneration(NamedBuildTarget.Server, Il2CppCodeGeneration.OptimizeSpeed);
 					changed = true;
 				}
 			}

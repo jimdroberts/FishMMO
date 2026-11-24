@@ -43,6 +43,51 @@ namespace FishMMO.Shared
 		protected Dictionary<Type, ICharacterBehaviour> Behaviours = new Dictionary<Type, ICharacterBehaviour>();
 
 		/// <summary>
+		/// The same entries as <see cref="Behaviours"/>, indexed by the slot each interface type is given once
+		/// (<see cref="BehaviourSlot{T}"/>), so <see cref="TryGet{T}"/> is an array read.
+		/// </summary>
+		/// <remarks>
+		/// Every character asks for its controllers many times a tick. The dictionary path ran a runtime
+		/// <c>Type.IsInterface</c> call and a <c>Type</c>-keyed hash probe per lookup, and profiled live it was
+		/// the scene server's largest single cost once thousands of NPCs were loaded.
+		/// </remarks>
+		private ICharacterBehaviour[] behaviourSlots = Array.Empty<ICharacterBehaviour>();
+
+		/// <summary>
+		/// How many <see cref="Behaviours"/> entries <see cref="RegisterCharacterBehaviour"/> also put in a slot.
+		/// When the dictionary holds more, something seeded it directly (the editor render rigs do, by
+		/// reflection), and a slot miss falls back to the dictionary.
+		/// </summary>
+		private int slottedBehaviourCount;
+
+		private static readonly object behaviourSlotLock = new object();
+		private static readonly Dictionary<Type, int> behaviourSlotByType = new Dictionary<Type, int>();
+
+		/// <summary>The slot for an interface type, assigned on first use; -1 for anything that is not an interface.</summary>
+		private static int BehaviourSlotFor(Type type)
+		{
+			if (type == null || !type.IsInterface)
+			{
+				return -1;
+			}
+			lock (behaviourSlotLock)
+			{
+				if (!behaviourSlotByType.TryGetValue(type, out int slot))
+				{
+					slot = behaviourSlotByType.Count;
+					behaviourSlotByType.Add(type, slot);
+				}
+				return slot;
+			}
+		}
+
+		/// <summary>The slot of <typeparamref name="T"/>, worked out once per type rather than on every lookup.</summary>
+		private static class BehaviourSlot<T> where T : class, ICharacterBehaviour
+		{
+			public static readonly int Index = BehaviourSlotFor(typeof(T));
+		}
+
+		/// <summary>
 		/// Unique network identifier for this character.
 		/// </summary>
 		public long ID { get; set; }
@@ -531,6 +576,14 @@ namespace FishMMO.Shared
 				{
 					// Register the behaviour for this interface type.
 					Behaviours.Add(iface, behaviour);
+
+					int slot = BehaviourSlotFor(iface);
+					if (slot >= behaviourSlots.Length)
+					{
+						Array.Resize(ref behaviourSlots, Math.Max(slot + 1, behaviourSlots.Length * 2));
+					}
+					behaviourSlots[slot] = behaviour;
+					slottedBehaviourCount++;
 				}
 			}
 		}
@@ -565,6 +618,13 @@ namespace FishMMO.Shared
 				if (Behaviours.TryGetValue(iface, out ICharacterBehaviour existing) && existing == behaviour)
 				{
 					Behaviours.Remove(iface);
+
+					int slot = BehaviourSlotFor(iface);
+					if (slot < behaviourSlots.Length && ReferenceEquals(behaviourSlots[slot], behaviour))
+					{
+						behaviourSlots[slot] = null;
+						slottedBehaviourCount--;
+					}
 				}
 			}
 		}
@@ -578,21 +638,8 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGet<T>(out T control) where T : class, ICharacterBehaviour
 		{
-			Type type = typeof(T);
-			if (!type.IsInterface)
-			{
-				throw new UnityException($"{type.Name} must be an interface.");
-			}
-
-			if (Behaviours.TryGetValue(type, out ICharacterBehaviour result))
-			{
-				if ((control = result as T) != null)
-				{
-					return true;
-				}
-			}
-			control = null;
-			return false;
+			control = Lookup<T>();
+			return control != null;
 		}
 
 		/// <summary>
@@ -603,15 +650,35 @@ namespace FishMMO.Shared
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T Get<T>() where T : class, ICharacterBehaviour
 		{
-			Type type = typeof(T);
-			if (!type.IsInterface)
+			return Lookup<T>();
+		}
+
+		/// <summary>
+		/// The behaviour registered for <typeparamref name="T"/>, or null: the slot first, and the dictionary
+		/// only when something seeded it outside <see cref="RegisterCharacterBehaviour"/>.
+		/// </summary>
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private T Lookup<T>() where T : class, ICharacterBehaviour
+		{
+			int slot = BehaviourSlot<T>.Index;
+			if (slot < 0)
 			{
-				throw new UnityException($"{type.Name} must be an interface.");
+				throw new UnityException($"{typeof(T).Name} must be an interface.");
 			}
 
-			if (Behaviours.TryGetValue(type, out ICharacterBehaviour result))
+			ICharacterBehaviour[] slots = behaviourSlots;
+			if (slot < slots.Length)
 			{
-				return result as T;
+				ICharacterBehaviour held = slots[slot];
+				if (held != null)
+				{
+					return held as T;
+				}
+			}
+
+			if (Behaviours.Count != slottedBehaviourCount && Behaviours.TryGetValue(typeof(T), out ICharacterBehaviour seeded))
+			{
+				return seeded as T;
 			}
 			return null;
 		}

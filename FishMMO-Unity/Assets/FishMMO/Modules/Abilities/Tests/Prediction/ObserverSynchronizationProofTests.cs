@@ -705,10 +705,10 @@ namespace FishMMO.UnitTests
 			LogAssert.IsFalse(source.Contains("private void Update()"),
 				"The LOD scheduler must not run from Update(); a headless server's frame rate is " +
 				"unrelated to its tick rate.");
-			LogAssert.IsTrue(source.Contains("TimeManager.OnPostTick += TimeManager_OnPostTick"),
-				"The LOD scheduler must subscribe to TimeManager.OnPostTick.");
-			LogAssert.IsTrue(source.Contains("TimeManager.OnPostTick -= TimeManager_OnPostTick"),
-				"The LOD scheduler must unsubscribe on stop, or a pooled object leaks a subscription.");
+			LogAssert.IsTrue(source.Contains("timeManager.OnPostTick += list.PostTick"),
+				"The LOD scheduler must run from TimeManager.OnPostTick (one shared subscription).");
+			LogAssert.IsTrue(source.Contains("ObservedLodList.Leave(this);"),
+				"The LOD scheduler must leave the shared list on stop, or a pooled object stays on it.");
 			LogAssert.IsTrue(source.Contains("evaluateIntervalTicks"),
 				"The evaluation cadence must be expressed in ticks.");
 		}

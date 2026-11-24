@@ -564,6 +564,7 @@ namespace FishMMO.Shared
 			 * detached their objects — there is no second set to sweep. */
 			KnownAbilities.Clear();
 			longestKnownAbilityRangeDirty = true;
+			knownAbilityListDirty = true;
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
 			KnownAbilityOnTickEvents.Clear();
@@ -866,18 +867,52 @@ namespace FishMMO.Shared
 		{
 			get
 			{
-				if (KnownAbilities == null)
+				List<Ability> abilities = KnownAbilityList;
+				for (int i = 0; i < abilities.Count; ++i)
 				{
-					return false;
-				}
-				foreach (Ability ability in KnownAbilities.Values)
-				{
+					Ability ability = abilities[i];
 					if (ability?.Objects != null && ability.Objects.Count > 0)
 					{
 						return true;
 					}
 				}
 				return false;
+			}
+		}
+
+		/// <summary><c>KnownAbilities.Values</c> as a list, rebuilt only when the known set changes.</summary>
+		private readonly List<Ability> knownAbilityList = new List<Ability>();
+
+		/// <summary>True when <see cref="knownAbilityList"/> needs rebuilding.</summary>
+		private bool knownAbilityListDirty = true;
+
+		/// <summary>
+		/// The known abilities for walks that run every tick.
+		/// </summary>
+		/// <remarks>
+		/// A <c>SortedDictionary</c>'s enumerator allocates its node stack on every walk, and
+		/// <see cref="HasLiveObjects"/> is asked every tick of every idle NPC the server decides whether to step. Marked
+		/// dirty wherever the known set changes; the count check also catches a write that bypassed those paths.
+		/// </remarks>
+		private List<Ability> KnownAbilityList
+		{
+			get
+			{
+				if (KnownAbilities == null)
+				{
+					knownAbilityList.Clear();
+					return knownAbilityList;
+				}
+				if (knownAbilityListDirty || knownAbilityList.Count != KnownAbilities.Count)
+				{
+					knownAbilityList.Clear();
+					foreach (Ability ability in KnownAbilities.Values)
+					{
+						knownAbilityList.Add(ability);
+					}
+					knownAbilityListDirty = false;
+				}
+				return knownAbilityList;
 			}
 		}
 
@@ -1537,6 +1572,11 @@ namespace FishMMO.Shared
 			reconcileData.RngS1 = rngS1;
 			reconcileData.RngS2 = rngS2;
 			reconcileData.RngS3 = rngS3;
+		}
+
+		/// <inheritdoc/>
+		public void OnServerTick()
+		{
 		}
 
 		/// <inheritdoc/>

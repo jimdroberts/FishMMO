@@ -6,6 +6,7 @@ using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.SceneManagement;
 using FishMMO.Logging;
 using FishMMO.Server.Core;
@@ -23,6 +24,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 	/// </summary>
 	/// <remarks>
 	/// <para>
+	/// Modes, for bandwidth tests: <c>walk</c> (the default) wanders; <c>combat</c> splits them into two teams that fight
+	/// with real combat NPCs' kits and brains, so casts, projectiles, combat reports, buffs and health bars are in the
+	/// traffic; a radius spreads them out to test streaming range and the per-viewer budgets instead of one dense crowd;
+	/// <c>chat</c> has each say a line in local chat every 20 to 40 s, as a talkative player would.
+	/// </para>
+	/// <para>
 	/// What they do not load: a client connection each (login, its own reconcile stream, encryption). That is a separate,
 	/// external bot-client test.
 	/// </para>
@@ -38,6 +45,71 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private const int MaxSimulatedPlayersPerCommand = 200;
 		private const int MaxSimulatedPlayers = 2000;
 		private const float SimulatedPlayerSpawnRadius = 25f;
+		private const int MinSimulatedSpawnRadius = 5;
+		private const int MaxSimulatedSpawnRadius = 1000;
+		/// <summary>Seconds before a fallen combat simulated player is replaced, so a fight keeps its numbers.</summary>
+		private const double SimulatedRespawnSeconds = 6.0;
+		/// <summary>How often the teams are paired up, the dead counted and the chatter run.</summary>
+		private const double SimulatedUpkeepSeconds = 1.0;
+		private const float SimulatedChatMinSeconds = 20f;
+		private const float SimulatedChatMaxSeconds = 40f;
+
+		internal enum SimulatedActivity { Walk, Combat }
+
+		/// <summary>What a batch of simulated players does: how they behave, how far out they stand, whether they talk.</summary>
+		internal sealed class SimulatedSettings
+		{
+			public SimulatedActivity Activity = SimulatedActivity.Walk;
+			public float Radius = SimulatedPlayerSpawnRadius;
+			public bool Chat;
+
+			public string Describe() =>
+				$"{(Activity == SimulatedActivity.Combat ? "combat, two teams" : "walking")}, within {Radius:0} m{(Chat ? ", chatting" : string.Empty)}";
+		}
+
+		/// <summary>One simulated player the upkeep looks after: its team, its chatter, its replacement when it falls.</summary>
+		private sealed class SimulatedMember
+		{
+			public NetworkObject Instance;
+			public NPC Npc;
+			public AIController Ai;
+			public SimulatedSettings Settings;
+			public int Number;
+			public int Team;
+			public Vector3 Origin;
+			public Scene Scene;
+			public SimulationRun Run;
+			public double NextChatAt;
+			public double DiedAt = -1.0;
+		}
+
+		/// <summary>A real combat NPC's ability kit and brain, which a combat simulated player borrows.</summary>
+		private sealed class SimulatedCombatKit
+		{
+			public AIArchetypeTemplate Archetype;
+			public List<CachedScriptableObject> Abilities;
+		}
+
+		private readonly List<SimulatedMember> simulatedMembers = new List<SimulatedMember>();
+		private List<SimulatedCombatKit> simulatedCombatKits;
+		private int simulatedNumber;
+		private double nextSimulatedUpkeepAt;
+
+		private static readonly string[] SimulatedChatLines =
+		{
+			"Anyone heading to the market?",
+			"Watch the ridge, there are wolves about.",
+			"Selling iron ore, fair price.",
+			"Has anyone seen the ferryman?",
+			"Need one more for the crypt.",
+			"The smith is out of nails again.",
+			"Fine weather for the road.",
+			"Who left the gate open?",
+			"Looking for a guild that raids.",
+			"Mind the bridge, it creaks.",
+			"Bring torches, the mine is dark.",
+			"Thanks for the heal, friend.",
+		};
 
 		private const int MaxSimulationRunSeconds = 3600;
 
@@ -53,6 +125,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public double StartedAt;
 			public double EndsAt;
 			public int Seconds;
+			public SimulatedSettings Settings;
+			/// <summary>Combat upkeep and chatter over the window: pairings made, deaths, replacements, chat lines said.</summary>
+			public long Pairings, Deaths, Respawns, ChatLines;
 			public int RealPlayersAtStart;
 			public TransportTrafficSnapshot TrafficAtStart;
 			/// <summary>Reconciles written and skipped as quiet, and player-ticks at the idle send interval, at the start.</summary>
@@ -114,8 +189,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				new OperatorCommand
 				{
 					Name = "simulate", Aliases = new[] { "simplayers", "bots" }, Category = "Testing",
-					Summary = "Spawns simulated players that walk around near you. With seconds: removed then, with a traffic and CPU report.",
-					Arguments = "count:Integer;seconds:Integer?",
+					Summary = "Spawns simulated players: walk or combat (two teams), within a radius, chat optional. Timed: a traffic and CPU report.",
+					Arguments = "count:Integer;seconds:Integer?;mode:Choice=walk,combat?;radius:Integer?;chat:Choice=chat?",
 					Run = SpawnSimulatedPlayers,
 				},
 				new OperatorCommand
@@ -135,10 +210,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Reply(character, $"Give how many to spawn, 1 to {MaxSimulatedPlayersPerCommand}, and optionally for how many seconds: /admin simulate 50 120.");
 				return;
 			}
-			int seconds = 0;
-			if (words.Length > 1 && (!int.TryParse(words[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out seconds) || seconds < 1 || seconds > MaxSimulationRunSeconds))
+			if (!TryParseSimulationOptions(words, out int seconds, out SimulatedSettings settings, out string problem))
 			{
-				Reply(character, $"The run length must be 1 to {MaxSimulationRunSeconds} seconds.");
+				Reply(character, problem);
 				return;
 			}
 			if (seconds > 0 && (simulationRun != null || simulationRunPending))
@@ -177,6 +251,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				AdminName = character.CharacterName,
 				SceneName = scene.name,
 				Seconds = seconds,
+				Settings = settings,
 			} : null;
 			if (pendingSpawns != null)
 			{
@@ -194,12 +269,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NetworkManager = networkManager,
 				Host = host,
 				Prefab = prefab,
+				Settings = settings,
 			};
 			if (run != null)
 			{
 				simulationRunPending = true;
 			}
-			Reply(character, $"Spawning {count} simulated player(s), {SimulatedSpawnsPerFrame} a frame{(run != null ? $"; the {seconds} s measurement starts when the last is in" : string.Empty)}.");
+			Reply(character, $"Spawning {count} simulated player(s), {settings.Describe()}, {SimulatedSpawnsPerFrame} a frame{(run != null ? $"; the {seconds} s measurement starts when the last is in" : string.Empty)}.");
 		}
 
 		/// <summary>Simulated players still to spawn, a few a frame, and what to do when they are all in.</summary>
@@ -215,6 +291,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public NetworkManager NetworkManager;
 			public AIBrainHost Host;
 			public NetworkObject Prefab;
+			public SimulatedSettings Settings;
 		}
 
 		private PendingSimulatedSpawns pendingSpawns;
@@ -244,13 +321,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			for (int i = 0; i < SimulatedSpawnsPerFrame && batch.Remaining > 0; ++i)
 			{
 				batch.Remaining--;
-				Vector2 offset = UnityEngine.Random.insideUnitCircle * SimulatedPlayerSpawnRadius;
-				Vector3 position = batch.Origin + new Vector3(offset.x, 0f, offset.y);
-				Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
-				if (TrySpawnSimulatedPlayer(batch.NetworkManager, batch.Host, batch.Prefab, batch.Scene, position, rotation, out NetworkObject instance))
+				int number = ++simulatedNumber;
+				if (SpawnSimulatedMember(batch.NetworkManager, batch.Host, batch.Prefab, batch.Scene, batch.Origin, batch.Settings, number, number % 2, batch.Run) != null)
 				{
-					simulatedPlayers.Add(instance);
-					batch.Run?.Spawned.Add(instance);
 					batch.Spawned++;
 				}
 			}
@@ -302,16 +375,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				run.Compression.Start();
 				simulationRun = run;
 				Reply(character, $"Measuring {spawned} simulated player(s) for {seconds} s; the report follows here and in the server log. /admin simclear ends it early.");
-				_ = Log.Info("SceneServerSystem", $"{character.CharacterName} started a {seconds} s simulation run of {spawned} in '{scene.name}'.");
+				_ = Log.Info("SceneServerSystem", $"{character.CharacterName} started a {seconds} s simulation run of {spawned} ({run.Settings.Describe()}) in '{scene.name}'.");
 				return;
 			}
 			string capped = spawned < requested ? $" (asked for {requested}; at most {MaxSimulatedPlayersPerCommand} a command and {MaxSimulatedPlayers} in all)" : string.Empty;
-			Reply(character, $"Spawned {spawned} simulated player(s) within {SimulatedPlayerSpawnRadius:0} m of you{capped}. {simulatedPlayers.Count} running on this server.");
+			Reply(character, $"Spawned {spawned} simulated player(s), {batch.Settings.Describe()}{capped}. {simulatedPlayers.Count} running on this server.");
 			_ = Log.Info("SceneServerSystem", $"{character.CharacterName} spawned {spawned} simulated players in '{scene.name}'; {simulatedPlayers.Count} running.");
 		}
 
 		/// <summary>One simulated player, spawned as a boss spawns an add; rolled back into the pool if anything interrupts it.</summary>
-		private static bool TrySpawnSimulatedPlayer(NetworkManager networkManager, AIBrainHost host, NetworkObject prefab, Scene scene, Vector3 position, Quaternion rotation, out NetworkObject instance)
+		private static bool TrySpawnSimulatedPlayer(NetworkManager networkManager, AIBrainHost host, NetworkObject prefab, Scene scene, Vector3 position, Quaternion rotation, SimulatedCombatKit kit, out NetworkObject instance)
 		{
 			instance = networkManager.GetPooledInstantiated(prefab, position, rotation, true);
 			if (instance == null)
@@ -325,8 +398,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				NPC npc = instance.GetComponent<NPC>();
 				if (npc != null)
 				{
-					// Warped onto the NavMesh at its spot, which becomes the home it wanders around.
-					host.Prepare(npc, position);
+					/* The kit is set on every spawn, not only a combat one: the instance comes from a pool, and a walker must
+					 * not keep the kit a fighter left on it. Equipped when the spawn starts it on the server. */
+					NPC authored = prefab.GetComponent<NPC>();
+					List<CachedScriptableObject> abilities = kit != null ? kit.Abilities : authored != null ? authored.Abilities : null;
+					npc.Abilities = abilities != null ? new List<CachedScriptableObject>(abilities) : new List<CachedScriptableObject>();
+					// Warped onto the NavMesh at its spot, which becomes the home it wanders around; a fighter thinks as its kit's NPC does.
+					host.Prepare(npc, position, kit?.Archetype);
 				}
 				networkManager.ServerManager.Spawn(instance, null, scene);
 				completed = true;
@@ -390,6 +468,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 			}
 			simulatedPlayers.Clear();
+			simulatedMembers.Clear();
 			return removed;
 		}
 
@@ -397,6 +476,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		private void UpdateSimulationRun(float deltaTime)
 		{
 			SpawnPendingSimulatedPlayers();
+			UpkeepSimulatedMembers();
 			SimulationRun run = simulationRun;
 			if (run == null)
 			{
@@ -474,7 +554,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			var lines = new List<string>
 			{
-				$"Simulation {(early ? "ended early" : "done")}: {run.Spawned.Count} simulated ({alive} still up), {players} real player(s), {seconds:0} s in '{run.SceneName}'.",
+				$"Simulation {(early ? "ended early" : "done")}: {run.Spawned.Count} simulated ({alive} still up; {run.Settings?.Describe()}), {players} real player(s), {seconds:0} s in '{run.SceneName}'.",
+				$"Simulated activity: {run.Pairings} pairings, {run.Deaths} fell, {run.Respawns} replaced; {run.ChatLines} chat lines ({run.ChatLines / seconds:0.00}/s).",
 				$"Server egress (measured): {wireBytes / seconds / 1000.0:0.0} kB/s wire, {datagrams / seconds:0} packets/s; per player {wireBytes / seconds / players / 1000.0:0.00} kB/s, {datagrams / seconds / players:0} pkt/s.",
 				$"  UDP payload {udpBytes / seconds / 1000.0:0.0} kB/s, game data {appBytes / seconds / 1000.0:0.0} kB/s (overhead x{(appBytes > 0 ? (double)wireBytes / appBytes : 0):0.00}).",
 				$"Server ingress (measured): {wireRecvBytes / seconds / 1000.0:0.0} kB/s wire, {datagramsIn / seconds:0} packets/s; per player {wireRecvBytes / seconds / players / 1000.0:0.00} kB/s, {datagramsIn / seconds / players:0} pkt/s.",
@@ -501,6 +582,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				simulatedPlayers.Remove(n);
 			}
+			simulatedMembers.RemoveAll(m => m.Run == run);
 			lines.Add($"Removed the run's {alive} simulated player(s).");
 
 			_ = Log.Info("SceneServerSystem", $"Simulation run by {run.AdminName}:\n" + string.Join("\n", lines) + "\n" + full + compressionSample);
@@ -532,6 +614,320 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			parts.Sort((x, y) => y.Count.CompareTo(x.Count));
 			return string.Join(", ", parts.ConvertAll(p => $"{p.Name} {p.Count}"));
+		}
+
+		/// <summary>
+		/// Reads what follows the count, in any order: up to two numbers (the run's seconds, 0 for untimed, then the radius in
+		/// metres) and the words <c>walk</c>, <c>combat</c> and <c>chat</c>.
+		/// </summary>
+		internal static bool TryParseSimulationOptions(string[] words, out int seconds, out SimulatedSettings settings, out string problem)
+		{
+			seconds = 0;
+			settings = new SimulatedSettings();
+			problem = null;
+			int numbers = 0;
+			for (int i = 1; i < words.Length; ++i)
+			{
+				string word = words[i].ToLowerInvariant();
+				if (int.TryParse(word, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value))
+				{
+					if (numbers == 0)
+					{
+						if (value < 0 || value > MaxSimulationRunSeconds)
+						{
+							problem = $"The run length must be 0 (untimed) to {MaxSimulationRunSeconds} seconds.";
+							return false;
+						}
+						seconds = value;
+					}
+					else if (numbers == 1)
+					{
+						if (value < MinSimulatedSpawnRadius || value > MaxSimulatedSpawnRadius)
+						{
+							problem = $"The radius must be {MinSimulatedSpawnRadius} to {MaxSimulatedSpawnRadius} metres.";
+							return false;
+						}
+						settings.Radius = value;
+					}
+					else
+					{
+						problem = SimulationUsage;
+						return false;
+					}
+					numbers++;
+					continue;
+				}
+				switch (word)
+				{
+					case "walk":
+						settings.Activity = SimulatedActivity.Walk;
+						break;
+					case "combat":
+					case "fight":
+						settings.Activity = SimulatedActivity.Combat;
+						break;
+					case "chat":
+						settings.Chat = true;
+						break;
+					default:
+						problem = SimulationUsage;
+						return false;
+				}
+			}
+			return true;
+		}
+
+		private const string SimulationUsage =
+			"/admin simulate <count> [seconds, 0 untimed] [walk|combat] [radius m] [chat], e.g. /admin simulate 100 120 combat 150 chat.";
+
+		/// <summary>
+		/// A point on the NavMesh within the radius of the origin, the ground's height found by the NavMesh rather than
+		/// assumed level with the admin. False when none of a few tries lands on it (open sea, say).
+		/// </summary>
+		private static bool TryPickSimulatedSpawnPoint(Vector3 origin, float radius, out Vector3 point)
+		{
+			float search = Mathf.Clamp(10f + radius * 0.2f, 10f, 200f);
+			for (int attempt = 0; attempt < 6; ++attempt)
+			{
+				Vector2 offset = UnityEngine.Random.insideUnitCircle * radius;
+				Vector3 candidate = origin + new Vector3(offset.x, 0f, offset.y);
+				if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, search, AIController.LandAreas))
+				{
+					point = hit.position;
+					return true;
+				}
+			}
+			point = origin;
+			return false;
+		}
+
+		/// <summary>
+		/// The kits of the catalogue's combat NPCs (the "Enemy - " archetypes with abilities), one per archetype, found once.
+		/// </summary>
+		private List<SimulatedCombatKit> SimulatedCombatKits(AIBrainCatalogue catalogue)
+		{
+			if (simulatedCombatKits != null)
+			{
+				return simulatedCombatKits;
+			}
+			simulatedCombatKits = new List<SimulatedCombatKit>();
+			if (catalogue == null)
+			{
+				return simulatedCombatKits;
+			}
+			foreach (AIBrainCatalogue.Entry entry in catalogue.Entries)
+			{
+				if (entry?.Prefab == null || entry.Archetype == null || !entry.Archetype.name.StartsWith("Enemy - ", StringComparison.Ordinal))
+				{
+					continue;
+				}
+				NPC authored = entry.Prefab.GetComponent<NPC>();
+				if (authored == null || authored.Abilities == null || authored.Abilities.Count == 0 ||
+					simulatedCombatKits.Exists(k => k.Archetype == entry.Archetype))
+				{
+					continue;
+				}
+				simulatedCombatKits.Add(new SimulatedCombatKit { Archetype = entry.Archetype, Abilities = authored.Abilities });
+			}
+			return simulatedCombatKits;
+		}
+
+		/// <summary>Spawns one simulated player with its batch's settings and starts looking after it. Null when it could not.</summary>
+		private SimulatedMember SpawnSimulatedMember(NetworkManager networkManager, AIBrainHost host, NetworkObject prefab, Scene scene,
+			Vector3 origin, SimulatedSettings settings, int number, int team, SimulationRun run)
+		{
+			if (!TryPickSimulatedSpawnPoint(origin, settings.Radius, out Vector3 position))
+			{
+				return null;
+			}
+			SimulatedCombatKit kit = null;
+			if (settings.Activity == SimulatedActivity.Combat)
+			{
+				List<SimulatedCombatKit> kits = SimulatedCombatKits(host.Catalogue);
+				// Roles spread across both teams: consecutive numbers alternate teams, so each team gets every role in turn.
+				kit = kits.Count > 0 ? kits[(number / 2) % kits.Count] : null;
+			}
+			Quaternion rotation = Quaternion.Euler(0f, UnityEngine.Random.Range(0f, 360f), 0f);
+			if (!TrySpawnSimulatedPlayer(networkManager, host, prefab, scene, position, rotation, kit, out NetworkObject instance))
+			{
+				return null;
+			}
+			NPC npc = instance.GetComponent<NPC>();
+			/* Aggression is the game's own way to strike a neutral: both teams are one faction, and the harm rule otherwise lets
+			 * every blow land for nothing. Set either way, since a pooled instance may carry a fighter's. */
+			if (npc != null && npc.TryGet(out IFactionController faction))
+			{
+				faction.TrySetAggression(settings.Activity == SimulatedActivity.Combat, out _);
+			}
+			SimulatedMember member = new SimulatedMember
+			{
+				Instance = instance,
+				Npc = npc,
+				Ai = instance.GetComponent<AIController>(),
+				Settings = settings,
+				Number = number,
+				Team = team,
+				Origin = origin,
+				Scene = scene,
+				Run = run,
+				NextChatAt = MonotonicClock.NowSeconds + UnityEngine.Random.Range(1f, SimulatedChatMaxSeconds),
+			};
+			simulatedPlayers.Add(instance);
+			run?.Spawned.Add(instance);
+			if (settings.Activity == SimulatedActivity.Combat || settings.Chat)
+			{
+				simulatedMembers.Add(member);
+			}
+			return member;
+		}
+
+		private static bool IsSimulatedMemberUp(SimulatedMember member)
+		{
+			return member.Instance != null && member.Instance.IsSpawned && member.Npc != null && !member.Npc.IsFlagged(CharacterFlags.IsDead);
+		}
+
+		/// <summary>
+		/// Once a second: pairs every idle fighter with the nearest one of the other team, replaces the fallen after a few
+		/// seconds, and lets the chatty speak.
+		/// </summary>
+		private void UpkeepSimulatedMembers()
+		{
+			if (simulatedMembers.Count == 0)
+			{
+				return;
+			}
+			double now = MonotonicClock.NowSeconds;
+			if (now < nextSimulatedUpkeepAt)
+			{
+				return;
+			}
+			nextSimulatedUpkeepAt = now + SimulatedUpkeepSeconds;
+
+			NetworkManager networkManager = Server?.NetworkWrapper?.NetworkManager;
+			AIBrainHost host = null;
+			NetworkObject prefab = null;
+			if (networkManager != null && AIBrainHost.TryGet(networkManager, out host) && host.Catalogue != null)
+			{
+				prefab = FindSimulatedPlayerPrefab(host.Catalogue);
+			}
+
+			for (int i = simulatedMembers.Count - 1; i >= 0; --i)
+			{
+				SimulatedMember member = simulatedMembers[i];
+				if (IsSimulatedMemberUp(member))
+				{
+					continue;
+				}
+				if (member.DiedAt < 0.0)
+				{
+					member.DiedAt = now;
+					if (member.Run != null)
+					{
+						member.Run.Deaths++;
+					}
+					/* Out of the list now: the corpse is the death system's to decay and pool, and a clear must not despawn
+					 * an instance that system still owns. */
+					simulatedPlayers.Remove(member.Instance);
+					member.Run?.Spawned.Remove(member.Instance);
+				}
+				if (member.Settings.Activity != SimulatedActivity.Combat)
+				{
+					// Only a fight replaces its fallen; anything else that died is simply no longer looked after.
+					simulatedMembers.RemoveAt(i);
+					continue;
+				}
+				if (now - member.DiedAt < SimulatedRespawnSeconds)
+				{
+					continue;
+				}
+				simulatedMembers.RemoveAt(i);
+				if (prefab == null || !member.Scene.IsValid() || !member.Scene.isLoaded || simulatedPlayers.Count >= MaxSimulatedPlayers)
+				{
+					continue;
+				}
+				SimulatedMember replacement = SpawnSimulatedMember(networkManager, host, prefab, member.Scene, member.Origin, member.Settings,
+					++simulatedNumber, member.Team, member.Run);
+				if (replacement != null && member.Run != null)
+				{
+					member.Run.Respawns++;
+				}
+			}
+
+			for (int i = 0; i < simulatedMembers.Count; ++i)
+			{
+				SimulatedMember member = simulatedMembers[i];
+				if (!IsSimulatedMemberUp(member))
+				{
+					continue;
+				}
+				if (member.Settings.Activity == SimulatedActivity.Combat && member.Ai != null && member.Ai.Target == null)
+				{
+					SimulatedMember enemy = NearestSimulatedEnemy(member);
+					if (enemy != null)
+					{
+						member.Ai.OnThreatReceived(enemy.Npc);
+						if (member.Run != null)
+						{
+							member.Run.Pairings++;
+						}
+					}
+				}
+				if (member.Settings.Chat && now >= member.NextChatAt)
+				{
+					member.NextChatAt = now + UnityEngine.Random.Range(SimulatedChatMinSeconds, SimulatedChatMaxSeconds);
+					SaySimulatedLine(member);
+				}
+			}
+		}
+
+		/// <summary>The nearest standing member of the other team in the same scene, within reach of the batch's spread.</summary>
+		private SimulatedMember NearestSimulatedEnemy(SimulatedMember of)
+		{
+			Vector3 position = of.Instance.transform.position;
+			float reach = of.Settings.Radius * 2f + 30f;
+			float best = reach * reach;
+			SimulatedMember nearest = null;
+			for (int i = 0; i < simulatedMembers.Count; ++i)
+			{
+				SimulatedMember candidate = simulatedMembers[i];
+				if (candidate == of || candidate.Team == of.Team || candidate.Settings.Activity != SimulatedActivity.Combat ||
+					candidate.Scene != of.Scene || !IsSimulatedMemberUp(candidate))
+				{
+					continue;
+				}
+				float distance = (candidate.Instance.transform.position - position).sqrMagnitude;
+				if (distance < best)
+				{
+					best = distance;
+					nearest = candidate;
+				}
+			}
+			return nearest;
+		}
+
+		/// <summary>
+		/// One line of local chat, sent as a player's Say is: once, to everyone observing the speaker. Sender 0, so clients show
+		/// it without asking the server for a name, and sent here rather than through the chat channels so it never reaches the
+		/// chat log.
+		/// </summary>
+		private void SaySimulatedLine(SimulatedMember member)
+		{
+			HashSet<FishNet.Connection.NetworkConnection> observers = member.Instance.Observers;
+			if (observers == null || observers.Count == 0 || Server?.NetworkWrapper == null)
+			{
+				return;
+			}
+			string line = SimulatedChatLines[UnityEngine.Random.Range(0, SimulatedChatLines.Length)];
+			Server.NetworkWrapper.Broadcast(observers, new ChatBroadcast
+			{
+				Channel = ChatChannel.Say,
+				SenderID = 0,
+				Text = $"[Sim {member.Number}] {line}",
+			}, true, FishNet.Transporting.Channel.Reliable);
+			if (member.Run != null)
+			{
+				member.Run.ChatLines++;
+			}
 		}
 
 		/// <summary>Forgets entries that are gone (died into the pool, or destroyed).</summary>

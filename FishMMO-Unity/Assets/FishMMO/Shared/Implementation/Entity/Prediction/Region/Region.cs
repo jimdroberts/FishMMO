@@ -160,6 +160,42 @@ namespace FishMMO.Shared
 			}
 		}
 
+		/// <summary>The scene this region polls in, cached for <see cref="NoPlayerNear"/>.</summary>
+		private UnityEngine.SceneManagement.Scene serverScene;
+
+		/// <summary>Cached <see cref="NoPlayerNear"/> delegate, so setting the gate allocates once.</summary>
+		private Func<bool> noPlayerNear;
+
+		/// <inheritdoc />
+		public override void OnStartServer()
+		{
+			base.OnStartServer();
+			/* The trigger's physics overlap ran every tick for every region in a loaded scene, box against terrain and meshes,
+			 * with no player anywhere near most of them. Regions only answer to players, so while none stood within reach of
+			 * this one at the last recording pass and nothing is inside, the overlap is skipped: an empty overlap raises no
+			 * callback, so the region sees exactly what it did. */
+			if (networkTrigger != null && Collider != null)
+			{
+				serverScene = gameObject.scene;
+				noPlayerNear ??= NoPlayerNear;
+				networkTrigger.SkipEmptyServerCheck = noPlayerNear;
+			}
+		}
+
+		/// <inheritdoc />
+		public override void OnStopServer()
+		{
+			if (networkTrigger != null)
+			{
+				networkTrigger.SkipEmptyServerCheck = null;
+			}
+			base.OnStopServer();
+		}
+
+		/// <summary>True while no player could be inside the region: none within it, plus a tick's travel, at the last recording pass.</summary>
+		private bool NoPlayerNear()
+			=> Collider == null || !LagCompensationRegistry.AnyPlayerWithin(serverScene, Collider.bounds, LagCompensationRegistry.RecordedSlack);
+
 		/// <inheritdoc />
 		public override void OnStopNetwork()
 		{
@@ -437,13 +473,45 @@ namespace FishMMO.Shared
 			return character is UnityEngine.Object uo && uo == null;
 		}
 
+		/// <summary>
+		/// What each collider seen by a region resolved to: its player, or null for anything else (an NPC, scenery).
+		/// </summary>
+		/// <remarks>
+		/// Every region raises Stay for every collider inside it on every tick, and each one searched the collider's
+		/// components for an interface: with two large scenes loaded that was a native component search per NPC per
+		/// region per tick, all of them answering "not a player". A collider's character never changes (a pooled player
+		/// keeps its collider and its component), so it is resolved once. Cleared wholesale when it grows large, which
+		/// also drops destroyed colliders.
+		/// </remarks>
+		private static readonly Dictionary<Collider, IPlayerCharacter> resolvedColliders = new Dictionary<Collider, IPlayerCharacter>();
+
+		/// <summary>Entries past which <see cref="resolvedColliders"/> is cleared.</summary>
+		private const int ResolvedColliderLimit = 16384;
+
 		private static IPlayerCharacter Resolve(Collider other)
 		{
+			if (ReferenceEquals(other, null))
+			{
+				return null;
+			}
+			if (resolvedColliders.TryGetValue(other, out IPlayerCharacter cached))
+			{
+				if (cached == null || !IsDestroyed(cached))
+				{
+					return cached;
+				}
+			}
 			if (other == null)
 			{
 				return null;
 			}
-			return other.GetComponent<IPlayerCharacter>();
+			if (resolvedColliders.Count >= ResolvedColliderLimit)
+			{
+				resolvedColliders.Clear();
+			}
+			IPlayerCharacter character = other.GetComponent<IPlayerCharacter>();
+			resolvedColliders[other] = character;
+			return character;
 		}
 
 		private static Vector3 CharacterPoint(IPlayerCharacter character)

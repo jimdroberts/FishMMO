@@ -308,10 +308,6 @@ namespace FishMMO.Shared
 				RegisterCombatEventBroadcast(base.NetworkManager);
 			}
 
-			if (base.TimeManager != null)
-			{
-				base.TimeManager.OnTick += TimeManager_OnTick;
-			}
 		}
 
 		/// <summary>
@@ -319,10 +315,7 @@ namespace FishMMO.Shared
 		/// </summary>
 		public override void OnStopNetwork()
 		{
-			if (base.TimeManager != null)
-			{
-				base.TimeManager.OnTick -= TimeManager_OnTick;
-			}
+			CombatTickList.Leave(this);
 
 			/* A character leaving the world must not stay on other characters' contributor lists.
 			 * A logged-out player holds no loot rights worth preserving, and the stale entry would
@@ -401,6 +394,7 @@ namespace FishMMO.Shared
 
 			int damageTemplateID = damageAttribute != null ? damageAttribute.ID : 0;
 			combatEvents.Add(sourceObjectID, kind, damageTemplateID, amount);
+			CombatTickList.Join(this);
 		}
 
 		/// <summary>
@@ -539,7 +533,8 @@ namespace FishMMO.Shared
 		/// </remarks>
 		private void FlushCombatEvents()
 		{
-			if (!base.IsServerStarted || combatEvents.Count < 1)
+			// The count first: it is a field read, and nearly every character has nothing to flush on nearly every tick.
+			if (combatEvents.Count < 1 || !base.IsServerStarted)
 			{
 				return;
 			}
@@ -816,11 +811,113 @@ namespace FishMMO.Shared
 		// ───── Combat Timer ─────────────────────────────────────────────────
 
 		/// <summary>
-		/// Tick-aligned combat timer. Called every tick on both client and server.
+		/// The server's characters with combat work to do on a tick: events to report or a combat timer running.
+		/// </summary>
+		/// <remarks>
+		/// Every character used to hold its own tick subscription for this, on both peers, and nearly all of them found
+		/// nothing to do on nearly every tick: with two world scenes loaded and empty, the empty flush was the scene
+		/// server's single largest cost. A character joins when an event is queued or it enters combat, and leaves on the
+		/// first tick it has neither. Server only: a client never queues an event or starts the timer.
+		/// </remarks>
+		private sealed class CombatTickList
+		{
+			private static readonly Dictionary<TimeManager, CombatTickList> lists = new Dictionary<TimeManager, CombatTickList>();
+
+			private readonly List<CharacterDamageController> members = new List<CharacterDamageController>();
+
+			/// <summary>Adds <paramref name="controller"/> to its TimeManager's list if it is not on it.</summary>
+			public static void Join(CharacterDamageController controller)
+			{
+				if (controller.combatTickList != null || !controller.IsServerStarted)
+				{
+					return;
+				}
+				TimeManager timeManager = controller.TimeManager;
+				if (timeManager == null)
+				{
+					return;
+				}
+				if (!lists.TryGetValue(timeManager, out CombatTickList list))
+				{
+					list = new CombatTickList();
+					lists[timeManager] = list;
+					timeManager.OnTick += list.Tick;
+				}
+				controller.combatTickList = list;
+				list.members.Add(controller);
+			}
+
+			/// <summary>Takes <paramref name="controller"/> off its list, if it is on one.</summary>
+			public static void Leave(CharacterDamageController controller)
+			{
+				CombatTickList list = controller.combatTickList;
+				if (list == null)
+				{
+					return;
+				}
+				controller.combatTickList = null;
+				int index = list.members.IndexOf(controller);
+				if (index >= 0)
+				{
+					int last = list.members.Count - 1;
+					list.members[index] = list.members[last];
+					list.members.RemoveAt(last);
+				}
+			}
+
+			private void Tick()
+			{
+				for (int i = 0; i < members.Count;)
+				{
+					CharacterDamageController member = members[i];
+					bool stay;
+					try
+					{
+						stay = member.RunCombatTick();
+					}
+					catch (Exception ex)
+					{
+						// One character's failure stays its own, as the per-character subscriptions kept it.
+						Log.Error("CharacterDamageController", $"{(member != null ? member.name : "<destroyed>")}: combat tick failed.", ex);
+						stay = false;
+					}
+					if (i >= members.Count || !ReferenceEquals(members[i], member))
+					{
+						// It left during its own tick: whatever sits at i now has not run yet.
+						continue;
+					}
+					if (stay)
+					{
+						++i;
+						continue;
+					}
+					member.combatTickList = null;
+					int last = members.Count - 1;
+					members[i] = members[last];
+					members.RemoveAt(last);
+				}
+			}
+		}
+
+		/// <summary>The list this character is on (<see cref="CombatTickList"/>), or null.</summary>
+		private CombatTickList combatTickList;
+
+		/// <summary>
+		/// One tick of combat work: reports queued events, then runs the combat timer. Returns whether there is still
+		/// work for the next tick.
+		/// </summary>
+		private bool RunCombatTick()
+		{
+			CombatTick();
+			return combatEvents.Count > 0 || combatTimerActive;
+		}
+
+		/// <summary>
+		/// Tick-aligned combat timer, run on the server for a character on the <see cref="CombatTickList"/>.
 		/// Clears the <see cref="CharacterFlags.IsInCombat"/> flag when the combat duration
 		/// has elapsed since the last combat action.
 		/// </summary>
-		private void TimeManager_OnTick()
+		private void CombatTick()
 		{
 			/* Ahead of the combat-timer early return: events are queued by damage that may have
 			 * landed on a character whose combat timer is not running (a heal out of combat, a
@@ -924,7 +1021,7 @@ namespace FishMMO.Shared
 		/// from — <c>EnterCombat</c> reached from inside a replicate (a buff's damage-over-time tick)
 		/// stamped a replicate tick, while the same call from an ability object's own OnTick
 		/// subscription stamped whichever snapshot happened to be set. Worse, the expiry check in
-		/// <c>TimeManager_OnTick</c> read the same resolver, so which domain it compared against was
+		/// the combat tick read the same resolver, so which domain it compared against was
 		/// decided by whether this behaviour's OnTick subscription ran before or after
 		/// <c>CharacterPredictionController</c>'s — i.e. by component order on the prefab.
 		/// <para>
@@ -988,6 +1085,9 @@ namespace FishMMO.Shared
 				combatTimerActive = true;
 				Character.EnableFlags(CharacterFlags.IsInCombat);
 				BroadcastCombatState(true);
+				CombatTickList.Join(this);
+				// An NPC napping out of the tick (nobody near, nothing to do) fights from now on.
+				predictionController?.WakeServerStep();
 			}
 		}
 

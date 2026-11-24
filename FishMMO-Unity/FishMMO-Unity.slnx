@@ -2,6 +2,7 @@
   <Project Path="FishMMO.UnitTests.csproj" />
   <Project Path="FishMMO.WorldDesign.Tests.csproj" />
   <Project Path="FishMMO.Shared.Tools.Editor.csproj" />
+  <Project Path="FishMMO.NPCs.Tests.csproj" />
   <Project Path="FishMMO.NPCs.Server.csproj" />
   <Project Path="FishMMO.Shared.Biomes.Editor.csproj" />
   <Project Path="FishMMO.Client.csproj" />
@@ -64,7 +65,6 @@
   <Project Path="FishMMO.Commerce.RenderScratch.csproj" />
   <Project Path="FishMMO.Matchmaking.Tests.csproj" />
   <Project Path="FishMMO.Map.csproj" />
-  <Project Path="FishMMO.NPCs.Tests.csproj" />
   <Project Path="FishMMO.Items.Tests.csproj" />
   <Project Path="FishMMO.Matchmaking.Client.csproj" />
   <Project Path="FishMMO.Quests.Tests.csproj" />

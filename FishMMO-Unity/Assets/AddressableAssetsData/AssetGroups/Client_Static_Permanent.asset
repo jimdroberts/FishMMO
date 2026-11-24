@@ -15,41 +15,6 @@ MonoBehaviour:
   m_GroupName: Client_Static_Permanent
   m_GUID: 8057324dd1039b846be556683994bffd
   m_SerializeEntries:
-  - m_GUID: 2641fc38a55d4ee99adb632e5f4f3fff
-    m_Address: AbilityIcon_CallToArms
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: c4049e91e2dfedf0a616678d1f052638
-    m_Address: AbilityIcon_Gate
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 8c92cd58a24544813fa4d2ca75dd2b58
-    m_Address: AbilityIcon_Mark
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 2eb8caa9d8955f15e84d346f3e8f4f67
-    m_Address: AbilityIcon_PortalHome
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: e27156be4a7e189027255b0f5f73fe78
-    m_Address: AbilityIcon_Recall
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 00215e1a57c5e60448c288f8237afed3
     m_Address: FishPrecipitation
     m_ReadOnly: 0
@@ -524,6 +489,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2641fc38a55d4ee99adb632e5f4f3fff
+    m_Address: AbilityIcon_CallToArms
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 2689c682a5d929398f5f54b9ef232bb3
     m_Address: AbilityIcon_BlinkBoltHitEffect
     m_ReadOnly: 0
@@ -623,6 +595,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 2e1182e35568a9eb677a3770282abef6
     m_Address: ItemIcon_SeaWormwood
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 2eb8caa9d8955f15e84d346f3e8f4f67
+    m_Address: AbilityIcon_PortalHome
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
@@ -2448,6 +2427,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 8c92cd58a24544813fa4d2ca75dd2b58
+    m_Address: AbilityIcon_Mark
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8d115a033e0a4a42cc6d73616b729622
     m_Address: ItemIcon_BhojpatraBark
     m_ReadOnly: 0
@@ -3358,6 +3344,13 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: c4049e91e2dfedf0a616678d1f052638
+    m_Address: AbilityIcon_Gate
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: c452380ccb1bc989a8d83380a02fc8e1
     m_Address: ItemIcon_ScrollofLesserFireball
     m_ReadOnly: 0
@@ -3851,6 +3844,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: e25b7988976840214d701fb847e17e85
     m_Address: ItemIcon_Jadeite
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Client_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: e27156be4a7e189027255b0f5f73fe78
+    m_Address: AbilityIcon_Recall
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent

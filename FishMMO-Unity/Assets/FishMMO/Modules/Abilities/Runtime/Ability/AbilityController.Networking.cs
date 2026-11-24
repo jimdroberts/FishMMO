@@ -571,6 +571,7 @@ namespace FishMMO.Shared
 			}
 
 			KnownAbilities.Clear();
+			knownAbilityListDirty = true;
 			KnownBaseAbilities.Clear();
 			KnownAbilityEvents.Clear();
 			KnownAbilityOnTickEvents.Clear();

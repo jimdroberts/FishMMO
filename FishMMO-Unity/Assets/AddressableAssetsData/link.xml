@@ -4,20 +4,20 @@
     <type fullname="FishMMO.Shared.AbilityObject" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityOnDestroyEvent" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityOnHitEvent" preserve="all" />
-    <type fullname="FishMMO.Shared.AbilityOnPreSpawnEvent" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityOnSpawnEvent" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityOnSummonEvent" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityOnTickEvent" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityTypeOverrideEventType" preserve="all" />
     <type fullname="FishMMO.Shared.KnowledgeScrollTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.LightningArc" preserve="all" />
     <type fullname="FishMMO.Shared.PetAbilityTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.AbilityApplyAreaAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.AbilityApplyHitscanAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.AbilityForkHitAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.AbilityHitCountAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.AbilityForkSplitAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.AbilityGuard" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.AbilityMoveTransformAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.AbilitySpawnMultiplyAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.AbilityRicochetHitAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ApplyDamageAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ApplyHealAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BlinkToHitTargetAction" preserve="nothing" serialized="true" />
@@ -27,38 +27,31 @@
     <type fullname="FishMMO.Shared.FollowCasterAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.InterruptAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.KnockbackHitAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ShieldInterceptAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PlayBeamFXAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PlayChainArcFXAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PlayLinkFXAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.TeleportCasterAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Abilities.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKAbilities" preserve="all" />
-    <type fullname="FishMMO.Client.UITKCastBar" preserve="all" />
+  <assembly fullname="FishMMO.Abilities.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AbilitySystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.AbilityCrafting, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.AbilityCrafter" preserve="all" />
     <type fullname="FishMMO.Shared.SendAbilityCrafterBroadcastAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.AbilityCrafting.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKAbilityCraft" preserve="all" />
+  <assembly fullname="FishMMO.AbilityCrafting.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.AbilityCraftingSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Achievements, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.AchievementTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.AchievementTier" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Achievements.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKAchievements" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.AmbientLife.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.AmbientLifeRenderProfile" preserve="all" />
-    <type fullname="FishMMO.Client.AmbientLifeSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.FallingLeavesSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.SeaCreatureKind" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.SeaFloatSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.SeaLifeSettings" preserve="nothing" serialized="true" />
+  <assembly fullname="FishMMO.Achievements.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AchievementSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Buffs, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.AttributeBuffTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.AttributeTickBuffTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.CharmBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.DamageNegationBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.DeflectBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.ResourceTickBuffTemplate" preserve="all" />
@@ -66,65 +59,16 @@
     <type fullname="FishMMO.Shared.ApplyBuffAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ApplyDispelAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.BuffAttributeTemplate" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.CanBeCharmedCondition" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Buffs.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKBuff" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDebuff" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Chat.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKChat" preserve="all" />
-    <type fullname="FishMMO.Client.UITKChatChannelPicker" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.CharacterSelectPreview" preserve="all" />
-    <type fullname="FishMMO.Client.CinematicCamera" preserve="all" />
-    <type fullname="FishMMO.Client.Client" preserve="all" />
-    <type fullname="FishMMO.Client.ClientLauncher" preserve="all" />
-    <type fullname="FishMMO.Client.ClientLoginAuthenticator" preserve="all" />
-    <type fullname="FishMMO.Client.ClientPostbootSystem" preserve="all" />
-    <type fullname="FishMMO.Client.HttpPatchServerService" preserve="all" />
-    <type fullname="FishMMO.Client.LoginBackdrop" preserve="all" />
-    <type fullname="FishMMO.Client.UITKCharacterCreate" preserve="all" />
-    <type fullname="FishMMO.Client.UITKCharacterSelect" preserve="all" />
-    <type fullname="FishMMO.Client.UITKClientLauncher" preserve="all" />
-    <type fullname="FishMMO.Client.UITKColorPicker" preserve="all" />
-    <type fullname="FishMMO.Client.UITKContextMenu" preserve="all" />
-    <type fullname="FishMMO.Client.UITKCrosshair" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDialogBox" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDialogInputBox" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDragObject" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDropdown" preserve="all" />
-    <type fullname="FishMMO.Client.UITKHealthBar" preserve="all" />
-    <type fullname="FishMMO.Client.UITKInspect" preserve="all" />
-    <type fullname="FishMMO.Client.UITKInstance" preserve="all" />
-    <type fullname="FishMMO.Client.UITKLabelMaker" preserve="all" />
-    <type fullname="FishMMO.Client.UITKLoadingScreen" preserve="all" />
-    <type fullname="FishMMO.Client.UITKLogin" preserve="all" />
-    <type fullname="FishMMO.Client.UITKManaBar" preserve="all" />
-    <type fullname="FishMMO.Client.UITKMenu" preserve="all" />
-    <type fullname="FishMMO.Client.UITKNameplateLayer" preserve="all" />
-    <type fullname="FishMMO.Client.UITKNetworkStats" preserve="all" />
-    <type fullname="FishMMO.Client.UITKOptions" preserve="all" />
-    <type fullname="FishMMO.Client.UITKReconnectDisplay" preserve="all" />
-    <type fullname="FishMMO.Client.UITKRegister" preserve="all" />
-    <type fullname="FishMMO.Client.UITKSceneChannel" preserve="all" />
-    <type fullname="FishMMO.Client.UITKSelector" preserve="all" />
-    <type fullname="FishMMO.Client.UITKServerSelect" preserve="all" />
-    <type fullname="FishMMO.Client.UITKStaminaBar" preserve="all" />
-    <type fullname="FishMMO.Client.UITKTarget" preserve="all" />
-    <type fullname="FishMMO.Client.UITKToast" preserve="all" />
-    <type fullname="FishMMO.Client.UITKTooltip" preserve="all" />
-    <type fullname="FishMMO.Client.UITKWorldLabelLayer" preserve="all" />
-    <type fullname="FishMMO.Client.UITKWorldQueueDisplay" preserve="all" />
-    <type fullname="FishMMO.Client.UnityHtmlContentFetcher" preserve="all" />
-    <type fullname="FishMMO.Client.UnityWebRequestService" preserve="all" />
-    <type fullname="FishMMO.Client.WebGLKeyHijack" preserve="all" />
+  <assembly fullname="FishMMO.Chat.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.ChatChannelSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Combat, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.PlayerCombatTriggers" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.Combat.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKDeathDialog" preserve="all" />
+  <assembly fullname="FishMMO.Combat.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.CombatSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Commerce, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.Merchant" preserve="all" />
@@ -132,11 +76,9 @@
     <type fullname="FishMMO.Shared.PremadeAbilityTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.SendMerchantBroadcastAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Commerce.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKLoot" preserve="all" />
-    <type fullname="FishMMO.Client.UITKMail" preserve="all" />
-    <type fullname="FishMMO.Client.UITKMerchant" preserve="all" />
-    <type fullname="FishMMO.Client.UITKTrade" preserve="all" />
+  <assembly fullname="FishMMO.Commerce.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.CommerceSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.TradeSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Factions, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.FactionMatrixTemplate" preserve="all" />
@@ -144,40 +86,33 @@
     <type fullname="FishMMO.Shared.FactionMatrix" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FactionTemplate/FactionHashSet" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Factions.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKFactions" preserve="all" />
+  <assembly fullname="FishMMO.Factions.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.FactionSystem" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.Hotkeys.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKHotkeyBar" preserve="all" />
+  <assembly fullname="FishMMO.Hotkeys.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.HotkeySystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Housing, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.PlotFoundation" preserve="all" />
     <type fullname="FishMMO.Shared.PlotFoundationVisual" preserve="all" />
     <type fullname="FishMMO.Shared.OpenPlotPanelAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Housing.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKHousingPlot" preserve="all" />
-    <type fullname="FishMMO.Client.UITKHousingVault" preserve="all" />
+  <assembly fullname="FishMMO.Housing.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.HousingSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Items, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.Banker" preserve="all" />
     <type fullname="FishMMO.Shared.PickupWorldItemAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SendBankerBroadcastAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Items.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKBank" preserve="all" />
-    <type fullname="FishMMO.Client.UITKEquipment" preserve="all" />
-    <type fullname="FishMMO.Client.UITKInventory" preserve="all" />
+  <assembly fullname="FishMMO.Items.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.CharacterInventorySystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Leaderboards, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.LeaderboardTemplate" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.Leaderboards.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKLeaderboards" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Map.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKMap" preserve="all" />
-    <type fullname="FishMMO.Client.UITKMinimap" preserve="all" />
+  <assembly fullname="FishMMO.Leaderboards.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.LeaderboardSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Matchmaking, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.DungeonEntrance" preserve="all" />
@@ -185,29 +120,97 @@
     <type fullname="FishMMO.Shared.SendArenaBoardBroadcastAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SendDungeonFinderBroadcastAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Matchmaking.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKArenaBoard" preserve="all" />
-    <type fullname="FishMMO.Client.UITKArenaHud" preserve="all" />
-    <type fullname="FishMMO.Client.UITKArenaResults" preserve="all" />
-    <type fullname="FishMMO.Client.UITKArenaScoreboard" preserve="all" />
-    <type fullname="FishMMO.Client.UITKDungeonFinder" preserve="all" />
+  <assembly fullname="FishMMO.Matchmaking.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.MatchmakingSystem" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Mounts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Shared.MountBuffTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.SaddleTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.CanMountCondition" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.DismountAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.MountAction" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishMMO.Naming, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.NameGeneration.NameGrammarTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.NameGeneration.NameModifierTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.NameGeneration.TitlePoolTemplate" preserve="all" />
   </assembly>
+  <assembly fullname="FishMMO.NPCs.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIAimProfile" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIArchetypeTemplate" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIBrainCatalogue" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AICombatPersonality" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AILodSettings" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AISystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.BaseAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.CasterAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.DefenderAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.GetBehindState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.HealerAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.IdleState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.MeleeAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.OrbitState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.PatrolState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.RangedAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.RetreatState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.ReturnHomeState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.RogueAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.WanderState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SceneSpawnTable" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnTableCatalogue" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIBrainCatalogue/Entry" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIPetSupportSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AIShelterSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.AISwimSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.NPCPackSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.NPCSpawnableSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnableSettings" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnerDefinition" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Spawner.SpawnersClearedCondition" preserve="nothing" serialized="true" />
+  </assembly>
   <assembly fullname="FishMMO.Pets, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.Pet" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.Pets.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKPetControl" preserve="all" />
+  <assembly fullname="FishMMO.Pets.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.PetAttackingState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.PetIdleState" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.PetSystem" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Quests.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.QuestSystem" preserve="all" />
+  </assembly>
+  <assembly fullname="FishMMO.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.KickRequestSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.AccountCreationSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.CharacterCreateSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.CharacterSelectSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.LoginQueueSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.LoginServerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.LoginServer.ServerSelectSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.Server" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerLauncher" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.ServerWindowTitleUpdater" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.CharacterSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.ChatSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.InteractableSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.NamingSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Navigation.NavMeshSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneChannelSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.SceneServerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldSceneSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldServerAuthenticator" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.WorldServer.WorldServerSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Navigation.SceneNavMeshCatalogue/Entry" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishMMO.Shared, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.AddressableSceneProcessor" preserve="all" />
     <type fullname="FishMMO.Shared.ArenaTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.ArmorTemplate" preserve="all" />
-    <type fullname="FishMMO.Shared.BootstrapSystem" preserve="all" />
+    <type fullname="FishMMO.Shared.BakedSceneData" preserve="all" />
     <type fullname="FishMMO.Shared.CaveCoverBake" preserve="all" />
     <type fullname="FishMMO.Shared.CaveCoverSite" preserve="all" />
     <type fullname="FishMMO.Shared.CaveVisibility" preserve="all" />
@@ -228,12 +231,10 @@
     <type fullname="FishMMO.Shared.DamageAttributeTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.DynamicAddressableLoadPathSystem" preserve="all" />
     <type fullname="FishMMO.Shared.FloatingBoats" preserve="all" />
-    <type fullname="FishMMO.Shared.FXBoneAttachment" preserve="all" />
     <type fullname="FishMMO.Shared.GeneratedCliffs" preserve="all" />
     <type fullname="FishMMO.Shared.ItemAttributeTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.ItemAttributeTemplateDatabase" preserve="all" />
     <type fullname="FishMMO.Shared.ItemTemplateDatabase" preserve="all" />
-    <type fullname="FishMMO.Shared.KCCCamera" preserve="all" />
     <type fullname="FishMMO.Shared.KCCController" preserve="all" />
     <type fullname="FishMMO.Shared.KCCPlayer" preserve="all" />
     <type fullname="FishMMO.Shared.LootTableTemplate" preserve="all" />
@@ -242,6 +243,7 @@
     <type fullname="FishMMO.Shared.NetworkTransformDistanceLod" preserve="all" />
     <type fullname="FishMMO.Shared.NPC" preserve="all" />
     <type fullname="FishMMO.Shared.NPCAttributeDatabase" preserve="all" />
+    <type fullname="FishMMO.Shared.ObserverBudgetCondition" preserve="all" />
     <type fullname="FishMMO.Shared.ParticleAdjuster" preserve="all" />
     <type fullname="FishMMO.Shared.PlayerCharacter" preserve="all" />
     <type fullname="FishMMO.Shared.PointOfInterestDiscovery" preserve="all" />
@@ -270,7 +272,6 @@
     <type fullname="FishMMO.Shared.TeleporterCache" preserve="all" />
     <type fullname="FishMMO.Shared.TeleporterDestination" preserve="all" />
     <type fullname="FishMMO.Shared.TerrainArrayBinder" preserve="all" />
-    <type fullname="FishMMO.Shared.TerrainArraySet" preserve="all" />
     <type fullname="FishMMO.Shared.TerrainDetailBake" preserve="all" />
     <type fullname="FishMMO.Shared.TerrainDetailBiomes" preserve="all" />
     <type fullname="FishMMO.Shared.TerrainScatterModes" preserve="all" />
@@ -282,32 +283,10 @@
     <type fullname="FishMMO.Shared.Weather.WeatherExposureTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.WeatherExposureController" preserve="all" />
     <type fullname="FishMMO.Shared.WorldItem" preserve="all" />
-    <type fullname="FishMMO.Shared.WorldMapDefinition" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsCache" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsCacheReader" preserve="all" />
     <type fullname="FishMMO.Shared.WorldSceneSettings" preserve="all" />
-    <type fullname="FishMMO.Shared.AddressableSceneLoadData" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.PointOfInterestKeepOut" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.PointOfInterestKindOverride" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.PointOfInterestPad" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.PointOfInterestRecord" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.SceneEmitter" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ScenePath" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ScenePropCollisionSet/Instance" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ScenePropCollisionSet/Prototype" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ScenePropSet/Prop" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ScenePropSet/Prototype" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.SceneRoom" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/Albedo" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/Grass" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/GroundColour" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/IndexMap" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/Scatter" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/ScatterChannel" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBake/Tile" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.TerrainDetailBiomes/Entry" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.AchievementIncrementAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.AreaTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ArenaCountdownCue" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ArenaFormat" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeAffinity" preserve="nothing" serialized="true" />
@@ -319,24 +298,21 @@
     <type fullname="FishMMO.Shared.CharacterInitialSpawnPositionDictionary" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CharacterRespawnPositionDetails" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CharacterRespawnPositionDictionary" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ConeTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ConstantFloatValue" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ConstantValue" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ConsumeResourceAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Core.NameplateStyle" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.DamageAmountValue" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.DiscoverSiteAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.DisplayRegionNameAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.EventTargetSelector" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.FurthestTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.HasResourceCondition" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.HealAmountValue" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.InitiatorTargetSelector" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.IsBehindTargetCondition" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.IsCharacterAliveCondition" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.IsCharacterNPCCondition" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ItemAttributeTemplateDatabase/ItemAttributeDictionary" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ItemTemplateDatabase/ItemDictionary" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.LineTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.LootTableEntry" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.MapPointOfInterestDetails" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.NPCAttribute" preserve="nothing" serialized="true" />
@@ -353,12 +329,9 @@
     <type fullname="FishMMO.Shared.NameGeneration.StringMapping" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.NameGeneration.TitleTemplate" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.NameGeneration.WeightedCoda" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.NearestTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.NetworkTransformDistanceLod/Band" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.PlayFXAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.RaceProportions" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.RandomRangeValue" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.RandomTargetSelector" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ResourceRestoration" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SceneBoundaryDetails" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SceneBoundaryDictionary" preserve="nothing" serialized="true" />
@@ -380,30 +353,40 @@
     <type fullname="FishMMO.Shared.WorldSceneDetails" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.WorldSceneDetailsDictionary" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.CaveCoverBake/Piece" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PointOfInterestKeepOut" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PointOfInterestPad" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PointOfInterestRecord" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.PointOfInterestShape" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SceneCaveLifeSpot" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SceneClimbable" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.SceneEmitter" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.ScenePath" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.ScenePointOfInterestEntrance" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.ScenePropCollisionSet/Instance" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.ScenePropCollisionSet/Prototype" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.ScenePropSet/Prop" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.ScenePropSet/Prototype" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.SceneRoom" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/Albedo" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/Grass" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/GroundColour" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/IndexMap" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/Scatter" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/ScatterChannel" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBake/Tile" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.TerrainDetailBiomes/Entry" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.TerrainScatterModes/Detail" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FloatingBoats/Lane" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FloatingBoats/Moored" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.FloatingBoats/Sailing" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.Social.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKFriendList" preserve="all" />
-    <type fullname="FishMMO.Client.UITKGuild" preserve="all" />
-    <type fullname="FishMMO.Client.UITKParty" preserve="all" />
+  <assembly fullname="FishMMO.Social.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.FriendSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.GuildSystem" preserve="all" />
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.PartySystem" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.Staff.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKReportPlayer" preserve="all" />
-    <type fullname="FishMMO.Client.UITKStaffConsole" preserve="all" />
-  </assembly>
-  <assembly fullname="FishMMO.Terrain.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.TerrainRenderProfile" preserve="all" />
-    <type fullname="FishMMO.Client.CaveCoverSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.DetailScatterSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.GrassBladeSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.TerrainHeightmapSettings" preserve="nothing" serialized="true" />
+  <assembly fullname="FishMMO.Staff.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.StaffSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.TestHarness, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.TestHarness.CombatSimManifest" preserve="all" />
@@ -414,10 +397,8 @@
     <type fullname="FishMMO.TestHarness.CombatSimBootstrap" preserve="all" />
     <type fullname="FishMMO.TestHarness.InteractableSimHarness" preserve="all" />
   </assembly>
-  <assembly fullname="FishMMO.TestHarness.World, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.TestHarness.World.WorldSimCamera" preserve="all" />
-    <type fullname="FishMMO.TestHarness.World.WorldSimController" preserve="all" />
-    <type fullname="FishMMO.TestHarness.World.WorldSimPanel" preserve="all" />
+  <assembly fullname="FishMMO.Travel.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.WaypointTravelSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.Water, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Water.InlandWaterRenderer" preserve="all" />
@@ -432,6 +413,9 @@
     <type fullname="FishMMO.Shared.WildlifeTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.WildlifeBodySpec" preserve="nothing" serialized="true" />
   </assembly>
+  <assembly fullname="FishMMO.Wildlife.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.AI.WildlifeFleeState" preserve="all" />
+  </assembly>
   <assembly fullname="FishMMO.WorldInteractables, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.Container" preserve="all" />
     <type fullname="FishMMO.Shared.ContainerTemplate" preserve="all" />
@@ -445,13 +429,8 @@
     <type fullname="FishMMO.Shared.SendContainerOpenBroadcastAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.SwitchAction" preserve="nothing" serialized="true" />
   </assembly>
-  <assembly fullname="FishMMO.WorldInteractables.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.UITKCapturePoint" preserve="all" />
-    <type fullname="FishMMO.Client.UITKContainer" preserve="all" />
-    <type fullname="FishMMO.Client.UITKGathering" preserve="all" />
-    <type fullname="FishMMO.Client.UITKLore" preserve="all" />
-    <type fullname="FishMMO.Client.UITKNPCDialogue" preserve="all" />
-    <type fullname="FishMMO.Client.UITKShrine" preserve="all" />
+  <assembly fullname="FishMMO.WorldInteractables.Server, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Server.Implementation.World.SceneServer.Interactable.WorldInteractableSystem" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.WorldSimulation, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.Atlas.WorldAtlas" preserve="all" />
@@ -542,28 +521,20 @@
     <type fullname="FishMMO.Shared.Biomes.BiomeSeaLife" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BiomeSeaFloat" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.Biomes.BedTextureLayer" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.Biomes.BiomeOverride" preserve="nothing" serialized="true" />
-  </assembly>
-  <assembly fullname="FishMMO.WorldSimulation.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="FishMMO.Client.WeatherAudioProfile" preserve="all" />
-    <type fullname="FishMMO.Client.WeatherRenderProfile" preserve="all" />
-    <type fullname="FishMMO.Client.FishCloudsFeature" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.FishHeatShimmerFeature" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.FishHeightFogFeature" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.FishVolumetricFogFeature" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.PrecipitationLook" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.VolumetricCloudDiagnostics" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.VolumetricCloudSettings" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.WeatherAudioEntry" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Client.WeatherTierSettings" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishNet.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishNet.Component.Observing.GridCondition" preserve="all" />
+    <type fullname="FishNet.Component.Observing.HashGrid" preserve="all" />
+    <type fullname="FishNet.Component.Observing.OwnerOnlyCondition" preserve="all" />
+    <type fullname="FishNet.Component.Observing.SceneCondition" preserve="all" />
     <type fullname="FishNet.Component.Prediction.NetworkTrigger" preserve="all" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform" preserve="all" />
+    <type fullname="FishNet.Component.Utility.PingDisplay" preserve="all" />
     <type fullname="FishNet.Managing.Client.ClientManager" preserve="all" />
     <type fullname="FishNet.Managing.Logging.LevelLoggingConfiguration" preserve="all" />
     <type fullname="FishNet.Managing.NetworkManager" preserve="all" />
     <type fullname="FishNet.Managing.Object.DefaultPrefabObjects" preserve="all" />
+    <type fullname="FishNet.Managing.Observing.ObserverManager" preserve="all" />
     <type fullname="FishNet.Managing.Predicting.PredictionManager" preserve="all" />
     <type fullname="FishNet.Managing.Scened.SceneManager" preserve="all" />
     <type fullname="FishNet.Managing.Server.ServerManager" preserve="all" />
@@ -573,13 +544,13 @@
     <type fullname="FishNet.Observing.NetworkObserver" preserve="all" />
     <type fullname="FishNet.Transporting.Multipass.Multipass" preserve="all" />
     <type fullname="FishNet.Transporting.Tugboat.Tugboat" preserve="all" />
-    <type fullname="FishNet.Managing.Transporting.LatencySimulator" preserve="nothing" serialized="true" />
-    <type fullname="FishNet.Serializing.TransformPackingData" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform/ComponentConfigurationType" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Component.Transforming.NetworkTransform/SnappedAxes" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Object.NetworkObject/PredictionType" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Object.NetworkObject/RigidbodyLocalReconcileCorrectionType" preserve="nothing" serialized="true" />
     <type fullname="FishNet.Object.TransformProperties" preserve="nothing" serialized="true" />
+    <type fullname="FishNet.Serializing.TransformPackingData" preserve="nothing" serialized="true" />
+    <type fullname="FishNet.Managing.Transporting.LatencySimulator" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="KinematicCharacterController, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="KinematicCharacterController.KinematicCharacterMotor" preserve="all" />
@@ -591,17 +562,6 @@
     <type fullname="UnityEngine.AddressableAssets.AssetReferenceGameObject" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.AddressableAssets.AssetReferenceSprite" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.AddressableAssets.AssetReferenceT`1" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.AddressableAssets.AssetReferenceTexture2D" preserve="nothing" serialized="true" />
-  </assembly>
-  <assembly fullname="Unity.InputSystem, Version=1.20.1.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.InputSystem.InputActionAsset" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.InputActionReference" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.UI.InputSystemUIInputModule" preserve="all" />
-    <type fullname="UnityEngine.InputSystem.InputAction" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputActionMap" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputBinding" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputControlScheme" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.InputSystem.InputControlScheme/DeviceRequirement" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="Unity.RenderPipelines.Universal.Runtime, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.Rendering.Universal.UniversalAdditionalCameraData" preserve="all" />
@@ -617,15 +577,8 @@
     <type fullname="UnityEngine.ResourceManagement.ResourceProviders.SceneInstance" preserve="all" />
     <type fullname="UnityEngine.ResourceManagement.ResourceProviders.SceneProvider" preserve="all" />
   </assembly>
-  <assembly fullname="Unity.Splines, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.Splines.SplineContainer" preserve="all" />
-    <type fullname="UnityEngine.Splines.BezierKnot" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.KnotLinkCollection" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.Spline" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.Spline/MetaData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Splines.SplineDataDictionary`1" preserve="nothing" serialized="true" />
-  </assembly>
   <assembly fullname="UnityEngine.AIModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="UnityEngine.AI.NavMeshData" preserve="all" />
     <type fullname="UnityEngine.AI.NavMeshObstacle" preserve="all" />
   </assembly>
   <assembly fullname="UnityEngine.AnimationModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
@@ -638,38 +591,30 @@
   </assembly>
   <assembly fullname="UnityEngine.CoreModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.Camera" preserve="all" />
-    <type fullname="UnityEngine.ComputeShader" preserve="all" />
-    <type fullname="UnityEngine.Cubemap" preserve="all" />
     <type fullname="UnityEngine.GameObject" preserve="all" />
     <type fullname="UnityEngine.Light" preserve="all" />
     <type fullname="UnityEngine.LightmapSettings" preserve="all" />
+    <type fullname="UnityEngine.LineRenderer" preserve="all" />
     <type fullname="UnityEngine.LODGroup" preserve="all" />
-    <type fullname="UnityEngine.Material" preserve="all" />
     <type fullname="UnityEngine.Mesh" preserve="all" />
     <type fullname="UnityEngine.MeshFilter" preserve="all" />
     <type fullname="UnityEngine.MeshRenderer" preserve="all" />
     <type fullname="UnityEngine.Object" preserve="all" />
     <type fullname="UnityEngine.RectTransform" preserve="all" />
     <type fullname="UnityEngine.RenderSettings" preserve="all" />
-    <type fullname="UnityEngine.RenderTexture" preserve="all" />
-    <type fullname="UnityEngine.Shader" preserve="all" />
-    <type fullname="UnityEngine.ShaderVariantCollection" preserve="all" />
     <type fullname="UnityEngine.SkinnedMeshRenderer" preserve="all" />
-    <type fullname="UnityEngine.Sprite" preserve="all" />
     <type fullname="UnityEngine.TextAsset" preserve="all" />
     <type fullname="UnityEngine.Texture2D" preserve="all" />
-    <type fullname="UnityEngine.Texture2DArray" preserve="all" />
-    <type fullname="UnityEngine.Texture3D" preserve="all" />
     <type fullname="UnityEngine.Transform" preserve="all" />
-    <type fullname="UnityEngine.LayerMask" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Vector4" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Color" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Vector2" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.LayerMask" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Quaternion" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Rect" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.Vector3" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.Vector2" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Vector2Int" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.Vector3" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.Vector4" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.Bounds" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.Rect" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.RenderingLayerMask" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="UnityEngine.ParticleSystemModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
@@ -691,55 +636,36 @@
   <assembly fullname="UnityEngine.TerrainPhysicsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="UnityEngine.TerrainCollider" preserve="all" />
   </assembly>
-  <assembly fullname="UnityEngine.UI, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.EventSystems.BaseInput" preserve="all" />
-    <type fullname="UnityEngine.EventSystems.EventSystem" preserve="all" />
-  </assembly>
   <assembly fullname="UnityEngine.UIElementsModule, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
-    <type fullname="UnityEngine.UIElements.PanelInputConfiguration" preserve="all" />
     <type fullname="UnityEngine.UIElements.PanelSettings" preserve="all" />
     <type fullname="UnityEngine.UIElements.StyleSheet" preserve="all" />
     <type fullname="UnityEngine.UIElements.ThemeStyleSheet" preserve="all" />
     <type fullname="UnityEngine.UIElements.UIDocument" preserve="all" />
-    <type fullname="UnityEngine.UIElements.VisualTreeAsset" preserve="all" />
-    <type fullname="UnityEngine.UIElements.PanelInputSettings" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.Button/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.Label/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.ScrollView/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.Slider/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.SliderInt/UxmlSerializedData" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.UIElements.DynamicAtlasSettings" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.Specificity" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleComplexSelector" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleProperty" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleRule" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleSelector" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleSelectorPart" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.StyleSheets.Dimension" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.StyleValueHandle" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.TextField/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.Toggle/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.VisualElement/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.VisualElementAsset" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleSheet/ImportStruct" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.UIElements.StyleSheets.Dimension" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleSheets.ResourcePath" preserve="nothing" serialized="true" />
     <type fullname="UnityEngine.UIElements.StyleSheets.ScalableImage" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.DropdownField/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.IntegerField/UxmlSerializedData" preserve="nothing" serialized="true" />
-    <type fullname="UnityEngine.UIElements.DynamicAtlasSettings" preserve="nothing" serialized="true" />
+    <type fullname="UnityEngine.UIElements.StyleValueHandle" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="WebTransport, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishNet.Transporting.WebTransport.WebTransport" preserve="all" />
   </assembly>
   <assembly fullname="FishMMO.NPCs">
     <type fullname="FishMMO.Shared.ApplyTauntAction" preserve="nothing" serialized="true" />
-    <type fullname="FishMMO.Shared.ApplyThreatAction" preserve="nothing" serialized="true" />
   </assembly>
   <assembly fullname="FishMMO.Travel">
+    <type fullname="FishMMO.Shared.CallToArmsAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.MarkLocationAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.OpenGateAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.PortalToBindAction" preserve="nothing" serialized="true" />
+    <type fullname="FishMMO.Shared.RecallAction" preserve="nothing" serialized="true" />
     <type fullname="FishMMO.Shared.UnlockWaypointAction" preserve="nothing" serialized="true" />
-  </assembly>
-  <assembly fullname="UnityEngine.MathematicsModule">
-    <type fullname="Unity.Mathematics.float3" preserve="nothing" serialized="true" />
-    <type fullname="Unity.Mathematics.float4" preserve="nothing" serialized="true" />
-    <type fullname="Unity.Mathematics.quaternion" preserve="nothing" serialized="true" />
   </assembly>
 </linker>

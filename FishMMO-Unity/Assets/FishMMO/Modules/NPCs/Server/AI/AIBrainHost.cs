@@ -663,9 +663,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				for (int i = 0; i < members.Count; ++i)
 				{
 					AIController member = members[i];
-					/* Every NPC body in the scene, corpses included: the overlap this replaced
-					 * returned any NPC collider on the layer, and a corpse keeps its collider. A
-					 * quarantined brain's NPC still stands where it stopped. */
+					/* Every NPC body that can stand beside one that separates, corpses included: the
+					 * overlap this replaced returned any NPC collider on the layer, and a corpse keeps
+					 * its collider. A quarantined brain's NPC still stands where it stopped.
+					 *
+					 * Not a Dormant one. Only the Active and Nearby tiers separate, near a player;
+					 * Dormant means nobody is even within the Far band, so a Dormant body is never
+					 * beside one that asks. Reading every dormant NPC's transform each tick (thousands
+					 * on a loaded scene) was most of this pass. The tier is a field, checked before
+					 * anything native is touched. */
+					if (ReferenceEquals(member, null) || member.CurrentLodTier == AILodTier.Dormant)
+					{
+						continue;
+					}
 					if (member == null || !member.gameObject.activeInHierarchy)
 					{
 						continue;
