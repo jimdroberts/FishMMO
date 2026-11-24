@@ -146,33 +146,23 @@ namespace FishMMO.UnitTests
 			Assert.That(MountRules.ActiveMount((SortedDictionary<int, Buff>)null), Is.Null);
 		}
 
-		// ── The Stablemaster at the stable door ────────────────────────────────────────────
+		// ── The Stablemaster among the towns' services ──────────────────────────────────────
 
 		[Test]
-		public void SiteLocal_IsTheInverseOfTheSiteFrame()
+		public void Stablemaster_IsAServiceKeptByStables_AndStandsAtThem()
 		{
-			Vector3 site = new Vector3(100f, 5f, -40f);
-			const float yaw = 37f;
-			Vector2 local = new Vector2(6f, -3f);
-			Vector3 world = site + Quaternion.Euler(0f, yaw, 0f) * new Vector3(local.x, 0f, local.y);
-			Vector2 back = StablemasterSiteBuilder.ToSiteLocal(site, yaw, world);
-			Assert.That(Vector2.Distance(back, local), Is.LessThan(0.001f));
-		}
-
-		[Test]
-		public void Stablemaster_StandsOutsideTheFirstStableDoor()
-		{
-			var doors = new List<PointOfInterestSiteContext.PlacedDoor>
-			{
-				new PointOfInterestSiteContext.PlacedDoor { Building = "Tavern", Hinge = Vector3.zero, Across = Vector3.right, Inward = Vector3.forward, Width = 1.2f },
-				new PointOfInterestSiteContext.PlacedDoor { Building = "Stables", Hinge = new Vector3(10f, 0f, 0f), Across = Vector3.right, Inward = Vector3.forward, Width = 2f },
-			};
-			Assert.That(StablemasterSiteBuilder.TryFindStableDoor(doors, out PointOfInterestSiteContext.PlacedDoor door), Is.True);
-			Assert.That(door.Building, Is.EqualTo("Stables"));
-			Vector3 spot = StablemasterSiteBuilder.StandingSpot(door);
-			Assert.That(spot.x, Is.EqualTo(11f).Within(0.001f), "the middle of the doorway");
-			Assert.That(spot.z, Is.EqualTo(-StablemasterSiteBuilder.StandOff).Within(0.001f), "out on the street, not inside");
-			Assert.That(StablemasterSiteBuilder.TryFindStableDoor(doors.GetRange(0, 1), out _), Is.False, "no stables, no Stablemaster");
+			System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(StablemasterService).TypeHandle);
+			ServiceNpc service = PointOfInterestServiceNpcs.Find(StablemasterService.ServiceName);
+			Assert.That(service, Is.Not.Null, "registered by the Mounts module");
+			CollectionAssert.AreEqual(new[] { StablemasterService.StablesPiece }, service.KeeperOf, "a site that lays stables keeps one");
+			Assert.That(service.Posts.Length, Is.EqualTo(1));
+			Assert.That(service.Posts[0].Kind, Is.EqualTo(NpcPostKind.Building));
+			CollectionAssert.AreEqual(new[] { StablemasterService.StablesPiece }, service.Posts[0].Pieces, "standing at the stables");
+			Assert.That(service.AtCapital, Is.True, "every capital keeps one");
+			var friendly = new PointOfInterestRecord { Kind = FishMMO.Shared.NameGeneration.POIType.Village };
+			var hostile = new PointOfInterestRecord { Kind = FishMMO.Shared.NameGeneration.POIType.BanditCamp };
+			Assert.That(service.KeeperSites(friendly), Is.True);
+			Assert.That(service.KeeperSites(hostile), Is.False, "no stablemaster at a hostile site");
 		}
 	}
 }

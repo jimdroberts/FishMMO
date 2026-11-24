@@ -85,8 +85,12 @@ namespace FishMMO.Server.Implementation
 		/// </summary>
 		private readonly Dictionary<ushort, Category> rpcLinks = new Dictionary<ushort, Category>();
 		private double rpcLinksBuiltAt = double.NegativeInfinity;
-		/// <summary>How long an unknown link waits before it may cause another full rebuild, seconds.</summary>
-		private const double FullReindexSeconds = 30.0;
+		/// <summary>
+		/// How long an unknown link waits before it may cause another full rebuild, seconds. The spawn feed keeps the table
+		/// current, so an unknown link is nearly always a despawned object's RPC still in flight, which no rebuild resolves;
+		/// at 30 s the rebuild (16 ms with both Moron scenes loaded) was a regular hitch in combat.
+		/// </summary>
+		private const double FullReindexSeconds = 600.0;
 		/// <summary>Objects spawned since they were last indexed; indexed before the next linked RPC is classified.</summary>
 		private readonly List<NetworkObject> spawnedSinceIndex = new List<NetworkObject>();
 		private bool spawnHooked;

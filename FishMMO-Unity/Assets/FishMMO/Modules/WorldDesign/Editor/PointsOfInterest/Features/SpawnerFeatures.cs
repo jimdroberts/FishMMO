@@ -87,7 +87,28 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>Whether a role spawns standing on one spot (a vendor at a stall) rather than scattered.</summary>
 		public static bool StandsOnSpot(PointOfInterestNpcRole role)
 		{
-			return role == PointOfInterestNpcRole.Banker || role == PointOfInterestNpcRole.Merchant || role == PointOfInterestNpcRole.Crafter;
+			return role == PointOfInterestNpcRole.Banker || role == PointOfInterestNpcRole.Merchant || role == PointOfInterestNpcRole.Crafter
+				|| role == PointOfInterestNpcRole.Weaponsmith || role == PointOfInterestNpcRole.Armorsmith;
+		}
+
+		/// <summary>
+		/// A seeded spot in the site's frame for an NPC spawner: within 0.45 of the radius for one standing on its spot (a
+		/// vendor), 0.25 for a scattered one. Not in the water (the sea and the highest tide too, context.IsWet): drawn again a
+		/// few times where it was, which only moves a spawner that stood in it. Not for a site under water, nor in a cave's
+		/// chamber (its ground is the chamber's).
+		/// </summary>
+		public static Vector2 DrawSpot(PointOfInterestSiteContext context, bool onSpot)
+		{
+			float share = onSpot ? 0.45f : 0.25f;
+			Vector2 local = PointOfInterestFeatureKit.RandomLocal(context, share);
+			if (!PointOfInterestKinds.Info(context.Record.Kind).Has(PointOfInterestTraits.Underwater) && !CaveShaper.TryForm(context.Record.Kind, out _))
+			{
+				for (int tries = 0; tries < 8 && Wet(context, local); tries++)
+				{
+					local = PointOfInterestFeatureKit.RandomLocal(context, share);
+				}
+			}
+			return local;
 		}
 
 		public override void Build(PointOfInterestSiteContext context)
@@ -115,16 +136,7 @@ namespace FishMMO.Shared.WorldDesign
 			}
 
 			bool onSpot = StandsOnSpot(Role);
-			Vector2 local = Offset != Vector2.zero ? Offset : PointOfInterestFeatureKit.RandomLocal(context, onSpot ? 0.45f : 0.25f);
-			// Not in the water (the sea and the highest tide too, context.IsWet): drawn again a few times where it was, which only
-			// moves a spawner that stood in it. Not for a site under water, nor in a cave's chamber (its ground is the chamber's).
-			if (Offset == Vector2.zero && !PointOfInterestKinds.Info(context.Record.Kind).Has(PointOfInterestTraits.Underwater) && !CaveShaper.TryForm(context.Record.Kind, out _))
-			{
-				for (int tries = 0; tries < 8 && Wet(context, local); tries++)
-				{
-					local = PointOfInterestFeatureKit.RandomLocal(context, onSpot ? 0.45f : 0.25f);
-				}
-			}
+			Vector2 local = Offset != Vector2.zero ? Offset : DrawSpot(context, onSpot);
 			int count = Count > 0 ? Count : DefaultCount(Role, context.Record.SizeClass);
 			float area = onSpot ? 0.0f : Mathf.Max(3.0f, context.Record.Radius * AreaShare);
 			ObjectSpawner spawner = PointOfInterestFeatureKit.AddSpawner(context, PointOfInterestFeatureKit.UniqueName(context, $"{Role} Spawner"), local, spawnables, count, area);

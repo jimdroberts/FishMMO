@@ -246,6 +246,10 @@ namespace FishMMO.UnitTests
 				/* Reading a leaderboard page is a database read that changes nothing and leads to
 				 * nothing, and a dead or stunned player may still look (issue #261). */
 				{ "Modules/Leaderboards/Server/LeaderboardSystem.cs", "reads a leaderboard page" },
+				/* Browsing the auction house, a player's own listings and a price hint are database reads
+				 * that change nothing; the posts, purchases and cancellations they lead to are gated
+				 * (by hand, so the refusal is answered) in AuctionHouseSystem.Trade.cs. */
+				{ "Modules/AuctionHouse/Server/AuctionHouseSystem.Browse.cs", "reads the auction house" },
 			};
 
 		[Test]

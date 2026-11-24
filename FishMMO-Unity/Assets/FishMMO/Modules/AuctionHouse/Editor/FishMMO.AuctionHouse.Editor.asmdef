@@ -1,0 +1,31 @@
+{
+    "name": "FishMMO.AuctionHouse.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.AuctionHouse",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server",
+        "FishMMO.NPCs.Editor",
+        "FishMMO.WorldDesign.Editor",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

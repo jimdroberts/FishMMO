@@ -502,6 +502,21 @@ namespace FishNet.Object
         }
 
         /// <summary>
+        /// FISHMMO EDIT: the observers an unbuffered, unreliable ObserversRpc sent now would skip: the owner when it would
+        /// discard the RPC, and observers the ObserverSendFilter declines. For a caller that delivers the same data another
+        /// way (NetworkTransformFrames). Call it exactly where the RPC would have been sent: the filter is asked once per
+        /// observer, as for the RPC.
+        /// </summary>
+        internal HashSet<NetworkConnection> GetUnreliableObserversRpcExclusions()
+        {
+            SetNetworkConnectionCache(addClientHost: false, addOwner: false);
+            if (Owner.IsValid && ExcludeOwnerFromUnbufferedObserversRpcs)
+                _networkConnectionCache.Add(Owner);
+            AddFilteredObserversToNetworkConnectionCache(Channel.Unreliable);
+            return _networkConnectionCache;
+        }
+
+        /// <summary>
         /// Adds observers declined by the ObserverSendFilter to ExcludedRpcConnections for an unbuffered ObserversRpc.
         /// </summary>
         private void AddFilteredObserversToNetworkConnectionCache(Channel channel)

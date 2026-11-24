@@ -560,6 +560,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 4dd7bc9a6c68414eb34da9db8207ae97
+    m_Address: UIAuctionHouse
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4e281eae8e9486e7f8ceca4fceac4c2c
     m_Address: FishMMO-Theme
     m_ReadOnly: 0

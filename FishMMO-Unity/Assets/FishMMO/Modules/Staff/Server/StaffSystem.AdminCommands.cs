@@ -171,6 +171,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			commands.AddRange(BuildAdminCharacterCommands());
 			commands.AddRange(BuildAdminTimeCommands());
 			commands.AddRange(BuildAdminSimulationCommands());
+			commands.AddRange(BuildAdminRegionCommands());
 			// Modules' administrator commands (Housing's /admin plot, ...).
 			foreach (OperatorCommandProvider provider in OperatorCommandProviders.All)
 			{

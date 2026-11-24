@@ -41,6 +41,11 @@ namespace FishNet.Transporting
         /// (TransportManager.SetSendInterval); at an interval of 1 it is never sent, so the wire format is FishNet's own.
         /// 22 = the value proposed upstream (feat/send-interval).
         /// </summary>
-        TickMarker = 22
+        TickMarker = 22,
+        /// <summary>
+        /// FISHMMO EDIT: one tick's unreliable NetworkTransform updates for one observer (NetworkTransformFrames). Sent
+        /// only while NetworkTransform.FrameObserverUpdates is true on the server; clients always read it.
+        /// </summary>
+        TransformFrame = 23
     }
 }

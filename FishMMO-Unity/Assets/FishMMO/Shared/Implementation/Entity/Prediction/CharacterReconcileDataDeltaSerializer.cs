@@ -232,6 +232,7 @@ namespace FishMMO.Shared
 
 			writer.InsertUInt32Unpacked((uint)(writer.Position - snapshotStart),
 				snapshotStart - RECONCILE_SNAPSHOT_LENGTH_BYTES);
+			ReconcileWireStats.AddFull(writer.Position - snapshotStart + RECONCILE_SNAPSHOT_LENGTH_BYTES);
 		}
 
 		/// <summary>
@@ -451,45 +452,72 @@ namespace FishMMO.Shared
 			int flagPos = writer.Position;
 			int startLength = writer.Length;
 			writer.WriteUInt16(0);
+			int sectionStart;
 
+			sectionStart = writer.Length;
 			if (writer.WriteDelta(prev.MotorState, next.MotorState, fieldOption))
 				flags |= MOTOR_STATE_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Motor, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDeltaInt64(prev.AbilityID, next.AbilityID, fieldOption))
 				flags |= ABILITY_ID_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Ability, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDeltaUInt32(prev.RemainingTicks, next.RemainingTicks, fieldOption))
 				flags |= REMAINING_TICKS_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Ability, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDeltaInt32(prev.Seed, next.Seed, fieldOption))
 				flags |= SEED_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Ability, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDelta(prev.ResourceState, next.ResourceState, fieldOption))
 				flags |= RESOURCE_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Resources, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDeltaInt32(prev.PackedFlagsAndSlot, next.PackedFlagsAndSlot, fieldOption))
 				flags |= PACKED_FLAGS_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Flags, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (CooldownReconcileEntry.WriteArrayDelta(writer, prev.Cooldowns, next.Cooldowns, fieldOption))
 				flags |= COOLDOWN_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Cooldowns, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (BuffReconcileEntry.WriteArrayDelta(writer, prev.Buffs, next.Buffs, fieldOption))
 				flags |= BUFF_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Buffs, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (WriteRngStateDelta(writer, prev, next, fieldOption))
 				flags |= RNG_STATE_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Rng, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (AttributeReconcileEntry.WriteArrayDelta(writer, prev.Attributes, next.Attributes, fieldOption))
 				flags |= ATTRIBUTE_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Attributes, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (EquipmentReconcileEntry.WriteArrayDelta(writer, prev.Equipment, next.Equipment, fieldOption))
 				flags |= EQUIPMENT_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Equipment, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (writer.WriteDeltaUInt32(prev.ChargedHoldTicks, next.ChargedHoldTicks, fieldOption))
 				flags |= CHARGED_HOLD_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.ChargedHold, writer.Length - sectionStart);
 
+			sectionStart = writer.Length;
 			if (ExposureReconcileEntry.WriteArrayDelta(writer, prev.Exposure, next.Exposure, fieldOption))
 				flags |= EXPOSURE_BIT;
+			ReconcileWireStats.AddSection(ReconcileWireStats.Section.Exposure, writer.Length - sectionStart);
 
 			if (flags != 0 || mustEmit)
 			{
@@ -499,6 +527,8 @@ namespace FishMMO.Shared
 				 * Writer. A packed backfill would overrun the placeholder and corrupt the
 				 * first field written after it. */
 				writer.InsertUInt16Unpacked(flags, flagPos);
+				ReconcileWireStats.AddSection(ReconcileWireStats.Section.Header, 2);
+				ReconcileWireStats.AddDelta(writer.Length - startLength);
 				return true;
 			}
 

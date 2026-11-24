@@ -1,0 +1,287 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIAuctionHouse.uss
+    Auction House  —  Structure & Layout only
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+    Sized against the 1200x800 reference resolution.
+
+    One pane at a time under the header tabs, so the window
+    never grows to fit all three. The listing columns are fixed
+    widths shared by the column heads (.ah-col--*) and the rows
+    (.ah-row__*), so they line up.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+.ah-panel {
+    position: absolute;
+    left: 50%; top: 50%; translate: -50% -50%;
+    width: 760px;
+    height: 480px;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.ah-hidden {
+    display: none;
+}
+
+/* ═══ HEADER ═══ */
+
+.ah-header {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.ah-header__title {
+    flex-shrink: 0;
+    margin-right: 12px;
+}
+
+.ah-tabs {
+    flex-direction: row;
+    flex: 1;
+    align-items: center;
+}
+
+.ah-tab {
+    height: 24px;
+    min-width: 68px;
+    margin-right: 4px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+/* ═══ PANES ═══ */
+
+.ah-pane {
+    flex: 1;
+    flex-direction: column;
+    padding: 8px 12px 0 12px;
+    min-height: 0;
+}
+
+.ah-toolbar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.ah-toolbar__search {
+    flex: 1;
+    margin-right: 6px;
+}
+
+.ah-toolbar__dropdown {
+    width: 130px;
+    margin-right: 6px;
+}
+
+.ah-toolbar__direction {
+    width: 28px;
+    height: 24px;
+    margin-right: 6px;
+}
+
+.ah-toolbar__button {
+    min-width: 74px;
+    height: 24px;
+}
+
+/* ═══ LISTING COLUMNS (heads and rows share the widths) ═══ */
+
+.ah-columns {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 20px;
+}
+
+.ah-col--icon, .ah-row__icon {
+    width: 26px;
+    flex-shrink: 0;
+}
+
+.ah-col--name, .ah-row__name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ah-col--qty, .ah-row__qty {
+    width: 52px;
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+.ah-col--price, .ah-row__price {
+    width: 88px;
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+.ah-col--seller, .ah-row__seller {
+    width: 110px;
+    flex-shrink: 0;
+    margin-left: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ah-col--time, .ah-row__time {
+    width: 56px;
+    flex-shrink: 0;
+    -unity-text-align: middle-right;
+}
+
+.ah-col--action {
+    width: 138px;
+    flex-shrink: 0;
+}
+
+.ah-list {
+    flex: 1;
+    min-height: 0;
+}
+
+.ah-row {
+    flex-direction: row;
+    align-items: center;
+    height: 30px;
+    flex-shrink: 0;
+}
+
+.ah-row__icon {
+    height: 22px;
+    margin-right: 4px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.ah-row__buyqty {
+    width: 56px;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+.ah-row__button {
+    min-width: 74px;
+    height: 24px;
+    margin-left: 4px;
+    flex-shrink: 0;
+}
+
+.ah-empty {
+    margin: 8px 0;
+    flex-shrink: 0;
+}
+
+.ah-pager {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    height: 30px;
+}
+
+.ah-pager__button {
+    width: 30px;
+    height: 24px;
+}
+
+.ah-pager__label {
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+/* ═══ SELL ═══ */
+
+.ah-sell__item {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.ah-sell__icon {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+    flex-shrink: 0;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.ah-sell__name {
+    flex: 1;
+    white-space: normal;
+}
+
+.ah-sell__fields {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-bottom: 10px;
+}
+
+.ah-sell__field {
+    flex-direction: column;
+    width: 150px;
+    margin-right: 12px;
+}
+
+.ah-sell__input {
+    margin-top: 2px;
+}
+
+.ah-sell__line {
+    flex-shrink: 0;
+    margin-bottom: 4px;
+    white-space: normal;
+}
+
+.ah-sell__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    margin-top: 8px;
+}
+
+.ah-sell__post {
+    min-width: 110px;
+    height: 28px;
+}
+
+/* ═══ MY LISTINGS ═══ */
+
+.ah-mine__count {
+    flex-shrink: 0;
+    margin-bottom: 6px;
+    white-space: normal;
+}
+
+/* ═══ FOOTER ═══ */
+
+.ah-footer {
+    flex-direction: row;
+    align-items: center;
+    min-height: 34px;
+    padding-left: 12px;
+    padding-right: 12px;
+    flex-shrink: 0;
+}
+
+.ah-footer__status {
+    flex: 1;
+    white-space: normal;
+}
+
+.ah-footer__balance {
+    flex-shrink: 0;
+    margin-left: 12px;
+}

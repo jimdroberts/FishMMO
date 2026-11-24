@@ -199,6 +199,12 @@ namespace FishMMO.Shared
 		/// <summary>Squared distance (5 cm) a character must move between passes to count as moving.</summary>
 		private const float MovedThresholdSqr = 0.05f * 0.05f;
 
+		/// <summary>Cosine of the smallest turn between passes that counts as moving (1 degree).</summary>
+		private const float TurnedThresholdDot = 0.99985f;
+
+		/// <summary>Facing as of the last pass, for <see cref="MovedSinceLastPass"/>.</summary>
+		private Vector3 forward = Vector3.forward;
+
 		/// <summary>
 		/// Why a per-observer interval was assigned. The engagement exemption honours one of these
 		/// and not the other, which is the whole reason the origin is recorded.
@@ -397,8 +403,15 @@ namespace FishMMO.Shared
 			}
 
 			Vector3 previous = Position;
-			Position = Transform.position;
-			MovedSinceLastPass = (Position - previous).sqrMagnitude > MovedThresholdSqr;
+			Vector3 previousForward = forward;
+			Transform.GetPositionAndRotation(out Vector3 position, out Quaternion rotation);
+			Position = position;
+			forward = rotation * Vector3.forward;
+			/* Turning counts. A fighter standing still while it turns to face its target sends a rotation every few ticks, and
+			 * charging it as idle let a crowd fighting in place run its viewers' NetworkTransform traffic well past the byte
+			 * budget (2.5-2.8 kB/s against 2 kB/s, 100 simulated fighters). */
+			MovedSinceLastPass = (Position - previous).sqrMagnitude > MovedThresholdSqr ||
+				Vector3.Dot(previousForward, forward) < TurnedThresholdDot;
 
 			/* Reset before the pass ranks anything, and mark the measurement valid here rather than
 			 * after ranking: a scene with no players in it produces no viewer loop at all, and that

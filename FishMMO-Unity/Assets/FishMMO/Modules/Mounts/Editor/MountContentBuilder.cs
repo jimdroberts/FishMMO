@@ -243,7 +243,7 @@ namespace FishMMO.Shared
 			{
 				merchant = ScriptableObject.CreateInstance<MerchantTemplate>();
 			}
-			merchant.Description = "Saddles for every mount, the knack of riding them, and a trick for unseating someone else.";
+			merchant.Description = "Stablemaster";
 			merchant.Items = new List<BaseItemTemplate>(saddles);
 			merchant.Abilities ??= new List<AbilityTemplate>();
 			merchant.AbilityEvents = new List<AbilityEvent> { dismount };

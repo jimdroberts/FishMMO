@@ -109,5 +109,16 @@
 		/// in the operator audit log.
 		/// </remarks>
 		AdminAdjustment = 11,
+
+		/// <summary>
+		/// The deposit a seller pays to list on the auction house (the Auction House module). Never returned once the
+		/// listing exists; returned only when the post itself fails.
+		/// </summary>
+		AuctionDeposit = 12,
+
+		/// <summary>
+		/// What a buyer pays for an auction house listing. The seller receives it, less the house's cut, by mail.
+		/// </summary>
+		AuctionPurchase = 13,
 	}
 }

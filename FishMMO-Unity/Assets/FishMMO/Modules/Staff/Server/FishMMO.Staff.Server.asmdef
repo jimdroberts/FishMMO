@@ -13,7 +13,8 @@
         "KinematicCharacterController",
         "WebTransport",
         "FishMMO.Abilities",
-        "FishMMO.NPCs.Server"
+        "FishMMO.NPCs.Server",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [
         "Editor",

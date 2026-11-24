@@ -2033,6 +2033,8 @@ namespace FishNet.Component.Transforming
                 return (whole & part) == part;
             }
 
+            // FISHMMO EDIT: how much was read, for a framed update (ReadFramedObserversUpdate).
+            _lastDeserializedLength = reader.Position - data.Offset;
             reader.Store();
         }
 
@@ -2333,10 +2335,90 @@ namespace FishNet.Component.Transforming
                         SerializeChanged(changed, writer, lastSentData);
                     }
 
-                    ObserversUpdateClientAuthoritativeTransform(writer.GetArraySegment(), channel);
+                    // FISHMMO EDIT: an unreliable update goes into each observer's frame for this tick (NetworkTransformFrames).
+                    if (!(channel == Channel.Unreliable && TryFrameObserversUpdate(writer.GetArraySegment())))
+                        ObserversUpdateClientAuthoritativeTransform(writer.GetArraySegment(), channel);
                 }
             }
         }
+
+        #region FISHMMO EDIT: update frames (upstream PR feat/networktransform-update-frames).
+        /// <summary>
+        /// FISHMMO EDIT: true for the server to send unreliable updates in per-observer frames (NetworkTransformFrames)
+        /// instead of one ObserversRpc each. Only the server reads it; clients read frames either way.
+        /// </summary>
+        public static bool FrameObserverUpdates = true;
+
+        /// <summary>This transform's component index in frames (NetworkTransformFrames.FirstTransform for the object's first); -1 until known.</summary>
+        private int _frameComponent = -1;
+
+        /// <summary>How many bytes the last DeserializePacket read; -1 when it did not run.</summary>
+        private int _lastDeserializedLength = -1;
+
+        /// <summary>Scratch data for measuring an update that is not applied.</summary>
+        private static TransformData _measureData;
+
+        /// <summary>
+        /// Queues an unreliable update for this tick's frames, for the observers the ObserversRpc would have reached.
+        /// False when it cannot be framed, and the caller sends the RPC.
+        /// </summary>
+        private bool TryFrameObserversUpdate(ArraySegment<byte> payload)
+        {
+            if (!FrameObserverUpdates || !IsServerStarted || IsClientStarted || payload.Count == 0 || payload.Count > NetworkTransformFrames.MaximumUpdateBytes)
+                return false;
+
+            NetworkObject nob = NetworkObject;
+            // The object's first NetworkTransform is sent as a header bit instead of its component index.
+            if (_frameComponent < 0)
+                _frameComponent = NetworkTransformFrames.FirstTransformOf(nob) == this ? NetworkTransformFrames.FirstTransform : ComponentIndex;
+            HashSet<NetworkConnection> excluded = GetUnreliableObserversRpcExclusions();
+            int offset = -1;
+            foreach (NetworkConnection conn in nob.Observers)
+            {
+                if (excluded.Contains(conn))
+                    continue;
+                if (offset < 0)
+                    offset = NetworkTransformFrames.AddPayload(payload);
+                NetworkTransformFrames.Append(conn, nob.ObjectId, (byte)_frameComponent, offset, payload.Count);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Reads one update from a frame on a client, with the same checks as ObserversUpdateClientAuthoritativeTransform.
+        /// <paramref name="data"/> runs to the end of the frame; returns how many bytes this update took.
+        /// </summary>
+        internal int ReadFramedObserversUpdate(ArraySegment<byte> data)
+        {
+            bool apply = !IsDeinitializing && !IsServerInitialized && _timeManager != null && _lastReceivedServerTransformData != null;
+            if (apply && !_clientAuthoritative && IsOwner && !_sendToOwner)
+                apply = false;
+            if (apply && _clientAuthoritative && IsOwner)
+                apply = false;
+            if (apply)
+            {
+                // Not new data.
+                uint lastPacketTick = _timeManager.LastPacketTick.LastRemoteTick;
+                if (lastPacketTick <= _lastObserversRpcTick)
+                    apply = false;
+                else
+                {
+                    _lastObserversRpcTick = lastPacketTick;
+                    _lastDeserializedLength = -1;
+                    DataReceived(data, Channel.Unreliable, false);
+                    if (_lastDeserializedLength > 0)
+                        return _lastDeserializedLength;
+                }
+            }
+
+            // Not applied: read it into scratch data, only to know its length.
+            _measureData ??= new();
+            ChangedFull changed = ChangedFull.Unset;
+            _lastDeserializedLength = -1;
+            DeserializePacket(data, _measureData, _measureData, ref changed);
+            return _lastDeserializedLength;
+        }
+        #endregion
 
         /// <summary>
         /// Sends transform data to server if needed.

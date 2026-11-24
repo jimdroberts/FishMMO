@@ -55,6 +55,8 @@ namespace FishNet.Managing.Object
         /// <returns>True if spawn was written.</returns>
         internal bool WriteSpawn(NetworkObject nob, PooledWriter writer, NetworkConnection connection)
         {
+            // FISHMMO EDIT: spawn size diagnostics (SpawnWireStats); local only, not proposed upstream.
+            int statsStart = writer.Length;
             writer.WritePacketIdUnpacked(PacketId.ObjectSpawn);
 
             ReservedLengthWriter asClientReservedWriter = ReservedWritersExtensions.Retrieve();
@@ -106,13 +108,18 @@ namespace FishNet.Managing.Object
             }
 
             NetworkConnection payloadSender = predictedSpawn ? NetworkManager.EmptyConnection : connection;
+            int statsPayload = writer.Length;
             WritePayload(payloadSender, nob, writer);
 
             /* RPCLinks and SyncTypes are ONLY written by the server.
              * Although not necessary, both sides will write the length
              * to keep the reading of spawns consistent. */
+            int statsLinks = writer.Length;
             WriteRpcLinks(nob, writer);
+            int statsSyncTypes = writer.Length;
             WriteSyncTypesForSpawn(nob, writer, connection);
+            if (SpawnWireStats.Enabled && connection != null)
+                SpawnWireStats.Add(statsPayload - statsStart, statsLinks - statsPayload, statsSyncTypes - statsLinks, writer.Length - statsSyncTypes);
 
             bool canWrite;
             // Need to validate predicted spawn length.
@@ -499,7 +506,13 @@ namespace FishNet.Managing.Object
             rw.Initialize(writer, NetworkBehaviour.PAYLOAD_RESERVE_BYTES);
 
             foreach (NetworkBehaviour nb in nob.NetworkBehaviours)
+            {
+                // FISHMMO EDIT: per-behaviour payload bytes (SpawnWireStats).
+                int statsStart = writer.Length;
                 nb.WritePayload(sender, writer);
+                if (SpawnWireStats.Enabled && writer.Length != statsStart)
+                    SpawnWireStats.AddPayload(nb.GetType(), writer.Length - statsStart);
+            }
 
             rw.WriteLength();
         }

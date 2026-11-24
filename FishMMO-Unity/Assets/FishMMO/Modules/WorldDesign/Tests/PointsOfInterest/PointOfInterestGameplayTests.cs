@@ -329,6 +329,133 @@ namespace FishMMO.UnitTests.PointsOfInterest
 			CollectionAssert.AreEquivalent(new[] { spawners[0], spawners[1] }, gate.Spawners);
 		}
 
+		/// <summary>Lays a kit piece at the site as PropsFeature would record it (a stand-in prefab named as the kit names it).</summary>
+		private GameObject Lay(PointOfInterestSiteContext context, string pieceId, Vector3 at, float yaw)
+		{
+			var prefab = new GameObject(StructurePieces.Prefix + pieceId + "_0");
+			SceneManager.MoveGameObjectToScene(prefab, scene);
+			loose.Add(prefab);
+			context.Laid.Add(new PointOfInterestSiteContext.PlacedProp { Prefab = prefab, Position = at, Rotation = Quaternion.Euler(0f, yaw, 0f), Scale = Vector3.one });
+			return prefab;
+		}
+
+		[Test]
+		public void Posts_AStallsKeeperStandsBehindItsCounter_FacingTheCustomers()
+		{
+			PointOfInterestSiteContext context = Site(POIType.Town);
+			Lay(context, PointOfInterestNpcPosts.StallPiece, new Vector3(15f, 0f, -20f), 90f);
+			var posts = new PointOfInterestNpcPosts(context);
+
+			Assert.IsTrue(posts.TryClaim(new[] { NpcPostRule.AtStall() }, out NpcPost post));
+			Vector3 expected = new Vector3(15f, 0f, -20f) + Quaternion.Euler(0f, 90f, 0f) * PointOfInterestNpcPosts.StallSpot;
+			Assert.Less(Vector3.Distance(expected, post.Position), 0.001f, "between the counter and the shelf");
+			Assert.Less(Vector3.Angle(Quaternion.Euler(0f, 90f, 0f) * Vector3.back, post.Facing * Vector3.forward), 0.5f, "facing out over the counter");
+			Assert.IsFalse(posts.TryClaim(new[] { NpcPostRule.AtStall() }, out _), "one keeper to a stall");
+		}
+
+		[Test]
+		public void Posts_AKeeperStandsOutBeforeTheDoor_TwoToABuilding_SideBySide()
+		{
+			PointOfInterestSiteContext context = Site(POIType.Town);
+			Vector3 at = new Vector3(30f, 0f, -10f);
+			Lay(context, "Stables", at, 45f);
+			StructureDoor door = StructurePieces.DoorsOf(StructurePieces.Find("Stables"), 0)[0];
+			Quaternion turn = Quaternion.Euler(0f, 45f, 0f);
+			Vector3 across = turn * door.Across, inward = turn * door.Inward;
+			across.y = inward.y = 0f;
+			Vector3 middle = at + turn * door.Hinge + across.normalized * (door.Width * 0.5f);
+			Vector3 expected = middle - inward.normalized * PointOfInterestNpcPosts.DoorStandOff;
+			expected.y = 0f;
+			var rules = new[] { NpcPostRule.AtBuilding("Stables") };
+			var posts = new PointOfInterestNpcPosts(context);
+
+			Assert.IsTrue(posts.TryClaim(rules, out NpcPost first));
+			Assert.Less(Vector3.Distance(expected, first.Position), 0.001f, "out on the street before the middle of its door");
+			Assert.Less(Vector3.Angle(-inward, first.Facing * Vector3.forward), 0.5f, "its back to the door");
+			Assert.IsTrue(posts.TryClaim(rules, out NpcPost second), "a second keeper shares the building");
+			Assert.AreEqual(PointOfInterestNpcPosts.Spacing, Vector3.Distance(first.Position, second.Position), 0.001f, "beside the first");
+			Assert.IsFalse(posts.TryClaim(rules, out _), "no third");
+			Assert.IsFalse(new PointOfInterestNpcPosts(context).TryClaim(new[] { NpcPostRule.AtBuilding("Smithy") }, out _), "a building the site did not lay offers nothing");
+		}
+
+		[Test]
+		public void Posts_TheMarketTakesAnyNumber_RoundTheMiddleOfItsStalls()
+		{
+			PointOfInterestSiteContext context = Site(POIType.Town);
+			Lay(context, PointOfInterestNpcPosts.StallPiece, new Vector3(0f, 0f, 0f), 0f);
+			Lay(context, PointOfInterestNpcPosts.StallPiece, new Vector3(10f, 0f, 0f), 0f);
+			var posts = new PointOfInterestNpcPosts(context);
+			Assert.IsTrue(posts.TryMarketMiddle(out Vector3 middle));
+			Assert.Less(Vector3.Distance(new Vector3(5f, 0f, 0f), middle), 0.001f);
+			var taken = new List<Vector3>();
+			for (int i = 0; i < 8; i++)
+			{
+				Assert.IsTrue(posts.TryClaim(new[] { NpcPostRule.AtMarket() }, out NpcPost post));
+				Assert.GreaterOrEqual(Vector3.Distance(middle, post.Position), PointOfInterestNpcPosts.MarketRing - 0.001f);
+				Assert.IsTrue(taken.TrueForAll(p => Vector3.Distance(p, post.Position) > 1f), "none on another");
+				taken.Add(post.Position);
+			}
+		}
+
+		[Test]
+		public void Seat_StandsTheTemplatesServicesAtTheirBuildings_AndACapitalKeepsOneOfEach()
+		{
+			PointOfInterestSiteContext context = Site(POIType.Capital, sizeClass: 2);
+			Vector3 stallA = new Vector3(12f, 0f, -20f), stallB = new Vector3(16f, 0f, -20f);
+			Vector3 bank = new Vector3(-20f, 0f, 0f), tower = new Vector3(40f, 0f, -40f);
+			Lay(context, PointOfInterestNpcPosts.StallPiece, stallA, 0f);
+			Lay(context, PointOfInterestNpcPosts.StallPiece, stallB, 0f);
+			Lay(context, "CountingHouse", bank, 0f);
+			Lay(context, "WizardTower", tower, 0f);
+			// The capital template's service roles, as its features make them.
+			foreach (PointOfInterestNpcRole role in new[] { PointOfInterestNpcRole.Merchant, PointOfInterestNpcRole.Merchant, PointOfInterestNpcRole.Banker, PointOfInterestNpcRole.Crafter })
+			{
+				new NpcSpawnerFeature { Role = role }.Build(context);
+			}
+			GameObject Of(PointOfInterestNpcRole role) => PointOfInterestNpcTable.LoadOrDefaults().Resolve(null, role).First().Prefab;
+			GameObject merchant = Of(PointOfInterestNpcRole.Merchant), banker = Of(PointOfInterestNpcRole.Banker), crafter = Of(PointOfInterestNpcRole.Crafter);
+
+			int added = PointOfInterestServiceNpcs.Seat(context);
+
+			ObjectSpawner[] spawners = context.Root.GetComponentsInChildren<ObjectSpawner>(true);
+			ObjectSpawner[] Spawning(GameObject prefab) => spawners.Where(s => s.Spawnables.Any(n => n.NetworkObject.gameObject == prefab)).ToArray();
+			ObjectSpawner[] merchants = Spawning(merchant);
+			Assert.AreEqual(2, merchants.Length, "the template's two merchants, no third");
+			foreach (ObjectSpawner m in merchants)
+			{
+				float nearest = Mathf.Min(Vector3.Distance(m.transform.position, stallA), Vector3.Distance(m.transform.position, stallB));
+				Assert.Less(nearest, 1f, $"{m.name} behind a market stall");
+			}
+			Assert.Less(Vector3.Distance(merchants[0].transform.position, merchants[1].transform.position), 5f, "the two at the two stalls");
+			Assert.Greater(Vector3.Distance(merchants[0].transform.position, merchants[1].transform.position), 1f);
+			Assert.Less(Vector3.Distance(Spawning(banker).Single().transform.position, bank), 20f, "the banker at the counting house");
+			Assert.Less(Vector3.Distance(Spawning(crafter).Single().transform.position, tower), 20f, "the ability crafter at the wizard's tower");
+
+			var spawned = spawners.SelectMany(s => s.Spawnables).Select(n => n.NetworkObject.gameObject).ToList();
+			Assert.AreEqual(spawned.Count - 1, spawned.Distinct().Count(), "one of each service; only the template's two merchants share a prefab");
+			Assert.AreEqual(spawners.Length - 4, added, "every spawner but the template's four was added");
+			RaceTemplate orc = PointOfInterestNpcTable.FindRace("orc");
+			foreach (ObjectSpawner spawner in spawners)
+			{
+				Assert.IsTrue(spawner.CompareTag(ObjectSpawner.EditorOnlyTag), spawner.name);
+				Assert.IsTrue(spawner.Spawnables.All(n => n is NPCSpawnableSettings npc && npc.FactionOverride == orc), $"{spawner.name} takes the site's race");
+			}
+
+			Vector3[] before = spawners.Select(s => s.transform.position).ToArray();
+			Assert.AreEqual(0, PointOfInterestServiceNpcs.Seat(context), "a second pass finds every service there");
+			CollectionAssert.AreEqual(before, context.Root.GetComponentsInChildren<ObjectSpawner>(true).Select(s => s.transform.position).ToArray(), "and stands each where it stood");
+		}
+
+		[Test]
+		public void Seat_AddsNothingAtASettlementWithoutTheBuildings()
+		{
+			PointOfInterestSiteContext city = Site(POIType.City, seed: 99);
+			Assert.AreEqual(0, PointOfInterestServiceNpcs.Seat(city), "only a capital keeps every service; a city keeps what its buildings bring");
+			PointOfInterestSiteContext camp = Site(POIType.BanditCamp, seed: 98);
+			Lay(camp, "Smithy", new Vector3(10f, 0f, -20f), 0f);
+			Assert.AreEqual(0, PointOfInterestServiceNpcs.Seat(camp), "a hostile site's smithy brings no smith");
+		}
+
 		[Test]
 		public void Region_IsNamedAfterTheSite_AndTheDiscoveryRidesIt()
 		{

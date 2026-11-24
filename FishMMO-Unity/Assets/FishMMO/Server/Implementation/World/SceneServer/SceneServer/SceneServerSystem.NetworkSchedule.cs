@@ -67,12 +67,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					idleNetworkSendInterval = NetworkSendSchedule.ClampIdle(idleInterval, networkSendInterval);
 				}
+				/* Movement updates in one frame per player per tick (NetworkTransformFrames) instead of one RPC each. Clients
+				 * read both, so turning it off needs only a scene server restart. */
+				if (Server.Configuration.TryGetInt("TransformFrames", out int transformFrames))
+				{
+					FishNet.Component.Transforming.NetworkTransform.FrameObserverUpdates = transformFrames != 0;
+				}
 			}
 			NetworkSendSchedule.Apply(Server?.NetworkWrapper?.NetworkManager, networkSendInterval, clientNetworkSendInterval, asServer: true);
 			_ = Log.Info("SceneServerSystem",
 				$"Network schedule: this server flushes every {networkSendInterval} tick(s), clients every {clientNetworkSendInterval}; " +
 				$"replicate queue depth {NetworkSendSchedule.CurrentStateInterpolation(Server?.NetworkWrapper?.NetworkManager)}; " +
-				$"players away from any fight {(idleNetworkSendInterval > 0 ? $"every {idleNetworkSendInterval}" : "off")}.");
+				$"players away from any fight {(idleNetworkSendInterval > 0 ? $"every {idleNetworkSendInterval}" : "off")}; " +
+				$"movement updates {(FishNet.Component.Transforming.NetworkTransform.FrameObserverUpdates ? "in frames" : "as RPCs")}.");
 		}
 
 		private void InitializeNetworkSchedule(ICharacterSystem<NetworkConnection, Scene> characterSystem)

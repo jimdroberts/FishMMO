@@ -1192,6 +1192,17 @@ namespace FishMMO.Shared.WorldDesign
 						notes?.Add($"{site.name}: site builder {builder.GetType().Name} threw: {ex.Message}");
 					}
 				}
+				// The service NPCs at their places (a smith at the smithy, a merchant at a stall), each building's keeper and a capital's
+				// one of each: after the template and the builders, so every building is laid and every spawner made.
+				try
+				{
+					PointOfInterestServiceNpcs.Seat(Context(0x5E41));
+				}
+				catch (Exception ex)
+				{
+					Debug.LogException(ex);
+					notes?.Add($"{site.name}: seating its service NPCs threw: {ex.Message}");
+				}
 				// Every way in on the map: a dungeon door always an entrance, each of a cave's mouths its own entry.
 				try
 				{

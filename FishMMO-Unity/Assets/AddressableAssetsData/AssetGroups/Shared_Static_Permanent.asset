@@ -5083,6 +5083,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 4f12791f2339a9902a6feb66dfae29a3
+    m_Address: an auctioneer
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 4f2b52211765971139e66a3e75202134
     m_Address: Coneflower Root
     m_ReadOnly: 0
@@ -9242,6 +9249,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 9354e48bab1a44eaa17d4cd5e74365d5
     m_Address: Brownie
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 938259a417d44bae9050bb8742e9d714
+    m_Address: Auctioneer Interact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

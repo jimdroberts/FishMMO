@@ -231,6 +231,8 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<PlotAccessEntity> PlotAccess { get; set; }
 		/// <summary>What was standing on a plot when its owner lost it.</summary>
 		public DbSet<PlotVaultEntity> PlotVault { get; set; }
+		/// <summary>The auction house's listings (the Auction House module).</summary>
+		public DbSet<AuctionListingEntity> AuctionListings { get; set; }
 		/// <summary>Character party memberships.</summary>
 		public DbSet<CharacterPartyEntity> CharacterParties { get; set; }
 		/// <summary>Parties.</summary>

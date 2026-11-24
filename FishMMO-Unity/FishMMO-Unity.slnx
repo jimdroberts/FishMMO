@@ -27,6 +27,7 @@
   <Project Path="FishMMO.Terrain.Tests.csproj" />
   <Project Path="FishMMO.Commerce.Server.csproj" />
   <Project Path="FishMMO.Water.csproj" />
+  <Project Path="FishMMO.AuctionHouse.csproj" />
   <Project Path="FishMMO.Buffs.Tests.csproj" />
   <Project Path="FishMMO.Render.Scratch.csproj" />
   <Project Path="FishMMO.Combat.Server.csproj" />
@@ -63,6 +64,7 @@
   <Project Path="FishMMO.Wildlife.csproj" />
   <Project Path="FishMMO.Hotkeys.Tests.csproj" />
   <Project Path="FishMMO.Commerce.RenderScratch.csproj" />
+  <Project Path="FishMMO.AuctionHouse.Editor.csproj" />
   <Project Path="FishMMO.Matchmaking.Tests.csproj" />
   <Project Path="FishMMO.Map.csproj" />
   <Project Path="FishMMO.Items.Tests.csproj" />
@@ -70,6 +72,7 @@
   <Project Path="FishMMO.Quests.Tests.csproj" />
   <Project Path="FishMMO.Social.Client.csproj" />
   <Project Path="FishMMO.Quests.Editor.csproj" />
+  <Project Path="FishMMO.AuctionHouse.Server.csproj" />
   <Project Path="FishMMO.Archetypes.csproj" />
   <Project Path="FishMMO.Buffs.RenderScratch.csproj" />
   <Project Path="FishMMO.Naming.Tests.csproj" />
@@ -123,6 +126,7 @@
   <Project Path="FishMMO.Factions.csproj" />
   <Project Path="FishMMO.Travel.Server.csproj" />
   <Project Path="FishMMO.Items.RenderScratch.csproj" />
+  <Project Path="FishMMO.AuctionHouse.Client.csproj" />
   <Project Path="FishMMO.Achievements.Server.csproj" />
   <Project Path="FishMMO.Pets.Server.csproj" />
   <Project Path="FishMMO.Items.Client.csproj" />
@@ -138,6 +142,7 @@
   <Project Path="FishMMO.Appearance.csproj" />
   <Project Path="FishMMO.Water.Editor.csproj" />
   <Project Path="FishMMO.Terrain.Editor.csproj" />
+  <Project Path="FishMMO.AuctionHouse.Tests.csproj" />
   <Project Path="Unity.RenderPipelines.Universal.Config.Editor.Tests.csproj" />
   <Project Path="FishMMO.WorldInteractables.Editor.csproj" />
   <Project Path="FishMMO.Achievements.Tests.csproj" />

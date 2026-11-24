@@ -6,7 +6,16 @@
         "FishMMO.Shared.Tools.Editor",
         "FishMMO.Core",
         "FishMMO.Commerce",
-        "FishMMO.Abilities"
+        "FishMMO.Abilities",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server",
+        "FishMMO.NPCs.Editor",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager"
     ],
     "includePlatforms": [
         "Editor"

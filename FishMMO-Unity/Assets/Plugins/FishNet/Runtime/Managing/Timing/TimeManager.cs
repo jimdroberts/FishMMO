@@ -1122,6 +1122,10 @@ namespace FishNet.Managing.Timing
                  * flush: the same messages, in the same order, in fewer packets. Paths that must flush now (a kick, a
                  * shutdown) call IterateOutgoing directly and are not affected. */
                 FishNet.Managing.Transporting.TransportManager transportManager = NetworkManager.TransportManager;
+                /* FISHMMO EDIT: this tick's NetworkTransform frames go into the bundles now, on every tick, so a frame
+                 * always carries its own tick even when the bundle is only flushed every few ticks. */
+                if (NetworkManager.IsServerStarted)
+                    FishNet.Component.Transforming.NetworkTransformFrames.Flush(transportManager);
                 if (transportManager.ShouldFlushOutgoing(asServer: true, LocalTick))
                     transportManager.IterateOutgoing(asServer: true, scheduled: true);
                 if (transportManager.ShouldFlushOutgoing(asServer: false, LocalTick))

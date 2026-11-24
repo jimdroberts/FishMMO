@@ -18,7 +18,7 @@ MonoBehaviour:
     m_SubObjectType: 
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
-  Description: Saddles for every mount, the knack of riding them, and a trick for unseating someone else.
+  Description: Stablemaster
   Abilities: []
   AbilityEvents:
   - {fileID: 11400000, guid: 6dc4effdddc13000fbc95bc0743a0392, type: 2}

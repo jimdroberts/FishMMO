@@ -56,7 +56,7 @@ Assets/FishMMO/Modules/Mounts/
 │                                       ECA/ (MountAction, DismountAction, CanMountCondition)
 ├── Editor/     FishMMO.Mounts.Editor   MountContentBuilder (Dashboard > Mounts > Build mounts; batch
 │                                       -executeMethod FishMMO.Shared.MountContentBuilder.BuildBatch),
-│                                       StablemasterSiteBuilder (a POI site builder)
+│                                       StablemasterService (the Stablemaster among the towns' service NPCs)
 ├── Prefabs/    a stablemaster.prefab (the general merchant's recipe, the Stablemaster's stock)
 ├── Templates/  Mounts/, Saddles/, Abilities/Mount, Events/ (Mount Event, Dismount), Premade/Premade Mount, NPCs/Stablemaster
 └── Tests/      FishMMO.Mounts.Tests    MountsModuleTests, MountContentTests
@@ -73,10 +73,11 @@ Core tests: `Tests/UnitTests/Prediction/MountMotionTests.cs` (flight and glide),
 | `CharacterAnimationController.SetRiding` / `CharacterAnimationSet.Ride` (core) | The rider astride. |
 | `AbilityPressOverrides` (Abilities) | Mount pressed while mounted dismounts. |
 | `BaseBuffTemplate.LastsUntilRemoved` (Buffs) | A mount never runs out and is saved. |
-| `PointOfInterestSiteBuilders` (World Design editor) | `StablemasterSiteBuilder` stands a Stablemaster outside the first stable door of every friendly site. |
+| `PointOfInterestServiceNpcs` (World Design editor) | `StablemasterService` registers the Stablemaster: kept by every friendly site that lays stables, standing before their door, and by every capital. |
 
 ## The Stablemaster
 
 Every site that lays a **Stables** building (towns, villages, farmsteads, castles; not hostile sites) gets one Stablemaster
-spawner 2.5 m out from its first stable door, taking the site's race. It sells the five saddles, the **Mount** premade and the
+spawner 2.5 m out from its first stable door, taking the site's race; every capital keeps one too (at its stables, or on a
+drawn spot when it laid none). It is one of the towns' service NPCs (World Design's `PointOfInterestServiceNpcs`). It sells the five saddles, the **Mount** premade and the
 **Dismount** effect (crafted onto any attack at an Ability Crafter). Cut scenes get their Stablemaster at the next re-cut.

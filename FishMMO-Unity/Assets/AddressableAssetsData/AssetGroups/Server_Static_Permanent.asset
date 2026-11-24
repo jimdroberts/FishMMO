@@ -304,6 +304,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 53b92812fb9d42208b077f184cc82177
+    m_Address: AuctionHouseSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 57662a393a0b3c42fb835c4b66b3710f
     m_Address: Assets/Prefabs/Server/LoginServer/CharacterSelectSystem.asset
     m_ReadOnly: 0

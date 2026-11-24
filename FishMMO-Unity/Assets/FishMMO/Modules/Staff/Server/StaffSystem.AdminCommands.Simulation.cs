@@ -138,6 +138,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public long[] QuietMissAtStart;
 			/// <summary>Process CPU time at the window's start; null where it cannot be read.</summary>
 			public TimeSpan? CpuAtStart;
+			/// <summary>Reconcile write counters at the start (ReconcileWireStats).</summary>
+			public ReconcileWireStats.Snapshot ReconcileAtStart;
 			public ServerTrafficBreakdown Breakdown;
 			/// <summary>Every packet's bytes over the run, for the compression estimate and its training sample.</summary>
 			public PacketCompressionSampler Compression;
@@ -151,6 +153,52 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		private SimulationRun simulationRun;
+
+		/// <summary>
+		/// Where the players' reconcile bytes went (full snapshots against deltas, each delta section's share) and what the
+		/// run's spawn messages were made of (header, behaviour payloads and the biggest of them, RPC links, SyncTypes).
+		/// </summary>
+		private static List<string> DescribeReconcileAndSpawnBytes(SimulationRun run)
+		{
+			var lines = new List<string>();
+			ReconcileWireStats.Snapshot now = ReconcileWireStats.Take();
+			ReconcileWireStats.Snapshot start = run.ReconcileAtStart;
+			long fulls = now.FullCount - start.FullCount, fullBytes = now.FullBytes - start.FullBytes;
+			long deltas = now.DeltaCount - start.DeltaCount, deltaBytes = now.DeltaBytes - start.DeltaBytes;
+			lines.Add($"Reconcile writes: {fulls} full (avg {(fulls > 0 ? fullBytes / (double)fulls : 0):0} B, {fullBytes / 1024.0:0} KiB), " +
+				$"{deltas} deltas (avg {(deltas > 0 ? deltaBytes / (double)deltas : 0):0} B, {deltaBytes / 1024.0:0} KiB).");
+			if (deltaBytes > 0 && start.SectionBytes != null)
+			{
+				var shares = new List<string>();
+				for (int i = 0; i < ReconcileWireStats.SectionCount; i++)
+				{
+					long bytes = now.SectionBytes[i] - start.SectionBytes[i];
+					if (bytes > 0)
+					{
+						shares.Add($"{(ReconcileWireStats.Section)i} {100.0 * bytes / deltaBytes:0}%");
+					}
+				}
+				lines.Add("  Delta bytes by section: " + string.Join(", ", shares) + ".");
+			}
+
+			SpawnWireStats.Enabled = false;
+			long spawns = SpawnWireStats.Count;
+			if (spawns > 0)
+			{
+				lines.Add($"Spawns written: {spawns}, avg {(SpawnWireStats.HeaderBytes + SpawnWireStats.PayloadBytes + SpawnWireStats.RpcLinkBytes + SpawnWireStats.SyncTypeBytes) / (double)spawns:0} B: " +
+					$"header {SpawnWireStats.HeaderBytes / (double)spawns:0}, payload {SpawnWireStats.PayloadBytes / (double)spawns:0}, " +
+					$"RPC links {SpawnWireStats.RpcLinkBytes / (double)spawns:0}, SyncTypes {SpawnWireStats.SyncTypeBytes / (double)spawns:0}.");
+				var byBehaviour = new List<KeyValuePair<Type, long>>(SpawnWireStats.PayloadBytesByBehaviour);
+				byBehaviour.Sort((a, b) => b.Value.CompareTo(a.Value));
+				var top = new List<string>();
+				for (int i = 0; i < byBehaviour.Count && i < 8; i++)
+				{
+					top.Add($"{byBehaviour[i].Key.Name} {byBehaviour[i].Value / (double)spawns:0}");
+				}
+				lines.Add("  Payload per spawn by behaviour (B): " + string.Join(", ", top) + ".");
+			}
+			return lines;
+		}
 
 		/// <summary>
 		/// This process's CPU time (user + system, all threads). Linux: /proc/self/stat, because the IL2CPP player's
@@ -370,6 +418,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				run.Gc2 = GC.CollectionCount(2);
 				ObserverStreamingRegistry.ResetLongestPass();
 				ServerTrafficBreakdown.ResetLongestReindex();
+				run.ReconcileAtStart = ReconcileWireStats.Take();
+				SpawnWireStats.Reset();
+				SpawnWireStats.Enabled = true;
 				run.Breakdown = ServerTrafficBreakdown.BeginWindow(networkManager);
 				run.Compression = new PacketCompressionSampler();
 				run.Compression.Start();
@@ -570,6 +621,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Byte budget {(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget} B/s per viewer" : "off")}; last pass left out {ObserverStreamingRegistry.LastPassByteEvicted}, slowed {ObserverStreamingRegistry.LastPassByteSlowed}.",
 			};
 			lines.AddRange(compressionSummary);
+			lines.AddRange(DescribeReconcileAndSpawnBytes(run));
 			lines.Add("Game data per player by kind (top):");
 			lines.AddRange(summary);
 

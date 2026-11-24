@@ -5,7 +5,8 @@
         "FishMMO.Core",
         "FishMMO.Shared",
         "FishNet.Runtime",
-        "KinematicCharacterController"
+        "KinematicCharacterController",
+        "FishMMO.Buffs"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

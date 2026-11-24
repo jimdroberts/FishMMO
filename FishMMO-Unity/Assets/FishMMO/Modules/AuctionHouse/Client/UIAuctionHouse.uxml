@@ -1,0 +1,113 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIAuctionHouse.uxml   —   FishMMO Auction House              ║
+    ║                                                              ║
+    ║  Opened at an Auctioneer. One market for the whole world.     ║
+    ║    Browse      : search, filter, sort, page, buy.             ║
+    ║    Sell        : right-click an item in the bags, price it,   ║
+    ║                  pick 12/24/48 hours, pay the deposit.        ║
+    ║    My Listings : what is for sale, and cancelling it.         ║
+    ║  Everything bought, earned or handed back arrives by mail.    ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss   — colors, fonts, transitions       ║
+    ║    2. UIAuctionHouse.uss  — sizes, flex, spacing             ║
+    ║                                                              ║
+    ║  Listing rows are built at runtime by UITKAuctionHouse.cs.    ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="UIAuctionHouse.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel ah-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header ah-header">
+            <ui:Label name="header-title" class="fish-panel__title ah-header__title" text="AUCTION HOUSE" />
+            <ui:VisualElement class="ah-tabs">
+                <ui:Button name="ah-tab-browse" class="fish-tab fish-tab--active ah-tab" text="Browse" />
+                <ui:Button name="ah-tab-sell" class="fish-tab ah-tab" text="Sell" />
+                <ui:Button name="ah-tab-mine" class="fish-tab ah-tab" text="My Listings" />
+            </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!-- ── BROWSE ──────────────────────────────────────── -->
+        <ui:VisualElement name="ah-browse" class="ah-pane">
+            <ui:VisualElement class="ah-toolbar">
+                <ui:TextField name="ah-search" class="fish-input fish-input--compact ah-toolbar__search" />
+                <ui:DropdownField name="ah-category" class="fish-dropdown fish-dropdown--compact ah-toolbar__dropdown" />
+                <ui:DropdownField name="ah-sort" class="fish-dropdown fish-dropdown--compact ah-toolbar__dropdown" />
+                <ui:Button name="ah-direction" class="fish-button fish-button--ghost ah-toolbar__direction" text="▲" tooltip="Smallest or largest first" />
+                <ui:Button name="ah-search-button" class="fish-button fish-button--primary ah-toolbar__button" text="Search" />
+            </ui:VisualElement>
+            <ui:VisualElement class="ah-columns">
+                <ui:Label class="fish-col-head ah-col--icon" text="" />
+                <ui:Label class="fish-col-head ah-col--name" text="Item" />
+                <ui:Label class="fish-col-head ah-col--qty" text="Qty" />
+                <ui:Label class="fish-col-head ah-col--price" text="Each" />
+                <ui:Label class="fish-col-head ah-col--price" text="Total" />
+                <ui:Label class="fish-col-head ah-col--seller" text="Seller" />
+                <ui:Label class="fish-col-head ah-col--time" text="Time" />
+                <ui:Label class="fish-col-head ah-col--action" text="" />
+            </ui:VisualElement>
+            <ui:ScrollView name="ah-results" class="fish-scroll ah-list"
+                           vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden" mode="Vertical" />
+            <ui:Label name="ah-results-empty" class="fish-empty ah-empty" text="Searching…" />
+            <ui:VisualElement class="ah-pager">
+                <ui:Button name="ah-prev" class="fish-button fish-button--ghost ah-pager__button" text="◀" />
+                <ui:Label name="ah-page" class="fish-label fish-label--caption ah-pager__label" text="" />
+                <ui:Button name="ah-next" class="fish-button fish-button--ghost ah-pager__button" text="▶" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ── SELL ────────────────────────────────────────── -->
+        <ui:VisualElement name="ah-sell" class="ah-pane ah-hidden">
+            <ui:VisualElement class="fish-well ah-sell__item">
+                <ui:VisualElement name="ah-sell-icon" class="ah-sell__icon" />
+                <ui:Label name="ah-sell-name" class="fish-label fish-label--title ah-sell__name" text="Right-click an item in your bags to sell it." />
+            </ui:VisualElement>
+            <ui:VisualElement class="ah-sell__fields">
+                <ui:VisualElement class="ah-sell__field">
+                    <ui:Label class="fish-label fish-label--caption" text="Quantity" />
+                    <ui:TextField name="ah-sell-quantity" class="fish-input fish-input--compact ah-sell__input" value="1" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ah-sell__field">
+                    <ui:Label class="fish-label fish-label--caption" text="Price each" />
+                    <ui:TextField name="ah-sell-price" class="fish-input fish-input--compact ah-sell__input" value="1" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ah-sell__field">
+                    <ui:Label class="fish-label fish-label--caption" text="Duration" />
+                    <ui:DropdownField name="ah-sell-duration" class="fish-dropdown fish-dropdown--compact ah-sell__input" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="ah-sell-hint" class="fish-label fish-label--accent ah-sell__line" text="" />
+            <ui:Label name="ah-sell-total" class="fish-label ah-sell__line" text="" />
+            <ui:Label name="ah-sell-deposit" class="fish-label ah-sell__line" text="" />
+            <ui:Label name="ah-sell-proceeds" class="fish-label fish-label--secondary ah-sell__line" text="" />
+            <ui:VisualElement class="ah-sell__actions">
+                <ui:Button name="ah-post" class="fish-button fish-button--primary ah-sell__post" text="List it" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- ── MY LISTINGS ─────────────────────────────────── -->
+        <ui:VisualElement name="ah-mine" class="ah-pane ah-hidden">
+            <ui:Label name="ah-mine-count" class="fish-label fish-label--caption ah-mine__count" text="" />
+            <ui:ScrollView name="ah-mine-list" class="fish-scroll ah-list"
+                           vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden" mode="Vertical" />
+            <ui:Label name="ah-mine-empty" class="fish-empty ah-empty" text="Loading…" />
+        </ui:VisualElement>
+
+        <!-- ── FOOTER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer ah-footer">
+            <ui:Label name="ah-status" class="fish-label fish-label--accent ah-footer__status" text="" />
+            <ui:Label name="ah-balance" class="fish-label fish-label--numeric ah-footer__balance" text="" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

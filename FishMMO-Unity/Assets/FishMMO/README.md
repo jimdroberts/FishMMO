@@ -34,6 +34,7 @@ assembly is the boundary, and scenes, prefabs and assets keep resolving their sc
 | [Appearance](Modules/Appearance/README.md) | `appearance` | Race proportions and blend shapes, hidden body regions, equipment drawn on the body. | |
 | [Ambient Life](Modules/AmbientLife/README.md) | `ambient-life` | Birds, sea life, motes, leaves and the life of the world's sites (client presentation). | |
 | [Archetypes](Modules/Archetypes/README.md) | `archetypes` | A player's archetype: set, announced, saved, checked. | |
+| [Auction House](Modules/AuctionHouse/README.md) | `auctionhouse` | One world-wide market at the Auctioneers: list, search, buy (all or part), cancel; deliveries by mail. | |
 | [Buffs](Modules/Buffs/README.md) | `buffs` | Buffs and debuffs, their templates and ticking, shields and deflection, the buff strips. | Abilities, Achievements, Archetypes, NPCs & AI, Pets, Social, World Interactables, and everything that depends on them |
 | [Chat](Modules/Chat/README.md) | `chat` | Conversation: the channels, cross-server delivery, the chat window. | |
 | [Combat](Modules/Combat/README.md) | `combat` | Damage, healing, death and revive; the combat text and death dialog. | Abilities and everything that depends on it |

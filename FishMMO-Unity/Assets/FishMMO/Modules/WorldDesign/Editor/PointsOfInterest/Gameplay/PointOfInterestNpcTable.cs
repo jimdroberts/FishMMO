@@ -20,6 +20,10 @@ namespace FishMMO.Shared.WorldDesign
 		MonsterPack = 5,
 		/// <summary>One stronger hostile leading a pack.</summary>
 		Elite = 6,
+		/// <summary>Sells the weapons (the general merchant no longer does): at the smithy.</summary>
+		Weaponsmith = 7,
+		/// <summary>Sells the armour and shields: at the smithy, beside the weaponsmith where there is one smithy.</summary>
+		Armorsmith = 8,
 	}
 
 	/// <summary>One weighted NPC prefab a role can draw.</summary>
@@ -91,6 +95,9 @@ namespace FishMMO.Shared.WorldDesign
 		public const string BankerPath = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/Banker/HumanBanker.prefab";
 		public const string MerchantPath = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/Merchants/GeneralGoods/HumanGeneralMerchant.prefab";
 		public const string CrafterPath = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/AbilityCrafter/HumanAbilityCrafter.prefab";
+		/// <summary>The smiths (the Commerce module's "Build smiths" makes them from the general merchant).</summary>
+		public const string WeaponsmithPath = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/Merchants/Weaponsmith/HumanWeaponsmith.prefab";
+		public const string ArmorsmithPath = "Assets/Prefabs/Shared/Entity/NPCs/Interactables/Human/Merchants/Armorsmith/HumanArmorsmith.prefab";
 		public const string OrcPath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc.prefab";
 		public const string OrcWarriorPath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc warrior.prefab";
 		public const string OrcMagePath = "Assets/Prefabs/Shared/Entity/NPCs/Monsters/Orcs/an orc mage.prefab";
@@ -139,6 +146,8 @@ namespace FishMMO.Shared.WorldDesign
 				Row(null, PointOfInterestNpcRole.Banker, (BankerPath, 1.0f)),
 				Row(null, PointOfInterestNpcRole.Merchant, (MerchantPath, 1.0f)),
 				Row(null, PointOfInterestNpcRole.Crafter, (CrafterPath, 1.0f)),
+				Row(null, PointOfInterestNpcRole.Weaponsmith, (WeaponsmithPath, 1.0f)),
+				Row(null, PointOfInterestNpcRole.Armorsmith, (ArmorsmithPath, 1.0f)),
 				Row("orc", PointOfInterestNpcRole.MonsterPack, (OrcPath, 0.5f), (OrcWarriorPath, 0.3f), (OrcMagePath, 0.2f)),
 				Row("orc", PointOfInterestNpcRole.Elite, (OrcWarriorPath, 1.0f)),
 			};
@@ -171,6 +180,16 @@ namespace FishMMO.Shared.WorldDesign
 			return rows;
 		}
 
+		/// <summary>The service NPCs added after the table was first written (the smiths), for <see cref="AddMissingSiteRows"/>.</summary>
+		public static List<PointOfInterestNpcEntry> ServiceRows()
+		{
+			return new List<PointOfInterestNpcEntry>
+			{
+				Row(null, PointOfInterestNpcRole.Weaponsmith, (WeaponsmithPath, 1.0f)),
+				Row(null, PointOfInterestNpcRole.Armorsmith, (ArmorsmithPath, 1.0f)),
+			};
+		}
+
 		private static PointOfInterestNpcEntry Clone(PointOfInterestNpcEntry row)
 		{
 			row.CloneForRace = true;
@@ -200,7 +219,9 @@ namespace FishMMO.Shared.WorldDesign
 		public int AddMissingSiteRows()
 		{
 			int added = 0;
-			foreach (PointOfInterestNpcEntry row in SiteRows())
+			var rows = SiteRows();
+			rows.AddRange(ServiceRows());
+			foreach (PointOfInterestNpcEntry row in rows)
 			{
 				if (row.Choices.Count == 0)
 				{

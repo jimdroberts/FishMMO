@@ -568,6 +568,11 @@ namespace FishNet.Managing.Client
                             {
                                 Objects.ParseObserversRpc(reader, channel);
                             }
+                            // FISHMMO EDIT: one tick's NetworkTransform updates for this client (NetworkTransformFrames).
+                            else if (packetId == PacketId.TransformFrame)
+                            {
+                                FishNet.Component.Transforming.NetworkTransformFrames.Parse(reader, Objects);
+                            }
                             else if (packetId == PacketId.TargetRpc)
                             {
                                 Objects.ParseTargetRpc(reader, channel);

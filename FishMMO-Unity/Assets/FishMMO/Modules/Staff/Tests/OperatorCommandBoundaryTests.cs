@@ -335,7 +335,7 @@ namespace FishMMO.UnitTests
 			List<TableEntry> gm = ReadTable("BuildGameMasterCommands", "/gm", out _);
 			List<TableEntry> admin = ReadTable("BuildAdminCommands", "/admin", out _);
 
-			string[] adminOnly = { "setgold", "givegold", "takegold", "giveitem", "setattr", "heal", "revive", "kill", "god", "ban", "access" };
+			string[] adminOnly = { "setgold", "givegold", "takegold", "giveitem", "setattr", "heal", "revive", "kill", "god", "ban", "access", "region" };
 			foreach (string name in adminOnly)
 			{
 				LogAssert.IsTrue(admin.Any(e => e.Name == name), $"/admin {name} must exist");

@@ -29,6 +29,26 @@ namespace FishMMO.Shared
 			return byID.TryGetValue(id, out template) && template != null;
 		}
 
+		/// <summary>
+		/// Adds every cached template that is a <typeparamref name="U"/>, whatever concrete type it was cached under, to
+		/// <paramref name="into"/>.
+		/// </summary>
+		/// <remarks>
+		/// The typed caches are keyed by each asset's concrete type, so <c>GetCache&lt;BaseBuffTemplate&gt;</c> finds no
+		/// attribute buff and <c>GetCache&lt;CharacterAttributeTemplate&gt;</c> no damage type. This walks the one registry
+		/// that holds them all. Allocates nothing itself; for tools that look a template up by name, not for a hot path.
+		/// </remarks>
+		public static void CollectAll<U>(List<U> into) where U : CachedScriptableObject
+		{
+			foreach (CachedScriptableObject template in byID.Values)
+			{
+				if (template is U typed && typed != null)
+				{
+					into.Add(typed);
+				}
+			}
+		}
+
 		protected static void RegisterByID(int id, CachedScriptableObject template)
 		{
 			if (id != 0 && template != null)

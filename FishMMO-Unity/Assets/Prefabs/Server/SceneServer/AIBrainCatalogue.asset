@@ -154,6 +154,9 @@ MonoBehaviour:
   - Prefab: {fileID: -4468559157413045786, guid: ea1285ea11248483d8ad41d5d9a406e3, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
     BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 4f12791f2339a9902a6feb66dfae29a3, type: 3}
+    Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+    BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: 90dbfcc60d7783c92acbe622007f76e1, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
     BossScript: {fileID: 0}
