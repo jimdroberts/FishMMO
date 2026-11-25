@@ -395,8 +395,71 @@ namespace FishMMO.UnitTests
 			string body = source.Substring(start, end - start);
 			LogAssert.IsFalse(body.Contains("viewerTargetId"), "having a target alone must not count as combat");
 			LogAssert.IsTrue(body.Contains("CombatRelevant"), "the target counts through CombatRelevant");
+			LogAssert.IsFalse(body.Contains("Entry.InCombat"), "someone else's fight nearby must not hold a bystander at the full send rate");
 			LogAssert.IsTrue(source.Contains("TargetMeansCombat(observed.InCombat") && source.Contains("HarmRule.MayHarm(viewer.Character, observed.Character"),
 				"CombatRelevant asks the central harm rule");
+		}
+
+		/// <summary>
+		/// Casts and ability objects reach observers within the combat effect range, and everything that follows a start
+		/// (hits, redirects, the end) reaches every player the start reached and every player handed the object in a spawn
+		/// payload: an observer told of a launch and never of its end flies it its whole lifetime and sets it off in empty air.
+		/// A cast's end is never filtered: the spawn payload hands a running cast to observers wherever they stand.
+		/// </summary>
+		[Test]
+		public void CombatEffects_FollowUpsReachEveryoneTheStartReached()
+		{
+			string root = Path.Combine(Directory.GetCurrentDirectory(), "Assets/FishMMO/Modules/Abilities/Runtime/");
+			string activation = ProjectFiles.ReadAllText(root + "Ability/AbilityController.Activation.cs");
+			LogAssert.IsTrue(activation.Contains("CombatEffectAudience.SendActivation(base.NetworkObject, ability.ID, spawnTick.Value, new AbilityActivatedBroadcast"),
+				"the activation is sent through the audience, keyed by caster, ability and spawn tick");
+			LogAssert.IsTrue(activation.Contains("CombatEffectAudience.SendCastStart(base.NetworkObject, cast, Channel.Reliable);") &&
+				activation.Contains("ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, cast, Channel.Reliable);"),
+				"a cast's start is filtered, its end goes to every observer");
+
+			string objects = ProjectFiles.ReadAllText(root + "Ability/AbilityObject.cs");
+			LogAssert.IsFalse(objects.Contains("ServerManager.Broadcast(casterNob, new AbilityObject"), "no follow-up bypasses the audience");
+			int followUps = 0;
+			for (int at = objects.IndexOf("CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value", StringComparison.Ordinal); at >= 0;
+				at = objects.IndexOf("CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value", at + 1, StringComparison.Ordinal))
+			{
+				followUps++;
+			}
+			LogAssert.AreEqual(4, followUps, "both hits, the redirect and the destruction follow the start's audience");
+
+			string payload = ProjectFiles.ReadAllText(root + "Ability/AbilityController.Networking.cs");
+			LogAssert.IsTrue(payload.Contains("CombatEffectAudience.Remember(base.NetworkObject, entry.AbilityID, entry.SpawnTick, conn);"),
+				"an observer handed an object in flight joins its audience");
+
+			string audience = ProjectFiles.ReadAllText(root + "Network/CombatEffectAudience.cs");
+			LogAssert.IsTrue(audience.Contains("remembered == null || remembered.Contains(connection) || IsWithinRange(connection, origin)"),
+				"a follow-up reaches the remembered audience, anyone now within range, and everyone when the start is not remembered");
+		}
+
+		/// <summary>
+		/// A connection on its own longer interval holds reliable data to that interval only when the server asks: near a
+		/// fight, reliable observer messages arrive on nearly every tick, so flushing them on the server's interval meant a
+		/// bystander's longer interval almost never sent fewer packets. Off by default, as FishNet ships.
+		/// </summary>
+		[Test]
+		public void IdleIntervalHoldsReliableDataOnlyWhenTheServerAsks()
+		{
+			string transport = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/Plugins/FishNet/Runtime/Managing/Transporting/TransportManager.cs"));
+			int start = transport.IndexOf("internal bool ShouldFlushConnection(", StringComparison.Ordinal);
+			LogAssert.IsTrue(start >= 0, "TransportManager must still decide each connection's flush");
+			int end = transport.IndexOf("\n        }", start, StringComparison.Ordinal);
+			string body = transport.Substring(start, end - start);
+			LogAssert.IsTrue(body.Contains("!HoldReliableToConnectionInterval && connection.HasReliableDataToSend"),
+				"reliable data jumps a connection's interval only while the hold is off");
+			LogAssert.IsTrue(transport.Contains("public bool HoldReliableToConnectionInterval { get; set; }"),
+				"the hold is a plain switch, false unless set");
+
+			string schedule = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/FishMMO/Server/Implementation/World/SceneServer/SceneServer/SceneServerSystem.NetworkSchedule.cs"));
+			LogAssert.IsTrue(schedule.Contains("TryGetInt(\"IdleIntervalHoldsReliable\"") &&
+				schedule.Contains("HoldReliableToConnectionInterval = idleHoldsReliable != 0"),
+				"the scene server sets it from IdleIntervalHoldsReliable");
 		}
 	}
 }

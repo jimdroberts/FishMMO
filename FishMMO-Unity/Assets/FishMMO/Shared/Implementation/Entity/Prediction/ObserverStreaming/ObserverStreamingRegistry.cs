@@ -108,14 +108,14 @@ namespace FishMMO.Shared
 		private static readonly Dictionary<int, HashSet<int>> byteEvictedByClientId = new Dictionary<int, HashSet<int>>();
 
 		/// <summary>
-		/// Viewers who, on the last pass, targeted something they could fight, fought someone, or had a character in combat
-		/// within their engagement range. The adaptive send interval keeps these at the full flush rate; see <c>NetworkSendSchedule</c>.
+		/// Viewers who, on the last pass, targeted something they could fight or were part of a fight. The adaptive send
+		/// interval keeps these at the full flush rate; see <c>NetworkSendSchedule</c>.
 		/// </summary>
 		private static readonly HashSet<int> nearCombatClientIds = new HashSet<int>();
 
 		/// <summary>
-		/// True when the viewer's last pass found it near combat: a target it may harm, a fight it is part of, or a character
-		/// in combat within its engagement range. Refreshed every pass (<see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/>).
+		/// True when the viewer's last pass found it near combat: a target it may harm or a fight it is part of. Refreshed
+		/// every pass (<see cref="ObserverStreamingPolicy.RescheduleIntervalTicks"/>).
 		/// </summary>
 		public static bool IsViewerNearCombat(int clientId) => nearCombatClientIds.Contains(clientId);
 
@@ -123,25 +123,36 @@ namespace FishMMO.Shared
 		private static readonly Dictionary<int, Dictionary<int, uint>> visibleSinceByClientId = new Dictionary<int, Dictionary<int, uint>>();
 
 		/// <summary>
-		/// Least time, in ticks, a character the budget let in stays in view before the budget may take it out again: 5 s at
-		/// 30 Hz. A crowd wandering across the budget's edge otherwise spawned and despawned its members over and over, each
-		/// time a full spawn (about 350 bytes) and an attribute snapshot (about 180) to the viewer for a few seconds of view.
+		/// Least time, in ticks, a character the budget let in stays in view before the budget may take it out again: 10 s at
+		/// 30 Hz (cfg ObserverMinimumVisibleTicks). A crowd wandering across the budget's edge otherwise spawned and despawned
+		/// its members over and over, each time a full spawn (about 430 bytes) to the viewer for a few seconds of view. At 5 s
+		/// a 100-character fight still read as fighters popping in and out.
 		/// </summary>
-		public static uint MinimumVisibleTicks = 150;
+		public static uint MinimumVisibleTicks = 300;
 
 		/// <summary>
 		/// Least time, in ticks, a character the byte budget took out of view stays out before the budget may let it back in:
-		/// 3 s at 30 Hz. The mirror of <see cref="MinimumVisibleTicks"/>: at the budget's edge a crowd otherwise left and came
-		/// back every few seconds, and each return was a full spawn. Never applies to a pinned character (party, target, a
-		/// fight) or to one within the viewer's engagement range, which come back at once.
+		/// 10 s at 30 Hz (cfg ObserverMinimumHiddenTicks). The mirror of <see cref="MinimumVisibleTicks"/>: at the budget's
+		/// edge a crowd otherwise left and came back every few seconds, and each return was a full spawn. Never applies to a
+		/// pinned character (party, target, a fight) or to one within the viewer's engagement range, which come back at once.
 		/// </summary>
-		public static uint MinimumHiddenTicks = 90;
+		public static uint MinimumHiddenTicks = 300;
 
 		/// <summary>The tick each character was taken out of each viewer's view by the budget (viewer → object → tick).</summary>
 		private static readonly Dictionary<int, Dictionary<int, uint>> hiddenSinceByClientId = new Dictionary<int, Dictionary<int, uint>>();
 
 		/// <summary>Per viewer, the characters within its engagement range on the last pass (never held out).</summary>
 		private static readonly Dictionary<int, HashSet<int>> engagedByClientId = new Dictionary<int, HashSet<int>>();
+
+		/// <summary>
+		/// Per player, the characters it struck or was struck by, with the tick of the latest blow (viewer → object → tick).
+		/// Kept by <see cref="NoteBlow"/>, read by the pin rule for <see cref="ObserverStreamingPolicy.BlowMemoryTicks"/>.
+		/// </summary>
+		private static readonly Dictionary<int, Dictionary<int, uint>> blowsByClientId = new Dictionary<int, Dictionary<int, uint>>();
+
+		/// <summary>(viewer connection, struck or striking object) pairs noted since the last tick, admitted on the next post tick.</summary>
+		private static readonly List<(NetworkConnection Viewer, NetworkObject Other)> pendingBlowAdmissions = new List<(NetworkConnection, NetworkObject)>();
+		private static readonly List<int> expiredBlows = new List<int>();
 
 		/// <summary>Longest scheduling pass since the last <see cref="ResetLongestPass"/>, milliseconds (a diagnostic, never simulation).</summary>
 		public static double LongestPassMilliseconds { get; private set; }
@@ -620,6 +631,9 @@ namespace FishMMO.Shared
 			nearCombatClientIds.Clear();
 			hiddenSinceByClientId.Clear();
 			engagedByClientId.Clear();
+			blowsByClientId.Clear();
+			pendingBlowAdmissions.Clear();
+			BlowClockOverride = null;
 		}
 
 		private static void OnPostTick()
@@ -628,6 +642,7 @@ namespace FishMMO.Shared
 			{
 				return;
 			}
+			AdmitPendingBlows();
 			uint tick = timeManager.LocalTick;
 			if ((int)(tick - nextPassTick) < 0)
 			{
@@ -635,6 +650,161 @@ namespace FishMMO.Shared
 			}
 			nextPassTick = tick + ObserverStreamingPolicy.RescheduleIntervalTicks;
 			RunPass();
+		}
+
+		/// <summary>
+		/// Records a blow between two characters (server only): each player involved gets the other pinned into its view
+		/// at once, without waiting for the next pass, and kept pinned for <see cref="ObserverStreamingPolicy.BlowMemoryTicks"/>.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// The pass's own fight pin reads loot credit (<c>IsFoughtBy</c>), which only players earn, so a monster striking a
+		/// player who had not yet struck back was not a fight to it: a crowd could keep the monster out of its victim's
+		/// view while it hit them. And a pin waited for the next pass, up to half a second, before the attacker appeared.
+		/// </para>
+		/// <para>
+		/// Deferred to this registry's post tick rather than rebuilding observers inside the damage call, which runs in the
+		/// middle of an ability's tick work.
+		/// </para>
+		/// </remarks>
+		public static void NoteBlow(NetworkObject attacker, NetworkObject victim)
+		{
+			if (attacker == null || victim == null || attacker == victim || !HasBlowClock)
+			{
+				return;
+			}
+			NoteBlowFor(victim, attacker);
+			NoteBlowFor(attacker, victim);
+		}
+
+		private static void NoteBlowFor(NetworkObject viewer, NetworkObject other)
+		{
+			if (!entriesByObject.TryGetValue(viewer, out ObserverStreamingEntry viewerEntry) || !viewerEntry.IsPlayer)
+			{
+				return;
+			}
+			NetworkConnection connection = viewer.Owner;
+			if (connection == null || !connection.IsValid)
+			{
+				return;
+			}
+			if (!blowsByClientId.TryGetValue(connection.ClientId, out Dictionary<int, uint> blows))
+			{
+				blowsByClientId[connection.ClientId] = blows = new Dictionary<int, uint>();
+			}
+			bool known = blows.ContainsKey(other.ObjectId);
+			blows[other.ObjectId] = BlowClockTick;
+			if (!known || !other.Observers.Contains(connection))
+			{
+				pendingBlowAdmissions.Add((connection, other));
+			}
+		}
+
+		/// <summary>
+		/// True when <paramref name="viewer"/> should be kept current on the resources (health, mana, stamina) of the
+		/// object: its target, anything pinned (party, fights, own pets), anything within reach of its abilities, or
+		/// anything it struck or was struck by. False for everyone else, who has no bar for it.
+		/// </summary>
+		/// <remarks>
+		/// <para>
+		/// Reach, not just the bars on screen: the viewer's own hits are predicted against its copy of the victim's health
+		/// (PredictedCombatEvents), so anything it could strike must be current before the first blow.
+		/// </para>
+		/// <para>
+		/// The target is read live from the viewer's entry rather than from the last pass's pins, so a newly hovered
+		/// character's bar is brought current on the next resource scan instead of up to a pass later. True whenever the
+		/// viewer has not been ranked yet (no pass since it arrived) or <see cref="ObserverStreamingPolicy.ResourceInterest"/> is off.
+		/// </para>
+		/// </remarks>
+		public static bool WantsLiveResources(NetworkConnection viewer, int objectId)
+		{
+			if (!ObserverStreamingPolicy.ResourceInterest || viewer == null || !rankedClientIds.Contains(viewer.ClientId))
+			{
+				return true;
+			}
+			int clientId = viewer.ClientId;
+			NetworkObject viewerObject = viewer.FirstObject;
+			if (viewerObject != null && entriesByObject.TryGetValue(viewerObject, out ObserverStreamingEntry viewerEntry) &&
+				viewerEntry.CurrentTargetObjectId == objectId)
+			{
+				return true;
+			}
+			return (pinnedByClientId.TryGetValue(clientId, out HashSet<int> pinned) && pinned.Contains(objectId)) ||
+				(engagedByClientId.TryGetValue(clientId, out HashSet<int> engaged) && engaged.Contains(objectId)) ||
+				HasRecentBlow(clientId, objectId);
+		}
+
+		/// <summary>True when the viewer struck or was struck by the object within <see cref="ObserverStreamingPolicy.BlowMemoryTicks"/>.</summary>
+		public static bool HasRecentBlow(int viewerClientId, int objectId)
+		{
+			return HasBlowClock &&
+				blowsByClientId.TryGetValue(viewerClientId, out Dictionary<int, uint> blows) &&
+				blows.TryGetValue(objectId, out uint tick) &&
+				BlowClockTick - tick <= ObserverStreamingPolicy.BlowMemoryTicks;
+		}
+
+		/// <summary>Stands in for the server's tick in the blow memory, for tests without a NetworkManager. Null uses the server's.</summary>
+		public static uint? BlowClockOverride { get; set; }
+		private static bool HasBlowClock => BlowClockOverride.HasValue || timeManager != null;
+		private static uint BlowClockTick => BlowClockOverride ?? (timeManager != null ? timeManager.LocalTick : 0u);
+
+		/// <summary>Pins each pending (viewer, other) pair and asks FishNet to re-test that pair now.</summary>
+		private static void AdmitPendingBlows()
+		{
+			if (pendingBlowAdmissions.Count == 0)
+			{
+				return;
+			}
+			for (int i = 0; i < pendingBlowAdmissions.Count; ++i)
+			{
+				(NetworkConnection viewer, NetworkObject other) = pendingBlowAdmissions[i];
+				if (viewer == null || !viewer.IsActive || other == null || !other.IsSpawned || other.Observers.Contains(viewer))
+				{
+					continue;
+				}
+				if (!pinnedByClientId.TryGetValue(viewer.ClientId, out HashSet<int> pins))
+				{
+					pinnedByClientId[viewer.ClientId] = pins = new HashSet<int>();
+				}
+				pins.Add(other.ObjectId);
+				other.NetworkManager.ServerManager.Objects.RebuildObservers(other, viewer);
+			}
+			pendingBlowAdmissions.Clear();
+		}
+
+		/// <summary>Drops blows older than <see cref="ObserverStreamingPolicy.BlowMemoryTicks"/>, and those of viewers that are gone.</summary>
+		private static void PruneBlows()
+		{
+			if (blowsByClientId.Count == 0 || !HasBlowClock)
+			{
+				return;
+			}
+			uint now = BlowClockTick;
+			prunedViewers.Clear();
+			foreach (KeyValuePair<int, Dictionary<int, uint>> viewer in blowsByClientId)
+			{
+				expiredBlows.Clear();
+				foreach (KeyValuePair<int, uint> blow in viewer.Value)
+				{
+					if (now - blow.Value > ObserverStreamingPolicy.BlowMemoryTicks)
+					{
+						expiredBlows.Add(blow.Key);
+					}
+				}
+				for (int i = 0; i < expiredBlows.Count; ++i)
+				{
+					viewer.Value.Remove(expiredBlows[i]);
+				}
+				if (viewer.Value.Count == 0)
+				{
+					prunedViewers.Add(viewer.Key);
+				}
+			}
+			for (int i = 0; i < prunedViewers.Count; ++i)
+			{
+				blowsByClientId.Remove(prunedViewers[i]);
+			}
+			prunedViewers.Clear();
 		}
 
 		/// <summary>
@@ -654,6 +824,7 @@ namespace FishMMO.Shared
 				LongestPassMilliseconds = milliseconds;
 			}
 			PruneVisibleSince();
+			PruneBlows();
 		}
 
 		/// <summary>Drops the visible-since records of viewers no longer ranked (gone).</summary>
@@ -957,14 +1128,21 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// A viewer is near combat when it is in combat itself, any candidate is fighting it, its target is one it may harm
-		/// or one already fighting, or a character in combat is within the engagement range (a fight it could be drawn into
-		/// or is watching from striking distance).
+		/// A viewer is near combat when it is in combat itself, any candidate is fighting it, or its target is one it may
+		/// harm or one already fighting.
 		/// </summary>
 		/// <remarks>
+		/// <para>
 		/// Not merely "has a target". The target is whatever character is under the crosshair (TargetController reports
 		/// the hovered one), so in a crowd a player walking through town always had one, and the idle send interval never
 		/// engaged: the 11-15 simulate run measured 0% of player ticks on it, against 91% the run before.
+		/// </para>
+		/// <para>
+		/// Not "a character in combat within the engagement range" either. A bystander watching someone else's fight sees it
+		/// at the idle interval (100 ms batches instead of 67 ms); the moment anyone in it targets, strikes or is struck by
+		/// the viewer, the viewer is part of it and back at the full rate. Measured with the old rule: a player standing
+		/// at the edge of a 100-character fight was on the idle interval 2% of the time.
+		/// </para>
 		/// </remarks>
 		private static bool IsNearCombat(bool viewerInCombat, List<Candidate> viewerCandidates)
 		{
@@ -975,7 +1153,7 @@ namespace FishMMO.Shared
 			for (int i = 0; i < viewerCandidates.Count; ++i)
 			{
 				Candidate candidate = viewerCandidates[i];
-				if (candidate.CombatRelevant || (candidate.Engaged && candidate.Entry.InCombat))
+				if (candidate.CombatRelevant)
 				{
 					return true;
 				}
@@ -1051,12 +1229,18 @@ namespace FishMMO.Shared
 			 *
 			 * Pins still occupy budget slots, so a player fighting several enemies simply
 			 * leaves fewer slots for strangers — which is the right trade. */
-			bool engagedWith = observed.InCombat &&
+			bool engagedWith = (observed.InCombat &&
 				distance <= ObserverStreamingPolicy.EngagementRangeCeiling &&
 				viewer.Character != null &&
 				observed.Character != null &&
 				(observed.IsFoughtBy(viewer.Character.ID) ||
-				 viewer.IsFoughtBy(observed.Character.ID));
+				 viewer.IsFoughtBy(observed.Character.ID))) ||
+				/* A blow in either direction (NoteBlow), whoever struck it: loot credit above is only earned by players, so
+				 * a monster that struck the viewer is a fight only through this. Not gated on InCombat, which a pause in
+				 * the fight can drop before the blow memory runs out. */
+				(distance <= ObserverStreamingPolicy.EngagementRangeCeiling &&
+				 viewer.NetworkObject.Owner != null &&
+				 HasRecentBlow(viewer.NetworkObject.Owner.ClientId, observed.NetworkObject.ObjectId));
 
 			/* The target pin is bounded by the engagement ceiling like the other two.
 			 * Previously implicit (hover targeting reaches 50 m at most), it has to be

@@ -40,6 +40,46 @@ namespace FishMMO.UnitTests.Weather
 			LogAssert.IsTrue(sheet.Base > 250f, $"a lifted fog is a sheet with its base above the ground, got {sheet.Base:0} m");
 		}
 
+		[Test]
+		public void ALiftedSheetLeavesNoSkinOnAPeakThatStandsOutOfIt()
+		{
+			// A peak 1500 m over pooled air at 300 m. A lifted sheet is a flat-topped deck, and the peak
+			// stands out of it bare — the skin over a sheet's level base coated the mountain from the base up
+			// to its silhouette.
+			var lying = new FogLayerView { Extinction = 0.01f, Depth = 200f, Lift = 0f, TopSoftness = 5f };
+			var lifted = lying;
+			lifted.Lift = 1f;
+			FogLayerView.Column sheet = lifted.Over(1500f, 300f);
+			Assert.That(sheet.Top, Is.EqualTo(300f + 200f).Within(1e-3f), "the sheet's top is level, the pooled air's plus its depth");
+			Assert.That(sheet.Profile(1500f + 1f), Is.EqualTo(0f), "no fog on the peak");
+			Vector2 shell = lifted.Shell(1500f, 300f);
+			LogAssert.IsTrue(shell.y < 1500f, $"and the march's ceiling no longer climbs to the peak: {shell.y:0} m");
+		}
+
+		[Test]
+		public void ALyingFogSkinsTheRisesNearItButNotTheSummitsFarAboveIt()
+		{
+			// Pooled air at 300 m under a lying fog 200 m deep: its top stands at 500 m. A rise just over that
+			// is still under the inversion and keeps its skin; a summit at 1500 m is up in the warm, dry air
+			// over it and stands clear, as hills over a valley fog do.
+			var lying = new FogLayerView { Extinction = 0.01f, Depth = 200f, Lift = 0f, TopSoftness = 5f };
+			FogLayerView.Column rise = lying.Over(520f, 300f);
+			LogAssert.IsTrue(rise.Top > 520f + 0.5f * lying.Depth * FogLayerView.RidgeSkin, $"a rise just over the fog's top keeps a skin: top {rise.Top - 520f:0} m over it");
+			FogLayerView.Column summit = lying.Over(1500f, 300f);
+			Assert.That(summit.Top, Is.EqualTo(500f).Within(1e-3f), "the summit's top is the pool's level");
+			Assert.That(summit.Profile(1500f + 1f), Is.EqualTo(0f), "no fog on the summit");
+
+			// The skin thins with height, never steps: the top over the ground falls smoothly as the ground rises.
+			float last = float.MaxValue;
+			for (float ground = 500f; ground <= 700f; ground += 2f)
+			{
+				float over = lying.Over(ground, 300f).Top - ground;
+				LogAssert.IsTrue(over <= last + 1e-3f, $"the skin over ground at {ground:0} m ({over:0.0} m) is no thicker than lower down ({last:0.0} m)");
+				last = over;
+			}
+			LogAssert.IsTrue(last < -lying.TopSoftness, $"and a fog's depth up it is gone: top {last:0} m under the ground");
+		}
+
 		private static PlanetAir Earth => PlanetAir.Earthlike;
 
 		/// <summary>Calm air just after dawn, as damp as a fog morning's.</summary>

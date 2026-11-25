@@ -151,6 +151,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			"ObserverByteBudget",
 			"ObserverUpdateCostBytes",
 			"ObserverIdleCostShare",
+			"ObserverResourceInterest",
+			"ObserverBlowMemoryTicks",
+			"ObserverMinimumVisibleTicks",
+			"ObserverMinimumHiddenTicks",
+			"ObserverCombatEffectRange",
 		};
 
 		/// <summary>
@@ -183,7 +188,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"reschedule={ObserverStreamingPolicy.RescheduleIntervalTicks} ticks " +
 				$"maxSendInterval={ObserverStreamingPolicy.MaxSendInterval} " +
 				$"visibilityBudget(unclassified)={ObserverStreamingPolicy.VisibilityBudget} budgetOverrides={DescribeBudgetOverrides()} " +
-				$"byteBudget={(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget}B/s update={ObserverStreamingPolicy.UpdateCostBytes}B idle={ObserverStreamingPolicy.IdleCostShare}" : "off")}");
+				$"byteBudget={(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget}B/s update={ObserverStreamingPolicy.UpdateCostBytes}B idle={ObserverStreamingPolicy.IdleCostShare}" : "off")} " +
+				$"hold visible/hidden={ObserverStreamingRegistry.MinimumVisibleTicks}/{ObserverStreamingRegistry.MinimumHiddenTicks} ticks " +
+				$"blowMemory={ObserverStreamingPolicy.BlowMemoryTicks} ticks resourceInterest={(ObserverStreamingPolicy.ResourceInterest ? "on" : "off")} " +
+				$"combatEffects={(ObserverStreamingPolicy.CombatEffectRange > 0f ? $"{ObserverStreamingPolicy.CombatEffectRange:0}m" : "everyone")}");
 		}
 
 		/// <summary>

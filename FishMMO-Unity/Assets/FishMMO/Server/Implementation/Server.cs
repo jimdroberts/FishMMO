@@ -861,7 +861,9 @@ namespace FishMMO.Server.Implementation
 			// 3. Stop accepting new connections.
 			NetworkWrapper?.StopServer();
 
-			// 4. Deinitialize behaviours and data containers.
+			// 4. Let every behaviour save what reaches into other behaviours while all of them are still up, then
+			//    deinitialize behaviours and data containers.
+			ShutdownFlushAllBehaviours();
 			DeinitializeAllBehaviours();
 			UnregisterAllBehaviours();
 
@@ -1095,6 +1097,34 @@ namespace FishMMO.Server.Implementation
 						// Register to registry before initializing
 						this.DataContainerRegistry.Register(container);
 					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Runs every behaviour's shutdown flush (<see cref="ServerBehaviour.ShutdownFlush"/>) before any is deinitialized.
+		/// </summary>
+		private void ShutdownFlushAllBehaviours()
+		{
+			if (this.serverBehaviors == null || this.BehaviourRegistry == null)
+			{
+				return;
+			}
+			// Same order as the deinitialization that follows; nothing is torn down until every behaviour has flushed.
+			for (int i = this.serverBehaviors.Count - 1; i >= 0; i--)
+			{
+				var behaviour = this.serverBehaviors[i];
+				if (behaviour == null)
+				{
+					continue;
+				}
+				try
+				{
+					behaviour.ShutdownFlush();
+				}
+				catch (Exception ex)
+				{
+					Log.Error("Server", $"Shutdown flush of {behaviour.GetType().Name} failed: {ex}");
 				}
 			}
 		}

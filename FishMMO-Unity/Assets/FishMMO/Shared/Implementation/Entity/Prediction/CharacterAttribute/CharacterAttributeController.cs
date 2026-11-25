@@ -978,6 +978,9 @@ namespace FishMMO.Shared
 			lastSentObservedResources = default;
 			hasSentObservedResources = false;
 			observedResourceMaximaResends = 0;
+			// The observers it was in sync with knew the previous occupant.
+			resourceSyncedObservers.Clear();
+			nextResourceInterestScanTick = 0u;
 			/* The sequence window belongs to the character, not to the pooled object. Left behind,
 			 * the next occupant's first pushes would be compared against a stranger's counter and
 			 * silently discarded until it caught up. */
@@ -2847,6 +2850,7 @@ namespace FishMMO.Shared
 			}
 
 			uint tick = base.TimeManager.LocalTick;
+			ScanResourceInterest(tick);
 
 			CharacterAttributeResourceState state = GetObservedResourceState();
 
@@ -3003,14 +3007,136 @@ namespace FishMMO.Shared
 
 			/* Observers only. The owner holds these values authoritatively through the reconcile,
 			 * at full precision and every tick, and its client discarded this message on arrival. */
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, message,
-				reliable ? Channel.Reliable : Channel.Unreliable);
+			SendObservedResources(message, reliable);
 
 			/* The baseline is the message as SENT, including fields the mask left out — those were
 			 * left out precisely because they equal what the receiver already holds, so recording
 			 * them keeps the next comparison honest without a second copy of the omission rule. */
 			lastSentObservedResources = message;
 			hasSentObservedResources = true;
+		}
+
+		/// <summary>
+		/// Observers kept current on this character's resources: each has had every push since a full one. An observer
+		/// that loses interest (ObserverStreamingRegistry.WantsLiveResources) leaves the set and is sent nothing; one that
+		/// gains it gets a full, reliable message first, so an omitted field never means "unchanged" to a receiver that
+		/// missed the change.
+		/// </summary>
+		private readonly HashSet<NetworkConnection> resourceSyncedObservers = new HashSet<NetworkConnection>();
+		private static readonly HashSet<NetworkConnection> resourceDeltaRecipients = new HashSet<NetworkConnection>();
+		private static readonly HashSet<NetworkConnection> resourceFullRecipients = new HashSet<NetworkConnection>();
+		private static readonly List<NetworkConnection> resourceSyncedScratch = new List<NetworkConnection>();
+
+		/// <summary>Ticks between scans for observers that became interested in a character whose resources are not moving.</summary>
+		private const uint ResourceInterestScanTicks = 3;
+		private uint nextResourceInterestScanTick;
+
+		/// <summary>Sends a resource message to the interested observers: the message to those in sync, a full one to the rest.</summary>
+		private void SendObservedResources(CharacterResourcesBroadcast message, bool reliable)
+		{
+			NetworkObject nob = base.NetworkObject;
+			if (!ObserverStreamingPolicy.ResourceInterest)
+			{
+				ObserverBroadcastScope.BroadcastToObserversExceptOwner(nob, message, reliable ? Channel.Reliable : Channel.Unreliable);
+				return;
+			}
+			if (nob == null || !nob.IsSpawned || base.NetworkManager == null)
+			{
+				return;
+			}
+			resourceDeltaRecipients.Clear();
+			resourceFullRecipients.Clear();
+			foreach (NetworkConnection connection in nob.Observers)
+			{
+				if (connection == null || ReferenceEquals(connection, nob.Owner))
+				{
+					continue;
+				}
+				if (!ObserverStreamingRegistry.WantsLiveResources(connection, nob.ObjectId))
+				{
+					resourceSyncedObservers.Remove(connection);
+					continue;
+				}
+				if (resourceSyncedObservers.Contains(connection))
+				{
+					resourceDeltaRecipients.Add(connection);
+				}
+				else
+				{
+					resourceFullRecipients.Add(connection);
+					resourceSyncedObservers.Add(connection);
+				}
+			}
+			if (resourceDeltaRecipients.Count > 0)
+			{
+				base.NetworkManager.ServerManager.Broadcast(resourceDeltaRecipients, message, true, reliable ? Channel.Reliable : Channel.Unreliable);
+				resourceDeltaRecipients.Clear();
+			}
+			if (resourceFullRecipients.Count > 0)
+			{
+				CharacterResourcesBroadcast full = message;
+				full.Mask = CharacterResourcesMask.All;
+				base.NetworkManager.ServerManager.Broadcast(resourceFullRecipients, full, true, Channel.Reliable);
+				resourceFullRecipients.Clear();
+			}
+		}
+
+		/// <summary>
+		/// Brings observers that became interested since the last push up to date with the last message sent (every field,
+		/// reliable), and forgets those that stopped observing. Runs every <see cref="ResourceInterestScanTicks"/> ticks, so a
+		/// character whose bar is not moving still reaches a viewer that has just targeted it.
+		/// </summary>
+		private void ScanResourceInterest(uint tick)
+		{
+			if (!ObserverStreamingPolicy.ResourceInterest || (int)(tick - nextResourceInterestScanTick) < 0)
+			{
+				return;
+			}
+			nextResourceInterestScanTick = tick + ResourceInterestScanTicks;
+			NetworkObject nob = base.NetworkObject;
+			if (nob == null || !nob.IsSpawned || base.NetworkManager == null)
+			{
+				return;
+			}
+			if (resourceSyncedObservers.Count > 0)
+			{
+				resourceSyncedScratch.Clear();
+				foreach (NetworkConnection connection in resourceSyncedObservers)
+				{
+					if (connection == null || !nob.Observers.Contains(connection))
+					{
+						resourceSyncedScratch.Add(connection);
+					}
+				}
+				for (int i = 0; i < resourceSyncedScratch.Count; ++i)
+				{
+					resourceSyncedObservers.Remove(resourceSyncedScratch[i]);
+				}
+				resourceSyncedScratch.Clear();
+			}
+			if (!hasSentObservedResources)
+			{
+				// Nothing sent yet: every observer holds the spawn payload's values, and the first push sends every field.
+				return;
+			}
+			resourceFullRecipients.Clear();
+			foreach (NetworkConnection connection in nob.Observers)
+			{
+				if (connection == null || ReferenceEquals(connection, nob.Owner) || resourceSyncedObservers.Contains(connection) ||
+					!ObserverStreamingRegistry.WantsLiveResources(connection, nob.ObjectId))
+				{
+					continue;
+				}
+				resourceFullRecipients.Add(connection);
+				resourceSyncedObservers.Add(connection);
+			}
+			if (resourceFullRecipients.Count > 0)
+			{
+				CharacterResourcesBroadcast full = lastSentObservedResources;
+				full.Mask = CharacterResourcesMask.All;
+				base.NetworkManager.ServerManager.Broadcast(resourceFullRecipients, full, true, Channel.Reliable);
+				resourceFullRecipients.Clear();
+			}
 		}
 
 		/// <summary>The resource state observers are sent: the server's, without the regeneration tick.</summary>

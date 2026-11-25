@@ -238,6 +238,35 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(body.Contains("PersistenceFallbackGate.WaitAsync("), "and the remaining fallback is bounded");
 		}
 
+		/// <summary>
+		/// The character shutdown save runs before any behaviour is torn down. It calls the inventory system's item flush, and
+		/// behaviours are deinitialized in reverse registration order, each clearing its server as it goes: run from
+		/// CharacterSystem.OnDeinitialize the flush found the inventory system already without a server, and a graceful
+		/// shutdown lost every item change since the last snapshot ("Database service registry is unavailable").
+		/// </summary>
+		[Test]
+		public void ShutdownSave_RunsBeforeAnyBehaviourIsTornDown()
+		{
+			string server = ReadSource("Assets/FishMMO/Server/Implementation/Server.cs");
+			string shutdown = MethodBody(server, "private void PerformShutdown()", "private void ShutdownFlushAllBehaviours()");
+			int flush = shutdown.IndexOf("ShutdownFlushAllBehaviours();", StringComparison.Ordinal);
+			int teardown = shutdown.IndexOf("DeinitializeAllBehaviours();", StringComparison.Ordinal);
+			LogAssert.IsTrue(flush >= 0 && teardown > flush, "every behaviour flushes before the first one is deinitialized");
+
+			string behaviour = ReadSource(ServerBehaviourPath);
+			LogAssert.IsTrue(behaviour.Contains("protected virtual void OnShutdownFlush() { }") && behaviour.Contains("public void ShutdownFlush()"),
+				"behaviours have a shutdown flush, empty unless overridden");
+
+			string characters = ReadSource(CharacterSystemPath);
+			string onFlush = MethodBody(characters, "protected override void OnShutdownFlush()", "public override void OnDeinitialize()");
+			LogAssert.IsTrue(onFlush.Contains("ShutDownCharacters();"), "the character save runs in the flush");
+			string onDeinit = MethodBody(characters, "public override void OnDeinitialize()", "private void ShutDownCharacters()");
+			LogAssert.IsTrue(onDeinit.Contains("if (!charactersShutDown)"), "teardown does not save a second time");
+			string body = MethodBody(characters, "private void ShutDownCharacters()", "#region Shutdown Flush");
+			LogAssert.IsTrue(body.Contains("FlushForShutdownAsync(") && body.Contains("charactersShutDown = true;"),
+				"the one save and claim release, marked done");
+		}
+
 		#endregion
 	}
 }

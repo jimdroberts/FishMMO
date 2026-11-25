@@ -46,9 +46,27 @@ namespace FishMMO.Client
 		/// <summary>A clap quieter than this (<see cref="Level"/>) is not made at all.</summary>
 		public const float QuietestLevel = 0.03f;
 
+		/// <summary>
+		/// Seconds of a frame a web build spends making claps (it has no worker thread). A clap takes some hundreds of
+		/// milliseconds; its sound takes three seconds a kilometre to arrive, so this is nearly always time enough.
+		/// </summary>
+		public const double FrameBudgetSeconds = 0.002;
+
+		/// <summary>Seconds a frame may spend instead when a clap's sound is about to arrive: a near strike.</summary>
+		public const double UrgentFrameBudgetSeconds = 0.010;
+
+		/// <summary>
+		/// A clap whose sound arrives within this many seconds is made at the urgent pace: a strike within about 700 m,
+		/// whose few seconds' grace the ordinary pace would overrun.
+		/// </summary>
+		public const double UrgentSeconds = 2.0;
+
 		private sealed class Clap
 		{
+			/// <summary>Being made on a worker thread (desktop), or</summary>
 			public Task<ThunderSynth.Result> Job;
+			/// <summary>being made a piece a frame on the main thread (web).</summary>
+			public ThunderSynth.Renderer Pieces;
 			public ThunderSynth.Result Made;
 			public bool Ready;
 			/// <summary>When (motion clock) the strike happened.</summary>
@@ -125,7 +143,8 @@ namespace FishMMO.Client
 				Intensity = strike.Intensity,
 			};
 #if UNITY_WEBGL && !UNITY_EDITOR
-			clap.Job = Task.FromResult(ThunderSynth.Render(channel, listener));
+			// No worker thread: made a piece a frame (MakePieces), never in one go, which froze the game at every strike.
+			clap.Pieces = new ThunderSynth.Renderer(channel, listener);
 #else
 			clap.Job = Task.Run(() => ThunderSynth.Render(channel, listener));
 #endif
@@ -137,23 +156,36 @@ namespace FishMMO.Client
 		{
 			double dsp = AudioSettings.dspTime;
 			double now = WorldMotion.Seconds;
+			MakePieces(now);
 			for (int i = claps.Count - 1; i >= 0; i--)
 			{
 				Clap clap = claps[i];
 				if (!clap.Ready)
 				{
-					if (!clap.Job.IsCompleted)
+					if (clap.Pieces != null)
 					{
-						continue;
+						if (!clap.Pieces.Done)
+						{
+							continue;
+						}
+						clap.Made = clap.Pieces.Result;
+						clap.Pieces = null;
 					}
-					if (clap.Job.IsFaulted || clap.Job.IsCanceled)
+					else
 					{
-						Debug.LogWarning("[Thunder] A clap could not be made: " + clap.Job.Exception?.GetBaseException().Message);
-						claps.RemoveAt(i);
-						continue;
+						if (!clap.Job.IsCompleted)
+						{
+							continue;
+						}
+						if (clap.Job.IsFaulted || clap.Job.IsCanceled)
+						{
+							Debug.LogWarning("[Thunder] A clap could not be made: " + clap.Job.Exception?.GetBaseException().Message);
+							claps.RemoveAt(i);
+							continue;
+						}
+						clap.Made = clap.Job.Result;
+						clap.Job = null;
 					}
-					clap.Made = clap.Job.Result;
-					clap.Job = null;
 					clap.Ready = true;
 					if (clap.Made.Samples == null || clap.Made.Samples.Length == 0)
 					{
@@ -180,6 +212,51 @@ namespace FishMMO.Client
 				{
 					UnityEngine.Object.Destroy(clap.Clip);
 					claps.RemoveAt(i);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Works on the claps being made a piece at a time, the one whose sound arrives first first, for this frame's
+		/// budget: <see cref="FrameBudgetSeconds"/>, or <see cref="UrgentFrameBudgetSeconds"/> while one is about to be heard.
+		/// </summary>
+		private void MakePieces(double now)
+		{
+			long started = System.Diagnostics.Stopwatch.GetTimestamp();
+			long deadline = long.MinValue;
+			while (true)
+			{
+				Clap first = null;
+				double firstArrives = double.MaxValue;
+				foreach (Clap clap in claps)
+				{
+					if (clap.Pieces == null || clap.Pieces.Done)
+					{
+						continue;
+					}
+					double arrives = clap.StruckAt + clap.Pieces.NearestMetres / SoundSynth.SpeedOfSound;
+					if (arrives < firstArrives)
+					{
+						firstArrives = arrives;
+						first = clap;
+					}
+				}
+				if (first == null)
+				{
+					return;
+				}
+				if (deadline == long.MinValue)
+				{
+					double budget = firstArrives - now < UrgentSeconds ? UrgentFrameBudgetSeconds : FrameBudgetSeconds;
+					deadline = started + (long)(budget * System.Diagnostics.Stopwatch.Frequency);
+				}
+				if (!first.Pieces.Step(deadline))
+				{
+					return;
+				}
+				if (System.Diagnostics.Stopwatch.GetTimestamp() >= deadline)
+				{
+					return;
 				}
 			}
 		}

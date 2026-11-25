@@ -394,26 +394,24 @@ namespace FishNet.Serializing
 
         #region Prediction.
         /// <summary>
-        /// Reads a reconcile written by WriteDeltaReconcile.
+        /// FISHMMO EDIT: (feat/acknowledged-delta-reconciles) reads the header WriteDeltaReconcile writes for types with
+        /// delta serializers. The body follows; read it with ReadDeltaReconcileBody.
         /// </summary>
-        /// <param name = "fullReconcile">Full reconcile a delta is applied to.</param>
         /// <param name = "isFull">True if the reconcile was written so that it could be read without a baseline.</param>
-        /// <param name = "fullReconcileId">Identifies the full reconcile a delta was written against, or this reconcile when isFull is true.</param>
-        internal T ReadDeltaReconcile<T>(T fullReconcile, out bool isFull, out byte fullReconcileId)
+        /// <param name = "id">This reconcile's id.</param>
+        /// <param name = "baselineDistance">Writes back the delta's baseline is; 0 when isFull.</param>
+        internal void ReadDeltaReconcileHeader(out bool isFull, out byte id, out byte baselineDistance)
         {
-            if (!Writer.HasDeltaSerializers<T>())
-            {
-                isFull = true;
-                fullReconcileId = 0;
-                return ReadReconcile<T>();
-            }
-
             byte header = ReadUInt8Unpacked();
             isFull = (header & Writer.RECONCILE_FULL_FLAG) != 0;
-            fullReconcileId = (byte)(header & Writer.RECONCILE_ID_MASK);
-
-            return isFull ? ReadReconcile<T>() : ReadDelta(fullReconcile);
+            id = (byte)(header & Writer.RECONCILE_ID_MASK);
+            baselineDistance = isFull ? (byte)0 : ReadUInt8Unpacked();
         }
+
+        /// <summary>
+        /// FISHMMO EDIT: reads the body after ReadDeltaReconcileHeader: in full, or a delta applied to <paramref name="baseline"/>.
+        /// </summary>
+        internal T ReadDeltaReconcileBody<T>(T baseline, bool isFull) => isFull ? ReadReconcile<T>() : ReadDelta(baseline);
 
         /// <summary>
         /// Reads replicates written by WriteDeltaReplicate.

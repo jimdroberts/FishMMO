@@ -62,15 +62,15 @@ MonoBehaviour:
       RespawnPositions:
         m_keys:
         - 'Marhut Respawn [332c70a7]'
-        - 'Ungate Respawn [7c14b111]'
         - 'High Liniarpunt Respawn [2bde4b35]'
+        - 'Ungate Respawn [7c14b111]'
         m_values:
         - Position: {x: -659.9686, y: 4.8836913, z: -1893.2039}
           Rotation: {x: -0, y: -0.6883546, z: -0, w: -0.7253744}
-        - Position: {x: 1034.2042, y: 17.452784, z: -830.8534}
-          Rotation: {x: -0, y: -0.5372996, z: -0, w: -0.8433915}
         - Position: {x: 212.79272, y: 4.5090575, z: -1176.7734}
           Rotation: {x: -0, y: 0.8616291, z: -0, w: -0.5075384}
+        - Position: {x: 1034.2042, y: 17.452784, z: -830.8534}
+          Rotation: {x: -0, y: -0.5372996, z: -0, w: -0.8433915}
       Teleporters:
         m_keys:
         - Gate to Moron 2
@@ -85,26 +85,8 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: -434.0171, z: 0}
           BoundarySize: {x: 3800, y: 3811.1738, z: 4750}
       Waypoints:
-        m_keys: 00000000040000000b0000002c00000001000000i
+        m_keys: 0b00000004000000000000002c00000001000000i
         m_values:
-        - Index: 0
-          Kind: 0
-          Name: Ungate
-          Description: 
-          Position: {x: 1036.74, y: 17.352783, z: -836.2912}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: 1036.74, y: 17.352783, z: -836.2912}
-          ArrivalYaw: 245
-        - Index: 4
-          Kind: 0
-          Name: High Liniarpunt
-          Description: 
-          Position: {x: 209.88387, y: 6.5584717, z: -1171.5256}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: 209.88387, y: 6.5584717, z: -1171.5256}
-          ArrivalYaw: 61.000004
         - Index: 11
           Kind: 0
           Name: Rulupalisade Keep
@@ -114,6 +96,24 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: 15.124977, y: 59.1781, z: -734.48}
           ArrivalYaw: 215
+        - Index: 4
+          Kind: 0
+          Name: High Liniarpunt
+          Description: 
+          Position: {x: 209.88387, y: 6.5584717, z: -1171.5256}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: 209.88387, y: 6.5584717, z: -1171.5256}
+          ArrivalYaw: 61.000004
+        - Index: 0
+          Kind: 0
+          Name: Ungate
+          Description: 
+          Position: {x: 1036.74, y: 17.352783, z: -836.2912}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: 1036.74, y: 17.352783, z: -836.2912}
+          ArrivalYaw: 245
         - Index: 44
           Kind: 0
           Name: Tho Gate
@@ -610,21 +610,21 @@ MonoBehaviour:
       RespawnPositions:
         m_keys:
         - 'Soda-white Vixeinfield Respawn [5c621b8a]'
+        - 'Keai Inn Respawn [1091a6e6]'
         - 'Brichamber Respawn [7ff07ff7]'
         - 'Kraakkhold Respawn [3025d570]'
         - 'Alstead Respawn [7c2651ee]'
-        - 'Keai Inn Respawn [1091a6e6]'
         m_values:
         - Position: {x: -478.34442, y: 309.11624, z: 1428.8458}
           Rotation: {x: -0, y: -0.9890159, z: -0, w: -0.1478095}
+        - Position: {x: 263.04117, y: 440.18152, z: -323.06665}
+          Rotation: {x: -0, y: 0.6293205, z: -0, w: -0.77714586}
         - Position: {x: -1675.2911, y: 121.39426, z: -1917.9879}
           Rotation: {x: -0, y: 0.96363044, z: -0, w: -0.2672383}
         - Position: {x: 1798.1799, y: 122.47264, z: -1547.3702}
           Rotation: {x: -0, y: -0.9588197, z: -0, w: -0.2840156}
         - Position: {x: 749.2213, y: 432.25952, z: -20.301321}
           Rotation: {x: -0, y: 0.026176952, z: -0, w: -0.99965733}
-        - Position: {x: 263.04117, y: 440.18152, z: -323.06665}
-          Rotation: {x: -0, y: 0.6293205, z: -0, w: -0.77714586}
       Teleporters:
         m_keys:
         - Gate to Moron 1
@@ -639,7 +639,7 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: 763.6801, z: 0}
           BoundarySize: {x: 4250, y: 3718.0283, z: 4250}
       Waypoints:
-        m_keys: 05000000060000001e00000008000000030000000d0000000000000033000000i
+        m_keys: 05000000080000000d0000003300000003000000000000001e00000006000000i
         m_values:
         - Index: 5
           Kind: 0
@@ -650,24 +650,6 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: 1793.148, y: 122.37264, z: -1550.6381}
           ArrivalYaw: 327
-        - Index: 6
-          Kind: 0
-          Name: Brichamber
-          Description: 
-          Position: {x: -1680.4341, y: 121.29426, z: -1914.8976}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: -1680.4341, y: 121.29426, z: -1914.8976}
-          ArrivalYaw: 31.000002
-        - Index: 30
-          Kind: 0
-          Name: Keai Inn
-          Description: 
-          Position: {x: 263.17975, y: 440.0815, z: -320.05832}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: 263.17975, y: 440.0815, z: -320.05832}
-          ArrivalYaw: 102
         - Index: 8
           Kind: 0
           Name: Castle Ivyow
@@ -677,15 +659,6 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: -1481.4076, y: 121.99936, z: -1940.5275}
           ArrivalYaw: 261
-        - Index: 3
-          Kind: 0
-          Name: Soda-white Vixeinfield
-          Description: 
-          Position: {x: -484.08224, y: 309.01624, z: 1427.0916}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: -484.08224, y: 309.01624, z: 1427.0916}
-          ArrivalYaw: 343
         - Index: 13
           Kind: 0
           Name: Iskaakir's Hold
@@ -695,15 +668,6 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: -313.01404, y: 163.68309, z: -1578.7324}
           ArrivalYaw: 317
-        - Index: 0
-          Kind: 0
-          Name: Alstead
-          Description: 
-          Position: {x: 755.2131, y: 432.15952, z: -19.987305}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: 755.2131, y: 432.15952, z: -19.987305}
-          ArrivalYaw: 177
         - Index: 51
           Kind: 0
           Name: Rod Toll
@@ -713,6 +677,42 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: 254.03792, y: 516.4214, z: 52.538834}
           ArrivalYaw: 27.000002
+        - Index: 3
+          Kind: 0
+          Name: Soda-white Vixeinfield
+          Description: 
+          Position: {x: -484.08224, y: 309.01624, z: 1427.0916}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: -484.08224, y: 309.01624, z: 1427.0916}
+          ArrivalYaw: 343
+        - Index: 0
+          Kind: 0
+          Name: Alstead
+          Description: 
+          Position: {x: 755.2131, y: 432.15952, z: -19.987305}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: 755.2131, y: 432.15952, z: -19.987305}
+          ArrivalYaw: 177
+        - Index: 30
+          Kind: 0
+          Name: Keai Inn
+          Description: 
+          Position: {x: 263.17975, y: 440.0815, z: -320.05832}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: 263.17975, y: 440.0815, z: -320.05832}
+          ArrivalYaw: 102
+        - Index: 6
+          Kind: 0
+          Name: Brichamber
+          Description: 
+          Position: {x: -1680.4341, y: 121.29426, z: -1914.8976}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: -1680.4341, y: 121.29426, z: -1914.8976}
+          ArrivalYaw: 31.000002
       PointsOfInterest:
       - Name: Air Elemental Alcove
         Description: 'Dungeon entrance, deep inside Air Elemental Alcove: reached through the cave.'
@@ -1338,17 +1338,17 @@ MonoBehaviour:
         m_values: []
       RespawnPositions:
         m_keys:
-        - 'Skabiwarren Respawn [4bb809e4]'
-        - 'South Paaenclosure Respawn [6b608415]'
         - 'Grakden Respawn [0a65d8b9]'
+        - 'South Paaenclosure Respawn [6b608415]'
+        - 'Skabiwarren Respawn [4bb809e4]'
         - 'Golurashadow Respawn [01eef504]'
         m_values:
-        - Position: {x: 142.12308, y: 65.51388, z: -465.98795}
-          Rotation: {x: -0, y: 0.9975641, z: -0, w: -0.06975648}
-        - Position: {x: -1168.7452, y: 78.95968, z: -712.1796}
-          Rotation: {x: -0, y: 0.83388585, z: -0, w: -0.551937}
         - Position: {x: -300.97162, y: 51.033775, z: -342.77307}
           Rotation: {x: -0, y: -0.55919296, z: -0, w: -0.82903755}
+        - Position: {x: -1168.7452, y: 78.95968, z: -712.1796}
+          Rotation: {x: -0, y: 0.83388585, z: -0, w: -0.551937}
+        - Position: {x: 142.12308, y: 65.51388, z: -465.98795}
+          Rotation: {x: -0, y: 0.9975641, z: -0, w: -0.06975648}
         - Position: {x: -51.90299, y: 54.05709, z: -187.07198}
           Rotation: {x: -0, y: 0.7009093, z: -0, w: -0.7132504}
       Teleporters:
@@ -1361,17 +1361,8 @@ MonoBehaviour:
         - BoundaryOrigin: {x: 0, y: -339.19287, z: 0}
           BoundarySize: {x: 3375, y: 3606.8906, z: 2250}
       Waypoints:
-        m_keys: 0000000008000000010000000300000002000000i
+        m_keys: 0800000001000000030000000200000000000000i
         m_values:
-        - Index: 0
-          Kind: 0
-          Name: Golurashadow
-          Description: 
-          Position: {x: -51.798275, y: 53.957092, z: -181.07289}
-          Icon: {fileID: 0}
-          HasArrival: 1
-          ArrivalPosition: {x: -51.798275, y: 53.957092, z: -181.07289}
-          ArrivalYaw: 91.00001
         - Index: 8
           Kind: 0
           Name: Hesestead Keep
@@ -1408,6 +1399,15 @@ MonoBehaviour:
           HasArrival: 1
           ArrivalPosition: {x: 136.18147, y: 65.41388, z: -465.15292}
           ArrivalYaw: 7.999999
+        - Index: 0
+          Kind: 0
+          Name: Golurashadow
+          Description: 
+          Position: {x: -51.798275, y: 53.957092, z: -181.07289}
+          Icon: {fileID: 0}
+          HasArrival: 1
+          ArrivalPosition: {x: -51.798275, y: 53.957092, z: -181.07289}
+          ArrivalYaw: 91.00001
       PointsOfInterest:
       - Name: Antenna Tumulus of the Empty Bone
         Description: 'Dungeon entrance (barrow)

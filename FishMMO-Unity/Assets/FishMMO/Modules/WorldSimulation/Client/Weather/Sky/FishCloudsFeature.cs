@@ -476,6 +476,9 @@ namespace FishMMO.Client
 			private static readonly int HistoryId = Shader.PropertyToID("_FishCloudHistory");
 			private static readonly int HistoryWeightId = Shader.PropertyToID("_FishCloudHistoryWeight");
 			private static readonly int BufferId = Shader.PropertyToID("_FishCloudBuffer");
+			private static readonly int CompositeMotionId = Shader.PropertyToID("_FishCloudCompositeMotion");
+			/// <summary>The march's last distances, kept past the frame's passes for the water (FishWaterFog.hlsl).</summary>
+			private static readonly int DistanceId = Shader.PropertyToID("_FishCloudDistance");
 			private static readonly int ScreenId = Shader.PropertyToID("_FishCloudScreen");
 			private static readonly int BufferTexelId = Shader.PropertyToID("_FishCloudBufferTexel");
 			private static readonly int RaySourceId = Shader.PropertyToID("_FishGodRaySource");
@@ -1017,16 +1020,27 @@ namespace FishMMO.Client
 					filterMode = FilterMode.Point,
 					wrapMode = TextureWrapMode.Clamp,
 				};
-				TextureHandle marchedMotion = nearQuarter ? renderGraph.ImportTexture(state.NearMarchMotion[state.NearIndex]) : renderGraph.CreateTexture(motionDesc);
+				// The far band (CloudFarBand) begins here, metres; 0: one band.
+				FindPasses();
+				int farPass = farBandPass;
+				float band = FarBandEnabled && farPass >= 0 ? Mathf.Max(0f, sky.CloudFarBandMetres) : 0f;
+				// The march's last distances (near and far together) are kept past the frame's passes and published beside the
+				// clouds (_FishCloudDistance), for the water: it lays the clouds over itself after the composite and puts what is
+				// falling in front of them as the composite does (FishWaterFog.hlsl). At a quarter rate with no far band that is
+				// the near march's own kept target; otherwise one the camera keeps for it.
+				bool nearIsLast = nearQuarter && band <= 0f;
+				if (!nearIsLast && !state.DistanceFits(width, height))
+				{
+					state.AllocateDistance(width, height);
+				}
+				RTHandle keptDistance = nearIsLast ? state.NearMarchMotion[state.NearIndex] : state.Distance;
+				TextureHandle marchedMotion = nearQuarter ? renderGraph.ImportTexture(state.NearMarchMotion[state.NearIndex])
+					: band > 0f ? renderGraph.CreateTexture(motionDesc) : renderGraph.ImportTexture(state.Distance);
 				TextureHandle historyRead = renderGraph.ImportTexture(state.Clouds[state.Index]);
 				TextureHandle historyWrite = renderGraph.ImportTexture(state.Clouds[1 - state.Index]);
 				TextureHandle weightRead = renderGraph.ImportTexture(state.Weight[state.Index]);
 				TextureHandle weightWrite = renderGraph.ImportTexture(state.Weight[1 - state.Index]);
 
-				// The far band (CloudFarBand) begins here, metres; 0: one band.
-				FindPasses();
-				int farPass = farBandPass;
-				float band = FarBandEnabled && farPass >= 0 ? Mathf.Max(0f, sky.CloudFarBandMetres) : 0f;
 				int marching = FarSliceOverride >= 0 ? FarSliceOverride % FarSlices : state.Frame % FarSlices;
 				// The far imposter: refreshed a band of rows a frame, and drawn in place of the far band once it has been filled.
 				int imposterRefreshPass = imposterUpdatePass;
@@ -1199,7 +1213,8 @@ namespace FishMMO.Client
 					marchDesc.name = "FishCloudsMarchWithFar";
 					motionDesc.name = "FishCloudsMarchMotionWithFar";
 					marched = renderGraph.CreateTexture(marchDesc);
-					marchedMotion = renderGraph.CreateTexture(motionDesc);
+					// The last distances: kept for the water (keptDistance).
+					marchedMotion = renderGraph.ImportTexture(state.Distance);
 					TextureHandle[] imposterNewer = null, imposterOlder = null;
 					if (imposterOn)
 					{
@@ -1486,8 +1501,12 @@ namespace FishMMO.Client
 					data.Material = material;
 					data.Pass = 2;
 					data.Source = steadied;
+					// The march's distances, for how much of what is falling stands in front of the cloud laid over
+					// the world (FishClouds.shader pass 2, FishCloudFallingInFront).
+					data.Motion = marchedMotion;
 					builder.SetRenderAttachment(resourceData.activeColorTexture, 0);
 					builder.UseTexture(steadied, AccessFlags.Read);
+					builder.UseTexture(marchedMotion, AccessFlags.Read);
 					// Only a buffer smaller than the screen (a tier that rebuilds at less than the
 					// screen, or a screen past the cap) needs the depth here, to know which of its four
 					// taps belong to this pixel — but it has to be asked for all the same. A pass that samples a texture it never declared gets whatever happens to be
@@ -1502,6 +1521,7 @@ namespace FishMMO.Client
 					builder.SetRenderFunc((MarchData d, RasterGraphContext context) =>
 					{
 						d.Material.SetTexture(BufferId, d.Source);
+						d.Material.SetTexture(CompositeMotionId, d.Motion);
 						Blitter.BlitTexture(context.cmd, Vector2.one, d.Material, d.Pass);
 					});
 				}
@@ -1547,7 +1567,14 @@ namespace FishMMO.Client
 				// says the buffer above is real. Left at zero, the bodies do not attenuate at all,
 				// which is the right way to fail: an unbound buffer samples as zero and would
 				// otherwise read as "fully occluded" and empty the sky.
-				Shader.SetGlobalVector(ScreenId, new Vector4(published ? 1f : 0f, 0f, 0f, 0f));
+				// And the march's distances beside it (keptDistance), y 1 while they are this frame's: without them the water
+				// leaves what is falling where its own fog put it.
+				bool distancePublished = published && keptDistance != null && keptDistance.rt != null;
+				if (distancePublished)
+				{
+					Shader.SetGlobalTexture(DistanceId, keptDistance.rt);
+				}
+				Shader.SetGlobalVector(ScreenId, new Vector4(published ? 1f : 0f, distancePublished ? 1f : 0f, 0f, 0f));
 
 				state.PreviousViewProjection = viewProjection;
 				state.PreviousPosition = position;
@@ -1911,6 +1938,27 @@ namespace FishMMO.Client
 					NearValid = false;
 				}
 
+				/// <summary>
+				/// The march's last distances when the near march's own kept target is not the last (a far band, or the near
+				/// march at full rate): written by the last march pass and published for the water after the composite.
+				/// </summary>
+				public RTHandle Distance;
+
+				public bool DistanceFits(int width, int height) => Distance != null && Distance.rt != null && Distance.rt.width == width && Distance.rt.height == height;
+
+				public void AllocateDistance(int width, int height)
+				{
+					ReleaseDistance();
+					Distance = RTHandles.Alloc(width, height, colorFormat: MotionFormat(),
+						filterMode: FilterMode.Point, wrapMode: TextureWrapMode.Clamp, name: "FishCloudsDistance");
+				}
+
+				public void ReleaseDistance()
+				{
+					Distance?.Release();
+					Distance = null;
+				}
+
 				/// <summary>Whether the far band's slices were last laid out to end at the imposter's start.</summary>
 				public bool FarBeforeImposter;
 				public int ImposterCycle;
@@ -2072,6 +2120,7 @@ namespace FishMMO.Client
 					ReleaseFar();
 					ReleaseImposter();
 					ReleaseNear();
+					ReleaseDistance();
 				}
 			}
 		}

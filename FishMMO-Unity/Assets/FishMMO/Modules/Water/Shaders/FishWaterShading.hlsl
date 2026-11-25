@@ -518,7 +518,8 @@ half4 FishWaterShade(float3 positionWS, float2 flatXZ, float4 screenPos, float d
 	{
 		// The air in front of the sea, behind the clouds, as the composite lays it over the ground (FishWaterAirHaze).
 		color = FishWaterAirHaze(color, positionWS);
-		color = FishWaterBehindClouds(color, screenUV);
+		// With what is falling put in front of the clouds (FishWaterBehindClouds at a world point).
+		color = FishWaterBehindClouds(color, screenUV, positionWS);
 		// The air's fog on top, only what the cloud buffer did not already carry (FishWaterAirFogOver).
 		half fogKeep;
 		color = FishWaterAirFogOver(color, positionWS, screenUV, fogKeep);

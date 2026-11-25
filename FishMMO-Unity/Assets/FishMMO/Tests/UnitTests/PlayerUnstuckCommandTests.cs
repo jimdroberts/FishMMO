@@ -158,10 +158,14 @@ namespace FishMMO.UnitTests
 			{
 				return $"registered [{string.Join(", ", registered)}] but removes [{string.Join(", ", removedWords ?? Array.Empty<string>())}]";
 			}
+			const string remove = "ChatHelper.RemoveCommands(UnstuckCommandWords);";
 			string deinitialize = SourceScanPins.Body(code, "public override void OnDeinitialize(");
-			return deinitialize != null && deinitialize.Contains("ChatHelper.RemoveCommands(UnstuckCommandWords);")
-				? null
-				: "OnDeinitialize must remove the unstuck words";
+			// The teardown lives in ShutDownCharacters, which the shutdown flush or OnDeinitialize runs once.
+			string shutDown = SourceScanPins.Body(code, "private void ShutDownCharacters(");
+			bool removes = deinitialize != null &&
+				(deinitialize.Contains(remove) ||
+				 (deinitialize.Contains("ShutDownCharacters();") && shutDown != null && shutDown.Contains(remove)));
+			return removes ? null : "OnDeinitialize must remove the unstuck words";
 		}
 
 		[Test]

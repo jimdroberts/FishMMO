@@ -772,7 +772,7 @@ namespace FishNet.Serializing
         /// </summary>
         internal const byte RECONCILE_FULL_FLAG = 1 << 7;
         /// <summary>
-        /// Bits of a delta reconcile header which identify the full reconcile.
+        /// Bits of a delta reconcile header which hold the reconcile's id (FishNet.Object.Prediction.ReconcileDeltas).
         /// </summary>
         internal const byte RECONCILE_ID_MASK = RECONCILE_FULL_FLAG - 1;
 
@@ -783,13 +783,14 @@ namespace FishNet.Serializing
         internal static bool HasDeltaSerializers<T>() => GenericDeltaWriter<T>.Write != null && GenericDeltaReader<T>.Read != null;
 
         /// <summary>
-        /// Writes a delta reconcile.
+        /// Writes a delta reconcile. FISHMMO EDIT: (feat/acknowledged-delta-reconciles) the header is this reconcile's id,
+        /// with the full flag when written in full; a delta then names its baseline by how many writes back it is.
         /// </summary>
-        /// <param name = "fullReconcile">Full reconcile which value is written as a delta against.</param>
-        /// <param name = "fullReconcileId">Identifies fullReconcile, or value when fullSerialize is true, so readers can tell if they hold it.</param>
-        /// <param name = "fullSerialize">True to write the reconcile so that it may be read without a baseline.</param>
-        /// <remarks>Delta serializers must not modify the value they are given as a baseline, as it is reused for every delta until the next full reconcile.</remarks>
-        internal void WriteDeltaReconcile<T>(T fullReconcile, T value, byte fullReconcileId, bool fullSerialize)
+        /// <param name = "baseline">Reconcile which value is written as a delta against; unused when <paramref name="baselineDistance"/> is 0.</param>
+        /// <param name = "id">This reconcile's id, so readers can keep it as a baseline.</param>
+        /// <param name = "baselineDistance">Writes back the baseline is (1 or more), or 0 to write the reconcile in full.</param>
+        /// <remarks>Delta serializers must not modify the value they are given as a baseline, as it may be reused for several deltas.</remarks>
+        internal void WriteDeltaReconcile<T>(T baseline, T value, byte id, byte baselineDistance)
         {
             if (!HasDeltaSerializers<T>())
             {
@@ -797,7 +798,8 @@ namespace FishNet.Serializing
                 return;
             }
 
-            byte header = (byte)(fullReconcileId & RECONCILE_ID_MASK);
+            bool fullSerialize = baselineDistance == 0;
+            byte header = (byte)(id & RECONCILE_ID_MASK);
             if (fullSerialize)
                 header |= RECONCILE_FULL_FLAG;
             WriteUInt8Unpacked(header);
@@ -805,9 +807,14 @@ namespace FishNet.Serializing
             /* A full reconcile uses the regular serializer. Delta serializers write differences,
              * so even with FullSerialize their output cannot be read without the baseline. */
             if (fullSerialize)
+            {
                 WriteReconcile(value);
+            }
             else
-                WriteDelta(fullReconcile, value, DeltaSerializerOption.RootSerialize);
+            {
+                WriteUInt8Unpacked(baselineDistance);
+                WriteDelta(baseline, value, DeltaSerializerOption.RootSerialize);
+            }
         }
 
         /// <summary>

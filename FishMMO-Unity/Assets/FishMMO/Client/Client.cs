@@ -108,6 +108,11 @@ namespace FishMMO.Client
 		/// Dictionary of world scenes currently loaded, keyed by scene handle.
 		/// </summary>
 		private Dictionary<SceneHandle, Scene> loadedWorldScenes = new Dictionary<SceneHandle, Scene>();
+		/// <summary>
+		/// World scenes whose unload was requested and may not have finished. A hop into a scene server waits for this
+		/// to empty (see <see cref="RequestHopTokenThenConnectRoutine"/>).
+		/// </summary>
+		private readonly List<Scene> unloadingWorldScenes = new List<Scene>();
 
 		// ── Events ──────────────────────────────────────────────────────
 
@@ -527,6 +532,7 @@ namespace FishMMO.Client
 			if (NetworkManager?.ClientManager != null)
 			{
 				NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
+				NetworkManager.ClientManager.OnClientConnectionState -= OnWorldSceneConnectionState;
 			}
 			ClientPortalStateSystem.Destroy();
 			ClientNamingSystem.Destroy();
@@ -577,6 +583,8 @@ namespace FishMMO.Client
 			NetworkManager.ClientManager.RegisterBroadcast<ChatBroadcast>(ChatWindow.OnChatBroadcastFallback);
 			NetworkManager.ClientManager.OnClientConnectionState -= OnScheduleConnectionState;
 			NetworkManager.ClientManager.OnClientConnectionState += OnScheduleConnectionState;
+			NetworkManager.ClientManager.OnClientConnectionState -= OnWorldSceneConnectionState;
+			NetworkManager.ClientManager.OnClientConnectionState += OnWorldSceneConnectionState;
 			NetworkManager.SceneManager.OnLoadStart += OnSceneLoadStart;
 			NetworkManager.SceneManager.OnLoadEnd += OnSceneLoadEnd;
 			NetworkManager.SceneManager.OnUnloadEnd += OnSceneUnloadEnd;
@@ -923,6 +931,22 @@ namespace FishMMO.Client
 
 		private IEnumerator RequestHopTokenThenConnectRoutine(ushort port, bool isWorldServer)
 		{
+			/* Into a scene server only once the last one's world scenes are gone: the new server's copy of the same
+			 * scene is not loaded while the old one is present (see OnWorldSceneConnectionState). Before the token,
+			 * so the wait cannot age it. */
+			if (!isWorldServer && AreWorldScenesUnloading())
+			{
+				float unloadDeadline = Time.realtimeSinceStartup + WorldSceneUnloadWaitSeconds;
+				while (AreWorldScenesUnloading() && Time.realtimeSinceStartup < unloadDeadline)
+				{
+					yield return null;
+				}
+				if (AreWorldScenesUnloading())
+				{
+					Log.Warning("Client", $"The previous world scenes were still unloading after {WorldSceneUnloadWaitSeconds:0} s; entering the scene server anyway.");
+				}
+			}
+
 			hopTokenReplyReceived = false;
 			if (LoginAuthenticator != null)
 			{
@@ -1149,8 +1173,42 @@ namespace FishMMO.Client
 		{
 			var sp = NetworkManager.SceneManager.GetSceneProcessor();
 			if (sp == null || this.loadedWorldScenes.Count < 1) return;
-			foreach (var s in this.loadedWorldScenes.Values) sp.BeginUnloadAsync(s);
+			foreach (var s in this.loadedWorldScenes.Values)
+			{
+				this.unloadingWorldScenes.Add(s);
+				sp.BeginUnloadAsync(s);
+			}
 			this.loadedWorldScenes.Clear();
+		}
+
+		/// <summary>True while a world scene this client asked to unload is still present.</summary>
+		private bool AreWorldScenesUnloading()
+		{
+			this.unloadingWorldScenes.RemoveAll(s => !s.IsValid());
+			return this.unloadingWorldScenes.Count > 0;
+		}
+
+		/// <summary>Longest a hop into a scene server waits for the previous world scenes to finish unloading.</summary>
+		private const float WorldSceneUnloadWaitSeconds = 30f;
+
+		/// <summary>
+		/// Drops the world scenes of a scene server this client is no longer connected to.
+		/// </summary>
+		/// <remarks>
+		/// A deliberate hand-off or a quit unloads them on the way out, but a scene server that went away (a crash or
+		/// restart) leaves them loaded, and the reconnect goes back to the same scene. A client never loads a scene it
+		/// already has (FishNet <c>CanLoadScene</c>: only servers stack), so the new server's load was skipped,
+		/// <see cref="OnSceneLoadStart"/> then unloaded the old copy, and the character was let in to a world that was
+		/// gone: no terrain, missing scene objects, the HUD bound to a character in a vanished scene (empty hotkey bar
+		/// and map) and no input. Unloading here, as the connection ends, clears the old copy before the next scene
+		/// server asks for it.
+		/// </remarks>
+		private void OnWorldSceneConnectionState(ClientConnectionStateArgs args)
+		{
+			if (args.ConnectionState == LocalConnectionState.Stopped)
+			{
+				UnloadWorldScenes();
+			}
 		}
 
 		// ── Broadcast handlers ──────────────────────────────────────────

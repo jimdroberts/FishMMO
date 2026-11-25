@@ -135,6 +135,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		public override ServerComponentInitializationStatus InitializeOnce()
 		{
+			charactersShutDown = false;
 			if (Server == null)
 			{
 				Log.Error("CharacterSystem", "InitializeOnce: Server is null");
@@ -253,10 +254,36 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			return ServerComponentInitializationStatus.Initialized;
 		}
 
+		/// <summary>True once <see cref="ShutDownCharacters"/> has run for this server run.</summary>
+		private bool charactersShutDown;
+
 		/// <summary>
-		/// Cleans up the character system, unregisters event handlers, and saves all characters to the database before shutdown.
+		/// Saves every character and hands back its claim while every other behaviour is still up: the save calls into the
+		/// inventory system's item flush (and the sub-entity tables of other modules), and behaviours registered after this
+		/// one are deinitialized before it. Run from here, the inventory system had already dropped its server, and every
+		/// item change since the last snapshot was lost on a graceful shutdown.
+		/// </summary>
+		protected override void OnShutdownFlush()
+		{
+			ShutDownCharacters();
+		}
+
+		/// <summary>
+		/// Cleans up the character system, unregisters event handlers, and saves all characters to the database before shutdown,
+		/// unless <see cref="OnShutdownFlush"/> already has.
 		/// </summary>
 		public override void OnDeinitialize()
+		{
+			if (!charactersShutDown)
+			{
+				ShutDownCharacters();
+			}
+			// A ScriptableObject outlives the run in the editor: the next run starts unflushed.
+			charactersShutDown = false;
+		}
+
+		/// <summary>Unregisters event handlers and saves all characters to the database. Runs once per server run.</summary>
+		private void ShutDownCharacters()
 		{
 			if (Server == null)
 			{
@@ -269,6 +296,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Log.Error("CharacterSystem", "OnDeinitialize: ServerManager is null");
 				return;
 			}
+			charactersShutDown = true;
 
 			// Authentication events
 			SceneServerAuthenticator loginAuthenticator = FindAnyObjectByType<SceneServerAuthenticator>();

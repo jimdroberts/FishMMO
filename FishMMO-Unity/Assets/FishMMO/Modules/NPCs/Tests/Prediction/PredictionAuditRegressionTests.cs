@@ -812,11 +812,11 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(DeltaReconcileWire.HasDeltaSerializers<KinematicCharacterMotorState>(),
 				"The motor state must have both delta serializers for this to exercise the delta path.");
 			Writer writer = new Writer();
-			DeltaReconcileWire.Write(writer, baseline, next, 1, fullSerialize: true);
+			DeltaReconcileWire.Write(writer, baseline, next, 1, baselineDistance: 0);
 
 			// A peer holding NOTHING must still decode it.
 			Reader reader = new Reader(writer.GetArraySegment(), null);
-			KinematicCharacterMotorState decoded = DeltaReconcileWire.Read<KinematicCharacterMotorState>(reader, default, out bool isFull, out _);
+			KinematicCharacterMotorState decoded = DeltaReconcileWire.Read<KinematicCharacterMotorState>(reader, default, out bool isFull, out _, out _);
 			LogAssert.IsTrue(isFull, "Written as a full reconcile.");
 			LogAssert.AreEqual(0, reader.Remaining, "Consumed exactly.");
 			LogAssert.IsTrue((decoded.Position - next.Position).magnitude < 0.05f,

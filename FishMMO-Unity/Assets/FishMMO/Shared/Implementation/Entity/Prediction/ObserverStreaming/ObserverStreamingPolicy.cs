@@ -357,6 +357,25 @@ namespace FishMMO.Shared
 		/// <summary>Ticks between scheduling passes. 15 is half a second at 30 Hz.</summary>
 		public static uint RescheduleIntervalTicks { get; set; } = 15;
 
+		/// <summary>
+		/// Ticks a blow keeps the two characters pinned into each other's view (each side that is a player). 300 is ten
+		/// seconds at 30 Hz: long enough to span the pauses of a fight, short enough that an attacker who ran away is let go.
+		/// </summary>
+		public static uint BlowMemoryTicks { get; set; } = 300;
+
+		/// <summary>
+		/// When true, a character's resource pushes go only to observers who would show or predict against them (see
+		/// <c>ObserverStreamingRegistry.WantsLiveResources</c>); the rest get one full update when they become interested.
+		/// </summary>
+		public static bool ResourceInterest { get; set; } = true;
+
+		/// <summary>
+		/// Metres from a caster within which observers are told of its casts and ability objects (CombatEffectAudience):
+		/// activations, cast starts, and the hits, redirects and ends of what they launched. 0 = every observer. Everything that
+		/// follows a start also reaches every player the start reached, so nothing launched on a screen is left without its end.
+		/// </summary>
+		public static float CombatEffectRange { get; set; } = 100f;
+
 		// ── Byte budget ─────────────────────────────────────────────
 
 		/// <summary>
@@ -653,6 +672,11 @@ namespace FishMMO.Shared
 				case "ObserverRangeScaleAtHighDensity": return TryFloat(value, v => RangeScaleAtHighDensity = Mathf.Clamp01(v));
 				case "ObserverMinimumRange": return TryFloat(value, v => MinimumRange = Mathf.Max(0f, v));
 				case "ObserverRescheduleTicks": return TryInt(value, v => RescheduleIntervalTicks = (uint)Math.Max(1, v));
+				case "ObserverBlowMemoryTicks": return TryInt(value, v => BlowMemoryTicks = (uint)Math.Max(0, v));
+				case "ObserverResourceInterest": return TryInt(value, v => ResourceInterest = v != 0);
+				case "ObserverCombatEffectRange": return TryFloat(value, v => CombatEffectRange = Mathf.Max(0f, v));
+				case "ObserverMinimumVisibleTicks": return TryInt(value, v => ObserverStreamingRegistry.MinimumVisibleTicks = (uint)Math.Max(0, v));
+				case "ObserverMinimumHiddenTicks": return TryInt(value, v => ObserverStreamingRegistry.MinimumHiddenTicks = (uint)Math.Max(0, v));
 				case "ObserverLodBands": return TryParseLodBands(value);
 				case "ObserverVisibilityBudgets": return TryParseVisibilityBudgets(value);
 				case "ObserverByteBudget": return TryInt(value, v => ByteBudget = Math.Max(0, v));

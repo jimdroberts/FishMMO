@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using FishNet.Connection;
 using FishNet.Managing.Timing;
@@ -67,19 +68,43 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				{
 					idleNetworkSendInterval = NetworkSendSchedule.ClampIdle(idleInterval, networkSendInterval);
 				}
+				/* A player on the idle interval gets its reliable data on that interval too (TransportManager.
+				 * HoldReliableToConnectionInterval). Without it, the reliable casts, hits and settles of a fight nearby flushed
+				 * a bystander on the server's interval anyway. Replies to the player wait one tick more at most. */
+				if (Server.Configuration.TryGetInt("IdleIntervalHoldsReliable", out int idleHoldsReliable) &&
+					Server.NetworkWrapper?.NetworkManager != null)
+				{
+					Server.NetworkWrapper.NetworkManager.TransportManager.HoldReliableToConnectionInterval = idleHoldsReliable != 0;
+				}
 				/* Movement updates in one frame per player per tick (NetworkTransformFrames) instead of one RPC each. Clients
 				 * read both, so turning it off needs only a scene server restart. */
 				if (Server.Configuration.TryGetInt("TransformFrames", out int transformFrames))
 				{
 					FishNet.Component.Transforming.NetworkTransform.FrameObserverUpdates = transformFrames != 0;
 				}
+				/* Owners acknowledge the reconciles they decode and the server writes deltas against those (ReconcileDeltas). 0
+				 * falls back to deltas against a full reconcile sent every second; the wire is the same, so only a restart. */
+				if (Server.Configuration.TryGetInt("ReconcileAcknowledgements", out int reconcileAcknowledgements))
+				{
+					FishNet.Object.NetworkBehaviour.UseReconcileAcknowledgements = reconcileAcknowledgements != 0;
+				}
+				/* Smallest turn, in degrees, a NetworkTransform sends (NetworkTransform.RotationSensitivity); 0 sends any change.
+				 * Only the sender reads it, so it needs only a restart. */
+				if (Server.Configuration.TryGetString("NetworkTransformRotationSensitivity", out string rotationSensitivityText) &&
+					float.TryParse(rotationSensitivityText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float rotationSensitivity))
+				{
+					FishNet.Component.Transforming.NetworkTransform.RotationSensitivity = Math.Max(0f, rotationSensitivity);
+				}
 			}
 			NetworkSendSchedule.Apply(Server?.NetworkWrapper?.NetworkManager, networkSendInterval, clientNetworkSendInterval, asServer: true);
 			_ = Log.Info("SceneServerSystem",
 				$"Network schedule: this server flushes every {networkSendInterval} tick(s), clients every {clientNetworkSendInterval}; " +
 				$"replicate queue depth {NetworkSendSchedule.CurrentStateInterpolation(Server?.NetworkWrapper?.NetworkManager)}; " +
-				$"players away from any fight {(idleNetworkSendInterval > 0 ? $"every {idleNetworkSendInterval}" : "off")}; " +
-				$"movement updates {(FishNet.Component.Transforming.NetworkTransform.FrameObserverUpdates ? "in frames" : "as RPCs")}.");
+				$"players away from any fight {(idleNetworkSendInterval > 0 ? $"every {idleNetworkSendInterval}" : "off")}" +
+				$"{(Server?.NetworkWrapper?.NetworkManager != null && Server.NetworkWrapper.NetworkManager.TransportManager.HoldReliableToConnectionInterval ? " (reliable data too)" : "")}; " +
+				$"movement updates {(FishNet.Component.Transforming.NetworkTransform.FrameObserverUpdates ? "in frames" : "as RPCs")}; " +
+				$"reconciles {(FishNet.Object.NetworkBehaviour.UseReconcileAcknowledgements ? "against acknowledged baselines" : "against a full reconcile each second")}; " +
+				$"rotation sent from {FishNet.Component.Transforming.NetworkTransform.RotationSensitivity:0.##} degree(s).");
 		}
 
 		private void InitializeNetworkSchedule(ICharacterSystem<NetworkConnection, Scene> characterSystem)

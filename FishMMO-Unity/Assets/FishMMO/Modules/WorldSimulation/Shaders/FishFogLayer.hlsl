@@ -212,6 +212,15 @@ float2 FishFogGround(float2 xz)
     return max(ground, 0.0);
 }
 
+/// <summary>
+/// How much of the ridge skin ground keeps that stands `rise` metres over the pooled fog's top, 0..1: all
+/// of it at the top and below, none a fog's depth over it. FogLayerView.SkinShare says the same.
+/// </summary>
+float FishFogSkinShare(float rise, float depth)
+{
+    return 1.0 - smoothstep(0.0, max(1.0, depth), rise);
+}
+
 /// <summary>The layer over a place: level over the pooled ground, a skin over what stands above it.</summary>
 FishFogColumn FishFogColumnAt(float2 xz)
 {
@@ -221,7 +230,6 @@ FishFogColumn FishFogColumnAt(float2 xz)
     // As soft as the layer is deep at most: a fade that half-wide starts at the pooled ground, which is
     // a thin still mist's profile — densest at the ground and thinning the whole way up.
     c.soft = clamp(_FishFogLayer.w, 0.25, max(0.25, depth));
-    c.top = max(ground.y + depth, ground.x + depth * FISH_FOG_RIDGE_SKIN);
     // Lifted: the base rises off the lowest ground under it. Lying on the ground, a fog has no base
     // at all — it fills down to whatever ground a ray meets, and the depth buffer ends the ray
     // there. It used to stop 2 m under the terrain map's ground, but that map is a hundred metres
@@ -229,6 +237,17 @@ FishFogColumn FishFogColumnAt(float2 xz)
     // ground stands well above the valley floor: the fog stopped in the air above the floor.
     float lifted = saturate(_FishFogLayer.z) * FISH_FOG_LIFTED_BASE * depth;
     float lying = 1.0 - smoothstep(0.0, 0.15, saturate(_FishFogLayer.z));
+    // Only a fog lying on the ground leaves a skin on the ground that stands out of it, and only on
+    // ground not far above it. A lifted sheet is a stratus deck, flat-topped: a mountain through it
+    // stands out of its top bare. With the skin, a sheet's flat base under a top that followed the rock
+    // coated every peak above the base right up to its silhouette, and cut off level underneath — a
+    // cloud cap that stood inside the mountain. And a fog lies under its inversion: ground standing
+    // a fog's depth over the pool's top is up in the warm, dry air over it, and stands clear, as hills
+    // over a valley fog do — the skin had coated every summit on the map to its silhouette.
+    // (Blended, not the skin scaled: max(level, ground) alone still follows the rock.)
+    float level = ground.y + depth;
+    float skinned = lying * FishFogSkinShare(ground.x - level, depth);
+    c.top = level + skinned * max(0.0, ground.x + depth * FISH_FOG_RIDGE_SKIN - level);
     c.baseSoft = max(0.25, lifted * 0.35);
     c.base = min(min(ground.x, ground.y) - 2.0 + lifted - lying * FISH_FOG_UNDER_MAP, c.top - c.soft - c.baseSoft);
     // And never under the sea. A fog is air: it lies on the water, and stops at its surface. Rays over

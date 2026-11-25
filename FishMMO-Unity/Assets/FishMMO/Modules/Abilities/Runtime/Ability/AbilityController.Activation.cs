@@ -832,7 +832,8 @@ namespace FishMMO.Shared
 			 * with a fresh lifetime. Ordering is a correctness requirement here and the reliable
 			 * channel is the only thing that provides it; a channel's per-tick message is ~40 bytes
 			 * and bounded by how long the key is held. */
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new AbilityActivatedBroadcast
+			// Within the combat effect range only; its hits and its end follow whoever it reached (CombatEffectAudience).
+			CombatEffectAudience.SendActivation(base.NetworkObject, ability.ID, spawnTick.Value, new AbilityActivatedBroadcast
 			{
 				CasterObjectID = base.NetworkObject.ObjectId,
 				AbilityID = ability.ID,
@@ -1776,14 +1777,23 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, new CharacterCastBroadcast
+			CharacterCastBroadcast cast = new CharacterCastBroadcast
 			{
 				CasterObjectID = base.NetworkObject.ObjectId,
 				ReferenceID = referenceID,
 				IsConsumable = isConsumable,
 				ServerTick = tick,
 				Started = started,
-			}, Channel.Reliable);
+			};
+			// A start reaches observers within the combat effect range; an end reaches every observer (CombatEffectAudience).
+			if (started)
+			{
+				CombatEffectAudience.SendCastStart(base.NetworkObject, cast, Channel.Reliable);
+			}
+			else
+			{
+				ObserverBroadcastScope.BroadcastToObserversExceptOwner(base.NetworkObject, cast, Channel.Reliable);
+			}
 		}
 
 		/// <summary>

@@ -86,10 +86,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 				return;
 			}
 
-			// Rotate to face the target smoothly
-			Vector3 directionToTarget = (controller.Target.position - controller.Character.Transform.position).normalized;
-			Quaternion targetRotation = Quaternion.LookRotation(directionToTarget);
-			controller.Character.Transform.rotation = Quaternion.Slerp(controller.Character.Transform.rotation, targetRotation, RotationSpeed * deltaTime);
+			// Face the target smoothly (horizontal only; nothing to do when standing on it or already facing it).
+			controller.TurnToward(controller.Target.position, RotationSpeed, deltaTime);
 
 			/* Bounded. Without a timeout an NPC whose flank position became unreachable mid-move
 			 * — the target walked into a corner — sits in this state indefinitely, out of combat

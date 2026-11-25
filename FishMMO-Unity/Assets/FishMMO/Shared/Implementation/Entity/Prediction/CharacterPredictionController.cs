@@ -1200,7 +1200,16 @@ namespace FishMMO.Shared
 			}
 
 			PooledWriter writer = WriterPool.Retrieve();
-			writer.WriteCharacterReconcileData(data);
+			// Serialized only to compare with the last one sent: not a wire write for the simulate report's counters.
+			ReconcileWireStats.NotOnTheWire++;
+			try
+			{
+				writer.WriteCharacterReconcileData(data);
+			}
+			finally
+			{
+				ReconcileWireStats.NotOnTheWire--;
+			}
 			ArraySegment<byte> bytes = writer.GetArraySegment();
 			bool same = lastReconcileLength == bytes.Count &&
 				bytes.AsSpan().SequenceEqual(new ReadOnlySpan<byte>(lastReconcileBytes, 0, lastReconcileLength));

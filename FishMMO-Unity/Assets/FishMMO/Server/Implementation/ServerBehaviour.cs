@@ -560,6 +560,28 @@ namespace FishMMO.Server.Implementation
 		protected virtual void OnUpdate(float deltaTime) { }
 
 		/// <summary>
+		/// Override in behaviours whose shutdown writes reach into OTHER behaviours. Runs once on server shutdown, for every
+		/// initialized behaviour, before any behaviour is deinitialized, so every behaviour it calls still holds its
+		/// <see cref="Server"/>.
+		/// </summary>
+		/// <remarks>
+		/// Behaviours are deinitialized in reverse registration order and each clears its references as it goes. A write
+		/// made from <see cref="OnDeinitialize"/> through a behaviour registered later therefore found that behaviour
+		/// already torn down: the character shutdown save called the inventory system's item flush after the inventory
+		/// system had dropped its server, and every item change since the last snapshot was lost.
+		/// </remarks>
+		protected virtual void OnShutdownFlush() { }
+
+		/// <summary>Runs <see cref="OnShutdownFlush"/> if this behaviour is initialized. Called by the server's shutdown.</summary>
+		public void ShutdownFlush()
+		{
+			if (Initialized && Server != null)
+			{
+				OnShutdownFlush();
+			}
+		}
+
+		/// <summary>
 		/// Deinitializes this behaviour, calling OnDeinitialize and clearing references.
 		/// </summary>
 		public void Deinitialize()

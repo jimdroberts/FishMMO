@@ -111,7 +111,7 @@ namespace FishMMO.UnitTests
 			ArraySegment<byte> delta = server.Send(authoritative, 2);
 
 			Reader reader = new Reader(delta, null);
-			KCCPlatform.ReconcileData decoded = DeltaReconcileWire.Read(reader, default(KCCPlatform.ReconcileData), out bool isFull, out _);
+			KCCPlatform.ReconcileData decoded = DeltaReconcileWire.Read(reader, default(KCCPlatform.ReconcileData), out bool isFull, out _, out _);
 			LogAssert.IsFalse(isFull, "Tick 2 is a delta.");
 			LogAssert.IsFalse(ReconcileEquals(authoritative, decoded),
 				"Decoded against an empty baseline the delta must come out wrong — near the world origin, which is where a " +
@@ -163,7 +163,7 @@ namespace FishMMO.UnitTests
 			}
 
 			// A client whose full reconcile drifted for any reason at all.
-			client.CorruptHeldFull(_ => new KCCPlatform.ReconcileData(new Vector3(-999f, 77f, 5f), 3));
+			client.Corrupt(server.LastFullId, _ => new KCCPlatform.ReconcileData(new Vector3(-999f, 77f, 5f), 3));
 
 			for (uint tick = 21; tick <= ServerTickRate + 1; tick++)
 			{
@@ -207,7 +207,8 @@ namespace FishMMO.UnitTests
 					$"tick {tick}: a lost delta must not cost the deltas after it");
 				AssertReconcileEquals(authoritative, received, $"tick {tick}");
 			}
-			KCCPlatform.ReconcileData lastGood = client.HeldFull;
+			int heldFullId = server.LastFullId;
+			KCCPlatform.ReconcileData lastGood = client.Held(heldFullId);
 
 			// Tick 31, the next full reconcile, is lost: 32..60 are discarded.
 			authoritative = Advance(authoritative, ServerTickRate + 1);
@@ -218,7 +219,8 @@ namespace FishMMO.UnitTests
 				authoritative = Advance(authoritative, tick);
 				LogAssert.IsFalse(client.Receive(server.Send(authoritative, tick), tick, out _),
 					$"tick {tick}: a delta against a lost full reconcile must be discarded, not decoded against the wrong baseline");
-				LogAssert.IsTrue(client.HeldFull.Position == lastGood.Position && client.HeldFull.GoalIndex == lastGood.GoalIndex,
+				KCCPlatform.ReconcileData held = client.Held(heldFullId);
+				LogAssert.IsTrue(held.Position == lastGood.Position && held.GoalIndex == lastGood.GoalIndex,
 					$"tick {tick}: a discarded delta must leave the client's full reconcile exactly where it was");
 			}
 

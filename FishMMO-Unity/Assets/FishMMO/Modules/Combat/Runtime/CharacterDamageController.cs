@@ -1600,6 +1600,10 @@ namespace FishMMO.Shared
 				 * A wolf's 5-point Punch against 5 Armor used to raise nothing, so the player's pet never moved. */
 				RaiseAttackAbsorbed(attacker);
 				EnterCombat();
+				if (attacker != null && base.IsServerStarted)
+				{
+					ObserverStreamingRegistry.NoteBlow(attacker.NetworkObject, base.NetworkObject);
+				}
 				if (attacker != null &&
 					attacker.TryGet(out ICharacterDamageController blockedAttackerDamageController))
 				{
@@ -1621,6 +1625,13 @@ namespace FishMMO.Shared
 			 * already dead, fully resisted — do not hand out loot rights for a hit that did
 			 * nothing. */
 			RecordCombatContribution(attacker, CombatContributionKind.Damage);
+
+			/* Both sides see each other now, whatever the crowd: a player struck by something outside its view gets the
+			 * attacker spawned on this server's next post tick rather than at the next visibility pass. */
+			if (attacker != null && base.IsServerStarted)
+			{
+				ObserverStreamingRegistry.NoteBlow(attacker.NetworkObject, base.NetworkObject);
+			}
 
 			/* Queued for this tick's observer message before the local event, because the local
 			 * event no longer reaches anybody's floating text — see QueueCombatEvent. Periodic

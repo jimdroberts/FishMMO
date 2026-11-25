@@ -36,11 +36,13 @@ namespace FishMMO.Shared
 		public const byte MaximumInterval = 2;
 
 		/// <summary>
-		/// The largest idle interval (a player away from any fight). Observed characters are drawn on the playback clock,
-		/// whose adaptive delay absorbs the extra tick (NetworkTransform timed playback), and lag compensation uses the exact
-		/// view tick the client claims, so one more tick of delay costs no accuracy; it only arrives 33 ms later.
+		/// The largest idle interval (a player not in a fight, including one watching someone else's). Observed characters are
+		/// drawn on the playback clock, whose adaptive delay (up to 8 ticks) absorbs the extra ticks (NetworkTransform timed
+		/// playback), and lag compensation uses the exact view tick the client claims, so the extra delay costs no accuracy;
+		/// at 4 a watched fight arrives every 133 ms instead of 67 ms. The player is back on the server's interval the tick it
+		/// deals or takes damage.
 		/// </summary>
-		public const byte MaximumIdleInterval = 3;
+		public const byte MaximumIdleInterval = 4;
 
 		/// <summary>How long a player stays at the full rate after its last sign of a fight, in ticks (3 s at 30 Hz).</summary>
 		public const uint EngagedHoldTicks = 90;

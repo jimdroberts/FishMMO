@@ -3818,9 +3818,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			{
 				return;
 			}
+			TurnToward(LookTarget.position, TurnRate, deltaTime);
+		}
 
-			// Get the direction from the agent to the LookTarget
-			Vector3 direction = LookTarget.position - Character.Transform.position;
+		/// <summary>
+		/// Turns the character smoothly toward <paramref name="point"/> about the vertical axis only, at
+		/// <paramref name="rate"/> (exponential smoothing, per second).
+		/// </summary>
+		public void TurnToward(Vector3 point, float rate, float deltaTime)
+		{
+			// Horizontal only: a character never pitches toward a target above or below it.
+			Vector3 direction = point - Character.Transform.position;
 			direction.y = 0f;
 
 			// Squared compare rather than == Vector3.zero: an exact-zero test misses the
@@ -3836,7 +3844,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			/* Already facing it: leave the transform alone. The smoothing below only ever
 			 * approaches the target, so without this an NPC facing an interactor or a standing
 			 * target rewrote its rotation — a transform write and a change notification — on every
-			 * network tick for as long as the look target was set. */
+			 * network tick for as long as it was facing something. */
 			Quaternion current = Character.Transform.rotation;
 			if (Quaternion.Angle(current, targetRotation) <= FACING_TOLERANCE_DEGREES)
 			{
@@ -3849,7 +3857,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 			 * but does not halve the total turn, so an NPC visibly turns at a different speed on a
 			 * 30 Hz server than on a 60 Hz one. 1 - e^(-rate * dt) is the closed form of the same
 			 * smoothing sampled continuously, so the result is identical at any step size. */
-			float t = 1f - Mathf.Exp(-TurnRate * deltaTime);
+			float t = 1f - Mathf.Exp(-rate * deltaTime);
 
 			Character.Transform.rotation = Quaternion.Slerp(current, targetRotation, t);
 		}

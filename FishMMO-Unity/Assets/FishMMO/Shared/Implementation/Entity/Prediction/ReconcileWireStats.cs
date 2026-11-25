@@ -29,9 +29,19 @@ namespace FishMMO.Shared
 		private static long fullCount, fullBytes, deltaCount, deltaBytes;
 		private static readonly long[] sectionBytes = new long[SectionCount];
 
+		/// <summary>
+		/// Above zero while a reconcile is serialized for something other than the wire (the quiet-reconcile comparison),
+		/// so that write is not counted as sent. Main thread only.
+		/// </summary>
+		public static int NotOnTheWire;
+
 		/// <summary>One full snapshot of <paramref name="bytes"/> bytes was written.</summary>
 		public static void AddFull(int bytes)
 		{
+			if (NotOnTheWire > 0)
+			{
+				return;
+			}
 			fullCount++;
 			fullBytes += bytes;
 		}

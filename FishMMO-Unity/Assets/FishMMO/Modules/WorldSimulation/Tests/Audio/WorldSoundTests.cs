@@ -278,6 +278,26 @@ namespace FishMMO.UnitTests.Audio
 		}
 
 		[Test]
+		public void ThunderMadeAPieceAtATimeIsTheSameAsInOneGo()
+		{
+			// A web build makes thunder a piece a frame; it must be the very same sound. A deadline already past gives one
+			// piece per call, the finest split there is.
+			ThunderSynth.Channel channel = Bolt(2000f, 1200f);
+			ThunderSynth.AddCloudChannel(channel, new Vector3(2000f, 1200f, 0f), 1200f, channel.Seed);
+			var pieces = new ThunderSynth.Renderer(channel, Vector3.zero);
+			int calls = 0;
+			while (!pieces.Step(System.Diagnostics.Stopwatch.GetTimestamp()))
+			{
+				calls++;
+				LogAssert.IsTrue(calls < 100000, "a render in pieces must finish");
+			}
+			LogAssert.IsTrue(calls > 10, $"a long clap must come in many pieces ({calls})");
+			ThunderSynth.Result whole = ThunderSynth.Render(channel, Vector3.zero);
+			LogAssert.IsTrue(Same(pieces.Result.Samples, whole.Samples), "the same samples, to the bit");
+			LogAssert.AreEqual(whole.NearestMetres, pieces.NearestMetres, "the nearest piece is known from the start");
+		}
+
+		[Test]
 		public void FarThunderRumblesWhereNearThunderCracks()
 		{
 			float near = Crossings(ThunderSynth.Render(Bolt(300f, 1200f), Vector3.zero).Samples, ThunderSynth.ThunderRate);

@@ -654,6 +654,120 @@ namespace FishMMO.UnitTests
 			return count;
 		}
 
+		// ── Blows and resource interest ──
+
+		/// <summary>A viewer, ranked by one pass, with a character standing beyond its reach but inside the fight ceiling.</summary>
+		private (NetworkConnection Viewer, NetworkObject ViewerObject, NetworkObject Other) MakeViewerAndBystander(int clientId, int baseObjectId)
+		{
+			NetworkConnection viewerConnection = new NetworkConnection { ClientId = clientId };
+			NetworkObject viewerObject = MakeObject($"Viewer{clientId}", Vector3.zero, baseObjectId);
+			SetField(viewerObject, "_owner", viewerConnection);
+			ObserverStreamingEntry viewerEntry = ObserverStreamingRegistry.Register(viewerObject, new MockCharacter(baseObjectId));
+			MakeViewer(viewerEntry);
+			// A real character's observer range reaches past its ability reach; a bare test object's defaults do not.
+			const float viewerRange = 80f;
+			SetAutoProperty(viewerEntry, "AppliedRange", viewerRange);
+
+			float distance = ObserverStreamingPolicy.ResolveEngagementRange(0f) + 5f;
+			LogAssert.IsTrue(distance < ObserverStreamingPolicy.EngagementRangeCeiling, "The bystander must be inside the fight ceiling.");
+			LogAssert.IsTrue(distance < viewerRange, "...and inside the viewer's range, so it is ranked.");
+			NetworkObject other = MakeObject($"Bystander{clientId}", new Vector3(distance, 0f, 0f), baseObjectId + 1);
+			ObserverStreamingRegistry.Register(other, new MockCharacter(baseObjectId + 1));
+			ObserverStreamingRegistry.RunPass();
+			return (viewerConnection, viewerObject, other);
+		}
+
+		/// <summary>
+		/// A blow pins the striker into its victim's view whoever struck: a monster earns no loot credit, so the pass's own
+		/// fight test never saw it, and a crowd could keep a monster out of view while it hit the player. The pin lasts the
+		/// blow memory, then lets go.
+		/// </summary>
+		[Test]
+		public void ABlowPinsTheStrikerIntoItsVictimsView_UntilTheMemoryRunsOut()
+		{
+			ObserverStreamingRegistry.BlowClockOverride = 1000u;
+			(NetworkConnection viewer, NetworkObject viewerObject, NetworkObject monster) = MakeViewerAndBystander(51, 1100);
+			LogAssert.AreEqual(0, ObserverStreamingRegistry.LastPassPinned, "Nothing is pinned before the blow.");
+
+			ObserverStreamingRegistry.NoteBlow(monster, viewerObject);
+			LogAssert.IsTrue(ObserverStreamingRegistry.HasRecentBlow(viewer.ClientId, monster.ObjectId), "The victim remembers the blow.");
+
+			ObserverStreamingRegistry.BlowClockOverride = 1000u + ObserverStreamingPolicy.BlowMemoryTicks;
+			ObserverStreamingRegistry.RunPass();
+			LogAssert.AreEqual(1, ObserverStreamingRegistry.LastPassPinned,
+				"The striker is pinned for as long as the blow is remembered, though it is no player and earned no loot credit.");
+
+			ObserverStreamingRegistry.BlowClockOverride = 1000u + ObserverStreamingPolicy.BlowMemoryTicks + 1u;
+			ObserverStreamingRegistry.RunPass();
+			LogAssert.AreEqual(0, ObserverStreamingRegistry.LastPassPinned, "Once the memory runs out the pin is let go.");
+			LogAssert.IsFalse(ObserverStreamingRegistry.HasRecentBlow(viewer.ClientId, monster.ObjectId), "...and the blow is forgotten.");
+		}
+
+		/// <summary>The striking player remembers its victim too: a blow is a fight in both directions.</summary>
+		[Test]
+		public void ABlowIsRememberedByTheStrikingPlayerToo()
+		{
+			ObserverStreamingRegistry.BlowClockOverride = 500u;
+			(NetworkConnection viewer, NetworkObject viewerObject, NetworkObject victim) = MakeViewerAndBystander(52, 1200);
+			ObserverStreamingRegistry.NoteBlow(viewerObject, victim);
+			LogAssert.IsTrue(ObserverStreamingRegistry.HasRecentBlow(viewer.ClientId, victim.ObjectId),
+				"A player that struck something outside its view keeps it pinned the same way.");
+		}
+
+		/// <summary>
+		/// Resources go only to observers who would show or predict against them. A ranked viewer is not kept current on a
+		/// bystander beyond its reach; a blow, or turning the policy off, changes that.
+		/// </summary>
+		[Test]
+		public void ResourcesReachOnlyInterestedObservers()
+		{
+			bool policy = ObserverStreamingPolicy.ResourceInterest;
+			try
+			{
+				ObserverStreamingPolicy.ResourceInterest = true;
+				ObserverStreamingRegistry.BlowClockOverride = 2000u;
+				(NetworkConnection viewer, NetworkObject viewerObject, NetworkObject bystander) = MakeViewerAndBystander(53, 1300);
+
+				LogAssert.IsTrue(ObserverStreamingRegistry.WantsLiveResources(new NetworkConnection { ClientId = 999 }, bystander.ObjectId),
+					"A viewer no pass has ranked yet gets everything: nothing is known about what it shows.");
+				LogAssert.IsFalse(ObserverStreamingRegistry.WantsLiveResources(viewer, bystander.ObjectId),
+					"A bystander beyond reach, untargeted and not fighting has no bar on this viewer's screen.");
+
+				ObserverStreamingRegistry.NoteBlow(bystander, viewerObject);
+				LogAssert.IsTrue(ObserverStreamingRegistry.WantsLiveResources(viewer, bystander.ObjectId),
+					"A blow makes it a fight: the viewer is kept current from the blow on, before the next pass.");
+
+				ObserverStreamingRegistry.Clear();
+				ObserverStreamingRegistry.BlowClockOverride = 2000u;
+				(viewer, _, bystander) = MakeViewerAndBystander(54, 1400);
+				ObserverStreamingPolicy.ResourceInterest = false;
+				LogAssert.IsTrue(ObserverStreamingRegistry.WantsLiveResources(viewer, bystander.ObjectId),
+					"With the policy off every observer gets every change, as before.");
+			}
+			finally
+			{
+				ObserverStreamingPolicy.ResourceInterest = policy;
+			}
+		}
+
+		/// <summary>The resource push goes through the interest test, and a newly interested observer gets every field, reliably.</summary>
+		[Test]
+		public void ResourcePushesAreScopedByInterest()
+		{
+			string source = ProjectFiles.ReadAllText(Path.Combine(Directory.GetCurrentDirectory(),
+				"Assets/FishMMO/Shared/Implementation/Entity/Prediction/CharacterAttribute/CharacterAttributeController.cs"));
+			string send = Between(source, "private void SendObservedResources(", "private void ScanResourceInterest(");
+			LogAssert.IsTrue(send.Contains("ObserverStreamingRegistry.WantsLiveResources(connection, nob.ObjectId)"),
+				"Every push asks the interest test per observer.");
+			LogAssert.IsTrue(send.Contains("full.Mask = CharacterResourcesMask.All") && send.Contains("Channel.Reliable"),
+				"An observer that was not in sync gets every field, reliably: an omitted field must never mean 'unchanged' to it.");
+			string scan = Between(source, "private void ScanResourceInterest(", "/// <summary>The resource state observers are sent");
+			LogAssert.IsTrue(scan.Contains("lastSentObservedResources") && scan.Contains("CharacterResourcesMask.All"),
+				"A character whose bar is not moving still reaches a viewer that has just become interested.");
+			string push = Between(source, "private void MaybePushObservedResources()", "/// <summary>");
+			LogAssert.IsTrue(push.Contains("ScanResourceInterest(tick)"), "The scan runs from the push path.");
+		}
+
 		/// <summary>A NetworkObject that reads as spawned, so the registry will keep and rank it.</summary>
 		private NetworkObject MakeObject(string name, Vector3 position, int objectId)
 		{

@@ -209,20 +209,30 @@ float4 FishWaterCloudsInFront(float2 screenUV)
 	return SAMPLE_TEXTURE2D_LOD(_FishCloudBuffer, sampler_FishCloudBuffer, screenUV, 0);
 }
 
-/// <summary>A surface seen through the clouds in front of it: its own light through them, theirs added.</summary>
-half3 FishWaterBehindClouds(half3 color, float2 screenUV)
-{
-	float4 clouds = FishWaterCloudsInFront(screenUV);
-	return color * clouds.a + clouds.rgb;
-}
+// What is falling in front of the clouds, by the composite's own law (FishCloudFalling.hlsl), and the march's distances
+// it is measured to: published beside the buffer (FishCloudsFeature, keptDistance), x the mean distance of what each ray
+// saw (km), at the march's size; _FishCloudScreen.y 1 while they are this frame's.
+#include "Assets/FishMMO/Shaders/FishCloudFalling.hlsl"
+TEXTURE2D(_FishCloudDistance);
 
 /// <summary>
-/// As above, for a surface at a world point: faded as the cloud composite fades itself underground (FishWaterOpenAir,
-/// with FISH_WATER_OPEN_AIR; the same as above without it).
+/// A surface at a world point seen through the clouds in front of it: its own light through them, theirs added. Faded
+/// as the cloud composite fades itself underground (FishWaterOpenAir, with FISH_WATER_OPEN_AIR; in the open without
+/// it), and with what is falling put in front of the clouds as the
+/// composite puts it in front of the clouds over the ground (FishCloudFallingInFront). The water's own distance fog
+/// (MixFog) lays the rain over the water under the clouds, and the march draws no rain on a ray that ends on the world,
+/// so without it a mist or a deck in front of the far sea in rain stood bare of the rain before it, pale over grey water.
+/// The ground under the camera is taken as sea level (no ground map here — a texture fewer): it moves only where the rain
+/// is reckoned to start when the camera stands above the cloud base.
 /// </summary>
 half3 FishWaterBehindClouds(half3 color, float2 screenUV, float3 positionWS)
 {
 	float4 clouds = FishWaterCloudsInFront(screenUV);
+	if (_FishCloudScreen.y > 0.5)
+	{
+		float cloudKm = SAMPLE_TEXTURE2D_LOD(_FishCloudDistance, sampler_PointClamp, screenUV, 0).x;
+		clouds = FishCloudFallingInFront(clouds, cloudKm, positionWS - _WorldSpaceCameraPos.xyz, 0.0);
+	}
 	half open = FishWaterOpenAir(positionWS);
 	return color * lerp(1.0h, (half)clouds.a, open) + clouds.rgb * open;
 }

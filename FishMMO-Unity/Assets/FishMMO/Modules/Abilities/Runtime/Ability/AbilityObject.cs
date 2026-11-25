@@ -2538,7 +2538,7 @@ namespace FishMMO.Shared
 
 			NetworkObject victimNob = hitCharacter?.NetworkObject;
 
-			ObserverBroadcastScope.BroadcastToObserversExceptOwner(casterNob, new AbilityObjectHitBroadcast
+			CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value, new AbilityObjectHitBroadcast
 			{
 				CasterObjectID = casterNob.ObjectId,
 				AbilityID = Ability.ID,
@@ -2548,7 +2548,7 @@ namespace FishMMO.Shared
 				Point = point,
 				Normal = normal,
 				DirectImpact = true,
-			}, Channel.Reliable);
+			}, Channel.Reliable, includeOwner: false);
 		}
 
 		/// <summary>
@@ -2618,7 +2618,7 @@ namespace FishMMO.Shared
 
 			NetworkObject victimNob = hitCharacter?.NetworkObject;
 
-			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectHitBroadcast
+			CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value, new AbilityObjectHitBroadcast
 			{
 				CasterObjectID = casterNob.ObjectId,
 				AbilityID = Ability.ID,
@@ -2631,7 +2631,7 @@ namespace FishMMO.Shared
 				PackedDeflectHeading = deflected ? AimDirectionCompression.Encode(deflectHeading) : 0u,
 				Blocked = blocked,
 				Ended = ended,
-			}, true, Channel.Reliable);
+			}, Channel.Reliable, includeOwner: true);
 		}
 
 		/// <summary>
@@ -2657,7 +2657,7 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectRedirectBroadcast
+			CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value, new AbilityObjectRedirectBroadcast
 			{
 				CasterObjectID = casterNob.ObjectId,
 				AbilityID = Ability.ID,
@@ -2670,7 +2670,7 @@ namespace FishMMO.Shared
 				 * transit delay behind the server's for the rest of the object's life. Every other
 				 * observer message that starts a clock carries this for the same reason. */
 				ServerTick = casterNob.TimeManager != null ? casterNob.TimeManager.Tick : 0u,
-			}, true, Channel.Reliable);
+			}, Channel.Reliable, includeOwner: true);
 		}
 
 		/// <summary>
@@ -3201,13 +3201,13 @@ namespace FishMMO.Shared
 				return;
 			}
 
-			casterNob.NetworkManager.ServerManager.Broadcast(casterNob, new AbilityObjectDestroyedBroadcast
+			CombatEffectAudience.SendFollowUp(casterNob, Ability.ID, SpawnTick.Value, new AbilityObjectDestroyedBroadcast
 			{
 				CasterObjectID = casterNob.ObjectId,
 				AbilityID = Ability.ID,
 				ContainerID = ContainerID,
 				ObjectID = ID,
-			}, true, Channel.Reliable);
+			}, Channel.Reliable, includeOwner: true);
 		}
 
 		/// <summary>

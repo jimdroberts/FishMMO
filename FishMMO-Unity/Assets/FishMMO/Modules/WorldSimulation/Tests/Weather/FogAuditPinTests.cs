@@ -224,6 +224,59 @@ namespace FishMMO.UnitTests.Weather
 		}
 
 		[Test]
+		public void WhatIsFallingStandsInFrontOfTheCloudOverTheWorld()
+		{
+			// The march leaves the rain off a ray that ends on the world, and the surface's own fog lies under the cloud
+			// laid over it: the composite has to put the rain between the camera and that cloud, or a peak inside the
+			// deck shows the deck's lit inside, bare of the rain, while the sky beside it is the rain's grey.
+			const string call = "clouds = FishCloudFallingInFront(clouds, SAMPLE_TEXTURE2D_LOD(_FishCloudCompositeMotion, sampler_PointClamp, input.uv, 0).x, toSurface, FishCompositeGround());";
+			string clouds = SourceScanPins.ReadCode(Shaders + "FishClouds.shader");
+			SourceScanPins.HoldsAndFires("falling in front over the world", clouds,
+				code => code.Contains(call) ? null : "the cloud over the world is not put behind what is falling",
+				SourceScanPins.Replace(call, ""),
+				"the cloud over a far ridge laid bare of the rain");
+			// One law for the composite and the water.
+			LogAssert.IsTrue(clouds.Contains("#include \"Assets/FishMMO/Shaders/FishCloudFalling.hlsl\""), "the composite reads the shared law");
+			// By the cloud's own distance, with no hang the march did not draw, and the surface's fog left as it is.
+			string falling = SourceScanPins.ReadCode("Assets/FishMMO/Shaders/FishCloudFalling.hlsl");
+			LogAssert.IsTrue(falling.Contains("FishSkyFallingFog(toSurface / max(1e-3, surfaceDistance), cloudDistance, false, ground)"),
+				"the rain in front of the cloud is counted to the cloud, not the surface, and in full (no hang drawn there)");
+			LogAssert.IsTrue(falling.Contains("(1.0 - through) * (1.0 - clouds.a) * _FishSkyFogColor.rgb, clouds.a)"),
+				"the transmittance is untouched, so the surface behind is fogged once");
+			string feature = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishCloudsFeature.cs");
+			LogAssert.IsTrue(feature.Contains("d.Material.SetTexture(CompositeMotionId, d.Motion);"), "the composite is handed the march's distances");
+			// Declared read by both resolves and the composite: undeclared, a render-graph texture reads as whatever is bound.
+			int reads = feature.Split(new[] { "builder.UseTexture(marchedMotion, AccessFlags.Read);" }, System.StringSplitOptions.None).Length - 1;
+			LogAssert.AreEqual(3, reads, "the composite declares it reads the march's distances");
+		}
+
+		[Test]
+		public void WhatIsFallingStandsInFrontOfTheCloudOverTheWater()
+		{
+			// The water lays the cloud buffer over itself after the composite, over its own distance fog: the same rain
+			// goes in front of the same cloud there, or a mist or a deck over the far sea in rain stands pale over grey water.
+			string fog = SourceScanPins.ReadCode(Water + "FishWaterFog.hlsl");
+			const string call = "clouds = FishCloudFallingInFront(clouds, cloudKm, positionWS - _WorldSpaceCameraPos.xyz, 0.0);";
+			SourceScanPins.HoldsAndFires("falling in front over the water", fog,
+				code => code.Contains(call) ? null : "the cloud over the water is not put behind what is falling",
+				SourceScanPins.Replace(call, ""),
+				"the cloud over the far sea laid bare of the rain");
+			LogAssert.IsTrue(fog.Contains("#include \"Assets/FishMMO/Shaders/FishCloudFalling.hlsl\""), "the water reads the composite's law");
+			// The only way the clouds are laid over water is the one that takes the rain: no overload without a position.
+			LogAssert.IsFalse(fog.Contains("half3 FishWaterBehindClouds(half3 color, float2 screenUV)"), "no way to lay the clouds over water bare of the rain");
+			foreach (string file in new[] { "FishWaterShading.hlsl", "FishInlandWater.hlsl", "FishWaterfall.shader" })
+			{
+				string code = SourceScanPins.ReadCode(Water + file);
+				LogAssert.IsTrue(System.Text.RegularExpressions.Regex.IsMatch(code, @"FishWaterBehindClouds\(color, \w+, positionWS\)"),
+					$"{file} lays the clouds over itself at its own world point");
+			}
+			// The distances reach it: published beside the buffer, flagged in _FishCloudScreen.y.
+			string feature = SourceScanPins.ReadCode("Assets/FishMMO/Modules/WorldSimulation/Client/Weather/Sky/FishCloudsFeature.cs");
+			LogAssert.IsTrue(feature.Contains("Shader.SetGlobalTexture(DistanceId, keptDistance.rt);"), "the march's distances are published for the water");
+			LogAssert.IsTrue(feature.Contains("new Vector4(published ? 1f : 0f, distancePublished ? 1f : 0f, 0f, 0f)"), "and flagged while they are this frame's");
+		}
+
+		[Test]
 		public void TheFallbackFogShadersReachABuild()
 		{
 			// The fog passes' settings stand in the weather render profile, drawn by the renderers' module passes host,

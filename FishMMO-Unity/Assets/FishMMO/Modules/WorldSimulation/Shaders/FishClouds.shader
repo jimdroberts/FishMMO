@@ -331,6 +331,10 @@ Shader "Hidden/FishMMO/Weather/Clouds"
             TEXTURE2D(_FishCloudBuffer);
             SAMPLER(sampler_FishCloudBuffer);
             float4 _FishCloudComposite;     // xy one over the buffer's size, z 1 when the buffer is the screen's own size
+            // The march's own target beside its clouds (pass 0's motion): x the mean distance of what each ray saw (km), 0
+            // where it saw nothing. At the march's size; read by the nearest texel, never blended, so a cloud's distance is
+            // never averaged with an empty texel's nothing.
+            TEXTURE2D(_FishCloudCompositeMotion);
 
             struct Attributes { uint vertexID : SV_VertexID; };
             struct Varyings { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -494,17 +498,10 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return here < nearest ? float4(0.0, 0.0, 0.0, 1.0) : farValue;
             }
 
-            // The falling rain, snow, hail, ash or sand at the camera, 1/m: what the pipeline's distance fog lays over every
-            // surface in its colour (WeatherFogPresenter.UniformFallingExtinction; 0 with the fog off).
-            float _FishFallingFog;
-            // That fog's colour: RenderSettings.fogColor as SkySystem publishes it for the sky (rgb). Not unity_FogColor,
-            // which a full-screen pass is not handed (it read black: the sky under falling rain went to black at the
-            // horizon above a lit sea).
-            float4 _FishSkyFogColor;
-            // The march's own globals this pass reads (FishCloudVolume.hlsl, which this pass does not include): the
-            // shown rain (y) and its extinction (w), the cloud base over the viewer (z, m), the ground map, and the deck.
-            float4 _FishCloudSub;
-            float4 _FishCloudShear;
+            // What is falling, its colour, the shown rain and the base over the viewer: shared with the water (FishCloudFalling.hlsl).
+            #include "Assets/FishMMO/Shaders/FishCloudFalling.hlsl"
+            // The march's own globals this pass reads besides (FishCloudVolume.hlsl, which this pass does not include): the
+            // ground map and the deck.
             float4 _FishCloudDeck;
             TEXTURE2D(_FishCloudTerrain);
             SAMPLER(sampler_FishCloudTerrain);
@@ -560,62 +557,18 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                 return saturate(_FishCloudLayer.w) * smoothstep(drawn * 0.7, drawn, reach);
             }
 
-            // The integral up to u (the height over the ground as a share of the base's, as the hang reads it) of the share
-            // of the falling extinction the march's rain hang leaves out: all of it up to 0.3, less and less of it to 0.9 as
-            // the hang ramps in, the hang's own fade under the base, none above the base. Uniform minus the hang's profile
-            // (FishCloudVolume.hlsl: saturate((under - 0.3) / 0.6) * saturate((1.0 - under) / 0.1)).
-            float FishSkyFallingShare(float u, bool hangs)
+            // The ground under the camera as the march's rain hang measures heights from (FishSkyFallingFog): the ground map's
+            // pooled ground, eased to sea level at the map's edge.
+            float FishCompositeGround()
             {
-                u = max(0.0, u);
-                if (!hangs)
-                {
-                    return min(u, 1.0);
-                }
-                if (u <= 0.3) return u;
-                if (u <= 0.9) { float d = u - 0.3; return 0.3 + d - d * d / 1.2; }
-                if (u <= 1.0) { float d = u - 0.9; return 0.6 + d * d / 0.2; }
-                return 0.65;
-            }
-
-            // How much of the light along a sky ray gets through what is falling between the camera and the cloud base:
-            // the same extinction the distance fog lays over a surface at that distance, over the stretch of the ray under
-            // the base, less the share the march's rain hang already takes (it draws the same rain, _FishCloudSub.w, from
-            // three tenths of the way up to the base wherever a cloud is raining). Closed form along a straight ray, the
-            // world's curve left out: a level ray stays under the base all the way and fogs to the fog's colour exactly as
-            // the far ground under it does, so ridge and sky meet with no edge; looking up, it is out of the falling air in
-            // a few hundred metres and the base shows.
-            float FishSkyFallingFog(float3 direction, float distance)
-            {
-                float beta = max(0.0, _FishFallingFog);
-                if (beta <= 1e-7)
-                {
-                    return 1.0;
-                }
-                float ground = 0.0;
                 if (_FishCloudTerrainRect.w > 0.5 && _FishCloudDeck.z < 0.5)
                 {
                     float2 uv = (_WorldSpaceCameraPos.xz - _FishCloudTerrainRect.xy) / max(1.0, _FishCloudTerrainRect.z);
                     float2 toEdge = min(uv, 1.0 - uv);
                     float inside = saturate(min(toEdge.x, toEdge.y) / 0.08);
-                    ground = SAMPLE_TEXTURE2D_LOD(_FishCloudTerrain, sampler_FishCloudTerrain, saturate(uv), 0).a * inside;
+                    return SAMPLE_TEXTURE2D_LOD(_FishCloudTerrain, sampler_FishCloudTerrain, saturate(uv), 0).a * inside;
                 }
-                float base = max(1.0, _FishCloudShear.z);
-                // The hang is drawn only while rain is shown (the column's floor goes down to the ground with it).
-                bool hangs = _FishCloudSub.y >= 0.01;
-                // As the hang reads it: the height over the ground against the base's altitude.
-                float u0 = (_WorldSpaceCameraPos.y - ground) / base;
-                float tau;
-                if (abs(direction.y) < 1e-3)
-                {
-                    float share = FishSkyFallingShare(u0 + 1e-3, hangs) - FishSkyFallingShare(u0, hangs);
-                    tau = beta * distance * share * 1000.0;
-                }
-                else
-                {
-                    float u1 = u0 + distance * direction.y / base;
-                    tau = beta * base * (FishSkyFallingShare(u1, hangs) - FishSkyFallingShare(u0, hangs)) / direction.y;
-                }
-                return exp(-max(0.0, tau));
+                return 0.0;
             }
 
             float4 Frag(Varyings input) : SV_Target
@@ -641,16 +594,20 @@ Shader "Hidden/FishMMO/Weather/Clouds"
                     float deck = FishDeckBeyondDrawn(normalize(toSurface));
                     clouds = float4(clouds.rgb + clouds.a * deck * _FishCloudHaze.rgb, clouds.a * (1.0 - deck));
                 }
-                else if (_FishCloudHaze.a > 0.0)
+                else
                 {
-                    // The ground takes the same air as the clouds in front of it, behind the clouds: far land and sea
-                    // go to the horizon's colour as the far cloud does, and meet it there with no seam.
-                    float air = FishAerialThrough(length(toSurface), GetCameraPositionWS().y, surface.y);
-                    clouds = float4(clouds.rgb + clouds.a * (1.0 - air) * _FishCloudHaze.rgb, clouds.a * air);
+                    clouds = FishCloudFallingInFront(clouds, SAMPLE_TEXTURE2D_LOD(_FishCloudCompositeMotion, sampler_PointClamp, input.uv, 0).x, toSurface, FishCompositeGround());
+                    if (_FishCloudHaze.a > 0.0)
+                    {
+                        // The ground takes the same air as the clouds in front of it, behind the clouds: far land and sea
+                        // go to the horizon's colour as the far cloud does, and meet it there with no seam.
+                        float air = FishAerialThrough(length(toSurface), GetCameraPositionWS().y, surface.y);
+                        clouds = float4(clouds.rgb + clouds.a * (1.0 - air) * _FishCloudHaze.rgb, clouds.a * air);
+                    }
                 }
                 if (isSky)
                 {
-                    float fallingThrough = FishSkyFallingFog(normalize(toSurface), 100000.0);
+                    float fallingThrough = FishSkyFallingFog(normalize(toSurface), 100000.0, true, FishCompositeGround());
                     if (_WorldSpaceCameraPos.y < _FishCloudShear.z)
                     {
                         // Under the base the falling air is nearest, the deck beyond it: in front of the clouds.

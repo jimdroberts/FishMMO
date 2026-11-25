@@ -214,6 +214,8 @@ namespace FishNet.Object
         internal void ClearObservers()
         {
             int startCount = Observers.Count;
+            // FISHMMO EDIT: frame slots. Every observer's slot for this object is freed.
+            FishNet.Component.Transforming.NetworkTransformFrames.ReleaseSlots(Observers, ObjectId);
 
             Observers.Clear();
 
@@ -262,6 +264,9 @@ namespace FishNet.Object
             int startCount = Observers.Count;
 
             bool removed = Observers.Remove(connection);
+            // FISHMMO EDIT: frame slots. The connection's slot for this object is freed.
+            if (removed)
+                FishNet.Component.Transforming.NetworkTransformFrames.ReleaseSlot(connection, ObjectId);
 
             //Like with clear, remove before calling ObserversActiveChange.
             RemoveObserverLevelOfDetail(connection);

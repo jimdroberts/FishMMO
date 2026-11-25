@@ -308,7 +308,8 @@ namespace FishMMO.Client
 		/// <remarks>
 		/// <para>
 		/// The ceiling is the highest the fog's top can stand anywhere over that ground: the layer's depth
-		/// over the highest pooled air, or its skin over the highest ground, faded out over one softness
+		/// over the highest pooled air, or its skin over the highest ground — but never more than a third of
+		/// the depth over that level, since ground higher still loses its skin — faded out over one softness
 		/// more — which is where FishFogDensity is last above zero. Nothing moves the top off that any
 		/// more (it used to be heaved and billowed, and the shell stood that much higher). Beyond the map
 		/// the ground is sea level, so never less than the depth itself. Everything above it the march
@@ -330,7 +331,11 @@ namespace FishMMO.Client
 			}
 			float depth = Mathf.Max(0f, Depth);
 			float soft = Softness(TopSoftness, depth);
-			float top = Mathf.Max(Mathf.Max(highestPooled + depth, highestGround + depth * RidgeSkin), depth);
+			// Each column's top is at most either of these: the level or the skin over the highest ground,
+			// and the highest level with the most a skin on ground near it ever stands over it (SkinReach).
+			float overGround = Mathf.Max(highestPooled + depth, highestGround + depth * RidgeSkin);
+			float overLevel = highestPooled + depth + Lying(Lift) * SkinReach * Mathf.Max(1f, depth);
+			float top = Mathf.Max(Mathf.Min(overGround, overLevel), depth);
 			float ceiling = top + soft + ShellMargin;
 			return new Vector2(-ShellMargin, ceiling);
 		}
@@ -625,6 +630,63 @@ namespace FishMMO.Client
 		}
 
 		/// <summary>
+		/// How much of a fog that has lifted <paramref name="lift"/> (0..1) still lies on the ground, 0..1, as the
+		/// shaders hold it (FishFogColumnAt): all of it on the ground, none once it has lifted 0.15. Only that
+		/// share has no base and leaves the <see cref="RidgeSkin"/> on ground that stands out of it.
+		/// </summary>
+		public static float Lying(float lift)
+		{
+			return 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 0.15f, Mathf.Clamp01(lift)));
+		}
+
+		/// <summary>
+		/// The top over a place (FishFogColumnAt): the pooled air's <paramref name="level"/>, raised to the
+		/// skin over the <paramref name="ground"/> by the <paramref name="lying"/> share and the ground's
+		/// <see cref="SkinShare"/>. Blended, not the skin scaled: max(level, ground) alone would still follow
+		/// the rock up a peak.
+		/// </summary>
+		private static float TopOver(float level, float ground, float depth, float lying)
+		{
+			float skinned = lying * SkinShare(ground - level, depth);
+			return level + skinned * Mathf.Max(0f, ground + depth * RidgeSkin - level);
+		}
+
+		/// <summary>
+		/// How much of the <see cref="RidgeSkin"/> ground keeps that stands <paramref name="rise"/> metres over
+		/// the pooled fog's top, 0..1 (FishFogSkinShare): all of it at the top and below, none a fog's depth
+		/// over it — up in the warm, dry air over the inversion, where hills over a valley fog stand clear.
+		/// </summary>
+		public static float SkinShare(float rise, float depth)
+		{
+			return 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(rise / Mathf.Max(1f, depth)));
+		}
+
+		/// <summary>
+		/// The most the top over any ground stands over the pooled air's level, as a share of the depth: the
+		/// largest SkinShare(r) × (r + skin) over every rise r. It peaks some 0.4 of the depth up, where the
+		/// skin is thinning, at about a third of the depth. Found once, with a little to spare, for
+		/// <see cref="Shell"/>. In a class of its own, so reading it never runs this type's initialiser (its
+		/// shader property ids).
+		/// </summary>
+		private static float SkinReach => SkinReachHolder.Value;
+
+		private static class SkinReachHolder
+		{
+			public static readonly float Value = Find();
+
+			private static float Find()
+			{
+				float most = RidgeSkin;
+				for (int i = 0; i <= 1000; i++)
+				{
+					float rise = i / 1000f;
+					most = Mathf.Max(most, SkinShare(rise, 1f) * (rise + RidgeSkin));
+				}
+				return most + 0.01f;
+			}
+		}
+
+		/// <summary>
 		/// The layer over ground at this height, where the pooled air lies at that one (FishFogColumnAt).
 		/// Over the sea the ground is the water's surface, sea level, not the bed under it.
 		/// </summary>
@@ -633,14 +695,15 @@ namespace FishMMO.Client
 			ground = Mathf.Max(0f, ground);
 			pooledGround = Mathf.Max(0f, pooledGround);
 			float depth = Mathf.Max(0f, Depth);
+			float lifted = Mathf.Clamp01(Lift) * FogLayer.LiftedBase * depth;
+			// Lying on the ground, no base: it fills down to whatever ground there is (FishFogColumnAt).
+			float lying = Lying(Lift);
 			var c = new Column
 			{
 				Soft = Softness(TopSoftness, depth),
-				Top = Mathf.Max(pooledGround + depth, ground + depth * RidgeSkin),
+				// Only a lying fog leaves a skin on a rise; a lifted sheet is flat-topped (FishFogColumnAt).
+				Top = TopOver(pooledGround + depth, ground, depth, lying),
 			};
-			float lifted = Mathf.Clamp01(Lift) * FogLayer.LiftedBase * depth;
-			// Lying on the ground, no base: it fills down to whatever ground there is (FishFogColumnAt).
-			float lying = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 0.15f, Mathf.Clamp01(Lift)));
 			c.BaseSoft = Mathf.Max(0.25f, lifted * 0.35f);
 			c.Base = Mathf.Min(Mathf.Min(ground, pooledGround) - 2f + lifted - lying * UnderMap, c.Top - c.Soft - c.BaseSoft);
 			// Never under the sea: a fog lies on the water and stops at its surface (FishFogColumnAt).

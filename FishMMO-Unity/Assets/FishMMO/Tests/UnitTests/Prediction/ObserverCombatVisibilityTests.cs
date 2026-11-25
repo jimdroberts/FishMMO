@@ -90,7 +90,7 @@ namespace FishMMO.UnitTests
 			LogAssert.IsTrue(publish >= 0, "the action-hit publisher must exist");
 			string body = source.Substring(publish, Math.Min(1600, source.Length - publish));
 
-			LogAssert.IsTrue(body.Contains("BroadcastToObserversExceptOwner"),
+			LogAssert.IsTrue(body.Contains("CombatEffectAudience.SendFollowUp(") && body.Contains("includeOwner: false"),
 				"an action impact goes to observers only — the owner resolved it and has already run the chain");
 			LogAssert.IsTrue(body.Contains("DirectImpact = true"),
 				"and it is flagged, so the receiver knows not to put it through the hit set");

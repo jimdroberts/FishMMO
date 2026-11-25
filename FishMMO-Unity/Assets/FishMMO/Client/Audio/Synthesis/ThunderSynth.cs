@@ -99,55 +99,262 @@ namespace FishMMO.Client
 		/// <summary>The thunder of a channel heard at <paramref name="listener"/>. Pure arithmetic: safe off the main thread.</summary>
 		public static Result Render(Channel channel, Vector3 listener)
 		{
-			var noise = new Noise(Hash(channel.Seed, 0x7417u));
-			var segments = new List<(Vector3 a, Vector3 b)>();
-			foreach (Vector3[] line in channel.Lines)
+			var renderer = new Renderer(channel, listener);
+			renderer.Step(long.MaxValue);
+			return renderer.Result;
+		}
+
+		/// <summary>
+		/// One clap's render, done a piece at a time: <see cref="Step"/> works until a deadline and carries on from there
+		/// next time. A web build has no worker thread, and a clap is hundreds of milliseconds of arithmetic: rendered in
+		/// one go it froze the game at every strike. Pieces give the same samples as one go, to the bit.
+		/// </summary>
+		public sealed class Renderer
+		{
+			/// <summary>Samples, or segments of channel, done between looks at the clock.</summary>
+			private const int SamplesPerCheck = 4096;
+			private const int SegmentsPerCheck = 16;
+
+			private enum Stage { Place, HighPass, Scatter, Measure, Mix, RemoveDc, Loudest, Scale, Limit, Done }
+
+			private readonly Channel channel;
+			private readonly Vector3 listener;
+			private readonly Vector3 listenerImage;
+			private readonly List<(Vector3 a, Vector3 b)> segments = new List<(Vector3 a, Vector3 b)>();
+			private Result result;
+			private Noise noise;
+			private Stage stage;
+			private int next;
+
+			private float typical, decay;
+			private int length;
+			private float[] dry, wet, mix;
+			private readonly float[] kernel = new float[1024];
+			private float field;
+			private Biquad high, higher;
+			private FeedbackDelay scatter;
+			private double drySum, wetSum;
+			private float gain;
+			private float dcIn, dcOut;
+			private LoudestStretch loudest;
+			private float loudestGain;
+			private float envelope;
+
+			/// <summary>Lays out the channel (quick); the samples are made by <see cref="Step"/>.</summary>
+			public Renderer(Channel channel, Vector3 listener)
 			{
-				for (int i = 0; i + 1 < line.Length; i++)
+				this.channel = channel;
+				this.listener = listener;
+				listenerImage = new Vector3(listener.x, 2f * channel.ListenerGround - listener.y, listener.z);
+				noise = new Noise(Hash(channel.Seed, 0x7417u));
+				foreach (Vector3[] line in channel.Lines)
 				{
-					Tortuous(line[i], line[i + 1], segments, ref noise);
-				}
-			}
-			var result = new Result { NearestMetres = float.MaxValue, FurthestMetres = 0f };
-			if (segments.Count == 0)
-			{
-				result.Samples = Array.Empty<float>();
-				return result;
-			}
-			foreach ((Vector3 a, Vector3 b) in segments)
-			{
-				foreach (Vector3 end in new[] { a, b })
-				{
-					float r = Vector3.Distance(end, listener);
-					if (r < result.NearestMetres)
+					for (int i = 0; i + 1 < line.Length; i++)
 					{
-						result.NearestMetres = r;
-						result.NearestPoint = end;
+						Tortuous(line[i], line[i + 1], segments, ref noise);
 					}
-					result.FurthestMetres = Math.Max(result.FurthestMetres, r);
 				}
+				result = new Result { NearestMetres = float.MaxValue, FurthestMetres = 0f };
+				if (segments.Count == 0)
+				{
+					result.Samples = Array.Empty<float>();
+					stage = Stage.Done;
+					return;
+				}
+				foreach ((Vector3 a, Vector3 b) in segments)
+				{
+					Reach(a);
+					Reach(b);
+				}
+				typical = 0.5f * (result.NearestMetres + result.FurthestMetres);
+				decay = Math.Clamp(ScatterSeconds + 0.25f * typical / 1000f, ScatterSeconds, 7f);
+				float spanSeconds = (result.FurthestMetres - result.NearestMetres) / SpeedOfSound;
+				length = (int)((spanSeconds + 0.1f + decay * 1.1f) * ThunderRate);
+				stage = Stage.Place;
 			}
 
-			float typical = 0.5f * (result.NearestMetres + result.FurthestMetres);
-			float decay = Math.Clamp(ScatterSeconds + 0.25f * typical / 1000f, ScatterSeconds, 7f);
-			float spanSeconds = (result.FurthestMetres - result.NearestMetres) / SpeedOfSound;
-			int length = (int)((spanSeconds + 0.1f + decay * 1.1f) * ThunderRate);
-			var dry = new float[length];
-			var listenerImage = new Vector3(listener.x, 2f * channel.ListenerGround - listener.y, listener.z);
-			var kernel = new float[1024];
-			// How strongly each stretch of channel was heated: the current, the channel's thickness, its branching vary
-			// along it, so some runs are far louder than others. A correlated random field along the channel (an AR(1)
-			// over the segments, about ten of them — 80 m — to a correlation), log-normal, mean one.
-			float field = 0f;
-			foreach ((Vector3 a, Vector3 b) in segments)
+			/// <summary>True once the samples are made.</summary>
+			public bool Done => stage == Stage.Done;
+
+			/// <summary>
+			/// Metres to the piece of channel nearest the listener, known from the start: the thunder's first sound arrives
+			/// that far after the strike, which is how long its render may take.
+			/// </summary>
+			public float NearestMetres => result.NearestMetres;
+
+			/// <summary>What was made; its samples are null until <see cref="Done"/>.</summary>
+			public Result Result => result;
+
+			private void Reach(Vector3 end)
 			{
+				float r = Vector3.Distance(end, listener);
+				if (r < result.NearestMetres)
+				{
+					result.NearestMetres = r;
+					result.NearestPoint = end;
+				}
+				result.FurthestMetres = Math.Max(result.FurthestMetres, r);
+			}
+
+			/// <summary>
+			/// Works until <paramref name="deadline"/> (a <see cref="System.Diagnostics.Stopwatch.GetTimestamp"/> reading;
+			/// <c>long.MaxValue</c> finishes it). Returns <see cref="Done"/>.
+			/// </summary>
+			public bool Step(long deadline)
+			{
+				// At least one piece a call, whatever the deadline: a call that did nothing could be made forever.
+				while (stage != Stage.Done)
+				{
+					switch (stage)
+					{
+						case Stage.Place:
+							if (dry == null)
+							{
+								dry = new float[length];
+							}
+							int lastSegment = Math.Min(segments.Count, next + SegmentsPerCheck);
+							for (; next < lastSegment; next++)
+							{
+								PlaceSegment(segments[next]);
+							}
+							if (next == segments.Count)
+							{
+								// Below 40 Hz, out of earshot on most speakers and only wasted headroom: a fourth-order cut.
+								high = Biquad.HighPass(40f, 0.7f, ThunderRate);
+								higher = Biquad.HighPass(40f, 0.7f, ThunderRate);
+								Advance(Stage.HighPass);
+							}
+							break;
+
+						case Stage.HighPass:
+							for (int end = Chunk(); next < end; next++)
+							{
+								dry[next] = higher.Process(high.Process(dry[next]));
+							}
+							if (next == length)
+							{
+								// The ground, the hills and the cloud scatter every wave back: a long diffuse tail, more of it the further off.
+								wet = new float[length];
+								scatter = new FeedbackDelay(decay, ThunderRate);
+								Advance(Stage.Scatter);
+							}
+							break;
+
+						case Stage.Scatter:
+							int scatterEnd = Chunk();
+							scatter.Run(dry, wet, next, scatterEnd);
+							next = scatterEnd;
+							if (next == length)
+							{
+								Advance(Stage.Measure);
+							}
+							break;
+
+						case Stage.Measure:
+							for (int end = Chunk(); next < end; next++)
+							{
+								drySum += dry[next] * dry[next];
+								wetSum += wet[next] * wet[next];
+							}
+							if (next == length)
+							{
+								float wetShare = Math.Clamp(0.6f + 0.05f * typical / 1000f, 0.6f, 1f);
+								gain = wetShare * Rms(drySum, length) / Math.Max(1e-12f, Rms(wetSum, length));
+								mix = new float[length];
+								Advance(Stage.Mix);
+							}
+							break;
+
+						case Stage.Mix:
+							for (int end = Chunk(); next < end; next++)
+							{
+								mix[next] = dry[next] + gain * wet[next];
+							}
+							if (next == length)
+							{
+								dry = null;
+								wet = null;
+								Advance(Stage.RemoveDc);
+							}
+							break;
+
+						case Stage.RemoveDc:
+							int dcEnd = Chunk();
+							SoundSynth.RemoveDc(mix, next, dcEnd, ref dcIn, ref dcOut);
+							next = dcEnd;
+							if (next == length)
+							{
+								FadeEnds(mix, 8, (int)(0.5f * ThunderRate));
+								// By the roll, not the crack: the loudest quarter second at a strong level, the crack then held to full scale.
+								loudest = new LoudestStretch(ThunderRate, 0.25f);
+								Advance(Stage.Loudest);
+							}
+							break;
+
+						case Stage.Loudest:
+							int loudestEnd = Chunk();
+							loudest.Measure(mix, next, loudestEnd);
+							next = loudestEnd;
+							if (next == length)
+							{
+								loudestGain = loudest.Gain(length, 0.5f);
+								Advance(Stage.Scale);
+							}
+							break;
+
+						case Stage.Scale:
+							int scaleEnd = Chunk();
+							SoundSynth.Scale(mix, next, scaleEnd, loudestGain);
+							next = scaleEnd;
+							if (next == length)
+							{
+								envelope = 0.95f;
+								Advance(Stage.Limit);
+							}
+							break;
+
+						case Stage.Limit:
+							int limitEnd = Chunk();
+							SoundSynth.Limit(mix, next, limitEnd, ThunderRate, 0.95f, 0.08f, ref envelope);
+							next = limitEnd;
+							if (next == length)
+							{
+								result.Samples = mix;
+								mix = null;
+								Advance(Stage.Done);
+							}
+							break;
+					}
+					if (stage != Stage.Done && System.Diagnostics.Stopwatch.GetTimestamp() >= deadline)
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+
+			private int Chunk() => Math.Min(length, next + SamplesPerCheck);
+
+			private void Advance(Stage to)
+			{
+				stage = to;
+				next = 0;
+			}
+
+			/// <summary>One segment of channel's waves, direct and off the ground, placed where they arrive.</summary>
+			private void PlaceSegment((Vector3 a, Vector3 b) segment)
+			{
+				(Vector3 a, Vector3 b) = segment;
+				// How strongly each stretch of channel was heated: the current, the channel's thickness, its branching vary
+				// along it, so some runs are far louder than others. A correlated random field along the channel (an AR(1)
+				// over the segments, about ten of them — 80 m — to a correlation), log-normal, mean one.
 				field = 0.9f * field + 0.436f * noise.Gauss();
 				float heated = MathF.Exp(StrengthSpread * field - 0.5f * StrengthSpread * StrengthSpread);
 				Vector3 run = b - a;
 				float span = run.magnitude;
 				if (span < 1e-3f)
 				{
-					continue;
+					return;
 				}
 				Vector3 along = run / span;
 				Vector3 middle = (a + b) * 0.5f;
@@ -176,30 +383,6 @@ namespace FishMMO.Client
 					Place(dry, kernel, width, (image - result.NearestMetres) / SpeedOfSound, GroundReturn * each / Math.Max(image, 30f));
 				}
 			}
-
-			// Below 40 Hz, out of earshot on most speakers and only wasted headroom: a fourth-order cut.
-			var high = Biquad.HighPass(40f, 0.7f, ThunderRate);
-			var higher = Biquad.HighPass(40f, 0.7f, ThunderRate);
-			for (int i = 0; i < length; i++)
-			{
-				dry[i] = higher.Process(high.Process(dry[i]));
-			}
-			// The ground, the hills and the cloud scatter every wave back: a long diffuse tail, more of it the further off.
-			float[] wet = Scatter(dry, decay, ThunderRate);
-			float wetShare = Math.Clamp(0.6f + 0.05f * typical / 1000f, 0.6f, 1f);
-			float gain = wetShare * Rms(dry) / Math.Max(1e-12f, Rms(wet));
-			var mix = new float[length];
-			for (int i = 0; i < length; i++)
-			{
-				mix[i] = dry[i] + gain * wet[i];
-			}
-			RemoveDc(mix);
-			FadeEnds(mix, 8, (int)(0.5f * ThunderRate));
-			// By the roll, not the crack: the loudest quarter second at a strong level, the crack then held to full scale.
-			NormalizeLoudest(mix, ThunderRate, 0.25f, 0.5f);
-			Limit(mix, ThunderRate, 0.95f, 0.08f);
-			result.Samples = mix;
-			return result;
 		}
 
 		/// <summary>Metres between the kinks of the channel at its finest: the length of its straight runs.</summary>
@@ -320,55 +503,59 @@ namespace FishMMO.Client
 
 		/// <summary>
 		/// The scattered field: an eight-line feedback delay network (Jot), each line 50–170 ms, mixed by a Householder
-		/// matrix so the echoes multiply into a smooth diffuse tail, decaying by 60 dB over <paramref name="decay"/>
-		/// seconds, each line low-passed so the highs die first as they do off grass, trees and cloud.
+		/// matrix so the echoes multiply into a smooth diffuse tail, decaying by 60 dB over the decay time, each line
+		/// low-passed so the highs die first as they do off grass, trees and cloud. Run over a sound in order, a piece at a time.
 		/// </summary>
-		private static float[] Scatter(float[] dry, float decay, int rate)
+		private sealed class FeedbackDelay
 		{
-			int[] delays = { 1103, 1427, 1789, 2153, 2539, 2903, 3331, 3779 };
-			const int lines = 8;
-			var buffers = new float[lines][];
-			var heads = new int[lines];
-			var gains = new float[lines];
-			var damp = new OnePole[lines];
-			for (int l = 0; l < lines; l++)
+			private const int Lines = 8;
+			private static readonly int[] Delays = { 1103, 1427, 1789, 2153, 2539, 2903, 3331, 3779 };
+			private readonly float[][] buffers = new float[Lines][];
+			private readonly int[] heads = new int[Lines];
+			private readonly float[] gains = new float[Lines];
+			private readonly OnePole[] damp = new OnePole[Lines];
+			private readonly float[] outs = new float[Lines];
+
+			public FeedbackDelay(float decay, int rate)
 			{
-				buffers[l] = new float[delays[l]];
-				// 60 dB over the decay time, whatever the line's own length.
-				gains[l] = MathF.Pow(10f, -3f * delays[l] / (decay * rate));
-				damp[l] = OnePole.LowPass(4000f, rate);
-			}
-			var wet = new float[dry.Length];
-			var outs = new float[lines];
-			for (int i = 0; i < dry.Length; i++)
-			{
-				float sum = 0f;
-				for (int l = 0; l < lines; l++)
+				for (int l = 0; l < Lines; l++)
 				{
-					outs[l] = buffers[l][heads[l]];
-					sum += outs[l];
-				}
-				wet[i] = sum;
-				float house = 2f / lines * sum;
-				for (int l = 0; l < lines; l++)
-				{
-					float back = damp[l].Process(outs[l] - house) * gains[l];
-					// The dry sound fed in with alternating signs, so the lines start decorrelated.
-					buffers[l][heads[l]] = back + ((l & 1) == 0 ? dry[i] : -dry[i]);
-					heads[l] = (heads[l] + 1) % delays[l];
+					buffers[l] = new float[Delays[l]];
+					// 60 dB over the decay time, whatever the line's own length.
+					gains[l] = MathF.Pow(10f, -3f * Delays[l] / (decay * rate));
+					damp[l] = OnePole.LowPass(4000f, rate);
 				}
 			}
-			return wet;
+
+			/// <summary>The tail of <paramref name="dry"/>'s samples [<paramref name="from"/>, <paramref name="to"/>) into <paramref name="wet"/>.</summary>
+			public void Run(float[] dry, float[] wet, int from, int to)
+			{
+				for (int i = from; i < to; i++)
+				{
+					float sum = 0f;
+					for (int l = 0; l < Lines; l++)
+					{
+						outs[l] = buffers[l][heads[l]];
+						sum += outs[l];
+					}
+					wet[i] = sum;
+					float house = 2f / Lines * sum;
+					for (int l = 0; l < Lines; l++)
+					{
+						float back = damp[l].Process(outs[l] - house) * gains[l];
+						// The dry sound fed in with alternating signs, so the lines start decorrelated.
+						buffers[l][heads[l]] = back + ((l & 1) == 0 ? dry[i] : -dry[i]);
+						// A compare, not a modulo: an integer division per line per sample was a large share of the cost.
+						int head = heads[l] + 1;
+						heads[l] = head == Delays[l] ? 0 : head;
+					}
+				}
+			}
 		}
 
-		private static float Rms(float[] data)
+		private static float Rms(double sumOfSquares, int count)
 		{
-			double sum = 0.0;
-			foreach (float x in data)
-			{
-				sum += x * x;
-			}
-			return (float)Math.Sqrt(sum / Math.Max(1, data.Length));
+			return (float)Math.Sqrt(sumOfSquares / Math.Max(1, count));
 		}
 	}
 }

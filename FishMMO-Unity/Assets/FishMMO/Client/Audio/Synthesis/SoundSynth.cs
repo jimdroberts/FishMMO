@@ -274,7 +274,13 @@ namespace FishMMO.Client
 		public static void RemoveDc(float[] data)
 		{
 			float dcIn = 0f, dcOut = 0f;
-			for (int i = 0; i < data.Length; i++)
+			RemoveDc(data, 0, data.Length, ref dcIn, ref dcOut);
+		}
+
+		/// <summary><see cref="RemoveDc(float[])"/> over samples [<paramref name="from"/>, <paramref name="to"/>), carrying its filter state, so a long sound can be done a piece at a time.</summary>
+		public static void RemoveDc(float[] data, int from, int to, ref float dcIn, ref float dcOut)
+		{
+			for (int i = from; i < to; i++)
 			{
 				float x = data[i];
 				dcOut = x - dcIn + 0.9985f * dcOut;
@@ -322,26 +328,56 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void NormalizeLoudest(float[] data, int rate, float windowSeconds, float rms)
 		{
-			int window = Math.Max(1, (int)(windowSeconds * rate));
-			double sum = 0.0, loudest = 0.0;
-			for (int i = 0; i < data.Length; i++)
+			var loudest = new LoudestStretch(rate, windowSeconds);
+			loudest.Measure(data, 0, data.Length);
+			Scale(data, 0, data.Length, loudest.Gain(data.Length, rms));
+		}
+
+		/// <summary>
+		/// <see cref="NormalizeLoudest"/> taken a piece at a time: <see cref="Measure"/> every sample in order, then
+		/// <see cref="Scale"/> them all by <see cref="Gain"/>.
+		/// </summary>
+		public struct LoudestStretch
+		{
+			private readonly int window;
+			private double sum, loudest;
+
+			public LoudestStretch(int rate, float windowSeconds)
 			{
-				sum += data[i] * data[i];
-				if (i >= window)
+				window = Math.Max(1, (int)(windowSeconds * rate));
+				sum = 0.0;
+				loudest = 0.0;
+			}
+
+			/// <summary>Takes in samples [<paramref name="from"/>, <paramref name="to"/>), which must follow the last ones measured.</summary>
+			public void Measure(float[] data, int from, int to)
+			{
+				for (int i = from; i < to; i++)
 				{
-					sum -= data[i - window] * data[i - window];
-				}
-				if (i >= window - 1)
-				{
-					loudest = Math.Max(loudest, sum / window);
+					sum += data[i] * data[i];
+					if (i >= window)
+					{
+						sum -= data[i - window] * data[i - window];
+					}
+					if (i >= window - 1)
+					{
+						loudest = Math.Max(loudest, sum / window);
+					}
 				}
 			}
-			if (data.Length < window)
+
+			/// <summary>The gain that brings the loudest stretch of a sound <paramref name="length"/> samples long to <paramref name="rms"/>.</summary>
+			public float Gain(int length, float rms)
 			{
-				loudest = sum / Math.Max(1, data.Length);
+				double level = length < window ? sum / Math.Max(1, length) : loudest;
+				return rms / (float)Math.Sqrt(Math.Max(level, 1e-18));
 			}
-			float gain = rms / (float)Math.Sqrt(Math.Max(loudest, 1e-18));
-			for (int i = 0; i < data.Length; i++)
+		}
+
+		/// <summary>Multiplies samples [<paramref name="from"/>, <paramref name="to"/>) by <paramref name="gain"/>.</summary>
+		public static void Scale(float[] data, int from, int to, float gain)
+		{
+			for (int i = from; i < to; i++)
 			{
 				data[i] *= gain;
 			}
@@ -353,9 +389,15 @@ namespace FishMMO.Client
 		/// </summary>
 		public static void Limit(float[] data, int rate, float ceiling, float releaseSeconds)
 		{
-			float release = 1f - MathF.Exp(-1f / MathF.Max(1f, releaseSeconds * rate));
 			float envelope = ceiling;
-			for (int i = 0; i < data.Length; i++)
+			Limit(data, 0, data.Length, rate, ceiling, releaseSeconds, ref envelope);
+		}
+
+		/// <summary><see cref="Limit(float[], int, float, float)"/> over samples [<paramref name="from"/>, <paramref name="to"/>), carrying its envelope (start it at <paramref name="ceiling"/>).</summary>
+		public static void Limit(float[] data, int from, int to, int rate, float ceiling, float releaseSeconds, ref float envelope)
+		{
+			float release = 1f - MathF.Exp(-1f / MathF.Max(1f, releaseSeconds * rate));
+			for (int i = from; i < to; i++)
 			{
 				float level = MathF.Abs(data[i]);
 				// Instant attack: the envelope is never below the sample, so the gain never lets one through.

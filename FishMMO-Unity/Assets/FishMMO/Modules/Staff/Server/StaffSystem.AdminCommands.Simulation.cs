@@ -140,6 +140,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			public TimeSpan? CpuAtStart;
 			/// <summary>Reconcile write counters at the start (ReconcileWireStats).</summary>
 			public ReconcileWireStats.Snapshot ReconcileAtStart;
+			/// <summary>NetworkTransformFrames counters at the start: updates written, rotation-only, queued, payload and frame bytes, frames.</summary>
+			public long[] FramesAtStart;
 			public ServerTrafficBreakdown Breakdown;
 			/// <summary>Every packet's bytes over the run, for the compression estimate and its training sample.</summary>
 			public PacketCompressionSampler Compression;
@@ -158,9 +160,41 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// Where the players' reconcile bytes went (full snapshots against deltas, each delta section's share) and what the
 		/// run's spawn messages were made of (header, behaviour payloads and the biggest of them, RPC links, SyncTypes).
 		/// </summary>
-		private static List<string> DescribeReconcileAndSpawnBytes(SimulationRun run)
+		/// <summary>NetworkTransformFrames' counters, in the order SimulationRun.FramesAtStart keeps them.</summary>
+		private static long[] FrameCounters()
+		{
+			return new[]
+			{
+				FishNet.Component.Transforming.NetworkTransformFrames.UpdatesWritten,
+				FishNet.Component.Transforming.NetworkTransformFrames.RotationOnlyUpdates,
+				FishNet.Component.Transforming.NetworkTransformFrames.UpdatesQueued,
+				FishNet.Component.Transforming.NetworkTransformFrames.PayloadBytesQueued,
+				FishNet.Component.Transforming.NetworkTransformFrames.FrameBytesWritten,
+				FishNet.Component.Transforming.NetworkTransformFrames.FramesWritten,
+				CombatEffectAudience.FilteredOut,
+			};
+		}
+
+		private static List<string> DescribeReconcileAndSpawnBytes(SimulationRun run, double seconds)
 		{
 			var lines = new List<string>();
+			if (run.FramesAtStart != null)
+			{
+				long[] counters = FrameCounters();
+				long written = counters[0] - run.FramesAtStart[0], rotationOnly = counters[1] - run.FramesAtStart[1];
+				long queued = counters[2] - run.FramesAtStart[2], payload = counters[3] - run.FramesAtStart[3];
+				long frameBytes = counters[4] - run.FramesAtStart[4], frames = counters[5] - run.FramesAtStart[5];
+				if (queued > 0)
+				{
+					lines.Add($"Movement updates: {written / seconds:0}/s written ({(written > 0 ? 100.0 * rotationOnly / written : 0):0}% rotation only, " +
+						$"sent from {FishNet.Component.Transforming.NetworkTransform.RotationSensitivity:0.##} degree(s)), {queued / seconds:0}/s to observers; " +
+						$"avg {payload / (double)queued:0.0} B data + {(frameBytes - payload) / (double)queued:0.0} B framing per update ({frames / seconds:0} frames/s).");
+				}
+				long combatFiltered = counters[6] - run.FramesAtStart[6];
+				lines.Add(ObserverStreamingPolicy.CombatEffectRange > 0f
+					? $"Combat effects: {combatFiltered / seconds:0.0}/s cast and ability-object messages kept from observers beyond {ObserverStreamingPolicy.CombatEffectRange:0} m."
+					: "Combat effects: sent to every observer (ObserverCombatEffectRange 0).");
+			}
 			ReconcileWireStats.Snapshot now = ReconcileWireStats.Take();
 			ReconcileWireStats.Snapshot start = run.ReconcileAtStart;
 			long fulls = now.FullCount - start.FullCount, fullBytes = now.FullBytes - start.FullBytes;
@@ -419,6 +453,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				ObserverStreamingRegistry.ResetLongestPass();
 				ServerTrafficBreakdown.ResetLongestReindex();
 				run.ReconcileAtStart = ReconcileWireStats.Take();
+				run.FramesAtStart = FrameCounters();
 				SpawnWireStats.Reset();
 				SpawnWireStats.Enabled = true;
 				run.Breakdown = ServerTrafficBreakdown.BeginWindow(networkManager);
@@ -621,7 +656,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Byte budget {(ObserverStreamingPolicy.ByteBudget > 0 ? $"{ObserverStreamingPolicy.ByteBudget} B/s per viewer" : "off")}; last pass left out {ObserverStreamingRegistry.LastPassByteEvicted}, slowed {ObserverStreamingRegistry.LastPassByteSlowed}.",
 			};
 			lines.AddRange(compressionSummary);
-			lines.AddRange(DescribeReconcileAndSpawnBytes(run));
+			lines.AddRange(DescribeReconcileAndSpawnBytes(run, seconds));
 			lines.Add("Game data per player by kind (top):");
 			lines.AddRange(summary);
 

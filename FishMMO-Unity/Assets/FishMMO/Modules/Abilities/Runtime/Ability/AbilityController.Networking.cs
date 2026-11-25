@@ -841,6 +841,11 @@ namespace FishMMO.Shared
 			for (int i = 0; i < inFlightWriteBuffer.Count; ++i)
 			{
 				InFlightAbilityObject entry = inFlightWriteBuffer[i];
+				// This receiver now holds the object wherever it stands, so it must hear how the object ends.
+				if (base.IsServerStarted)
+				{
+					CombatEffectAudience.Remember(base.NetworkObject, entry.AbilityID, entry.SpawnTick, conn);
+				}
 				writer.WriteInt64(entry.AbilityID);
 				// Unpacked: a per-cast seed is full entropy by construction.
 				writer.WriteInt32Unpacked(entry.Seed);

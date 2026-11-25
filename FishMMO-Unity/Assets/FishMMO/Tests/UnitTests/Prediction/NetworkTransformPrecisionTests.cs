@@ -364,6 +364,51 @@ namespace FishMMO.UnitTests
 		}
 
 		/// <summary>
+		/// NetworkTransform.RotationSensitivity: a turn smaller than it is not sent, measured against the last rotation sent,
+		/// so small turns add up; 0 keeps sending any change, as FishNet does.
+		/// </summary>
+		[Test]
+		public void TurnBelowTheRotationSensitivity_DoesNotMarkTheRotationChanged()
+		{
+			const int RotationBit = 8;
+			FieldInfo sensitivity = NtType.GetField("RotationSensitivity", BindingFlags.Static | BindingFlags.Public);
+			Assert.IsNotNull(sensitivity, "NetworkTransform.RotationSensitivity is gone.");
+			float before = (float)sensitivity.GetValue(null);
+			GameObject go = new GameObject("NtRotationSensitivity");
+			try
+			{
+				NT nt = Build(go, Vector3.zero, PROJECT_MULTIPLIER);
+				MethodInfo getChanged = NtType.GetMethod("GetChanged",
+					BindingFlags.Instance | BindingFlags.NonPublic,
+					null,
+					new[] { typeof(Vector3), typeof(Quaternion), typeof(Vector3), typeof(NetworkBehaviour) },
+					null);
+				Assert.IsNotNull(getChanged, "GetChanged signature changed; this guard needs updating.");
+				Quaternion lastSent = Quaternion.identity;
+
+				int RotationBits(float yaw)
+				{
+					go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
+					object result = getChanged.Invoke(nt, new object[] { go.transform.localPosition, lastSent, go.transform.localScale, null });
+					return Convert.ToInt32(result) & RotationBit;
+				}
+
+				sensitivity.SetValue(null, 0f);
+				Assert.AreEqual(RotationBit, RotationBits(0.01f), "With no sensitivity, any turn is sent.");
+
+				sensitivity.SetValue(null, 1f);
+				Assert.AreEqual(0, RotationBits(0.4f), "A 0.4 degree turn is inside a 1 degree sensitivity.");
+				Assert.AreEqual(0, RotationBits(0.95f), "Just under the sensitivity is not sent.");
+				Assert.AreEqual(RotationBit, RotationBits(1.2f), "A 1.2 degree turn from the last rotation sent is.");
+			}
+			finally
+			{
+				sensitivity.SetValue(null, before);
+				UnityEngine.Object.DestroyImmediate(go);
+			}
+		}
+
+		/// <summary>
 		/// The sensitivity and the multiplier have to be chosen together: the first decides how far
 		/// something moves before a packet is scheduled, the second how finely that packet can
 		/// describe it.

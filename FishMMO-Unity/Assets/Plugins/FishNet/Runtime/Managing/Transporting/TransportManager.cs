@@ -583,6 +583,18 @@ namespace FishNet.Managing.Transporting
         /// <summary>Called when a connection is given its own send interval.</summary>
         internal void NoteConnectionSendInterval() => ConnectionSendIntervalsUsed = true;
 
+        /// <summary>
+        /// When true, a connection with its own longer interval holds its reliable data to that interval too, instead of
+        /// flushing it on the server's interval. False by default: replies are never slowed.
+        /// </summary>
+        /// <remarks>
+        /// For servers whose longer intervals go to spectators rather than to clients waiting on replies. A connection near
+        /// other players receives reliable observer messages (their casts, hits, settles) on nearly every tick, so with
+        /// reliable data flushed on the server's interval its own longer interval almost never sent fewer packets. Holding
+        /// it delays a reply by at most the difference between the two intervals.
+        /// </remarks>
+        public bool HoldReliableToConnectionInterval { get; set; }
+
         /// <summary>The interval a connection's unreliable data is flushed at: its own, else the server's.</summary>
         public byte GetSendInterval(NetworkConnection connection)
         {
@@ -591,7 +603,8 @@ namespace FishNet.Managing.Transporting
 
         /// <summary>
         /// Returns if a connection's outgoing data is flushed on a tick: on its own interval, or on the server's when
-        /// reliable data is waiting (replies are never slowed by a connection's longer interval).
+        /// reliable data is waiting (replies are never slowed by a connection's longer interval) unless
+        /// <see cref="HoldReliableToConnectionInterval"/> is set.
         /// </summary>
         internal bool ShouldFlushConnection(NetworkConnection connection, uint tick)
         {
@@ -602,7 +615,7 @@ namespace FishNet.Managing.Transporting
                 return serverDue;
             if (own <= 1 || tick % own == 0)
                 return true;
-            return serverDue && connection.HasReliableDataToSend;
+            return serverDue && !HoldReliableToConnectionInterval && connection.HasReliableDataToSend;
         }
 
         /// <summary>Connections passed over by a scheduled flush, kept dirty for a later one.</summary>

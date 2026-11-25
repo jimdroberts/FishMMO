@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using NUnit.Framework;
 using FishMMO.Shared;
 using FishNet.Object;
+using FishNet.Object.Prediction;
 using FishNet.Serializing;
 using UnityEngine;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -11,22 +12,16 @@ using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
 namespace FishMMO.UnitTests
 {
 	/// <summary>
-	/// FishNet's delta reconcile wire (<c>FISHNET_DELTA_PREDICTION</c>, feat/delta-prediction-beta),
-	/// driven through its real header code.
+	/// FishNet's delta reconcile wire (<c>FISHNET_DELTA_PREDICTION</c>, feat/delta-prediction-beta and
+	/// feat/acknowledged-delta-reconciles), driven through its real code.
 	/// </summary>
 	/// <remarks>
 	/// <para>
-	/// <c>Writer.WriteDeltaReconcile</c>, <c>Reader.ReadDeltaReconcile</c> and
-	/// <c>Writer.HasDeltaSerializers</c> are <c>internal</c> to FishNet.Runtime, so they are reached by
-	/// reflection. Reflecting rather than re-implementing means these fixtures fail when FishNet's
-	/// header changes shape, which a hand-rolled copy of the header would not.
-	/// </para>
-	/// <para>
-	/// The bookkeeping AROUND those calls lives in private <c>NetworkBehaviour</c> fields that an
-	/// EditMode test cannot reach without a spawned object, so <see cref="DeltaReconcileSender{T}"/>
-	/// and <see cref="DeltaReconcileReceiver{T}"/> mirror it line for line — about thirty lines, the
-	/// same approach the PR's own harness takes. <c>PredictionAuditRegressionTests</c> pins the
-	/// FishNet source those mirrors copy.
+	/// The bookkeeping (ids, baselines, acknowledgements) is FishNet's own <see cref="ReconcileDeltaWriter{T}"/> and
+	/// <see cref="ReconcileDeltaReader{T}"/>, the classes NetworkBehaviour uses, so nothing here is a hand-copied mirror.
+	/// The header methods (<c>Writer.WriteDeltaReconcile</c>, <c>Reader.ReadDeltaReconcileHeader</c>/<c>Body</c>,
+	/// <c>Writer.HasDeltaSerializers</c>) are <c>internal</c> to FishNet.Runtime and reached by reflection, for the few
+	/// tests that write a payload by hand.
 	/// </para>
 	/// </remarks>
 	internal static class DeltaReconcileWire
@@ -39,39 +34,40 @@ namespace FishMMO.UnitTests
 			return (bool)Invoke(Find(typeof(Writer), "HasDeltaSerializers").MakeGenericMethod(typeof(T)), null, Array.Empty<object>());
 		}
 
-		/// <summary><c>Writer.WriteDeltaReconcile</c>: the one-byte header, then the regular serializer (full) or a delta against <paramref name="fullReconcile"/>.</summary>
-		public static void Write<T>(Writer writer, T fullReconcile, T value, byte fullReconcileId, bool fullSerialize)
+		/// <summary><c>Writer.WriteDeltaReconcile</c>: the header, then the regular serializer (distance 0) or a delta against <paramref name="baseline"/>.</summary>
+		public static void Write<T>(Writer writer, T baseline, T value, byte id, byte baselineDistance)
 		{
 			Invoke(Find(typeof(Writer), "WriteDeltaReconcile").MakeGenericMethod(typeof(T)), writer,
-				new object[] { fullReconcile, value, fullReconcileId, fullSerialize });
+				new object[] { baseline, value, id, baselineDistance });
 		}
 
-		/// <summary><c>Reader.ReadDeltaReconcile</c>.</summary>
-		public static T Read<T>(Reader reader, T fullReconcile, out bool isFull, out byte fullReconcileId)
+		/// <summary><c>Reader.ReadDeltaReconcileHeader</c> then <c>ReadDeltaReconcileBody</c> against <paramref name="baseline"/>.</summary>
+		public static T Read<T>(Reader reader, T baseline, out bool isFull, out byte id, out byte baselineDistance)
 		{
-			object[] args = { fullReconcile, null, null };
-			T value = (T)Invoke(Find(typeof(Reader), "ReadDeltaReconcile").MakeGenericMethod(typeof(T)), reader, args);
-			isFull = (bool)args[1];
-			fullReconcileId = (byte)args[2];
-			return value;
+			object[] header = { null, null, null };
+			Invoke(Find(typeof(Reader), "ReadDeltaReconcileHeader"), reader, header);
+			isFull = (bool)header[0];
+			id = (byte)header[1];
+			baselineDistance = (byte)header[2];
+			return (T)Invoke(Find(typeof(Reader), "ReadDeltaReconcileBody").MakeGenericMethod(typeof(T)), reader, new object[] { baseline, isFull });
 		}
 
-		/// <summary><c>NetworkBehaviour.MAXIMUM_FULL_RECONCILE_INTERVAL</c>: full reconciles are at most this many ticks apart.</summary>
+		/// <summary><c>NetworkBehaviour.MAXIMUM_FULL_RECONCILE_INTERVAL</c>: without acknowledgements, full reconciles are at most this many ticks apart.</summary>
 		public static uint MaximumFullReconcileInterval
 		{
 			get
 			{
 				FieldInfo field = typeof(NetworkBehaviour).GetField("MAXIMUM_FULL_RECONCILE_INTERVAL", Any);
-				LogAssert.IsNotNull(field, "NetworkBehaviour.MAXIMUM_FULL_RECONCILE_INTERVAL is gone; FishNet's delta reconcile bookkeeping changed and the mirrors in this file must be re-derived from it.");
+				LogAssert.IsNotNull(field, "NetworkBehaviour.MAXIMUM_FULL_RECONCILE_INTERVAL is gone; FishNet's delta reconcile bookkeeping changed.");
 				return Convert.ToUInt32(field.GetRawConstantValue());
 			}
 		}
 
-		/// <summary>The bytes FishNet would send for one reconcile, header included.</summary>
-		public static int Bytes<T>(T fullReconcile, T value, bool fullSerialize)
+		/// <summary>The bytes FishNet would send for one reconcile, header included: in full, or as a delta against <paramref name="baseline"/>.</summary>
+		public static int Bytes<T>(T baseline, T value, bool fullSerialize)
 		{
 			Writer writer = new Writer();
-			Write(writer, fullReconcile, value, 1, fullSerialize);
+			Write(writer, baseline, value, 1, fullSerialize ? (byte)0 : (byte)1);
 			return writer.Length;
 		}
 
@@ -79,7 +75,7 @@ namespace FishMMO.UnitTests
 		{
 			MethodInfo method = type.GetMethod(name, Any);
 			LogAssert.IsNotNull(method, $"{type.Name}.{name} was not found. These fixtures drive FishNet's delta prediction " +
-				"(feat/delta-prediction-beta) directly; if it moved, re-point them rather than modelling the wire by hand.");
+				"directly; if it moved, re-point them rather than modelling the wire by hand.");
 			return method;
 		}
 
@@ -98,18 +94,18 @@ namespace FishMMO.UnitTests
 	}
 
 	/// <summary>
-	/// Mirrors the server half of <c>NetworkBehaviour</c>'s delta reconcile bookkeeping:
-	/// <c>GetDeltaSerializeOption</c> and <c>Reconcile_WriteDelta</c>.
+	/// The server half, as NetworkBehaviour.Reconcile_WriteDelta drives FishNet's <see cref="ReconcileDeltaWriter{T}"/>.
 	/// </summary>
 	internal sealed class DeltaReconcileSender<T>
 	{
+		private readonly ReconcileDeltaWriter<T> writer = new ReconcileDeltaWriter<T>();
 		private readonly uint fullInterval;
-		private T baseline;
-		private byte fullReconcileId;
+		private readonly uint refreshInterval;
+		private readonly bool acknowledged;
 		/// <summary><c>_lastFullReconcileWriteTick</c>; 0 is <c>TimeManager.UNSET_TICK</c>.</summary>
 		private uint lastFullReconcileTick;
 
-		/// <summary><c>NetworkObject.ObserverAddedTick</c>: set it to the tick an observer is added on.</summary>
+		/// <summary><c>NetworkObject.ObserverAddedTick</c>, honoured as with state forwarding: set it to the tick an observer is added on.</summary>
 		public uint ObserverAddedTick;
 
 		/// <summary>Full reconciles written so far.</summary>
@@ -121,42 +117,40 @@ namespace FishMMO.UnitTests
 		/// <summary>Bytes written so far, headers included.</summary>
 		public int TotalBytes { get; private set; }
 
-		/// <summary>The writer's baseline: the last full reconcile, as readers decode it.</summary>
-		public T Baseline => baseline;
+		/// <summary>The last full reconcile written, as readers decode it.</summary>
+		public T Baseline => writer.TryGetWritten(writer.LastFullId, out T value) ? value : default;
 
-		public DeltaReconcileSender(ushort tickRate)
+		/// <summary>Id of the last full reconcile written.</summary>
+		public int LastFullId => writer.LastFullId;
+
+		/// <summary>The writer, for acknowledgements.</summary>
+		public ReconcileDeltaWriter<T> DeltaWriter => writer;
+
+		/// <param name="acknowledged">
+		/// True for an owner that acknowledges (NetworkBehaviour without state forwarding); false for state forwarding,
+		/// where no acknowledgement is used and deltas are written against the last full reconcile.
+		/// </param>
+		public DeltaReconcileSender(ushort tickRate, bool acknowledged = false)
 		{
 			fullInterval = Math.Min(tickRate, DeltaReconcileWire.MaximumFullReconcileInterval);
+			refreshInterval = tickRate * 10u;
+			this.acknowledged = acknowledged;
 		}
 
 		public ArraySegment<byte> Send(T value, uint localTick) => Send(value, localTick, out _);
 
 		public ArraySegment<byte> Send(T value, uint localTick, out bool wasFull)
 		{
-			// GetDeltaSerializeOption.
-			wasFull = lastFullReconcileTick == 0
-				|| localTick - lastFullReconcileTick >= fullInterval
-				|| ObserverAddedTick >= lastFullReconcileTick;
-
-			// Reconcile_WriteDelta.
+			bool forceFull = !acknowledged && ObserverAddedTick != 0 && ObserverAddedTick >= lastFullReconcileTick;
+			FishNet.Serializing.Writer output = new FishNet.Serializing.Writer();
+			writer.Write(output, value, localTick, acknowledged, fullInterval, refreshInterval, forceFull);
+			wasFull = writer.LastWasFull;
 			if (wasFull)
 			{
 				lastFullReconcileTick = localTick;
-				fullReconcileId++;
 				FullCount++;
 			}
-
-			Writer writer = new Writer();
-			DeltaReconcileWire.Write(writer, baseline, value, fullReconcileId, wasFull);
-			ArraySegment<byte> written = writer.GetArraySegment();
-
-			if (wasFull)
-			{
-				// The writer decodes its own full reconcile, so a lossy full serializer cannot make it diverge from readers.
-				Reader self = new Reader(written, null);
-				baseline = DeltaReconcileWire.Read(self, baseline, out _, out _);
-			}
-
+			ArraySegment<byte> written = output.GetArraySegment();
 			SentCount++;
 			TotalBytes += written.Count;
 			return written;
@@ -164,49 +158,41 @@ namespace FishMMO.UnitTests
 	}
 
 	/// <summary>
-	/// Mirrors the client half of <c>NetworkBehaviour</c>'s delta reconcile bookkeeping:
-	/// <c>Reconcile_ReadDelta</c>.
+	/// The client half, as NetworkBehaviour.Reconcile_ReadDelta drives FishNet's <see cref="ReconcileDeltaReader{T}"/>.
 	/// </summary>
 	internal sealed class DeltaReconcileReceiver<T>
 	{
-		/// <summary><c>_fullReconcileRead</c>: boxed, null until a full reconcile arrives.</summary>
-		private object fullReconcile;
-		private byte fullReconcileId;
-		private uint fullReconcileServerTick;
+		private readonly ReconcileDeltaReader<T> reader = new ReconcileDeltaReader<T>();
 
-		public bool HoldsFull => fullReconcile != null;
+		/// <summary>True once any reconcile has been decoded.</summary>
+		public bool HoldsFull => reader.NewestId >= 0;
 
-		/// <summary>The full reconcile deltas are applied to (a copy of the box; arrays are shared, which is what makes immutability testable).</summary>
-		public T HeldFull => fullReconcile is T value ? value : default;
+		/// <summary>The reader, for acknowledgements.</summary>
+		public ReconcileDeltaReader<T> DeltaReader => reader;
+
+		/// <summary>What this reader decoded for <paramref name="id"/>.</summary>
+		public T Held(int id) => reader.TryGetDecoded(id, out T value) ? value : default;
 
 		/// <summary>
-		/// Reads one reconcile. Returns false when FishNet would discard it: a delta against a full
-		/// reconcile this receiver does not hold. The payload is consumed exactly either way.
+		/// Reads one reconcile. Returns false when FishNet would discard it: a delta against a reconcile this receiver does
+		/// not hold. The payload is consumed exactly either way.
 		/// </summary>
 		public bool Receive(ArraySegment<byte> payload, uint serverTick, out T value)
 		{
-			Reader reader = new Reader(payload, null);
-			value = DeltaReconcileWire.Read(reader, HeldFull, out bool isFull, out byte id);
-			LogAssert.AreEqual(0, reader.Remaining,
+			FishNet.Serializing.Reader input = new FishNet.Serializing.Reader(payload, null);
+			bool usable = reader.Read(input, serverTick, out value);
+			LogAssert.AreEqual(0, input.Remaining,
 				"A reconcile must be consumed exactly, whether it is used or discarded; the shared state reader continues after it.");
-
-			if (isFull)
-			{
-				fullReconcile = value;
-				fullReconcileId = id;
-				fullReconcileServerTick = serverTick;
-				return true;
-			}
-
-			return fullReconcile != null
-				&& id == fullReconcileId
-				&& serverTick - fullReconcileServerTick <= DeltaReconcileWire.MaximumFullReconcileInterval * 2;
+			return usable;
 		}
 
-		/// <summary>Replaces the held full reconcile; stands in for any way a baseline could go wrong.</summary>
-		public void CorruptHeldFull(Func<T, T> corrupt)
+		/// <summary>Replaces what this reader holds for <paramref name="id"/>; stands in for any way a baseline could go wrong.</summary>
+		public void Corrupt(int id, Func<T, T> corrupt)
 		{
-			fullReconcile = corrupt(HeldFull);
+			FieldInfo field = typeof(ReconcileDeltaReader<T>).GetField("_decoded", BindingFlags.Instance | BindingFlags.NonPublic);
+			LogAssert.IsNotNull(field, "ReconcileDeltaReader<T>._decoded is gone.");
+			T[] decoded = (T[])field.GetValue(reader);
+			decoded[id] = corrupt(decoded[id]);
 		}
 	}
 
@@ -358,7 +344,7 @@ namespace FishMMO.UnitTests
 			wrongFull.ResourceState.Health = -12345f;
 
 			Reader reader = new Reader(delta, null);
-			CharacterReconcileData decoded = DeltaReconcileWire.Read(reader, wrongFull, out bool isFull, out _);
+			CharacterReconcileData decoded = DeltaReconcileWire.Read(reader, wrongFull, out bool isFull, out _, out _);
 			LogAssert.IsFalse(isFull, "Tick 10 is a delta.");
 			LogAssert.IsFalse(ReconcileEquals(authoritative, decoded),
 				"A delta decoded against a full reconcile the writer did not use must come out wrong. If it does not, the " +
@@ -560,20 +546,25 @@ namespace FishMMO.UnitTests
 			ArraySegment<byte> twentyNine = default;
 			ArraySegment<byte> thirtyOne = default;
 			ArraySegment<byte> thirtyTwo = default;
+			CharacterReconcileData atTwentyNine = default;
 			CharacterReconcileData atThirtyTwo = default;
 			for (uint tick = 7; tick <= 32; tick++)
 			{
 				authoritative = Advance(authoritative, tick);
 				ArraySegment<byte> payload = server.Send(authoritative, tick);
-				if (tick == 29) twentyNine = payload;
+				if (tick == 29) { twentyNine = payload; atTwentyNine = authoritative; }
 				if (tick == 31) thirtyOne = payload;
 				if (tick == 32) { thirtyTwo = payload; atThirtyTwo = authoritative; }
 			}
 
 			LogAssert.IsFalse(client.Receive(thirtyTwo, 32, out _), "A delta that overtakes its own full reconcile must be discarded.");
 			LogAssert.IsTrue(client.Receive(thirtyOne, 31, out _), "The full reconcile, late, is usable.");
-			LogAssert.IsFalse(client.Receive(twentyNine, 29, out _),
-				"A delta against the previous full reconcile, arriving after the new one, must be discarded.");
+			/* The reader keeps every recent reconcile by id, not only the newest full one, so a late delta against the
+			 * previous full reconcile still names a baseline it holds and decodes to exactly what was written. That it is
+			 * older than what the owner already applied is Reconcile_Reader_Remote's tick check to refuse, not this one's. */
+			LogAssert.IsTrue(client.Receive(twentyNine, 29, out received),
+				"A delta against the previous full reconcile, arriving after the new one, names a baseline still held.");
+			AssertReconcileEquals(atTwentyNine, received, "tick 29 against full 1, late");
 			LogAssert.IsTrue(client.Receive(thirtyTwo, 32, out received), "A duplicate of tick 32 now decodes.");
 			AssertReconcileEquals(atThirtyTwo, received, "tick 32 against full 31");
 		}
@@ -594,7 +585,7 @@ namespace FishMMO.UnitTests
 			/* Corrupt the held full reconcile outright — a stand-in for any way it could go wrong that
 			 * these tests have not thought of. The id still matches, so the guard cannot catch it: the
 			 * guarantee asserted is recovery, not immunity. */
-			client.CorruptHeldFull(full =>
+			client.Corrupt(server.LastFullId, full =>
 			{
 				full.MotorState.Position += new Vector3(999f, -999f, 999f);
 				full.ResourceState.Health = -12345f;
@@ -654,11 +645,11 @@ namespace FishMMO.UnitTests
 			foreach (CharacterReconcileData heldBaseline in new[] { default(CharacterReconcileData), staleFull })
 			{
 				Writer writer = new Writer();
-				DeltaReconcileWire.Write(writer, server.Baseline, authoritative, 2, false);
+				DeltaReconcileWire.Write(writer, server.Baseline, authoritative, 2, 1);
 				writer.WriteInt32(Sentinel);
 
 				Reader reader = new Reader(writer.GetArraySegment(), null);
-				DeltaReconcileWire.Read(reader, heldBaseline, out bool isFull, out _);
+				DeltaReconcileWire.Read(reader, heldBaseline, out bool isFull, out _, out _);
 				LogAssert.IsFalse(isFull, "This is a delta.");
 				LogAssert.AreEqual(Sentinel, reader.ReadInt32(),
 					"A delta decoded against the wrong baseline must still leave the reader positioned exactly after its own payload.");
@@ -678,7 +669,7 @@ namespace FishMMO.UnitTests
 
 			authoritative = Advance(authoritative, 1);
 			client.Receive(server.Send(authoritative, 1), 1, out _);
-			CharacterReconcileData readerFullCopy = DeepCopy(client.HeldFull);
+			CharacterReconcileData readerFullCopy = DeepCopy(client.Held(server.LastFullId));
 			CharacterReconcileData writerFullCopy = DeepCopy(server.Baseline);
 
 			for (uint tick = 2; tick < ServerTickRate; tick++)
@@ -691,8 +682,9 @@ namespace FishMMO.UnitTests
 				AssertReconcileEquals(authoritative, received, $"tick {tick}");
 			}
 
-			AssertReconcileEquals(readerFullCopy, client.HeldFull, "the reader's full reconcile after 28 deltas");
-			LogAssert.IsTrue(ArrayEquals(readerFullCopy.Attributes, client.HeldFull.Attributes) && ArrayEquals(readerFullCopy.Exposure, client.HeldFull.Exposure),
+			CharacterReconcileData readerFull = client.Held(server.LastFullId);
+			AssertReconcileEquals(readerFullCopy, readerFull, "the reader's full reconcile after 28 deltas");
+			LogAssert.IsTrue(ArrayEquals(readerFullCopy.Attributes, readerFull.Attributes) && ArrayEquals(readerFullCopy.Exposure, readerFull.Exposure),
 				"A delta reader patched the full reconcile's arrays in place.");
 			AssertReconcileEquals(writerFullCopy, server.Baseline, "the writer's full reconcile after 28 deltas");
 		}
@@ -720,6 +712,214 @@ namespace FishMMO.UnitTests
 
 			TestContext.WriteLine($"MEASURE 0.1 degree/tick turn over {ServerTickRate * 2} reconciles: worst error {worst:F3} degrees");
 			LogAssert.IsTrue(worst < 0.1f, $"A slow turn reconciled {worst:F3} degrees away from the server; it must track within a tenth of a degree.");
+		}
+
+		// ── Acknowledged deltas (feat/acknowledged-delta-reconciles) ──────────
+
+		/// <summary>Hands the owner's acknowledgement to the server, as the replicate the owner sends would.</summary>
+		private static void DeliverAcknowledgement(byte acknowledgement, ReconcileDeltaWriter<CharacterReconcileData> writer)
+		{
+			if ((acknowledgement & ReconcileDeltas.AcknowledgementFlag) != 0)
+			{
+				writer.Acknowledge((byte)(acknowledgement & ~ReconcileDeltas.AcknowledgementFlag));
+			}
+		}
+
+		/// <summary>
+		/// While the owner acknowledges, every reconcile is a delta against one it holds: no full reconcile after the first
+		/// but the ten-second refresh, and every reconcile decodes exactly.
+		/// </summary>
+		[Test]
+		public void Acknowledged_Chain_NeedsNoPeriodicFull()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate, acknowledged: true);
+			DeltaReconcileSender<CharacterReconcileData> unacknowledged = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = MakeReconcileData();
+			// The acknowledgement rides the owner's replicates: it reaches the server a few ticks later.
+			const int AcknowledgementLag = 3;
+			var inFlight = new System.Collections.Generic.Queue<byte>();
+
+			uint ticks = ServerTickRate * 20u;
+			for (uint tick = 1; tick <= ticks; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				unacknowledged.Send(authoritative, tick);
+				LogAssert.IsTrue(client.Receive(server.Send(authoritative, tick), tick, out CharacterReconcileData received),
+					$"tick {tick}: nothing was lost, so every reconcile must be usable");
+				AssertReconcileEquals(authoritative, received, $"tick {tick}");
+
+				inFlight.Enqueue(client.DeltaReader.GetAcknowledgement(tick));
+				if (inFlight.Count > AcknowledgementLag)
+				{
+					DeliverAcknowledgement(inFlight.Dequeue(), server.DeltaWriter);
+				}
+			}
+
+			LogAssert.AreEqual(2, server.FullCount, "The first reconcile and the ten-second refresh are the only full ones in twenty seconds.");
+			TestContext.WriteLine(
+				$"MEASURE {ticks} reconciles: acknowledged {server.TotalBytes / (double)server.SentCount:F1}B/reconcile ({server.FullCount} full), " +
+				$"against the last full {unacknowledged.TotalBytes / (double)unacknowledged.SentCount:F1}B/reconcile ({unacknowledged.FullCount} full)");
+			/* Advance changes position, health, rotation and timers every tick, so a delta is ~70 B against any baseline and
+			 * this chain only saves the full reconciles. A mostly idle owner, whose deltas are a few bytes, saves most of what
+			 * it cost: there the once-a-second full reconcile was nearly all of it. */
+			LogAssert.IsTrue(server.TotalBytes < unacknowledged.TotalBytes, "Acknowledged deltas must never cost more than the full-every-second scheme.");
+		}
+
+		/// <summary>
+		/// The channel this exists for: reconciles and acknowledgements both lost and reordered. Every reconcile the owner
+		/// accepts must be exactly what the server wrote for that tick, and a loss must cost only a tick or two, not the
+		/// second until the next full reconcile.
+		/// </summary>
+		[Test]
+		public void LossyReorderingChannel_NeverMisapplies_AndNeverStallsLong()
+		{
+			foreach (bool acknowledged in new[] { true, false })
+			{
+				var random = new System.Random(20211);
+				DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate, acknowledged);
+				DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+				var written = new System.Collections.Generic.Dictionary<uint, CharacterReconcileData>();
+				var down = new System.Collections.Generic.List<(uint ArrivesOn, uint Tick, ArraySegment<byte> Payload)>();
+				var up = new System.Collections.Generic.List<(uint ArrivesOn, byte Acknowledgement)>();
+				CharacterReconcileData authoritative = MakeReconcileData();
+
+				uint ticks = ServerTickRate * 30u;
+				uint lastUsable = 0;
+				uint longestGap = 0;
+				int used = 0;
+				for (uint tick = 1; tick <= ticks; tick++)
+				{
+					authoritative = Advance(authoritative, tick);
+					written[tick] = authoritative;
+					ArraySegment<byte> payload = server.Send(authoritative, tick);
+					// 10% lost; the rest arrive up to two ticks late, so they also reorder.
+					if (random.NextDouble() >= 0.10)
+					{
+						down.Add((tick + (uint)random.Next(0, 3), tick, new ArraySegment<byte>(payload.ToArray())));
+					}
+
+					for (int i = down.Count - 1; i >= 0; i--)
+					{
+						if (down[i].ArrivesOn != tick)
+						{
+							continue;
+						}
+						if (client.Receive(down[i].Payload, down[i].Tick, out CharacterReconcileData received))
+						{
+							AssertReconcileEquals(written[down[i].Tick], received, $"acknowledged {acknowledged}, tick {down[i].Tick} received on {tick}");
+							longestGap = Math.Max(longestGap, tick - lastUsable);
+							lastUsable = tick;
+							used++;
+						}
+						down.RemoveAt(i);
+					}
+
+					// The owner's replicates: 10% lost, one to three ticks late.
+					if (random.NextDouble() >= 0.10)
+					{
+						up.Add((tick + (uint)random.Next(1, 4), client.DeltaReader.GetAcknowledgement(tick)));
+					}
+					for (int i = up.Count - 1; i >= 0; i--)
+					{
+						if (up[i].ArrivesOn == tick)
+						{
+							DeliverAcknowledgement(up[i].Acknowledgement, server.DeltaWriter);
+							up.RemoveAt(i);
+						}
+					}
+				}
+
+				TestContext.WriteLine(
+					$"MEASURE 10% loss both ways, reordered, {ticks} ticks, {(acknowledged ? "acknowledged" : "against the last full")}: " +
+					$"{used} reconciles used, longest gap {longestGap} ticks, {server.FullCount} full, " +
+					$"{server.TotalBytes / (double)server.SentCount:F1}B/reconcile");
+				if (acknowledged)
+				{
+					LogAssert.IsTrue(longestGap <= 8u, $"longest gap {longestGap} ticks. " + "With acknowledgements a loss must cost a few ticks, not the second until the next full reconcile.");
+					LogAssert.IsTrue(server.FullCount <= 4, $"{server.FullCount} full. " + "Only the first full reconcile and the ten-second refreshes, whatever is lost.");
+				}
+			}
+		}
+
+		/// <summary>Acknowledgements arrive out of order: the newest wins, and one too old to be a baseline is not used.</summary>
+		[Test]
+		public void Acknowledgements_KeepTheNewest_AndExpire()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate, acknowledged: true);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = MakeReconcileData();
+			byte eight = 0;
+			byte five = 0;
+			for (uint tick = 1; tick <= 10; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				client.Receive(server.Send(authoritative, tick), tick, out _);
+				if (tick == 5) five = client.DeltaReader.GetAcknowledgement(tick);
+				if (tick == 8) eight = client.DeltaReader.GetAcknowledgement(tick);
+			}
+
+			DeliverAcknowledgement(eight, server.DeltaWriter);
+			DeliverAcknowledgement(five, server.DeltaWriter);
+			LogAssert.AreEqual(eight & 0x7F, server.DeltaWriter.AcknowledgedId, "A late, older acknowledgement must not replace a newer one.");
+
+			authoritative = Advance(authoritative, 11);
+			LogAssert.IsTrue(client.Receive(server.Send(authoritative, 11, out bool full), 11, out CharacterReconcileData received) && !full,
+				"Written against the acknowledged reconcile.");
+			AssertReconcileEquals(authoritative, received, "tick 11 against the acknowledged reconcile");
+
+			// No acknowledgement for more than the baseline window: the server must stop using the old one.
+			for (uint tick = 12; tick <= 12 + ReconcileDeltas.MaximumBaselineWrites; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				server.Send(authoritative, tick);
+			}
+			LogAssert.AreEqual(-1, server.DeltaWriter.AcknowledgedId, "An acknowledgement older than the baseline window is not a baseline.");
+		}
+
+		/// <summary>The owner stops acknowledging what it decoded once that is too old to be anyone's baseline.</summary>
+		[Test]
+		public void Acknowledgement_StopsWhenStale()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate, acknowledged: true);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			LogAssert.AreEqual(0, client.DeltaReader.GetAcknowledgement(1), "Nothing decoded yet: nothing to acknowledge.");
+			client.Receive(server.Send(MakeReconcileData(), 10), 10, out _);
+			LogAssert.AreNotEqual(0, client.DeltaReader.GetAcknowledgement(10 + ReconcileDeltas.MaximumBaselineTicks), "Recent enough.");
+			LogAssert.AreEqual(0, client.DeltaReader.GetAcknowledgement(11 + ReconcileDeltas.MaximumBaselineTicks), "Too old to acknowledge.");
+		}
+
+		/// <summary>
+		/// A long outage, longer than the ids take to wrap: nothing reaches the owner for five seconds. Ids written in that time
+		/// reuse the ones it holds, so a delta naming one of them must be refused, never decoded against the old reconcile;
+		/// and the owner recovers within a second of the outage ending.
+		/// </summary>
+		[Test]
+		public void LongOutage_PastTheIdWrap_NeverMisapplies_AndRecovers()
+		{
+			DeltaReconcileSender<CharacterReconcileData> server = new DeltaReconcileSender<CharacterReconcileData>(ServerTickRate, acknowledged: true);
+			DeltaReconcileReceiver<CharacterReconcileData> client = new DeltaReconcileReceiver<CharacterReconcileData>();
+			CharacterReconcileData authoritative = MakeReconcileData();
+			uint outageStart = 40, outageEnd = 40 + ServerTickRate * 5u;
+			uint recovered = 0;
+			for (uint tick = 1; tick <= outageEnd + ServerTickRate * 2u; tick++)
+			{
+				authoritative = Advance(authoritative, tick);
+				ArraySegment<byte> payload = server.Send(authoritative, tick);
+				bool lost = tick >= outageStart && tick < outageEnd;
+				if (!lost && client.Receive(payload, tick, out CharacterReconcileData received))
+				{
+					AssertReconcileEquals(authoritative, received, $"tick {tick}");
+					if (tick >= outageEnd && recovered == 0)
+					{
+						recovered = tick;
+					}
+				}
+				// The owner's replicates keep flowing (it is the downlink that failed); they carry whatever it holds.
+				DeliverAcknowledgement(client.DeltaReader.GetAcknowledgement(tick), server.DeltaWriter);
+			}
+			LogAssert.IsTrue(recovered != 0 && recovered - outageEnd <= ServerTickRate,
+				$"The owner must be using reconciles again within a second of the outage ending; it was at tick {recovered} (outage ended {outageEnd}).");
 		}
 
 		// ── Helpers ──────────────────────────────────────────────────────────

@@ -1120,7 +1120,44 @@ namespace FishNet.Component.Transforming
         {
             ResetState();
             ChangeUpdateSubscription(subscribe: false);
+            // FISHMMO EDIT: frame slots. The slot no longer names this transform here.
+            if (_frameSlot >= 0)
+            {
+                NetworkTransformFrames.UnbindClientSlot(_frameSlot, this);
+                _frameSlot = -1;
+            }
         }
+
+        #region FISHMMO EDIT: frame slots (see NetworkTransformFrames).
+        /// <summary>On a client, the slot this transform's framed updates arrive under; -1 when none.</summary>
+        private int _frameSlot = -1;
+
+        /// <summary>
+        /// Writes the receiving observer's slot for this object (the object's first NetworkTransform only; 0 otherwise or
+        /// when slots are off), so its framed updates can name it in about one byte.
+        /// </summary>
+        public override void WritePayload(NetworkConnection connection, Writer writer)
+        {
+            base.WritePayload(connection, writer);
+            int slot = -1;
+            if (IsServerStarted && FrameObserverUpdates && connection != null && connection.IsValid && NetworkTransformFrames.FirstTransformOf(NetworkObject) == this)
+                slot = NetworkTransformFrames.AssignSlot(connection, ObjectId);
+            writer.WriteUnsignedPackedWhole((ulong)(slot + 1));
+        }
+
+        /// <summary>Reads the slot <see cref="WritePayload"/> wrote and, on a client, binds it to this transform.</summary>
+        public override void ReadPayload(NetworkConnection connection, Reader reader)
+        {
+            base.ReadPayload(connection, reader);
+            int slot = (int)reader.ReadUnsignedPackedWhole() - 1;
+            if (slot < 0 || IsServerStarted)
+                return;
+            if (_frameSlot >= 0)
+                NetworkTransformFrames.UnbindClientSlot(_frameSlot, this);
+            _frameSlot = slot;
+            NetworkTransformFrames.BindClientSlot(slot, this);
+        }
+        #endregion
 
         /// <summary>
         /// Tries to clear the GoalDatas queue during an ownership change.
@@ -2352,6 +2389,16 @@ namespace FishNet.Component.Transforming
         /// <summary>This transform's component index in frames (NetworkTransformFrames.FirstTransform for the object's first); -1 until known.</summary>
         private int _frameComponent = -1;
 
+        /// <summary>
+        /// FISHMMO EDIT: (upstream PR feat/networktransform-rotation-sensitivity) smallest change of rotation, in degrees,
+        /// that is sent; 0 sends any change, as before. Like the position sensitivity it is measured against the last
+        /// rotation sent, so small turns add up and are sent once they reach it, and a settle still sends the last one
+        /// reliably. A character turning to keep facing a moving target changed its rotation by a fraction of a degree
+        /// nearly every tick, each sent although no one could see it (with compact rotation, often not even a change of
+        /// the 16-bit heading that is sent). Only the sending side reads it.
+        /// </summary>
+        public static float RotationSensitivity = 0f;
+
         /// <summary>How many bytes the last DeserializePacket read; -1 when it did not run.</summary>
         private int _lastDeserializedLength = -1;
 
@@ -2372,6 +2419,7 @@ namespace FishNet.Component.Transforming
             if (_frameComponent < 0)
                 _frameComponent = NetworkTransformFrames.FirstTransformOf(nob) == this ? NetworkTransformFrames.FirstTransform : ComponentIndex;
             HashSet<NetworkConnection> excluded = GetUnreliableObserversRpcExclusions();
+            NetworkTransformFrames.CountUpdate(payload);
             int offset = -1;
             foreach (NetworkConnection conn in nob.Observers)
             {
@@ -2567,7 +2615,8 @@ namespace FishNet.Component.Transforming
             if (_synchronizeRotation)
             {
                 Quaternion rotation = t.localRotation;
-                if (!rotation.Matches(lastRotation, true))
+                // FISHMMO EDIT: (upstream PR feat/networktransform-rotation-sensitivity) see RotationSensitivity.
+                if (RotationSensitivity > 0f ? Quaternion.Angle(rotation, lastRotation) >= RotationSensitivity : !rotation.Matches(lastRotation, true))
                     changed |= ChangedDelta.Rotation;
             }
             

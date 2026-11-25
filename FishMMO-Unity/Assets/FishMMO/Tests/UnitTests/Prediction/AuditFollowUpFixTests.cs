@@ -198,9 +198,12 @@ namespace FishMMO.UnitTests
 				"And the other: the observed character has damaged the viewer. Either one is a fight, " +
 				"and an enemy attacking a player who has not hit back yet is the case that matters most.");
 
-			LogAssert.IsTrue(Regex.IsMatch(source, @"engagedWith\s*=\s*observed\.InCombat"),
+			LogAssert.IsTrue(Regex.IsMatch(source, @"engagedWith\s*=\s*\(?observed\.InCombat"),
 				"Gated on the observed character being in combat, so a stale contributor entry cannot " +
 				"pin something the fight has long since left.");
+			LogAssert.IsTrue(source.Contains("HasRecentBlow(viewer.NetworkObject.Owner.ClientId, observed.NetworkObject.ObjectId)"),
+				"A blow pins too, whoever struck: loot credit is earned only by players, so a monster striking a player " +
+				"was no fight to the contributor test. The blow memory bounds it instead of the combat flag.");
 		}
 
 		/// <summary>
