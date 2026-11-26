@@ -29,6 +29,30 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void PvPRank_IsAnEloRating_StartingAndFlooredWhereTheArenaRates()
+		{
+			var rank = AssetDatabase.LoadAssetAtPath<CharacterAttributeTemplate>(ProjectFiles.Path("Assets/FishMMO/Templates/Entity/CharacterAttributes/PvP/PvP Rank.asset"));
+			LogAssert.IsNotNull(rank, "the PvP Rank attribute ships");
+			/* A character who has never played has no saved row: the game gives them the initial value, and the queue's
+			 * team balancing reads them at ArenaRatingSource's default. Both must be where the Elo starts. */
+			LogAssert.AreEqual(ArenaRating.DefaultRating, rank.InitialValue, "everyone starts at the starting rating");
+			LogAssert.AreEqual(ArenaRating.DefaultRating, FishMMO.Database.Data.ArenaRatingSource.FromAttribute(1).DefaultRating, "an unsaved rank balances as the starting rating");
+			LogAssert.AreEqual(ArenaRating.MinimumRating, rank.MinValue, "and never falls below the floor");
+
+			/* The database migration that moved every stored rank onto the Elo scale finds the rows by this ID, computed
+			 * from the type and asset names as the game computes it. Renaming either strands that reset. */
+			rank.AddToCache(rank.name);
+			try
+			{
+				LogAssert.AreEqual(("CharacterAttributeTemplate" + "PvP Rank").GetDeterministicHashCode(), rank.ID, "the ID the migration resets");
+			}
+			finally
+			{
+				rank.RemoveFromCache();
+			}
+		}
+
+		[Test]
 		public void TheInteractableSystemRunsNoMatchmaking()
 		{
 			string interactables = ProjectFiles.ReadAllText("Assets/FishMMO/Server/Implementation/World/SceneServer/Interactable/InteractableSystem.cs");

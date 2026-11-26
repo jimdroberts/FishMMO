@@ -431,7 +431,7 @@ namespace FishMMO.TestHarness.World
 
 		/// <summary>
 		/// The height a point is held to, at least <paramref name="clearance"/> above the terrain under it as it is drawn (the
-		/// snow lying on it included, <see cref="SnowLift"/>), unless the point is sheltered (<see cref="Sheltered"/>): then it
+		/// snow lying on it included, <see cref="SnowSurface.LiftAt"/>), unless the point is sheltered (<see cref="Sheltered"/>): then it
 		/// is left where it is.
 		/// </summary>
 		/// <remarks>
@@ -445,50 +445,12 @@ namespace FishMMO.TestHarness.World
 			{
 				return position.y;
 			}
-			float surface = ground + SnowLift(under, new Vector3(position.x, ground, position.z));
+			float surface = ground + SnowSurface.LiftAt(under, new Vector3(position.x, ground, position.z));
 			if (position.y >= surface + clearance || Sheltered(physics, position, ground, mask))
 			{
 				return position.y;
 			}
 			return surface + clearance;
-		}
-
-		private static readonly int SnowDepthProperty = Shader.PropertyToID("_FishSnowDepth");
-
-		/// <summary>
-		/// How high the drawn snow stands over the terrain at a point on it, metres, as the terrain shader lifts it
-		/// (FishSnowLift / FishSnowLiftMetres): the tile's blanket where the cover is white, the deep snow past it, none on
-		/// ground too steep to hold it, and none unless this quality tier lifts the ground and there is snow in the scene.
-		/// Read from the cover map's own copy of what it publishes. Footprints and the sky's shelter are left out: both only
-		/// lower the snow, so the camera errs above the surface, never under it.
-		/// </summary>
-		private static float SnowLift(Terrain terrain, Vector3 ground)
-		{
-			Material material = terrain != null ? terrain.materialTemplate : null;
-			float blanket = material != null && material.HasFloat(SnowDepthProperty) ? material.GetFloat(SnowDepthProperty) : 0f;
-			if (blanket <= 0f || Shader.GetGlobalVector(WeatherShaderGlobals.Tier).x <= 0f)
-			{
-				return 0f;
-			}
-			Vector4 everywhere = Shader.GetGlobalVector(WeatherShaderGlobals.Cover);
-			if (everywhere.x <= 0f && Shader.GetGlobalVector(WeatherCoverMap.SnowLineId).z <= 0.5f)
-			{
-				return 0f;
-			}
-			WeatherCoverMap map = WeatherPresentation.Instance != null ? WeatherPresentation.Instance.CoverMap : null;
-			float cover = map != null ? map.Sample(ground, new WeatherCover { Snow = everywhere.x }).Snow : everywhere.x;
-			float deep = map != null ? map.SampleDeepSnow(ground) : 0f;
-			float lift = Mathf.Clamp01(cover) * blanket + deep;
-			if (lift <= 0f)
-			{
-				return 0f;
-			}
-			// FishCoverFacing at a slope bias of 0.5: all of it on the level, none past 60°.
-			Vector3 size = terrain.terrainData.size;
-			Vector3 origin = terrain.GetPosition();
-			float up = terrain.terrainData.GetInterpolatedNormal((ground.x - origin.x) / size.x, (ground.z - origin.z) / size.z).y;
-			float facing = Mathf.Clamp01((up - 0.5f) / 0.5f);
-			return lift * facing * facing;
 		}
 
 		/// <summary>

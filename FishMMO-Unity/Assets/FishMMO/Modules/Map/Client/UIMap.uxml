@@ -54,6 +54,14 @@
 
             <ui:VisualElement name="map-side" class="map-side">
 
+                <!-- Guide: the marker the minimap points the way to. Shown only while there is one; click a marker to choose. -->
+                <ui:VisualElement name="map-guide-section" class="fish-section map-section map-guide-section">
+                    <ui:Label class="fish-label fish-label--title map-section__title" text="GUIDE" />
+                    <ui:Label name="map-guide-name" class="fish-label fish-label--accent map-guide__name" text="" />
+                    <ui:Label name="map-guide-status" class="fish-label fish-label--caption map-guide__status" text="" />
+                    <ui:Button name="map-guide-clear" class="fish-button fish-button--ghost map-guide__clear" text="STOP GUIDING" />
+                </ui:VisualElement>
+
                 <!-- Waypoint: the selected fast-travel point. Outside the scroll view so that a click on a waypoint always shows its result. -->
                 <ui:VisualElement name="map-waypoint-section" class="fish-section map-section">
                     <ui:Label class="fish-label fish-label--title map-section__title" text="WAYPOINT" />

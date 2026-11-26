@@ -13,11 +13,12 @@ MonoBehaviour:
   m_Name: PvP Rank Leaderboard
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.LeaderboardTemplate
   DisplayName: PvP Rank
-  Description: Lifetime arena rank. Raised by every win, lowered by every loss, never reset.
+  Description: Lifetime arena rating (Elo) from every arena match, never reset by a season. Shown after 10 matches.
   Category: 0
   SortOrder: 10
   Source: 2
   AttributeTemplate: {fileID: 11400000, guid: 20e5bd4e8ce1460eb80fef7bd641e060, type: 2}
+  GamesAttributeTemplate: {fileID: 11400000, guid: 9a88fefa44ca40898b9b14fcec6f3d87, type: 2}
   AchievementTemplate: {fileID: 0}
   MinimumGames: 10
-  ScoreLabel: Rank
+  ScoreLabel: Rating

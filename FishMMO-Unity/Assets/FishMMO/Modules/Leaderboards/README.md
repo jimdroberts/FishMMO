@@ -57,8 +57,9 @@ Boards are `LeaderboardTemplate` assets (`Assets/FishMMO/Modules/Leaderboards/Te
 | Source | Reads | Current as of |
 |---|---|---|
 | Arena Season Rating | `arena_rating.rating` in the active season, placed players only (`MinimumGames`) | The end of the character's last ranked match |
-| Character Attribute | `character_attributes.value` for one attribute (PvP Rank, PvP Wins) | The owner's last character save (every 30 s online) |
+| Character Attribute | `character_attributes.value` for one attribute (PvP Rank, PvP Wins). With a `GamesAttributeTemplate`, only characters whose games attribute reaches `MinimumGames` (PvP Rank counts PvP Matches) | The owner's last character save (every 30 s online) |
 | Achievement | `character_achievements.value` for one achievement (Kills, Waypoints Discovered) | The owner's last character save (every 30 s online) |
+| Duel Rating / Duel Wins | `duel_record.rating` (finished duels at least `MinimumGames`) / `duel_record.wins`, written by the Duels module | The end of the character's last duel |
 
 A new board is a new asset pointing at a number the game already keeps. Nothing here adds a column.
 
@@ -122,6 +123,7 @@ Create a `LeaderboardTemplate` (FishMMO → Leaderboard → Leaderboard), set it
 - **Every scene server keeps its own cache.** Two servers can show the same board up to one cache lifetime apart; each re-reads the same rows when its copy expires.
 - **Attribute and achievement boards trail online play by one save interval.** Those values live on the character in memory and are written by the character save. The board deliberately does not patch in the live values of characters on this server: a board mixing live values for some characters with saved values for the rest would order people by which server they stand on.
 - **Arena placement.** The arena board ranks a character only after `MinimumGames` ranked games this season, matching the placement games after which their own profile stops showing the rating as provisional. `LeaderboardWiringTests` fails if a board's minimum drops below any arena's `PlacementGames`.
+- **PvP Rank placement.** PvP Rank is an Elo rating that starts everyone at 1500, so one win would otherwise put a newcomer near the top. Its board counts PvP Matches (`GamesAttributeTemplate`) and ranks a character after `MinimumGames` of them; the same test holds it to the arenas' `PlacementGames`.
 - **Ties** share a rank (1, 2, 2, 4) and keep a fixed order within it (arena: fewer games first; then character ID), so paging never repeats or skips a character.
 
 ## Operational Checks
@@ -129,7 +131,7 @@ Create a `LeaderboardTemplate` (FishMMO → Leaderboard → Leaderboard), set it
 | Check | How | Expected |
 |---|---|---|
 | The system is loaded | Addressables: `LeaderboardSystem.asset` in `Server_Static_Permanent` | It carries the `SceneServer_Systems` label (`LeaderboardWiringTests.TheSceneServer_LoadsTheLeaderboardSystem`) |
-| Boards are offered | Open Leaderboards from the game menu | PvP: Arena Rating, PvP Rank, PvP Wins. PvE: Monsters Slain, Explorers |
+| Boards are offered | Open Leaderboards from the game menu | PvP: Arena Rating, PvP Rank, PvP Wins, Duel Rating, Duel Wins. PvE: Monsters Slain, Explorers |
 | Reads are shared | Several players open the same page within `cacheSeconds` | One database read; every reply reports the same age |
 | A failed read is not cached | Stop the database, request, restart, request again | First reply `Unavailable`, second a board |
 | Staff are excluded | Rank a character on a GM account | Absent with `rankStaff` off, present with it on |

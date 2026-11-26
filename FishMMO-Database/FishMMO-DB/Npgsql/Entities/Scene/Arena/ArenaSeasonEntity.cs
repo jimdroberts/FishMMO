@@ -3,16 +3,20 @@ using System;
 namespace FishMMO.Database.Npgsql.Entities
 {
 	/// <summary>
-	/// A ranked arena season: the window over which ratings accumulate and the leaderboard stands.
+	/// A PvP season: the window over which ranked arena ratings accumulate and the season board stands.
 	/// </summary>
 	/// <remarks>
 	/// Exactly one season is active at a time. Ratings are keyed by season, so a new season starts
-	/// everybody at the placement stage again while history keeps the old numbers.
+	/// everybody at the placement stage again while history keeps the old numbers. Every season ever
+	/// played stays a row: ending one only closes it, so its ratings and its place in the count are
+	/// never lost.
 	/// </remarks>
 	public class ArenaSeasonEntity
 	{
 		/// <summary>Primary key.</summary>
 		public long ID { get; set; }
+		/// <summary>The season's place in the count, from 1. Unique; the next season is one more than the highest.</summary>
+		public int Number { get; set; }
 		/// <summary>Display name, e.g. "Season 1".</summary>
 		public string Name { get; set; }
 		/// <summary>When the season began (UTC).</summary>

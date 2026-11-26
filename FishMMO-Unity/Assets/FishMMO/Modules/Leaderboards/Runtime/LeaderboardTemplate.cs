@@ -27,6 +27,10 @@ namespace FishMMO.Shared
 		CharacterAttribute = 2,
 		/// <summary>An achievement's progress, such as Kills. Current as of the last character save.</summary>
 		Achievement = 3,
+		/// <summary>The duel rating (the Duels module). Current the moment a duel ends.</summary>
+		DuelRating = 4,
+		/// <summary>Duels won (the Duels module). Current the moment a duel ends.</summary>
+		DuelWins = 5,
 	}
 
 	/// <summary>
@@ -69,11 +73,14 @@ namespace FishMMO.Shared
 		[Tooltip("Character Attribute source: the attribute whose value is ranked.")]
 		public CharacterAttributeTemplate AttributeTemplate;
 
+		[Tooltip("Character Attribute source, optional: an attribute counting the character's games (PvP Matches for PvP Rank). When set, a character is ranked only once it reaches Minimum Games. Empty ranks everyone with a score.")]
+		public CharacterAttributeTemplate GamesAttributeTemplate;
+
 		[Tooltip("Achievement source: the achievement whose progress is ranked.")]
 		[TemplateOf("AchievementTemplate")]
 		public CachedScriptableObject AchievementTemplate;
 
-		[Tooltip("Arena source: ranked games a character must finish this season to appear. Match your arenas' Placement Games, so a rating the player's own profile still hides as provisional is never ranked publicly.")]
+		[Tooltip("Arena source: ranked games a character must finish this season to appear. Match your arenas' Placement Games, so a rating the player's own profile still hides as provisional is never ranked publicly. Duel Rating source: duels a character must finish to appear. Character Attribute source with a Games Attribute Template: the games it must count.")]
 		[Min(1)]
 		public int MinimumGames = 10;
 
@@ -87,7 +94,7 @@ namespace FishMMO.Shared
 		public string ResolvedScoreLabel => string.IsNullOrWhiteSpace(ScoreLabel) ? "Score" : ScoreLabel;
 
 		/// <summary>Whether the board carries a win/loss record beside the score.</summary>
-		public bool ShowsRecord => Source == LeaderboardSource.ArenaSeasonRating;
+		public bool ShowsRecord => Source == LeaderboardSource.ArenaSeasonRating || Source == LeaderboardSource.DuelRating || Source == LeaderboardSource.DuelWins;
 
 		/// <summary>
 		/// The attribute or achievement template the board reads, or 0 for a source that has none
@@ -119,6 +126,8 @@ namespace FishMMO.Shared
 			switch (Source)
 			{
 				case LeaderboardSource.ArenaSeasonRating:
+				case LeaderboardSource.DuelRating:
+				case LeaderboardSource.DuelWins:
 					problem = null;
 					return true;
 				case LeaderboardSource.CharacterAttribute:

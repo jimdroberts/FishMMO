@@ -98,6 +98,21 @@ namespace FishMMO.Shared
 		/// </summary>
 		private static readonly Dictionary<int, Dictionary<int, int>> ranksByClientId = new Dictionary<int, Dictionary<int, int>>();
 
+		/// <summary>
+		/// Per viewer, each ranked character's standing on the last pass: its rank within its classification divided by how
+		/// many of that classification the viewer is shown. Below 1 is inside the cut, above 1 outside it.
+		/// </summary>
+		private static readonly Dictionary<int, Dictionary<int, float>> standingsByClientId = new Dictionary<int, Dictionary<int, float>>();
+		private static readonly Dictionary<int, int> admittedByBucket = new Dictionary<int, int>();
+
+		/// <summary>
+		/// How far from the cut a character must stand for the visibility holds to let go of it: one ranked within the first
+		/// (1 - margin) of what the viewer is shown comes back at once, and one ranked past (1 + margin) of it leaves at once.
+		/// The holds only damp the characters near the cut, where the flicker is; a 10 s hold everywhere kept a far fighter in
+		/// view while a nearer one that had been left out walked closer and stayed hidden. Cfg ObserverHoldStandingMargin.
+		/// </summary>
+		public static float HoldStandingMargin = 0.25f;
+
 		/// <summary>Viewers that produced a ranking on the most recent pass.</summary>
 		private static readonly HashSet<int> rankedClientIds = new HashSet<int>();
 
@@ -247,8 +262,9 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// Keeps a character the budget took out of view out for at least <see cref="MinimumHiddenTicks"/>, unless it is pinned
-		/// or within the viewer's engagement range. Records the moment the budget takes a visible character out.
+		/// Keeps a character the budget took out of view out for at least <see cref="MinimumHiddenTicks"/>, unless it is pinned,
+		/// within the viewer's engagement range, or now well inside the cut (<see cref="HoldStandingMargin"/>). Records the moment
+		/// the budget takes a visible character out.
 		/// </summary>
 		private static bool HoldForMinimumHiddenTime(int viewerClientId, int observedObjectId, bool currentlyVisible, bool visible)
 		{
@@ -271,7 +287,9 @@ namespace FishMMO.Shared
 				return visible;
 			}
 			bool exempt = (pinnedByClientId.TryGetValue(viewerClientId, out HashSet<int> pinned) && pinned.Contains(observedObjectId)) ||
-				(engagedByClientId.TryGetValue(viewerClientId, out HashSet<int> engaged) && engaged.Contains(observedObjectId));
+				(engagedByClientId.TryGetValue(viewerClientId, out HashSet<int> engaged) && engaged.Contains(observedObjectId)) ||
+				// Now well inside what the viewer is shown: more relevant than characters it would be held out behind.
+				(TryGetStanding(viewerClientId, observedObjectId, out float standing) && standing < 1f - HoldStandingMargin);
 			if (!exempt && now - hiddenAt < MinimumHiddenTicks)
 			{
 				return false;
@@ -304,7 +322,9 @@ namespace FishMMO.Shared
 			{
 				since[observedObjectId] = visibleAt = now;
 			}
-			if (!within && now - visibleAt < MinimumVisibleTicks)
+			if (!within && now - visibleAt < MinimumVisibleTicks &&
+				// Now well outside what the viewer is shown: it would be holding a place a more relevant character needs.
+				!(TryGetStanding(viewerClientId, observedObjectId, out float standing) && standing > 1f + HoldStandingMargin))
 			{
 				return true;
 			}
@@ -623,6 +643,7 @@ namespace FishMMO.Shared
 				Detach(entries[i], i);
 			}
 			ranksByClientId.Clear();
+			standingsByClientId.Clear();
 			rankedClientIds.Clear();
 			budgetsByObjectId.Clear();
 			pinnedByClientId.Clear();
@@ -1396,6 +1417,54 @@ namespace FishMMO.Shared
 			{
 				ApplyByteBudget(viewerConnection, evicted);
 			}
+			RecordStandings(viewerConnection, ranks, evicted);
+		}
+
+		/// <summary>
+		/// Each candidate's standing for this viewer (see <see cref="standingsByClientId"/>): counts, per classification, the
+		/// candidates the viewer is shown (pinned, or inside the count budget and not left out by the byte budget), and divides
+		/// each candidate's rank by that count.
+		/// </summary>
+		private static void RecordStandings(NetworkConnection viewerConnection, Dictionary<int, int> ranks, HashSet<int> evicted)
+		{
+			if (!standingsByClientId.TryGetValue(viewerConnection.ClientId, out Dictionary<int, float> standings))
+			{
+				standingsByClientId[viewerConnection.ClientId] = standings = new Dictionary<int, float>();
+			}
+			standings.Clear();
+			admittedByBucket.Clear();
+			for (int i = 0; i < candidates.Count; ++i)
+			{
+				Candidate candidate = candidates[i];
+				int objectId = candidate.Entry.NetworkObject.ObjectId;
+				int budget = candidate.Entry.VisibilityBudget;
+				bool shown = candidate.Pinned ||
+					(!evicted.Contains(objectId) && (budget <= 0 || (ranks.TryGetValue(objectId, out int rank) && rank < budget)));
+				if (shown)
+				{
+					admittedByBucket.TryGetValue(candidate.Entry.RankBucket, out int count);
+					admittedByBucket[candidate.Entry.RankBucket] = count + 1;
+				}
+			}
+			for (int i = 0; i < candidates.Count; ++i)
+			{
+				Candidate candidate = candidates[i];
+				int objectId = candidate.Entry.NetworkObject.ObjectId;
+				if (!ranks.TryGetValue(objectId, out int rank))
+				{
+					continue;
+				}
+				admittedByBucket.TryGetValue(candidate.Entry.RankBucket, out int admitted);
+				standings[objectId] = rank / (float)Mathf.Max(1, admitted);
+			}
+		}
+
+		/// <summary>The character's standing for the viewer on the last pass, or false when it was not ranked.</summary>
+		private static bool TryGetStanding(int viewerClientId, int observedObjectId, out float standing)
+		{
+			standing = 0f;
+			return standingsByClientId.TryGetValue(viewerClientId, out Dictionary<int, float> standings) &&
+				standings.TryGetValue(observedObjectId, out standing);
 		}
 
 		/// <summary>

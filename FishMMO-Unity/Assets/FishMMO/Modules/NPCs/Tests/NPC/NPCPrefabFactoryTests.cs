@@ -244,5 +244,59 @@ namespace FishMMO.UnitTests.NPCs
 			Assert.AreEqual(orcRaceID, SerializedRaceID(orc));
 		}
 
+		/// <summary>
+		/// A clone's map marker follows its own role, not the base's: a townsperson cloned from a merchant
+		/// was drawn as a vendor and a simulated player cloned from the banker as a service.
+		/// </summary>
+		[Test]
+		public void MarkerTypeFor_FollowsTheRoleNotTheBase()
+		{
+			Assert.AreEqual(MapMarkerType.Vendor, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.Merchant, false, MapMarkerType.Service));
+			Assert.AreEqual(MapMarkerType.Service, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.Banker, false, MapMarkerType.Vendor));
+			Assert.AreEqual(MapMarkerType.Trainer, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.AbilityCrafter, false, MapMarkerType.NPC));
+
+			// No role: an inherited role type is dropped, to an enemy for an aggressive NPC.
+			Assert.AreEqual(MapMarkerType.NPC, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.None, false, MapMarkerType.Vendor));
+			Assert.AreEqual(MapMarkerType.NPC, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.None, false, MapMarkerType.Service));
+			Assert.AreEqual(MapMarkerType.Enemy, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.None, true, MapMarkerType.Trainer));
+
+			// Anything else the prefab chose is kept.
+			Assert.AreEqual(MapMarkerType.Enemy, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.None, true, MapMarkerType.Enemy));
+			Assert.AreEqual(MapMarkerType.NPC, NPCPrefabFactory.MarkerTypeFor(NPCInteraction.None, false, MapMarkerType.NPC));
+		}
+
+		/// <summary>
+		/// Only an NPC that has a role is drawn as one: a shipped NPC prefab whose marker says vendor,
+		/// service, trainer or quest giver carries an interactable. Character prefabs carry no static label;
+		/// the map labels an NPC from itself.
+		/// </summary>
+		[Test]
+		public void ShippedNpcMarkers_MatchTheirRoleAndCarryNoLabel()
+		{
+			List<string> problems = new List<string>();
+			foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Prefabs/Shared/Entity", "Assets/FishMMO/Modules" }))
+			{
+				string path = AssetDatabase.GUIDToAssetPath(guid);
+				GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+				MapMarker marker = prefab != null ? prefab.GetComponent<MapMarker>() : null;
+				if (marker == null || prefab.GetComponent<FishMMO.Shared.Core.ICharacter>() == null)
+				{
+					continue;
+				}
+
+				if (!string.IsNullOrEmpty(marker.Label))
+				{
+					problems.Add($"{path}: character marker carries the static label '{marker.Label}'.");
+				}
+
+				bool roleType = marker.Type == MapMarkerType.Vendor || marker.Type == MapMarkerType.Service ||
+					marker.Type == MapMarkerType.Trainer || marker.Type == MapMarkerType.QuestGiver;
+				if (roleType && prefab.GetComponent<IInteractable>() == null)
+				{
+					problems.Add($"{path}: drawn as {marker.Type} but has no interactable.");
+				}
+			}
+			Assert.IsEmpty(problems, string.Join("\n", problems));
+		}
 	}
 }

@@ -69,6 +69,36 @@ namespace FishMMO.Client
 		/// </summary>
 		public int SelectedWaypointIndex { get; set; } = -1;
 
+		/// <summary>Modifier on the marker the player chose to be guided to (<see cref="MapGuide"/>).</summary>
+		public const string MarkerGuidedClass = "map-marker--guided";
+
+		/// <summary>USS class on the guide overlay's root.</summary>
+		public const string GuideClass = "map-guide";
+
+		/// <summary>USS class on the guide's ring, drawn round the target while it is in view.</summary>
+		public const string GuideRingClass = "map-guide__ring";
+
+		/// <summary>USS class on the guide's arrow, drawn on the rim pointing at a target out of view.</summary>
+		public const string GuideArrowClass = "map-guide__arrow";
+
+		/// <summary>USS class on the guide's distance readout.</summary>
+		public const string GuideDistanceClass = "map-guide__distance";
+
+		/// <summary>
+		/// The scene this view shows, which decides whether the guide's target is among its markers. Null
+		/// marks nothing.
+		/// </summary>
+		public string SceneName { get; set; }
+
+		/// <summary>
+		/// Where the guide overlay points, or null to hide it. Set each frame by a panel that shows the
+		/// guide — the minimap; the world map marks the target's own marker instead.
+		/// </summary>
+		public Vector3? GuideTarget { get; set; }
+
+		/// <summary>The distance readout under the guide, or null for none.</summary>
+		public string GuideText { get; set; }
+
 		/// <summary>USS class added to a marker that has been pinned to the frame edge.</summary>
 		public const string MarkerClampedClass = "map-marker--clamped";
 
@@ -103,6 +133,18 @@ namespace FishMMO.Client
 
 		/// <summary>The layer markers are added to.</summary>
 		private readonly VisualElement markerLayer;
+
+		/// <summary>The guide overlay, above the markers.</summary>
+		private readonly VisualElement guideLayer;
+
+		/// <summary>The ring round an in-view guide target.</summary>
+		private readonly VisualElement guideRing;
+
+		/// <summary>The rim arrow towards an out-of-view guide target.</summary>
+		private readonly VisualElement guideArrow;
+
+		/// <summary>The guide's distance readout.</summary>
+		private readonly Label guideDistance;
 
 		/// <summary>Marker elements currently in use, one per drawn snapshot.</summary>
 		private readonly List<VisualElement> activeMarkers = new List<VisualElement>();
@@ -205,6 +247,21 @@ namespace FishMMO.Client
 			markerLayer.AddToClassList(MarkerLayerClass);
 			Add(markerLayer);
 
+			guideLayer = CreateLayer("map-guide");
+			guideLayer.AddToClassList(GuideClass);
+			guideRing = CreateGuidePart(GuideRingClass);
+			guideArrow = CreateGuidePart(GuideArrowClass);
+			guideArrow.generateVisualContent += DrawGuideArrow;
+			guideDistance = new Label() { pickingMode = PickingMode.Ignore };
+			guideDistance.AddToClassList(GuideDistanceClass);
+			guideDistance.style.position = Position.Absolute;
+			guideDistance.style.translate = new StyleTranslate(new Translate(Length.Percent(-50.0f), Length.Percent(-50.0f)));
+			guideLayer.Add(guideRing);
+			guideLayer.Add(guideArrow);
+			guideLayer.Add(guideDistance);
+			guideLayer.style.display = DisplayStyle.None;
+			Add(guideLayer);
+
 			RegisterCallback<GeometryChangedEvent>(OnGeometryChanged);
 			RegisterCallback<PointerDownEvent>(OnPointerDown);
 			RegisterCallback<PointerUpEvent>(OnPointerUp);
@@ -234,6 +291,16 @@ namespace FishMMO.Client
 			layer.style.right = 0;
 			layer.style.bottom = 0;
 			return layer;
+		}
+
+		/// <summary>One absolutely placed, centred, non-interactive piece of the guide overlay.</summary>
+		private static VisualElement CreateGuidePart(string className)
+		{
+			VisualElement part = new VisualElement() { pickingMode = PickingMode.Ignore };
+			part.AddToClassList(className);
+			part.style.position = Position.Absolute;
+			part.style.translate = new StyleTranslate(new Translate(Length.Percent(-50.0f), Length.Percent(-50.0f)));
+			return part;
 		}
 
 		/// <summary>
@@ -480,6 +547,93 @@ namespace FishMMO.Client
 			{
 				activeMarkers[i].style.display = DisplayStyle.None;
 			}
+
+			LayoutGuide(content);
+		}
+
+		/// <summary>
+		/// Places the guide overlay: a ring on the target while it is in view, an arrow on the rim pointing
+		/// at it while it is not, and the distance beside either.
+		/// </summary>
+		/// <param name="content">The frame, in points.</param>
+		/// <remarks>
+		/// The arrow is pinned the way an edge-clamped marker is (<see cref="ClampToFrame"/>), along the line
+		/// from the centre, so it points the same way the player has to go; on a minimap that turns with the
+		/// character, straight up is straight ahead.
+		/// </remarks>
+		private void LayoutGuide(Rect content)
+		{
+			if (!GuideTarget.HasValue)
+			{
+				guideLayer.style.display = DisplayStyle.None;
+				return;
+			}
+			guideLayer.style.display = DisplayStyle.Flex;
+
+			Vector2 view = View.WorldToView(GuideTarget.Value);
+			bool inView = view.x >= ClampInset && view.x <= 1.0f - ClampInset &&
+				view.y >= ClampInset && view.y <= 1.0f - ClampInset;
+
+			Vector2 placed = inView ? view : ClampToFrame(view);
+			Vector2 point = new Vector2(placed.x * content.width, (1.0f - placed.y) * content.height);
+
+			guideRing.style.display = inView ? DisplayStyle.Flex : DisplayStyle.None;
+			guideArrow.style.display = inView ? DisplayStyle.None : DisplayStyle.Flex;
+
+			Vector2 labelPoint;
+			if (inView)
+			{
+				guideRing.style.left = point.x;
+				guideRing.style.top = point.y;
+				labelPoint = point + new Vector2(0.0f, 16.0f);
+			}
+			else
+			{
+				Vector2 direction = view - new Vector2(0.5f, 0.5f);
+				guideArrow.style.left = point.x;
+				guideArrow.style.top = point.y;
+				guideArrow.style.rotate = new StyleRotate(new Rotate(Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg));
+
+				// The readout sits inward of the arrow, towards the centre, so the frame's edge never cuts it.
+				Vector2 inward = new Vector2(-direction.x, direction.y).normalized;
+				labelPoint = point + inward * 18.0f;
+			}
+
+			bool hasText = !string.IsNullOrEmpty(GuideText);
+			guideDistance.style.display = hasText ? DisplayStyle.Flex : DisplayStyle.None;
+			if (hasText)
+			{
+				if (!string.Equals(guideDistance.text, GuideText, StringComparison.Ordinal))
+				{
+					guideDistance.text = GuideText;
+				}
+				guideDistance.style.left = labelPoint.x;
+				guideDistance.style.top = labelPoint.y;
+			}
+		}
+
+		/// <summary>The guide's arrow: a chevron-backed triangle pointing up, turned by the layout to face the target.</summary>
+		private static void DrawGuideArrow(MeshGenerationContext context)
+		{
+			VisualElement element = context.visualElement;
+			Rect rect = element.contentRect;
+			if (rect.width <= 0.0f || rect.height <= 0.0f)
+			{
+				return;
+			}
+			Painter2D painter = context.painter2D;
+			painter.fillColor = element.resolvedStyle.color;
+			painter.strokeColor = new Color(0.0f, 0.0f, 0.0f, 0.9f);
+			painter.lineWidth = 1.5f;
+			painter.lineJoin = LineJoin.Miter;
+			painter.BeginPath();
+			painter.MoveTo(new Vector2(rect.width * 0.5f, 0.75f));
+			painter.LineTo(new Vector2(rect.width - 0.75f, rect.height - 0.75f));
+			painter.LineTo(new Vector2(rect.width * 0.5f, rect.height * 0.7f));
+			painter.LineTo(new Vector2(0.75f, rect.height - 0.75f));
+			painter.ClosePath();
+			painter.Fill();
+			painter.Stroke();
 		}
 
 		/// <summary>
@@ -662,6 +816,7 @@ namespace FishMMO.Client
 
 			bool selected = snapshot.IsWaypoint && snapshot.WaypointIndex == SelectedWaypointIndex;
 			element.EnableInClassList(MarkerSelectedClass, selected);
+			element.EnableInClassList(MarkerGuidedClass, SceneName != null && MapGuide.IsTarget(in snapshot, SceneName));
 
 			parts.Icon.style.width = snapshot.Size;
 			parts.Icon.style.height = snapshot.Size;

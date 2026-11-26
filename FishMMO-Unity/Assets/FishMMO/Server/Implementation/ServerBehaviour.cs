@@ -561,8 +561,8 @@ namespace FishMMO.Server.Implementation
 
 		/// <summary>
 		/// Override in behaviours whose shutdown writes reach into OTHER behaviours. Runs once on server shutdown, for every
-		/// initialized behaviour, before any behaviour is deinitialized, so every behaviour it calls still holds its
-		/// <see cref="Server"/>.
+		/// initialized behaviour, before any behaviour is deinitialized and before the network server stops, so every
+		/// behaviour it calls still holds its <see cref="Server"/> and every character is still spawned.
 		/// </summary>
 		/// <remarks>
 		/// Behaviours are deinitialized in reverse registration order and each clears its references as it goes. A write

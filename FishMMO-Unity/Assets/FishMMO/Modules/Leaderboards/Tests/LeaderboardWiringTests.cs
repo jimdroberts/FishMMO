@@ -6,6 +6,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 using FishMMO.Client;
+using FishMMO.Server.Implementation.World.SceneServer;
 using FishMMO.Shared;
 using FishMMO.Shared.Core;
 using LogAssert = FishMMO.UnitTests.Harness.LogAssert;
@@ -80,6 +81,47 @@ namespace FishMMO.UnitTests
 				{
 					LogAssert.IsTrue(IsAddressable(source, group), $"{board.name} reads {source.name}, which must be in the same group");
 				}
+				if (board.Source == LeaderboardSource.CharacterAttribute && board.GamesAttributeTemplate != null)
+				{
+					LogAssert.IsTrue(IsAddressable(board.GamesAttributeTemplate, group), $"{board.name} counts games in {board.GamesAttributeTemplate.name}, which must be in the same group");
+				}
+			}
+		}
+
+		[Test]
+		public void ThePvPRankBoard_RanksARatingOnlyOnceItHasBeenPlayedFor()
+		{
+			LeaderboardTemplate board = AssetDatabase.LoadAssetAtPath<LeaderboardTemplate>(ProjectFiles.Path(BoardsFolder + "/PvP Rank Leaderboard.asset"));
+			LogAssert.IsNotNull(board, "the PvP Rank board ships");
+			LogAssert.AreEqual(LeaderboardSource.CharacterAttribute, board.Source, "it reads the PvP Rank attribute");
+			LogAssert.IsNotNull(board.AttributeTemplate, "with its attribute");
+			LogAssert.AreEqual("PvP Rank", board.AttributeTemplate.name, "the arena's Elo rating");
+			LogAssert.IsNotNull(board.GamesAttributeTemplate, "PvP Rank starts everyone at 1500, so one win must not top the board: it counts games");
+			LogAssert.AreEqual("PvP Matches", board.GamesAttributeTemplate.name, "in the matches the arena counts");
+
+			foreach (ArenaTemplate arena in AssetDatabase.FindAssets("t:ArenaTemplate")
+				.Select(AssetDatabase.GUIDToAssetPath)
+				.Select(AssetDatabase.LoadAssetAtPath<ArenaTemplate>)
+				.Where(a => a != null))
+			{
+				LogAssert.IsTrue(board.MinimumGames >= arena.PlacementGames,
+					$"{board.name} ranks after {board.MinimumGames} matches, but {arena.name} is still placing a rating until {arena.PlacementGames}");
+			}
+
+			// Template IDs exist once a template is cached, as both peers do when they load it.
+			board.AttributeTemplate.AddToCache(board.AttributeTemplate.name);
+			board.GamesAttributeTemplate.AddToCache(board.GamesAttributeTemplate.name);
+			try
+			{
+				LogAssert.IsTrue(LeaderboardSystem.TryBuildQuery(board, false, out FishMMO.Database.Data.LeaderboardQuery query), "the server turns it into a read");
+				LogAssert.AreEqual(board.AttributeTemplate.ID, query.TemplateID, "of the rating");
+				LogAssert.AreEqual(board.GamesAttributeTemplate.ID, query.GamesTemplateID, "floored on the matches played");
+				LogAssert.AreEqual(board.MinimumGames, query.MinimumGames, "at the board's minimum");
+			}
+			finally
+			{
+				board.GamesAttributeTemplate.RemoveFromCache();
+				board.AttributeTemplate.RemoveFromCache();
 			}
 		}
 
@@ -111,6 +153,26 @@ namespace FishMMO.UnitTests
 					LogAssert.IsTrue(board.MinimumGames >= arena.PlacementGames,
 						$"{board.name} ranks after {board.MinimumGames} games, but {arena.name}'s profile hides a rating until {arena.PlacementGames}");
 				}
+			}
+		}
+
+		[Test]
+		public void TheDuelBoards_AreListed_AndReadTheDuelRecord()
+		{
+			string group = Read(AddressablesGroup);
+			string[] paths = { BoardsFolder + "/Duel Rating Leaderboard.asset", BoardsFolder + "/Duel Wins Leaderboard.asset" };
+			LeaderboardSource[] sources = { LeaderboardSource.DuelRating, LeaderboardSource.DuelWins };
+			for (int i = 0; i < paths.Length; ++i)
+			{
+				LeaderboardTemplate board = AssetDatabase.LoadAssetAtPath<LeaderboardTemplate>(ProjectFiles.Path(paths[i]));
+				LogAssert.IsNotNull(board, $"{paths[i]} exists");
+				LogAssert.AreEqual(sources[i], board.Source, $"{board.name} reads the duel record");
+				LogAssert.AreEqual(LeaderboardCategory.PvP, board.Category, "listed under PvP");
+				LogAssert.IsTrue(board.IsConfigured(out string problem), $"{board.name}: {problem}");
+				LogAssert.IsTrue(board.ShowsRecord, "with the win/loss record beside the score");
+				LogAssert.IsTrue(IsAddressable(board, group), $"{board.name} is loaded by both peers");
+				LogAssert.IsTrue(LeaderboardSystem.TryBuildQuery(board, false, out FishMMO.Database.Data.LeaderboardQuery query), "the server turns it into a read");
+				LogAssert.AreEqual((byte)sources[i], (byte)query.Source, "of the matching database source");
 			}
 		}
 

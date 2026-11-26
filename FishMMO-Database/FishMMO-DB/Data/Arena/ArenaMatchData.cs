@@ -83,21 +83,45 @@ namespace FishMMO.Database.Data
 		}
 	}
 
-	/// <summary>A ranked season.</summary>
+	/// <summary>A PvP season.</summary>
 	public struct ArenaSeasonData
 	{
 		public readonly long ID;
+		/// <summary>The season's place in the count, from 1.</summary>
+		public readonly int Number;
 		public readonly string Name;
 		public readonly DateTime StartsUtc;
 		public readonly DateTime? EndsUtc;
 		public readonly bool Active;
 
-		public ArenaSeasonData(long id, string name, DateTime startsUtc, DateTime? endsUtc, bool active)
+		public ArenaSeasonData(long id, int number, string name, DateTime startsUtc, DateTime? endsUtc, bool active)
 		{
 			ID = id;
+			Number = number;
 			Name = name;
 			StartsUtc = startsUtc;
 			EndsUtc = endsUtc;
+			Active = active;
+		}
+	}
+
+	/// <summary>What moving to the next season did.</summary>
+	public struct ArenaSeasonAdvanceData
+	{
+		/// <summary>
+		/// False when the active season was not the one the caller expected (someone else moved it on first, or there
+		/// was none): nothing was written, and <see cref="Active"/> is the season active now.
+		/// </summary>
+		public readonly bool Advanced;
+		/// <summary>The season that was closed. Default when nothing was.</summary>
+		public readonly ArenaSeasonData Ended;
+		/// <summary>The season active now.</summary>
+		public readonly ArenaSeasonData Active;
+
+		public ArenaSeasonAdvanceData(bool advanced, ArenaSeasonData ended, ArenaSeasonData active)
+		{
+			Advanced = advanced;
+			Ended = ended;
 			Active = active;
 		}
 	}

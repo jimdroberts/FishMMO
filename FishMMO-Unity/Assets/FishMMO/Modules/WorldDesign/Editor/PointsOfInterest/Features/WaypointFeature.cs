@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using FishMMO.Shared.NameGeneration;
 using FishNet.Object;
 using UnityEditor;
 using UnityEngine;
@@ -59,6 +60,7 @@ namespace FishMMO.Shared.WorldDesign
 	/// <summary>
 	/// A respawn point at the site (<see cref="CharacterRespawnPosition"/>): where a character who dies nearby can come
 	/// back. Its name carries the site id, because respawn points are keyed by name in the scene details cache.
+	/// A capital's is also where new characters begin (<see cref="StartingLocations"/>).
 	/// </summary>
 	[Serializable]
 	[MovedFrom(false, sourceAssembly: "FishMMO.Shared.Tools.Editor")]
@@ -71,6 +73,10 @@ namespace FishMMO.Shared.WorldDesign
 		{
 			GameObject point = PointOfInterestFeatureKit.AddChildAt(context, PointOfInterestFeatureKit.UniqueName(context, "Respawn"), Offset, 180.0f, 0.1f);
 			point.AddComponent<CharacterRespawnPosition>();
+			if (context.Record.Kind == POIType.Capital)
+			{
+				StartingLocations.Mark(point);
+			}
 		}
 	}
 }

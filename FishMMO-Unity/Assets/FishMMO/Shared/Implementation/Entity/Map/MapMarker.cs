@@ -63,16 +63,34 @@ namespace FishMMO.Shared
 		public Color Tint = Color.white;
 
 		/// <summary>
-		/// Text drawn beside the icon. Empty means no label.
+		/// Text drawn beside the icon on an object that is not a character. Empty means no label.
 		/// </summary>
 		/// <remarks>
-		/// Never used for a character's name. Names come from the character itself and are
-		/// suppressed for anything the detection rule covers — a name attached to a throttled
-		/// position would hand a modified client the one piece of information the throttling
-		/// exists to withhold.
+		/// Ignored on a character. An NPC is labelled from itself — its live name and its interactable's
+		/// <see cref="IInteractable.Title"/>, see <see cref="NpcName"/> and <see cref="NpcTitle"/> — because a
+		/// static label is copied along with everything else when a prefab is cloned from another, which
+		/// is how every townsperson cloned from a merchant came to be drawn as "Goods" and every simulated
+		/// player as "Bank". A player character is never labelled: a name attached to a throttled position
+		/// would hand a modified client the one piece of information the throttling exists to withhold.
 		/// </remarks>
-		[Tooltip("Static text drawn beside the icon. Leave empty for no label.")]
+		[Tooltip("Static text drawn beside the icon on a fixture. Ignored on characters: an NPC is labelled with its own name and title.")]
 		public string Label;
+
+		/// <summary>
+		/// Text shown only when the pointer rests on a fixture's marker, and as its name when it is chosen
+		/// to be guided to. Empty falls back to <see cref="Label"/>. Ignored on characters.
+		/// </summary>
+		/// <remarks>
+		/// For a fixture that should be identifiable without putting text on the map: a plot for sale is a
+		/// green square on the map and says what it costs only when asked.
+		/// </remarks>
+		[Tooltip("Hover-only text for a fixture. Empty uses the label. Ignored on characters.")]
+		public string HoverText;
+
+		/// <summary>The hover text of a fixture: <see cref="HoverText"/>, else <see cref="Label"/>, else null.</summary>
+		public string ResolvedHoverText => !string.IsNullOrEmpty(HoverText) ? HoverText
+			: !string.IsNullOrEmpty(Label) ? Label
+			: null;
 
 		/// <summary>Size of the icon in UI points at the map's base scale.</summary>
 		[Tooltip("Size of the icon in UI points at the map's base scale.")]
@@ -121,6 +139,84 @@ namespace FishMMO.Shared
 #if !UNITY_SERVER
 		private IMapMarkerIconSource iconSource;
 #endif
+
+		/// <summary>
+		/// The interactable on this object, when it has one, resolved once on enable. Null on the server.
+		/// </summary>
+		public IInteractable Interactable { get; private set; }
+
+		/// <summary>Whether this marker is on a non-player character.</summary>
+		public bool IsNpc => Character != null && !(Character is IPlayerCharacter);
+
+		/// <summary>
+		/// The NPC's live name, or null when this is not an NPC.
+		/// </summary>
+		/// <remarks>
+		/// Read live: a generated NPC is named by the naming system after it wakes, and a pooled one is
+		/// renamed on every respawn.
+		/// </remarks>
+		public string NpcName => IsNpc && !string.IsNullOrWhiteSpace(Character.Name) ? Character.Name : null;
+
+		/// <summary>
+		/// The NPC's role — its interactable's title, such as "Banker" — or null when it is not an NPC, has
+		/// no interactable, or the interactable has no title.
+		/// </summary>
+		public string NpcTitle
+		{
+			get
+			{
+				if (!IsNpc || Interactable == null)
+				{
+					return null;
+				}
+				string title = Interactable.Title;
+				return string.IsNullOrWhiteSpace(title) ? null : title;
+			}
+		}
+
+		/// <summary>The name the kept "Name &lt;Title&gt;" label was built from.</summary>
+		private string composedName;
+
+		/// <summary>The title the kept "Name &lt;Title&gt;" label was built from.</summary>
+		private string composedTitle;
+
+		/// <summary>The kept "Name &lt;Title&gt;" label.</summary>
+		private string composedLabel;
+
+		/// <summary>
+		/// An NPC's map label from its name and title: "Name &lt;Title&gt;", either part alone, or null.
+		/// </summary>
+		/// <param name="showName">Whether the name is included.</param>
+		/// <param name="showTitle">Whether the title is included.</param>
+		/// <returns>The label, or null when there is nothing to draw.</returns>
+		/// <remarks>
+		/// The map asks for this ten times a second per NPC in view, so the combined form is kept and
+		/// rebuilt only when the name or title changes. Compared by value: the name is the GameObject's,
+		/// which the engine hands back as a new string on every read.
+		/// </remarks>
+		public string ComposeNpcLabel(bool showName, bool showTitle)
+		{
+			string name = showName ? NpcName : null;
+			string title = showTitle ? NpcTitle : null;
+
+			if (name == null)
+			{
+				return title;
+			}
+			if (title == null)
+			{
+				return name;
+			}
+
+			if (composedLabel == null || !string.Equals(name, composedName, System.StringComparison.Ordinal) ||
+				!string.Equals(title, composedTitle, System.StringComparison.Ordinal))
+			{
+				composedName = name;
+				composedTitle = title;
+				composedLabel = name + " <" + title + ">";
+			}
+			return composedLabel;
+		}
 
 		/// <summary>
 		/// The icon to draw: this marker's own, else its icon source's, else null.
@@ -176,6 +272,7 @@ namespace FishMMO.Shared
 		private void OnEnable()
 		{
 			Character = GetComponent<ICharacter>();
+			Interactable = GetComponent<IInteractable>();
 			iconSource = GetComponent<IMapMarkerIconSource>();
 			MapMarkerRegistry.Register(this);
 		}

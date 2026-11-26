@@ -28,5 +28,14 @@ namespace FishMMO.Database.Data.Enums
 		/// character save, so it trails an online character by up to one save interval.
 		/// </summary>
 		CharacterAchievement = 3,
+
+		/// <summary>
+		/// <c>duel_record.rating</c>, for characters with at least the board's minimum of finished duels. Written in the
+		/// same transaction that records a duel, so it is current the moment the duel ends.
+		/// </summary>
+		DuelRating = 4,
+
+		/// <summary><c>duel_record.wins</c>. Current the moment a duel ends.</summary>
+		DuelWins = 5,
 	}
 }

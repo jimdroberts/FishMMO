@@ -105,6 +105,18 @@ namespace FishMMO.Client
 		/// <summary>USS class marking the selected colour swatch.</summary>
 		private const string SWATCH_SELECTED_CLASS = "map-swatch--selected";
 
+		/// <summary>Name of the guide section container.</summary>
+		private const string GUIDE_SECTION_NAME = "map-guide-section";
+
+		/// <summary>Name of the label naming the guide's target.</summary>
+		private const string GUIDE_NAME_LABEL_NAME = "map-guide-name";
+
+		/// <summary>Name of the label giving the distance to the guide's target.</summary>
+		private const string GUIDE_STATUS_LABEL_NAME = "map-guide-status";
+
+		/// <summary>Name of the button that stops guiding.</summary>
+		private const string GUIDE_CLEAR_BUTTON_NAME = "map-guide-clear";
+
 		/// <summary>Name of the waypoint section container.</summary>
 		private const string WAYPOINT_SECTION_NAME = "map-waypoint-section";
 
@@ -162,6 +174,15 @@ namespace FishMMO.Client
 
 		/// <summary>The dial pointing at the planet's north (<see cref="TrueNorth"/>), over the map's corner.</summary>
 		private MapCompass compass;
+
+		/// <summary>The guide section container, shown while there is a target.</summary>
+		private VisualElement guideSection;
+
+		/// <summary>Label naming the guide's target.</summary>
+		private Label guideNameLabel;
+
+		/// <summary>Label giving the distance to the guide's target.</summary>
+		private Label guideStatusLabel;
 
 		/// <summary>The waypoint section container.</summary>
 		private VisualElement waypointSection;
@@ -376,6 +397,15 @@ namespace FishMMO.Client
 				noteAddButton.clicked += AddPendingNote;
 			}
 
+			guideSection = root.Q<VisualElement>(GUIDE_SECTION_NAME);
+			guideNameLabel = root.Q<Label>(GUIDE_NAME_LABEL_NAME);
+			guideStatusLabel = root.Q<Label>(GUIDE_STATUS_LABEL_NAME);
+			Button guideClear = root.Q<Button>(GUIDE_CLEAR_BUTTON_NAME);
+			if (guideClear != null)
+			{
+				guideClear.clicked += MapGuide.Clear;
+			}
+
 			waypointSection = root.Q<VisualElement>(WAYPOINT_SECTION_NAME);
 			waypointNameLabel = root.Q<Label>(WAYPOINT_NAME_LABEL_NAME);
 			waypointDescriptionLabel = root.Q<Label>(WAYPOINT_DESCRIPTION_LABEL_NAME);
@@ -401,6 +431,8 @@ namespace FishMMO.Client
 			ClientMapSystem.OnViewedSceneChanged += MapSystem_OnViewedSceneChanged;
 			ClientMapSystem.OnVisitedScenesChanged -= MapSystem_OnVisitedScenesChanged;
 			ClientMapSystem.OnVisitedScenesChanged += MapSystem_OnVisitedScenesChanged;
+			MapGuide.OnChanged -= RefreshGuidePanel;
+			MapGuide.OnChanged += RefreshGuidePanel;
 
 			/* Static events on the controller interface, so they can be subscribed before any
 			 * character exists and survive the character being replaced. Unsubscribed in
@@ -423,6 +455,7 @@ namespace FishMMO.Client
 
 			ApplySceneToView();
 			RefreshWaypointPanel();
+			RefreshGuidePanel();
 		}
 
 		/// <summary>
@@ -434,6 +467,7 @@ namespace FishMMO.Client
 			ClientMapSystem.OnNotesChanged -= MapSystem_OnNotesChanged;
 			ClientMapSystem.OnViewedSceneChanged -= MapSystem_OnViewedSceneChanged;
 			ClientMapSystem.OnVisitedScenesChanged -= MapSystem_OnVisitedScenesChanged;
+			MapGuide.OnChanged -= RefreshGuidePanel;
 			IWaypointController.OnWaypointUnlocked -= Waypoint_OnUnlocked;
 			IWaypointController.OnWaypointTravelled -= Waypoint_OnTravelled;
 			IWaypointController.OnWaypointTravelRefused -= Waypoint_OnTravelRefused;
@@ -558,6 +592,7 @@ namespace FishMMO.Client
 			ApplyView();
 			RefreshMarkers();
 			RefreshExplored();
+			RefreshGuidePanel();
 		}
 
 		/// <summary>
@@ -572,6 +607,7 @@ namespace FishMMO.Client
 
 			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
 			shownSceneName = view.SceneName;
+			mapView.SceneName = view.SceneName;
 			Rect rect = view.MapRect;
 
 			mapView.MapTexture = view.MapImage;
@@ -883,12 +919,24 @@ namespace FishMMO.Client
 			if (marker.HasValue && marker.Value.NoteID != 0)
 			{
 				SelectNote(marker.Value.NoteID);
+				GuideTo(marker.Value);
 				return;
 			}
 
 			if (marker.HasValue && marker.Value.IsWaypoint)
 			{
 				SelectWaypoint(marker.Value.WaypointIndex);
+				GuideTo(marker.Value);
+				return;
+			}
+
+			// Any other marker — a place, an NPC, a dungeon entrance, a plot — is chosen for the guide.
+			if (marker.HasValue && MapGuide.CanGuideTo(marker.Value))
+			{
+				if (!GuideTo(marker.Value))
+				{
+					SetNoteHint("The minimap can guide you only within the scene you are in.");
+				}
 				return;
 			}
 
@@ -901,6 +949,65 @@ namespace FishMMO.Client
 			pendingNotePosition = world;
 			hasPendingNotePosition = true;
 			RefreshNoteEditor();
+		}
+
+		/// <summary>
+		/// Chooses a marker for the minimap's guide (<see cref="MapGuide"/>), when it is in the scene the
+		/// character stands in: the minimap shows only that scene, so a marker anywhere else has no way to it.
+		/// </summary>
+		/// <param name="marker">The clicked marker.</param>
+		/// <returns>True when the marker was chosen.</returns>
+		private bool GuideTo(in MapMarkerSnapshot marker)
+		{
+			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			return view.IsCurrent && MapGuide.Set(in marker, view.SceneName);
+		}
+
+		/// <summary>
+		/// Shows or hides the guide section, naming the target and the distance to it.
+		/// </summary>
+		private void RefreshGuidePanel()
+		{
+			if (guideSection == null)
+			{
+				return;
+			}
+
+			bool show = MapGuide.HasTarget;
+			guideSection.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+			if (!show)
+			{
+				return;
+			}
+
+			if (guideNameLabel != null)
+			{
+				guideNameLabel.text = MapGuide.Name ?? string.Empty;
+			}
+
+			if (Character != null && Character.Transform != null &&
+				MapGuide.TryGetTarget(Character, ClientMapSystem.Fog, out Vector3 target))
+			{
+				Vector3 offset = target - Character.Transform.position;
+				offset.y = 0.0f;
+				int metres = Mathf.RoundToInt(offset.magnitude);
+				SetGuideStatus(MapGuide.IsLastKnown
+					? $"Last seen {metres} m away. The minimap points the way."
+					: $"{metres} m away. The minimap points the way.");
+			}
+			else if (MapGuide.HasTarget)
+			{
+				SetGuideStatus("In another scene.");
+			}
+		}
+
+		/// <summary>Writes the guide section's status line.</summary>
+		private void SetGuideStatus(string text)
+		{
+			if (guideStatusLabel != null && !string.Equals(guideStatusLabel.text, text, StringComparison.Ordinal))
+			{
+				guideStatusLabel.text = text;
+			}
 		}
 
 		/// <summary>

@@ -136,6 +136,23 @@ namespace FishMMO.Shared
 		/// Sharpness for obstruction smoothing.
 		/// </summary>
 		public float ObstructionSharpness = 10000f;
+
+		/// <summary>The bare ground under a point and the drawn snow surface over it; false where no snow lies on the ground there.</summary>
+		public delegate bool SnowSurfaceQuery(Vector3 point, out float ground, out float surface);
+
+		/// <summary>
+		/// Where the snow's drawn surface stands, installed by the weather (it lives in a module this core camera does not
+		/// know). The terrain shader lifts the ground under snow, a metre and more in a deep pack, while the terrain collider
+		/// stays at the bare ground: a camera that only met the collider went down through the white surface and showed the
+		/// world from under it. Null: nothing lies on the ground to keep out of.
+		/// </summary>
+		public static SnowSurfaceQuery SnowSurfaceAt;
+
+		/// <summary>Metres between the boom's samples of the snow surface: a drift bends over metres, not centimetres.</summary>
+		private const float SnowSampleSpacing = 0.5f;
+
+		/// <summary>The most samples a boom takes of the snow surface in a frame, however long it is.</summary>
+		private const int MaxSnowSamples = 40;
 		/// <summary>
 		/// Colliders to ignore when checking for obstructions.
 		/// </summary>
@@ -620,6 +637,8 @@ namespace FishMMO.Shared
 		private void HandleObstructions(PhysicsScene physicsScene, Vector3 pivot, float deltaTime)
 		{
 			float closest = NearestObstruction(physicsScene, pivot, -Transform.forward, TargetDistance);
+			// The snow lying on the ground stops the boom too, short of whatever the cast met.
+			closest = Mathf.Min(closest, NearestSnowSurface(pivot, -Transform.forward, Mathf.Min(closest, TargetDistance)));
 
 			// Handle obstruction results
 			if (closest < Mathf.Infinity)
@@ -667,6 +686,76 @@ namespace FishMMO.Shared
 				}
 			}
 			return closest;
+		}
+
+		/// <summary>
+		/// How far along the boom the camera (a sphere of <see cref="ObstructionCheckRadius"/>, placed as
+		/// <see cref="CalculateTargetPosition"/> places it) can go before it enters the snow lying on the ground
+		/// (<see cref="SnowSurfaceAt"/>); infinity when it never does within <paramref name="maxDistance"/>.
+		/// </summary>
+		/// <remarks>
+		/// Sampled every <see cref="SnowSampleSpacing"/> and the crossing interpolated between the last sample above the surface
+		/// and the first under it. Only the layer between the bare ground and the snow's surface counts: a point under the bare
+		/// ground is the collider's business (the cast already stopped there) or inside a cave, whose roof the terrain's
+		/// heightmap runs over. A pivot already under the surface (a character waist-deep in a drift) leaves the boom alone:
+		/// there is nowhere short of it to pull the camera back to.
+		/// </remarks>
+		private float NearestSnowSurface(Vector3 origin, Vector3 direction, float maxDistance)
+		{
+			SnowSurfaceQuery query = SnowSurfaceAt;
+			if (query == null)
+			{
+				return Mathf.Infinity;
+			}
+			Vector3 framing = Style == KCCCameraStyle.ThirdPerson && TargetDistance > 0.0f
+				? Transform.right * FollowPointFraming.x + Transform.up * FollowPointFraming.y
+				: Vector3.zero;
+			return SnowCrossing(query, origin + framing, direction, maxDistance, ObstructionCheckRadius);
+		}
+
+		/// <summary>
+		/// How far a sphere of <paramref name="radius"/> goes from <paramref name="origin"/> along <paramref name="direction"/>
+		/// before it enters the snow <paramref name="query"/> describes; infinity when it does not within
+		/// <paramref name="maxDistance"/>, or when it starts inside it.
+		/// </summary>
+		public static float SnowCrossing(SnowSurfaceQuery query, Vector3 origin, Vector3 direction, float maxDistance, float radius)
+		{
+			if (query == null || maxDistance <= 0f || float.IsInfinity(maxDistance) || float.IsNaN(maxDistance))
+			{
+				return Mathf.Infinity;
+			}
+			float previousGap = SnowGap(query, origin, radius);
+			if (previousGap < 0f)
+			{
+				return Mathf.Infinity;
+			}
+			int count = Mathf.Clamp(Mathf.CeilToInt(maxDistance / SnowSampleSpacing), 1, MaxSnowSamples);
+			float step = maxDistance / count;
+			for (int i = 1; i <= count; i++)
+			{
+				float gap = SnowGap(query, origin + direction * (step * i), radius);
+				if (gap < 0f)
+				{
+					// Where the boom crossed the surface; the last sample's distance when that one was outside the layer.
+					float t = float.IsPositiveInfinity(previousGap) ? 0f : previousGap / (previousGap - gap);
+					return step * (i - 1 + t);
+				}
+				previousGap = gap;
+			}
+			return Mathf.Infinity;
+		}
+
+		/// <summary>
+		/// How far a sphere of <paramref name="radius"/> at <paramref name="point"/> clears the snow's surface, metres (negative
+		/// inside the snow); positive infinity where no snow lies or the point is under the bare ground.
+		/// </summary>
+		private static float SnowGap(SnowSurfaceQuery query, Vector3 point, float radius)
+		{
+			if (!query(point, out float ground, out float surface) || point.y < ground)
+			{
+				return float.PositiveInfinity;
+			}
+			return point.y - radius - surface;
 		}
 
 		/// <summary>

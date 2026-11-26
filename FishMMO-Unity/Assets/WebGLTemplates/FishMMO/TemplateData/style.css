@@ -16,6 +16,9 @@ body { font-family: -apple-system, 'Segoe UI', Roboto, 'Noto Sans', Cantarell, '
 #unity-logo { width: 154px; height: 130px; background: url('unity-logo-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
 #unity-progress-bar-empty { width: 141px; height: 18px; margin-top: 10px; margin-left: 6.5px; background: url('progress-bar-empty-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
 #unity-progress-bar-full { width: 0%; height: 18px; margin-top: 10px; background: url('progress-bar-full-{{{ SPLASH_SCREEN_STYLE.toLowerCase() }}}.png') no-repeat center }
+/* Under the bar: what is loading (the boot download after the engine has started, BootProgress.jslib). Never takes input. */
+#unity-loading-container { pointer-events: none }
+#fishmmo-loading-text { margin-top: 12px; min-height: 1.2em; font-size: 13px; color: #93a5b0; text-align: center; white-space: nowrap }
 
 /* Footer: the home page's header bar. */
 #unity-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 20px; height: 40px; padding: 0 16px;

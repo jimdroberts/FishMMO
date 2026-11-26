@@ -96,6 +96,10 @@ namespace FishMMO.Client
 			Vector3 localPosition = local != null && local.Transform != null ? local.Transform.position : Vector3.zero;
 			float detectionSquared = DetectionRadius * DetectionRadius;
 
+			// Read once per collection, not per marker: each is a lookup in the settings store.
+			bool showNpcNames = forWorldMap ? ClientSettings.WorldMapNpcNames : ClientSettings.MinimapNpcNames;
+			bool showNpcTitles = forWorldMap ? ClientSettings.WorldMapNpcTitles : ClientSettings.MinimapNpcTitles;
+
 			foreach (MapMarker marker in MapMarkerRegistry.Markers)
 			{
 				if (marker == null)
@@ -149,8 +153,9 @@ namespace FishMMO.Client
 					 * coarsened, one-second-old position would hand back precisely the identity
 					 * the throttling exists to withhold, and would do it in the most useful
 					 * possible form. */
-					Label = exact ? marker.Label : null,
-					Tooltip = exact ? marker.Label : null,
+					Label = exact ? ResolveLabel(marker, showNpcNames, showNpcTitles) : null,
+					// The tooltip names an NPC in full whatever the labels show: it answers a pointer resting on the dot.
+					Tooltip = exact ? ResolveTooltip(marker) : null,
 					Size = marker.IconSize,
 					/* Group members are always pinned to the edge when they leave the view,
 					 * whatever the prefab said. "Where has my party gone" is the question a
@@ -301,6 +306,73 @@ namespace FishMMO.Client
 				Mathf.Round(position.x / PositionQuantum) * PositionQuantum,
 				position.y,
 				Mathf.Round(position.z / PositionQuantum) * PositionQuantum);
+		}
+
+		/// <summary>
+		/// The text drawn beside a marker that the filter has resolved exactly.
+		/// </summary>
+		/// <param name="marker">The marker.</param>
+		/// <param name="showNpcNames">Whether an NPC's name is included.</param>
+		/// <param name="showNpcTitles">Whether an NPC's title is included.</param>
+		/// <returns>The label, or null for none.</returns>
+		/// <remarks>
+		/// A fixture draws its authored <see cref="MapMarker.Label"/>. An NPC is labelled from itself, never
+		/// from the authored field, which a cloned prefab inherits from whatever it was cloned from. A player
+		/// character is never labelled.
+		/// </remarks>
+		public static string ResolveLabel(MapMarker marker, bool showNpcNames, bool showNpcTitles)
+		{
+			if (marker.Character == null)
+			{
+				return string.IsNullOrEmpty(marker.Label) ? null : marker.Label;
+			}
+			return marker.IsNpc ? marker.ComposeNpcLabel(showNpcNames, showNpcTitles) : null;
+		}
+
+		/// <summary>
+		/// The text shown when the pointer rests on a marker the filter has resolved exactly, and the name
+		/// the guide gives it.
+		/// </summary>
+		/// <param name="marker">The marker.</param>
+		/// <returns>The text, or null for none.</returns>
+		/// <remarks>An NPC is named in full whatever its label shows; a fixture uses its hover text.</remarks>
+		public static string ResolveTooltip(MapMarker marker)
+		{
+			if (marker.Character == null)
+			{
+				return marker.ResolvedHoverText;
+			}
+			return marker.IsNpc ? marker.ComposeNpcLabel(true, true) : null;
+		}
+
+		/// <summary>
+		/// Applies the visibility rules to one marker, for a reader that follows a single object.
+		/// </summary>
+		/// <param name="marker">The marker.</param>
+		/// <param name="local">The local player character. May be null.</param>
+		/// <param name="fog">The explored map, for the discovery rule. May be null.</param>
+		/// <param name="position">The position the map may show for it.</param>
+		/// <param name="exact">Whether that position is the object's true, current one.</param>
+		/// <returns>True when the local player may see the marker at all right now.</returns>
+		/// <remarks>
+		/// The same rules <see cref="Collect"/> applies, sharing its throttle record, so a reader of one
+		/// marker — the minimap's guide following a chosen target — is never told more about it than the
+		/// map itself draws. A detection-tier target is followed at its coarse, stale position and lost
+		/// when it leaves the detection radius.
+		/// </remarks>
+		public bool TryResolve(MapMarker marker, IPlayerCharacter local, FogOfWarMap fog, out Vector3 position, out bool exact)
+		{
+			position = default;
+			exact = false;
+			if (marker == null || !marker.isActiveAndEnabled)
+			{
+				return false;
+			}
+
+			Vector3 localPosition = local != null && local.Transform != null ? local.Transform.position : Vector3.zero;
+			MapRelationship relationship = MapRelationshipTracker.Resolve(local, marker.Character);
+			return TryResolvePosition(marker, relationship, localPosition, DetectionRadius * DetectionRadius,
+				Time.unscaledTimeAsDouble, fog, out position, out exact);
 		}
 
 		/// <summary>

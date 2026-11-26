@@ -406,6 +406,31 @@
                           class="fish-hint options-hint" />
 
                 <!--
+                    Map labels. An NPC is labelled on the maps with its own name and, for one that
+                    can be interacted with, its title (<Banker>); each part can be turned off for
+                    each map. Players are never labelled; places keep their names.
+                -->
+                <ui:Label text="MAP" class="fish-attr-category options-section" />
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="World Map: NPC Names" class="fish-label options-row-label" />
+                    <ui:Toggle name="map-world-npc-names-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="World Map: NPC Titles" class="fish-label options-row-label" />
+                    <ui:Toggle name="map-world-npc-titles-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Minimap: NPC Names" class="fish-label options-row-label" />
+                    <ui:Toggle name="map-minimap-npc-names-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:VisualElement class="options-row">
+                    <ui:Label text="Minimap: NPC Titles" class="fish-label options-row-label" />
+                    <ui:Toggle name="map-minimap-npc-titles-toggle" class="fish-toggle options-row-field" />
+                </ui:VisualElement>
+                <ui:Label text="Titles name what an NPC does, such as &lt;Banker&gt;. Hover an NPC on either map for its full name and title."
+                          class="fish-hint options-hint" />
+
+                <!--
                     Chat text. Deliberately NOT a second use of Interface Scale above: that
                     slider resizes every panel and stops at 1.5x, so it cannot help a player
                     who can read the rest of the HUD but not the chat log. Tabs and the

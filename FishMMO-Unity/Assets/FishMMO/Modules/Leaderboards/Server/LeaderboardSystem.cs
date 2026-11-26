@@ -253,6 +253,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				case LeaderboardSource.ArenaSeasonRating:
 					query = new LeaderboardQuery(LeaderboardSourceKind.ArenaSeasonRating, 0, Math.Max(1, template.MinimumGames), rankStaff);
 					return true;
+				case LeaderboardSource.DuelRating:
+					query = new LeaderboardQuery(LeaderboardSourceKind.DuelRating, 0, Math.Max(1, template.MinimumGames), rankStaff);
+					return true;
+				case LeaderboardSource.DuelWins:
+					query = new LeaderboardQuery(LeaderboardSourceKind.DuelWins, 0, 0, rankStaff);
+					return true;
 				case LeaderboardSource.CharacterAttribute:
 				case LeaderboardSource.Achievement:
 					int sourceID = template.SourceTemplateID;
@@ -263,7 +269,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					LeaderboardSourceKind kind = template.Source == LeaderboardSource.CharacterAttribute
 						? LeaderboardSourceKind.CharacterAttribute
 						: LeaderboardSourceKind.CharacterAchievement;
-					query = new LeaderboardQuery(kind, sourceID, 0, rankStaff);
+					// An attribute board may require games played (PvP Rank needs PvP Matches); achievements never do.
+					int gamesID = template.Source == LeaderboardSource.CharacterAttribute && template.GamesAttributeTemplate != null
+						? template.GamesAttributeTemplate.ID
+						: 0;
+					query = new LeaderboardQuery(kind, sourceID, gamesID != 0 ? Math.Max(1, template.MinimumGames) : 0, rankStaff, gamesID);
 					return true;
 				default:
 					return false;

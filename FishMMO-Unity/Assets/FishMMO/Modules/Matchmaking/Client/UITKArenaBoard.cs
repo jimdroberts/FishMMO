@@ -647,7 +647,7 @@ namespace FishMMO.Client
 			lines.Add(arena.RespawnSeconds > 0
 				? $"• Respawn {arena.RespawnSeconds} seconds after death."
 				: "• No respawns: one life each.");
-			lines.Add($"• Win +{arena.WinRankPoints} rank, loss -{arena.LossRankPoints}.");
+			lines.Add("• PvP Rank moves with every result: beating a stronger team gains more, losing to a weaker one costs more.");
 			if (arena.IsRankedFormat(selectedFormat))
 			{
 				lines.Add($"• Ranked: season rating moves with each result; {arena.PlacementGames} placement games. Parties must fill a team.");

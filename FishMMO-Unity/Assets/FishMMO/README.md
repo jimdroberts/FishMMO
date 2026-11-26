@@ -39,6 +39,7 @@ assembly is the boundary, and scenes, prefabs and assets keep resolving their sc
 | [Chat](Modules/Chat/README.md) | `chat` | Conversation: the channels, cross-server delivery, the chat window. | |
 | [Combat](Modules/Combat/README.md) | `combat` | Damage, healing, death and revive; the combat text and death dialog. | Abilities and everything that depends on it |
 | [Commerce](Modules/Commerce/README.md) | `commerce` | Merchants, mail, corpse loot and player trade. | |
+| [Duels](Modules/Duels/README.md) | `duels` | One-on-one open-world duels: challenge, duel ground, countdown, non-lethal finish, duel rating and boards. | |
 | [Factions](Modules/Factions/README.md) | `factions` | Faction standings, the aggression toggle and their harm relation. | |
 | [Hotkeys](Modules/Hotkeys/README.md) | `hotkeys` | The hotkey bar: bindings, persistence, keys, stacked or paged bars. | |
 | [Housing](Modules/Housing/README.md) | `housing` | Plots, building, rent, guests and the house vault. | |

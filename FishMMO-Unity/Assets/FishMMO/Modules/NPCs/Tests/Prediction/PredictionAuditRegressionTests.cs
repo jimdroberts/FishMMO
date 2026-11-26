@@ -1925,6 +1925,52 @@ namespace FishMMO.UnitTests
 			}
 		}
 
+		/// <summary>
+		/// The holds only damp characters near the cut. One the budget took out that now stands well inside what the viewer is
+		/// shown comes back at once, and one in view that now stands well outside it leaves at once: a 10 s hold everywhere
+		/// kept a far fighter in view while a nearer one, left out a moment earlier, walked closer and stayed hidden.
+		/// </summary>
+		[Test]
+		public void VisibilityHolds_LetGoOfCharactersFarFromTheCut()
+		{
+			int budget = ObserverStreamingPolicy.VisibilityBudget;
+			int widened = Mathf.CeilToInt(budget * (1f + ObserverStreamingPolicy.VisibilityBudgetHysteresis));
+			SeedRanks(clientId: 16, count: widened + 5);
+			var standings = (Dictionary<int, Dictionary<int, float>>)typeof(ObserverStreamingRegistry)
+				.GetField("standingsByClientId", Priv).GetValue(null);
+			standings[16] = new Dictionary<int, float>();
+			float margin = ObserverStreamingRegistry.HoldStandingMargin;
+			int objectId = RankObjectId(widened);
+			try
+			{
+				// Taken out of view (the visible hold off for this step), then back inside the budget.
+				uint minimumVisible = ObserverStreamingRegistry.MinimumVisibleTicks;
+				ObserverStreamingRegistry.MinimumVisibleTicks = 0;
+				LogAssert.IsFalse(Budget(16, objectId, currentlyVisible: true), "Past the widened boundary: taken out of view.");
+				ObserverStreamingRegistry.MinimumVisibleTicks = minimumVisible;
+				RegistryRanks(16)[objectId] = 0;
+
+				standings[16][objectId] = 1f - margin * 0.5f;
+				LogAssert.IsFalse(Budget(16, objectId, currentlyVisible: false), "Just inside the cut: still held out for its minimum time.");
+				standings[16][objectId] = 1f - margin * 2f;
+				LogAssert.IsTrue(Budget(16, objectId, currentlyVisible: false), "Well inside the cut: back at once.");
+
+				// In view since now, then well past the cut: its minimum time in view would hold it.
+				int other = RankObjectId(0);
+				LogAssert.IsTrue(Budget(16, other, currentlyVisible: true), "Inside the budget and in view.");
+				RegistryRanks(16)[other] = widened;
+				standings[16][other] = 1f + margin * 0.5f;
+				LogAssert.IsTrue(Budget(16, other, currentlyVisible: true), "Just outside the cut: kept for its minimum time in view.");
+				standings[16][other] = 1f + margin * 2f;
+				LogAssert.IsFalse(Budget(16, other, currentlyVisible: true), "Well outside the cut: it leaves at once.");
+			}
+			finally
+			{
+				standings.Clear();
+				ClearRegistryRanks();
+			}
+		}
+
 		private static bool Budget(int clientId, int objectId, bool currentlyVisible)
 			=> ObserverStreamingRegistry.IsWithinVisibilityBudget(clientId, objectId, currentlyVisible, out _);
 

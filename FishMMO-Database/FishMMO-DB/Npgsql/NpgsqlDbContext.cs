@@ -251,6 +251,10 @@ namespace FishMMO.Database.Npgsql
 		public DbSet<ArenaRatingEntity> ArenaRatings { get; set; }
 		/// <summary>Arena queue locks.</summary>
 		public DbSet<ArenaPenaltyEntity> ArenaPenalties { get; set; }
+		/// <summary>Every character's duel rating and record (the Duels module).</summary>
+		public DbSet<DuelRecordEntity> DuelRecords { get; set; }
+		/// <summary>Finished duels (the Duels module).</summary>
+		public DbSet<DuelResultEntity> DuelResults { get; set; }
 		/// <summary>Chat messages.</summary>
 		public DbSet<ChatEntity> Chat { get; set; }
 

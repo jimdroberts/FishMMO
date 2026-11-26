@@ -677,6 +677,7 @@ namespace FishMMO.Shared
 				case "ObserverCombatEffectRange": return TryFloat(value, v => CombatEffectRange = Mathf.Max(0f, v));
 				case "ObserverMinimumVisibleTicks": return TryInt(value, v => ObserverStreamingRegistry.MinimumVisibleTicks = (uint)Math.Max(0, v));
 				case "ObserverMinimumHiddenTicks": return TryInt(value, v => ObserverStreamingRegistry.MinimumHiddenTicks = (uint)Math.Max(0, v));
+				case "ObserverHoldStandingMargin": return TryFloat(value, v => ObserverStreamingRegistry.HoldStandingMargin = Mathf.Clamp(v, 0f, 1f));
 				case "ObserverLodBands": return TryParseLodBands(value);
 				case "ObserverVisibilityBudgets": return TryParseVisibilityBudgets(value);
 				case "ObserverByteBudget": return TryInt(value, v => ByteBudget = Math.Max(0, v));

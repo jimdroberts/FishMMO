@@ -474,11 +474,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d70dc4c61ccb4977b5ab6436da234d9c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.MapMarker
-  Type: 7
+  Type: 6
   Visibility: 0
   Icon: {fileID: 0}
   Tint: {r: 1, g: 1, b: 1, a: 1}
-  Label: Goods
+  Label: 
   IconSize: 14
   ClampToEdge: 0
   Priority: 0

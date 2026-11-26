@@ -18,6 +18,8 @@ namespace FishMMO.Database.Npgsql.Services
 	{
 		private const int MaxBatchIds = 1024;
 		private const int DefaultRating = 1500;
+		/// <summary>The name column's length.</summary>
+		private const int MaxSeasonNameLength = 64;
 
 		/// <summary>
 		/// Initializes a new instance of ArenaRatingService.
@@ -37,10 +39,13 @@ namespace FishMMO.Database.Npgsql.Services
 				string seasonTable = dbContext.GetTableName<ArenaSeasonEntity>();
 
 				/* The partial unique index on active makes two servers racing to create the first
-				 * season safe: the loser's insert is a no-op (ON CONFLICT on the index) and the
-				 * following read returns the winner's row. */
-				var insertSql = $@"INSERT INTO {seasonTable} (name, starts_utc, ends_utc, active, time_created)
-					SELECT 'Season 1', {{0}}, NULL, TRUE, {{0}}
+				 * season safe: the loser's insert is a no-op (ON CONFLICT on either unique index) and
+				 * the following read returns the winner's row. The number continues the count, so a
+				 * database whose seasons were all closed by hand opens the next one, not a second
+				 * "Season 1". */
+				var insertSql = $@"INSERT INTO {seasonTable} (number, name, starts_utc, ends_utc, active, time_created)
+					SELECT m.n, 'Season ' || m.n, {{0}}, NULL, TRUE, {{0}}
+					FROM (SELECT COALESCE(MAX(number), 0) + 1 AS n FROM {seasonTable}) m
 					WHERE NOT EXISTS (SELECT 1 FROM {seasonTable} WHERE active = TRUE)
 					ON CONFLICT DO NOTHING";
 
@@ -64,38 +69,76 @@ namespace FishMMO.Database.Npgsql.Services
 		}
 
 		/// <inheritdoc/>
-		public async Task<DatabaseResult<ArenaSeasonData>> StartNewSeasonAsync(string name, DateTime? endsUtc, CancellationToken cancellationToken = default)
+		public async Task<DatabaseResult<ArenaSeasonAdvanceData>> StartNextSeasonAsync(long expectedActiveSeasonId, string name = null, DateTime? endsUtc = null, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(name))
+			if (expectedActiveSeasonId <= 0)
 			{
-				return DatabaseResult<ArenaSeasonData>.Failure(DatabaseErrorCodes.ValidationError, "Season name is required.");
+				return DatabaseResult<ArenaSeasonAdvanceData>.Failure(DatabaseErrorCodes.ValidationError, "The season expected to be active is required.");
+			}
+			string? trimmed = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+			if (trimmed != null && trimmed.Length > MaxSeasonNameLength)
+			{
+				return DatabaseResult<ArenaSeasonAdvanceData>.Failure(DatabaseErrorCodes.ValidationError, $"A season name is at most {MaxSeasonNameLength} characters.");
 			}
 
 			var now = DateTime.UtcNow;
 
-			var result = await ExecuteTransactionAsync(async dbContext =>
+			return await ExecuteTransactionAsync(async dbContext =>
 			{
 				string seasonTable = dbContext.GetTableName<ArenaSeasonEntity>();
 
-				await dbContext.Database.ExecuteSqlRawAsync(
-					$@"UPDATE {seasonTable} SET active = FALSE, ends_utc = COALESCE(ends_utc, {{0}}) WHERE active = TRUE",
-					new object[] { now },
-					cancellationToken).ConfigureAwait(false);
+				/* One mover at a time: the lock is self-exclusive, so a second advance waits here and
+				 * then finds the season it expected already closed. Readers (matches being formed,
+				 * boards) are not blocked. */
+				await dbContext.Database.ExecuteSqlRawAsync($"LOCK TABLE {seasonTable} IN SHARE ROW EXCLUSIVE MODE", cancellationToken).ConfigureAwait(false);
 
-				var rows = await dbContext.ArenaSeasons
+				var active = await dbContext.ArenaSeasons
+					.FromSqlRaw($@"SELECT * FROM {seasonTable} WHERE active = TRUE LIMIT 1")
+					.AsNoTracking()
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				if (active.Count == 0 || active[0].ID != expectedActiveSeasonId)
+				{
+					return new ArenaSeasonAdvanceData(false, default, active.Count == 0 ? default : MapSeason(active[0]));
+				}
+
+				var closed = await dbContext.ArenaSeasons
 					.FromSqlRaw(
-						$@"INSERT INTO {seasonTable} (name, starts_utc, ends_utc, active, time_created)
-						VALUES ({{0}}, {{1}}, {{2}}, TRUE, {{1}})
-						RETURNING *",
-						name.Trim(), now, (object)endsUtc)
+						$@"UPDATE {seasonTable} SET active = FALSE, ends_utc = {{1}} WHERE id = {{0}} RETURNING *",
+						expectedActiveSeasonId, now)
 					.AsNoTracking()
 					.ToListAsync(cancellationToken)
 					.ConfigureAwait(false);
 
-				return MapSeason(rows[0]);
-			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+				var opened = await dbContext.ArenaSeasons
+					.FromSqlRaw(
+						$@"INSERT INTO {seasonTable} (number, name, starts_utc, ends_utc, active, time_created)
+						SELECT m.n, COALESCE(NULLIF({{0}}, ''), 'Season ' || m.n), {{1}}, {{2}}, TRUE, {{1}}
+						FROM (SELECT COALESCE(MAX(number), 0) + 1 AS n FROM {seasonTable}) m
+						RETURNING *",
+						trimmed ?? string.Empty, now, (object?)endsUtc)
+					.AsNoTracking()
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
 
-			return result;
+				return new ArenaSeasonAdvanceData(true, MapSeason(closed[0]), MapSeason(opened[0]));
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<IReadOnlyList<ArenaSeasonData>>> FetchSeasonsAsync(int limit, CancellationToken cancellationToken = default)
+		{
+			limit = Math.Clamp(limit, 1, 100);
+			return await ExecuteReadAsync<IReadOnlyList<ArenaSeasonData>>(async dbContext =>
+			{
+				var rows = await dbContext.ArenaSeasons
+					.AsNoTracking()
+					.OrderByDescending(e => e.Number)
+					.Take(limit)
+					.ToListAsync(cancellationToken)
+					.ConfigureAwait(false);
+				return rows.Select(MapSeason).ToList();
+			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>
@@ -197,7 +240,7 @@ namespace FishMMO.Database.Npgsql.Services
 
 		private static ArenaSeasonData MapSeason(ArenaSeasonEntity e)
 		{
-			return new ArenaSeasonData(e.ID, e.Name, e.StartsUtc, e.EndsUtc, e.Active);
+			return new ArenaSeasonData(e.ID, e.Number, e.Name, e.StartsUtc, e.EndsUtc, e.Active);
 		}
 
 		private static ArenaRatingData MapRating(ArenaRatingEntity e)

@@ -51,6 +51,26 @@ namespace FishMMO.Shared
 		/// "not an enemy" refusal). False for refusals no toggle changes: an arena's teams, a pack, companions.
 		/// </summary>
 		bool AggressionLiftsRefusal => false;
+
+		/// <summary>
+		/// True when a blow from <paramref name="attacker"/> that would leave <paramref name="defender"/> with no health
+		/// should leave them standing instead (a duel is won, never killed). Asked only of a blow that would kill, between
+		/// two different sides; the first relation that spares decides, and hears <see cref="OnSpared"/>.
+		/// </summary>
+		bool Spares(ICharacter attacker, ICharacter defender) => false;
+
+		/// <summary>A blow this relation spared (see <see cref="Spares"/>) has landed.</summary>
+		void OnSpared(ICharacter attacker, ICharacter defender) { }
+
+		/// <summary>
+		/// The alliance between two sides when this relation decides it outright (a duel's opponents are enemies while it
+		/// is fought), so targeting and nameplates agree with who may harm whom. False leaves it to party, guild and faction.
+		/// </summary>
+		bool TryResolveAlliance(ICharacter a, ICharacter b, out FactionAllianceLevel level)
+		{
+			level = FactionAllianceLevel.Neutral;
+			return false;
+		}
 	}
 
 	/// <summary>A relation that also says who are companions: never harmed, never drawn hostile, whatever anyone's toggle says.</summary>
@@ -227,6 +247,73 @@ namespace FishMMO.Shared
 			{
 				relation.OnRefusedAttack(attackerSide, defenderSide, attack.CastKey, refusedBy);
 			}
+		}
+
+		/// <summary>
+		/// Whether a blow from <paramref name="attacker"/> that would leave <paramref name="defender"/> with no health is to
+		/// leave them standing instead, and which relation said so (<see cref="IHarmRelation.Spares"/>). Never for the world
+		/// (no attacker) or for a character harming itself.
+		/// </summary>
+		public static bool TrySpare(ICharacter attacker, ICharacter defender, out IHarmRelation sparedBy)
+		{
+			sparedBy = null;
+			if (IsUnrestricted(attacker, defender))
+			{
+				return false;
+			}
+			ICharacter attackerSide = Principal(attacker);
+			ICharacter defenderSide = Principal(defender);
+			if (ReferenceEquals(attackerSide, defenderSide))
+			{
+				return false;
+			}
+			foreach (IHarmRelation relation in Installed())
+			{
+				if (relation.Spares(attackerSide, defenderSide))
+				{
+					sparedBy = relation;
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Tells <paramref name="sparedBy"/> that the blow it spared (see <see cref="TrySpare"/>) has landed.</summary>
+		public static void NoteSpared(IHarmRelation sparedBy, ICharacter attacker, ICharacter defender)
+		{
+			if (sparedBy == null || attacker == null || defender == null)
+			{
+				return;
+			}
+			sparedBy.OnSpared(Principal(attacker), Principal(defender));
+		}
+
+		/// <summary>
+		/// The alliance between two characters when a relation decides it outright (<see cref="IHarmRelation.TryResolveAlliance"/>),
+		/// asked with each side's principal; false leaves it to the faction rules.
+		/// </summary>
+		public static bool TryResolveAlliance(ICharacter a, ICharacter b, out FactionAllianceLevel level)
+		{
+			level = FactionAllianceLevel.Neutral;
+			if (a == null || b == null)
+			{
+				return false;
+			}
+			ICharacter sideA = Principal(a);
+			ICharacter sideB = Principal(b);
+			if (ReferenceEquals(sideA, sideB))
+			{
+				return false;
+			}
+			foreach (IHarmRelation relation in Installed())
+			{
+				if (relation.TryResolveAlliance(sideA, sideB, out level))
+				{
+					return true;
+				}
+			}
+			level = FactionAllianceLevel.Neutral;
+			return false;
 		}
 
 		/// <summary>

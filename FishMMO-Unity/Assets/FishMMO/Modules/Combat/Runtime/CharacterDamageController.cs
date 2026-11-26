@@ -1588,6 +1588,16 @@ namespace FishMMO.Shared
 				amount = DamageMitigation.Guard(Character, attacker, amount, SimulatesOwnBuffEffects());
 			}
 
+			/* A blow that would kill, from a side a relation spares (a duel opponent), leaves the defender standing on
+			 * what is left of its last point instead: a duel is won, never killed. Decided on what actually lands, after
+			 * every reduction, so a blow the guard would have stopped anyway is not counted as the finishing one. The
+			 * caster's client predicts the same clamp from the same relation, so its number agrees with the server's. */
+			IHarmRelation sparedBy = null;
+			if (amount >= 1 && amount >= ResourceInstance.CurrentValue && HarmRule.TrySpare(attacker, Character, out sparedBy))
+			{
+				amount = Mathf.Max(0, Mathf.CeilToInt(ResourceInstance.CurrentValue) - 1);
+			}
+
 			if (amount < 1)
 			{
 				/* A fully blocked hit still ENGAGES. Standing behind a shield does not mean nobody
@@ -1609,6 +1619,7 @@ namespace FishMMO.Shared
 				{
 					blockedAttackerDamageController.EnterCombat();
 				}
+				HarmRule.NoteSpared(sparedBy, attacker, Character);
 				return 0;
 			}
 			ResourceInstance.Consume(amount);
@@ -1668,6 +1679,10 @@ namespace FishMMO.Shared
 			if (ResourceInstance.CurrentValue <= 0.0f)
 			{
 				Kill(attacker);
+			}
+			else
+			{
+				HarmRule.NoteSpared(sparedBy, attacker, Character);
 			}
 
 			/* The number that landed — the exact value QueueCombatEvent put in the server's report,

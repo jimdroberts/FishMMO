@@ -55,6 +55,10 @@ namespace FishMMO.Client
 		[Range(0f, 0.5f)] public float BankClearance = 0.03f;
 		[Tooltip("Over how much more height above that the bank grass thins in to full, metres: a fringe instead of a mown edge.")]
 		[Range(0.01f, 1f)] public float BankThinning = 0.25f;
+
+		[Header("Snow")]
+		[Tooltip("Blades rooted under at least this much snow, metres, are not grown at all: not drawn, not in the shadow pass. The depth is the snow surface's height over the ground as the terrain draws it (the cover's blanket where the ground lifts, plus the deep snow), shed off slopes and kept off by roofs and crowns. Without it only a blade the snow surface wholly hides is left out, so every tip poking out of a deep drift was still grown, and on a tier that does not lift the ground deep snow left out nothing. 0: off.")]
+		[Range(0f, 1f)] public float SnowCullDepth = 0.05f;
 		[Tooltip("Blades widen as the field thins: width × share^-exponent. 1 keeps the ground covered as fully as near the camera (fewer blades, each standing for the ones thinned out); 0.5 let coverage fall to two thirds by 15 m and a quarter by 50 m, which read as the grass fading out just past the camera. Flower and seed heads keep their area instead (share^-0.5 whatever this is).")]
 		[Range(0f, 1f)] public float WidenExponent = 1f;
 		[Tooltip("The most a blade widens (and a head grows), as a multiple of its near width. Past the share where it caps, coverage falls with the share: at 12 that is about 50 m with the default rings.")]

@@ -373,6 +373,8 @@ namespace FishMMO.Client
 			}
 
 			mapView.Fog = ClientMapSystem.Fog;
+			mapView.SceneName = ClientMapSystem.SceneName;
+			UpdateGuide(center);
 
 			double now = Time.unscaledTimeAsDouble;
 			if (now >= nextMarkerRefreshTime)
@@ -393,6 +395,45 @@ namespace FishMMO.Client
 			{
 				PlaceCompass(view.WorldToViewAngle(TrueNorth.BearingAt(Character.Transform.gameObject.scene, center)));
 			}
+		}
+
+		/// <summary>The whole metres the guide's readout was last written for; -1 when it shows nothing.</summary>
+		private int guideMetres = -1;
+
+		/// <summary>Whether the guide's readout was last written for a target lost from the map.</summary>
+		private bool guideLastKnown;
+
+		/// <summary>The guide's readout, kept so it is rebuilt only when the whole metres change.</summary>
+		private string guideText;
+
+		/// <summary>
+		/// Points the overlay at the guide's target (<see cref="MapGuide"/>), with the distance to it across
+		/// the ground; a target lost from the map is shown at the last place it was seen, marked "~".
+		/// </summary>
+		/// <param name="center">Where the character stands.</param>
+		private void UpdateGuide(Vector3 center)
+		{
+			if (!MapGuide.TryGetTarget(Character, ClientMapSystem.Fog, out Vector3 target))
+			{
+				mapView.GuideTarget = null;
+				mapView.GuideText = null;
+				guideMetres = -1;
+				return;
+			}
+
+			Vector3 offset = target - center;
+			offset.y = 0.0f;
+			int metres = Mathf.RoundToInt(offset.magnitude);
+			bool lastKnown = MapGuide.IsLastKnown;
+			if (metres != guideMetres || lastKnown != guideLastKnown || guideText == null)
+			{
+				guideMetres = metres;
+				guideLastKnown = lastKnown;
+				guideText = (lastKnown ? "~" : string.Empty) + metres.ToString() + " m";
+			}
+
+			mapView.GuideTarget = target;
+			mapView.GuideText = guideText;
 		}
 
 		/// <summary>How far in from the map's edge the compass letter sits, in points.</summary>

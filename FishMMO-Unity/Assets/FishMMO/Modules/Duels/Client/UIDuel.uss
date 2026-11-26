@@ -1,0 +1,87 @@
+/*
+    UIDuel.uss
+    The duel HUD. Colours come from FishMMO-Theme.uss. Placed where the arena HUD's strip sits (under the target frame,
+    clear of the minimap): the two are never shown together, because duels are not fought in arenas.
+*/
+
+.duel-hidden {
+    display: none;
+}
+
+.duel-root {
+    position: absolute;
+    left: 50%;
+    top: 132px;
+    translate: -50% 0;
+    width: 240px;
+    flex-direction: column;
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-color: var(--gold);
+    flex-shrink: 0;
+}
+
+.duel-title {
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.duel-clock {
+    margin-top: 4px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.duel-hint {
+    margin-top: 2px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+    flex-shrink: 0;
+}
+
+.duel-hint--warning {
+    color: var(--warn);
+    -unity-font-style: bold;
+}
+
+.duel-yield {
+    height: 20px;
+    min-width: 72px;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.duel-countdown {
+    position: absolute;
+    left: 50%;
+    top: 220px;
+    translate: -50% 0;
+    font-size: 72px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--gold);
+    text-shadow: 0 2px 6px var(--edge-dark);
+}
+
+.duel-banner {
+    position: absolute;
+    left: 50%;
+    top: 220px;
+    translate: -50% 0;
+    font-size: 48px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--text-bright);
+    text-shadow: 0 2px 6px var(--edge-dark);
+}
+
+.duel-banner--won {
+    color: var(--gold);
+}
+
+.duel-banner--lost {
+    color: var(--danger);
+}

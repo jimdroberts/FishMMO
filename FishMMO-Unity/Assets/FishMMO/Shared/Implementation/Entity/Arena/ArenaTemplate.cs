@@ -214,27 +214,19 @@ namespace FishMMO.Shared
 		public List<Color> TeamColors = new List<Color>(ArenaTeamColors.Defaults);
 
 		[Header("Rating")]
-		[Tooltip("PvP rank points awarded to every member of the winning team.")]
-		[Min(0)]
-		public int WinRankPoints = 10;
-
-		[Tooltip("PvP rank points removed from every member of a losing team. Rank never drops below zero.")]
-		[Min(0)]
-		public int LossRankPoints = 5;
-
-		[Header("Ranked")]
-		[Tooltip("Ranked: games a character plays at the placement K-factor before their rating is shown as final.")]
+		[Tooltip("Games a character plays at the placement K-factor: their first PvP Rank games (every format), and their first games of a season in a ranked format.")]
 		[Min(0)]
 		public int PlacementGames = 10;
 
-		[Tooltip("Ranked: Elo K-factor once placed.")]
+		[Tooltip("Elo K-factor once placed, for PvP Rank (every format) and the season rating (ranked formats).")]
 		[Min(1)]
 		public int RatingK = 32;
 
-		[Tooltip("Ranked: Elo K-factor during placement.")]
+		[Tooltip("Elo K-factor during placement.")]
 		[Min(1)]
 		public int PlacementK = 64;
 
+		[Header("Ranked")]
 		[Tooltip("Ranked: rating band around the longest waiter at zero wait. 0 disables banding.")]
 		[Min(0)]
 		public int RatingBandBase = 150;

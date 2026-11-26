@@ -24,10 +24,17 @@ namespace FishMMO.Database.Data
 		public readonly int TemplateID;
 
 		/// <summary>
-		/// Arena only: games a character must have finished this season to be ranked. Values below
-		/// 1 are read as 1, so a row that was inserted and never scored cannot appear.
+		/// Arena and duel rating: games (this season) or duels a character must have finished to be
+		/// ranked. An attribute board with a <see cref="GamesTemplateID"/>: the value that attribute must
+		/// reach. Values below 1 are read as 1, so a row that was inserted and never scored cannot appear.
 		/// </summary>
 		public readonly int MinimumGames;
+
+		/// <summary>
+		/// Attribute boards only: the attribute that counts a character's games (PvP Matches for the PvP
+		/// Rank board), which must reach <see cref="MinimumGames"/> before they are ranked. 0 for no floor.
+		/// </summary>
+		public readonly int GamesTemplateID;
 
 		/// <summary>
 		/// When false, only characters on player accounts are ranked; game masters' and
@@ -35,12 +42,13 @@ namespace FishMMO.Database.Data
 		/// </summary>
 		public readonly bool RankStaff;
 
-		public LeaderboardQuery(LeaderboardSourceKind source, int templateID, int minimumGames, bool rankStaff)
+		public LeaderboardQuery(LeaderboardSourceKind source, int templateID, int minimumGames, bool rankStaff, int gamesTemplateID = 0)
 		{
 			Source = source;
 			TemplateID = templateID;
 			MinimumGames = minimumGames;
 			RankStaff = rankStaff;
+			GamesTemplateID = gamesTemplateID;
 		}
 
 		public bool Equals(LeaderboardQuery other)
@@ -48,7 +56,8 @@ namespace FishMMO.Database.Data
 			return Source == other.Source &&
 				TemplateID == other.TemplateID &&
 				MinimumGames == other.MinimumGames &&
-				RankStaff == other.RankStaff;
+				RankStaff == other.RankStaff &&
+				GamesTemplateID == other.GamesTemplateID;
 		}
 
 		public override bool Equals(object obj) => obj is LeaderboardQuery other && Equals(other);
@@ -61,11 +70,12 @@ namespace FishMMO.Database.Data
 				hash = (hash * 397) ^ TemplateID;
 				hash = (hash * 397) ^ MinimumGames;
 				hash = (hash * 397) ^ (RankStaff ? 1 : 0);
+				hash = (hash * 397) ^ GamesTemplateID;
 				return hash;
 			}
 		}
 
-		public override string ToString() => $"{Source}:{TemplateID}:min{MinimumGames}:{(RankStaff ? "staff" : "players")}";
+		public override string ToString() => $"{Source}:{TemplateID}:min{MinimumGames}{(GamesTemplateID != 0 ? $"@{GamesTemplateID}" : string.Empty)}:{(RankStaff ? "staff" : "players")}";
 	}
 
 	/// <summary>One ranked character on a board.</summary>

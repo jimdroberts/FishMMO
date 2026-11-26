@@ -15,13 +15,17 @@ namespace FishMMO.Database.Data
 		public readonly long SeasonID;
 		/// <summary>Template id of the character attribute that supplies the rating when <see cref="SeasonID"/> is 0, or 0.</summary>
 		public readonly int AttributeTemplateID;
-		/// <summary>Rating assumed for a character with no rating row. 1500 for ranked, 0 for the attribute.</summary>
+		/// <summary>Rating assumed for a character with no rating row: the rating everyone starts at (1500), for either source.</summary>
 		public readonly int DefaultRating;
 
 		public static readonly ArenaRatingSource None = default;
 
 		public static ArenaRatingSource FromSeason(long seasonId, int defaultRating = 1500) => new ArenaRatingSource(seasonId, 0, defaultRating);
-		public static ArenaRatingSource FromAttribute(int attributeTemplateId) => new ArenaRatingSource(0, attributeTemplateId, 0);
+		/// <summary>
+		/// The lifetime PvP Rank attribute. A character who has never had it saved has no row and is read at
+		/// <paramref name="defaultRating"/>, which must be the attribute's initial value (it is an Elo rating).
+		/// </summary>
+		public static ArenaRatingSource FromAttribute(int attributeTemplateId, int defaultRating = 1500) => new ArenaRatingSource(0, attributeTemplateId, defaultRating);
 
 		public ArenaRatingSource(long seasonID, int attributeTemplateID, int defaultRating)
 		{

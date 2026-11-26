@@ -119,7 +119,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public bool Forfeited;
 			/// <summary>Disconnected from a live match and inside the reconnect grace, or null.</summary>
 			public double? DisconnectedAt;
-			/// <summary>Rank change written when they disconnected, so a return inside the grace can refund it exactly.</summary>
+			/// <summary>PvP Rank change written when they disconnected, so a return inside the grace can refund it exactly.</summary>
 			public int ForfeitRankDelta;
 			/// <summary>Whether the win/loss/matches attributes were charged for a forfeit.</summary>
 			public bool ForfeitCharged;
@@ -131,6 +131,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			public bool Ready;
 			/// <summary>Took a vacated seat from the queue after the match went live.</summary>
 			public bool Backfilled;
+			/// <summary>
+			/// PvP Rank as it stood when the player first arrived, before this match changed it: the rank the other teams are
+			/// rated against. Every format; see <see cref="SnapshotPvPRank"/>.
+			/// </summary>
+			public int PvPRankBefore = ArenaRating.DefaultRating;
+			/// <summary>Whether <see cref="PvPRankBefore"/> was read from the character. Only such a seat stands in an average.</summary>
+			public bool PvPRankKnown;
 			/// <summary>Ranked: rating and games before the match.</summary>
 			public int RatingBefore = ArenaRating.DefaultRating;
 			public int GamesBefore;
@@ -772,6 +779,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			seat.Present = true;
 			seat.Name = character.CharacterName;
 			seat.LastPosition = character.Transform != null ? character.Transform.position : seat.LastPosition;
+			if (!seat.PvPRankKnown)
+			{
+				SnapshotPvPRank(character, seat);
+			}
 
 			/* Arriving during the countdown after having been dropped: reseat them. Arriving once
 			 * live stays dropped — the sides were settled when play began. */
@@ -1048,11 +1059,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			seat.Name = character.CharacterName;
 			DropCarriedFlag(state, seat, character.Transform != null ? character.Transform.position : seat.LastPosition);
 
-			int lossPoints = state.Template != null ? state.Template.LossRankPoints : 5;
-			int winPoints = state.Template != null ? state.Template.WinRankPoints : 10;
 			// A forfeit is a loss to whichever team is not theirs; any other team index will do.
 			int notTheirTeam = seat.Team == 0 ? 1 : 0;
-			seat.ForfeitRankDelta = ApplyPvPResult(character, seat.Team, notTheirTeam, winPoints, lossPoints);
+			seat.ForfeitRankDelta = ApplyPvPResult(character, state, seat, notTheirTeam);
 			seat.ForfeitCharged = true;
 
 			int lockMinutes = state.Template != null ? state.Template.DeserterLockMinutes : 15;
@@ -2002,8 +2011,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 
 			// Stats and results, for everyone still here.
-			int winPoints = state.Template != null ? state.Template.WinRankPoints : 10;
-			int lossPoints = state.Template != null ? state.Template.LossRankPoints : 5;
 			int placementGamesTotal = state.Template != null ? state.Template.PlacementGames : 10;
 			var resultMembers = new List<ArenaMatchResultMember>(state.Seats.Count);
 			Server.DataContainerRegistry.TryGet<ICharacterMappingData<NetworkConnection>>(out var charMapping);
@@ -2023,7 +2030,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				int rankDelta = 0;
 				if (here)
 				{
-					rankDelta = ApplyPvPResult(character, seat.Team, winnerTeam, winPoints, lossPoints);
+					rankDelta = ApplyPvPResult(character, state, seat, winnerTeam);
 				}
 				else if (seat.Forfeited)
 				{
@@ -2795,24 +2802,68 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 			}
 		}
 
-		/// <summary>Records a result on a character's PvP attributes and returns the rank change.</summary>
-		private int ApplyPvPResult(IPlayerCharacter character, int team, int winnerTeam, int winPoints, int lossPoints)
+		/// <summary>
+		/// Records a result on a character's PvP attributes and returns the PvP Rank change: Elo against the average PvP
+		/// Rank of everyone on the other teams, team-wise, as the ranked season rating is (<see cref="ArenaRating"/>).
+		/// </summary>
+		/// <remarks>
+		/// Every format moves it, ranked or not. The opponents are averaged from the ranks they arrived with, so a player
+		/// who has already been charged a forfeit does not drag their team's opponents' gains down, and the result does
+		/// not depend on the order the seats are written in. The K-factor is the template's, at the placement value for a
+		/// character's first <see cref="ArenaTemplate.PlacementGames"/> matches.
+		/// </remarks>
+		private int ApplyPvPResult(IPlayerCharacter character, ArenaMatchState state, ArenaSeatState seat, int winnerTeam)
 		{
-			int currentRank = 0;
+			int delta = 0;
 			if (TryGetPvPAttribute(character, PvPRankAttributeName, out CharacterAttribute rank))
 			{
-				currentRank = rank.Value;
+				int matches = TryGetPvPAttribute(character, PvPMatchesAttributeName, out CharacterAttribute played) ? played.Value : 0;
+				ArenaTemplate template = state.Template;
+				int k = ArenaRating.KFactor(matches,
+					template != null ? template.PlacementGames : 10,
+					template != null ? template.RatingK : 32,
+					template != null ? template.PlacementK : 64);
+				delta = ArenaRating.Change(rank.Value, PvPRankOpponentAverage(state, seat.Team), ArenaRating.ScoreFor(seat.Team, winnerTeam), k);
 			}
-
-			int delta = ArenaRules.ResolveRankDelta(currentRank, team, winnerTeam, winPoints, lossPoints);
 
 			AdjustPvPAttribute(character, PvPRankAttributeName, delta);
 			AdjustPvPAttribute(character, PvPMatchesAttributeName, 1);
 			if (winnerTeam >= 0)
 			{
-				AdjustPvPAttribute(character, team == winnerTeam ? PvPWinsAttributeName : PvPLossesAttributeName, 1);
+				AdjustPvPAttribute(character, seat.Team == winnerTeam ? PvPWinsAttributeName : PvPLossesAttributeName, 1);
 			}
 			return delta;
+		}
+
+		/// <summary>Records the PvP Rank a seat's player arrived with. Once per seat, on first arrival.</summary>
+		private void SnapshotPvPRank(IPlayerCharacter character, ArenaSeatState seat)
+		{
+			if (!TryGetPvPAttribute(character, PvPRankAttributeName, out CharacterAttribute rank))
+			{
+				return;
+			}
+			seat.PvPRankBefore = rank.Value;
+			seat.PvPRankKnown = true;
+		}
+
+		/// <summary>
+		/// Average arrival PvP Rank of every seat not on <paramref name="team"/> whose rank was read; the starting rating
+		/// when none was. Dropped seats (never played) are left out; forfeited ones played, and stay in.
+		/// </summary>
+		private static int PvPRankOpponentAverage(ArenaMatchState state, int team)
+		{
+			long sum = 0;
+			int count = 0;
+			foreach (ArenaSeatState other in state.Seats.Values)
+			{
+				if (other.Dropped || !other.PvPRankKnown || other.Team == team)
+				{
+					continue;
+				}
+				sum += other.PvPRankBefore;
+				++count;
+			}
+			return count == 0 ? ArenaRating.DefaultRating : (int)(sum / count);
 		}
 
 		private bool TryGetPvPAttribute(IPlayerCharacter character, string templateName, out CharacterAttribute attribute)

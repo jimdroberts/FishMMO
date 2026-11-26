@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: PvP Matches
   m_EditorClassIdentifier: 
   Description: Arena matches played to a result.
+  SheetCategory: Arena
+  SheetLabel: Matches
   InitialValue: 0
   MinValue: 0
   MaxValue: 2147483647

@@ -190,29 +190,6 @@ namespace FishMMO.Shared
 		}
 
 		/// <summary>
-		/// The rank change for one player.
-		/// </summary>
-		/// <param name="currentRank">Rank before the match.</param>
-		/// <param name="team">The player's team.</param>
-		/// <param name="winnerTeam">Winning team, or -1 for a draw.</param>
-		/// <param name="winPoints">Points for a win.</param>
-		/// <param name="lossPoints">Points lost for a loss.</param>
-		/// <returns>Signed delta such that <c>currentRank + delta</c> is never below zero.</returns>
-		public static int ResolveRankDelta(int currentRank, int team, int winnerTeam, int winPoints, int lossPoints)
-		{
-			if (winnerTeam < 0)
-			{
-				return 0;
-			}
-			if (team == winnerTeam)
-			{
-				return Math.Max(0, winPoints);
-			}
-			int loss = Math.Max(0, lossPoints);
-			return -Math.Min(loss, Math.Max(0, currentRank));
-		}
-
-		/// <summary>
 		/// What interacting with a flag stand does for one player.
 		/// </summary>
 		/// <param name="standTeam">Team whose flag rests on the stand.</param>

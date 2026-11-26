@@ -11,7 +11,8 @@ using UnityEngine.SceneManagement;
 namespace FishMMO.Shared
 {
 	/// <summary>
-	/// Links two world scenes with a pair of gates, one in each scene's capital (else its biggest city, town or port): a
+	/// Links two world scenes with a pair of gates, one in each scene's capital (else its biggest city, town or port, or a site
+	/// named by the caller, <see cref="Link(string, string, string, string, bool, List{string})"/>): a
 	/// portal arch with a <see cref="SceneTeleporter"/> in its opening, and a <see cref="TeleporterDestination"/> a few metres in
 	/// front of it where travellers from the other scene arrive, facing into town. Re-runnable: a scene's old gates to the same
 	/// scene are replaced. The world scene details cache must be rebuilt after (the batch entry does), which is what carries the
@@ -124,15 +125,50 @@ namespace FishMMO.Shared
 		/// <summary>Places a gate in each scene leading to the other; optionally re-places and rebakes their wildlife too.</summary>
 		public static bool Link(string pathA, string pathB, bool placeWildlife, List<string> notes)
 		{
+			return Link(pathA, null, pathB, null, placeWildlife, notes);
+		}
+
+		/// <summary>
+		/// Batch: links Moron 2 and Moron 3 through two magical sites rather than their capitals (Moron 2's ley nexus, Moron 3's
+		/// ritual stones), then rebuilds the world scene details cache. Exits 0 when it worked.
+		/// </summary>
+		public static void LinkMoron2And3Batch()
+		{
+			bool ok = false;
+			var notes = new List<string>();
+			try
+			{
+				ok = Link("Assets/Scenes/WorldScene/Moron/Moron 2.unity", "Confluence of the Mysterious Bell",
+					"Assets/Scenes/WorldScene/Moron/Moron 3.unity", "To Offering Stone", placeWildlife: false, notes);
+				if (ok)
+				{
+					ok = WorldSceneDetailsCacheBuilder.Rebuild();
+					notes.Add(ok ? "World scene details cache rebuilt." : "FAILED: the world scene details cache rebuild failed.");
+				}
+			}
+			catch (Exception ex)
+			{
+				notes.Add($"FAILED: {ex}");
+			}
+			Debug.Log("[Scene gates]\n  " + string.Join("\n  ", notes) + $"\n  ok={ok}");
+			EditorApplication.Exit(ok ? 0 : 1);
+		}
+
+		/// <summary>
+		/// Places a gate in each scene leading to the other, at the named point of interest in each (<paramref name="siteA"/>,
+		/// <paramref name="siteB"/>), or at the scene's capital (else its biggest town) where the name is null.
+		/// </summary>
+		public static bool Link(string pathA, string siteA, string pathB, string siteB, bool placeWildlife, List<string> notes)
+		{
 			string nameA = System.IO.Path.GetFileNameWithoutExtension(pathA);
 			string nameB = System.IO.Path.GetFileNameWithoutExtension(pathB);
 
 			// A: its arrival (from B) and its gate (to B, destination filled in once B's arrival exists).
-			if (!PlaceGate(pathA, nameB, null, placeWildlife, notes, out string arrivalA))
+			if (!PlaceGate(pathA, siteA, nameB, null, placeWildlife, notes, out string arrivalA))
 			{
 				return false;
 			}
-			if (!PlaceGate(pathB, nameA, arrivalA, placeWildlife, notes, out string arrivalB))
+			if (!PlaceGate(pathB, siteB, nameA, arrivalA, placeWildlife, notes, out string arrivalB))
 			{
 				return false;
 			}
@@ -158,7 +194,7 @@ namespace FishMMO.Shared
 			return true;
 		}
 
-		private static bool PlaceGate(string scenePath, string otherName, string destinationId, bool placeWildlife, List<string> notes, out string arrivalId)
+		private static bool PlaceGate(string scenePath, string siteName, string otherName, string destinationId, bool placeWildlife, List<string> notes, out string arrivalId)
 		{
 			arrivalId = null;
 			Scene scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Single);
@@ -170,7 +206,16 @@ namespace FishMMO.Shared
 				WildlifeSpawnerCut.PlaceInScene(scene, notes);
 			}
 
-			if (!TryFindTown(scene, out PointOfInterestRecord town))
+			PointOfInterestRecord town;
+			if (siteName != null)
+			{
+				if (!TryFindSite(scene, siteName, out town))
+				{
+					notes.Add($"FAILED: {scene.name} has no point of interest called '{siteName}'.");
+					return false;
+				}
+			}
+			else if (!TryFindTown(scene, out town))
 			{
 				notes.Add($"FAILED: {scene.name} has no capital, city, town or village.");
 				return false;
@@ -258,6 +303,26 @@ namespace FishMMO.Shared
 				}
 				if (town != null)
 				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>The point of interest called <paramref name="name"/> (its generated name, exactly).</summary>
+		private static bool TryFindSite(Scene scene, string name, out PointOfInterestRecord site)
+		{
+			site = null;
+			ScenePointOfInterestSettings settings = FindComponent<ScenePointOfInterestSettings>(scene);
+			if (settings == null || settings.Points == null || settings.Points.Points == null)
+			{
+				return false;
+			}
+			foreach (PointOfInterestRecord record in settings.Points.Points)
+			{
+				if (string.Equals(record.Name, name, StringComparison.Ordinal))
+				{
+					site = record;
 					return true;
 				}
 			}

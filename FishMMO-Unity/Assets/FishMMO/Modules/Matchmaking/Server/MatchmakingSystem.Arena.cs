@@ -892,7 +892,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.Interactable
 				// != 0, not > 0: template ids are signed hashes, and 0 is the only "no attribute".
 				else if (waiters[0].BalanceTeams && waiters[0].RankAttributeTemplateID != 0)
 				{
-					ratingSource = ArenaRatingSource.FromAttribute(waiters[0].RankAttributeTemplateID);
+					ratingSource = ArenaRatingSource.FromAttribute(waiters[0].RankAttributeTemplateID, ArenaRating.DefaultRating);
 				}
 				var composeOptions = new ArenaComposeOptions(band, waiters[0].BalanceTeams);
 

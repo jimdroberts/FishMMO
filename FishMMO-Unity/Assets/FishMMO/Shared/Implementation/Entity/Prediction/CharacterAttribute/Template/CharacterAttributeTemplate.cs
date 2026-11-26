@@ -41,6 +41,23 @@ namespace FishMMO.Shared
 		public string Description;
 
 		/// <summary>
+		/// The character sheet heading this attribute is listed under, e.g. "Arena". Empty: the heading for its kind
+		/// (Resource, Damage, Resistance, Core).
+		/// </summary>
+		[Tooltip("The character sheet heading this attribute is listed under, e.g. \"Arena\". Empty: the heading for its kind (Resource, Damage, Resistance, Core).")]
+		public string SheetCategory;
+
+		/// <summary>
+		/// The name the character sheet shows for this attribute. Empty: the template's name.
+		/// </summary>
+		/// <remarks>
+		/// A label only. The template's name is its identity (the ID is a hash of it), so renaming the asset would orphan
+		/// every saved value; this changes only what the sheet reads.
+		/// </remarks>
+		[Tooltip("The name the character sheet shows. Empty: the template's name. A label only: renaming the asset changes its ID and orphans every saved value.")]
+		public string SheetLabel;
+
+		/// <summary>
 		/// The initial (base) value for this attribute when a character is created.
 		/// </summary>
 		public int InitialValue;
@@ -95,6 +112,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string Name { get { return this.name; } }
 
+		/// <summary>What the character sheet calls this attribute: <see cref="SheetLabel"/>, or the name when it is empty.</summary>
+		public string SheetName { get { return string.IsNullOrWhiteSpace(SheetLabel) ? Name : SheetLabel; } }
+
 		/// <summary>
 		/// Returns the initial value as a percentage (InitialValue * 0.01f).
 		/// </summary>
@@ -123,31 +143,42 @@ namespace FishMMO.Shared
 			return IsPercentage ? $"{value:+#;-#;0}%" : $"{value:+#;-#;0}";
 		}
 
+		/// <summary>A value in this attribute's own unit, unsigned: a level, not a change.</summary>
+		private string FormatAbsolute(int value)
+		{
+			return IsPercentage ? $"{value}%" : value.ToString();
+		}
+
 		/// <summary>
 		/// Describes the attribute: what it is and the range it lives in.
 		/// </summary>
 		/// <param name="content">The content being assembled.</param>
 		public void BuildTooltip(TooltipContent content)
 		{
-			if (!string.IsNullOrWhiteSpace(Name))
+			// The sheet's own words: "Arena Rating" for a row labelled Rating under the Arena heading.
+			string title = !string.IsNullOrWhiteSpace(SheetCategory) && !string.IsNullOrWhiteSpace(SheetLabel)
+				? SheetCategory.Trim() + " " + SheetLabel.Trim()
+				: SheetName;
+			if (!string.IsNullOrWhiteSpace(title))
 			{
-				content.AddTitle(Name);
+				content.AddTitle(title);
 			}
 			if (!string.IsNullOrWhiteSpace(Description))
 			{
 				content.AddBody(Description);
 			}
+			// Absolute values, not modifiers: no sign. An unbounded maximum is left out rather than printed as 2147483647.
 			if (InitialValue > 0)
 			{
-				content.AddStat("Initial", FormatValue(InitialValue), TooltipPriority.Stats);
+				content.AddStat("Initial", FormatAbsolute(InitialValue), TooltipPriority.Stats);
 			}
 			if (MinValue > 0)
 			{
-				content.AddStat("Minimum", FormatValue(MinValue), TooltipPriority.Stats + 1);
+				content.AddStat("Minimum", FormatAbsolute(MinValue), TooltipPriority.Stats + 1);
 			}
-			if (MaxValue > 0)
+			if (MaxValue > 0 && MaxValue < int.MaxValue)
 			{
-				content.AddStat("Maximum", FormatValue(MaxValue), TooltipPriority.Stats + 2);
+				content.AddStat("Maximum", FormatAbsolute(MaxValue), TooltipPriority.Stats + 2);
 			}
 		}
 	}

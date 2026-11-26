@@ -15,6 +15,11 @@ namespace FishMMO.Shared
 	/// placement so a new player's first games move them quickly to where they belong, then settles.
 	/// </para>
 	/// <para>
+	/// Two ratings run on these rules: the lifetime PvP Rank attribute, moved by every arena match in any format, and
+	/// the season rating, moved only by ranked formats and started over each season. Both start at
+	/// <see cref="DefaultRating"/>.
+	/// </para>
+	/// <para>
 	/// The matchmaking band widens with wait time: a high rating alone in the queue would otherwise
 	/// never play. The band is measured from the longest-waiting candidate, so it is their patience
 	/// that opens the field.
@@ -67,6 +72,15 @@ namespace FishMMO.Shared
 				delta = -1;
 			}
 			return delta;
+		}
+
+		/// <summary>
+		/// What one result adds to a stored rating, after the floor: <see cref="Delta"/> applied and clamped, as a change.
+		/// </summary>
+		/// <remarks>The PvP Rank attribute is changed by adding to it, so the change must already respect the floor.</remarks>
+		public static int Change(int rating, int opponentAverage, double score, int k)
+		{
+			return Apply(rating, Delta(rating, opponentAverage, score, k)) - rating;
 		}
 
 		/// <summary>Applies a change and clamps to the floor.</summary>

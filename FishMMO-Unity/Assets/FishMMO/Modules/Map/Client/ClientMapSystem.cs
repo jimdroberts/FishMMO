@@ -210,6 +210,8 @@ namespace FishMMO.Client
 			Character = character;
 			Filter.Reset();
 			MapRelationshipTracker.Track(character);
+			// The guide is this character's choice, and its live target may be a marker from the last world.
+			MapGuide.Clear();
 
 			// The server's fog and scene list belong to the account of the character that was showing.
 			serverFog.Clear();
@@ -241,6 +243,7 @@ namespace FishMMO.Client
 			if (!string.Equals(currentScene, SceneName, StringComparison.Ordinal))
 			{
 				LoadScene(currentScene);
+				MapGuide.OnSceneChanged(currentScene);
 			}
 
 			double now = Time.unscaledTimeAsDouble;
@@ -739,6 +742,20 @@ namespace FishMMO.Client
 				{
 					Notes.RemoveAt(i);
 					SaveNotes();
+					MapGuide.OnNotesChanged(NoteExists);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/// <summary>Whether a note of the current scene still exists.</summary>
+		private static bool NoteExists(long noteID)
+		{
+			for (int i = 0; i < Notes.Count; ++i)
+			{
+				if (Notes[i].ID == noteID)
+				{
 					return true;
 				}
 			}
@@ -881,6 +898,7 @@ namespace FishMMO.Client
 			visitedScenes.Clear();
 			RequestFog = null;
 			Filter.Reset();
+			MapGuide.Clear();
 			MapRelationshipTracker.Untrack();
 			MapMarkerRegistry.Clear();
 			Renderer.Dispose();

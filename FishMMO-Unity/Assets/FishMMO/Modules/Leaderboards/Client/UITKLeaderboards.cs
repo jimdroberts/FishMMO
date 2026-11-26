@@ -406,6 +406,10 @@ namespace FishMMO.Client
 				{
 					AddEmpty($"No one has finished {board.MinimumGames} ranked {(board.MinimumGames == 1 ? "game" : "games")} this season yet.");
 				}
+				else if (board.Source == LeaderboardSource.DuelRating)
+				{
+					AddEmpty($"No one has finished {board.MinimumGames} {(board.MinimumGames == 1 ? "duel" : "duels")} yet.");
+				}
 				else
 				{
 					AddEmpty("No one is on this board yet.");
@@ -479,7 +483,9 @@ namespace FishMMO.Client
 			standingBox.RemoveFromClassList(STANDING_RANKED_CLASS);
 			standingLabel.text = board.Source == LeaderboardSource.ArenaSeasonRating
 				? $"You are not ranked yet. Players appear after {board.MinimumGames} ranked {(board.MinimumGames == 1 ? "game" : "games")} this season."
-				: "You are not on this board yet.";
+				: board.Source == LeaderboardSource.DuelRating
+					? $"You are not ranked yet. Players appear after {board.MinimumGames} {(board.MinimumGames == 1 ? "duel" : "duels")}."
+					: "You are not on this board yet.";
 		}
 
 		private void RenderPager()

@@ -43,8 +43,6 @@ MonoBehaviour:
   TeamSpawnPrefixes:
   - Team1
   - Team2
-  WinRankPoints: 10
-  LossRankPoints: 5
   CountdownCues:
   - SecondsRemaining: 3
     Triggers: []

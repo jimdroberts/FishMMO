@@ -28,6 +28,7 @@
             <div id="unity-progress-bar-empty">
               <div id="unity-progress-bar-full"></div>
             </div>
+            <div id="fishmmo-loading-text"></div>
           </div>
         </div>
       </div>
@@ -165,13 +166,32 @@
       script.onload = () => {
         const loadingContainer = document.querySelector("#unity-loading-container");
         const progressBarFull = document.querySelector("#unity-progress-bar-full");
+        const loadingText = document.querySelector("#fishmmo-loading-text");
+
+        // The loader stays up after the engine has started: the game's own loading screen is in its first scene, whose
+        // bundles download first (a minute on a slower line). The game reports that download here and says when its own
+        // screen has taken over (BootProgress.jslib, WebBootProgress.cs).
+        let bootDone = false;
+        window.fishMMOBootProgress = (fraction, text) => {
+          if (bootDone) return;
+          loadingContainer.style.display = "block";
+          progressBarFull.style.width = 100 * Math.max(0, Math.min(1, fraction)) + "%";
+          loadingText.textContent = text;
+        };
+        window.fishMMOBootDone = () => {
+          bootDone = true;
+          loadingContainer.style.display = "none";
+        };
 
         createUnityInstance(canvas, config, (progress) => {
+          if (bootDone) return;
+          loadingContainer.style.display = "block";
           if (progress < 1) {
-            loadingContainer.style.display = "block";
             progressBarFull.style.width = 100 * progress + "%";
+            loadingText.textContent = "Downloading the game";
           } else {
-            loadingContainer.style.display = "none";
+            progressBarFull.style.width = "0%";
+            loadingText.textContent = "Starting";
           }
         }).then((unityInstance) => {
 #if SHOW_DIAGNOSTICS
@@ -221,6 +241,7 @@
                 };
 #endif
               }).catch((message) => {
+                window.fishMMOBootDone();
                 alert(message);
               });
             };

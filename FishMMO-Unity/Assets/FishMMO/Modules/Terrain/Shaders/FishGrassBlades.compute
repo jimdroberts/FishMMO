@@ -486,7 +486,7 @@ float GrassHeightAt(float2 local)
 Texture2D<float4> _GrassCover;               // WeatherCoverMap: r snow 0..1
 Texture2D<float> _GrassDeepSnow;             // its deep snow, 0..1 of _GrassSnow.z
 Texture2D<float4> _GrassOcclusion;           // the sky occlusion map: heights in 16 bits across r and g
-float4 _GrassSnow;                           // x 1 when the cover map is valid, y the ground's lift at full cover (m; 0 where this tier does not lift it), z metres deep snow's 1 stands for, w unused
+float4 _GrassSnow;                           // x 1 when the cover map is valid, y the ground's lift at full cover (m; 0 where this tier does not lift it), z metres deep snow's 1 stands for, w the snow depth (m) under which no blade grows (0 off)
 float4 _GrassCoverRect;                      // xy the cover map's corner (world x/z), zw its size (m)
 float4 _GrassOcclusionRect;                  // xy the occlusion map's corner, zw its size
 float4 _GrassOcclusionRange;                 // x lowest height, y height range, z 1 when valid, w metres per texel
@@ -576,8 +576,10 @@ float GrassExposure(float3 root)
 
 /* Whether snow hides the whole blade, as the drawing would bury it (FishGrassBlades.hlsl GrassBuild, FishSurface.hlsl
  * FishSnowLiftMetres), never more: shrunk by the cover it stands in to almost nothing, or — on the tier that lifts the
- * ground under snow — standing wholly under the snow's surface. `height` is the most the blade is drawn at (the vertex
- * shader only shortens it further). Footprints are not asked: a print in deep snow does not bare the grass under it. */
+ * ground under snow — standing wholly under the snow's surface — or rooted under at least _GrassSnow.w of snow on any tier
+ * (GrassBladeSettings.SnowCullDepth): a drift's worth of tips poking out reads as snow, not as grass. `height` is the most
+ * the blade is drawn at (the vertex shader only shortens it further). Footprints are not asked: a print in deep snow does
+ * not bare the grass under it. */
 bool GrassBuried(float3 root, float2 local, int type, float height)
 {
     // One exit (see GrassSnowAt).
@@ -596,7 +598,9 @@ bool GrassBuried(float3 root, float2 local, int type, float height)
         {
             float drawn = height * max(0.02, bury) + 0.02;
             float lift = (saturate(snow) * _GrassSnow.y + deep) * exposure;
-            [branch] if (_GrassSnow.y > 0.0 && lift > drawn)
+            bool overTop = _GrassSnow.y > 0.0 && lift > drawn;
+            bool pastDepth = _GrassSnow.w > 0.0 && lift >= _GrassSnow.w;
+            [branch] if (overTop || pastDepth)
             {
                 // The snow sheds off a slope (FishCoverFacing): the ground's own slope, from the heights a metre either way.
                 float hL = GrassHeightAt(local - float2(1.0, 0.0));
@@ -605,7 +609,8 @@ bool GrassBuried(float3 root, float2 local, int type, float height)
                 float hU = GrassHeightAt(local + float2(0.0, 1.0));
                 float3 normal = normalize(float3(hL - hR, 2.0, hD - hU));
                 float facing = saturate((normal.y - 0.5) / 0.5);
-                buried = lift * facing * facing > drawn;
+                float surface = lift * facing * facing;
+                buried = (overTop && surface > drawn) || (pastDepth && surface >= _GrassSnow.w);
             }
         }
     }

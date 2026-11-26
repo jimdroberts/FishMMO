@@ -29,6 +29,14 @@ MonoBehaviour:
     - SceneServer_Systems
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 025fdffd21614b1d9c64e8d0cfa4286a
+    m_Address: DuelSystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 08e6cbd6774b0d6bf9a41c088868ab86
     m_Address: Wildlife Flee State
     m_ReadOnly: 0

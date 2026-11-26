@@ -12,9 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd705ccd005d95b43b3fee5021a4de1d, type: 3}
   m_Name: PvP Rank
   m_EditorClassIdentifier: 
-  Description: Arena rank. Rises with wins and falls with losses, never below zero.
-  InitialValue: 0
-  MinValue: 0
+  Description: Arena rating (Elo), moved by every arena match. Starts at 1500; beating a stronger team gains more, losing to a weaker one costs more. Never below 100.
+  SheetCategory: Arena
+  SheetLabel: Rating
+  InitialValue: 1500
+  MinValue: 100
   MaxValue: 2147483647
   IsPercentage: 0
   IsResourceAttribute: 0

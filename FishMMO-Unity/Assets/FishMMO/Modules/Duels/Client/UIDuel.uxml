@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="/Assets/FishMMO/Modules/Duels/Client/UIDuel.uss" />
+    <!-- The strip, top centre: the opponent, the clock, the edge warning, Yield. Shown only during a duel. -->
+    <ui:VisualElement name="duel-root" class="fish-panel duel-root duel-hidden" picking-mode="Ignore">
+        <ui:Label name="duel-title" text="" class="fish-panel__title duel-title" />
+        <ui:Label name="duel-clock" text="" class="fish-label fish-label--numeric duel-clock" />
+        <ui:Label name="duel-hint" text="" class="fish-hint duel-hint" />
+        <ui:Button name="duel-yield" text="Yield" class="fish-button duel-yield" />
+    </ui:VisualElement>
+
+    <!-- The countdown, then "Fight!", large in the middle of the screen. -->
+    <ui:Label name="duel-countdown" text="" class="duel-countdown duel-hidden" picking-mode="Ignore" />
+
+    <!-- The result. -->
+    <ui:Label name="duel-banner" text="" class="duel-banner duel-hidden" picking-mode="Ignore" />
+</ui:UXML>

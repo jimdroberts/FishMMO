@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d805fb8bcfd4ec5ac4e0408c8fc6149, type: 3}
+  m_Name: Duel Rating Leaderboard
+  m_EditorClassIdentifier: FishMMO.Shared::FishMMO.Shared.LeaderboardTemplate
+  DisplayName: Duel Rating
+  Description: Open-world duel ratings. A player appears once they have finished five duels.
+  Category: 0
+  SortOrder: 30
+  Source: 4
+  AttributeTemplate: {fileID: 0}
+  AchievementTemplate: {fileID: 0}
+  MinimumGames: 5
+  ScoreLabel: Rating

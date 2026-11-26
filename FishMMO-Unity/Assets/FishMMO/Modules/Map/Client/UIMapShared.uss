@@ -199,6 +199,51 @@
 }
 
 /*
+    The marker chosen on the world map to be guided to (MapGuide). A ring in the guide's colour
+    rather than a new fill, so the marker keeps the colour that says what it is.
+*/
+.map-marker--guided .map-marker__icon {
+    border-color: var(--map-guide);
+    border-width: 2px;
+    scale: 1.35 1.35;
+}
+
+.map-marker--guided .map-marker__label {
+    color: var(--map-guide);
+    -unity-font-style: bold;
+}
+
+/*
+    The guide overlay (UITKMapView.LayoutGuide), drawn by the minimap: a ring on the target while it
+    is in view, an arrow on the rim pointing at it while it is not, and the distance beside either.
+    Each part is centred on the point C# gives it.
+*/
+.map-guide__ring {
+    width: 22px;
+    height: 22px;
+    border-radius: 11px;
+    border-width: 2px;
+    border-color: var(--map-guide);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.map-guide__arrow {
+    width: 14px;
+    height: 16px;
+    color: var(--map-guide);
+}
+
+.map-guide__distance {
+    margin: 0;
+    padding: 0;
+    font-size: 10px;
+    -unity-font-style: bold;
+    color: var(--map-guide);
+    text-shadow: 1px 1px 2px var(--shadow-text-hard);
+    white-space: nowrap;
+}
+
+/*
     A dungeon entrance. Squared like the other places on the map rather than round like the things
     in it, and ringed, because a portal reads as a threshold rather than as a dot. This is the
     fallback appearance: an entrance whose DungeonTemplate carries artwork draws that sprite

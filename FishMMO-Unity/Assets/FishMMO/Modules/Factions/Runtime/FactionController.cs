@@ -1535,6 +1535,13 @@ namespace FishMMO.Shared
 				return arenaLevel;
 			}
 
+			/* Then any relation that decides an alliance outright — a duel makes its two sides enemies while it is
+			 * fought, partymates or not — so targeting agrees with who the harm rule lets them hit. */
+			if (HarmRule.TryResolveAlliance(Character, otherFactionController.Character, out FactionAllianceLevel relationLevel))
+			{
+				return relationLevel;
+			}
+
 			/* A pet answers as its owner (HarmRule.Principal), as it does for who may harm whom.
 			 * A pet and its owner share no party or guild of their own, so they used to read as
 			 * neutral — or as enemies whenever the owner's aggression was on — and an ally-only
@@ -1640,6 +1647,11 @@ namespace FishMMO.Shared
 			if (ArenaTeamRegistry.TryResolveAlliance(Character, otherFactionController.Character, out FactionAllianceLevel arenaLevel))
 			{
 				return arenaLevel;
+			}
+			// As are a duel's sides while it is fought (see ResolveAllianceLevel).
+			if (HarmRule.TryResolveAlliance(Character, otherFactionController.Character, out FactionAllianceLevel relationLevel))
+			{
+				return relationLevel;
 			}
 			// A player whose aggression is on may be struck by anyone outside their party and guild (HarmRule), so
 			// everyone but those companions sees them as hostile.

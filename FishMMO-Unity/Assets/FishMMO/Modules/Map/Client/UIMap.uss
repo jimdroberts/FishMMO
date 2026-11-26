@@ -244,6 +244,36 @@
 
 
 /* ═══════════════════════════════════════════════════════════
+   GUIDE
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hidden until something is chosen; UITKMap.RefreshGuidePanel shows it inline. */
+.map-guide-section {
+    display: none;
+}
+
+.map-guide__name {
+    font-size: 12px;
+    color: var(--map-guide);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-guide__status {
+    font-size: 10px;
+    white-space: normal;
+    margin-top: 2px;
+    margin-bottom: 6px;
+}
+
+.map-guide__clear {
+    height: 22px;
+    font-size: 10px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    WAYPOINT
    ═══════════════════════════════════════════════════════════ */
 

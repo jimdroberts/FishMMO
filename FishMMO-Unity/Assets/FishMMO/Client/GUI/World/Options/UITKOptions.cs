@@ -184,6 +184,10 @@ namespace FishMMO.Client
 		private const string CHAT_TIMESTAMP_FORMAT_NAME = "chat-timestamp-format-dropdown";
 		private const string CHAT_CHANNEL_TAGS_NAME = "chat-channel-tags-toggle";
 		private const string CHAT_GROUP_NAME = "chat-group-toggle";
+		private const string MAP_WORLD_NPC_NAMES_NAME = "map-world-npc-names-toggle";
+		private const string MAP_WORLD_NPC_TITLES_NAME = "map-world-npc-titles-toggle";
+		private const string MAP_MINIMAP_NPC_NAMES_NAME = "map-minimap-npc-names-toggle";
+		private const string MAP_MINIMAP_NPC_TITLES_NAME = "map-minimap-npc-titles-toggle";
 		private const string NETSTATS_ENABLED_NAME = "netstats-enabled-toggle";
 		private const string NETSTATS_GRAPH_NAME = "netstats-graph-toggle";
 		private const string HOTBAR_SECTION_NAME = "options-hotbar-section";
@@ -551,6 +555,10 @@ namespace FishMMO.Client
 		private DropdownField chatTimestampFormatDropdown;
 		private Toggle chatChannelTagsToggle;
 		private Toggle chatGroupToggle;
+		private Toggle mapWorldNpcNamesToggle;
+		private Toggle mapWorldNpcTitlesToggle;
+		private Toggle mapMinimapNpcNamesToggle;
+		private Toggle mapMinimapNpcTitlesToggle;
 		private DropdownField colorVisionDropdown;
 		private Toggle colorFilterToggle;
 		private Slider colorFilterStrengthSlider;
@@ -766,6 +774,10 @@ namespace FishMMO.Client
 			chatTimestampFormatDropdown = Root.Q<DropdownField>(CHAT_TIMESTAMP_FORMAT_NAME);
 			chatChannelTagsToggle = Root.Q<Toggle>(CHAT_CHANNEL_TAGS_NAME);
 			chatGroupToggle = Root.Q<Toggle>(CHAT_GROUP_NAME);
+			mapWorldNpcNamesToggle = Root.Q<Toggle>(MAP_WORLD_NPC_NAMES_NAME);
+			mapWorldNpcTitlesToggle = Root.Q<Toggle>(MAP_WORLD_NPC_TITLES_NAME);
+			mapMinimapNpcNamesToggle = Root.Q<Toggle>(MAP_MINIMAP_NPC_NAMES_NAME);
+			mapMinimapNpcTitlesToggle = Root.Q<Toggle>(MAP_MINIMAP_NPC_TITLES_NAME);
 			netStatsEnabledToggle = Root.Q<Toggle>(NETSTATS_ENABLED_NAME);
 			netStatsGraphToggle = Root.Q<Toggle>(NETSTATS_GRAPH_NAME);
 			hotbarSection = Root.Q<VisualElement>(HOTBAR_SECTION_NAME);
@@ -794,6 +806,7 @@ namespace FishMMO.Client
 			InitializeNameplateSettings();
 			InitializeInterfaceSettings();
 			InitializeChatSettings();
+			InitializeMapLabelSettings();
 			InitializeColorVision();
 			InitializeNetworkStatsSettings();
 			InitializeHotbarSettings();
@@ -2825,6 +2838,29 @@ namespace FishMMO.Client
 				chatGroupToggle.RegisterValueChangedCallback((evt) =>
 					ClientChatSettings.SetGroupMessages(evt.newValue));
 			}
+		}
+
+		/// <summary>
+		/// Binds the MAP rows: whether each map labels NPCs with their names and their titles. The maps read
+		/// the settings on every marker collection, so a change shows within a quarter of a second.
+		/// </summary>
+		private void InitializeMapLabelSettings()
+		{
+			BindSettingToggle(mapWorldNpcNamesToggle, ClientSettings.WorldMapNpcNamesKey, ClientSettings.WorldMapNpcNames);
+			BindSettingToggle(mapWorldNpcTitlesToggle, ClientSettings.WorldMapNpcTitlesKey, ClientSettings.WorldMapNpcTitles);
+			BindSettingToggle(mapMinimapNpcNamesToggle, ClientSettings.MinimapNpcNamesKey, ClientSettings.MinimapNpcNames);
+			BindSettingToggle(mapMinimapNpcTitlesToggle, ClientSettings.MinimapNpcTitlesKey, ClientSettings.MinimapNpcTitles);
+		}
+
+		/// <summary>Shows a boolean setting on a toggle and writes it back when the toggle changes.</summary>
+		private static void BindSettingToggle(Toggle toggle, string key, bool value)
+		{
+			if (toggle == null)
+			{
+				return;
+			}
+			toggle.SetValueWithoutNotify(value);
+			toggle.RegisterValueChangedCallback((evt) => ClientSettings.Set(key, evt.newValue));
 		}
 
 		// ── Colour vision ───────────────────────────────────────────

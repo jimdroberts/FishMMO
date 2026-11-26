@@ -40,6 +40,28 @@ Assets/FishMMO/Modules/Matchmaking/
 | `Accomplishments.Record` | A dungeon entrance's achievement is credited on entering; the group finder credits its entry's. |
 | `[assembly: GameModule]` | `MatchmakingModule` ("matchmaking"). |
 
+## Ratings and seasons
+
+Two Elo ratings, both on `ArenaRating`'s rules (start 1500, floor 100, the arena template's `RatingK`, and
+`PlacementK` for the first `PlacementGames`). Team-wise: each player is rated against the average rating of the other
+teams, so team-mates move together.
+
+| Rating | Moved by | Stored | Reset |
+|---|---|---|---|
+| **PvP Rank** | Every arena match, any format. A forfeit counts as a loss, refunded on a return inside the grace. | The `PvP Rank` character attribute (initial value 1500, minimum 100); `PvP Matches` counts the games | Never |
+| **Season rating** | Ranked formats only | `arena_rating`, keyed by season | Each season |
+
+Opponents are averaged from the PvP Rank each seat arrived with, so the order seats are written in changes nothing.
+Unranked team balancing reads PvP Rank too (a character with no saved row counts as 1500).
+
+**Seasons** are rows in `arena_season`, numbered from 1 and never deleted, so the count and every past season's ratings
+survive restarts and deploys. `/admin season` shows the active season and the ones before it; `/admin season next <n>
+[name]` ends season *n* and begins *n + 1* in one transaction (`IArenaRatingService.StartNextSeasonAsync`). Naming the
+season being ended makes the command safe to send twice, and lets two administrators race without skipping a season.
+Every scene server reads the active season from the database, so all of them follow without a message. A ranked match
+already under way finishes in the season it was formed in; boards show the new season within their cache lifetime.
+Duel ratings (Duels module) are not seasonal.
+
 ## What stays in the core
 
 The world and its content: dungeon and arena templates, dungeon difficulties (instancing uses them), the dungeon

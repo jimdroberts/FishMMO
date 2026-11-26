@@ -149,15 +149,19 @@ namespace FishMMO.UnitTests
 			Assert.AreEqual(3, placed[2].Place);
 		}
 
-		// ── Rank ────────────────────────────────────────────────────────────
+		// ── PvP Rank ────────────────────────────────────────────────────────
 
 		[Test]
-		public void Rank_WinLossDraw_NeverBelowZero()
+		public void PvPRank_Change_IsElo_AndAddsOnlyWhatTheFloorAllows()
 		{
-			Assert.AreEqual(10, ArenaRules.ResolveRankDelta(0, 0, 0, 10, 5));
-			Assert.AreEqual(-5, ArenaRules.ResolveRankDelta(40, 1, 0, 10, 5));
-			Assert.AreEqual(-3, ArenaRules.ResolveRankDelta(3, 1, 0, 10, 5), "a rank of 3 loses only 3");
-			Assert.AreEqual(0, ArenaRules.ResolveRankDelta(40, 1, -1, 10, 5), "a draw moves nothing");
+			Assert.AreEqual(16, ArenaRating.Change(1500, 1500, 1.0, 32), "an even win is half the K-factor");
+			Assert.AreEqual(-16, ArenaRating.Change(1500, 1500, 0.0, 32));
+			Assert.AreEqual(0, ArenaRating.Change(1500, 1500, 0.5, 32), "an even draw moves nothing");
+			Assert.AreEqual(8, ArenaRating.Change(1400, 1600, 0.5, 32), "a draw with a stronger team gains");
+			Assert.Greater(ArenaRating.Change(1200, 1800, 1.0, 32), ArenaRating.Change(1800, 1200, 1.0, 32), "an upset pays more");
+			Assert.AreEqual(0, ArenaRating.Change(ArenaRating.MinimumRating, 1500, 0.0, 32), "at the floor a loss costs nothing more");
+			// An even loss at K 64 is -32; ten above the floor, it stops at the floor.
+			Assert.AreEqual(-10, ArenaRating.Change(ArenaRating.MinimumRating + 10, ArenaRating.MinimumRating + 10, 0.0, 64), "near the floor a loss stops at it");
 		}
 
 		// ── Capture the Flag ────────────────────────────────────────────────

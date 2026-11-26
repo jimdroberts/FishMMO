@@ -590,6 +590,8 @@ namespace FishMMO.Shared
 				root.AddComponent(desired);
 			}
 
+			ApplyMapMarker(root, recipe);
+
 			if (recipe.Interaction == NPCInteraction.Merchant)
 			{
 				// The Commerce module's component, written through its serialized field: the NPCs module does not reference it.
@@ -603,6 +605,58 @@ namespace FishMMO.Shared
 						serialized.ApplyModifiedPropertiesWithoutUndo();
 					}
 				}
+			}
+		}
+
+		/// <summary>
+		/// Makes the prefab's map marker describe this NPC rather than the one it was copied from.
+		/// </summary>
+		/// <param name="root">The prefab contents root.</param>
+		/// <param name="recipe">The recipe.</param>
+		/// <remarks>
+		/// The copy keeps the base's marker, role and label included, so every townsperson cloned from a
+		/// merchant was drawn as a vendor labelled "Goods" and every simulated player cloned from the banker as
+		/// a service labelled "Bank". The label is cleared because the map labels an NPC from itself (its
+		/// name and its interactable's title); the type follows the role, and an NPC without one loses a
+		/// role type it inherited.
+		/// </remarks>
+		private static void ApplyMapMarker(GameObject root, NPCRecipe recipe)
+		{
+			MapMarker marker = root.GetComponent<MapMarker>();
+			if (marker == null)
+			{
+				return;
+			}
+
+			marker.Label = string.Empty;
+			marker.Type = MarkerTypeFor(recipe.Interaction, recipe.IsAggressive, marker.Type);
+		}
+
+		/// <summary>
+		/// The map marker type for an NPC's role.
+		/// </summary>
+		/// <param name="interaction">The role.</param>
+		/// <param name="isAggressive">Whether the NPC attacks on sight.</param>
+		/// <param name="current">The type the prefab carries now.</param>
+		/// <returns>The type to draw it as.</returns>
+		public static MapMarkerType MarkerTypeFor(NPCInteraction interaction, bool isAggressive, MapMarkerType current)
+		{
+			switch (interaction)
+			{
+				case NPCInteraction.Merchant: return MapMarkerType.Vendor;
+				case NPCInteraction.Banker: return MapMarkerType.Service;
+				case NPCInteraction.AbilityCrafter: return MapMarkerType.Trainer;
+			}
+
+			switch (current)
+			{
+				case MapMarkerType.Vendor:
+				case MapMarkerType.Service:
+				case MapMarkerType.Trainer:
+				case MapMarkerType.QuestGiver:
+					return isAggressive ? MapMarkerType.Enemy : MapMarkerType.NPC;
+				default:
+					return current;
 			}
 		}
 

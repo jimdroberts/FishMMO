@@ -499,7 +499,7 @@ MonoBehaviour:
   Visibility: 0
   Icon: {fileID: 0}
   Tint: {r: 1, g: 1, b: 1, a: 1}
-  Label: Bank
+  Label: 
   IconSize: 14
   ClampToEdge: 0
   Priority: 0

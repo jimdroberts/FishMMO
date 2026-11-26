@@ -891,6 +891,13 @@ MonoBehaviour:
     - ClientWorldGUI_Panels
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 808df143cb6a4b00b80a35221fa4762a
+    m_Address: UIDuel
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 812c5019d0b5936448907684d6f595b6
     m_Address: Forked Bolt
     m_ReadOnly: 0

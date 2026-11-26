@@ -80,6 +80,8 @@ namespace FishMMO.Shared
 		private static Dictionary<string, AddressableSceneLoadData> sceneOperationQueue = new Dictionary<string, AddressableSceneLoadData>();
 		/// <summary>Scene loads in flight, keyed by requested scene name.</summary>
 		private static Dictionary<string, AddressableSceneLoadData> currentSceneOperations = new Dictionary<string, AddressableSceneLoadData>();
+		/// <summary>The scene load the drain is waiting on, for <see cref="TryGetSceneDownload"/>; default when none.</summary>
+		private static AsyncOperationHandle<SceneInstance> sceneInFlight;
 
 		/// <summary>
 		/// Items enqueued since the last <see cref="BeginProcessQueue"/>, awaiting a batch
@@ -164,6 +166,7 @@ namespace FishMMO.Shared
 			currentOperations.Clear();
 			sceneOperationQueue.Clear();
 			currentSceneOperations.Clear();
+			sceneInFlight = default;
 
 			stagedAssetKeys.Clear();
 			stagedSceneNames.Clear();
@@ -268,6 +271,25 @@ namespace FishMMO.Shared
 		/// "nothing is happening" until the next item happens to finish.
 		/// </remarks>
 		public static bool IsLoading => isProcessingQueue;
+
+		/// <summary>
+		/// The download of the scene load in flight (the scene's bundle and every bundle it depends on): false when no scene
+		/// is loading. <see cref="DownloadStatus.TotalBytes"/> is 0 when everything it needs is already cached.
+		/// </summary>
+		/// <remarks>
+		/// For the web boot, where the first scene's dependencies are a large download with nothing on screen yet
+		/// (<see cref="WebBootProgress"/>).
+		/// </remarks>
+		public static bool TryGetSceneDownload(out DownloadStatus status)
+		{
+			if (sceneInFlight.IsValid() && !sceneInFlight.IsDone)
+			{
+				status = sceneInFlight.GetDownloadStatus();
+				return true;
+			}
+			status = default;
+			return false;
+		}
 
 		/// <summary>
 		/// Raises the run's total to at least the currently known item count. Never lowers
@@ -746,7 +768,9 @@ namespace FishMMO.Shared
 
 					currentSceneOperations[sceneName] = sceneLoadData;
 					AttachSceneCompletion(sceneName, sceneLoadData, operation);
+					sceneInFlight = operation;
 					yield return operation;
+					sceneInFlight = default;
 					continue;
 				}
 
@@ -1439,6 +1463,7 @@ namespace FishMMO.Shared
 			currentOperations.Clear();
 			sceneOperationQueue.Clear();
 			currentSceneOperations.Clear();
+			sceneInFlight = default;
 			stagedAssetKeys.Clear();
 			stagedSceneNames.Clear();
 

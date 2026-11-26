@@ -518,7 +518,51 @@ namespace FishMMO.Shared
 			#endregion
 #endif
 			AddressableLoadProcessor.EnqueueLoad(initialScenes);
+#if UNITY_WEBGL && !UNITY_EDITOR && !UNITY_SERVER
+			StartCoroutine(ReportBootDownload());
+#endif
 		}
+
+		/// <summary>
+		/// The first scene's download is the last thing the page's own loader shows (<see cref="WebBootProgress"/>): the
+		/// game's loading screen is in that scene, so the page hands over to it here.
+		/// </summary>
+		public override void OnCompleteProcessing()
+		{
+			WebBootProgress.Done();
+			base.OnCompleteProcessing();
+		}
+
+#if UNITY_WEBGL && !UNITY_EDITOR && !UNITY_SERVER
+		/// <summary>
+		/// Reports the first scene's download to the page's loader until it lands. The scene's own bundle and its
+		/// dependencies were 160 MB at the time of writing, all fetched before the game can draw anything of its own.
+		/// </summary>
+		private System.Collections.IEnumerator ReportBootDownload()
+		{
+			const float interval = 0.1f;
+			float next = 0f;
+			bool started = false;
+			while (true)
+			{
+				if (AddressableLoadProcessor.TryGetSceneDownload(out UnityEngine.ResourceManagement.AsyncOperations.DownloadStatus status))
+				{
+					started = true;
+					if (Time.unscaledTime >= next)
+					{
+						next = Time.unscaledTime + interval;
+						WebBootProgress.Report(status.TotalBytes > 0 ? status.Percent : 1f,
+							WebBootProgress.Describe(status.DownloadedBytes, status.TotalBytes));
+					}
+				}
+				else if (started)
+				{
+					yield break;
+				}
+				yield return null;
+			}
+		}
+#endif
 
 		/// <summary>
 		/// Unity OnDestroy message. Handles shutdown and cleanup when the object is destroyed.

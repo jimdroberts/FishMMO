@@ -93,6 +93,12 @@ namespace FishMMO.Shared
 				triggers.InsertArrayElementAtIndex(0);
 				triggers.GetArrayElementAtIndex(0).objectReferenceValue = trigger;
 				serialized.ApplyModifiedPropertiesWithoutUndo();
+				// The factory drew an NPC with no role as a plain NPC; an auctioneer is a service, as the banker is.
+				MapMarker marker = root.GetComponent<MapMarker>();
+				if (marker != null)
+				{
+					marker.Type = MapMarkerType.Service;
+				}
 				PrefabUtility.SaveAsPrefabAsset(root, AuctioneerPrefabPath);
 			}
 			finally

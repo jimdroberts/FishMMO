@@ -241,6 +241,13 @@ namespace FishMMO.Database.Npgsql.Services
 				case LeaderboardSourceKind.CharacterAttribute:
 					sourceTable = dbContext.GetTableName<CharacterAttributeEntity>();
 					sourceFilter = $"s.template_id = {P(query.TemplateID)} AND s.deleted = FALSE AND s.value > 0";
+					if (query.GamesTemplateID != 0)
+					{
+						// A rating is not a placing until it has been played for: the games attribute must reach the floor.
+						sourceFilter += $@" AND EXISTS (SELECT 1 FROM {sourceTable} g
+							WHERE g.character_id = s.character_id AND g.template_id = {P(query.GamesTemplateID)}
+								AND g.deleted = FALSE AND g.value >= {P(Math.Max(1, query.MinimumGames))})";
+					}
 					score = "s.value::bigint";
 					tieBreak = "s.character_id ASC";
 					break;
@@ -249,6 +256,24 @@ namespace FishMMO.Database.Npgsql.Services
 					sourceFilter = $"s.template_id = {P(query.TemplateID)} AND s.deleted = FALSE AND s.value > 0";
 					score = "s.value";
 					tieBreak = "s.character_id ASC";
+					break;
+				case LeaderboardSourceKind.DuelRating:
+					sourceTable = dbContext.GetTableName<DuelRecordEntity>();
+					sourceFilter = $"(s.wins + s.losses + s.draws) >= {P(Math.Max(1, query.MinimumGames))}";
+					score = "s.rating::bigint";
+					wins = "s.wins";
+					losses = "s.losses";
+					// At equal rating, the one earned in fewer duels leads, as on the arena board.
+					tieBreak = "(s.wins + s.losses + s.draws) ASC, s.character_id ASC";
+					break;
+				case LeaderboardSourceKind.DuelWins:
+					sourceTable = dbContext.GetTableName<DuelRecordEntity>();
+					sourceFilter = "s.wins > 0";
+					score = "s.wins::bigint";
+					wins = "s.wins";
+					losses = "s.losses";
+					// At equal wins, fewer losses lead.
+					tieBreak = "s.losses ASC, s.character_id ASC";
 					break;
 				default:
 					throw new ArgumentOutOfRangeException(nameof(query), query.Source, "Unknown leaderboard source.");
@@ -291,6 +316,8 @@ namespace FishMMO.Database.Npgsql.Services
 			switch (query.Source)
 			{
 				case LeaderboardSourceKind.ArenaSeasonRating:
+				case LeaderboardSourceKind.DuelRating:
+				case LeaderboardSourceKind.DuelWins:
 					refusal = string.Empty;
 					return true;
 				case LeaderboardSourceKind.CharacterAttribute:

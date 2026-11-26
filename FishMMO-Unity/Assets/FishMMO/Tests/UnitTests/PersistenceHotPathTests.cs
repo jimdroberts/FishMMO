@@ -252,6 +252,10 @@ namespace FishMMO.UnitTests
 			int flush = shutdown.IndexOf("ShutdownFlushAllBehaviours();", StringComparison.Ordinal);
 			int teardown = shutdown.IndexOf("DeinitializeAllBehaviours();", StringComparison.Ordinal);
 			LogAssert.IsTrue(flush >= 0 && teardown > flush, "every behaviour flushes before the first one is deinitialized");
+			/* And before the network stops: the stop despawns the characters, releasing their Core entities, and the
+			 * departure capture of state kept there (the hotkey bar) threw "has no Core entity", so those rows were skipped. */
+			int networkStop = shutdown.IndexOf("NetworkWrapper?.StopServer();", StringComparison.Ordinal);
+			LogAssert.IsTrue(networkStop > flush, "the shutdown save runs while the characters are still spawned");
 
 			string behaviour = ReadSource(ServerBehaviourPath);
 			LogAssert.IsTrue(behaviour.Contains("protected virtual void OnShutdownFlush() { }") && behaviour.Contains("public void ShutdownFlush()"),

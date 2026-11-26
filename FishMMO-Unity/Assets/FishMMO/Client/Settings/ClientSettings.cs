@@ -452,6 +452,30 @@ namespace FishMMO.Client
 		/// <summary>Whether the maps show numeric coordinates, subject to the Cartography tier.</summary>
 		public static bool MapShowCoordinates => GetBool(MapShowCoordinatesKey, true);
 
+		/// <summary>Configuration key for whether the world map labels NPCs with their names.</summary>
+		public const string WorldMapNpcNamesKey = "Map.WorldMapNpcNames";
+
+		/// <summary>Configuration key for whether the world map labels NPCs with their titles, such as &lt;Banker&gt;.</summary>
+		public const string WorldMapNpcTitlesKey = "Map.WorldMapNpcTitles";
+
+		/// <summary>Configuration key for whether the minimap labels NPCs with their names.</summary>
+		public const string MinimapNpcNamesKey = "Map.MinimapNpcNames";
+
+		/// <summary>Configuration key for whether the minimap labels NPCs with their titles, such as &lt;Banker&gt;.</summary>
+		public const string MinimapNpcTitlesKey = "Map.MinimapNpcTitles";
+
+		/// <summary>Whether the world map labels NPCs with their names.</summary>
+		public static bool WorldMapNpcNames => GetBool(WorldMapNpcNamesKey, true);
+
+		/// <summary>Whether the world map labels NPCs with their titles.</summary>
+		public static bool WorldMapNpcTitles => GetBool(WorldMapNpcTitlesKey, true);
+
+		/// <summary>Whether the minimap labels NPCs with their names.</summary>
+		public static bool MinimapNpcNames => GetBool(MinimapNpcNamesKey, true);
+
+		/// <summary>Whether the minimap labels NPCs with their titles.</summary>
+		public static bool MinimapNpcTitles => GetBool(MinimapNpcTitlesKey, true);
+
 		// ── Bounds ──────────────────────────────────────────────────
 
 		/// <summary>Smallest interface scale offered, as a multiplier of the authored size.</summary>

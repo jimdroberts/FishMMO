@@ -84,7 +84,8 @@ namespace FishMMO.Client
 				MapMarker mapMarker = marker.AddComponent<MapMarker>();
 				mapMarker.Type = MapMarkerType.HousingPlot;
 				mapMarker.Visibility = MapMarkerVisibility.Always;
-				mapMarker.Label = plot.Price > 0 ? $"Plot for sale ({plot.Price:N0} gold)" : "Plot for sale";
+				// No label: a plot is a green square on the map, and says what it is only when hovered or guided to.
+				mapMarker.HoverText = plot.Price > 0 ? $"Plot for sale ({plot.Price:N0} gold)" : "Plot for sale";
 				mapMarker.ShowOnMinimap = true;
 				mapMarker.ShowOnWorldMap = true;
 				// Joins the registry with its fields set (MapMarker registers in OnEnable).

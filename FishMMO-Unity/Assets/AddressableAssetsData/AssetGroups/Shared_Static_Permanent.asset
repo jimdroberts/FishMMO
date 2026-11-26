@@ -4075,6 +4075,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 3e67e48f2e7147b68d45d24503edbb91
+    m_Address: Duel Rating Leaderboard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3ead72283fb1f03efa06e1c49e570138
     m_Address: HydraLair - Skull Fen (Small)
     m_ReadOnly: 0
@@ -11775,6 +11782,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: be0de551ea0d11395aaf8e2be3f08ace
     m_Address: Silverleaf Patch
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: be40c3a6f2ef4fce8131c299104c5676
+    m_Address: Duel Wins Leaderboard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

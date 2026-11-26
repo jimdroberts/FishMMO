@@ -858,12 +858,16 @@ namespace FishMMO.Server.Implementation
 			// supervisor's grace period on a wedged database.
 			UnitySyncOverAsync.BeginShutdownBudget(shutdownBlockingBudgetMilliseconds);
 
-			// 3. Stop accepting new connections.
+			// 3. Let every behaviour save what reaches into other behaviours while all of them are still up. Before the
+			//    network stops: stopping it despawns every character, which releases its Core entity, and the departure
+			//    capture reads state that lives there (the hotkey bar) — after the stop the save skipped those rows.
+			//    The flush runs synchronously on this thread, so nothing is received or sent between it and the stop.
+			ShutdownFlushAllBehaviours();
+
+			// 4. Stop accepting new connections.
 			NetworkWrapper?.StopServer();
 
-			// 4. Let every behaviour save what reaches into other behaviours while all of them are still up, then
-			//    deinitialize behaviours and data containers.
-			ShutdownFlushAllBehaviours();
+			// 5. Deinitialize behaviours and data containers.
 			DeinitializeAllBehaviours();
 			UnregisterAllBehaviours();
 

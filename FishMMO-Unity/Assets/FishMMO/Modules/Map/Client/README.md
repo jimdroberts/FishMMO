@@ -107,6 +107,43 @@ When an entrance has no artwork yet, or its dungeon has none, the marker falls b
 rule draws in the fallback grey, which is an NPC's. `DungeonEntranceMapMarkerTests.EveryMarkerTypeHasAStyleRule`
 is the guard that keeps a new type from arriving that way.
 
+## What a marker is labelled
+
+- **A fixture** (a dungeon entrance, a portal) draws its authored `MapMarker.Label`. `MapMarker.HoverText`
+  is text shown only on hover — a plot for sale has no label and says "Plot for sale (2,800 gold)" when
+  hovered.
+- **An NPC** is labelled from itself, never from the authored field: its live name (`MapMarker.NpcName`,
+  the GameObject's, which the naming system sets) and, when it has an interactable with a title, that
+  title (`MapMarker.NpcTitle`), as "Bramwell <Banker>". The authored label is ignored on characters
+  because a prefab cloned from another keeps it — every townsperson cloned from a merchant was drawn as
+  "Goods" and every simulated player cloned from the banker as "Bank". `NPCPrefabFactory` now clears it
+  and sets the marker type from the clone's own role.
+- **A player** is never labelled (see the anti-radar story below).
+
+The Options UI tab's MAP rows turn the name and the title off separately for the world map and the
+minimap (`ClientSettings.WorldMapNpcNames`, `WorldMapNpcTitles`, `MinimapNpcNames`, `MinimapNpcTitles`;
+all on by default). The tooltip names an NPC in full whatever the labels show.
+`MapMarkerFilter.ResolveLabel` / `ResolveTooltip` are the single place this is decided.
+
+## Guiding the player to a marker
+
+Clicking any marker on the world map but the player's own chooses it for the guide (`MapGuide`,
+client-side only: nothing is sent). Notes and waypoints keep their own selection too. The side bar's
+GUIDE section names the target, gives the distance and has STOP GUIDING; the chosen marker wears
+`.map-marker--guided` on both maps. The minimap draws the guide overlay (`UITKMapView.GuideTarget`,
+`--map-guide`): a ring on the target while it is in view, an arrow on the rim pointing at it while it is
+not, with the distance across the ground beside either.
+
+- **Fixed targets** (notes, places, waypoints, plots) are positions, cleared on arrival
+  (`MapGuide.ArrivalDistance`, 6 m).
+- **Live targets** (an NPC, anything with a marker component) are followed through
+  `MapMarkerFilter.TryResolve`, the map's own rules and throttle record, so the guide never knows more
+  than the map draws: a detection-tier target is followed at its coarse position, and one the map may no
+  longer show is kept at the last place it was seen ("~120 m"). The marker is let go of when it leaves the
+  registry, because a pooled object returns as a different creature.
+- Only the scene the character stands in: a marker on another scene's map cannot be chosen, and changing
+  scene clears the guide.
+
 ## What stays on the frame
 
 A marker is drawn until the whole of it has left the frame, and it is the rectangle it actually

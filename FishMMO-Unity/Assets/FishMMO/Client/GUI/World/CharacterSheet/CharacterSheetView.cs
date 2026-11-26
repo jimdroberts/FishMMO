@@ -168,6 +168,14 @@ namespace FishMMO.Client
 		/// <summary>Attribute row elements created at runtime.</summary>
 		private readonly List<VisualElement> attributeRowElements = new List<VisualElement>();
 
+		/// <summary>Scratch for a module section's rows while it is filled.</summary>
+		private readonly List<CharacterSheetRow> sectionRows = new List<CharacterSheetRow>();
+
+		/// <summary>Whether this sheet is following <see cref="CharacterSheetSections.Changed"/> (while it has rows built).</summary>
+		private bool sectionsSubscribed;
+		/// <summary>The shared tooltip panel's name.</summary>
+		private const string TOOLTIP_PANEL = "UITooltip";
+
 		/// <summary>
 		/// The attributes this sheet currently holds a subscription on.
 		/// </summary>
@@ -794,6 +802,8 @@ namespace FishMMO.Client
 			var damageAttributes      = new List<CharacterAttribute>();
 			var resistanceAttributes  = new List<CharacterAttribute>();
 			var coreAttributes        = new List<CharacterAttribute>();
+			// Headings a template names itself (SheetCategory), after the four kinds, in the order first met.
+			var namedCategories       = new List<KeyValuePair<string, List<CharacterAttribute>>>();
 
 			foreach (CharacterResourceAttribute ra in attributeController.ResourceAttributes.Values)
 			{
@@ -802,7 +812,12 @@ namespace FishMMO.Client
 
 			foreach (CharacterAttribute attr in attributeController.Attributes.Values)
 			{
-				if (attr.Template.Name.Contains("Regeneration"))
+				string named = attr.Template.SheetCategory;
+				if (!string.IsNullOrWhiteSpace(named))
+				{
+					NamedCategory(namedCategories, named.Trim()).Add(attr);
+				}
+				else if (attr.Template.Name.Contains("Regeneration"))
 				{
 					resourceAttributes.Add(attr);
 				}
@@ -824,11 +839,152 @@ namespace FishMMO.Client
 			AddAttributeCategory("Damage",      damageAttributes);
 			AddAttributeCategory("Resistance",  resistanceAttributes);
 			AddAttributeCategory("Core",        coreAttributes);
+			for (int i = 0; i < namedCategories.Count; ++i)
+			{
+				AddAttributeCategory(namedCategories[i].Key, namedCategories[i].Value);
+			}
 
-			resourceAttributes.Clear();
-			damageAttributes.Clear();
-			resistanceAttributes.Clear();
-			coreAttributes.Clear();
+			AddModuleSections();
+			CharacterSheetSections.Changed -= OnSectionsChanged; // defensive dedup
+			CharacterSheetSections.Changed += OnSectionsChanged;
+			sectionsSubscribed = true;
+		}
+
+		private static List<CharacterAttribute> NamedCategory(List<KeyValuePair<string, List<CharacterAttribute>>> categories, string name)
+		{
+			for (int i = 0; i < categories.Count; ++i)
+			{
+				if (string.Equals(categories[i].Key, name, System.StringComparison.OrdinalIgnoreCase))
+				{
+					return categories[i].Value;
+				}
+			}
+			var list = new List<CharacterAttribute>();
+			categories.Add(new KeyValuePair<string, List<CharacterAttribute>>(name, list));
+			return list;
+		}
+
+		/// <summary>
+		/// The sections modules keep themselves (<see cref="CharacterSheetSections"/>), each under its own heading, after
+		/// the attributes.
+		/// </summary>
+		private void AddModuleSections()
+		{
+			IReadOnlyList<CharacterSheetSections.Section> sections = CharacterSheetSections.All;
+			for (int i = 0; i < sections.Count; ++i)
+			{
+				CharacterSheetSections.Section section = sections[i];
+				sectionRows.Clear();
+				bool shown;
+				try
+				{
+					shown = section.Fill(subject, sectionRows);
+				}
+				catch (System.Exception e)
+				{
+					Debug.LogException(e);
+					continue;
+				}
+				if (!shown || sectionRows.Count == 0)
+				{
+					continue;
+				}
+				AddCategoryHeader(section.Title);
+				for (int r = 0; r < sectionRows.Count; ++r)
+				{
+					CharacterSheetRow line = sectionRows[r];
+					Label valueLabel = AddRow(line.Label, string.IsNullOrEmpty(line.Description) ? null : new RowTooltip(line.Label, line.Description));
+					valueLabel.text = line.Value;
+				}
+			}
+			sectionRows.Clear();
+		}
+
+		/// <summary>A module's numbers moved: rebuild the rows in place, if this sheet is showing them.</summary>
+		private void OnSectionsChanged()
+		{
+			if (subject == null || !options.ShowAttributes || !subject.TryGet(out ICharacterAttributeController attributeController))
+			{
+				return;
+			}
+			DestroyAttributeElements();
+			BuildAttributeRows(attributeController);
+		}
+
+		/// <summary>Adds a heading to the attribute list.</summary>
+		private void AddCategoryHeader(string title)
+		{
+			Label header = new Label(title);
+			header.AddToClassList(CSS_ATTR_CATEGORY);
+			attributeList.Add(header);
+			attributeCategoryElements.Add(header);
+		}
+
+		/// <summary>Adds a name / value row to the attribute list and returns its (empty) value label.</summary>
+		/// <param name="label">The row's name.</param>
+		/// <param name="tooltip">What hovering the row explains, or null.</param>
+		private Label AddRow(string label, ITooltip tooltip)
+		{
+			VisualElement row = new VisualElement();
+			row.AddToClassList(CSS_ATTR_ROW);
+
+			Label nameLabel = new Label(label);
+			nameLabel.AddToClassList(CSS_ATTR_NAME);
+			row.Add(nameLabel);
+
+			Label valueLabel = new Label();
+			valueLabel.AddToClassList(CSS_ATTR_VALUE);
+			row.Add(valueLabel);
+
+			attributeList.Add(row);
+			attributeRowElements.Add(row);
+
+			if (tooltip != null)
+			{
+				// The tooltip closes itself when its owner row is torn down (a rebuild, a new subject).
+				row.RegisterCallback<PointerEnterEvent>(evt => OnRowPointerEnter(row, tooltip));
+				row.RegisterCallback<PointerLeaveEvent>(evt => OnRowPointerLeave(row));
+			}
+			return valueLabel;
+		}
+
+		private void OnRowPointerEnter(VisualElement row, ITooltip tooltip)
+		{
+			if (UIManager.TryGetTK(TOOLTIP_PANEL, out UITKTooltip panel))
+			{
+				panel.Open(tooltip, row);
+			}
+		}
+
+		private void OnRowPointerLeave(VisualElement row)
+		{
+			if (UIManager.TryGetTK(TOOLTIP_PANEL, out UITKTooltip panel))
+			{
+				panel.HideFor(row);
+			}
+		}
+
+		/// <summary>A module section row's tooltip: its label as the title, then the text.</summary>
+		private sealed class RowTooltip : ITooltip
+		{
+			private readonly string title;
+			private readonly string body;
+
+			public RowTooltip(string title, string body)
+			{
+				this.title = title;
+				this.body = body;
+			}
+
+			public UnityEngine.Sprite Icon => null;
+
+			public string Name => title;
+
+			public void BuildTooltip(TooltipContent content)
+			{
+				content.AddTitle(title);
+				content.AddBody(body);
+			}
 		}
 
 		/// <summary>
@@ -842,11 +998,7 @@ namespace FishMMO.Client
 				return;
 			}
 
-			// Category header
-			Label header = new Label(categoryName);
-			header.AddToClassList(CSS_ATTR_CATEGORY);
-			attributeList.Add(header);
-			attributeCategoryElements.Add(header);
+			AddCategoryHeader(categoryName);
 
 			for (int i = 0; i < attributes.Count; ++i)
 			{
@@ -854,15 +1006,7 @@ namespace FishMMO.Client
 
 				attribute.OnAttributeUpdated -= OnAttributeUpdated; // defensive dedup
 
-				VisualElement row = new VisualElement();
-				row.AddToClassList(CSS_ATTR_ROW);
-
-				Label nameLabel = new Label(attribute.Template.Name);
-				nameLabel.AddToClassList(CSS_ATTR_NAME);
-				row.Add(nameLabel);
-
-				Label valueLabel = new Label();
-				valueLabel.AddToClassList(CSS_ATTR_VALUE);
+				Label valueLabel = AddRow(attribute.Template.SheetName, attribute.Template);
 
 				if (attribute.Template.IsResourceAttribute)
 				{
@@ -884,10 +1028,6 @@ namespace FishMMO.Client
 						valueLabel.AddToClassList(CSS_ATTR_PERCENT);
 					}
 				}
-
-				row.Add(valueLabel);
-				attributeList.Add(row);
-				attributeRowElements.Add(row);
 
 				attributeValueLabels[attribute.Template.ID] = valueLabel;
 				attribute.OnAttributeUpdated += OnAttributeUpdated;
@@ -960,6 +1100,12 @@ namespace FishMMO.Client
 		private void DestroyAttributeElements()
 		{
 			UnsubscribeAttributes();
+
+			if (sectionsSubscribed)
+			{
+				CharacterSheetSections.Changed -= OnSectionsChanged;
+				sectionsSubscribed = false;
+			}
 
 			/* RemoveFromHierarchy, not attributeList.Remove. VisualElement.Remove THROWS when the
 			 * element is not its child, and after the document re-clones the UXML (every show, when hiding disabled it) these rows belong to

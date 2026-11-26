@@ -1153,7 +1153,7 @@ namespace FishMMO.Client
 			cmd.SetComputeTextureParam(compute, generateKernel, TypeTableId, typeTable);
 			// The scene's baked paths: blades on a worn way are thinned and trampled short (FishGroundPaths.hlsl).
 			FishMMO.Shared.ScenePathSurfaceBinder.BindCompute(cmd, compute, generateKernel);
-			BindSnow();
+			BindSnow(s);
 			BindFlora();
 			cmd.SetComputeVectorParam(compute, ColourId, new Vector4(colourFootprint, cell, ConstantTerrainColour ? 1f : 0f, 0f));
 			if (gpuGather)
@@ -1492,9 +1492,10 @@ namespace FishMMO.Client
 		/// globals the weather publishes and handed over by name: the cover's snow, the deep snow past it, the sky occlusion
 		/// that keeps snow off what is sheltered. Placeholders and a zero validity where one is not published yet, so
 		/// nothing is cut. The ground's lift at full cover only where this tier lifts it and there is snow in the scene,
-		/// exactly when the terrain shader lifts it (FishSnowLift).
+		/// exactly when the terrain shader lifts it (FishSnowLift). And the depth past which no blade is grown at all
+		/// (<see cref="GrassBladeSettings.SnowCullDepth"/>).
 		/// </summary>
-		private void BindSnow()
+		private void BindSnow(GrassBladeSettings s)
 		{
 			Texture cover = Shader.GetGlobalTexture(FishCoverTexId);
 			Texture deep = Shader.GetGlobalTexture(FishSnowDepthTexId);
@@ -1513,7 +1514,7 @@ namespace FishMMO.Client
 			cmd.SetComputeTextureParam(compute, generateKernel, GrassCoverId, coverValid ? cover : Texture2D.blackTexture);
 			cmd.SetComputeTextureParam(compute, generateKernel, GrassDeepSnowId, deepValid ? deep : Texture2D.blackTexture);
 			cmd.SetComputeTextureParam(compute, generateKernel, GrassOcclusionId, occlusion != null ? occlusion : Texture2D.blackTexture);
-			cmd.SetComputeVectorParam(compute, GrassSnowId, new Vector4(coverValid ? 1f : 0f, blanket, deepValid ? deepParams.x : 0f, 0f));
+			cmd.SetComputeVectorParam(compute, GrassSnowId, new Vector4(coverValid ? 1f : 0f, blanket, deepValid ? deepParams.x : 0f, Mathf.Max(0f, s.SnowCullDepth)));
 			cmd.SetComputeVectorParam(compute, GrassCoverRectId, Shader.GetGlobalVector(FishCoverRectId));
 			cmd.SetComputeVectorParam(compute, GrassOcclusionRectId, Shader.GetGlobalVector(FishOcclusionRectId));
 			cmd.SetComputeVectorParam(compute, GrassOcclusionRangeId, occlusion != null ? Shader.GetGlobalVector(FishOcclusionRangeId) : Vector4.zero);

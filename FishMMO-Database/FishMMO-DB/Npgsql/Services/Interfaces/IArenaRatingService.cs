@@ -27,12 +27,21 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		Task<DatabaseResult<ArenaSeasonData>> GetOrCreateActiveSeasonAsync(CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Ends the active season and starts a new one. Ratings of the old season are kept.
+		/// Ends the active season and starts the next one, numbered one past the highest ever played. Ratings of the old
+		/// season are kept, as is its row.
 		/// </summary>
-		/// <param name="name">Display name of the new season.</param>
+		/// <remarks>
+		/// Guarded by the season the caller believes is active, so a command sent twice (or by two administrators at
+		/// once) moves the count on once: the second finds a different season active and writes nothing.
+		/// </remarks>
+		/// <param name="expectedActiveSeasonId">The season the caller saw active; it must still be.</param>
+		/// <param name="name">Display name of the new season, or null for "Season N".</param>
 		/// <param name="endsUtc">When the new season ends, or null for open-ended.</param>
 		/// <param name="cancellationToken">Cancellation token.</param>
-		Task<DatabaseResult<ArenaSeasonData>> StartNewSeasonAsync(string name, DateTime? endsUtc, CancellationToken cancellationToken = default);
+		Task<DatabaseResult<ArenaSeasonAdvanceData>> StartNextSeasonAsync(long expectedActiveSeasonId, string name = null, DateTime? endsUtc = null, CancellationToken cancellationToken = default);
+
+		/// <summary>The most recent seasons, newest first.</summary>
+		Task<DatabaseResult<IReadOnlyList<ArenaSeasonData>>> FetchSeasonsAsync(int limit, CancellationToken cancellationToken = default);
 
 		/// <summary>Reads the given characters' ratings in a season. Characters with none are absent.</summary>
 		Task<DatabaseResult<IReadOnlyList<ArenaRatingData>>> FetchRatingsAsync(long seasonId, IReadOnlyList<long> characterIds, CancellationToken cancellationToken = default);
