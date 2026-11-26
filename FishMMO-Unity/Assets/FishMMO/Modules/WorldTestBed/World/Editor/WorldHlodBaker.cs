@@ -16,12 +16,13 @@ using Object = UnityEngine.Object;
 namespace FishMMO.TestHarness.World.Editor
 {
 	/// <summary>Lossless last-LOD aggregation. Does not change collision, source assets or shadow geometry.</summary>
+	[UnityEditor.Build.BuildCallbackVersion(2)]
 	public sealed class WorldHlodBaker : IProcessSceneWithReport
 	{
 		public int callbackOrder => 900;
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
-			if (report == null) return;
+			if (!FishMMO.Shared.SceneBuildProcessing.IsBuilding(report)) return; // the Addressables build passes no report
 			foreach (var root in scene.GetRootGameObjects()) foreach (var owner in root.GetComponentsInChildren<WorldHlod>(true))
 			{
 				var data = owner.Data;

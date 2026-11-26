@@ -30,14 +30,14 @@ MonoBehaviour:
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 1
-    Data: {fileID: -6232016343399784091, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
+    Data: {fileID: -981704905778592021, guid: 83b7302d3becafc62b241ba674ce663d, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 2
-    Data: {fileID: -5736866984018715613, guid: 7d05afec765a37c51a30bb8b8c501b38, type: 2}
+    Data: {fileID: -5080155015848122307, guid: 7d05afec765a37c51a30bb8b8c501b38, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}
   - SceneName: Moron 3
-    Data: {fileID: -3999105813872996659, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
+    Data: {fileID: 818747477638286274, guid: 517e0f903b1298e60bc29ac228329c07, type: 2}
     Position: {x: 0, y: 0, z: 0}
     Rotation: {x: 0, y: 0, z: 0, w: 1}

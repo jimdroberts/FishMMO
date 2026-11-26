@@ -76,6 +76,7 @@ MonoBehaviour:
     SprinkleLevel: 2
     BankClearance: 0.03
     BankThinning: 0.25
+    SnowCullDepth: 0.05
     WidenExponent: 1
     MaxWiden: 64
     MaxBladePixels: 2.5

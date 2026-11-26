@@ -1861,8 +1861,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 				validatedSceneLastTimeByClientId[conn.ClientId] = now2;
 
-				if (character == null)
+				/* Destroyed while the client loaded (IsGone, not == null: the interface comparison misses a destroyed
+				 * object). Activating it threw, the exception got the connection kicked, and the teardown then threw on
+				 * the same object before releasing the claim, so the player was locked out until a restart. Take it out
+				 * of waiting and hand the claim back here instead; there is nothing left to put in the world. */
+				if (IsGone(character))
 				{
+					mappingData.WaitingSceneLoadCharacters.Remove(conn);
+					ClearSceneLoadDeadline(conn.ClientId);
+					LogGoneCharacter(conn, character, "waiting for its client to finish loading");
+					if (character != null)
+					{
+						DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
+						TryExtractAndReleaseSession(mappingData, character.ID);
+					}
 					DisconnectWithNotice(conn, DisconnectNoticeReason.CharacterUnavailable);
 					return;
 				}

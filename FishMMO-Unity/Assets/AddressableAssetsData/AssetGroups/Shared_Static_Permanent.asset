@@ -603,6 +603,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 0a4af5b89031ec0f1964ddb3c55f24e7
+    m_Address: a sandstrider raider
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 0a6aa6eb1dcea50a25afa70dbe803610
     m_Address: Teleporter Interact
     m_ReadOnly: 0
@@ -1618,6 +1625,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 185bb4436cba67f1e8463dd9db729ea8
+    m_Address: a hill goblin townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1870b55ac3702fb038b244beac0d86af
     m_Address: Baobab Fruit Node
     m_ReadOnly: 0
@@ -2325,13 +2339,6 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 22ae2a7682fef184fab5e0868f2666d3
-    m_Address: Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 Biome Map.asset
-    m_ReadOnly: 0
-    m_SerializedLabels:
-    - Shared_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 22b34970d75fb846b96044075201dfb8
     m_Address: MerfolkVillage - Drowned Reefhold
     m_ReadOnly: 0
@@ -2852,6 +2859,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 29aee043fff147c6af1e2b0be2c797bb
     m_Address: Forgeborn
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 29e74276197b8a3ed8d5a223700d7a44
+    m_Address: HumanArmorsmith
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3426,6 +3440,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 3243c87cb242a03478e9ee038f7873ed
     m_Address: Elf
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 326b0c85308d2e85d92af5e546ae7a11
+    m_Address: HumanWeaponsmith
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4581,6 +4602,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 470404e06dc2a65f39ec3146d612ebcd
     m_Address: Teresken Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 470bc02e5b5b93029b0f73faa49bfc57
+    m_Address: Armorsmith
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6679,6 +6707,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 6a97aa41c5434b79385d1085ba47c6f3
+    m_Address: a catfolk townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 6a9e274fe547e60b88771898e7da3e52
     m_Address: LadyOfTheLake - Sword Stone
     m_ReadOnly: 0
@@ -7031,6 +7066,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 700e34038b9cb9603b58fda65fcdc95f
     m_Address: SmugglersTunnel - Run (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 701a9fdc1162d892b8a1308994fb8553
+    m_Address: a thistlekin raider
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -8171,6 +8213,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 83b72f35acb605f5bb9aed72126c8711
     m_Address: GoblinWarren - Stockade (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 83eaf96a9706e7c9ead67979cda63052
+    m_Address: an orc guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -9333,6 +9382,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 94cd0019bba4a28c3a709e7bffc57597
     m_Address: MerfolkVillage - Shell Town
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 94ec16fe4fd03e3f2b330240b29dfacc
+    m_Address: a mummy guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10891,6 +10947,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: af0cc84dd96d75f9b9da4423a47d9063
+    m_Address: Weaponsmith
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: af2a67544dc2e63ad9cafce0a21e0106
     m_Address: IcePalace - Frost Court (Medium)
     m_ReadOnly: 0
@@ -11425,6 +11488,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b8141b6a248a6e334a1ec57a308250bd
     m_Address: Mark Event
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b84ced9c50923101f8fa6c58aa0e0742
+    m_Address: a hill goblin guard
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14440,6 +14510,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: ea7066c2cb5cd9d36a7a4a1dd7eb71d4
+    m_Address: a lionfolk townsperson
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: ea7bafa3e830e4a849bd1797d03c96c9
     m_Address: HydraLair - Many Heads (Small)
     m_ReadOnly: 0
@@ -14995,6 +15072,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: f198ef3b01e722c3b9a19732c64e29c2
     m_Address: Searing Beam
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: f19c776f5d1a5ca259812b7beda52a6a
+    m_Address: an orc townsperson
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

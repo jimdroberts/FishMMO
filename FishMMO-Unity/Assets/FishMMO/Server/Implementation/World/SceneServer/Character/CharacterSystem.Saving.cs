@@ -639,6 +639,19 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// <param name="sessionInfo">Session ownership info to release after save, or null if no session is claimed.</param>
 		private void SaveAndDespawnCharacter(NetworkConnection conn, IPlayerCharacter character, CharacterSessionInfo? sessionInfo = null)
 		{
+			/* Nothing can be snapshotted from a destroyed character, and the snapshot below threw on its transform before
+			 * the release was ever queued: the claim stayed held and the player was locked out until a restart. Hand the
+			 * claim back without a save; the last periodic save stands, as after a crash. */
+			if (IsGone(character))
+			{
+				LogGoneCharacter(conn, character, "being saved on its way out");
+				if (character != null && sessionInfo.HasValue)
+				{
+					ReleaseSessionSafely(character.ID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
+				}
+				return;
+			}
+
 			// Combat is transient state — clear it before saving so it never persists to DB.
 			// (BuildCharacterData also masks the flag for defense-in-depth.)
 			character.DisableFlags(CharacterFlags.IsInCombat);
@@ -654,9 +667,26 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			character.DisableFlags(CharacterFlags.IsLoaded);
 
 			// Snapshot character data on the main thread
-			CharacterData charData = BuildCharacterData(character);
+			CharacterData charData = default;
 			var subEntities = new SubEntitySnapshot();
-			AppendDepartureSubEntities(character, subEntities, sessionInfo);
+			bool snapshotTaken = false;
+			try
+			{
+				charData = BuildCharacterData(character);
+				AppendDepartureSubEntities(character, subEntities, sessionInfo);
+				snapshotTaken = true;
+			}
+			catch (Exception ex)
+			{
+				/* Same rule as a destroyed character: a snapshot that cannot be taken must not cost the player their
+				 * claim. Nothing has been queued yet, so releasing now cannot overtake a save. The body is still
+				 * despawned below. */
+				Log.Error("CharacterSystem", $"Could not snapshot character {character.ID} on its way out; releasing its claim without a save. {ex}");
+				if (sessionInfo.HasValue)
+				{
+					ReleaseSessionSafely(character.ID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
+				}
+			}
 
 			/* The item flush is captured here, on the main thread, while the containers are still
 			 * live — and it is AWAITED inside the save-and-release below, before the release.
@@ -669,7 +699,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * the last minute was at the mercy of that race. The lease is passed explicitly for
 			 * the same reason the caller took the token out of SessionTokens first. */
 			Func<Task<ItemWriteOutcome>> itemFlush = null;
-			if (Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
+			if (snapshotTaken && Server.BehaviourRegistry.TryGet(out ICharacterInventorySystem inventorySystem))
 			{
 				itemFlush = inventorySystem.CaptureDespawnFlush(character, sessionInfo);
 			}
@@ -695,7 +725,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			 * runs on the same lane as the writes it supersedes — the ordering requirement
 			 * ICharacterItemService.SaveSnapshotAsync states. Unkeyed, it rode a different lane
 			 * and correctness rested entirely on the journal's sequence claim and the row lock. */
-			if (!EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, subEntities, sessionInfo, itemFlush), charData.ID))
+			if (snapshotTaken && !EnqueueAsyncWork(() => SaveAndReleaseCharacterAsync(charData, subEntities, sessionInfo, itemFlush), charData.ID))
 			{
 				Log.Warning("CharacterSystem", $"SaveAndDespawnCharacter: Failed to enqueue save/release for character {charData.ID} — queued for retry.");
 				/* The item flush AND the sub-entity rows travel with the pending release, not on

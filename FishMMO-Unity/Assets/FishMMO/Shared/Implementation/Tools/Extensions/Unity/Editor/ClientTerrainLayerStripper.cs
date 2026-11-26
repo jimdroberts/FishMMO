@@ -22,8 +22,12 @@ namespace FishMMO.Shared
 	/// nothing ever samples. On a world of 1024² ground families that is tens of megabytes per scene.
 	/// </para>
 	/// <para>
-	/// <b>What the copy keeps.</b> Heights and holes (the collider and the shape). The detail layers
-	/// and prototypes, and the trees. And either:
+	/// <b>What the copy keeps.</b> Heights and holes (the collider and the shape). The detail prototypes
+	/// and resolution, and the trees. The detail layers (each prototype's painted density) where the
+	/// scene's bake does not carry the tile whole (<see cref="KeepDetailsReason"/>): where its grass and
+	/// its scatter are both baked, current, and at the density players draw them, the player draws them
+	/// from the bake and reads which prototypes are painted from it too (TerrainDetailRouting.Painted),
+	/// so the layers were a second copy of what the bake holds. And either:
 	/// </para>
 	/// <list type="bullet">
 	/// <item><b>no alphamaps and no layers</b>, where the scene's bake (<see cref="SceneTerrainBake"/>)
@@ -68,10 +72,13 @@ namespace FishMMO.Shared
 	/// </para>
 	/// <para>
 	/// Client builds only (server builds keep <see cref="ServerTerrainStripper"/>'s copy, which drops
-	/// layers and alphamaps altogether), and only in a build: <c>report</c> is null when a scene is
-	/// processed for play mode.
+	/// layers and alphamaps altogether), and only in a build (<see cref="SceneBuildProcessing.IsBuilding"/>): a player
+	/// build or the Addressables content build, never a scene loading in play mode.
 	/// </para>
 	/// </remarks>
+	// Versioned so the content build's cache of processed scenes is dropped when this changes: an unchanged scene keeps its
+	// cached (unstripped) result otherwise.
+	[UnityEditor.Build.BuildCallbackVersion(3)]
 	public sealed class ClientTerrainLayerStripper : IProcessSceneWithReport
 	{
 		/// <summary>The name suffix that marks a copy as the client's in the build log and the memory profiler.</summary>
@@ -81,11 +88,12 @@ namespace FishMMO.Shared
 
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
-			if (report == null || ClientOnlySceneStripper.IsServerBuild())
+			// Not report == null: the Addressables build, which packs every world scene, passes none (SceneBuildProcessing).
+			if (!SceneBuildProcessing.IsBuilding(report) || ClientOnlySceneStripper.IsServerBuild())
 			{
 				return;
 			}
-			TerrainIndexMapBuildGuard.Validate(scene, report.summary.platform);
+			TerrainIndexMapBuildGuard.Validate(scene, SceneBuildProcessing.Target(report));
 			var notes = new List<string>();
 			int copied = Strip(scene, notes);
 			if (copied > 0)
@@ -118,6 +126,9 @@ namespace FishMMO.Shared
 			var refused = new HashSet<TerrainData>();
 			int stripped = 0, kept = 0;
 			long alphamapBytes = 0, indexBytes = 0;
+			int detailsStripped = 0, detailsKept = 0;
+			long detailBytes = 0;
+			List<float> qualityDensities = QualityDetailDensities();
 			foreach (GameObject root in scene.GetRootGameObjects())
 			{
 				foreach (Terrain terrain in root.GetComponentsInChildren<Terrain>(true))
@@ -157,7 +168,24 @@ namespace FishMMO.Shared
 								indexBytes += (long)stored.Map.Length * sizeof(uint);
 							}
 						}
-						copy = ClientCopy(original, layers, keepAlphamaps: keep);
+						bool keepDetails = true;
+						if (original.detailPrototypes.Length > 0)
+						{
+							TerrainDetailBake.Tile bakedTile = BakedTileOf(holders, original, out TerrainDetailBake tileBake);
+							string detailReason = KeepDetailsReason(tileBake, bakedTile, terrain.detailObjectDensity, qualityDensities);
+							keepDetails = detailReason != null;
+							if (keepDetails)
+							{
+								detailsKept++;
+								Debug.Log($"[Client terrain stripper] '{scene.name}' / '{terrain.name}': detail layers kept: {detailReason}.");
+							}
+							else
+							{
+								detailsStripped++;
+								detailBytes += DetailBytes(original);
+							}
+						}
+						copy = ClientCopy(original, layers, keepAlphamaps: keep, keepDetails: keepDetails);
 						copies.Add(original, copy);
 					}
 					terrain.terrainData = copy;
@@ -171,6 +199,10 @@ namespace FishMMO.Shared
 			notes?.Add(stripped > 0
 				? $"Alphamaps and layers left out of {stripped} tile(s) whose stored index maps match them texel for texel ({alphamapBytes / 1048576.0:0.0} MB of alphamaps for {indexBytes / 1048576.0:0.0} MB of index maps){(kept > 0 ? $"; KEPT on {kept} tile(s) (warnings above)" : "")}."
 				: kept > 0 ? $"Alphamaps KEPT on all {kept} tile(s): no usable stored index maps (warnings above)." : "No alphamaps to leave out.");
+			if (detailsStripped > 0 || detailsKept > 0)
+			{
+				notes?.Add($"Detail layers left out of {detailsStripped} tile(s) the bake carries whole ({detailBytes / 1048576.0:0.0} MB){(detailsKept > 0 ? $"; kept on {detailsKept}" : "")}.");
+			}
 			if (remapped > 0)
 			{
 				notes?.Add($"The scene's terrain detail bake now names the client copies ({remapped} reference(s)).");
@@ -233,6 +265,106 @@ namespace FishMMO.Shared
 				return "its stored index map differs from its alphamaps";
 			}
 			return null;
+		}
+
+		/// <summary>
+		/// Why a tile must keep its detail layers in a client build, or null when the scene's bake carries everything a player
+		/// draws from them: a current bake (<see cref="TerrainDetailBake.Version"/>, not stale) with its grass and its scatter
+		/// both baked, the scatter at the density players draw it at, whether that is the terrain's own
+		/// (<paramref name="terrainDensity"/>) or a quality level's override (<paramref name="qualityDensities"/>). A player then
+		/// takes both from the bake (GrassTerrain and DetailScatterTerrain TakeBaked), and the painted prototypes from it too.
+		/// Anything less and the player would build from the layers, so they stay.
+		/// </summary>
+		public static string KeepDetailsReason(TerrainDetailBake bake, TerrainDetailBake.Tile tile, float terrainDensity, IReadOnlyList<float> qualityDensities)
+		{
+			if (bake == null || tile == null)
+			{
+				return "the scene's terrain detail bake has no entry for it";
+			}
+			if (bake.BakedVersion != TerrainDetailBake.Version)
+			{
+				return $"its bake is of version {bake.BakedVersion}, not {TerrainDetailBake.Version}";
+			}
+			if (tile.Stale)
+			{
+				return "it was edited after it was baked";
+			}
+			if (tile.Grass == null || !tile.Grass.Baked)
+			{
+				return "its grass is not baked";
+			}
+			if (tile.Scatter == null || !tile.Scatter.Baked)
+			{
+				return "its scatter is not baked";
+			}
+			if (!Mathf.Approximately(terrainDensity, tile.Scatter.DensityScale))
+			{
+				return $"its scatter was baked at density {tile.Scatter.DensityScale}, the terrain draws at {terrainDensity}";
+			}
+			if (qualityDensities != null)
+			{
+				foreach (float density in qualityDensities)
+				{
+					if (!Mathf.Approximately(density, tile.Scatter.DensityScale))
+					{
+						return $"its scatter was baked at density {tile.Scatter.DensityScale}, a quality level draws at {density}";
+					}
+				}
+			}
+			return null;
+		}
+
+		/// <summary>Every quality level's terrain detail density scale (what a level that overrides the terrain's own draws at).</summary>
+		private static List<float> QualityDetailDensities()
+		{
+			var densities = new List<float>();
+			UnityEngine.Object[] assets = UnityEditor.AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/QualitySettings.asset");
+			if (assets == null || assets.Length == 0 || assets[0] == null)
+			{
+				return densities;
+			}
+			var settings = new UnityEditor.SerializedObject(assets[0]);
+			UnityEditor.SerializedProperty levels = settings.FindProperty("m_QualitySettings");
+			for (int i = 0; levels != null && i < levels.arraySize; i++)
+			{
+				UnityEditor.SerializedProperty density = levels.GetArrayElementAtIndex(i).FindPropertyRelative("terrainDetailDensityScale");
+				if (density != null)
+				{
+					densities.Add(density.floatValue);
+				}
+			}
+			return densities;
+		}
+
+		/// <summary>A terrain data's entry in any of the scene's bakes, and that bake; null when none has one.</summary>
+		private static TerrainDetailBake.Tile BakedTileOf(List<SceneTerrainBake> holders, TerrainData data, out TerrainDetailBake bake)
+		{
+			foreach (SceneTerrainBake holder in holders)
+			{
+				TerrainDetailBake.Tile tile = holder.Bake != null ? holder.Bake.TileOf(data) : null;
+				if (tile != null)
+				{
+					bake = holder.Bake;
+					return tile;
+				}
+			}
+			bake = null;
+			return null;
+		}
+
+		/// <summary>The detail layers' bytes: one per detail cell for every layer each patch holds.</summary>
+		private static long DetailBytes(TerrainData data)
+		{
+			int resolution = data.detailResolution, perPatch = Math.Max(1, data.detailResolutionPerPatch);
+			long bytes = 0;
+			for (int y = 0; y < resolution; y += perPatch)
+			{
+				for (int x = 0; x < resolution; x += perPatch)
+				{
+					bytes += (long)data.GetSupportedLayers(x, y, Math.Min(perPatch, resolution - x), Math.Min(perPatch, resolution - y)).Length * perPatch * perPatch;
+				}
+			}
+			return bytes;
 		}
 
 		/// <summary>The scene's terrain detail bakes (normally one, on its root "Terrain Detail Bake").</summary>
@@ -339,11 +471,12 @@ namespace FishMMO.Shared
 		/// A new terrain data with everything the original has except its layers' textures: heights,
 		/// holes, size, alphamaps, layers (same count, order and tiling, no textures), details and
 		/// trees — or, without <paramref name="keepAlphamaps"/>, no alphamaps and no layers at all (the
-		/// alphamap resolution kept, for what reads it). The original is only read.
+		/// alphamap resolution kept, for what reads it); without <paramref name="keepDetails"/>, no detail
+		/// layers (the prototypes and detail resolution kept). The original is only read.
 		/// <paramref name="layerCopies"/> shares one texture-less layer per original layer across all the
 		/// copies made from it.
 		/// </summary>
-		public static TerrainData ClientCopy(TerrainData original, Dictionary<TerrainLayer, TerrainLayer> layerCopies = null, bool keepAlphamaps = true)
+		public static TerrainData ClientCopy(TerrainData original, Dictionary<TerrainLayer, TerrainLayer> layerCopies = null, bool keepAlphamaps = true, bool keepDetails = true)
 		{
 			if (original == null)
 			{
@@ -398,10 +531,14 @@ namespace FishMMO.Shared
 			copy.wavingGrassAmount = original.wavingGrassAmount;
 			copy.wavingGrassSpeed = original.wavingGrassSpeed;
 			copy.wavingGrassTint = original.wavingGrassTint;
-			int detailWidth = original.detailWidth, detailHeight = original.detailHeight;
-			for (int layer = 0; layer < original.detailPrototypes.Length; layer++)
+			// The prototypes and resolution stay either way: the bake's layout check reads them.
+			if (keepDetails)
 			{
-				copy.SetDetailLayer(0, 0, layer, original.GetDetailLayer(0, 0, detailWidth, detailHeight, layer));
+				int detailWidth = original.detailWidth, detailHeight = original.detailHeight;
+				for (int layer = 0; layer < original.detailPrototypes.Length; layer++)
+				{
+					copy.SetDetailLayer(0, 0, layer, original.GetDetailLayer(0, 0, detailWidth, detailHeight, layer));
+				}
 			}
 
 			// Trees last, onto the finished heights. Positions are normalised to the size, which is the same.

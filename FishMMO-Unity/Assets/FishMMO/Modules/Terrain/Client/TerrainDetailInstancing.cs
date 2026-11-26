@@ -73,14 +73,51 @@ namespace FishMMO.Client
 			{
 				return painted;
 			}
+			bool any = false;
 			foreach (int p in data.GetSupportedLayers(0, 0, data.detailWidth, data.detailHeight))
+			{
+				if (p >= 0 && p < painted.Length)
+				{
+					painted[p] = true;
+					any = true;
+				}
+			}
+			if (!any)
+			{
+				PaintedFromBake(data, painted);
+			}
+			return painted;
+		}
+
+		/// <summary>
+		/// What the scene's bake read from a terrain whose detail layers a client build left out (ClientTerrainLayerStripper):
+		/// the prototypes its grass and its scatter were baked from. The build drops a tile's layers only where both are baked,
+		/// so this names every prototype the selection would have found painted and drawn, and the baked maps match it.
+		/// </summary>
+		private static void PaintedFromBake(TerrainData data, bool[] painted)
+		{
+			FishMMO.Shared.TerrainDetailBake.Tile tile = FishMMO.Shared.SceneTerrainBake.TileOf(data, out _);
+			if (tile == null)
+			{
+				return;
+			}
+			MarkPainted(tile.Grass != null && tile.Grass.Baked ? tile.Grass.LayerPrototypes : null, painted);
+			MarkPainted(tile.Scatter != null && tile.Scatter.Baked ? tile.Scatter.LayerPrototypes : null, painted);
+		}
+
+		private static void MarkPainted(int[] prototypes, bool[] painted)
+		{
+			if (prototypes == null)
+			{
+				return;
+			}
+			foreach (int p in prototypes)
 			{
 				if (p >= 0 && p < painted.Length)
 				{
 					painted[p] = true;
 				}
 			}
-			return painted;
 		}
 	}
 

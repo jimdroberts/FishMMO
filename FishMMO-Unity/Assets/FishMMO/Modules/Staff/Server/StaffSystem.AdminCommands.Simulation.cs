@@ -451,7 +451,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				run.Gc1 = GC.CollectionCount(1);
 				run.Gc2 = GC.CollectionCount(2);
 				ObserverStreamingRegistry.ResetLongestPass();
-				ServerTrafficBreakdown.ResetLongestReindex();
 				run.ReconcileAtStart = ReconcileWireStats.Take();
 				run.FramesAtStart = FrameCounters();
 				SpawnWireStats.Reset();
@@ -647,7 +646,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				$"Server ingress (measured): {wireRecvBytes / seconds / 1000.0:0.0} kB/s wire, {datagramsIn / seconds:0} packets/s; per player {wireRecvBytes / seconds / players / 1000.0:0.00} kB/s, {datagramsIn / seconds / players:0} pkt/s.",
 				$"  UDP payload {udpRecvBytes / seconds / 1000.0:0.0} kB/s, game data {appRecvBytes / seconds / 1000.0:0.0} kB/s in {appRecvMessages / seconds / players:0} msg/s per player; the rest is QUIC acks and headers.",
 				$"Server CPU: {cpuText}; frames avg {1000.0 * run.FrameSeconds / Math.Max(1, run.Frames):0.0} ms, worst {1000.0 * run.LongestFrame:0.0} ms.",
-				$"Worst frame: {(run.WorstFrameGcGeneration >= 0 ? $"a gen-{run.WorstFrameGcGeneration} GC ran in it" : "no GC")}; longest visibility pass {ObserverStreamingRegistry.LongestPassMilliseconds:0.0} ms; longest RPC-link reindex {ServerTrafficBreakdown.LongestReindexMilliseconds:0.0} ms.",
+				$"Worst frame: {(run.WorstFrameGcGeneration >= 0 ? $"a gen-{run.WorstFrameGcGeneration} GC ran in it" : "no GC")}; longest visibility pass {ObserverStreamingRegistry.LongestPassMilliseconds:0.0} ms.",
 				$"Reconciles: {reconcilesSent / seconds / players:0.0}/s per player sent, {quietSkipped / seconds / players:0.0}/s skipped as quiet; " +
 					$"players on the idle send interval {(playerTicks > 0 ? 100.0 * idleTicks / playerTicks : 0):0}% of the time.",
 				$"Idle players' reconciles that changed anyway, by what changed: {DescribeQuietMisses(run.QuietMissAtStart)}.",

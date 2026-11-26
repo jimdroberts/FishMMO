@@ -62,6 +62,8 @@ namespace FishMMO.Shared
 	/// out too.
 	/// </para>
 	/// </remarks>
+	// Versioned so the content build's cache of processed scenes is dropped when this changes.
+	[UnityEditor.Build.BuildCallbackVersion(2)]
 	public sealed class ServerTerrainStripper : IProcessSceneWithReport
 	{
 		/// <summary>Unity's smallest alphamap resolution.</summary>
@@ -80,7 +82,8 @@ namespace FishMMO.Shared
 
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
-			if (report == null || !ClientOnlySceneStripper.IsServerBuild())
+			// Not report == null: the Addressables build, which packs every world scene, passes none (SceneBuildProcessing).
+			if (!SceneBuildProcessing.IsBuilding(report) || !ClientOnlySceneStripper.IsServerBuild())
 			{
 				return;
 			}

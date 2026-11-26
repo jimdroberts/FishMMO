@@ -88,6 +88,34 @@ namespace FishMMO.Shared
 			scratchMaterials.Clear();
 		}
 
+		/// <summary>
+		/// Redraws every copy made so far at <paramref name="opacity"/> of its original's own: a fade that changes every frame
+		/// (a character fading in as it comes into view) without remaking the copies.
+		/// </summary>
+		public void SetOpacity(float opacity)
+		{
+			foreach (KeyValuePair<Material, Material> pair in originals)
+			{
+				Material copy = pair.Key, original = pair.Value;
+				if (copy == null || original == null)
+				{
+					continue;
+				}
+				CopyAlpha(copy, original, BaseColorId, opacity);
+				CopyAlpha(copy, original, ColorId, opacity);
+			}
+		}
+
+		private static void CopyAlpha(Material copy, Material original, int id, float opacity)
+		{
+			if (copy.HasProperty(id) && original.HasProperty(id))
+			{
+				Color color = copy.GetColor(id);
+				color.a = original.GetColor(id).a * Mathf.Clamp01(opacity);
+				copy.SetColor(id, color);
+			}
+		}
+
 		/// <summary>Puts every faded renderer's own materials back and destroys the copies.</summary>
 		public void Restore()
 		{

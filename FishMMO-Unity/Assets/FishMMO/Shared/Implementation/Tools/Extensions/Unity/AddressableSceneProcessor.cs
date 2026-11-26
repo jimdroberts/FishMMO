@@ -40,6 +40,31 @@ namespace FishMMO.Shared
 		/// </summary>
 		private Scene lastLoadedScene;
 
+		/// <summary>The newest scene load any processor began, for <see cref="TryGetDownload"/>; default when none.</summary>
+		private static AsyncOperationHandle<SceneInstance> newestLoad;
+
+		/// <summary>
+		/// The download of the scene load in flight (its bundle and every bundle it depends on), in bytes: false when no
+		/// scene is loading. <paramref name="totalBytes"/> is 0 when everything it needs is already cached.
+		/// </summary>
+		/// <remarks>
+		/// For the loading screen's stall clock: a world scene is one bundle of up to 250 MB, and on a slow line its
+		/// percentage can sit still for a minute while the bytes are arriving.
+		/// </remarks>
+		public static bool TryGetDownload(out long downloadedBytes, out long totalBytes)
+		{
+			if (newestLoad.IsValid() && !newestLoad.IsDone)
+			{
+				DownloadStatus status = newestLoad.GetDownloadStatus();
+				downloadedBytes = status.DownloadedBytes;
+				totalBytes = status.TotalBytes;
+				return true;
+			}
+			downloadedBytes = 0;
+			totalBytes = 0;
+			return false;
+		}
+
 		/// <summary>
 		/// Called at the start of a scene load queue. Resets processor state.
 		/// </summary>
@@ -84,6 +109,7 @@ namespace FishMMO.Shared
 			AsyncOperationHandle<SceneInstance> loadHandle = Addressables.LoadSceneAsync(sceneName, parameters, false);
 			loadingAsyncOperations.Add(loadHandle);
 			currentAsyncOperation = loadHandle;
+			newestLoad = loadHandle;
 
 			loadHandle.Completed += (op) =>
 			{

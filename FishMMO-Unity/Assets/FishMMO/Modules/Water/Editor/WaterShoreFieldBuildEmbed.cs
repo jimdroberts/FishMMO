@@ -1,3 +1,4 @@
+using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -24,6 +25,8 @@ namespace FishMMO.Water.Editor
 	/// Ordered after <c>ClientOnlySceneStripper</c> (0), so a field it removes is not built first.
 	/// </para>
 	/// </remarks>
+	// Versioned so the content build's cache of processed scenes is dropped when this changes.
+	[UnityEditor.Build.BuildCallbackVersion(2)]
 	public sealed class WaterShoreFieldBuildEmbed : IProcessSceneWithReport
 	{
 		public int callbackOrder => 100;
@@ -31,7 +34,9 @@ namespace FishMMO.Water.Editor
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
 			// A dedicated server builds no field (WaterShoreField.Request): tens of megabytes it would only carry.
-			if (report == null || IsServerBuild())
+			// Play mode only, not report == null: the Addressables build, which packs every world scene, passes no report
+			// either, and that test skipped every shipped scene, so players computed the field at load.
+			if ((report == null && EditorApplication.isPlayingOrWillChangePlaymode) || IsServerBuild())
 			{
 				return;
 			}

@@ -23,13 +23,16 @@ namespace FishMMO.Shared
 	/// <c>standaloneBuildSubtarget</c> before every server build), or a dedicated-server compile.
 	/// </para>
 	/// </remarks>
+	// Versioned so the content build's cache of processed scenes is dropped when this changes.
+	[UnityEditor.Build.BuildCallbackVersion(2)]
 	public sealed class ClientOnlySceneStripper : IProcessSceneWithReport
 	{
 		public int callbackOrder => 0;
 
 		public void OnProcessScene(Scene scene, BuildReport report)
 		{
-			if (report == null || !IsServerBuild())
+			// Not report == null: the Addressables build, which packs every world scene, passes none (SceneBuildProcessing).
+			if (!SceneBuildProcessing.IsBuilding(report) || !IsServerBuild())
 			{
 				return;
 			}

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8218f9b645c38b742a5d094500a7c0bc, type: 3}
+  m_Name: Weaponsmith
+  m_EditorClassIdentifier: FishMMO.Commerce::FishMMO.Shared.MerchantTemplate
+  icon:
+    m_AssetGUID: 
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  Description: Weaponsmith
+  Abilities: []
+  AbilityEvents: []
+  Items:
+  - {fileID: 11400000, guid: 2a666181fba14f54a8a1e2729e38e44e, type: 2}
+  PremadeAbilities: []
+  BuysItems: 1
+  SellPriceMultiplier: 0.25

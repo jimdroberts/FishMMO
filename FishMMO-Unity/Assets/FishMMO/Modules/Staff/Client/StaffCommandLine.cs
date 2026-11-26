@@ -383,24 +383,24 @@ namespace FishMMO.Client
 			return false;
 		}
 
-		/// <summary>True when <paramref name="list"/> holds <paramref name="word"/>, ignoring case.</summary>
-		private static bool ContainsIgnoreCase(IReadOnlyList<string> list, string word)
+		/// <summary>True when <paramref name="words"/> holds <paramref name="word"/>, ignoring case.</summary>
+		private static bool ContainsIgnoreCase(IReadOnlyList<string> words, string word)
 		{
-			return FindIgnoreCase(list, word) != null;
+			return FindIgnoreCase(words, word) != null;
 		}
 
 		/// <summary>The listed spelling of <paramref name="word"/>, or null when it is not listed.</summary>
-		private static string FindIgnoreCase(IReadOnlyList<string> list, string word)
+		private static string FindIgnoreCase(IReadOnlyList<string> words, string word)
 		{
-			if (list == null)
+			if (words == null)
 			{
 				return null;
 			}
-			for (int i = 0; i < list.Count; ++i)
+			for (int i = 0; i < words.Count; ++i)
 			{
-				if (string.Equals(list[i], word, StringComparison.OrdinalIgnoreCase))
+				if (string.Equals(words[i], word, StringComparison.OrdinalIgnoreCase))
 				{
-					return list[i];
+					return words[i];
 				}
 			}
 			return null;

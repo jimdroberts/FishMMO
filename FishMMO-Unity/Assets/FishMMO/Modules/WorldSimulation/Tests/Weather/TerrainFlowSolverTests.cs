@@ -51,6 +51,31 @@ namespace FishMMO.UnitTests.Weather
 		private static int Middle => (int)(Centre / Cell);
 		private static int Out => (int)(Radius / Cell) + 2;
 
+		/// <summary>
+		/// The web steps the solve a few milliseconds a frame (it has no worker; whole, it was one frame of some 15 s): the
+		/// stepped answer must be the whole solve's, bit for bit, however small the steps.
+		/// </summary>
+		[Test]
+		public void SolvedAPieceAtATime_IsTheSameAsSolvedInOneGo()
+		{
+			float[] ground = Disc();
+			float[] levels = { 200f, 500f, 900f };
+			float[][] whole = TerrainFlowSolver.Solve(ground, N, Cell, levels, parallel: false);
+			TerrainFlowSolver.Stepper stepper = TerrainFlowSolver.BeginSolve(ground, N, Cell, levels);
+			Assert.IsNull(stepper.Result, "no answer before the last step");
+			int calls = 0;
+			while (!stepper.Step(0.0))
+			{
+				calls++;
+			}
+			Assert.Greater(calls, levels.Length, "a zero budget still makes progress, a sweep a call, over many calls");
+			for (int k = 0; k < levels.Length; k++)
+			{
+				CollectionAssert.AreEqual(whole[k], stepper.Result[k], $"level {k}");
+			}
+			Assert.IsTrue(stepper.Step(0.0), "a finished stepper stays finished");
+		}
+
 		[Test]
 		public void WithNoGroundAboveTheLevel_TheAirIsUndisturbed()
 		{

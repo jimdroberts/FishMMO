@@ -210,7 +210,7 @@ MonoBehaviour:
     MaxDecay: 0
     MinScale: 1
     MaxScale: 1
-    Role: 8
+    Role: 12
     Style: timber
   - Tag: notice
     MinCount: 1

@@ -36,10 +36,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </summary>
 		private sealed class LingeringCharacter
 		{
-			/// <summary>The still-spawned character.</summary>
+			/// <summary>
+			/// The body's object. Only a reference: something outside the linger can despawn it, and the pool then resets
+			/// it and may hand it to the next login. Read it through <see cref="TryGetBody"/>, never directly.
+			/// </summary>
 			public IPlayerCharacter Character;
+			/// <summary>The character this body is, kept apart from <see cref="Character"/>, whose ID the pool clears.</summary>
+			public long CharacterID;
 			/// <summary>Account that owns it, used to match a reconnecting player.</summary>
 			public string Account;
+			/// <summary>
+			/// The scene the linger added the body to (see <see cref="AdjustLingeringSceneCount"/>), recorded when it began
+			/// so the count is given back to that scene even when the object is gone or reused by then.
+			/// </summary>
+			public long CountedWorldServerID;
+			/// <summary>See <see cref="CountedWorldServerID"/>.</summary>
+			public string CountedSceneName;
+			/// <summary>See <see cref="CountedWorldServerID"/>.</summary>
+			public long CountedSceneHandle;
+			/// <summary>True when the counted scene is an instance (<see cref="CountedSceneHandle"/> is its instance handle).</summary>
+			public bool CountedInInstance;
+
+			/// <summary>
+			/// The body, while it is still this character's spawned body.
+			/// </summary>
+			/// <remarks>
+			/// False when the object was destroyed, despawned (the pool's ResetState released its Core entity, cleared its
+			/// flags and zeroed its ID), or reused for another login. A despawned body was snapshotted as a pool-reset object
+			/// with no Core entity (the hotkey bar's capture threw), and a REUSED one was another player's live character:
+			/// the linger's end saved it under this character's claim and then despawned it out from under its own connection.
+			/// </remarks>
+			public bool TryGetBody(out IPlayerCharacter body)
+			{
+				body = Character;
+				if (IsGone(body) || body.NetworkObject == null || !body.NetworkObject.IsSpawned || body.ID != CharacterID)
+				{
+					body = null;
+					return false;
+				}
+				return true;
+			}
 			/// <summary>
 			/// Hard deadline after which the body is removed regardless of combat state, in
 			/// <see cref="MonotonicClock"/> seconds. A local duration: on the wall clock a host
@@ -78,8 +114,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// </remarks>
 		private IPlayerCharacter TryGetLingeringCharacter(long characterID)
 		{
-			return lingeringCharacters.TryGetValue(characterID, out LingeringCharacter entry)
-				? entry.Character
+			return lingeringCharacters.TryGetValue(characterID, out LingeringCharacter entry) && entry.TryGetBody(out IPlayerCharacter body)
+				? body
 				: null;
 		}
 
@@ -176,11 +212,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// session, so the player is not locked out of rejoining it.
 			character.EnableFlags(CharacterFlags.IsCombatLogged);
 
+			bool inInstance = character.IsInInstance();
 			var entry = new LingeringCharacter
 			{
 				Character = character,
+				CharacterID = character.ID,
 				Account = character.Account,
 				ExpiresAt = MonotonicClock.NowSeconds + combatLogoutLingerSeconds,
+				CountedWorldServerID = character.WorldServerID,
+				CountedSceneName = inInstance ? character.InstanceSceneName : character.SceneName,
+				CountedSceneHandle = inInstance ? character.InstanceSceneHandle : character.SceneHandle,
+				CountedInInstance = inInstance,
 			};
 
 			lingeringCharacters[character.ID] = entry;
@@ -191,7 +233,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// makes a scene holding only unattended bodies report itself empty, which marks it
 			// a stale-pulse candidate for unload and advertises capacity that is not free.
 			// Unloading that scene would destroy the bodies and strand their claims.
-			AdjustLingeringSceneCount(character, 1);
+			AdjustLingeringSceneCount(entry, 1);
 
 			// Persist immediately. The body can be damaged or killed from here on with no
 			// connection attached, so a crash mid-linger would otherwise roll the character back
@@ -220,12 +262,12 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			foreach (var kvp in lingeringCharacters)
 			{
 				LingeringCharacter entry = kvp.Value;
-				IPlayerCharacter character = entry.Character;
 
 				string reason = null;
-				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				if (!entry.TryGetBody(out IPlayerCharacter character))
 				{
-					// Something else already removed the body; drop the bookkeeping.
+					// Something else already removed the body (or its object now belongs to another login); drop the
+					// bookkeeping and hand the claim back. FinalizeCombatLinger neither saves nor touches the object then.
 					reason = "body no longer spawned";
 				}
 				else if (character.IsFlagged(CharacterFlags.IsDead))
@@ -298,8 +340,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				lingeringCharactersByAccount.Remove(entry.Account);
 			}
 
-			IPlayerCharacter character = entry.Character;
-
 			CharacterSessionInfo? sessionInfo = null;
 			if (Server.DataContainerRegistry.TryGet(out ICharacterMappingData<NetworkConnection> data) &&
 				data.SessionTokens.TryGetValue(characterID, out CharacterSessionInfo si))
@@ -308,9 +348,17 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				sessionInfo = si;
 			}
 
-			if (character == null)
+			// Balance the increment taken when the linger began; the body is leaving the scene, or has already left it.
+			AdjustLingeringSceneCount(entry, -1);
+
+			if (!entry.TryGetBody(out IPlayerCharacter character))
 			{
-				// Nothing left to save or despawn, but the claim still has to be handed back.
+				/* Nothing left to save or despawn, but the claim still has to be handed back. The object is NOT handed to
+				 * SaveAndDespawnCharacter: despawned, it is a pool-reset shell with no Core entity, and reused, it is
+				 * another player's live character. The snapshot taken when the linger began, and the periodic saves
+				 * since, stand. */
+				Log.Warning("CharacterSystem",
+					$"Combat linger of character {characterID} ended with its body gone ({reason}); releasing its claim without a save.");
 				if (sessionInfo.HasValue)
 				{
 					ReleaseSessionSafely(characterID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
@@ -319,9 +367,6 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 
 			Log.Debug("CharacterSystem", $"Combat linger ended for {character.CharacterName}: {reason}.");
-
-			// Balance the increment taken when the linger began; the body is leaving the scene.
-			AdjustLingeringSceneCount(character, -1);
 
 			// SaveAndDespawnCharacter clears IsCombatLogged before snapshotting, so the row this
 			// writes no longer claims a body is present.
@@ -354,9 +399,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			pendingLingerReasons.Remove(characterID);
 
 			// Balance the increment taken when the linger began.
-			AdjustLingeringSceneCount(entry.Character, -1);
+			AdjustLingeringSceneCount(entry, -1);
 
-			DespawnLingeringBody(entry.Character);
+			// Only this character's own body: a reused object is another player's.
+			if (entry.TryGetBody(out IPlayerCharacter body))
+			{
+				DespawnLingeringBody(body);
+			}
 		}
 
 		/// <inheritdoc/>
@@ -425,8 +474,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			foreach (var kvp in lingeringCharacters)
 			{
-				IPlayerCharacter character = kvp.Value.Character;
-				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				if (!kvp.Value.TryGetBody(out IPlayerCharacter character))
 				{
 					// Nothing to write; its claim is released unwritten.
 					continue;
@@ -482,15 +530,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return false;
 			}
 
-			IPlayerCharacter character = entry.Character;
-
 			lingeringCharacters.Remove(characterID);
 			lingeringCharactersByAccount.Remove(entry.Account ?? accountName);
 
 			// Balance the increment taken when the linger began, here rather than on the success
 			// path, so the early returns below cannot leave the scene permanently over-counted.
 			// The normal load this hands off to increments again via OnAfterLoadCharacter.
-			AdjustLingeringSceneCount(character, -1);
+			AdjustLingeringSceneCount(entry, -1);
 
 			// Take the claim out of SessionTokens and hand it to the load. On success the load
 			// puts it back; on failure it releases it — the same contract every other load path
@@ -503,10 +549,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				sessionInfo = si;
 			}
 
-			if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+			if (!entry.TryGetBody(out IPlayerCharacter character))
 			{
-				// The body went away between the sweep and here. Fall back to a normal load,
-				// releasing the orphaned claim so the fresh claim can succeed.
+				// The body went away between the sweep and here (or its object is another login's now). Fall back to a
+				// normal load, releasing the orphaned claim so the fresh claim can succeed.
 				if (sessionInfo.HasValue)
 				{
 					ReleaseSessionSafely(characterID, sessionInfo.Value.ServerID, sessionInfo.Value.Token);
@@ -573,23 +619,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// holding unattended bodies is neither reported as empty nor advertised as having
 		/// capacity it does not have. Every path that starts or ends a linger must call this in
 		/// balanced pairs; a reattach hands off to the normal load, which increments again.
+		/// <para>
+		/// The scene is the one recorded when the linger began, not read off the object: by the
+		/// linger's end the object may have been despawned (its scene fields reset) or reused by
+		/// another login (another scene), and the count must go back where it was taken.
+		/// </para>
 		/// </remarks>
-		private void AdjustLingeringSceneCount(IPlayerCharacter character, int amount)
+		private void AdjustLingeringSceneCount(LingeringCharacter entry, int amount)
 		{
-			if (character == null ||
+			if (entry == null ||
 				!Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServerSystem))
 			{
 				return;
 			}
 
-			if (character.IsInInstance())
-			{
-				sceneServerSystem.AdjustSceneCharacterCount(character.WorldServerID, character.InstanceSceneName, character.InstanceSceneHandle, amount);
-			}
-			else
-			{
-				sceneServerSystem.AdjustSceneCharacterCount(character.WorldServerID, character.SceneName, character.SceneHandle, amount);
-			}
+			sceneServerSystem.AdjustSceneCharacterCount(entry.CountedWorldServerID, entry.CountedSceneName, entry.CountedSceneHandle, amount);
 		}
 
 		/// <summary>
@@ -725,8 +769,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			int failed = 0;
 			foreach (var kvp in lingeringCharacters)
 			{
-				IPlayerCharacter character = kvp.Value.Character;
-				if (character == null || character.NetworkObject == null || !character.NetworkObject.IsSpawned)
+				if (!kvp.Value.TryGetBody(out IPlayerCharacter character))
 				{
 					// The sweep will drop the bookkeeping; nothing here to write.
 					continue;
@@ -750,8 +793,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			}
 			foreach (var kvp in lingeringCharacters)
 			{
-				IPlayerCharacter character = kvp.Value.Character;
-				if (character != null && character.NetworkObject != null && character.NetworkObject.IsSpawned)
+				if (kvp.Value.TryGetBody(out IPlayerCharacter character))
 				{
 					results.Add(character);
 				}

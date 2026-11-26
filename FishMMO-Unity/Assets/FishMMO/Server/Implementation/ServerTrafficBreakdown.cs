@@ -77,25 +77,6 @@ namespace FishMMO.Server.Implementation
 		private readonly float intervalSeconds;
 		private readonly Dictionary<NetworkConnection, Dictionary<Category, Tally>> byConnection = new Dictionary<NetworkConnection, Dictionary<Category, Tally>>();
 		private readonly Dictionary<ushort, string> broadcastNames = new Dictionary<ushort, string>();
-		/// <summary>
-		/// RPC link index to the RPC type and behaviour it was given to. Built once in full, then kept current from spawns:
-		/// a link is made when its object spawns, and an index a despawned object gave back is only ever reused by a later
-		/// spawn, which overwrites it here. The full rebuild walked every spawned behaviour by reflection (25 ms with both
-		/// Moron scenes loaded) and ran up to once a second while despawned objects' links were still in flight.
-		/// </summary>
-		private readonly Dictionary<ushort, Category> rpcLinks = new Dictionary<ushort, Category>();
-		private double rpcLinksBuiltAt = double.NegativeInfinity;
-		/// <summary>
-		/// How long an unknown link waits before it may cause another full rebuild, seconds. The spawn feed keeps the table
-		/// current, so an unknown link is nearly always a despawned object's RPC still in flight, which no rebuild resolves;
-		/// at 30 s the rebuild (16 ms with both Moron scenes loaded) was a regular hitch in combat.
-		/// </summary>
-		private const double FullReindexSeconds = 600.0;
-		/// <summary>Objects spawned since they were last indexed; indexed before the next linked RPC is classified.</summary>
-		private readonly List<NetworkObject> spawnedSinceIndex = new List<NetworkObject>();
-		private bool spawnHooked;
-		private static readonly System.Reflection.FieldInfo RpcLinksField =
-			typeof(NetworkBehaviour).GetField("_rpcLinks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 		/// <summary>FishNet allocates RPC link indices above its highest PacketId (NetworkManager.StartingRpcLinkIndex).</summary>
 		private static readonly ushort HighestPacketId = HighestPacketIdValue();
 
@@ -121,20 +102,6 @@ namespace FishMMO.Server.Implementation
 			this.periodic = periodic;
 			this.intervalSeconds = intervalSeconds;
 			IndexBroadcasts();
-			if (networkManager != null && networkManager.ServerManager != null && networkManager.ServerManager.Objects != null)
-			{
-				networkManager.ServerManager.Objects.OnSpawnedAdd += OnSpawnedAdd;
-				spawnHooked = true;
-			}
-		}
-
-		private void OnSpawnedAdd(int objectId, NetworkObject networkObject)
-		{
-			// Only once the full table exists: before it, the first full build reads every spawned object anyway.
-			if (networkObject != null && !double.IsNegativeInfinity(rpcLinksBuiltAt))
-			{
-				spawnedSinceIndex.Add(networkObject);
-			}
 		}
 
 		/// <summary>
@@ -227,15 +194,6 @@ namespace FishMMO.Server.Implementation
 			}
 			stopped = true;
 			TransportManager.OnServerMessageQueued -= OnMessageQueued;
-			if (spawnHooked)
-			{
-				spawnHooked = false;
-				if (networkManager != null && networkManager.ServerManager != null && networkManager.ServerManager.Objects != null)
-				{
-					networkManager.ServerManager.Objects.OnSpawnedAdd -= OnSpawnedAdd;
-				}
-			}
-			spawnedSinceIndex.Clear();
 			periodic?.UnregisterPeriodicCallback(OnInterval);
 			byConnection.Clear();
 		}
@@ -297,135 +255,20 @@ namespace FishMMO.Server.Implementation
 			return new Category(packetId, 0, null);
 		}
 
-		/// <summary>A linked RPC: the RPC type and behaviour its link index was given to.</summary>
+		/// <summary>
+		/// A linked RPC: the RPC type and behaviour its link index was given to, from the server's own record of the links it
+		/// gave out (ServerManager.TryGetRpcLinkOwner, a tagged FishNet edit). One lookup a message. It replaces an index of
+		/// every spawned behaviour's links read by reflection, whose rebuilds were the scene server's worst frames (16-48 ms).
+		/// A link no longer given out (its object despawned while the RPC was still queued) is counted as unresolved.
+		/// </summary>
 		private Category ClassifyRpcLink(ushort linkIndex)
 		{
-			if (spawnedSinceIndex.Count > 0)
+			FishNet.Managing.Server.ServerManager serverManager = networkManager != null ? networkManager.ServerManager : null;
+			if (serverManager != null && serverManager.TryGetRpcLinkOwner(linkIndex, out NetworkBehaviour owner, out PacketId rpcPacketId) && owner != null)
 			{
-				IndexSpawnedSince();
-			}
-			if (rpcLinks.TryGetValue(linkIndex, out Category known))
-			{
-				return known;
-			}
-			/* Unknown: a despawned object's link still in flight, nearly always. The first time builds the whole table; after
-			 * that the spawn feed keeps it current, so a rebuild is only a rare safety net. */
-			double now = MonotonicClock.NowSeconds;
-			if (now - rpcLinksBuiltAt >= FullReindexSeconds)
-			{
-				rpcLinksBuiltAt = now;
-				IndexRpcLinks();
-				if (rpcLinks.TryGetValue(linkIndex, out known))
-				{
-					return known;
-				}
+				return new Category((ushort)rpcPacketId, 0, owner.GetType());
 			}
 			return new Category(0, 0, typeof(UnresolvedRpcLink));
-		}
-
-		/// <summary>Longest <see cref="IndexRpcLinks"/> since the last <see cref="ResetLongestReindex"/>, milliseconds.</summary>
-		public static double LongestReindexMilliseconds { get; private set; }
-
-		/// <summary>Starts a new measurement of <see cref="LongestReindexMilliseconds"/>.</summary>
-		public static void ResetLongestReindex() => LongestReindexMilliseconds = 0d;
-
-		/// <summary>Every spawned behaviour's RPC links (FishNet keeps them internal: read by reflection, a diagnostic only).</summary>
-		private void IndexRpcLinks()
-		{
-			long started = System.Diagnostics.Stopwatch.GetTimestamp();
-			try
-			{
-				IndexRpcLinksCore();
-			}
-			finally
-			{
-				double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000d / System.Diagnostics.Stopwatch.Frequency;
-				if (milliseconds > LongestReindexMilliseconds)
-				{
-					LongestReindexMilliseconds = milliseconds;
-				}
-			}
-		}
-
-		/// <summary>The objects spawned since the last index: their links, which may reuse indices despawned objects gave back.</summary>
-		private void IndexSpawnedSince()
-		{
-			long started = System.Diagnostics.Stopwatch.GetTimestamp();
-			try
-			{
-				if (RpcLinksField == null)
-				{
-					return;
-				}
-				for (int i = 0; i < spawnedSinceIndex.Count; i++)
-				{
-					NetworkObject nob = spawnedSinceIndex[i];
-					if (nob != null)
-					{
-						IndexObject(nob);
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				_ = Log.Warning(LogCategory, $"Could not read RPC link tables; linked RPCs are counted as unresolved. {ex.GetType().Name}: {ex.Message}");
-			}
-			finally
-			{
-				spawnedSinceIndex.Clear();
-				double milliseconds = (System.Diagnostics.Stopwatch.GetTimestamp() - started) * 1000d / System.Diagnostics.Stopwatch.Frequency;
-				if (milliseconds > LongestReindexMilliseconds)
-				{
-					LongestReindexMilliseconds = milliseconds;
-				}
-			}
-		}
-
-		private void IndexRpcLinksCore()
-		{
-			rpcLinks.Clear();
-			spawnedSinceIndex.Clear();
-			if (RpcLinksField == null)
-			{
-				return;
-			}
-			try
-			{
-				foreach (NetworkObject nob in networkManager.ServerManager.Objects.Spawned.Values)
-				{
-					if (nob == null)
-					{
-						continue;
-					}
-					IndexObject(nob);
-				}
-			}
-			catch (Exception ex)
-			{
-				_ = Log.Warning(LogCategory, $"Could not read RPC link tables; linked RPCs are counted as unresolved. {ex.GetType().Name}: {ex.Message}");
-			}
-		}
-
-		/// <summary>One object's behaviours' RPC links into <see cref="rpcLinks"/>.</summary>
-		private void IndexObject(NetworkObject nob)
-		{
-			foreach (NetworkBehaviour behaviour in nob.NetworkBehaviours)
-			{
-				if (behaviour == null || !(RpcLinksField.GetValue(behaviour) is System.Collections.IDictionary links) || links.Count == 0)
-				{
-					continue;
-				}
-				foreach (object link in links.Values)
-				{
-					Type linkType = link.GetType();
-					object linkIndex = linkType.GetField("LinkPacketId")?.GetValue(link);
-					object rpcPacketId = linkType.GetField("RpcPacketId")?.GetValue(link);
-					if (linkIndex is ushort index && rpcPacketId != null)
-					{
-						rpcLinks[index] = new Category(Convert.ToUInt16(rpcPacketId), 0, behaviour.GetType());
-					}
-				}
-			}
 		}
 
 		/// <summary>The behaviour a message is about: object id (signed packed whole, zigzag), then its component index.</summary>

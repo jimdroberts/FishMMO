@@ -17,7 +17,35 @@ namespace FishNet.Managing.Server
         /// RPCLink indexes which can be used.
         /// </summary>
         private Queue<ushort> _availableRpcLinkIndexes = new();
+        /// <summary>
+        /// FISHMMO EDIT: the behaviour holding each link index this server gave out, and the RPC type it stands for, so a
+        /// diagnostic naming outbound messages can resolve a linked RPC in one lookup instead of reading every spawned
+        /// behaviour's links by reflection (which took 16-48 ms a rebuild on a busy scene server).
+        /// </summary>
+        private Dictionary<ushort, (NetworkBehaviour Owner, PacketId RpcPacketId)> _rpcLinkOwners = new();
         #endregion
+
+        /// <summary>
+        /// FISHMMO EDIT: the behaviour and RPC type a link index this server gave out belongs to; false when it is not given out.
+        /// </summary>
+        public bool TryGetRpcLinkOwner(ushort linkIndex, out NetworkBehaviour owner, out PacketId rpcPacketId)
+        {
+            if (_rpcLinkOwners.TryGetValue(linkIndex, out (NetworkBehaviour Owner, PacketId RpcPacketId) entry))
+            {
+                owner = entry.Owner;
+                rpcPacketId = entry.RpcPacketId;
+                return true;
+            }
+            owner = null;
+            rpcPacketId = default;
+            return false;
+        }
+
+        /// <summary>FISHMMO EDIT: records who holds a link index just given out (see <see cref="TryGetRpcLinkOwner"/>).</summary>
+        internal void NoteRpcLinkOwner(ushort linkIndex, NetworkBehaviour owner, PacketId rpcPacketId)
+        {
+            _rpcLinkOwners[linkIndex] = (owner, rpcPacketId);
+        }
 
         /// <summary>
         /// Initializes RPC Links for NetworkBehaviours.
@@ -61,7 +89,11 @@ namespace FishNet.Managing.Server
         internal void StoreRpcLinks(Dictionary<uint, RpcLinkType> links)
         {
             foreach (RpcLinkType rlt in links.Values)
+            {
+                // FISHMMO EDIT: a returned link has no owner until it is given out again.
+                _rpcLinkOwners.Remove(rlt.LinkPacketId);
                 _availableRpcLinkIndexes.Enqueue(rlt.LinkPacketId);
+            }
         }
     }
 }

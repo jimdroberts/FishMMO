@@ -273,12 +273,44 @@ namespace FishMMO.UnitTests.WorldDesign
 				GameObject tile = Terrain.CreateTerrainGameObject(original);
 				SceneManager.MoveGameObjectToScene(tile, scene);
 				tile.GetComponent<Terrain>().materialTemplate = array;
-				// No report: a scene processed for play mode.
+				// No report, in play mode: a scene loading for play, left alone.
+				SceneBuildProcessing.PlayingForTests = true;
 				new ClientTerrainLayerStripper().OnProcessScene(scene, null);
 				Assert.That(tile.GetComponent<Terrain>().terrainData, Is.SameAs(original));
 			}
 			finally
 			{
+				SceneBuildProcessing.PlayingForTests = null;
+				EditorSceneManager.ClosePreviewScene(scene);
+			}
+		}
+
+		/// <summary>
+		/// The Addressables content build, which packs every world scene, hands the processors no report. The stripper took
+		/// that for play mode and skipped every shipped scene, so the client downloaded Unity's full terrain data. Outside
+		/// play mode a missing report is a build: the stripper runs (here its array guard stops the bare test scene, which
+		/// ships no array set, and that it got that far is the point).
+		/// </summary>
+		[Test]
+		public void AContentBuild_WithNoReport_IsProcessed()
+		{
+			Material array = ArrayMaterial();
+			TerrainData original = Generated();
+			Scene scene = EditorSceneManager.NewPreviewScene();
+			try
+			{
+				GameObject tile = Terrain.CreateTerrainGameObject(original);
+				SceneManager.MoveGameObjectToScene(tile, scene);
+				tile.GetComponent<Terrain>().materialTemplate = array;
+				SceneBuildProcessing.PlayingForTests = false;
+				Assert.Throws<UnityEditor.Build.BuildFailedException>(() => new ClientTerrainLayerStripper().OnProcessScene(scene, null));
+				Assert.IsTrue(SceneBuildProcessing.IsBuilding(null), "no report outside play mode is a build");
+				SceneBuildProcessing.PlayingForTests = true;
+				Assert.IsFalse(SceneBuildProcessing.IsBuilding(null), "no report in play mode is a scene loading for play");
+			}
+			finally
+			{
+				SceneBuildProcessing.PlayingForTests = null;
 				EditorSceneManager.ClosePreviewScene(scene);
 			}
 		}
@@ -380,6 +412,58 @@ namespace FishMMO.UnitTests.WorldDesign
 					EditorSceneManager.ClosePreviewScene(scene);
 				}
 			}
+		}
+
+		/// <summary>A copy without its detail layers keeps what the bake's layout check reads: the prototypes and the resolution.</summary>
+		[Test]
+		public void ACopyWithoutDetailLayers_KeepsTheirPrototypesAndResolution()
+		{
+			TerrainData original = Generated();
+			TerrainData copy = Track(ClientTerrainLayerStripper.ClientCopy(original, keepDetails: false));
+			Assert.AreEqual(original.detailPrototypes.Length, copy.detailPrototypes.Length);
+			Assert.AreEqual(original.detailPrototypes[0].prototype, copy.detailPrototypes[0].prototype);
+			Assert.AreEqual(original.detailResolution, copy.detailResolution);
+			Assert.AreEqual(original.detailResolutionPerPatch, copy.detailResolutionPerPatch);
+			Assert.IsNotEmpty(original.GetSupportedLayers(0, 0, original.detailWidth, original.detailHeight), "the original is painted");
+			Assert.IsEmpty(copy.GetSupportedLayers(0, 0, copy.detailWidth, copy.detailHeight), "the copy carries no density");
+			Assert.AreEqual(7, original.GetDetailLayer(0, 0, original.detailWidth, original.detailHeight, 0)[3, 4], "the original is only read");
+
+			TerrainData kept = Track(ClientTerrainLayerStripper.ClientCopy(original));
+			Assert.AreEqual(7, kept.GetDetailLayer(0, 0, kept.detailWidth, kept.detailHeight, 0)[3, 4], "kept by default");
+		}
+
+		/// <summary>
+		/// A tile's detail layers leave the client build only where the bake carries it whole, so nothing a player draws is
+		/// lost: current, not stale, grass and scatter both baked, the scatter at every density a player may draw it at.
+		/// </summary>
+		[Test]
+		public void DetailLayersStay_UnlessTheBakeCarriesTheTileWhole()
+		{
+			TerrainDetailBake bake = Track(ScriptableObject.CreateInstance<TerrainDetailBake>());
+			bake.BakedVersion = TerrainDetailBake.Version;
+			var tile = new TerrainDetailBake.Tile();
+			tile.Grass.Baked = true;
+			tile.Scatter.Baked = true;
+			tile.Scatter.DensityScale = 1f;
+			float[] quality = { 1f, 1f, 1f };
+
+			Assert.IsNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, quality), "a whole, current bake carries it");
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, null, 1f, quality), "no entry");
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(null, tile, 1f, quality), "no bake");
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 0.5f, quality), "the terrain draws at another density");
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, new[] { 1f, 0.6f }), "a quality level draws at another density");
+
+			tile.Stale = true;
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, quality), "edited since the bake");
+			tile.Stale = false;
+			tile.Grass.Baked = false;
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, quality), "grass not baked");
+			tile.Grass.Baked = true;
+			tile.Scatter.Baked = false;
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, quality), "scatter not baked");
+			tile.Scatter.Baked = true;
+			bake.BakedVersion = TerrainDetailBake.Version - 1;
+			Assert.IsNotNull(ClientTerrainLayerStripper.KeepDetailsReason(bake, tile, 1f, quality), "another bake version");
 		}
 
 		[Test]

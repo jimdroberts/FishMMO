@@ -156,7 +156,7 @@ namespace FishMMO.Shared.WorldDesign
 				.S(Well, 1, 1, Centre, style: Stone).S(Tent, 3, 5, Ring).S(Storage, 3, 3, Scatter).S(Fire, 1, 2, Scatter).S(Bedding, 0, 2, Scatter)
 				.In(1.3f, "Desert", "High Desert", "Oasis", "Scrubland").Pad(0.6f);
 			T(a, POIType.CaravanHalt, "Walled Caravanserai", Walled, Stone)
-				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Well, 1, 1, Centre).S(LeanTo, 2, 4, Scatter).S(Storage, 3, 5, Scatter).S(Stable, 0, 1, Scatter)
+				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Well, 1, 1, Centre).S(LeanTo, 2, 4, Scatter).S(Storage, 3, 5, Scatter).S(Stable, 0, 1, Edges)
 				.Weighs(0.5f).Sized(false, false, true).Pad(0.7f);
 
 			T(a, POIType.BeastBoneyard, "Dry Bones", Scattered, Earth)

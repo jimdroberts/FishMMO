@@ -81,8 +81,91 @@ namespace FishMMO.Client
 			return result;
 		}
 
+		/// <summary>
+		/// <see cref="Solve"/> a piece at a time, for where there is no worker to give it to: the web player runs
+		/// <see cref="PlatformWork"/> inline, and the whole solve was one frame of some 15 s at 384 cells, the page frozen
+		/// behind a loading screen it could not draw. <see cref="Stepper.Step"/> runs relaxation sweeps until its budget is
+		/// spent, at least one a call; the answer is the one <see cref="Solve"/> gives, bit for bit (the same sweeps in the
+		/// same order, levels one after another).
+		/// </summary>
+		public sealed class Stepper
+		{
+			private readonly IEnumerator<bool> steps;
+			private readonly float[][] result;
+
+			internal Stepper(float[] ground, int n, float cell, float[] levels)
+			{
+				if (ground == null || ground.Length != n * n)
+				{
+					throw new ArgumentException("ground must hold n * n heights");
+				}
+				result = new float[levels.Length][];
+				steps = SolveSteps(ground, n, cell, levels, result);
+			}
+
+			/// <summary>The flow at every level once <see cref="Done"/>, as <see cref="Solve"/> returns it; null until then.</summary>
+			public float[][] Result => Done ? result : null;
+
+			/// <summary>True once every level is solved.</summary>
+			public bool Done { get; private set; }
+
+			/// <summary>Runs sweeps for about <paramref name="budgetMilliseconds"/> (at least one); true when the solve is done.</summary>
+			public bool Step(double budgetMilliseconds)
+			{
+				if (Done)
+				{
+					return true;
+				}
+				long limit = System.Diagnostics.Stopwatch.GetTimestamp() +
+					(long)(budgetMilliseconds * System.Diagnostics.Stopwatch.Frequency / 1000.0);
+				do
+				{
+					if (!steps.MoveNext())
+					{
+						Done = true;
+						return true;
+					}
+				}
+				while (System.Diagnostics.Stopwatch.GetTimestamp() < limit);
+				return false;
+			}
+		}
+
+		/// <summary>Starts <see cref="Solve"/> as a <see cref="Stepper"/>, to be stepped a little each frame.</summary>
+		public static Stepper BeginSolve(float[] ground, int n, float cell, float[] levels)
+		{
+			return new Stepper(ground, n, cell, levels);
+		}
+
+		/// <summary>Every level a sweep at a time, into <paramref name="result"/>.</summary>
+		private static IEnumerator<bool> SolveSteps(float[] ground, int n, float cell, float[] levels, float[][] result)
+		{
+			for (int k = 0; k < levels.Length; k++)
+			{
+				IEnumerator<bool> level = SolveLevelSteps(ground, n, cell, levels[k], result, k);
+				while (level.MoveNext())
+				{
+					yield return true;
+				}
+			}
+		}
+
 		/// <summary>The flow at one level: n·n·<see cref="Channels"/> offsets, metres.</summary>
 		public static float[] SolveLevel(float[] ground, int n, float cell, float level)
+		{
+			var output = new float[1][];
+			IEnumerator<bool> steps = SolveLevelSteps(ground, n, cell, level, output, 0);
+			while (steps.MoveNext())
+			{
+			}
+			return output[0];
+		}
+
+		/// <summary>
+		/// <see cref="SolveLevel"/> a sweep at a time: each step is one relaxation sweep of one field on one grid of the
+		/// cascade. The answer is written to <paramref name="output"/>[<paramref name="slot"/>] at the end.
+		/// </summary>
+		private static IEnumerator<bool> SolveLevelSteps(float[] ground, int n, float cell, float level, float[][] output, int slot)
 		{
 			// The cascade's grids, finest first: each a pooled copy of the one before.
 			var grounds = new List<float[]> { ground };
@@ -96,6 +179,7 @@ namespace FishMMO.Client
 
 			float[] previous = null;
 			int previousSize = 0;
+			var grid = new float[1][];
 			for (int g = sizes.Count - 1; g >= 0; g--)
 			{
 				int m = sizes[g];
@@ -104,14 +188,22 @@ namespace FishMMO.Client
 				// The coarsest grid starts from nothing and needs the most sweeps; each finer one starts
 				// from the coarser answer and only has to put the detail in.
 				int sweeps = previous == null ? 4 * m : m;
-				previous = SolveGrid(grounds[g], m, h, level, start, sweeps);
+				IEnumerator<bool> gridSteps = SolveGridSteps(grounds[g], m, h, level, start, sweeps, grid);
+				while (gridSteps.MoveNext())
+				{
+					yield return true;
+				}
+				previous = grid[0];
 				previousSize = m;
 			}
-			return previous;
+			output[slot] = previous;
 		}
 
-		/// <summary>One grid's four fields, each started from <paramref name="start"/> (or zero).</summary>
-		private static float[] SolveGrid(float[] ground, int m, float h, float level, float[] start, int sweeps)
+		/// <summary>
+		/// One grid's four fields, each started from <paramref name="start"/> (or zero), a relaxation sweep a step; the
+		/// answer goes to <paramref name="output"/>[0].
+		/// </summary>
+		private static IEnumerator<bool> SolveGridSteps(float[] ground, int m, float h, float level, float[] start, int sweeps, float[][] output)
 		{
 			int count = m * m;
 			// 0 open air reached from the edge, 1 rock, 2 air shut in by rock (a hollow the wind cannot
@@ -164,10 +256,27 @@ namespace FishMMO.Client
 			}
 
 			float omega = (float)(2.0 / (1.0 + Math.Sin(Math.PI / m)));
-			RelaxPotential(phiX, kind, m, h, omega, sweeps, true);
-			RelaxPotential(phiZ, kind, m, h, omega, sweeps, false);
-			RelaxStream(psiX, kind, m, omega, sweeps);
-			RelaxStream(psiZ, kind, m, omega, sweeps);
+			// The four fields one after another, a sweep a step (the same order and arithmetic as relaxing each whole).
+			for (int sweep = 0; sweep < sweeps; sweep++)
+			{
+				SweepPotential(phiX, kind, m, h, omega, true);
+				yield return true;
+			}
+			for (int sweep = 0; sweep < sweeps; sweep++)
+			{
+				SweepPotential(phiZ, kind, m, h, omega, false);
+				yield return true;
+			}
+			for (int sweep = 0; sweep < sweeps; sweep++)
+			{
+				SweepStream(psiX, kind, m, omega);
+				yield return true;
+			}
+			for (int sweep = 0; sweep < sweeps; sweep++)
+			{
+				SweepStream(psiZ, kind, m, omega);
+				yield return true;
+			}
 			ExtendIntoRock(phiX, kind, m, h, true);
 			ExtendIntoRock(phiZ, kind, m, h, false);
 
@@ -183,7 +292,7 @@ namespace FishMMO.Client
 				result[i * Channels + 2] = phiZ[i];
 				result[i * Channels + 3] = psiZ[i];
 			}
-			return result;
+			output[0] = result;
 		}
 
 		/// <summary>
@@ -191,38 +300,36 @@ namespace FishMMO.Client
 		/// the edge, and with no flow into the rock. φ's gradient normal to a face is zero, so a rock
 		/// neighbour stands in as a ghost with φ equal to the cell's own — which for the offset is the
 		/// cell's own d plus the step in the undisturbed coordinate toward it.
+		/// One Gauss-Seidel sweep with over-relaxation.
 		/// </summary>
-		private static void RelaxPotential(float[] d, byte[] kind, int m, float h, float omega, int sweeps, bool alongX)
+		private static void SweepPotential(float[] d, byte[] kind, int m, float h, float omega, bool alongX)
 		{
-			for (int sweep = 0; sweep < sweeps; sweep++)
+			for (int z = 1; z < m - 1; z++)
 			{
-				for (int z = 1; z < m - 1; z++)
+				int row = z * m;
+				for (int x = 1; x < m - 1; x++)
 				{
-					int row = z * m;
-					for (int x = 1; x < m - 1; x++)
+					int i = row + x;
+					if (kind[i] != 0)
 					{
-						int i = row + x;
-						if (kind[i] != 0)
-						{
-							continue;
-						}
-						float sum = 0f;
-						int open = 0;
-						// +x, −x, +z, −z: the ghost for rock is d_i − h toward +axis and d_i + h toward −axis
-						// along the wind's own axis, and d_i across it; the d_i parts move to the left side.
-						float lean = 0f;
-						if (kind[i + 1] != 1) { sum += d[i + 1]; open++; } else if (alongX) { lean -= h; }
-						if (kind[i - 1] != 1) { sum += d[i - 1]; open++; } else if (alongX) { lean += h; }
-						if (kind[i + m] != 1) { sum += d[i + m]; open++; } else if (!alongX) { lean -= h; }
-						if (kind[i - m] != 1) { sum += d[i - m]; open++; } else if (!alongX) { lean += h; }
-						if (open == 0)
-						{
-							d[i] = 0f;
-							continue;
-						}
-						float settled = (sum + lean) / open;
-						d[i] += omega * (settled - d[i]);
+						continue;
 					}
+					float sum = 0f;
+					int open = 0;
+					// +x, −x, +z, −z: the ghost for rock is d_i − h toward +axis and d_i + h toward −axis
+					// along the wind's own axis, and d_i across it; the d_i parts move to the left side.
+					float lean = 0f;
+					if (kind[i + 1] != 1) { sum += d[i + 1]; open++; } else if (alongX) { lean -= h; }
+					if (kind[i - 1] != 1) { sum += d[i - 1]; open++; } else if (alongX) { lean += h; }
+					if (kind[i + m] != 1) { sum += d[i + m]; open++; } else if (!alongX) { lean -= h; }
+					if (kind[i - m] != 1) { sum += d[i - m]; open++; } else if (!alongX) { lean += h; }
+					if (open == 0)
+					{
+						d[i] = 0f;
+						continue;
+					}
+					float settled = (sum + lean) / open;
+					d[i] += omega * (settled - d[i]);
 				}
 			}
 		}
@@ -230,24 +337,22 @@ namespace FishMMO.Client
 		/// <summary>
 		/// The stream function's offset: harmonic in the open air, zero at the edge, and fixed over the
 		/// rock (set by the caller), so every outline of rock is a streamline.
+		/// One Gauss-Seidel sweep with over-relaxation.
 		/// </summary>
-		private static void RelaxStream(float[] d, byte[] kind, int m, float omega, int sweeps)
+		private static void SweepStream(float[] d, byte[] kind, int m, float omega)
 		{
-			for (int sweep = 0; sweep < sweeps; sweep++)
+			for (int z = 1; z < m - 1; z++)
 			{
-				for (int z = 1; z < m - 1; z++)
+				int row = z * m;
+				for (int x = 1; x < m - 1; x++)
 				{
-					int row = z * m;
-					for (int x = 1; x < m - 1; x++)
+					int i = row + x;
+					if (kind[i] != 0)
 					{
-						int i = row + x;
-						if (kind[i] != 0)
-						{
-							continue;
-						}
-						float settled = 0.25f * (d[i + 1] + d[i - 1] + d[i + m] + d[i - m]);
-						d[i] += omega * (settled - d[i]);
+						continue;
 					}
+					float settled = 0.25f * (d[i + 1] + d[i - 1] + d[i + m] + d[i - m]);
+					d[i] += omega * (settled - d[i]);
 				}
 			}
 		}

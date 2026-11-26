@@ -77,7 +77,11 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// Combat-logout bodies are in the world with nobody driving them, and are not in ConnectionCharacters.
 			foreach (LingeringCharacter lingering in lingeringCharacters.Values)
 			{
-				CollectIfLost(lingering.Character);
+				// Only a body still its own: a reused object is another player's, collected above if it is lost.
+				if (lingering.TryGetBody(out IPlayerCharacter body))
+				{
+					CollectIfLost(body);
+				}
 			}
 
 			// NPCs and pets. Players hold no scene object entry; everything else here is not a character.

@@ -92,11 +92,21 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				data.WaitingSceneLoadCharacters.Remove(conn);
 
-				TryExtractAndReleaseSession(data, waitingSceneCharacter.ID);
+				if (waitingSceneCharacter != null)
+				{
+					TryExtractAndReleaseSession(data, waitingSceneCharacter.ID);
 
-				DispatchCharacterEvent(OnDisconnect, conn, waitingSceneCharacter, nameof(OnDisconnect));
+					DispatchCharacterEvent(OnDisconnect, conn, waitingSceneCharacter, nameof(OnDisconnect));
 
-				Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
+					if (IsGone(waitingSceneCharacter))
+					{
+						LogGoneCharacter(conn, waitingSceneCharacter, "still loading when its connection closed");
+					}
+					else
+					{
+						Server.NetworkWrapper.NetworkManager.StorePooledInstantiated(waitingSceneCharacter.NetworkObject, true);
+					}
+				}
 			}
 
 			if (!data.ConnectionCharacters.TryGetValue(conn, out IPlayerCharacter character))
@@ -106,6 +116,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			// Remove the connection->character entry
 			data.ConnectionCharacters.Remove(conn);
+
+			/* A character whose object was destroyed under it cannot be saved (its transform is gone) or despawned,
+			 * but its claim must still be handed back. The save used to throw first, so nothing after it ran: the
+			 * session was never released and the player could not log in anywhere until the server restarted.
+			 * Its last periodic save stands, as after a crash. */
+			if (IsGone(character))
+			{
+				LogGoneCharacter(conn, character, "in the world when its connection closed");
+				if (character == null)
+				{
+					return;
+				}
+				ClearInstanceDeathCount(character.ID);
+				data.CharactersByID.Remove(character.ID);
+				if (!string.IsNullOrEmpty(character.CharacterNameLower))
+				{
+					data.CharactersByLowerCaseName.Remove(character.CharacterNameLower);
+				}
+				if (data.CharactersByWorld.TryGetValue(character.WorldServerID, out Dictionary<long, IPlayerCharacter> goneWorld))
+				{
+					goneWorld.Remove(character.ID);
+				}
+				if (!skipOnDisconnect)
+				{
+					DispatchCharacterEvent(OnDisconnect, conn, character, nameof(OnDisconnect));
+				}
+				TryExtractAndReleaseSession(data, character.ID);
+				return;
+			}
 
 			/* The instance death count goes with the character, on every route out of this server.
 			 *
@@ -340,6 +379,29 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		}
 
 		/// <summary>
+		/// True when <paramref name="character"/> is null or its Unity object has been destroyed.
+		/// </summary>
+		/// <remarks>
+		/// <c>character == null</c> on the interface does not see a destroyed object: Unity's null is the overloaded
+		/// <c>==</c> on <see cref="UnityEngine.Object"/>, which an interface comparison never calls. A destroyed
+		/// character passes that test and then throws on its first transform or GameObject access. Its plain C#
+		/// properties (ID, name, world server) are still readable, which is what lets its claim be released.
+		/// </remarks>
+		internal static bool IsGone(IPlayerCharacter character)
+		{
+			return character == null || (character is UnityEngine.Object unityObject && unityObject == null);
+		}
+
+		/// <summary>Reports a character found destroyed while this server still tracked it: a bug elsewhere, so loud.</summary>
+		private static void LogGoneCharacter(NetworkConnection conn, IPlayerCharacter character, string where)
+		{
+			Log.Error("CharacterSystem", character == null
+				? $"Connection {conn?.ClientId}: a null character was {where}."
+				: $"Connection {conn?.ClientId}: character {character.ID} '{character.CharacterNameLower}' was destroyed while {where}; " +
+				  "releasing its claim without a save (its last periodic save stands). Something destroyed or reused its object while this server still tracked it.");
+		}
+
+		/// <summary>
 		/// Periodic callback for out-of-bounds character checks.
 		/// </summary>
 		/// <param name="deltaTime">Delta time parameter (unused).</param>
@@ -370,7 +432,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			// which would prevent the need to do all of this lookup stuff.
 			foreach (IPlayerCharacter character in data.ConnectionCharacters.Values)
 			{
-				if (character == null || string.IsNullOrWhiteSpace(character.SceneName))
+				// A destroyed character is the disconnect path's to clean up; reading its transform here threw.
+				if (IsGone(character) || string.IsNullOrWhiteSpace(character.SceneName))
 				{
 					continue;
 				}
@@ -640,10 +703,10 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			List<long> lingering = null;
 			foreach (var kvp in lingeringCharacters)
 			{
-				IPlayerCharacter body = kvp.Value.Character;
-				if (body != null &&
-					body.IsInInstance() &&
-					body.InstanceSceneHandle == instanceSceneID)
+				// By the scene the linger recorded, not the object's: a body despawned or reused by now still holds a claim
+				// that ending the linger hands back.
+				LingeringCharacter entry = kvp.Value;
+				if (entry.CountedInInstance && entry.CountedSceneHandle == instanceSceneID)
 				{
 					(lingering ??= new List<long>()).Add(kvp.Key);
 				}

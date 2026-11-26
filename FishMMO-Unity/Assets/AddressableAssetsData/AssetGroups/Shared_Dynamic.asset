@@ -20,109 +20,137 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 188cb4ddc03de3b40b08c95fc5afb56a
     m_Address: GreaterFaydark
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1d234ea97070a47a5a82e57050746c40
     m_Address: WorldSimPanel
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1fb3c09f53bd2c3c5998626e7d841b22
     m_Address: InteractableDistanceCondition
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 22ae2a7682fef184fab5e0868f2666d3
+    m_Address: Assets/Scenes/WorldScene/Moron/Moron 3 Terrain/Moron 3 Biome Map.asset
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 399b6f57bd881202faf76df2fb774ed9
     m_Address: StoneLayer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3beac095da1831c42b95c47d02fbaf12
     m_Address: Assets/VersionConfig.asset
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 46351237b3e72234a8bf86b294af5914
     m_Address: Felwithe
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5698bc7b728b9e3f5b11006fd1392858
     m_Address: World Sim Mountain
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 5c2d23be0cbdd4048a53de5b3b050809
     m_Address: StartScene A Background
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 8f629fde6505bb188be91d9698c01088
     m_Address: GrassLayer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a0f2e2dfb049684459f356b4502cc0d6
     m_Address: TestDungeon
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a2dc3278bbd2a2d8883e7d71da003f94
     m_Address: World Sim Hill
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a42dd55b9b0e2524f8d7d2d0f621d179
     m_Address: PlayerDistanceCondition
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: af9d2e8814f76f4498e2ed07cc8191ef
     m_Address: StartScene B Background
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b990db2e82046faec8280cfd8f74b6d4
     m_Address: MonsterDistanceCondition
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: da214ccdbdeb48e1bf9f800234807a1f
     m_Address: WaypointDistanceCondition
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: dd202fa0a3b7de04ab1143a8d66afd98
     m_Address: Crushbone
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e24c70deddf6cf726a84a9e1e96936fc
     m_Address: CombatSimNetwork
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: fd1b280444649d6b4962cd57b0298cb3
     m_Address: WorldItemDistanceCondition
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Dynamic
     FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 32d60da793475f74593af93cb933abd4, type: 2}
   m_SchemaSet:
     m_Schemas:
     - {fileID: 11400000, guid: ca22d8e0f6224934e91d45ab09b4e34e, type: 2}
+    m_SchemaDisplayOrder: []
+  m_IncludeInBuild: 1
+  m_IncludeInBuildMigrated: 1

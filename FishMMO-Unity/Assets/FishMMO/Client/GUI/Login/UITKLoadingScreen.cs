@@ -80,10 +80,47 @@ namespace FishMMO.Client
 		/// <summary>The bar as shown in this showing: it only rises (reset when the overlay comes up).</summary>
 		private float displayedProgress;
 
-		/// <summary>Restarts the escape hatch's stall clock.</summary>
+		/// <summary>
+		/// Restarts the escape hatch's stall clock, and takes back an offer already made: loading has moved again.
+		/// </summary>
+		/// <remarks>
+		/// The offer used to stay until the overlay hid, so a load that paused (a long frame, a big bundle on a slow line)
+		/// and then carried on kept telling the player it had "stopped making progress" all the way to the world. Players
+		/// read that as a hang and pressed Return to Login on loads that were about to succeed.
+		/// </remarks>
 		private void NoteAdvance()
 		{
 			this.lastAdvanceUnscaled = Time.unscaledTime;
+			if (this.escapeHatchOffered)
+			{
+				this.escapeHatchOffered = false;
+				ApplyEscapeHatch();
+			}
+		}
+
+		/// <summary>Bytes of the scene download in flight when the stall clock last counted them; -1 when none.</summary>
+		private long lastDownloadedBytes = -1;
+		/// <summary>Bytes arriving that count as an advance: a scene's percentage can sit still while its one big bundle downloads.</summary>
+		private const long DownloadAdvanceBytes = 256 * 1024;
+
+		/// <summary>Counts bytes arriving for the scene download in flight as progress for the stall clock.</summary>
+		private void TickDownloadProgress()
+		{
+			if (!SceneDownloadProgress.TryGetBytes(out long downloaded, out _))
+			{
+				this.lastDownloadedBytes = -1;
+				return;
+			}
+			if (this.lastDownloadedBytes < 0 || downloaded < this.lastDownloadedBytes)
+			{
+				this.lastDownloadedBytes = downloaded;
+				return;
+			}
+			if (downloaded - this.lastDownloadedBytes >= DownloadAdvanceBytes)
+			{
+				this.lastDownloadedBytes = downloaded;
+				NoteAdvance();
+			}
 		}
 
 		/// <summary>
@@ -470,6 +507,10 @@ namespace FishMMO.Client
 
 			TickSceneContentHold();
 			ReportSceneContent();
+			if (Visible)
+			{
+				TickDownloadProgress();
+			}
 
 			/* Client null means boot: the overlay is covering the initial Addressable load, there
 			 * is no session to quit and no login panel to return to yet. Offering the button there

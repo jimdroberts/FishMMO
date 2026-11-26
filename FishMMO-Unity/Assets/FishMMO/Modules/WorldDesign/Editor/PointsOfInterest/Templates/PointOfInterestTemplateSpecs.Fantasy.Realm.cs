@@ -141,10 +141,10 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Manor House: a walled house with a stable, chapel and garden fountain ──
 			T(a, POIType.ManorHouse, "Stone Manor", Walled, Stone)
-				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(StoneHouse, 1, 1, Centre, 0f, 0f, 1.3f, 1.3f).S(Chapel, 0, 1, Scatter).S(Stable, 1, 1, Scatter)
+				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(StoneHouse, 1, 1, Centre, 0f, 0f, 1.3f, 1.3f).S(Chapel, 0, 1, Scatter).S(Stable, 1, 1, Edges)
 				.S(RmGarden, 0, 1, Scatter).S(Well, 0, 1, Scatter).S(Banner, 1, 2, Scatter).S(Storage, 2, 4, Scatter).Pad(0.7f);
 			T(a, POIType.ManorHouse, "Timber Manor", Walled, Timber)
-				.S(Fence, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S("=TimberHouseLarge", 1, 1, Centre, 0f, 0f, 1.2f, 1.3f).S(RmBarn, 0, 1, Scatter).S(Stable, 1, 1, Scatter)
+				.S(Fence, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S("=TimberHouseLarge", 1, 1, Centre, 0f, 0f, 1.2f, 1.3f).S(RmBarn, 0, 1, Scatter).S(Stable, 1, 1, Edges)
 				.S(Well, 0, 1, Scatter).S(Storage, 2, 5, Scatter).S(RmHay, 0, 2, Scatter).Pad(0.7f).Elsewhere(0.6f).In(1.4f, Woods).In(1.4f, Swamp);
 			T(a, POIType.ManorHouse, "Grange", Walled, Stone)
 				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(StoneHouse, 1, 1, Centre, 0f, 0f, 1.3f, 1.3f).S(Granary, 1, 1, Scatter).S(RmBarn, 0, 1, Scatter)
@@ -263,10 +263,10 @@ namespace FishMMO.Shared.WorldDesign
 
 			// ── Pack Hold: Commandery, Lost Throne, Royal Mausoleum ──
 			T(a, POIType.Commandery, "Stone", Walled, Stone)
-				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Chapel, 1, 1, Centre).S(Barracks, 1, 2, Scatter).S(Stable, 1, 1, Scatter).S(Well, 0, 1, Scatter)
+				.S(Wall, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Chapel, 1, 1, Centre).S(Barracks, 1, 2, Scatter).S(Stable, 1, 1, Edges).S(Well, 0, 1, Scatter)
 				.S(Banner, 3, 5, Scatter).S(TrainingYard, 0, 1, Edges).S(Brazier, 1, 2, Scatter).Pad(0.7f);
 			T(a, POIType.Commandery, "Preceptory", Walled, Timber)
-				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Chapel, 1, 1, Centre).S(Longhouse, 1, 2, Scatter).S(Stable, 1, 1, Scatter).S(Banner, 3, 5, Scatter)
+				.S(Palisade, 1, 1, Perimeter).S(Gate, 1, 1, Gates).S(Chapel, 1, 1, Centre).S(Longhouse, 1, 2, Scatter).S(Stable, 1, 1, Edges).S(Banner, 3, 5, Scatter)
 				.S(Storage, 2, 4, Scatter).Pad(0.7f).Elsewhere(0.6f).In(1.3f, Woods).In(1.2f, Cold).Races(Civil);
 
 			T(a, POIType.LostThrone, "Stone Seat", Single, Stone)

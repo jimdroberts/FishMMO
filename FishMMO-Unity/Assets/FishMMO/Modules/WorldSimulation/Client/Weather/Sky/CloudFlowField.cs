@@ -101,6 +101,17 @@ namespace FishMMO.Client
 		private Task<ushort[]> solving;
 		private Task<Prepared> preparing;
 		private float[] solvingLevels;
+
+		/// <summary>
+		/// The flow solve on the web, stepped a little each frame (<see cref="TerrainFlowSolver.Stepper"/>); null elsewhere,
+		/// and when none is running. The web player has no worker: run whole, the solve was one frame of some 15 s.
+		/// </summary>
+		private TerrainFlowSolver.Stepper stepping;
+		/// <summary>The stepped solve's levels packed so far into the field's halves, one a frame once it is done.</summary>
+		private ushort[] steppingHalves;
+		private int steppingPacked;
+		/// <summary>Main-thread time the stepped solve may take a frame, ms: about a quarter of a 60 Hz frame.</summary>
+		private const double StepBudgetMilliseconds = 4.0;
 		private int signature;
 		private int generation;
 
@@ -180,6 +191,10 @@ namespace FishMMO.Client
 				{
 					Debug.LogException(done.Exception.InnerException ?? done.Exception);
 				}
+			}
+			if (stepping != null)
+			{
+				StepSolve();
 			}
 			if (solving != null && solving.IsCompleted)
 			{
@@ -301,6 +316,8 @@ namespace FishMMO.Client
 			generation++;
 			solving = null;
 			preparing = null;
+			stepping = null;
+			steppingHalves = null;
 			rockReady = false;
 			fieldReady = false;
 			HighestRock = 0f;
@@ -433,8 +450,48 @@ namespace FishMMO.Client
 			float[] smoothed = prepared.Smoothed;
 			float[] levels = prepared.Levels;
 			solvingLevels = levels;
+			if (PlatformWork.Inline)
+			{
+				// No worker to hand it to: a few milliseconds of it a frame instead (StepSolve).
+				stepping = TerrainFlowSolver.BeginSolve(smoothed, n, cell, levels);
+				steppingHalves = null;
+				steppingPacked = 0;
+				return;
+			}
 			int mine = generation;
 			solving = PlatformWork.Run(() => mine == generation ? PackField(TerrainFlowSolver.Solve(smoothed, n, cell, levels)) : null);
+		}
+
+		/// <summary>
+		/// Advances the web's stepped solve by its budget; once it is done, packs one level a frame and uploads the field
+		/// with the last. Until then the sky reads the air undisturbed, as it does while a worker solves.
+		/// </summary>
+		private void StepSolve()
+		{
+			if (!stepping.Done)
+			{
+				stepping.Step(StepBudgetMilliseconds);
+				return;
+			}
+			float[][] solved = stepping.Result;
+			if (solved == null || solved.Length != Levels)
+			{
+				stepping = null;
+				steppingHalves = null;
+				return;
+			}
+			int plane = Resolution * Resolution * TerrainFlowSolver.Channels;
+			steppingHalves ??= new ushort[plane * Levels];
+			PackLevel(solved[steppingPacked], steppingHalves, steppingPacked * plane, plane);
+			steppingPacked++;
+			if (steppingPacked < Levels)
+			{
+				return;
+			}
+			ushort[] halves = steppingHalves;
+			stepping = null;
+			steppingHalves = null;
+			UploadField(halves);
 		}
 
 		private void UploadRock(ushort[] halves)
@@ -468,13 +525,18 @@ namespace FishMMO.Client
 			var halves = new ushort[plane * Levels];
 			for (int k = 0; k < Levels; k++)
 			{
-				float[] level = solved[k];
-				for (int i = 0; i < plane; i++)
-				{
-					halves[k * plane + i] = Mathf.FloatToHalf(level[i]);
-				}
+				PackLevel(solved[k], halves, k * plane, plane);
 			}
 			return halves;
+		}
+
+		/// <summary>One solved level into the field's halves at <paramref name="offset"/>.</summary>
+		private static void PackLevel(float[] level, ushort[] halves, int offset, int plane)
+		{
+			for (int i = 0; i < plane; i++)
+			{
+				halves[offset + i] = Mathf.FloatToHalf(level[i]);
+			}
 		}
 
 		private void UploadField(ushort[] halves)
@@ -701,6 +763,8 @@ namespace FishMMO.Client
 			generation++;
 			solving = null;
 			preparing = null;
+			stepping = null;
+			steppingHalves = null;
 			if (field != null)
 			{
 				if (Application.isPlaying) Object.Destroy(field); else Object.DestroyImmediate(field);

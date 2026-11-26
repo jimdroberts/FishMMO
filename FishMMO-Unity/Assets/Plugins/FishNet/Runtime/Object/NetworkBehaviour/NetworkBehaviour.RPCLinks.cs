@@ -78,6 +78,8 @@ namespace FishNet.Object
                 if (serverManager.GetRpcLink(out ushort linkIndex))
                 {
                     _rpcLinks[rpcHash] = new(rpcHash, packetId, linkIndex);
+                    // FISHMMO EDIT: who holds the link, for ServerManager.TryGetRpcLinkOwner.
+                    serverManager.NoteRpcLinkOwner(linkIndex, this, packetId);
                     return true;
                 }
                 else
