@@ -103,6 +103,8 @@ namespace FishMMO.Client
 			/// blank. Display only — nothing resolves a target from it.
 			/// </summary>
 			public string Name = string.Empty;
+			/// <summary>True for a member's seated mercenary (keyed by <c>PartySeatCompanions.RosterKey</c>), not a character.</summary>
+			public bool IsCompanion;
 			/// <summary>The member's health fraction, 0-1.</summary>
 			public float HealthPCT;
 			/// <summary>The member's mana fraction, 0-1.</summary>
@@ -550,6 +552,7 @@ namespace FishMMO.Client
 				partyController.OnValidatePartyMembers += PartyController_OnValidatePartyMembers;
 				partyController.OnRemovePartyMember += OnPartyRemoveMember;
 				partyController.OnLeaveParty += OnLeaveParty;
+				partyController.OnPartyMercenarySeat += OnPartyMercenarySeat;
 			}
 			BindPinSource();
 		}
@@ -597,6 +600,7 @@ namespace FishMMO.Client
 			partyController.OnValidatePartyMembers -= PartyController_OnValidatePartyMembers;
 			partyController.OnRemovePartyMember -= OnPartyRemoveMember;
 			partyController.OnLeaveParty -= OnLeaveParty;
+			partyController.OnPartyMercenarySeat -= OnPartyMercenarySeat;
 		}
 
 		/// <summary>
@@ -916,6 +920,44 @@ namespace FishMMO.Client
 					ApplyIdentity(target);
 				}
 			});
+
+			GetOrCreateRow(model);
+			ApplyModelToRow(model);
+			RefreshHeader();
+		}
+
+		/// <summary>
+		/// Adds, renames or removes the row of the mercenary a member has seated, from that member's roster row.
+		/// </summary>
+		/// <param name="ownerID">The member who hired it.</param>
+		/// <param name="kitID">Its kit, or 0 when none is seated.</param>
+		/// <param name="mercenaryName">Its name.</param>
+		/// <remarks>
+		/// Listed as a row of its own because it holds a seat of its own: a party of five and a mercenary is full. Its live
+		/// vitals come in the same payload as the members', under the same key.
+		/// </remarks>
+		public void OnPartyMercenarySeat(long ownerID, int kitID, string mercenaryName)
+		{
+			long key = PartySeatCompanions.RosterKey(ownerID);
+			if (kitID == 0)
+			{
+				if (roster.ContainsKey(key))
+				{
+					OnPartyRemoveMember(key);
+				}
+				return;
+			}
+
+			MemberModel model = GetOrCreateModel(key);
+			model.IsCompanion = true;
+			model.Rank = PartyRank.None;
+			model.Name = string.IsNullOrEmpty(mercenaryName) ? "Mercenary" : mercenaryName;
+			if (!model.HasVitals)
+			{
+				model.HealthPCT = 1.0f;
+				model.ManaPCT = 1.0f;
+				model.StaminaPCT = 1.0f;
+			}
 
 			GetOrCreateRow(model);
 			ApplyModelToRow(model);
@@ -1284,6 +1326,13 @@ namespace FishMMO.Client
 			rowRoot.EnableInClassList(ROW_PINNED_CLASS, characterID == PinnedMemberID());
 
 			memberList.Add(rowRoot);
+			// A seated mercenary sits directly under the member who hired it.
+			if (PartySeatCompanions.IsCompanionKey(characterID) &&
+				rows.TryGetValue(PartySeatCompanions.OwnerOf(characterID), out MemberRow ownerRow) &&
+				ownerRow.Root != null && ownerRow.Root.parent == memberList)
+			{
+				memberList.Insert(memberList.IndexOf(ownerRow.Root) + 1, rowRoot);
+			}
 			rows.Add(characterID, row);
 			return row;
 		}
@@ -1388,8 +1437,9 @@ namespace FishMMO.Client
 			 * setting their root's visibility, which children inherit; an explicit Visible here
 			 * would override that and leave the badge drawn on a hidden party panel. */
 			bool isLeader = model.Rank == PartyRank.Leader;
-			row.Rank.text = isLeader ? "LEADER" : string.Empty;
-			row.Rank.style.visibility = isLeader ? new StyleEnum<Visibility>(StyleKeyword.Null) : new StyleEnum<Visibility>(Visibility.Hidden);
+			bool badged = isLeader || model.IsCompanion;
+			row.Rank.text = isLeader ? "LEADER" : model.IsCompanion ? "MERCENARY" : string.Empty;
+			row.Rank.style.visibility = badged ? new StyleEnum<Visibility>(StyleKeyword.Null) : new StyleEnum<Visibility>(Visibility.Hidden);
 		}
 
 		/// <summary>
@@ -2047,8 +2097,17 @@ namespace FishMMO.Client
 			{
 				return;
 			}
-			if (BaseCharacter.ClientCharacters.TryGetValue(characterID, out ICharacter member) &&
-				member != null && member.Transform != null &&
+			// A seated mercenary's row resolves to the mercenary itself, when this client can see it.
+			ICharacter member = null;
+			if (PartySeatCompanions.IsCompanionKey(characterID))
+			{
+				member = PartySeatCompanions.ResolveFor(PartySeatCompanions.OwnerOf(characterID));
+			}
+			else
+			{
+				BaseCharacter.ClientCharacters.TryGetValue(characterID, out member);
+			}
+			if (member != null && member.Transform != null &&
 				WithinPinRange(member.Transform.position) &&
 				targetController.TryPinTarget(member.Transform))
 			{
@@ -2076,6 +2135,13 @@ namespace FishMMO.Client
 			if (pinned == null || !pinned.TryGetComponent(out ICharacter character))
 			{
 				return 0;
+			}
+			// A pinned mercenary marks its own row, which goes by its owner.
+			if (character is NPC npc && npc.CompanionOwner != null &&
+				roster.ContainsKey(PartySeatCompanions.RosterKey(npc.CompanionOwner.ID)) &&
+				ReferenceEquals(PartySeatCompanions.ResolveFor(npc.CompanionOwner.ID), character))
+			{
+				return PartySeatCompanions.RosterKey(npc.CompanionOwner.ID);
 			}
 			return character.ID;
 		}
@@ -2162,8 +2228,10 @@ namespace FishMMO.Client
 				!UIManager.TryGetTK("UIContextMenu", out UITKContextMenu contextMenu) ||
 				!Character.TryGet(out IPartyMembership partyController) ||
 				partyController.ID < 1 ||
-				!roster.TryGetValue(characterID, out MemberModel model))
+				!roster.TryGetValue(characterID, out MemberModel model) ||
+				model.IsCompanion)
 			{
+				// A mercenary is managed by whoever hired it, in their Mercenary window: it has no member menu.
 				return;
 			}
 

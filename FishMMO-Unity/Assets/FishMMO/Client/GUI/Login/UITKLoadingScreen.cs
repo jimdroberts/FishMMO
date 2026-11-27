@@ -452,10 +452,10 @@ namespace FishMMO.Client
 				this.stagesSeen.Clear();
 				this.displayedProgress = 0.0f;
 				NoteAdvance();
+				ClearHints();
 			}
 
 			SetProgress(0.0f);
-			SetHint(null);
 			ApplyEscapeHatch();
 			if (loadingImage != null)
 			{
@@ -510,6 +510,7 @@ namespace FishMMO.Client
 			if (Visible)
 			{
 				TickDownloadProgress();
+				RefreshHint();
 			}
 
 			/* Client null means boot: the overlay is covering the initial Addressable load, there
@@ -695,16 +696,19 @@ namespace FishMMO.Client
 		/// </summary>
 		private void ReportSceneContent()
 		{
-			if (!Visible || addressableLoadActive || sceneLoadReporting)
+			if (!Visible || addressableLoadActive || sceneLoadReporting ||
+				!SceneContentLoads.TryDescribe(out string hint, out float progress))
 			{
+				contentHint = null;
 				return;
 			}
-			if (!SceneContentLoads.TryDescribe(out string hint, out float progress))
+			// The stage first: a new stage resets the stage's best progress, which the bar is then measured against. Kept
+			// when the text is unchanged so the hint line sees the same reference and is not recomposed.
+			if (!string.Equals(hint, contentHint, System.StringComparison.Ordinal))
 			{
-				return;
+				contentHint = hint;
 			}
-			// The hint first: a new stage resets the stage's best progress, which the bar is then measured against.
-			SetHint(hint);
+			NoteStage(hint);
 			if (SceneContentLoads.Pending > 0)
 			{
 				SetProgress(progress, SceneStageEnd, ContentLoadsEnd);
@@ -757,6 +761,7 @@ namespace FishMMO.Client
 			contentSettled = false;
 			sceneLoadReporting = false;
 			SceneContentLoads.Covered = false;
+			ClearHints();
 
 			// The status line explains one specific wait; it must not survive into the next
 			// one, which is usually an ordinary scene load with nothing to explain.
@@ -901,22 +906,188 @@ namespace FishMMO.Client
 			}
 		}
 
+		/// <summary>"Entering ..." for the FishNet scene load in flight; null when none is.</summary>
+		private string sceneLoadHint;
+		/// <summary>The content stage's line (<see cref="SceneContentLoads.TryDescribe"/>); null when it is not reporting.</summary>
+		private string contentHint;
+		/// <summary>"Loading ..." for the Addressable item in flight; rebuilt only when the item changes.</summary>
+		private string addressableHint;
+		/// <summary>The raw item name <see cref="addressableHint"/> was built from.</summary>
+		private string addressableHintItem;
+
+		/// <summary>The inputs <see cref="RefreshHint"/> last composed the line from; the line is rebuilt only when one changes.</summary>
+		private string shownSceneHint, shownAddressableHint, shownContentHint;
+		/// <summary>Download readings (tenths of a MB) the line was last composed with; -1 when none was shown.</summary>
+		private long shownSceneTenths = -1, shownSceneTotalTenths = -1, shownItemTenths = -1, shownItemTotalTenths = -1;
+
 		/// <summary>
-		/// Sets the hint line under the progress bar, hiding it when there is nothing to say.
+		/// Player-facing names for the Addressable labels and scenes the client loads behind this overlay. Anything not
+		/// listed is shown with its identifier spaced out (<see cref="Readable"/>).
+		/// </summary>
+		private static readonly System.Collections.Generic.Dictionary<string, string> FriendlyNames =
+			new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal)
+		{
+			{ "Client_Static_Permanent", "client assets" },
+			{ Constants.SharedStaticLabel, "game data" },
+			{ "ClientPostboot", "game systems" },
+			{ "ClientLauncher", "launcher" },
+			{ "LoginBackdrop", "login world" },
+			{ "ClientLoginGUI", "login screen" },
+			{ "ClientWorldGUI", "interface" },
+		};
+
+		/// <summary>
+		/// Counts a new stage of the transition: another scene, the next biome, the next Addressable item. A stage counts once
+		/// per showing, so a line flipping back and forth is not progress.
+		/// </summary>
+		private void NoteStage(string stage)
+		{
+			if (!string.IsNullOrWhiteSpace(stage) && this.stagesSeen.Add(stage))
+			{
+				// Progress, and its bar starts again.
+				this.stageBestProgress = 0.0f;
+				NoteAdvance();
+			}
+		}
+
+		/// <summary>Clears every source of the hint line (the overlay is coming up fresh or going away).</summary>
+		private void ClearHints()
+		{
+			sceneLoadHint = null;
+			contentHint = null;
+			addressableHint = null;
+			addressableHintItem = null;
+			shownSceneHint = shownAddressableHint = shownContentHint = null;
+			shownSceneTenths = shownSceneTotalTenths = shownItemTenths = shownItemTotalTenths = -1;
+			SetHintText(null);
+		}
+
+		/// <summary>
+		/// Writes the line under the bar: one row per load running at once (the FishNet scene load, the Addressable item in
+		/// flight, and the scene's own content once those are done), each with its download where it has one.
+		/// </summary>
+		/// <remarks>
+		/// World entry runs an Addressable batch and a FishNet scene load together, so a single "currently loading" would
+		/// name one and hide the other; each gets its own row instead. Composed only when an input changes (downloads are
+		/// compared in tenths of a MB), so a steady load costs no string work per frame.
+		/// </remarks>
+		private void RefreshHint()
+		{
+			string scene = sceneLoadReporting ? sceneLoadHint : null;
+			long sceneTenths = -1, sceneTotalTenths = -1;
+			if (scene != null && AddressableSceneProcessor.TryGetDownload(out long sceneDownloaded, out long sceneTotal) &&
+				sceneTotal > 0 && sceneDownloaded < sceneTotal)
+			{
+				sceneTenths = ToTenthsOfMegabyte(sceneDownloaded);
+				sceneTotalTenths = ToTenthsOfMegabyte(sceneTotal);
+			}
+
+			string item = null;
+			long itemTenths = -1, itemTotalTenths = -1;
+			if (addressableLoadActive &&
+				AddressableLoadProcessor.TryGetCurrentItem(out string itemName, out _, out UnityEngine.ResourceManagement.AsyncOperations.DownloadStatus download))
+			{
+				if (!string.Equals(itemName, addressableHintItem, System.StringComparison.Ordinal))
+				{
+					addressableHintItem = itemName;
+					addressableHint = $"Loading {FriendlyName(itemName)}";
+					NoteStage(addressableHint);
+				}
+				item = addressableHint;
+				if (download.TotalBytes > 0 && !download.IsDone && download.DownloadedBytes < download.TotalBytes)
+				{
+					itemTenths = ToTenthsOfMegabyte(download.DownloadedBytes);
+					itemTotalTenths = ToTenthsOfMegabyte(download.TotalBytes);
+				}
+			}
+
+			if (ReferenceEquals(scene, shownSceneHint) && ReferenceEquals(item, shownAddressableHint) &&
+				ReferenceEquals(contentHint, shownContentHint) &&
+				sceneTenths == shownSceneTenths && sceneTotalTenths == shownSceneTotalTenths &&
+				itemTenths == shownItemTenths && itemTotalTenths == shownItemTotalTenths)
+			{
+				return;
+			}
+			shownSceneHint = scene;
+			shownAddressableHint = item;
+			shownContentHint = contentHint;
+			shownSceneTenths = sceneTenths;
+			shownSceneTotalTenths = sceneTotalTenths;
+			shownItemTenths = itemTenths;
+			shownItemTotalTenths = itemTotalTenths;
+
+			var line = new System.Text.StringBuilder(96);
+			AppendRow(line, scene, sceneTenths, sceneTotalTenths);
+			AppendRow(line, item, itemTenths, itemTotalTenths);
+			AppendRow(line, contentHint, -1, -1);
+			SetHintText(line.Length > 0 ? line.ToString() : null);
+		}
+
+		/// <summary>Appends one row of the hint, with "(12.3 of 80.0 MB)" when a download is running.</summary>
+		private static void AppendRow(System.Text.StringBuilder line, string row, long tenths, long totalTenths)
+		{
+			if (string.IsNullOrWhiteSpace(row))
+			{
+				return;
+			}
+			if (line.Length > 0)
+			{
+				line.Append('\n');
+			}
+			line.Append(row);
+			if (totalTenths > 0)
+			{
+				line.Append(" (").Append((tenths / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))
+					.Append(" of ").Append((totalTenths / 10.0).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))
+					.Append(" MB)");
+			}
+		}
+
+		/// <summary>Bytes as whole tenths of a MB (1 MB = 1,048,576 bytes).</summary>
+		private static long ToTenthsOfMegabyte(long bytes) => bytes * 10 / (1024 * 1024);
+
+		/// <summary>The player-facing name of an Addressable label or scene (<see cref="FriendlyNames"/>).</summary>
+		private static string FriendlyName(string identifier)
+		{
+			if (string.IsNullOrEmpty(identifier))
+			{
+				return "game files";
+			}
+			return FriendlyNames.TryGetValue(identifier, out string friendly) ? friendly : Readable(identifier);
+		}
+
+		/// <summary>An identifier spaced out for display: "Some_Label" and "SomeScene" become "Some Label" and "Some Scene".</summary>
+		private static string Readable(string identifier)
+		{
+			var text = new System.Text.StringBuilder(identifier.Length + 8);
+			for (int i = 0; i < identifier.Length; ++i)
+			{
+				char c = identifier[i];
+				if (c == '_' || c == '-')
+				{
+					text.Append(' ');
+					continue;
+				}
+				// A capital after a lower-case letter starts a word ("LoginBackdrop"); runs of capitals ("GUI") stay together.
+				if (i > 0 && char.IsUpper(c) && char.IsLower(identifier[i - 1]))
+				{
+					text.Append(' ');
+				}
+				text.Append(c);
+			}
+			return text.ToString();
+		}
+
+		/// <summary>
+		/// Writes the hint label, hiding it when there is nothing to say.
 		/// </summary>
 		/// <param name="text">The hint, or null to hide the line.</param>
 		/// <remarks>
 		/// Collapsed rather than left blank so the block above it stays vertically centred on
 		/// itself — an empty label still occupies a line and shifts everything off-centre.
 		/// </remarks>
-		private void SetHint(string text)
+		private void SetHintText(string text)
 		{
-			if (!string.IsNullOrWhiteSpace(text) && this.stagesSeen.Add(text))
-			{
-				// A new stage of the transition (another scene, the next biome): progress, and its bar starts again.
-				this.stageBestProgress = 0.0f;
-				NoteAdvance();
-			}
 			if (loadingHint == null)
 			{
 				return;
@@ -991,7 +1162,9 @@ namespace FishMMO.Client
 			/* Naming the destination turns an anonymous wait into a legible one. The player
 			 * already knows they clicked something; the useful fact is where they are going,
 			 * and it costs nothing since the lookup data is in hand. */
-			SetHint(string.IsNullOrWhiteSpace(sld.FullName) ? null : $"Entering {sld.FullName}");
+			sceneLoadHint = string.IsNullOrWhiteSpace(sld.FullName) ? null : $"Entering {sld.FullName}";
+			NoteStage(sceneLoadHint);
+			RefreshHint();
 
 			// Details is an Inspector reference and the overlay must survive it being unset:
 			// an NRE here escapes into FishNet's SceneManager event invocation, which aborts
@@ -1022,6 +1195,7 @@ namespace FishMMO.Client
 		{
 			sceneTransitionActive = false;
 			sceneLoadReporting = false;
+			sceneLoadHint = null;
 			RefreshVisibility();
 		}
 

@@ -39,6 +39,12 @@ namespace FishMMO.Shared
 		/// </remarks>
 		event Action<PartyMemberVitalsEntry[]> OnUpdatePartyVitals;
 
+		/// <summary>
+		/// Raised for each roster row with the mercenary that member has seated: owner ID, kit (0 for none) and name. A
+		/// seated mercenary takes a party seat and is listed under <c>PartySeatCompanions.RosterKey(owner)</c>.
+		/// </summary>
+		event Action<long, int, string> OnPartyMercenarySeat;
+
 		/// <summary>Triggers invoked when the character joins or creates a party.</summary>
 		List<Trigger> OnPartyJoinTriggers { get; }
 

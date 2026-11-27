@@ -47,6 +47,9 @@ namespace FishMMO.Shared
 		/// </summary>
 		public event Action OnLeaveParty;
 
+		/// <inheritdoc />
+		public event Action<long, int, string> OnPartyMercenarySeat;
+
 		[Header("ECA - Party")]
 		[Tooltip("Triggers invoked when the character joins or creates a party.")]
 		[SerializeField]
@@ -97,6 +100,7 @@ namespace FishMMO.Shared
 			OnValidatePartyMembers = null;
 			OnRemovePartyMember = null;
 			OnLeaveParty = null;
+			OnPartyMercenarySeat = null;
 		}
 
 #if !UNITY_SERVER
@@ -200,6 +204,7 @@ namespace FishMMO.Shared
 			}
 
 			OnAddPartyMember?.Invoke(msg.Member.CharacterID, msg.Member.Rank, PartyVitalsQuantiser.ByteToFraction(msg.Member.HealthPCT));
+			OnPartyMercenarySeat?.Invoke(msg.Member.CharacterID, msg.Member.MercenaryKitID, msg.Member.MercenaryName);
 		}
 
 		/// <summary>
@@ -219,6 +224,11 @@ namespace FishMMO.Shared
 			for (int i = 0; i < msg.Members.Length; i++)
 			{
 				newIds.Add(msg.Members[i].CharacterID);
+				// A seated mercenary is a row of its own, so the set that keeps rows names it too.
+				if (msg.Members[i].MercenaryKitID != 0)
+				{
+					newIds.Add(PartySeatCompanions.RosterKey(msg.Members[i].CharacterID));
+				}
 			}
 
 			OnValidatePartyMembers?.Invoke(newIds);

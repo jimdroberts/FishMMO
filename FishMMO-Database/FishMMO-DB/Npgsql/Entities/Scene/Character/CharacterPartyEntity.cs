@@ -34,5 +34,17 @@ namespace FishMMO.Database.Npgsql.Entities
 		/// Health percentage of the character, used for party frame display.
 		/// </summary>
 		public float HealthPCT { get; set; }
+		/// <summary>
+		/// The kit template of the mercenary this member has seated in the party, or 0 for none (the Mercenaries module).
+		/// </summary>
+		/// <remarks>
+		/// A hired mercenary takes a party seat, and a seat is counted wherever members are: the capacity checks count
+		/// every row plus every row with a seated mercenary. It lives on its owner's row because a mercenary is not a
+		/// character and has no row of its own, and so that the owner leaving (the row deleted) takes the seat with it.
+		/// At most one row of a party has one.
+		/// </remarks>
+		public int MercenaryKitID { get; set; }
+		/// <summary>The seated mercenary's name, for the party frame of members who cannot see it; empty for none.</summary>
+		public string MercenaryName { get; set; }
 	}
 }

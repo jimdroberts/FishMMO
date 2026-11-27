@@ -24,7 +24,7 @@ Shader "FishMMO/Rock Fillet"
         [HideInInspector][NoScaleOffset] _FishLookNormal("Look normals", 2DArray) = "" {}
         [HideInInspector][NoScaleOffset] _FishLookMask("Look gloss and occlusion", 2DArray) = "" {}
         [HideInInspector] _FishLookSlices("Look slices (albedo, normal, gloss, occlusion)", Vector) = (-1, -1, -1, -1)
-        [HideInInspector] _FishFilletMaps("Maps in use (metallic-gloss, occlusion, normal; w the look arrays)", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _FishFilletMaps("Maps in use (metallic-gloss, occlusion, normal)", Vector) = (0, 0, 0, 0)
         [HideInInspector] _FishContactOn("Contact blend", Float) = 1.0
         [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull", Float) = 2.0
     }
@@ -53,6 +53,8 @@ Shader "FishMMO/Rock Fillet"
             #pragma target 4.5
             #pragma vertex FishFilletForwardVertex
             #pragma fragment FishFilletForwardFragment
+            // The look's maps as array slices or as 2D maps (RockFillets; FishRockFilletPass.hlsl's FISH_FILLET_MAP).
+            #pragma multi_compile_local_fragment _ _FISH_FILLET_LOOK_ARRAY
 
             // As FishMMO/Weather Lit's forward pass, less the lightmaps, probe volumes and debug views a GPU-built surface
             // never has.
@@ -82,6 +84,14 @@ Shader "FishMMO/Rock Fillet"
             // The fine ground map through the core's inline sampler, as the rock's forward pass reads it.
             #define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
             #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
+            // The look-array variant reads no base map, so sampler_BaseMap, which the moss borrows, is not bound there (Unity
+            // refuses a sampler whose texture no program reads): the moss borrows the colour array's instead, imported Repeat,
+            // trilinear, aniso 8 as every generated map is. Declared here, before the moss; FishRockFilletPass.hlsl skips it.
+            #if defined(_FISH_FILLET_LOOK_ARRAY)
+            TEXTURE2D_ARRAY(_FishLookColour);   SAMPLER(sampler_FishLookColour);
+            #define FISH_FILLET_COLOUR_ARRAY_DECLARED 1
+            #define FISH_MOSS_SAMPLER sampler_FishLookColour
+            #endif
             #include "Assets/FishMMO/Shaders/Surface/FishMoss.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishGroundContactLit.hlsl"
             #include "Assets/FishMMO/Shaders/Surface/FishIndoor.hlsl"

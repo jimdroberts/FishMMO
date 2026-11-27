@@ -1481,6 +1481,13 @@ MonoBehaviour:
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: e51005df1ed54689bdea80ace6b9c38c
+    m_Address: UIMercenary
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - ClientWorldGUI_Panels
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: e7ee28202b5d4b148c267ba2fbb4e8af
     m_Address: UIShrine
     m_ReadOnly: 0

@@ -82,6 +82,10 @@ namespace FishMMO.Shared
 		private static Dictionary<string, AddressableSceneLoadData> currentSceneOperations = new Dictionary<string, AddressableSceneLoadData>();
 		/// <summary>The scene load the drain is waiting on, for <see cref="TryGetSceneDownload"/>; default when none.</summary>
 		private static AsyncOperationHandle<SceneInstance> sceneInFlight;
+		/// <summary>The asset key the drain is working on, for <see cref="TryGetCurrentItem"/>; null when it is on a scene or idle.</summary>
+		private static AddressableAssetKey assetInFlight;
+		/// <summary>The scene name the drain is working on, for <see cref="TryGetCurrentItem"/>; null when it is on an asset or idle.</summary>
+		private static string sceneNameInFlight;
 
 		/// <summary>
 		/// Items enqueued since the last <see cref="BeginProcessQueue"/>, awaiting a batch
@@ -167,6 +171,8 @@ namespace FishMMO.Shared
 			sceneOperationQueue.Clear();
 			currentSceneOperations.Clear();
 			sceneInFlight = default;
+			assetInFlight = null;
+			sceneNameInFlight = null;
 
 			stagedAssetKeys.Clear();
 			stagedSceneNames.Clear();
@@ -288,6 +294,51 @@ namespace FishMMO.Shared
 				return true;
 			}
 			status = default;
+			return false;
+		}
+
+		/// <summary>
+		/// The item the drain is working on, for a loading screen to name: the key's first label (an asset label such as
+		/// <c>Shared_Static_Permanent</c>) or the requested scene name. False when the drain is idle.
+		/// </summary>
+		/// <remarks>
+		/// One item at a time: the drain validates, loads and activates strictly in turn, so whatever else is queued is
+		/// waiting behind this one.
+		/// </remarks>
+		/// <param name="name">The label or scene name, unformatted.</param>
+		/// <param name="isScene">True for a scene, false for an asset label.</param>
+		/// <param name="download">The item's download in flight; <see cref="DownloadStatus.TotalBytes"/> is 0 when nothing is being fetched.</param>
+		public static bool TryGetCurrentItem(out string name, out bool isScene, out DownloadStatus download)
+		{
+			download = default;
+			if (!isProcessingQueue)
+			{
+				name = null;
+				isScene = false;
+				return false;
+			}
+			if (sceneNameInFlight != null)
+			{
+				name = sceneNameInFlight;
+				isScene = true;
+				if (sceneInFlight.IsValid() && !sceneInFlight.IsDone)
+				{
+					download = sceneInFlight.GetDownloadStatus();
+				}
+				return true;
+			}
+			if (assetInFlight != null && assetInFlight.Keys != null && assetInFlight.Keys.Count > 0)
+			{
+				name = assetInFlight.Keys[0];
+				isScene = false;
+				if (currentOperations.TryGetValue(assetInFlight, out AsyncOperationHandle handle) && handle.IsValid() && !handle.IsDone)
+				{
+					download = handle.GetDownloadStatus();
+				}
+				return true;
+			}
+			name = null;
+			isScene = false;
 			return false;
 		}
 
@@ -635,6 +686,8 @@ namespace FishMMO.Shared
 				{
 					AddressableAssetKey assetKey = waitingResourceValidationQueue[0];
 					waitingResourceValidationQueue.RemoveAt(0);
+					assetInFlight = assetKey;
+					sceneNameInFlight = null;
 
 					if (assetKey == null || assetKey.Keys == null || assetKey.Keys.Count < 1)
 					{
@@ -671,6 +724,8 @@ namespace FishMMO.Shared
 				{
 					AddressableAssetKey assetKey = operationQueue.First();
 					operationQueue.Remove(assetKey);
+					assetInFlight = assetKey;
+					sceneNameInFlight = null;
 
 					Log.Debug("AddressableLoadProcessor", $"Loading: {assetKey}");
 
@@ -722,6 +777,8 @@ namespace FishMMO.Shared
 					string sceneName = next.Key;
 					AddressableSceneLoadData sceneLoadData = next.Value;
 					sceneOperationQueue.Remove(sceneName);
+					assetInFlight = null;
+					sceneNameInFlight = sceneName;
 
 					if (loadedScenes.ContainsKey(sceneName))
 					{
@@ -783,6 +840,8 @@ namespace FishMMO.Shared
 			isProcessingQueue = false;
 			itemsCompletedThisRun = 0;
 			itemsTotalThisRun = 0;
+			assetInFlight = null;
+			sceneNameInFlight = null;
 
 			RaiseProgress(1f);
 		}
@@ -1464,6 +1523,8 @@ namespace FishMMO.Shared
 			sceneOperationQueue.Clear();
 			currentSceneOperations.Clear();
 			sceneInFlight = default;
+			assetInFlight = null;
+			sceneNameInFlight = null;
 			stagedAssetKeys.Clear();
 			stagedSceneNames.Clear();
 

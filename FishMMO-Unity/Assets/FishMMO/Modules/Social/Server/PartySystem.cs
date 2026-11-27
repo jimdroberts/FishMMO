@@ -1114,6 +1114,13 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				}
 
 				vitalsEntryBuffer.Add(entry);
+
+				// The member's seated companion (a hired mercenary), on the row the roster lists it under.
+				ICharacter companion = PartySeatCompanions.ResolveFor(member.ID);
+				if (companion != null)
+				{
+					vitalsEntryBuffer.Add(BuildCompanionVitals(companion, PartySeatCompanions.RosterKey(member.ID), now));
+				}
 			}
 
 			PartyMemberVitalsUpdateBroadcast broadcast = new PartyMemberVitalsUpdateBroadcast()
@@ -1125,6 +1132,35 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 
 			vitalsRecipients.Clear();
 			vitalsRecipientIDs.Clear();
+		}
+
+		/// <summary>
+		/// One seated companion's vitals row, keyed by <paramref name="rosterKey"/> (<see cref="PartySeatCompanions.RosterKey"/>).
+		/// Its buffs go through the same per-recipient ledger as a member's. No meters: what a companion does is credited
+		/// to its owner (<c>NPC.CompanionOwner</c>), so its own would always read zero.
+		/// </summary>
+		private PartyMemberVitalsEntry BuildCompanionVitals(ICharacter companion, long rosterKey, float now)
+		{
+			ObservedBuffEntry[] buffs = BuildObservedBuffs(companion, now, out int signature);
+			bool buffsChanged = observedBuffLedger.NeedsSend(vitalsRecipientIDs, rosterKey, signature);
+			if (buffsChanged)
+			{
+				observedBuffLedger.MarkSent(vitalsRecipientIDs, rosterKey, signature);
+			}
+
+			PartyMemberVitalsEntry entry = new PartyMemberVitalsEntry()
+			{
+				CharacterID = rosterKey,
+				BuffsChanged = buffsChanged,
+				Buffs = buffsChanged ? buffs : null,
+			};
+			if (companion.TryGet(out ICharacterAttributeController attributeController))
+			{
+				entry.HealthPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetHealthResourceAttributeCurrentPercentage());
+				entry.ManaPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetManaResourceAttributeCurrentPercentage());
+				entry.StaminaPCT = PartyVitalsQuantiser.FractionToByte(attributeController.GetStaminaResourceAttributeCurrentPercentage());
+			}
+			return entry;
 		}
 
 		/// <summary>
@@ -1224,7 +1260,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 		/// bytes on the wire per member per second.
 		/// </para>
 		/// </remarks>
-		private ObservedBuffEntry[] BuildObservedBuffs(IPlayerCharacter member, float now, out int signature)
+		private ObservedBuffEntry[] BuildObservedBuffs(ICharacter member, float now, out int signature)
 		{
 			signature = 0;
 
@@ -2219,6 +2255,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						CharacterID = x.CharacterID,
 						Rank = (PartyRank)x.Rank,
 						HealthPCT = PartyVitalsQuantiser.FractionToByte(x.HealthPCT),
+						MercenaryKitID = x.MercenaryKitID,
+						MercenaryName = x.MercenaryKitID != 0 ? x.MercenaryName : null,
 					};
 				}
 
@@ -2395,6 +2433,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 						CharacterID = row.CharacterID,
 						Rank = (PartyRank)row.Rank,
 						HealthPCT = PartyVitalsQuantiser.FractionToByte(row.HealthPCT),
+						MercenaryKitID = row.MercenaryKitID,
+						MercenaryName = row.MercenaryKitID != 0 ? row.MercenaryName : null,
 					};
 				}
 
@@ -3266,7 +3306,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					AnswerDatabaseFault(conn);
 					return;
 				}
-				if (membersResult.Data == null || membersResult.Data.Count >= MaxPartySize)
+				// Seats, not rows: a member's seated mercenary takes one too.
+				if (membersResult.Data == null || CharacterPartyData.CountSeats(membersResult.Data) >= MaxPartySize)
 				{
 					return;
 				}
@@ -3433,7 +3474,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 					return PartyJoinOutcome.Failed;
 				}
 
-				if (membersResult.Data.Count >= MaxPartySize)
+				// Seats, not rows: a member's seated mercenary takes one too.
+				if (CharacterPartyData.CountSeats(membersResult.Data) >= MaxPartySize)
 				{
 					return PartyJoinOutcome.Full;
 				}
@@ -3705,6 +3747,95 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				await Log.Error("PartySystem", $"Error creating a party for an instance (CharID={characterID}): {ex}");
 				return 0;
+			}
+		}
+
+		/// <inheritdoc />
+		public async Task<PartyJoinOutcome> TrySeatMercenaryAsync(long characterID, long partyID, int kitID, string mercenaryName)
+		{
+			if (characterID <= 0 || partyID <= 0 || kitID == 0)
+			{
+				return PartyJoinOutcome.Refused;
+			}
+
+			// Claimed like a join: a seat is counted against the same capacity, and the two must not interleave.
+			if (!TryBeginPartyMutation(partyID, out long mutationToken))
+			{
+				return PartyJoinOutcome.Refused;
+			}
+
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
+					!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return PartyJoinOutcome.Failed;
+				}
+
+				DatabaseResult<MercenarySeatResult> seatResult = await charPartyService.SeatMercenaryAsync(characterID, partyID, kitID, mercenaryName, MaxPartySize);
+				if (!seatResult.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Could not seat the mercenary of character {characterID} in party {partyID}: [{seatResult.ErrorCode}] {seatResult.ErrorMessage}");
+					return PartyJoinOutcome.Failed;
+				}
+
+				switch (seatResult.Data)
+				{
+					case MercenarySeatResult.Seated:
+						// Every scene server re-reads the roster, the seat with it.
+						await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(TrySeatMercenaryAsync));
+						return PartyJoinOutcome.Joined;
+					case MercenarySeatResult.PartyFull:
+						return PartyJoinOutcome.Full;
+					default:
+						return PartyJoinOutcome.Refused;
+				}
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error seating the mercenary of character {characterID} in party {partyID}: {ex}");
+				return PartyJoinOutcome.Failed;
+			}
+			finally
+			{
+				EndPartyMutation(partyID, mutationToken);
+			}
+		}
+
+		/// <inheritdoc />
+		public async Task<bool> UnseatMercenaryAsync(long characterID, long partyID)
+		{
+			if (characterID <= 0)
+			{
+				return false;
+			}
+
+			try
+			{
+				if (Server?.Database?.ServiceRegistry == null ||
+					!Server.Database.ServiceRegistry.TryGet<ICharacterPartyService>(out var charPartyService) ||
+					!Server.Database.ServiceRegistry.TryGet<IPartyUpdateService>(out var partyUpdateService))
+				{
+					return false;
+				}
+
+				DatabaseResult result = await charPartyService.UnseatMercenaryAsync(characterID);
+				if (!result.IsSuccess)
+				{
+					await Log.Warning("PartySystem", $"Could not free the mercenary seat of character {characterID}: [{result.ErrorCode}] {result.ErrorMessage}");
+					return false;
+				}
+				if (partyID > 0)
+				{
+					await AnnouncePartyChangeAsync(partyUpdateService, partyID, nameof(UnseatMercenaryAsync));
+				}
+				return true;
+			}
+			catch (Exception ex)
+			{
+				await Log.Error("PartySystem", $"Error freeing the mercenary seat of character {characterID}: {ex}");
+				return false;
 			}
 		}
 

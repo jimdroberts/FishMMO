@@ -353,7 +353,24 @@ namespace FishMMO.UnitTests
 				"FISH_FILLET_MAP(_MetallicGlossMap, sampler_MetallicGlossMap, _FishLookMask, _FishLookSlices.z, uvX)",
 				"FISH_FILLET_MAP(_OcclusionMap, sampler_OcclusionMap, _FishLookMask, _FishLookSlices.w, uvX)",
 				"FISH_FILLET_MAP(_BumpMap, sampler_BumpMap, _FishLookNormal, _FishLookSlices.y, uvX)");
-			StringAssert.Contains("source.IsKeywordEnabled(TerrainLookMath.Keyword) ? 1f : 0f", SourceScanPins.ReadCode(Terrain + "RockFillets.cs"));
+			StringAssert.Contains("m.SetKeyword(new LocalKeyword(shader, LookArrayKeyword), source.IsKeywordEnabled(TerrainLookMath.Keyword));",
+				SourceScanPins.ReadCode(Terrain + "RockFillets.cs"));
+		}
+
+		[Test]
+		public void RockFillets_BindOnlyTheMapSetTheirVariantReads()
+		{
+			// A branch on a per-look value bound both sets (four 2D maps, three arrays): High Fidelity's forward pass needed 35
+			// textures, over WebGPU's 32 a stage, and Unity could not draw it. The set is a keyword, chosen at compile time.
+			string shader = SourceScanPins.ReadCode(Shaders + "FishRockFillet.shader");
+			StringAssert.Contains("#pragma multi_compile_local_fragment _ " + RockFillets.LookArrayKeyword, shader);
+			string pass = SourceScanPins.ReadCode(Shaders + "FishRockFilletPass.hlsl");
+			Ordered(pass, "#if defined(" + RockFillets.LookArrayKeyword + ")",
+				"#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D_ARRAY(array,",
+				"#else",
+				"#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D(map, mapSampler, uv))",
+				"#endif");
+			StringAssert.DoesNotContain("_FishFilletMaps.w", pass, "no runtime choice between the sets");
 		}
 
 		[Test]

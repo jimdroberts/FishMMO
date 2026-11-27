@@ -120,5 +120,8 @@
 		/// What a buyer pays for an auction house listing. The seller receives it, less the house's cut, by mail.
 		/// </summary>
 		AuctionPurchase = 13,
+
+		/// <summary>Hiring a mercenary (the Mercenaries module). Paid once; returning a resting one is free.</summary>
+		MercenaryHire = 14,
 	}
 }

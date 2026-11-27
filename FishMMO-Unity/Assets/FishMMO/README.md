@@ -28,7 +28,7 @@ assembly is the boundary, and scenes, prefabs and assets keep resolving their sc
 
 | Module | Id | What it is | Remove together with |
 |---|---|---|---|
-| [Abilities](Modules/Abilities/README.md) | `abilities` | Abilities and their casting, cooldowns, knowledge, the ability book and cast bar. | Ability Crafting, Achievements, Archetypes, Commerce, Hotkeys, Items, NPCs & AI, Pets, Wildlife, Staff, World Interactables, Matchmaking, Social, World Design |
+| [Abilities](Modules/Abilities/README.md) | `abilities` | Abilities and their casting, cooldowns, knowledge, the ability book and cast bar. | Ability Crafting, Achievements, Archetypes, Commerce, Hotkeys, Items, Mercenaries, NPCs & AI, Pets, Wildlife, Staff, World Interactables, Matchmaking, Social, World Design |
 | [Ability Crafting](Modules/AbilityCrafting/README.md) | `abilitycrafting` | Crafting new abilities at an ability crafter. | |
 | [Achievements](Modules/Achievements/README.md) | `achievements` | Achievement progress, tiers, rewards and the window. | World Design |
 | [Appearance](Modules/Appearance/README.md) | `appearance` | Race proportions and blend shapes, hidden body regions, equipment drawn on the body. | |
@@ -43,16 +43,17 @@ assembly is the boundary, and scenes, prefabs and assets keep resolving their sc
 | [Factions](Modules/Factions/README.md) | `factions` | Faction standings, the aggression toggle and their harm relation. | |
 | [Hotkeys](Modules/Hotkeys/README.md) | `hotkeys` | The hotkey bar: bindings, persistence, keys, stacked or paged bars. | |
 | [Housing](Modules/Housing/README.md) | `housing` | Plots, building, rent, guests and the house vault. | |
-| [Items](Modules/Items/README.md) | `items` | The inventory, bank and predicted equipment, the inventory system and the item windows. | |
+| [Items](Modules/Items/README.md) | `items` | The inventory, bank and predicted equipment, the inventory system and the item windows. | Mercenaries |
 | [Leaderboards](Modules/Leaderboards/README.md) | `leaderboards` | PvP and PvE boards read from the database. | |
 | [Map](Modules/Map/README.md) | `map` | The world map and minimap, fog of war, map notes and marker filters. | World Design |
 | [Matchmaking](Modules/Matchmaking/README.md) | `matchmaking` | Group finder, dungeon finder and instances, arenas. | |
+| [Mercenaries](Modules/Mercenaries/README.md) | `mercenaries` | Mercenaries for hire: preset kits, a party seat, pet-style AI, gear kept for them, rest and return. | |
 | [Naming](Modules/Naming/README.md) | `naming` | The name generator and the names scene objects are given. | World Design |
 | [Mounts](Modules/Mounts/README.md) | `mounts` | Saddles, the Mount ability (a mount is a buff), how each mount moves, the drawn mount, Dismount, the Stablemaster. | |
-| [NPCs & AI](Modules/NPCs/README.md) | `npcs` | The server's NPC brains, threat and spawners; the NPC designer. | Pets, Wildlife, Staff, World Design |
+| [NPCs & AI](Modules/NPCs/README.md) | `npcs` | The server's NPC brains, threat and spawners; the NPC designer. | Mercenaries, Pets, Wildlife, Staff, World Design |
 | [Pets](Modules/Pets/README.md) | `pets` | Pets and summons, the pet system and the pet control panel. | |
 | [Quests](Modules/Quests/README.md) | `quests` | Quests, the quest log and quest givers. | |
-| [Social](Modules/Social/README.md) | `social` | Friends, party and guild. | |
+| [Social](Modules/Social/README.md) | `social` | Friends, party and guild. | Mercenaries (its tests) |
 | [Staff and Support](Modules/Staff/README.md) | `staff` | `/gm` and `/admin`, the staff console, reports and tickets. | |
 | [Terrain](Modules/Terrain/README.md) | `terrain` | The client's GPU drawing of the ground: trees, props, grass, scatter. | World Test Bed, World Design, Naming |
 | [Travel](Modules/Travel/README.md) | `travel` | Waypoint discovery and fast travel; the travel spells (Portal to Bind, Mark, Recall, Gate to Gate Stones, Call to Arms). | |

@@ -19,5 +19,11 @@ namespace FishMMO.Shared
 		/// The bank inventory for storing items in a bank or safe location.
 		/// </summary>
 		Bank = 2,
+
+		/// <summary>
+		/// The gear a character keeps for its hired mercenary (the Mercenaries module). It stays the character's when the
+		/// mercenary dies or rests, and goes onto the next one hired.
+		/// </summary>
+		MercenaryEquipment = 3,
 	}
 }

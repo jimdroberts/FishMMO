@@ -533,6 +533,12 @@ namespace FishMMO.Shared.WorldDesign
 		private const float PierFender = 0.4f;
 		/// <summary>Headings tried for a jetty of a boat's own.</summary>
 		private const int JettyTries = 24;
+		/// <summary>How far past the waterline a jetty runs beyond its boat's length at most, metres.</summary>
+		private const float JettyReachBeyondHull = 10f;
+		/// <summary>How far back up the shore a jetty's run square to it is measured from, metres.</summary>
+		private const float JettyRunBack = 12f;
+		/// <summary>The cosine of the most a jetty turns from the heading tried to meet the shore square (75°): past it, the next heading.</summary>
+		private static readonly float JettyTurnCos = Mathf.Cos(75f * Mathf.Deg2Rad);
 
 		/// <summary>
 		/// Whether a hull at <paramref name="at"/> along <paramref name="axis"/> floats on one water this boat may lie on along its
@@ -662,7 +668,7 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>
 		/// A jetty of the boat's own: along a heading out from the site, from the bank where the ground meets its deck (or the
 		/// high-water line) plank module by module out over the water while its piles reach the bed
-		/// (<see cref="PropsFeature.MeasureShore(System.Func{float, float}, System.Func{float, float}, float, float, float, out float, out float, out float)"/>),
+		/// (<see cref="PropsFeature.MeasureShore(System.Func{float, float}, System.Func{float, float}, float, float, float, out float, out float, out float, float, float)"/>),
 		/// the hull lying alongside its outer modules (the moored ones with posts and a ladder down), afloat at mean water. A cog
 		/// lying at a jetty whose piles stop short of its draft at low water settles on the bottom then, as a cog was built to.
 		/// </summary>
@@ -677,22 +683,31 @@ namespace FishMMO.Shared.WorldDesign
 			}
 			float sea = water.Sea;
 			float tide = float.IsNegativeInfinity(sea) ? 0f : PropsFeature.HighestTideOf(context);
-			// MeasureShore looks 2.5 of these ahead for the water and runs out 0.6 of one past it at most.
+			// MeasureShore looks 2.5 of these ahead for the water (its reach past the waterline is the hull's, below).
 			float span = Mathf.Max((length + 18f) / 0.6f, radius + 40f);
 			float offset = PierHalfWidth + beam * 0.5f + PierFender;
+			Waters waters = water;
+			bool wetAt(Vector2 p)
+			{
+				float level = waters.At(p.x, p.y);
+				return !float.IsNegativeInfinity(level) && level > context.GroundAt(p.x, p.y) + 0.3f;
+			}
+			// Out past the waterline no further than the hull and a little: a berth, not as far as the piles could go.
+			float reach = length + JettyReachBeyondHull;
+			float Measure(Vector2 from0, Vector2 along, out float deck0, out float from1, out float to1) => PropsFeature.MeasureShore(
+				t => context.GroundAt(from0.x + along.x * t, from0.y + along.y * t),
+				t =>
+				{
+					Vector2 q = from0 + along * t;
+					return context.Water != null ? context.Water.SurfaceAt(q.x, q.y) : float.NegativeInfinity;
+				},
+				sea, tide, span, out deck0, out from1, out to1, float.PositiveInfinity, reach);
 			for (int attempt = 0; attempt < JettyTries; attempt++)
 			{
 				float a = random.NextFloat() * Mathf.PI * 2f;
 				var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
 				Vector2 origin = site + dir * (radius * 0.3f);
-				float shore = PropsFeature.MeasureShore(
-					t => context.GroundAt(origin.x + dir.x * t, origin.y + dir.y * t),
-					t =>
-					{
-						Vector2 q = origin + dir * t;
-						return context.Water != null ? context.Water.SurfaceAt(q.x, q.y) : float.NegativeInfinity;
-					},
-					sea, tide, span, out float deck, out float from, out float to);
+				float shore = Measure(origin, dir, out float deck, out float from, out float to);
 				if (float.IsNaN(shore) || float.IsNaN(from) || float.IsNaN(to))
 				{
 					continue;
@@ -701,6 +716,20 @@ namespace FishMMO.Shared.WorldDesign
 				if (float.IsNegativeInfinity(water.At(wet.x, wet.y)))
 				{
 					// The water it runs out over is not this boat's (a lake for a ship, a basin shut in from the ocean).
+					continue;
+				}
+				// Square to the shore where it meets the water, not along the heading tried: that met the shore at a slant.
+				Vector2 waterline = origin + dir * shore;
+				Vector2 square = PropsFeature.ShoreNormal(wetAt, waterline, dir);
+				if (Vector2.Dot(square, dir) < JettyTurnCos)
+				{
+					continue;
+				}
+				dir = square;
+				origin = waterline - dir * JettyRunBack;
+				shore = Measure(origin, dir, out deck, out from, out to);
+				if (float.IsNaN(shore) || float.IsNaN(from) || float.IsNaN(to))
+				{
 					continue;
 				}
 				int modules = Mathf.Max(2, Mathf.RoundToInt((to - from) / PierModule));

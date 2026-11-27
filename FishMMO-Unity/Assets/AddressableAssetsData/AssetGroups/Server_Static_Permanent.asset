@@ -159,6 +159,14 @@ MonoBehaviour:
     - Server_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 2d7a30282247a4816af51e1ea99319f0
+    m_Address: MercenarySystem
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - SceneServer_Systems
+    - Server_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3011f4f80a62463c881f7f7269c2de7e
     m_Address: WorldInteractableSystem
     m_ReadOnly: 0

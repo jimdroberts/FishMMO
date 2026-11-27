@@ -41,6 +41,7 @@ All party mutations emit a party update marker (`IPartyUpdateService.PersistAsyn
 ## Features
 
 - Party creation with automatic leader assignment and database persistence
+- Mercenary seats (the Mercenaries module): a member's hired mercenary holds a seat of its own, recorded on that member's row (`character_party.mercenary_kit_id`, `mercenary_name`). Every capacity check counts seats (members plus seated mercenaries): `CountAsync`, `PersistAsync`'s locked count and `CharacterPartyData.CountSeats` in the accept and join paths. A party holds one (`SeatMercenaryAsync`, under the party row lock); the row moving to another party or being deleted takes the seat with it. Roster entries carry the seat (`PartyAddEntry.MercenaryKitID`/`MercenaryName`) and the client lists it under `PartySeatCompanions.RosterKey(owner)`; the vitals pump adds its row from the live companion (`PartySeatCompanions.Resolve`). `TrySeatMercenaryAsync` / `UnseatMercenaryAsync` announce the change like any other mutation
 - Chat-based party invite commands (`/pi`, `/invite`) resolving targets by lowercase character name
 - Invitation flow with pending-invite tracking, TTL expiration, and bounded cleanup sweep
 - Accept/decline invitation with capacity checks and membership persistence

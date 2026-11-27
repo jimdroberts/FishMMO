@@ -1044,6 +1044,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 110648a884e049a7d971951ae2495305
+    m_Address: a wizard for hire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 1131aa5377e19ec030d6ba5d5dae3e27
     m_Address: Merchant Interact
     m_ReadOnly: 0
@@ -2173,6 +2180,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 202dfadbe2d54389af9f0c35fc62046b
     m_Address: Plot Interact
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 207ade8b0eab5f088a7cda037ba2739e
+    m_Address: Wizard Mercenary Kit
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -3361,6 +3375,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 30ebc81143e9a527baae755a27e4fe4d
+    m_Address: a healer for hire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 310be9e7330451e4f9b479a8dd71236e
     m_Address: GoblinWarren - Stockade (Small)
     m_ReadOnly: 0
@@ -3725,6 +3746,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 37bcc999131140b189559eb076024d54
+    m_Address: a mercenary wizard
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 3808d76d702f2899793db81ded0f4752
     m_Address: Pamir Hips
     m_ReadOnly: 0
@@ -3937,6 +3965,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 3b1f8948c96621a50bea0ca268afa744
     m_Address: RitualSite - Bonefire (Medium-Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 3b47cceead8778270bb927f676965cd4
+    m_Address: a mercenary archer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -4392,6 +4427,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 42d5c8d62e7d987379ce955122fe4098
     m_Address: Pigeon Guano Node
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 42eff421ca253fcc2bbb874eda32b096
+    m_Address: a mercenary healer
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -6758,6 +6800,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: 6b4a3572a0630b4a0a2e355493c26409
     m_Address: StoneCircle - Trilithons
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: 6b6377b5512253c15ac0407ff7dd11ef
+    m_Address: Healer Mercenary Kit
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -10254,6 +10303,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: a3cfdc184e1b170bea82d657c16cebab
+    m_Address: a mercenary warrior
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: a3faf3f516c6461b8dfc143c16748348
     m_Address: PlayerCombatTriggers
     m_ReadOnly: 0
@@ -11241,6 +11297,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b4963962308dbd0ea858ef20db4aaea9
+    m_Address: Warrior Mercenary Kit
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b49b15e64d664505b90412570309e091
     m_Address: Phantom
     m_ReadOnly: 0
@@ -11432,6 +11495,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: b7726aa2f6831acf7896881ab797c35f
     m_Address: Pyramid - Smooth-sided (Large)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: b791ea8eda92f328692605c0eb30a482
+    m_Address: Archer Mercenary Kit
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -12713,6 +12783,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: ce49271f47c18816fb1c0ea574fe5794
     m_Address: CliffPalace - Alcove (Small)
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: ce85e2a717b6cd504a00be40b5b40b4a
+    m_Address: a warrior for hire
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent
@@ -14538,6 +14615,13 @@ MonoBehaviour:
     - Shared_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: eab0414b27852310abf69522a23d3076
+    m_Address: an archer for hire
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: eab1242282cf4fc3b49aa312e2e6f2f0
     m_Address: Spider Elf
     m_ReadOnly: 0
@@ -15918,6 +16002,13 @@ MonoBehaviour:
     m_FolderGuid: 
   - m_GUID: fe3425a466033e34ead49fcfc3204895
     m_Address: Small World Item
+    m_ReadOnly: 0
+    m_SerializedLabels:
+    - Shared_Static_Permanent
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
+  - m_GUID: fe38a3765d074b0cb3a4fbade7c5e0ea
+    m_Address: Mercenary Interact
     m_ReadOnly: 0
     m_SerializedLabels:
     - Shared_Static_Permanent

@@ -414,6 +414,12 @@ namespace FishMMO.Server.Implementation.LoginServer
 							r = await markService.DeleteAsync(characterId);
 							if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete the mark for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 						}
+						// The hired mercenary (the Mercenaries module); its gear went with the items above. Optional, as the mark is.
+						if (TryGetDbService(out ICharacterMercenaryService mercenaryService))
+						{
+							r = await mercenaryService.DeleteAsync(characterId);
+							if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete the mercenary for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
+						}
 						r = await archetypeService.DeleteAsync(characterId, deleteVersion);
 						if (!r.IsSuccess) await Log.Warning("CharacterSelectSystem", $"Failed to delete archetypes for character {characterId}: [{r.ErrorCode}] {r.ErrorMessage}");
 					}

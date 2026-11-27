@@ -108,6 +108,27 @@ namespace FishMMO.Server.Core.World.SceneServer
 		Task<long> TryCreatePartyForInstanceAsync(TConnection conn, long characterID, long worldServerID, float healthPCT);
 
 		/// <summary>
+		/// Seats a member's hired mercenary in the member's party (the Mercenaries module), so it takes a seat as a member
+		/// does. Refused when another member already has one seated (a party holds one) or no seat is free; seats are
+		/// counted against the same size limit as members, in the same locked statement. Call from an async worker.
+		/// </summary>
+		/// <param name="characterID">The member who hired it.</param>
+		/// <param name="partyID">The member's party.</param>
+		/// <param name="kitID">The mercenary's kit template.</param>
+		/// <param name="mercenaryName">Its name, for the roster of members who cannot see it.</param>
+		/// <returns><see cref="PartyJoinOutcome.Joined"/> when seated; <see cref="PartyJoinOutcome.Full"/> when no seat is
+		/// free; <see cref="PartyJoinOutcome.Refused"/> when another mercenary is seated or the member is not in the party.</returns>
+		Task<PartyJoinOutcome> TrySeatMercenaryAsync(long characterID, long partyID, int kitID, string mercenaryName);
+
+		/// <summary>
+		/// Frees a member's mercenary seat and tells the party. A member with none is success. Call from an async worker.
+		/// </summary>
+		/// <param name="characterID">The member who hired it.</param>
+		/// <param name="partyID">The party to tell, or 0.</param>
+		/// <returns>False only when the write failed.</returns>
+		Task<bool> UnseatMercenaryAsync(long characterID, long partyID);
+
+		/// <summary>
 		/// Drops a character out of a party it cannot belong to, with no connection involved.
 		/// </summary>
 		/// <remarks>

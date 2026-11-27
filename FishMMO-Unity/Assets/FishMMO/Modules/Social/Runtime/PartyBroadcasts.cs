@@ -81,6 +81,13 @@ namespace FishMMO.Shared
 		/// <see cref="PartyVitalsQuantiser.ByteToFraction"/>.
 		/// </remarks>
 		public byte HealthPCT;
+		/// <summary>
+		/// The kit of the mercenary this member has seated in the party, or 0 for none. A seated mercenary is listed as a
+		/// row of its own under its owner, keyed by <c>PartySeatCompanions.RosterKey</c>.
+		/// </summary>
+		public int MercenaryKitID;
+		/// <summary>The seated mercenary's name; null when none is seated.</summary>
+		public string MercenaryName;
 	}
 
 	/// <summary>

@@ -1485,6 +1485,21 @@ namespace FishMMO.Shared.WorldDesign
 				PointOfInterestLayoutSlot slot = request.Slots[s];
 				float module = slot.Module > 0f ? slot.Module : Mathf.Max(1f, slot.Footprint.y);
 				int piers = Mathf.Clamp(slot.Count, 1, 4);
+				if (request.PierRuns.Count > 0)
+				{
+					// Each pier along its own run, square to the shore where it meets the water.
+					for (int p = 0; p < Mathf.Min(piers, request.PierRuns.Count); p++)
+					{
+						PointOfInterestPierRun run = request.PierRuns[p];
+						int count = Math.Max(2, Mathf.RoundToInt((run.To - run.From) / module));
+						for (int i = 0; i < count; i++)
+						{
+							Vector2 at = run.Origin + run.Direction * (run.From + (i + 0.5f) * module);
+							TryLay(s, -1, at, run.Yaw, new Vector2(slot.Footprint.x, module), Bound.None, PierGroup);
+						}
+					}
+					return;
+				}
 				bool measured = !float.IsNaN(request.PierFrom) && !float.IsNaN(request.PierTo);
 				int modules = measured
 					? Math.Max(2, Mathf.RoundToInt((request.PierTo - request.PierFrom) / module))

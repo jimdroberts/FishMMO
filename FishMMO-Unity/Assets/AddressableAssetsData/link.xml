@@ -205,6 +205,15 @@
     <type fullname="FishMMO.Client.UITKArenaScoreboard" preserve="all" />
     <type fullname="FishMMO.Client.UITKDungeonFinder" preserve="all" />
   </assembly>
+  <assembly fullname="FishMMO.Mercenaries, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Shared.Mercenary" preserve="all" />
+    <type fullname="FishMMO.Shared.MercenaryKitTemplate" preserve="all" />
+    <type fullname="FishMMO.Shared.MercenaryRecruiter" preserve="all" />
+    <type fullname="FishMMO.Shared.SendMercenaryOfferAction" preserve="nothing" serialized="true" />
+  </assembly>
+  <assembly fullname="FishMMO.Mercenaries.Client, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
+    <type fullname="FishMMO.Client.UITKMercenary" preserve="all" />
+  </assembly>
   <assembly fullname="FishMMO.Mounts, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
     <type fullname="FishMMO.Shared.MountBuffTemplate" preserve="all" />
     <type fullname="FishMMO.Shared.SaddleTemplate" preserve="all" />

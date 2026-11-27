@@ -61,6 +61,16 @@ namespace FishMMO.Shared
 		[SerializeField, ShowReadonly]
 		private int npcSeed = 0;
 
+		/// <summary>The seed this NPC's look (model) and attribute rolls were drawn from; 0 before it spawns.</summary>
+		public int AppearanceSeed => npcSeed;
+
+		/// <summary>
+		/// Server: a seed the next spawn uses instead of drawing a fresh one, so an NPC comes back looking as it did (a
+		/// hired mercenary keeps the face it was hired with); 0 draws as usual. Set after the object is taken from the
+		/// pool and before it is spawned; the spawn consumes it.
+		/// </summary>
+		public int SpawnSeedOverride { get; set; }
+
 		/// <summary>
 		/// Gender selected for this NPC's generated name and model set.
 		/// </summary>
@@ -389,7 +399,8 @@ namespace FishMMO.Shared
 
 			// Re-roll seed and RNG on every spawn (pool reuse).
 			// ResetState clears these when the object returns to the pool.
-			npcSeed = npcSeedGenerator.Next();
+			npcSeed = SpawnSeedOverride != 0 ? SpawnSeedOverride : npcSeedGenerator.Next();
+			SpawnSeedOverride = 0;
 			npcRNG = new DeterministicRNG(npcSeed);
 
 			// Regenerate gender and name for model selection and display.

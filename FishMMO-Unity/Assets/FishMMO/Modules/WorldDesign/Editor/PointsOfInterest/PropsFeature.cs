@@ -59,6 +59,20 @@ namespace FishMMO.Shared.WorldDesign
 		Behind,
 	}
 
+	/// <summary>
+	/// The line one pier runs along, in the site's frame: from <see cref="Origin"/> along <see cref="Direction"/> (a unit
+	/// vector, out over the water), its modules from <see cref="From"/> to <see cref="To"/> metres along it.
+	/// </summary>
+	public struct PointOfInterestPierRun
+	{
+		public Vector2 Origin;
+		public Vector2 Direction;
+		public float From, To;
+
+		/// <summary>The run's heading in the site's frame, degrees (0 the site's heading, 90 right): the yaw its modules are laid at.</summary>
+		public float Yaw => Mathf.Atan2(Direction.x, Direction.y) * Mathf.Rad2Deg;
+	}
+
 	/// <summary>One piece a layout places: which slot it fills, where in the site's frame, and which way it faces.</summary>
 	public struct PointOfInterestLayoutPiece
 	{
@@ -176,6 +190,12 @@ namespace FishMMO.Shared.WorldDesign
 		/// NaN lays it from <see cref="ShoreAhead"/> for its footprint's share of the site.
 		/// </summary>
 		public float PierFrom = float.NaN, PierTo = float.NaN;
+		/// <summary>
+		/// Each pier's own run, measured square to the shore where it meets the water (<see cref="PropsFeature.MeasurePierRuns"/>):
+		/// the layout lays one pier along each, in order, and falls back to <see cref="PierFrom"/>/<see cref="PierTo"/> down the
+		/// heading when there are none.
+		/// </summary>
+		public readonly List<PointOfInterestPierRun> PierRuns = new List<PointOfInterestPierRun>();
 		/// <summary>Spots kept clear for the site's gameplay (a waypoint, a respawn point): x, z in the site's frame and y the radius.</summary>
 		public readonly List<Vector3> Clearings = new List<Vector3>();
 		/// <summary>
@@ -1573,6 +1593,8 @@ namespace FishMMO.Shared.WorldDesign
 			if (request.Slots.Exists(s => s.Role == PointOfInterestSlotRole.Pier))
 			{
 				request.ShoreAhead = MeasureShore(context, out pierDeck, out request.PierFrom, out request.PierTo);
+				PointOfInterestLayoutSlot pierSlot = request.Slots.Find(s => s.Role == PointOfInterestSlotRole.Pier);
+				MeasurePierRuns(context, request.ShoreAhead, Mathf.Clamp(pierSlot.Count, 1, 4), Mathf.Max(pierSlot.Footprint.x * 3f, 8f), request.PierRuns);
 			}
 
 			// The ways that come in: a walled site opens its gates toward them.
@@ -2890,7 +2912,130 @@ namespace FishMMO.Shared.WorldDesign
 		/// <summary>The most a pier's deck may stand over the bank where it starts, metres: a step up, not a climb.</summary>
 		private const float PierStep = 0.5f;
 		/// <summary>How far back of the high-water line a pier may start to meet a bank at its deck's height, metres.</summary>
-		private const float PierLandward = 8f;
+		private const float PierLandward = 4f;
+		/// <summary>
+		/// How deep the water (at its mean) is at a pier's head, metres: enough for the village's boats to lie there, and the
+		/// pier runs no further. A landing stage is built out to the water a boat needs, not as far as its piles could go.
+		/// </summary>
+		public const float PierBerthDepth = 1.5f;
+		/// <summary>The furthest a pier runs out past the waterline, metres, however gently the bed shelves.</summary>
+		public const float PierMaxReach = 15f;
+		/// <summary>How far back up the shore a pier's run is measured from, metres: past the most it starts behind the water.</summary>
+		private const float PierRunBack = 12f;
+		/// <summary>The most a pier turns from the first pier's heading to meet its own stretch of shore square, degrees: so piers side by side never cross.</summary>
+		private const float PierFanDegrees = 25f;
+		/// <summary>The most a pier turns from the site's heading to meet the shore square, degrees.</summary>
+		private const float PierTurnDegrees = 75f;
+
+		/// <summary>
+		/// The runs of a site's piers (<see cref="PointOfInterestLayoutRequest.PierRuns"/>), each square to the shore where it
+		/// meets the water, rather than all down the site's heading.
+		/// </summary>
+		/// <remarks>
+		/// The site's heading is the planner's, read off a coarse distance-to-water field, so the shore seldom crosses it square:
+		/// piers laid along it ran into the water at a slant (and, slanting across a shelving beach, further than they needed to).
+		/// The first pier's shore is found down the heading as before (<paramref name="shoreAhead"/>); its way into the water is the
+		/// shore's normal there (<see cref="ShoreNormal"/>). The others stand <paramref name="spacing"/> apart along that shore,
+		/// each finding its own waterline and turning to meet it square, within <see cref="PierFanDegrees"/> of the first.
+		/// </remarks>
+		internal static void MeasurePierRuns(PointOfInterestSiteContext context, float shoreAhead, int piers, float spacing, List<PointOfInterestPierRun> runs)
+		{
+			runs.Clear();
+			if (float.IsNaN(shoreAhead) || context.GroundAt == null)
+			{
+				return;
+			}
+			float sea = SeaLevelOf(context);
+			float tide = float.IsNegativeInfinity(sea) ? 0f : HighestTideOf(context);
+			Func<float, float> groundAt(Vector2 origin, Vector2 dir) => t => context.OnGround(origin + dir * t).y;
+			Func<float, float> waterAt(Vector2 origin, Vector2 dir) => t =>
+			{
+				Vector3 at = context.OnGround(origin + dir * t);
+				return context.Water != null ? context.Water.SurfaceAt(at.x, at.z) : float.NegativeInfinity;
+			};
+			bool wet(Vector2 local)
+			{
+				Vector3 at = context.OnGround(local);
+				float level = context.Water != null ? context.Water.SurfaceAt(at.x, at.z) : float.NegativeInfinity;
+				if (float.IsNegativeInfinity(level) && !float.IsNegativeInfinity(sea) && at.y < sea)
+				{
+					level = sea;
+				}
+				return !float.IsNegativeInfinity(level) && level > at.y + 0.3f;
+			}
+
+			Vector2 ahead = Vector2.up;
+			Vector2 first = ShoreNormal(wet, ahead * shoreAhead, ahead);
+			first = TurnToward(first, ahead, PierTurnDegrees);
+			var along = new Vector2(first.y, -first.x);
+			for (int p = 0; p < piers; p++)
+			{
+				Vector2 foot = ahead * shoreAhead + along * ((p - (piers - 1) * 0.5f) * spacing);
+				// This pier's own waterline, found along the first pier's heading, and the shore's normal there.
+				Vector2 start = foot - first * PierRunBack;
+				float shore = MeasureShore(groundAt(start, first), waterAt(start, first), sea, tide, (PierRunBack + PierMaxReach) / 2.5f, out _, out _, out _);
+				if (float.IsNaN(shore))
+				{
+					continue;
+				}
+				Vector2 waterline = start + first * shore;
+				Vector2 dir = TurnToward(ShoreNormal(wet, waterline, first), first, PierFanDegrees);
+				Vector2 origin = waterline - dir * PierRunBack;
+				if (float.IsNaN(MeasureShore(groundAt(origin, dir), waterAt(origin, dir), sea, tide, (PierRunBack + PierMaxReach) / 2.5f, out _, out float from, out float to))
+					|| float.IsNaN(from) || float.IsNaN(to))
+				{
+					continue;
+				}
+				runs.Add(new PointOfInterestPierRun { Origin = origin, Direction = dir, From = from, To = to });
+			}
+		}
+
+		/// <summary>
+		/// The way out into the water square to the shore at <paramref name="at"/>: the mean of the bearings to the water on
+		/// rings around it, less those to dry ground. On a straight shore that is the shore's normal; on a curving one, the
+		/// way the water opens. <paramref name="fallback"/> where the rings are all wet or all dry.
+		/// </summary>
+		public static Vector2 ShoreNormal(Func<Vector2, bool> wet, Vector2 at, Vector2 fallback)
+		{
+			const int Bearings = 24;
+			Vector2 sum = Vector2.zero;
+			int wetCount = 0, dryCount = 0;
+			for (float radius = 4f; radius <= 12f; radius += 4f)
+			{
+				for (int k = 0; k < Bearings; k++)
+				{
+					float a = k * (2f * Mathf.PI / Bearings);
+					var u = new Vector2(Mathf.Sin(a), Mathf.Cos(a));
+					if (wet(at + u * radius))
+					{
+						sum += u;
+						wetCount++;
+					}
+					else
+					{
+						sum -= u;
+						dryCount++;
+					}
+				}
+			}
+			if (wetCount == 0 || dryCount == 0 || sum.sqrMagnitude < 1e-4f)
+			{
+				return fallback.normalized;
+			}
+			return sum.normalized;
+		}
+
+		/// <summary><paramref name="direction"/>, turned toward <paramref name="toward"/> until it is within <paramref name="maxDegrees"/> of it.</summary>
+		internal static Vector2 TurnToward(Vector2 direction, Vector2 toward, float maxDegrees)
+		{
+			float off = Vector2.SignedAngle(toward, direction);
+			if (Mathf.Abs(off) <= maxDegrees)
+			{
+				return direction.normalized;
+			}
+			float a = (Mathf.Atan2(toward.x, toward.y) * Mathf.Rad2Deg - Mathf.Sign(off) * maxDegrees) * Mathf.Deg2Rad;
+			return new Vector2(Mathf.Sin(a), Mathf.Cos(a));
+		}
 
 		/// <summary>Metres ahead of the centre where the water begins, and the pier's deck over it; NaN where there is no shore.</summary>
 		public static float MeasureShore(PointOfInterestSiteContext context, out float deck) => MeasureShore(context, out deck, out _, out _);
@@ -2908,8 +3053,13 @@ namespace FishMMO.Shared.WorldDesign
 		/// </para>
 		/// <para>
 		/// <b>From the bank.</b> A deck that high over a beach would start a step taller than a man where the water does, so the
-		/// pier starts back up the shore where the ground reaches its deck (or, on a low beach, at the high-water line), and runs
-		/// out as far past the waterline as it would have; it stops short where the bed falls deeper than its piles reach.
+		/// pier starts back up the shore where the ground reaches its deck (or, on a low beach, at the high-water line).
+		/// </para>
+		/// <para>
+		/// <b>Out to a berth.</b> It runs out until the water at its head is <see cref="PierBerthDepth"/> deep, as a landing stage
+		/// is built, and never more than <see cref="PierMaxReach"/> past the waterline; it stops short where the bed falls deeper
+		/// than its piles reach. Run out as far as the piles could go, across a gently shelving bed, piers stretched tens of
+		/// metres to sea.
 		/// </para>
 		/// </remarks>
 		public static float MeasureShore(PointOfInterestSiteContext context, out float deck, out float from, out float to)
@@ -2938,8 +3088,10 @@ namespace FishMMO.Shared.WorldDesign
 		/// <paramref name="sea"/> the mean sea level (negative infinity for none) and <paramref name="highestTide"/> how far
 		/// over it the tide comes.
 		/// </summary>
+		/// <param name="berth">How deep the water (at its mean) need be at the pier's head: it stops there (<see cref="PierBerthDepth"/>).</param>
+		/// <param name="maxReach">The furthest it runs past the waterline, metres (<see cref="PierMaxReach"/>).</param>
 		public static float MeasureShore(Func<float, float> groundAlong, Func<float, float> waterAlong, float sea, float highestTide, float radius,
-			out float deck, out float from, out float to)
+			out float deck, out float from, out float to, float berth = PierBerthDepth, float maxReach = PierMaxReach)
 		{
 			deck = float.NaN;
 			from = to = float.NaN;
@@ -2982,9 +3134,9 @@ namespace FishMMO.Shared.WorldDesign
 				{
 					from = t;
 				}
-				// Out as far past the waterline as a pier reaches, short of where the piles stop meeting the bed or the ground
-				// comes up dry again.
-				float outward = t + Mathf.Max(6f, radius * 0.6f);
+				// Out to where a boat can lie at its head, no further than it reaches, and short of where the piles stop
+				// meeting the bed or the ground comes up dry again.
+				float outward = t + Mathf.Max(6f, maxReach);
 				to = t;
 				for (float o = t; o <= outward; o += 0.5f)
 				{
@@ -2994,6 +3146,10 @@ namespace FishMMO.Shared.WorldDesign
 						break;
 					}
 					to = o;
+					if (level - bed >= berth)
+					{
+						break;
+					}
 				}
 				to = Mathf.Max(to, from + 6f);
 				return t;

@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f50f40e27ffadcc1ba8a416c9a30e44, type: 3}
+  m_Name: MercenarySystem
+  m_EditorClassIdentifier: FishMMO.Mercenaries.Server::FishMMO.Server.Implementation.World.SceneServer.MercenarySystem
+  currencyTemplate: {fileID: 11400000, guid: 5f83904fcedd0864fbb6162f45fbeb9e, type: 2}
+  seatCheckIntervalSeconds: 1
+  seatGraceSeconds: 5
+  maxMainThreadActionsPerFrame: 100
+  ingressDebounceMilliseconds: 250
+  ingressSweepIntervalSeconds: 5
+  ingressEntryTtlSeconds: 30
+  ingressSweepMaxRemovals: 128

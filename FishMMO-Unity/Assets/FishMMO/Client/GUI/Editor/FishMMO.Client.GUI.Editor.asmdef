@@ -5,7 +5,9 @@
         "FishMMO.Client",
         "FishMMO.Shared",
         "FishMMO.Shared.Tools.Editor",
-        "WebTransport"
+        "WebTransport",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor"
     ],
     "includePlatforms": [
         "Editor"

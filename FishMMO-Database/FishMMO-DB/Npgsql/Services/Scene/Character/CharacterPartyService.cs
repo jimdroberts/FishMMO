@@ -66,14 +66,15 @@ namespace FishMMO.Database.Npgsql.Services
 		private const int CombatLoggedFlagMask = 1 << 13;
 
 		/// <summary>
-		/// Compiled query for counting party members.
+		/// Compiled query for counting a party's SEATS: one per member and one per seated mercenary
+		/// (<see cref="CharacterPartyEntity.MercenaryKitID"/>), which is what every capacity check compares.
 		/// </summary>
 		private static readonly Func<NpgsqlDbContext, long, CancellationToken, Task<int>> getPartyMemberCountQuery =
 			EF.CompileAsyncQuery((NpgsqlDbContext context, long partyId, CancellationToken ct) =>
 				context.CharacterParties
 					.AsNoTracking()
 					.Where(p => p.PartyID == partyId)
-					.Count());
+					.Sum(p => p.MercenaryKitID != 0 ? 2 : 1));
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="CharacterPartyService"/> class.
@@ -155,7 +156,7 @@ namespace FishMMO.Database.Npgsql.Services
 						SELECT CASE
 							WHEN NOT EXISTS (SELECT 1 FROM party_row) THEN FALSE
 							WHEN EXISTS (SELECT 1 FROM existing_membership WHERE party_id = {{1}}) THEN TRUE
-							WHEN (SELECT COUNT(*) FROM {TableName} WHERE party_id = {{1}}) < {{2}} THEN TRUE
+							WHEN (SELECT COUNT(*) + COUNT(*) FILTER (WHERE mercenary_kit_id <> 0) FROM {TableName} WHERE party_id = {{1}}) < {{2}} THEN TRUE
 							ELSE FALSE
 						END AS ok
 					),
@@ -169,7 +170,10 @@ namespace FishMMO.Database.Npgsql.Services
 							party_id = EXCLUDED.party_id,
 							rank = EXCLUDED.rank,
 							health_pct = EXCLUDED.health_pct,
-							version = EXCLUDED.version
+							version = EXCLUDED.version,
+							-- A seat belongs to the party it was taken in: a row moved to another party leaves its mercenary behind.
+							mercenary_kit_id = CASE WHEN {TableName}.party_id = EXCLUDED.party_id THEN {TableName}.mercenary_kit_id ELSE 0 END,
+							mercenary_name = CASE WHEN {TableName}.party_id = EXCLUDED.party_id THEN {TableName}.mercenary_name ELSE '' END
 						WHERE
 							EXCLUDED.version > {TableName}.version
 						RETURNING 1
@@ -326,14 +330,7 @@ namespace FishMMO.Database.Npgsql.Services
 				if (entity == null)
 					return (CharacterPartyData?)null;
 
-				return (CharacterPartyData?)new CharacterPartyData(
-					id: entity.ID,
-					version: entity.Version,
-					characterID: entity.CharacterID,
-					partyID: entity.PartyID,
-					rank: entity.Rank,
-					healthPCT: entity.HealthPCT
-				);
+				return (CharacterPartyData?)ToData(entity);
 			}, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
@@ -469,7 +466,9 @@ namespace FishMMO.Database.Npgsql.Services
 				characterID: p.CharacterID,
 				partyID: p.PartyID,
 				rank: p.Rank,
-				healthPCT: p.HealthPCT);
+				healthPCT: p.HealthPCT,
+				mercenaryKitID: p.MercenaryKitID,
+				mercenaryName: p.MercenaryName);
 		}
 
 		/// <summary>
@@ -504,6 +503,101 @@ namespace FishMMO.Database.Npgsql.Services
 				result[entry.Key] = entry.Value;
 			}
 			return result;
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult<MercenarySeatResult>> SeatMercenaryAsync(long characterId, long partyId, int kitId, string mercenaryName, int maxCapacity, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0 || partyId <= 0)
+			{
+				return DatabaseResult<MercenarySeatResult>.Failure(DatabaseErrorCodes.ValidationError, "Invalid character or party ID.");
+			}
+			if (kitId == 0)
+			{
+				return DatabaseResult<MercenarySeatResult>.Failure(DatabaseErrorCodes.ValidationError, "A seated mercenary needs a kit.");
+			}
+			if (maxCapacity <= 0 || maxCapacity > MaxAllowedPartyCapacity)
+			{
+				return DatabaseResult<MercenarySeatResult>.Failure(DatabaseErrorCodes.ValidationError, $"Max capacity must be 1 to {MaxAllowedPartyCapacity}.");
+			}
+			string name = string.IsNullOrEmpty(mercenaryName) ? "" : (mercenaryName.Length > 32 ? mercenaryName.Substring(0, 32) : mercenaryName);
+
+			return await ExecuteTransactionAsync(async dbContext =>
+			{
+				var partyTableName = dbContext.GetTableName<PartyEntity>();
+
+				/* The party row is locked in its own statement first, as PersistAsync does and for the same reason (issue
+				 * #267): a join waiting on the lock must count after this seat commits, and this seat after it. */
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"SELECT id FROM {partyTableName} WHERE id = {{0}} FOR UPDATE",
+					new object[] { partyId },
+					cancellationToken).ConfigureAwait(false);
+
+				var sql = $@"
+					WITH
+					owner_row AS (
+						SELECT mercenary_kit_id
+						FROM {TableName}
+						WHERE character_id = {{0}} AND party_id = {{1}}
+					),
+					others AS (
+						SELECT
+							COUNT(*) + COUNT(*) FILTER (WHERE mercenary_kit_id <> 0) AS seats,
+							COUNT(*) FILTER (WHERE mercenary_kit_id <> 0 AND character_id <> {{0}}) AS other_mercenaries
+						FROM {TableName}
+						WHERE party_id = {{1}}
+					),
+					verdict AS (
+						SELECT CASE
+							WHEN NOT EXISTS (SELECT 1 FROM owner_row) THEN 1
+							WHEN (SELECT other_mercenaries FROM others) > 0 THEN 2
+							WHEN (SELECT mercenary_kit_id FROM owner_row) <> 0 THEN 0
+							WHEN (SELECT seats FROM others) >= {{2}} THEN 3
+							ELSE 0
+						END AS code
+					),
+					seated AS (
+						UPDATE {TableName}
+						SET mercenary_kit_id = {{3}}, mercenary_name = {{4}}
+						WHERE character_id = {{0}} AND party_id = {{1}} AND (SELECT code FROM verdict) = 0
+						RETURNING 1
+					)
+					SELECT CASE
+						WHEN (SELECT code FROM verdict) <> 0 THEN (SELECT code FROM verdict)
+						WHEN EXISTS (SELECT 1 FROM seated) THEN 0
+						ELSE 4
+					END AS value";
+
+				int code = await ExecuteScalarIntAsync(dbContext, sql,
+					new object[] { characterId, partyId, maxCapacity, kitId, name },
+					cancellationToken).ConfigureAwait(false);
+				switch (code)
+				{
+					case 0: return MercenarySeatResult.Seated;
+					case 1: return MercenarySeatResult.NotAMember;
+					case 2: return MercenarySeatResult.PartyHasMercenary;
+					case 3: return MercenarySeatResult.PartyFull;
+					default: throw new StaleStateException("The mercenary seat was not written.");
+				}
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <inheritdoc/>
+		public async Task<DatabaseResult> UnseatMercenaryAsync(long characterId, CancellationToken cancellationToken = default)
+		{
+			if (characterId <= 0)
+			{
+				return DatabaseResult.Failure(DatabaseErrorCodes.ValidationError, "Character ID must be greater than 0.");
+			}
+
+			return await ExecuteWriteAsync(async dbContext =>
+			{
+				// No row (the owner has left the party) is success: the seat went with the row.
+				await dbContext.Database.ExecuteSqlRawAsync(
+					$"UPDATE {TableName} SET mercenary_kit_id = 0, mercenary_name = '' WHERE character_id = {{0}} AND mercenary_kit_id <> 0",
+					new object[] { characterId },
+					cancellationToken).ConfigureAwait(false);
+			}, saveChanges: false, cancellationToken: cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <inheritdoc/>

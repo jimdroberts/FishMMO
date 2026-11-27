@@ -39,6 +39,26 @@ namespace FishMMO.Server.Core.World.SceneServer
 			out List<Item> affectedFromItems, out List<long> deletedFromSlots, out List<Item> affectedToItems);
 
 		/// <summary>
+		/// Moves the item in one of a character's containers to a slot of another (swapping with what is there) and
+		/// persists both sides in ONE journalled batch, as a bank deposit is. For a module's containers
+		/// (<c>ModuleItemContainers</c>): the mercenary gear window. The caller has validated the move (the socket fits,
+		/// the slots exist) and tells the client itself.
+		/// </summary>
+		/// <param name="character">The owner of both containers.</param>
+		/// <param name="from">Source container.</param>
+		/// <param name="fromType">Source container type.</param>
+		/// <param name="fromSlot">Source slot; it must hold an item.</param>
+		/// <param name="to">Destination container.</param>
+		/// <param name="toType">Destination container type.</param>
+		/// <param name="toSlot">Destination slot; an item there goes to <paramref name="fromSlot"/>.</param>
+		/// <param name="operation">Short operation name for persistence log lines.</param>
+		/// <param name="movedFrom">Out: the items now in <paramref name="from"/> that the move touched (the swapped one, if any).</param>
+		/// <param name="movedTo">Out: the items now in <paramref name="to"/> that the move touched.</param>
+		/// <returns>False when nothing moved: a locked or empty slot, or the write could not be queued (the move is undone).</returns>
+		bool TryMoveBetweenContainers(IPlayerCharacter character, IItemContainer from, InventoryType fromType, int fromSlot,
+			IItemContainer to, InventoryType toType, int toSlot, string operation, out List<Item> movedFrom, out List<Item> movedTo);
+
+		/// <summary>
 		/// Grants an item to one of a character's containers: places it, tells the owning client,
 		/// persists it, and hands it the identity the database assigns.
 		/// </summary>

@@ -33,6 +33,10 @@ MonoBehaviour:
     - ea37f40b-17e9-443f-9453-7e6c4dac513c
     - 055b6ce8-f7c4-4ecf-a3fe-8321cb69475d
     - 2943b437-ffbc-4274-91a3-23531c0b8d37
+    - 25d4782c-36a5-4c80-82fd-d76dd2be7882
+    - b27e02cb-ab96-4786-8211-b36529af25e1
+    - a548beb3-b089-49e1-ad1b-283615fb7c3c
+    - ecfa5e30-605f-4f8d-88a8-0fc9b3fdf0fc
     m_values:
     - DestinationID: 89dadc7d-ffdf-414a-b3f0-c701f9f4f23d
       SceneName: Dungeon
@@ -125,6 +129,26 @@ MonoBehaviour:
       Position: {x: 1495, y: 143.73778, z: -1792}
       Rotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
     - DestinationID: 2943b437-ffbc-4274-91a3-23531c0b8d37
+      SceneName: Moron 3
+      DisplayName: Arrival from Moron 2
+      Position: {x: 975, y: 80.77889, z: 344}
+      Rotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: 25d4782c-36a5-4c80-82fd-d76dd2be7882
+      SceneName: Moron 1
+      DisplayName: Arrival from Moron 2
+      Position: {x: 1063, y: 17.452784, z: -824.0001}
+      Rotation: {x: -0, y: -0.7071053, z: -0, w: 0.7071084}
+    - DestinationID: b27e02cb-ab96-4786-8211-b36529af25e1
+      SceneName: Moron 2
+      DisplayName: Arrival from Moron 1
+      Position: {x: 1815, y: 122.47264, z: -1568}
+      Rotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: a548beb3-b089-49e1-ad1b-283615fb7c3c
+      SceneName: Moron 2
+      DisplayName: Arrival from Moron 3
+      Position: {x: 1495, y: 143.73778, z: -1792}
+      Rotation: {x: -0, y: -0.7071068, z: -0, w: 0.7071068}
+    - DestinationID: ecfa5e30-605f-4f8d-88a8-0fc9b3fdf0fc
       SceneName: Moron 3
       DisplayName: Arrival from Moron 2
       Position: {x: 975, y: 80.77889, z: 344}

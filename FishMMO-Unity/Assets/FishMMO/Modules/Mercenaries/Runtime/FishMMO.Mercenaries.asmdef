@@ -1,0 +1,24 @@
+{
+    "name": "FishMMO.Mercenaries",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.NPCs",
+        "FishMMO.Items",
+        "FishMMO.Buffs",
+        "FishMMO.Abilities",
+        "FishMMO.Combat"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

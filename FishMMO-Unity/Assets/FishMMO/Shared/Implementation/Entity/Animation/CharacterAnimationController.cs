@@ -337,6 +337,14 @@ namespace FishMMO.Shared
 			else
 			{
 				Observe(position, ref motion);
+				// A non-player character never jumps or falls: the server walks it along the NavMesh (a knockback shoves it
+				// across the ground), so it stands unless it swims or climbs. The ray only finds its ground once that ground's
+				// collision is here, and a floor or plinth streams in with the props around it (PropColliderStreamer), well
+				// after the character itself is seen.
+				if (!(Character is IPlayerCharacter) && !motion.Swimming && !motion.Climbing)
+				{
+					motion.Grounded = true;
+				}
 				// The server's word, once it has spoken, over the guess (CharacterMovementModeBroadcast).
 				if (observedModeKnown)
 				{

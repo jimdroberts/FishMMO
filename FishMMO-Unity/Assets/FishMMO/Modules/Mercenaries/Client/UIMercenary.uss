@@ -1,0 +1,119 @@
+/*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    UIMercenary.uss
+    Mercenary window  —  Structure & Layout only
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NO colors or fonts here — those live in FishMMO-Theme.uss.
+
+    The body is the character sheet's (UICharacterSheet.uss,
+    loaded before this file): the same eq-* sockets, columns
+    and preview, so the mercenary's gear reads exactly like
+    the player's own. This file adds only what the sheet has
+    not got: the summary, the hints, the stance and the orders.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+
+/*
+    Where the character sheet sits (left: 1%, top: 12%), and a little wider for the footer's five buttons.
+    The bag opens with this window (gear is dragged out of it) and is tiled against the right edge (908..1188 of the
+    1200-unit panel), so this window (12..572) never covers it: a covered UI Toolkit window does not hear the press
+    that would complete a drag. Capped like the sheet; the attribute list is the part that gives up height.
+*/
+.merc-panel {
+    position: absolute;
+    left: 1%; top: 12%;
+    width: 560px;
+    max-height: 84%;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.merc-hidden {
+    display: none;
+}
+
+/* ═══ SUMMARY ═══ */
+
+.merc-summary {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px 0 14px;
+    flex-shrink: 0;
+}
+
+.merc-summary__text {
+    flex-direction: column;
+    flex-shrink: 1;
+}
+
+.merc-kit {
+    margin-top: 2px;
+    white-space: normal;
+}
+
+.merc-status {
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.merc-empty {
+    margin: 8px 14px 0 14px;
+    white-space: normal;
+}
+
+/* ═══ BODY (the sheet's) ═══ */
+
+/* A little shorter than the sheet's 320: this window has a summary and a footer the sheet has not. */
+.merc-body {
+    height: 300px;
+    padding-bottom: 4px;
+}
+
+.merc-hint {
+    margin: 0 14px 6px 14px;
+    white-space: normal;
+    flex-shrink: 0;
+}
+
+/* ═══ ATTRIBUTES ═══ */
+
+/* The sheet's footer region, allowed to shrink to nothing on a short screen (its list scrolls). */
+.merc-attributes {
+    flex-shrink: 1;
+    min-height: 0;
+}
+
+.merc-attr-row {
+    flex-direction: row;
+    justify-content: space-between;
+    height: 22px;
+    padding: 0 6px;
+}
+
+/* ═══ FOOTER: stance on the left, the orders on the right ═══ */
+
+.merc-footer {
+    flex-direction: row;
+    align-items: center;
+    padding: 8px 12px;
+    flex-shrink: 0;
+}
+
+.merc-stance {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+}
+
+.merc-stance__button {
+    height: 26px;
+    min-width: 80px;
+    margin-right: 4px;
+}
+
+.merc-footer__button {
+    min-width: 104px;
+    height: 28px;
+    margin-left: 6px;
+}

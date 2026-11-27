@@ -1620,7 +1620,20 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 							break;
 
 						default:
-							Log.Error("CharacterSystem", $"Character {character.ID}: item {row.ID} names container {row.Container}, which this build does not know. It will be pruned by the next snapshot.");
+							{
+								/* A module's container (ModuleItemContainers), placed as the bank is. Nothing is equipped
+								 * from it: the items are only held for the module (mercenary gear). */
+								IItemContainer moduleContainer = ModuleItemContainers.Resolve(character, (InventoryType)(byte)row.Container);
+								if (moduleContainer == null)
+								{
+									Log.Error("CharacterSystem", $"Character {character.ID}: item {row.ID} names container {row.Container}, which this build does not know. It is left in the database untouched.");
+									break;
+								}
+								if (!moduleContainer.SetItemSlot(item, row.Slot))
+								{
+									Log.Error("CharacterSystem", $"Character {character.ID}: {row.Container} slot {row.Slot} is not valid; item {row.ID} could not be loaded and will be pruned by the next snapshot.");
+								}
+							}
 							break;
 					}
 				}

@@ -1,0 +1,34 @@
+{
+    "name": "FishMMO.Mercenaries.Editor",
+    "rootNamespace": "FishMMO.Shared",
+    "references": [
+        "FishMMO.Core",
+        "FishMMO.Shared",
+        "FishMMO.Shared.Tools.Editor",
+        "FishMMO.Server",
+        "FishNet.Runtime",
+        "KinematicCharacterController",
+        "FishMMO.Mercenaries",
+        "FishMMO.Mercenaries.Server",
+        "FishMMO.Abilities",
+        "FishMMO.NPCs",
+        "FishMMO.NPCs.Server",
+        "FishMMO.NPCs.Editor",
+        "FishMMO.WorldDesign.Editor",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.ResourceManager",
+        "FishMMO.Buffs"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "defineConstraints": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "versionDefines": [],
+    "noEngineReferences": false
+}

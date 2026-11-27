@@ -43,7 +43,7 @@ MonoBehaviour:
       KiteRotationSpeed: 30
     KeepOutCircles: []
   - Name: 'The Hidden Crystal Spires Lumen Quartz Cluster Spawner 2 [019b8bd8]'
-    Position: {x: -324.09042, y: -21.765564, z: 276.9211}
+    Position: {x: -324.09042, y: -21.727936, z: 276.9211}
     Rotation: {x: -0, y: 0.6553352, z: -0, w: -0.7553383}
     OrConditions: []
     TrueConditions: []

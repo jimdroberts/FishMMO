@@ -1,0 +1,160 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:fish="FishMMO.Client">
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  UIMercenary.uxml   —   FishMMO Mercenary window              ║
+    ║                                                              ║
+    ║  The player's hired mercenary (issue #135), laid out as the   ║
+    ║  player's own character sheet (UICharacterSheet.uxml) so the  ║
+    ║  two read as one window showing two characters:               ║
+    ║    Summary    : name, kit, out / resting.                     ║
+    ║    Body       : the sockets around the mercenary's preview,   ║
+    ║                 in the sheet's places and with its names      ║
+    ║                 (slot-head ... slot-offhand). No saddle: a    ║
+    ║                 mercenary does not ride.                      ║
+    ║    Attributes : read off the mercenary while it is out.       ║
+    ║    Footer     : stance; Send to Rest / Return, Release.       ║
+    ║                                                              ║
+    ║  Stylesheet load order (MUST be first-to-last):              ║
+    ║    1. FishMMO-Theme.uss     — colors, fonts, transitions     ║
+    ║    2. UICharacterSheet.uss  — the sheet's eq-* layout        ║
+    ║    3. UIMercenary.uss       — this window's own              ║
+    ║                                                              ║
+    ║  Attribute rows are built at runtime by UITKMercenary.cs.     ║
+    ╚══════════════════════════════════════════════════════════════╝
+    -->
+
+    <Style src="/Assets/FishMMO/Client/GUI/FishMMO-Theme.uss" />
+    <Style src="/Assets/FishMMO/Client/GUI/World/CharacterSheet/UICharacterSheet.uss" />
+    <Style src="/Assets/FishMMO/Modules/Mercenaries/Client/UIMercenary.uss" />
+
+    <ui:VisualElement name="panel-root" class="fish-panel merc-panel">
+
+        <!-- ── HEADER ──────────────────────────────────────── -->
+        <ui:VisualElement name="panel-header" class="fish-panel__header eq-header">
+            <ui:VisualElement name="header-left" class="eq-header__left">
+                <ui:VisualElement name="header-icon" class="fish-panel__icon eq-header__icon" />
+                <ui:Label name="header-title" class="fish-panel__title eq-header__title" text="MERCENARY" />
+            </ui:VisualElement>
+            <ui:Button name="close-button" class="fish-close-btn" text="✕" />
+        </ui:VisualElement>
+
+        <!-- ── SUMMARY ─────────────────────────────────────── -->
+        <ui:VisualElement name="merc-summary" class="merc-summary">
+            <ui:VisualElement class="merc-summary__text">
+                <ui:Label name="merc-name" class="fish-label fish-label--title merc-name" text="" />
+                <ui:Label name="merc-kit" class="fish-label fish-label--secondary merc-kit" text="" />
+            </ui:VisualElement>
+            <ui:Label name="merc-status" class="fish-badge merc-status" text="" />
+        </ui:VisualElement>
+        <ui:Label name="merc-empty" class="fish-empty merc-empty" text="You have no mercenary. Speak to a Mercenary in town to hire one. Gear you give a mercenary stays here for the next." />
+
+        <!-- ── BODY: the sheet's sockets around the preview ── -->
+        <ui:VisualElement name="panel-body" class="eq-body merc-body">
+
+            <!-- LEFT COLUMN : Head / Chest / Legs / Feet -->
+            <ui:VisualElement name="column-left" class="eq-col">
+                <ui:VisualElement name="slot-head" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Head" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-chest" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Chest" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-legs" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Legs" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-feet" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Feet" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- CENTER : preview + Back / Accessory -->
+            <ui:VisualElement name="equipment-center" class="eq-center">
+                <ui:VisualElement name="preview-viewport" class="fish-preview eq-preview">
+                    <ui:VisualElement name="preview-rt" class="eq-preview__rt" />
+                    <ui:Label name="preview-label" class="fish-preview__label eq-preview__label" text="" />
+                </ui:VisualElement>
+                <ui:VisualElement name="center-slots" class="eq-center-slots">
+                    <ui:VisualElement name="slot-back" class="fish-slot eq-slot">
+                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Back" />
+                        <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="slot-accessory" class="fish-slot eq-slot">
+                        <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                        <ui:Label         class="fish-slot__label eq-slot__label" text="Accessory" />
+                        <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                        <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- RIGHT COLUMN : Shoulders / Hands / Main Hand / Off Hand -->
+            <ui:VisualElement name="column-right" class="eq-col">
+                <ui:VisualElement name="slot-shoulders" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Shoulders" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-hands" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Hands" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-mainhand" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Main Hand" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement name="slot-offhand" class="fish-slot eq-slot">
+                    <ui:VisualElement class="fish-slot__icon eq-slot__icon" />
+                    <ui:Label         class="fish-slot__label eq-slot__label" text="Off Hand" />
+                    <ui:Label         class="fish-slot__amount eq-slot__amount eq-hidden" />
+                    <ui:VisualElement class="fish-slot__lock eq-slot__lock eq-hidden" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+        <ui:Label name="merc-gear-hint" class="fish-hint merc-hint" text="Drag gear from your bags onto a slot, or right-click it in your bags. Click a slot to take it back." />
+
+        <!-- ── ATTRIBUTES (the part that shrinks to fit) ───── -->
+        <ui:VisualElement name="merc-attributes" class="eq-footer merc-attributes">
+            <ui:VisualElement class="fish-divider eq-divider" />
+            <ui:Label class="fish-attr-category eq-attr-heading" text="ATTRIBUTES" />
+            <ui:ScrollView name="merc-attribute-list"
+                           class="fish-scroll eq-attr-scroll"
+                           vertical-scroller-visibility="Auto"
+                           horizontal-scroller-visibility="Hidden"
+                           mode="Vertical" />
+            <ui:Label name="merc-attribute-hint" class="fish-hint merc-hint" text="" />
+        </ui:VisualElement>
+
+        <!-- ── FOOTER : stance, then the orders ─────────────── -->
+        <ui:VisualElement name="panel-footer" class="fish-panel__footer merc-footer">
+            <ui:VisualElement name="merc-stance" class="merc-stance">
+                <ui:Button name="merc-stance-passive" class="fish-tab merc-stance__button" text="Passive" />
+                <ui:Button name="merc-stance-defensive" class="fish-tab merc-stance__button" text="Defensive" />
+                <ui:Button name="merc-stance-aggressive" class="fish-tab merc-stance__button" text="Aggressive" />
+            </ui:VisualElement>
+            <ui:Button name="merc-rest" class="fish-button fish-button--primary merc-footer__button" text="Send to Rest" />
+            <ui:Button name="merc-release" class="fish-button fish-button--danger merc-footer__button" text="Release" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

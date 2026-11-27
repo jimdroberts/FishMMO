@@ -103,7 +103,9 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="deltaTime">Seconds since the previous AI tick.</param>
 		public override void UpdateState(AIController controller, float deltaTime)
 		{
-			Pet pet = controller.OwningPet as Pet;
+			/* Any companion, not only a Pet: a hired mercenary (the Mercenaries module) heels, holds and engages by the
+			 * same rules, and nothing below reads more than IAICompanion. */
+			IAICompanion pet = controller.OwningPet;
 			if (pet == null)
 			{
 				// Not a pet after all — behave like a plain idle state rather than freezing.
@@ -162,7 +164,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="abilityController">The pet's ability controller.</param>
 		/// <param name="pet">The pet.</param>
 		/// <returns>True when the pet is casting or walking for a friend this tick.</returns>
-		private bool TrySupport(AIController controller, IAbilityKnowledgeController abilityController, Pet pet)
+		private bool TrySupport(AIController controller, IAbilityKnowledgeController abilityController, IAICompanion pet)
 		{
 			bool mayMove = pet.MovementOrder != PetMovementOrder.Stay;
 			switch (PetSupport.Plan(controller, EnemyLayers, mayMove, out PetSupport.Choice choice))
@@ -249,7 +251,7 @@ namespace FishMMO.Server.Implementation.World.SceneServer.AI
 		/// <param name="controller">The AI controller.</param>
 		/// <param name="pet">The pet.</param>
 		/// <param name="deltaTime">Seconds since the previous AI tick.</param>
-		private void FollowOwner(AIController controller, Pet pet, float deltaTime)
+		private void FollowOwner(AIController controller, IAICompanion pet, float deltaTime)
 		{
 			if (pet.PetOwner == null || pet.PetOwner.Transform == null)
 			{

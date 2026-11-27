@@ -34,6 +34,17 @@ namespace FishMMO.Database.Npgsql.Entities
 				.IsRequired()
 				.HasDefaultValue(1.0f);
 
+			// The seated mercenary (0 = none); see CharacterPartyEntity.MercenaryKitID.
+			builder.Property(e => e.MercenaryKitID)
+				.IsRequired()
+				.HasDefaultValue(0);
+
+			// Empty for none.
+			builder.Property(e => e.MercenaryName)
+				.IsRequired()
+				.HasMaxLength(32)
+				.HasDefaultValue("");
+
 			// Unique constraint: one character can only be in one party
 			builder.HasIndex(e => e.CharacterID)
 				.IsUnique();

@@ -204,6 +204,10 @@
                 };
 
 #if DEVELOPMENT_PLAYER
+                // Pipeline-state recording (open with ?psotrace): downloads everything recorded so far (GraphicsStateTrace).
+                window.fishMMOSaveGraphicsStates = () => unityInstance.SendMessage("Graphics State Trace", "Save");
+                // The states drawn that the warm-up had not created, as a recording to merge in (GraphicsStateWarmup).
+                window.fishMMOSaveGraphicsStateMisses = () => unityInstance.SendMessage("Graphics State Warm-up", "SaveMisses");
                 var profile = unityProfiler.createButton(unityInstance);
                 profile.style.marginLeft = '5px';
                 document.querySelector("#unity-build-title").appendChild(profile);

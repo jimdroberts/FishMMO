@@ -29,5 +29,11 @@ namespace FishMMO.Database.Data
 
 		/// <summary>The character's bank storage.</summary>
 		Bank = 2,
+
+		/// <summary>
+		/// The gear the character keeps for its hired mercenary (the Mercenaries module). Slot is an <c>ItemSlot</c> socket,
+		/// as for <see cref="Equipment"/>. The items stay the character's whether a mercenary is hired or not.
+		/// </summary>
+		MercenaryEquipment = 3,
 	}
 }

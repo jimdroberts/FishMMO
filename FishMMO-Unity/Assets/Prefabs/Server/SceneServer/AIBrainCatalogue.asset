@@ -31,6 +31,9 @@ MonoBehaviour:
   - Prefab: {fileID: 7250114663715075110, guid: dc086b43c817e4cadbc5ee1d0104c824, type: 3}
     Archetype: {fileID: 11400000, guid: 46b4f2113db9e56288655a9be0e7166f, type: 2}
     BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: eab0414b27852310abf69522a23d3076, type: 3}
+    Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+    BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: f1b02b8fa3f9478b681ea51b69ac86a7, type: 3}
     Archetype: {fileID: 11400000, guid: 6e798e2ad3941655eaf189dba5684e1d, type: 2}
     BossScript: {fileID: 0}
@@ -103,6 +106,9 @@ MonoBehaviour:
   - Prefab: {fileID: -4468559157413045786, guid: 0f574451d492e06b890d7da7a026706c, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
     BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 30ebc81143e9a527baae755a27e4fe4d, type: 3}
+    Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+    BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: b84ced9c50923101f8fa6c58aa0e0742, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
     BossScript: {fileID: 0}
@@ -120,6 +126,18 @@ MonoBehaviour:
     BossScript: {fileID: 0}
   - Prefab: {fileID: 6349228138187238843, guid: ea7066c2cb5cd9d36a7a4a1dd7eb71d4, type: 3}
     Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+    BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 3b47cceead8778270bb927f676965cd4, type: 3}
+    Archetype: {fileID: 11400000, guid: c1b394c50e981f8e9846e6ae76fd46d9, type: 2}
+    BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 42eff421ca253fcc2bbb874eda32b096, type: 3}
+    Archetype: {fileID: 11400000, guid: 2bd0895600ce38e6227fbd6837a3683c, type: 2}
+    BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: a3cfdc184e1b170bea82d657c16cebab, type: 3}
+    Archetype: {fileID: 11400000, guid: 4689f14e17de9c19f5ab5e2f64222034, type: 2}
+    BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 37bcc999131140b189559eb076024d54, type: 3}
+    Archetype: {fileID: 11400000, guid: aaade1fe5738f5c7c9c604a82c9f4a07, type: 2}
     BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: e9b7af4016382cd6686707ea004111aa, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
@@ -169,8 +187,14 @@ MonoBehaviour:
   - Prefab: {fileID: 6349228138187238843, guid: a2a571dad3dffbe4384fa571b61ebd92, type: 3}
     Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
     BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: ce85e2a717b6cd504a00be40b5b40b4a, type: 3}
+    Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
+    BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: c8d852a7d5a007dc1896b0ef64a3a145, type: 3}
     Archetype: {fileID: 11400000, guid: e557be921ffadc5f2b39c4cded06c0a7, type: 2}
+    BossScript: {fileID: 0}
+  - Prefab: {fileID: 7250114663715075110, guid: 110648a884e049a7d971951ae2495305, type: 3}
+    Archetype: {fileID: 11400000, guid: 3c1e7a9b5d2f4e8a9b6c0d1e2f3a4b5c, type: 2}
     BossScript: {fileID: 0}
   - Prefab: {fileID: -4468559157413045786, guid: e2cabf180689b73989cd2cd9482dc1c8, type: 3}
     Archetype: {fileID: 11400000, guid: 6e798e2ad3941655eaf189dba5684e1d, type: 2}

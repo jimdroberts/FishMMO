@@ -84,6 +84,43 @@ namespace FishMMO.Shared
 		/// </summary>
 		public string DisplayName => string.IsNullOrEmpty(generatedName) ? authoredName : generatedName;
 
+		/// <summary>What a generated name is drawn from: the seed, gender, biome and climate variant.</summary>
+		public struct NameState
+		{
+			/// <summary>The seed; 0 means no generated name (the authored one stands).</summary>
+			public int Seed;
+			/// <summary>The gender behind the name and the model set.</summary>
+			public CharacterGender Gender;
+			/// <summary>The biome the name was read from, or 0.</summary>
+			public int BiomeID;
+			/// <summary>The climate variant (index plus one), or 0.</summary>
+			public byte Variant;
+		}
+
+		/// <summary>The state this object's name was drawn from, so another object can wear the same name.</summary>
+		public NameState CaptureName()
+		{
+			GenerateNameIfNeeded();
+			return new NameState() { Seed = nameSeed, Gender = selectedGender, BiomeID = biomeID, Variant = variantIndex };
+		}
+
+		/// <summary>
+		/// Server: wears a name drawn elsewhere instead of drawing one (a hired mercenary keeps the name it was hired
+		/// under). Call after taking the object from the pool and before spawning it; a zero seed does nothing.
+		/// </summary>
+		public void AdoptName(NameState state)
+		{
+			if (state.Seed == 0)
+			{
+				return;
+			}
+			nameSeed = state.Seed;
+			selectedGender = state.Gender;
+			biomeID = settings.UsesBiome ? state.BiomeID : 0;
+			variantIndex = settings.UsesBiome ? state.Variant : (byte)0;
+			nameGenerated = true;
+		}
+
 		/// <summary>
 		/// Captures the authored name so a pooled reuse has something to fall back to.
 		/// </summary>

@@ -577,6 +577,8 @@ namespace FishMMO.Shared
 				// Materials / shaders
 				case ".mat":
 				case ".shader":
+				// Pipeline-state recordings (GraphicsStateWarmup): beside the shaders they name, resident from launch
+				case ".graphicsstate":
 				case ".shadergraph":
 				case ".shadersubgraph":
 				case ".compute":
@@ -607,6 +609,7 @@ namespace FishMMO.Shared
 				case ".shadergraph":
 				case ".shadersubgraph":
 				case ".compute":
+				case ".graphicsstate":
 				case ".ttf":
 				case ".otf":
 				case ".fnt":

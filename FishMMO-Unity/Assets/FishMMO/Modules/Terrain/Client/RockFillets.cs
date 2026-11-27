@@ -127,6 +127,9 @@ namespace FishMMO.Client
 		private static readonly int DrawStartsId = Shader.PropertyToID("_FishFilletStarts");
 		private static readonly int FadeId = Shader.PropertyToID("_FishFilletFade");
 		private static readonly int MapsId = Shader.PropertyToID("_FishFilletMaps");
+
+		/// <summary>The fillet shader's keyword for a look whose maps are array slices.</summary>
+		public const string LookArrayKeyword = "_FISH_FILLET_LOOK_ARRAY";
 		private static readonly int ContactOnId = Shader.PropertyToID("_FishContactOn");
 
 		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -488,12 +491,14 @@ namespace FishMMO.Client
 		{
 			var m = new Material(shader) { name = $"{source.name} (rock fillet)", hideFlags = HideFlags.DontSave };
 			m.CopyPropertiesFromMaterial(source);
-			// w: the rock's maps are look array slices (ProceduralArtLookArrays; the arrays and slices came with the copy).
 			m.SetVector(MapsId, new Vector4(
 				source.IsKeywordEnabled("_METALLICSPECGLOSSMAP") ? 1f : 0f,
 				source.IsKeywordEnabled("_OCCLUSIONMAP") ? 1f : 0f,
 				source.IsKeywordEnabled("_NORMALMAP") ? 1f : 0f,
-				source.IsKeywordEnabled(TerrainLookMath.Keyword) ? 1f : 0f));
+				0f));
+			// The rock's maps are look array slices (ProceduralArtLookArrays; the arrays and slices came with the copy): the
+			// variant that reads them, which binds only them (FishRockFilletPass.hlsl's FISH_FILLET_MAP).
+			m.SetKeyword(new LocalKeyword(shader, LookArrayKeyword), source.IsKeywordEnabled(TerrainLookMath.Keyword));
 			// The rocks' base band and crevices (FishGroundColour.hlsl), as the rock renderers set it.
 			m.SetFloat(ContactOnId, 1f);
 			return m;

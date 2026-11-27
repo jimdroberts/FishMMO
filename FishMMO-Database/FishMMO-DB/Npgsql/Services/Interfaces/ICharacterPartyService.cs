@@ -98,5 +98,16 @@ namespace FishMMO.Database.Npgsql.Services.Interfaces
 		/// One entry per distinct requested party, ALWAYS present; empty when nobody in it is online.
 		/// </returns>
 		Task<DatabaseResult<IReadOnlyDictionary<long, IReadOnlyList<long>>>> FetchOnlineMemberIdsAsync(long[] partyIds, CancellationToken cancellationToken = default);
+
+		/// <summary>
+		/// Seats a member's hired mercenary in the member's party: the member's row then holds two seats. Refused when
+		/// the member is not in that party, another member already has a mercenary seated, or the party has no free
+		/// seat (seats = members + seated mercenaries, against <paramref name="maxCapacity"/>). Seating a member who
+		/// already has one seated replaces the kit and name. The party row is locked for the count, as for a join.
+		/// </summary>
+		Task<DatabaseResult<MercenarySeatResult>> SeatMercenaryAsync(long characterId, long partyId, int kitId, string mercenaryName, int maxCapacity, CancellationToken cancellationToken = default);
+
+		/// <summary>Frees a member's mercenary seat. A member with none, or no longer in a party, is success.</summary>
+		Task<DatabaseResult> UnseatMercenaryAsync(long characterId, CancellationToken cancellationToken = default);
 	}
 }

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e30fcd145ddb98b19a3c077b5cb659e9, type: 3}
+  m_Name: Wizard Mercenary Kit
+  m_EditorClassIdentifier: FishMMO.Mercenaries::FishMMO.Shared.MercenaryKitTemplate
+  DisplayName: Wizard
+  Description: Casts fire, lightning and frost from range.
+  HireCost: 750
+  Prefab: {fileID: 7250114663715075110, guid: 37bcc999131140b189559eb076024d54, type: 3}
+  Abilities:
+  - {fileID: 11400000, guid: 9a571cab03b3f684da8436e4391abdbb, type: 2}
+  - {fileID: 11400000, guid: 81fdb2d3b49d824148aa4fe19de06e0d, type: 2}
+  - {fileID: 11400000, guid: 85677d5ea29aa739dbccd90ba29593fd, type: 2}
+  - {fileID: 11400000, guid: 87ef20d9ba0183b7e87a0eb4d5d43eca, type: 2}

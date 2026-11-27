@@ -1177,6 +1177,12 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: 4937db08503f01f0cab2db18214874d6
+    m_Address: GraphicsStates/WebGLPlayer-WebGPU-Performant
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: 49f487794f4796290e19dee24e901513
     m_Address: ItemIcon_Ironstone
     m_ReadOnly: 0
@@ -1405,12 +1411,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 5522416bf2ba5c63cb9e281e99d7f6ea
-    m_Address: Albedo 14x1
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 5579178f792a71b4d2a00a774363bdbe
@@ -2573,12 +2573,6 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
-  - m_GUID: 928e5c5556a829ece832943b77c8fa8f
-    m_Address: Mask 14x1
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
   - m_GUID: 931ee327d5b4f2f59300656960059231
     m_Address: ItemIcon_FieldMushroom
     m_ReadOnly: 0
@@ -2640,12 +2634,6 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels:
     - Client_Static_Permanent
-    FlaggedDuringContentUpdateRestriction: 0
-    m_FolderGuid: 
-  - m_GUID: 974e7d29cae886add8b34f20af5b6f53
-    m_Address: Normal 14x1
-    m_ReadOnly: 0
-    m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
   - m_GUID: 98251557c9494852b50999eddd6f9e2f

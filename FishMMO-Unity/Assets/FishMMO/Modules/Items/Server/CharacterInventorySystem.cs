@@ -2678,7 +2678,8 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				case ItemContainerType.Equipment:
 					return character.TryGet(out IEquipmentController equipment) ? equipment : null;
 				default:
-					return null;
+					// A module's container (mercenary gear), so its rows are repaired and identified as the others are.
+					return ModuleItemContainers.Resolve(character, container.ToInventoryType());
 			}
 		}
 
@@ -3263,6 +3264,16 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				containers.Add(ItemContainerType.Equipment);
 				AppendCurrentContainerRows(character.ID, equipmentController, ItemContainerType.Equipment, rows);
 			}
+			for (int m = 0; m < ModuleItemContainers.Count; ++m)
+			{
+				IItemContainer moduleContainer = ModuleItemContainers.ResolveAt(character, m);
+				if (moduleContainer != null)
+				{
+					ItemContainerType type = ModuleItemContainers.TypeAt(m).ToContainerType();
+					containers.Add(type);
+					AppendCurrentContainerRows(character.ID, moduleContainer, type, rows);
+				}
+			}
 		}
 
 		/// <summary>One container's rows for <see cref="AppendCurrentItemRows"/>. The slot is the list position, as the snapshot writes it.</summary>
@@ -3373,6 +3384,18 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				containers.Add(ItemContainerType.Equipment);
 				rows = BuildContainerSnapshot(characterID, equipmentController, ItemContainerType.Equipment, rows);
+			}
+			/* A module's containers (mercenary gear) in the same snapshot and transaction, so an item moved between the
+			 * bags and one of them is described at one moment. Listed only when the character has it, as above. */
+			for (int m = 0; m < ModuleItemContainers.Count; ++m)
+			{
+				IItemContainer moduleContainer = ModuleItemContainers.ResolveAt(character, m);
+				if (moduleContainer != null)
+				{
+					ItemContainerType type = ModuleItemContainers.TypeAt(m).ToContainerType();
+					containers.Add(type);
+					rows = BuildContainerSnapshot(characterID, moduleContainer, type, rows);
+				}
 			}
 
 			/* One instance in two slots is a duplicated item in memory, and a snapshot that wrote
@@ -3630,6 +3653,46 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				return true;
 			}
 			return false;
+		}
+
+		/// <inheritdoc />
+		public bool TryMoveBetweenContainers(IPlayerCharacter character, IItemContainer from, InventoryType fromType, int fromSlot,
+			IItemContainer to, InventoryType toType, int toSlot, string operation, out List<Item> movedFrom, out List<Item> movedTo)
+		{
+			movedFrom = null;
+			movedTo = null;
+			if (character == null || character.ID <= 0 || from == null || to == null || ReferenceEquals(from, to) || fromType == toType ||
+				!from.IsValidSlot(fromSlot) || !to.IsValidSlot(toSlot) || !from.TryGetItem(fromSlot, out _))
+			{
+				return false;
+			}
+
+			if (!SwapContainerItems(from, to, fromSlot, toSlot, out List<Item> fromItems, out List<long> _, out List<Item> toItems))
+			{
+				return false;
+			}
+
+			/* ONE batch for both sides, as for the bank: every item that changed container is written with its new container
+			 * and slot, which updates the row it already had, so no vacated slot needs a statement of its own. */
+			ItemWriteBatch batch = BeginItemBatch(character.ID, operation);
+			if (fromItems != null && fromItems.Count > 0)
+			{
+				batch.AddItemWrites(BuildItemDataList(character.ID, fromItems, fromType.ToContainerType()));
+			}
+			if (toItems != null && toItems.Count > 0)
+			{
+				batch.AddItemWrites(BuildItemDataList(character.ID, toItems, toType.ToContainerType()));
+			}
+			if (!EnqueueItemBatch(batch))
+			{
+				// Not queued: put both slots back as they were, so memory never says what the database will not.
+				SwapContainerItems(to, from, toSlot, fromSlot, out List<Item> _, out List<long> _, out List<Item> _);
+				return false;
+			}
+
+			movedFrom = fromItems ?? new List<Item>(0);
+			movedTo = toItems ?? new List<Item>(0);
+			return true;
 		}
 
 		/// <summary>

@@ -35,8 +35,8 @@ StructuredBuffer<FishFilletTri> _FishFilletTris;   // the drawn set, grouped by 
 StructuredBuffer<uint> _FishFilletStarts;          // each look's first triangle in it, by command (= look)
 float4 _FishFilletFade;                            // xyz the camera the fillets were drawn round, w the distance they are gone at (m)
 // Per look (its material, set by RockFillets from the rock material's keywords): x its metallic-gloss map, y its
-// occlusion map, z its normal map are in use, w its maps are look array slices (_FISH_LOOK_ARRAY). Outside UnityPerMaterial,
-// which is FishWeatherLitInput.hlsl's layout.
+// occlusion map, z its normal map are in use. Whether its maps are look array slices is a keyword instead
+// (_FISH_FILLET_LOOK_ARRAY, below). Outside UnityPerMaterial, which is FishWeatherLitInput.hlsl's layout.
 float4 _FishFilletMaps;
 
 // ── FishMMO edit: the rock's maps as look array slices (ProceduralArtLookArrays: the generator writes the rock
@@ -44,14 +44,23 @@ float4 _FishFilletMaps;
 // read with the colour array's sampler — every generated map is imported Repeat, trilinear, aniso 8 — so the pass needs one
 // sampler more, not three. The fillet shader never enables the look keyword, so it declares them itself. ──
 #if !defined(FISH_LOOK_ARRAYS)
+#if !defined(FISH_FILLET_COLOUR_ARRAY_DECLARED)
 TEXTURE2D_ARRAY(_FishLookColour);   SAMPLER(sampler_FishLookColour);
+#endif
 TEXTURE2D_ARRAY(_FishLookNormal);
 TEXTURE2D_ARRAY(_FishLookMask);
 #endif
 
-// One map of the look at a projected uv: its array slice when the rock's maps are slices, else its 2D map.
-#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) (_FishFilletMaps.w > 0.5 \
-    ? (half4)SAMPLE_TEXTURE2D_ARRAY(array, sampler_FishLookColour, uv, max(slice, 0.0)) : (half4)SAMPLE_TEXTURE2D(map, mapSampler, uv))
+// One map of the look at a projected uv: its array slice when the rock's maps are slices (_FISH_FILLET_LOOK_ARRAY, set by
+// RockFillets from the rock material's _FISH_LOOK_ARRAY), else its 2D map. A keyword, not a branch on a per-look value: a
+// branch binds both sets, the four 2D maps and the three arrays, and with High Fidelity's shadows, probe atlas and occlusion
+// the forward pass needed 35 textures, over the 32 a WebGPU device gives a stage (Unity then cannot draw the variant). Each
+// variant now binds only the set it reads.
+#if defined(_FISH_FILLET_LOOK_ARRAY)
+#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D_ARRAY(array, sampler_FishLookColour, uv, max(slice, 0.0)))
+#else
+#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D(map, mapSampler, uv))
+#endif
 
 // Metres over which a fillet's edge dissolves where it reaches the rocks' faces.
 #define FISH_FILLET_EDGE 0.04

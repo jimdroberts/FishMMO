@@ -577,6 +577,13 @@ namespace FishMMO.Shared.CustomBuildTool.Core
 				default: break;
 			}
 
+			// -fishmmoDevelopment: a development player whatever the environment (the web included), e.g. to record pipeline
+			// states (GraphicsStateTrace), which Unity does only in development builds.
+			if (Array.Exists(Environment.GetCommandLineArgs(), a => string.Equals(a, "-fishmmoDevelopment", StringComparison.OrdinalIgnoreCase)))
+			{
+				buildOptions |= BuildOptions.Development;
+			}
+
 			return buildOptions;
 		}
 	}
