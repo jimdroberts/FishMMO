@@ -29,10 +29,6 @@ namespace FishMMO.Shared
 			}
 
 			bool isAlive = healthAttribute.CurrentValue > 0;
-			if (!isAlive)
-			{
-				Log.Debug("IsCharacterAliveCondition", $"Character '{characterToCheck?.Name}' is dead (health <= 0).");
-			}
 			return isAlive;
 		}
 	}

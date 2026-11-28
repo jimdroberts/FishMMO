@@ -2012,8 +2012,16 @@ namespace FishMMO.Client
 					HandleUnrecoverableAuthFailure();
 					break;
 
+				/* Every other result (a two-factor prompt, a wrong password, a full server...) is the login screens' to
+				 * show (UITKLogin, UITKRegister, UITKServerSelect, UITKCharacterSelect); this switch only tracks the
+				 * connection. Warning on all of them put "Unhandled auth result: TwoFactorRequired" in the console of
+				 * every two-factor login. Only a value the enum does not define (an auth server newer than the client)
+				 * is worth one. */
 				default:
-					Log.Warning("Client", $"Unhandled auth result: {r}");
+					if (!System.Enum.IsDefined(typeof(ClientAuthenticationResult), r))
+					{
+						Log.Warning("Client", $"Unknown auth result: {(byte)r}");
+					}
 					break;
 			}
 		}

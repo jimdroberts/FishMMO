@@ -64,17 +64,29 @@ namespace FishMMO.Shared
 		private bool faded;
 		private readonly CharacterFade fade = new CharacterFade();
 
+		/// <summary>Unscaled time the current appearance began; negative when the character is not fading in.</summary>
+		private float appearStarted = -1f;
+		/// <summary>Unscaled time the character came into view (its spawn on this client).</summary>
+		private float appearRequested;
+		/// <summary>The screen-door dissolve the character comes into view through (<see cref="CharacterAppear"/>).</summary>
+		private readonly CharacterAppear appear = new CharacterAppear();
+		/// <summary>The fade-in's share drawn, 0 to 1 (1 when not fading in).</summary>
+		private float AppearFactor => appearStarted < 0f ? 1f : Mathf.Clamp01((Time.unscaledTime - appearStarted) / AppearSeconds);
+#endif
+
 		/// <summary>
 		/// How long another character takes to fade in when it comes into view, s. A character appears where the
 		/// server's visibility cut lets it in (about 100 m, or the per-viewer count): drawn whole on its first frame, it
-		/// popped; fading in over half a second, it walks into view.
+		/// popped; fading in over half a second, it walks into view. Wildlife (WildlifeBody) fades in over the same time.
 		/// </summary>
-		private const float AppearSeconds = 0.5f;
-		/// <summary>Unscaled time the current appearance began; negative when the character is not fading in.</summary>
-		private float appearStarted = -1f;
-		/// <summary>The fade-in's share of the opacity, 0 to 1 (1 when not fading in).</summary>
-		private float AppearFactor => appearStarted < 0f ? 1f : Mathf.Clamp01((Time.unscaledTime - appearStarted) / AppearSeconds);
-#endif
+		public const float AppearSeconds = 0.5f;
+
+		/// <summary>
+		/// Longest the fade-in waits for a body to fade, s: an NPC's model is an Addressables load that lands after the spawn,
+		/// and a clock started at the spawn could run out before it landed, so the model arrived whole. A model with nothing that
+		/// dissolves never gives the clock a start, and appears whole after this.
+		/// </summary>
+		private const float AppearWaitSeconds = 3f;
 
 		/// <summary>The model under a mesh root, skipping one that has been switched off to be destroyed.</summary>
 		/// <remarks>
@@ -103,11 +115,24 @@ namespace FishMMO.Shared
 			base.OnStartCharacter();
 #if !UNITY_SERVER
 			TryBuildBody();
-			// Someone else coming into view fades in; this client's own character is simply there.
+			// This client's own character is simply there: OnStartClient may have begun a fade-in before ownership arrived.
+			EndAppear();
+#endif
+		}
+
+		/// <summary>
+		/// Someone else coming into view fades in. From here and not from <see cref="OnStartCharacter"/>, which only the
+		/// local player's own character runs (PlayerCharacter.TryInitializeLocalClient): started there, no NPC or other player
+		/// ever faded in. OnStartClient runs on every client for every spawn, after the payload.
+		/// </summary>
+		public override void OnStartClient()
+		{
+			base.OnStartClient();
+#if !UNITY_SERVER
 			if (!base.IsOwner)
 			{
-				appearStarted = Time.unscaledTime;
-				ApplyFade();
+				appearRequested = appearStarted = Time.unscaledTime;
+				TickAppear();
 			}
 #endif
 		}
@@ -147,7 +172,7 @@ namespace FishMMO.Shared
 			// A pooled character reused by another player must not arrive faded.
 			faded = false;
 			concealCount = 0;
-			appearStarted = -1f;
+			EndAppear();
 			fade.Restore();
 #endif
 		}
@@ -156,6 +181,7 @@ namespace FishMMO.Shared
 		private void OnDestroy()
 		{
 			DropBody();
+			appear.End();
 			fade.Restore();
 		}
 
@@ -166,12 +192,12 @@ namespace FishMMO.Shared
 			 * always drawn as it is. /gm invis (faded) is a different thing and nothing reveals it. */
 			float concealed = concealCount <= 0 ? 1f
 				: (ConcealmentView.SeesInvisible && !base.IsOwner) ? RevealedOpacity : ConcealedOpacity;
-			float opacity = Mathf.Min(concealed, faded ? HiddenOpacity : 1f) * AppearFactor;
+			float opacity = Mathf.Min(concealed, faded ? HiddenOpacity : 1f);
 			if (opacity < 1f && Character != null && Character.MeshRoot != null)
 			{
 				if (fade.IsApplied && !Mathf.Approximately(appliedOpacity, opacity))
 				{
-					// Retuned in place: the fade-in changes it every frame, and remaking the copies each time was not on.
+					// Retuned in place (invisibility seen or no longer seen) without remaking the copies.
 					fade.SetOpacity(opacity);
 				}
 				fade.Apply(Character.MeshRoot, opacity);
@@ -247,6 +273,7 @@ namespace FishMMO.Shared
 			ridingWanted = false;
 			observedMode = 0;
 			faded = false;
+			EndAppear();
 			fade.Restore();
 		}
 
@@ -371,19 +398,33 @@ namespace FishMMO.Shared
 			TickAppear();
 		}
 
-		/// <summary>Advances a fade-in, and ends it (the model drawn with its own materials again) once it is whole.</summary>
+		/// <summary>Advances a fade-in, and ends it (the model drawn by its own materials alone) once it is whole.</summary>
 		private void TickAppear()
 		{
 			if (appearStarted < 0f)
 			{
 				return;
 			}
-			bool whole = AppearFactor >= 1f;
-			if (whole)
+			float now = Time.unscaledTime;
+			// Nothing to dissolve yet (the model is still loading): the half second starts when there is a body to show.
+			if (!appear.IsApplied && now - appearRequested < AppearWaitSeconds)
 			{
-				appearStarted = -1f;
+				appearStarted = now;
 			}
-			ApplyFade();
+			float visible = AppearFactor;
+			if (visible >= 1f)
+			{
+				EndAppear();
+				return;
+			}
+			appear.Apply(Character != null ? Character.MeshRoot : null, visible);
+		}
+
+		/// <summary>Ends a fade-in at once: the model drawn whole.</summary>
+		private void EndAppear()
+		{
+			appearStarted = -1f;
+			appear.End();
 		}
 
 		/// <summary>What a watched character is doing, read off where it is (<see cref="ObservedMotion"/>).</summary>

@@ -48,10 +48,6 @@ namespace FishMMO.Shared
 			}
 
 			bool meetsRequirement = characterAttribute.FinalValue >= RequiredValue;
-			if (!meetsRequirement)
-			{
-				Log.Debug("HasRequiredCharacterAttribute", $"Character '{characterToCheck?.Name}' failed stat check for '{Template.Name}'. Current: {characterAttribute.FinalValue}, Required: {RequiredValue}.");
-			}
 			return meetsRequirement;
 		}
 

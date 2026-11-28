@@ -14,8 +14,18 @@ CBUFFER_START(UnityPerMaterial)
     half _Smoothness;
     float4 _WildGait;   // x step phase (radians), y leg swing (radians), z gallop 0..1, w body bob (metres)
     float4 _WildPose;   // x attack lunge 0..1, y fallen 0..1, z tail wag (radians), w half the body's width (the side it falls on)
-    float4 _WildFlight; // x wing angle up from level (radians), y height flown over the ground (metres), zw unused
+    float4 _WildFlight; // x wing angle up from level (radians), y height flown over the ground (metres), z the share the
+                        // fade-in still dissolves (1 at the spawn, 0 drawn whole), w unused
 CBUFFER_END
+
+#include "Assets/FishMMO/Shaders/FishDither.hlsl"
+
+// The fade-in as the animal comes into view (WildlifeBody): the shared 4×4 screen-door, so it dissolves in like a humanoid
+// (Weather Lit's _FishVisible). In every pass, so the shadow, the depth and the target outline arrive with the body.
+void WildlifeAppearClip(float4 positionCS)
+{
+    FishDitherClip(positionCS.xy, 1.0 - _WildFlight.z);
+}
 
 struct WildlifeAttributes
 {
@@ -138,6 +148,7 @@ float3 WildlifeAdditionalLight(float3 positionWS, float3 n, float2 screenUV)
 
 half4 WildlifeForwardFragment(WildlifeVaryings input) : SV_Target
 {
+    WildlifeAppearClip(input.positionCS);
     float3 n = normalize(input.normalWS);
     float3 v = normalize(GetWorldSpaceViewDir(input.positionWS));
     // Authored as sRGB colours.
@@ -169,6 +180,7 @@ half4 WildlifeForwardFragment(WildlifeVaryings input) : SV_Target
 
 half4 WildlifeDepthNormalsFragment(WildlifeVaryings input) : SV_Target
 {
+    WildlifeAppearClip(input.positionCS);
     float3 n = normalize(input.normalWS);
 #if defined(_GBUFFER_NORMALS_OCT)
     float2 octNormalWS = PackNormalOctQuadEncode(n);
@@ -216,6 +228,7 @@ WildlifeDepthVaryings WildlifeDepthVertex(WildlifeAttributes input)
 
 half4 WildlifeDepthFragment(WildlifeDepthVaryings input) : SV_Target
 {
+    WildlifeAppearClip(input.positionCS);
     return half4(input.positionCS.z, 0.0, 0.0, 0.0);
 }
 
@@ -244,6 +257,7 @@ WildlifeOutlineVaryings WildlifeOutlineVertex(WildlifeAttributes input)
 
 half4 WildlifeOutlineFragment(WildlifeOutlineVaryings input) : SV_Target
 {
+    WildlifeAppearClip(input.positionCS);
     return FishOutlineMaskFragment(input.positionCS);
 }
 

@@ -123,6 +123,31 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
+		public void ACheaperLessRelevantOneNeverTakesTheRoomOfAMoreRelevantOneLeftOut()
+		{
+			// Two moving ones fill 300; the third (moving, nearer) is left out; the fourth, idle and far, would fit in what is
+			// left, 15 B/s, but it is less relevant than one already refused.
+			var slots = new List<ObserverStreamingPolicy.BudgetSlot> { Slot(), Slot(), Slot(), Slot(moving: false) };
+			ObserverStreamingPolicy.FitByteBudget(slots, 300, 30, 2);
+			LogAssert.IsFalse(slots[2].Admitted, "the third does not fit");
+			LogAssert.IsFalse(slots[3].Admitted, "and the idle one behind it is not let in ahead of it");
+		}
+
+		[Test]
+		public void TheHysteresisNeverKeepsAFartherOneAheadOfANearerOneLeftOut()
+		{
+			// The far one is already visible and idle: 300 + 15 is inside 300 × 1.25, so the widened budget alone would keep
+			// it, while the nearer one that wants in is refused. Charged with the refused one's cost it leaves first.
+			var slots = new List<ObserverStreamingPolicy.BudgetSlot> { Slot(), Slot(), Slot(), Slot(moving: false, visible: true) };
+			ObserverStreamingPolicy.FitByteBudget(slots, 300, 30, 2);
+			LogAssert.IsFalse(slots[2].Admitted, "the nearer one does not fit");
+			LogAssert.IsFalse(slots[3].Admitted, "so the farther one in view is not kept ahead of it");
+			var noneRefused = new List<ObserverStreamingPolicy.BudgetSlot> { Slot(), Slot(), Slot(moving: false, visible: true) };
+			ObserverStreamingPolicy.FitByteBudget(noneRefused, 300, 30, 2);
+			LogAssert.IsTrue(noneRefused[2].Admitted, "with nobody nearer left out, the hysteresis still keeps it");
+		}
+
+		[Test]
 		public void TheScheduleNeverExceedsTheTestedInterval()
 		{
 			LogAssert.AreEqual((byte)1, NetworkSendSchedule.Clamp(0));

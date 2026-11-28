@@ -32,6 +32,10 @@ namespace FishMMO.Shared
 		private float attackTimer;
 		private float death;
 		private float deathTarget;
+		/// <summary>The flight vector last sent (z is the fade-in, below), so a fade step can be sent alone.</summary>
+		private Vector4 flight;
+		/// <summary>Unscaled time the animal came into view; negative once it is drawn whole.</summary>
+		private float appearStarted = -1f;
 #endif
 
 		public override void OnStartCharacter()
@@ -54,6 +58,9 @@ namespace FishMMO.Shared
 			base.OnStartClient();
 #if !UNITY_SERVER
 			BuildBody();
+			// Coming into view: dissolves in over the time a humanoid takes (CharacterAnimationController.AppearSeconds).
+			appearStarted = Time.unscaledTime;
+			SendAppear();
 #endif
 		}
 
@@ -65,6 +72,8 @@ namespace FishMMO.Shared
 			speed = 0f;
 			attackTimer = 0f;
 			death = deathTarget = 0f;
+			appearStarted = -1f;
+			flight = Vector4.zero;
 #endif
 		}
 
@@ -119,6 +128,8 @@ namespace FishMMO.Shared
 			// Nothing to pose while nobody sees it (the shadow pass counts as seen).
 			if (!bodyRenderer.isVisible)
 			{
+				// The fade-in still advances: isVisible is last frame's, so the first frame on screen draws what was sent here.
+				SendAppear();
 				return;
 			}
 
@@ -129,14 +140,47 @@ namespace FishMMO.Shared
 			float wag = Mathf.Sin(Time.time * (speed > 0.2f ? 9f : 4f)) * (speed > 0.2f ? 0.12f : 0.3f);
 			float fallen = Mathf.SmoothStep(0f, 1f, death);
 
-			WildlifeFlight flight = WildlifeFlight.Evaluate(spec, species.RunSpeed, speed, wingPhase, attack, fallen);
-			wingPhase = Mathf.Repeat(wingPhase + flight.BeatsPerSecond * Mathf.PI * 2f * dt, Mathf.PI * 2f);
+			WildlifeFlight wings = WildlifeFlight.Evaluate(spec, species.RunSpeed, speed, wingPhase, attack, fallen);
+			wingPhase = Mathf.Repeat(wingPhase + wings.BeatsPerSecond * Mathf.PI * 2f * dt, Mathf.PI * 2f);
 			float legSwing = spec.WingSpan > 0f ? gait.LegSwing * 0.15f : gait.LegSwing;
 			float bob = spec.HoverHeight > 0f ? 0f : gait.Bob;
 
 			block.SetVector(GaitId, new Vector4(phase, legSwing, gait.Gallop, bob));
 			block.SetVector(PoseId, new Vector4(attack, fallen, wag, spec.Width * 0.5f));
-			block.SetVector(FlightId, new Vector4(flight.WingAngle, flight.Height, 0f, 0f));
+			flight = new Vector4(wings.WingAngle, wings.Height, AppearHidden(), 0f);
+			block.SetVector(FlightId, flight);
+			bodyRenderer.SetPropertyBlock(block);
+		}
+
+		/// <summary>
+		/// The share of the body still dissolved by the fade-in, 1 at the spawn to 0 after
+		/// <see cref="CharacterAnimationController.AppearSeconds"/> (FishWildlife.hlsl clips it through the shared screen-door
+		/// pattern, in every pass). Ends the fade-in once whole.
+		/// </summary>
+		private float AppearHidden()
+		{
+			if (appearStarted < 0f)
+			{
+				return 0f;
+			}
+			float shown = (Time.unscaledTime - appearStarted) / CharacterAnimationController.AppearSeconds;
+			if (shown >= 1f)
+			{
+				appearStarted = -1f;
+				return 0f;
+			}
+			return 1f - Mathf.Max(0f, shown);
+		}
+
+		/// <summary>Sends the fade-in step alone (the pose keeps what was last sent), while the animal is fading in.</summary>
+		private void SendAppear()
+		{
+			if (bodyRenderer == null || block == null || (appearStarted < 0f && flight.z == 0f))
+			{
+				return;
+			}
+			flight.z = AppearHidden();
+			block.SetVector(FlightId, flight);
 			bodyRenderer.SetPropertyBlock(block);
 		}
 #endif

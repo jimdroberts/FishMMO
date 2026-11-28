@@ -553,7 +553,7 @@ Warnings are non-blocking — they appear in the Console attached to the offendi
 
 ### 10.10 Per-trigger verbose logging
 
-`Trigger` exposes a `Verbose` toggle (Inspector → *Debug* group). When checked, the trigger's own lifecycle logs (conditions met / not met / no targets produced) are promoted from `Log.Debug` to `Log.Info` so a single misbehaving asset can be diagnosed without flipping the global log level for the whole project.
+`Trigger` exposes a `Verbose` toggle (Inspector → *Debug* group). When checked, the trigger logs its lifecycle (conditions met / not met / no targets produced) at `Log.Info`; unchecked, it logs none of it at any level, because triggers fire every tick for every buff, region and hit and those lines buried the console. Check it on the one asset being diagnosed.
 
 ### 10.11 Designer-facing action ordering
 

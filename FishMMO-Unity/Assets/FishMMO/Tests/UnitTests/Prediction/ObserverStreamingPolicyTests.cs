@@ -57,18 +57,20 @@ namespace FishMMO.UnitTests
 		}
 
 		[Test]
-		public void Score_CombatOutranksPartyOutranksGuildOutranksProximity()
+		public void Score_NearnessOutweighsAFightElsewhere_AndPartyOutranksGuildOutranksStranger()
 		{
-			AuthTestTrace.LogTestStart(nameof(Score_CombatOutranksPartyOutranksGuildOutranksProximity),
-				"With default weights a distant fighter outranks a nearby party member, who outranks a guild member, who outranks a stranger.")
+			AuthTestTrace.LogTestStart(nameof(Score_NearnessOutweighsAFightElsewhere_AndPartyOutranksGuildOutranksStranger),
+				"With default weights a stranger beside the viewer outranks a fighter at the edge of view (the far one leaves the budget first); at equal distance the fighter ranks higher; party outranks guild outranks stranger.")
 				.GetAwaiter().GetResult();
 
 			float fighterFar = ObserverStreamingPolicy.Score(true, false, false, 90f, 100f);
+			float fighterNear = ObserverStreamingPolicy.Score(true, false, false, 5f, 100f);
 			float partyNear = ObserverStreamingPolicy.Score(false, true, false, 5f, 100f);
 			float guildNear = ObserverStreamingPolicy.Score(false, false, true, 5f, 100f);
 			float strangerNear = ObserverStreamingPolicy.Score(false, false, false, 5f, 100f);
 
-			LogAssert.IsTrue(fighterFar > partyNear, $"combat ({fighterFar}) must outrank party ({partyNear}).");
+			LogAssert.IsTrue(strangerNear > fighterFar, $"a stranger at 5 m ({strangerNear}) must outrank a fighter at 90 m ({fighterFar}).");
+			LogAssert.IsTrue(fighterNear > strangerNear, $"at the same distance the fighter ({fighterNear}) outranks the stranger ({strangerNear}).");
 			LogAssert.IsTrue(partyNear > guildNear, $"party ({partyNear}) must outrank guild ({guildNear}).");
 			LogAssert.IsTrue(guildNear > strangerNear, $"guild ({guildNear}) must outrank stranger ({strangerNear}).");
 		}

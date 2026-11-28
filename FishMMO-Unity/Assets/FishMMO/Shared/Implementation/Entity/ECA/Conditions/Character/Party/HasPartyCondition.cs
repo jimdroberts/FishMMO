@@ -21,10 +21,6 @@ namespace FishMMO.Shared
 				return false;
 			}
 			bool isInParty = partyController.ID != 0;
-			if (!isInParty)
-			{
-				Log.Debug("HasPartyCondition", $"Character '{characterToCheck?.Name}' is not in a party.");
-			}
 			return isInParty;
 		}
 	}

@@ -3103,6 +3103,12 @@ MonoBehaviour:
     - Client_Static_Permanent
     FlaggedDuringContentUpdateRestriction: 0
     m_FolderGuid: 
+  - m_GUID: b54ff8cc5e3f3eea5af996b8d2ab9315
+    m_Address: GraphicsStates/WebGLPlayer-WebGPU-High Fidelity
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+    m_FolderGuid: 
   - m_GUID: b585bd5ba1a3d6fc582deaad2d9d14e7
     m_Address: TestHuman_BaseColor
     m_ReadOnly: 0

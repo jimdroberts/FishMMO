@@ -21,10 +21,6 @@ namespace FishMMO.Shared
 				return false;
 			}
 			bool isInGuild = guildController.ID != 0;
-			if (!isInGuild)
-			{
-				Log.Debug("HasGuildCondition", $"Character '{characterToCheck?.Name}' is not in a guild.");
-			}
 			return isInGuild;
 		}
 	}

@@ -55,11 +55,14 @@ namespace FishMMO.Shared
 		public static int FullRateObserverCap { get; set; } = 24;
 
 		/// <summary>
-		/// Relevance weight for a character currently in combat. Kept above
-		/// <see cref="PartyWeight"/> + <see cref="DistanceWeight"/> so a fighter at the edge of
-		/// range still outranks an idle party member standing next to the viewer.
+		/// Relevance weight for a character currently in combat: at the default <see cref="DistanceWeight"/> over a 100 m
+		/// range, a fight counts as 20 m nearer. Kept well below <see cref="DistanceWeight"/>, so nearness decides who the
+		/// visibility budgets keep and the farthest character leaves first. At 120 it outweighed all of proximity: a monster
+		/// fighting someone else at the edge of view outranked an idle one beside the viewer, so in a busy area the near
+		/// monsters were the ones the budgets left out while the far fighters stayed. A fight the viewer is in is pinned
+		/// (party, target, blows) and needs no weight.
 		/// </summary>
-		public static float CombatWeight { get; set; } = 120f;
+		public static float CombatWeight { get; set; } = 10f;
 
 		/// <summary>Relevance weight for a character in the viewer's party.</summary>
 		public static float PartyWeight { get; set; } = 60f;
@@ -442,11 +445,20 @@ namespace FishMMO.Shared
 		/// <b>Hysteresis.</b> A character the viewer already sees is measured against the budget widened by
 		/// <see cref="VisibilityBudgetHysteresis"/>, so one at the edge does not flicker in and out from pass to pass.
 		/// </para>
+		/// <para>
+		/// <b>Priority order holds.</b> A character left out still counts against every less relevant one after it, as if it
+		/// had been admitted. Skipping it instead let whatever came later and fit take the room: an idle far monster (charged
+		/// its idle share) or a far one already in view (the widened budget) stayed while a nearer one that moved was left out,
+		/// so the near monsters popped and the far ones did not. Now a less relevant character is only kept within the
+		/// hysteresis band past the more relevant ones, never ahead of them.
+		/// </para>
 		/// </remarks>
 		public static float FitByteBudget(List<BudgetSlot> slots, int budgetBytesPerSecond, int tickRate, byte slowestInterval)
 		{
 			byte slowest = (byte)Math.Max(1, (int)slowestInterval);
 			float spent = 0f;
+			// What the slots left out so far would have cost: charged to every later slot's test, never spent.
+			float refused = 0f;
 			float widened = budgetBytesPerSecond * (1f + Mathf.Max(0f, VisibilityBudgetHysteresis));
 			// Engaged first: charged at their desired interval, never cut.
 			for (int i = 0; i < slots.Count; ++i)
@@ -473,7 +485,8 @@ namespace FishMMO.Shared
 				byte floor = (byte)Math.Max(slowest, (int)slot.DesiredInterval);
 				float cost = UpdateCostPerSecond(floor, slot.Moving, tickRate);
 				float limit = slot.CurrentlyVisible ? widened : budgetBytesPerSecond;
-				if (slot.Pinned || spent + cost <= limit)
+				// Measured with what the more relevant ones left out would have cost (see the remarks): priority order holds.
+				if (slot.Pinned || spent + refused + cost <= limit)
 				{
 					slot.Admitted = true;
 					slot.Interval = floor;
@@ -483,6 +496,7 @@ namespace FishMMO.Shared
 				{
 					slot.Admitted = false;
 					slot.Interval = floor;
+					refused += cost;
 				}
 				slots[i] = slot;
 			}

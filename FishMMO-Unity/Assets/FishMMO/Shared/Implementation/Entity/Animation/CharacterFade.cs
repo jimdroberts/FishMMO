@@ -212,5 +212,90 @@ namespace FishMMO.Shared
 			}
 		}
 	}
+
+	/// <summary>
+	/// A character coming into view, drawn through the shared screen-door dissolve instead of all at once: FishMMO/Weather
+	/// Lit's <c>_FishVisible</c> (the day/night fade's property, 1 drawn whole) on each of its renderers' property blocks
+	/// while it appears, and the blocks taken off again when it is whole.
+	/// </summary>
+	/// <remarks>
+	/// <para>
+	/// <b>No new pipeline.</b> The dissolve clips in the opaque forward pass the renderer already draws with. Fading in
+	/// through <see cref="CharacterFade"/>'s transparent copies instead would draw every arriving character with a blend
+	/// state nothing else uses, and on the web each new state is a pipeline the browser builds on the frame it is first
+	/// drawn, the hitch the boot warm-up exists to keep out of play.
+	/// </para>
+	/// <para>
+	/// <b>Only the colour pass.</b> Depth priming is off on every renderer, so the depth the forward pass tests against is
+	/// its own and a clipped pixel shows what is behind it; the shadow and the depth texture are whole for the half second.
+	/// </para>
+	/// <para>
+	/// <b>Its own blocks only.</b> A renderer that already carries a property block (a mount's body) belongs to someone
+	/// else and is left alone, as is a material without the property. Taking the blocks off again puts the renderers back
+	/// in the SRP batcher.
+	/// </para>
+	/// </remarks>
+	internal sealed class CharacterAppear
+	{
+		private static readonly int VisibleId = Shader.PropertyToID("_FishVisible");
+		private static readonly List<Renderer> scratchRenderers = new List<Renderer>();
+		private static MaterialPropertyBlock block;
+
+		/// <summary>Renderers given a block by this appearance.</summary>
+		private readonly HashSet<Renderer> touched = new HashSet<Renderer>();
+
+		/// <summary>Whether any renderer is dissolving now.</summary>
+		public bool IsApplied => touched.Count > 0;
+
+		/// <summary>
+		/// Draws <paramref name="visible"/> (0 to 1) of every mesh and skinned mesh renderer under <paramref name="root"/>
+		/// that can dissolve, those added since the last call included (a model or equipment that loaded late).
+		/// </summary>
+		public void Apply(Transform root, float visible)
+		{
+			if (root == null)
+			{
+				return;
+			}
+			block ??= new MaterialPropertyBlock();
+			block.Clear();
+			block.SetFloat(VisibleId, Mathf.Clamp01(visible));
+			root.GetComponentsInChildren(true, scratchRenderers);
+			for (int r = 0; r < scratchRenderers.Count; r++)
+			{
+				Renderer renderer = scratchRenderers[r];
+				if (!(renderer is MeshRenderer) && !(renderer is SkinnedMeshRenderer))
+				{
+					continue;
+				}
+				if (!touched.Contains(renderer) && (renderer.HasPropertyBlock() || !Dissolves(renderer)))
+				{
+					continue;
+				}
+				renderer.SetPropertyBlock(block);
+				touched.Add(renderer);
+			}
+			scratchRenderers.Clear();
+		}
+
+		/// <summary>Takes the blocks off: every renderer drawn whole, by its own materials alone.</summary>
+		public void End()
+		{
+			foreach (Renderer renderer in touched)
+			{
+				if (renderer != null)
+				{
+					renderer.SetPropertyBlock(null);
+				}
+			}
+			touched.Clear();
+		}
+
+		private static bool Dissolves(Renderer renderer)
+		{
+			Material material = renderer.sharedMaterial;
+			return material != null && material.HasProperty(VisibleId);
+		}
+	}
 }
 #endif

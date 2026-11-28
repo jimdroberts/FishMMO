@@ -454,11 +454,10 @@ namespace FishMMO.Shared.Core
 
 		[Header("Debug")]
 		/// <summary>
-		/// When true, this trigger promotes its own <c>Log.Debug</c> diagnostics to <c>Log.Info</c>
-		/// so its lifecycle is visible without flipping the global log level. Use for diagnosing
-		/// a single misbehaving trigger asset in a noisy build.
+		/// When true, this trigger logs its lifecycle (conditions met / not met / no targets) at <c>Log.Info</c>. Off, it logs
+		/// none of it at any level. Use for diagnosing a single misbehaving trigger asset.
 		/// </summary>
-		[Tooltip("When checked, this trigger's own lifecycle logs (conditions met / not met / no targets) are promoted from Debug to Info so they show up without enabling global Debug logging. Diagnostic use only.")]
+		[Tooltip("When checked, this trigger logs its lifecycle (conditions met / not met / no targets) at Info. Unchecked, it logs none of it. Diagnostic use only.")]
 		public bool Verbose;
 
 		/// <summary>
@@ -542,26 +541,24 @@ namespace FishMMO.Shared.Core
 					ExecuteForTarget(eventData, presentationOnly: true);
 				}
 
-				LogLifecycle($"Trigger '{name}' produced no targets for {eventData.Initiator?.Name}.");
+				if (Verbose)
+				{
+					LogLifecycle($"Trigger '{name}' produced no targets for {eventData.Initiator?.Name}.");
+				}
 			}
 
 			RaiseOnExecuted(eventData);
 		}
 
 		/// <summary>
-		/// Writes a lifecycle diagnostic at Debug level by default, or Info when <see cref="Verbose"/>
-		/// is enabled on this trigger asset. Keeps the global log level untouched.
+		/// Writes a lifecycle diagnostic at Info level when <see cref="Verbose"/> is enabled on this trigger asset, and nothing
+		/// otherwise. Triggers fire every tick for every buff, region and hit, so at Debug level for all of them the lines
+		/// buried the console of any development build. Callers test <see cref="Verbose"/> first, so the message is not even
+		/// built for a trigger nobody is diagnosing.
 		/// </summary>
 		private void LogLifecycle(string message)
 		{
-			if (Verbose)
-			{
-				Log.Info("Trigger", message);
-			}
-			else
-			{
-				Log.Debug("Trigger", message);
-			}
+			Log.Info("Trigger", message);
 		}
 
 		/// <summary>
@@ -606,12 +603,18 @@ namespace FishMMO.Shared.Core
 			eventData.ConditionFilter = ShouldEvaluateCondition;
 			if (TriggerExecution.AreConditionsMet(Conditions, eventData))
 			{
-				LogLifecycle($"Trigger '{name}' conditions met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
+				if (Verbose)
+				{
+					LogLifecycle($"Trigger '{name}' conditions met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
+				}
 				TriggerExecution.ExecuteActions(OnConditionsMetActions, eventData, presentationOnly);
 			}
 			else
 			{
-				LogLifecycle($"Trigger '{name}' conditions not met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
+				if (Verbose)
+				{
+					LogLifecycle($"Trigger '{name}' conditions not met for {eventData.Initiator?.Name}, target {eventData.Target?.name}.");
+				}
 				TriggerExecution.ExecuteActions(OnConditionsNotMetActions, eventData, presentationOnly);
 			}
 		}

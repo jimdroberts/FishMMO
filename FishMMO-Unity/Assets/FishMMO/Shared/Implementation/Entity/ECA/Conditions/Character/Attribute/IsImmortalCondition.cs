@@ -23,10 +23,6 @@ namespace FishMMO.Shared
 			}
 
 			bool isImmortal = damageController.Immortal;
-			if (!isImmortal)
-			{
-				Log.Debug("IsImmortalCondition", $"(Character: '{characterToCheck?.Name}') is mortal.");
-			}
 			return isImmortal;
 		}
 	}

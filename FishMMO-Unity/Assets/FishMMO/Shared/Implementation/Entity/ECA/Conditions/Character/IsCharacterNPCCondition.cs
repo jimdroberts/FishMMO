@@ -1,5 +1,4 @@
 using System;
-using FishMMO.Logging;
 using UnityEngine;
 using FishMMO.Shared.Core;
 
@@ -16,10 +15,6 @@ namespace FishMMO.Shared
 		{
 			ICharacter characterToCheck = (eventData?.TargetCharacter ?? initiator);
 			bool isNPC = characterToCheck is NPC;
-			if (!isNPC)
-			{
-				Log.Debug("IsCharacterNPCCondition", $"Character '{characterToCheck?.Name}' is not an NPC.");
-			}
 			return isNPC;
 		}
 	}
