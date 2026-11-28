@@ -522,6 +522,10 @@ namespace KinematicCharacterController
 		public const float CollisionOffset = 0.01f;
 		public const float GroundProbeReboundDistance = 0.02f;
 		public const float MinimumGroundProbingDistance = 0.005f;
+		/// <summary>
+		/// The smallest ground-snap correction applied to a character already standing on stable ground (0.1 mm).
+		/// </summary>
+		public const float GroundSnapDeadband = 0.0001f;
 		public const float GroundProbingBackstepDistance = 0.1f;
 		public const float SweepProbingBackstepDistance = 0.002f;
 		public const float SecondaryProbesVertical = 0.02f;
@@ -1433,7 +1437,16 @@ namespace KinematicCharacterController
 						// Ground snapping
 						if (!groundingReport.SnappingPrevented)
 						{
-							probingPosition = groundSweepPosition + (groundSweepDirection * (groundSweepHit.distance - CollisionOffset));
+							Vector3 snappedPosition = groundSweepPosition + (groundSweepDirection * (groundSweepHit.distance - CollisionOffset));
+
+							// A character already standing on stable ground is snapped only when the correction is larger than
+							// GroundSnapDeadband: the sweep's hit distance carries float error, so snapping every tick moves a standing
+							// character by nanometres forever. The correction is measured from the current position each tick, so the
+							// character never sits more than the dead band off the snapped height.
+							if (!LastGroundingStatus.IsStableOnGround || (snappedPosition - probingPosition).sqrMagnitude > GroundSnapDeadband * GroundSnapDeadband)
+							{
+								probingPosition = snappedPosition;
+							}
 						}
 
 						CharacterController.OnGroundHit(groundSweepHit.collider, groundSweepHit.normal, groundSweepHit.point, ref groundHitStabilityReport);
