@@ -62,6 +62,13 @@
                     <ui:Button name="map-guide-clear" class="fish-button fish-button--ghost map-guide__clear" text="STOP GUIDING" />
                 </ui:VisualElement>
 
+                <!-- Gate: while a Gate spell waits for its destination, every Gate Stone the character has discovered, in any land. Hidden otherwise. -->
+                <ui:VisualElement name="map-gate-section" class="fish-section map-section map-gate-section">
+                    <ui:Label class="fish-label fish-label--title map-section__title" text="OPEN A GATE" />
+                    <ui:Label name="map-gate-hint" class="fish-hint map-gate__hint" text="" />
+                    <ui:VisualElement name="map-gate-list" class="map-gate-list" />
+                </ui:VisualElement>
+
                 <!-- Waypoint: the selected fast-travel point. Outside the scroll view so that a click on a waypoint always shows its result. -->
                 <ui:VisualElement name="map-waypoint-section" class="fish-section map-section">
                     <ui:Label class="fish-label fish-label--title map-section__title" text="WAYPOINT" />

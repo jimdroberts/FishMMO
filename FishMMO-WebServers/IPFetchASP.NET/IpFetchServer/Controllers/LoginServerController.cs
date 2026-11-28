@@ -183,7 +183,11 @@ public class LoginServerController : ControllerBase
 
 		// Wrap in a "Ports" envelope so Unity's JsonUtility can deserialize
 		// the response without manual string rewriting on the client.
-		return Ok(new { Ports = loginServerPorts, ConnectionToken = token });
+		// Serialized up front and sent as bytes so the response carries a Content-Length: Ok(object) streams
+		// the JSON chunked, and the web client's loader warns about every response without a length.
+		// No naming policy, as AddJsonOptions configures: JsonUtility needs the exact property names.
+		byte[] body = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { Ports = loginServerPorts, ConnectionToken = token });
+		return File(body, "application/json");
 	}
 
 	/// <summary>

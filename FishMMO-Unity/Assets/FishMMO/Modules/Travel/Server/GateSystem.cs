@@ -239,6 +239,14 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 			{
 				return null;
 			}
+			// Nothing to choose: say so now rather than open a map with no destination on it.
+			WorldSceneDetailsCache cache = Server.BehaviourRegistry.TryGet(out ISceneServerSystem<NetworkConnection> sceneServer)
+				? sceneServer.WorldSceneDetailsCache
+				: null;
+			if (!caster.TryGet(out IWaypointController waypoints) || !GateStoneDirectory.AnyDiscovered(cache, waypoints))
+			{
+				return NoStonesText;
+			}
 			choices[caster.ID] = new Choice()
 			{
 				Caster = caster,
@@ -246,8 +254,15 @@ namespace FishMMO.Server.Implementation.World.SceneServer
 				Deadline = Time.time + settings.ChooseSeconds,
 			};
 			Send(caster.Owner, new GateChooseBroadcast() { Seconds = settings.ChooseSeconds });
+			Toast(caster, ChooseText, ToastSeverity.Info);
 			return null;
 		}
+
+		/// <summary>What a caster who has discovered no Gate Stone is told.</summary>
+		public const string NoStonesText = "You know of no Gate Stone. Find one and use it (E), then cast Gate.";
+
+		/// <summary>What the caster is told when the wait for its choice begins.</summary>
+		public const string ChooseText = "Choose a Gate Stone on the map.";
 
 		private void EndChoice(IPlayerCharacter caster, string text, ToastSeverity severity = ToastSeverity.Warning)
 		{

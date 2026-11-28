@@ -38,6 +38,11 @@ namespace FishMMO.AbilityContent
 		private const float GateCastSeconds = 2f, GateCooldownSeconds = 60f, CallToArmsCastSeconds = 3f, CallToArmsCooldownSeconds = 300f;
 		private const int GateManaCost = 30, CallToArmsManaCost = 40;
 
+		// The spells' colours: home gold, the mark's arcane violet (shared with the blink), the gate's lavender (its portal's glow), a rally's red.
+		private static readonly Palette HomePalette = new Palette(new Color(1.0f, 0.72f, 0.25f), new Color(1.0f, 0.96f, 0.82f));
+		private static readonly Palette GatePalette = new Palette(new Color(0.45f, 0.35f, 1.0f), new Color(0.86f, 0.80f, 1.0f));
+		private static readonly Palette RallyPalette = new Palette(new Color(0.85f, 0.14f, 0.08f), new Color(1.0f, 0.80f, 0.30f));
+
 		[DashboardTool(DashboardToolAttribute.Maintenance, "Generate Travel Spells", Section = "Ability Content", Order = 4,
 			Tooltip = "Generates the travel spells (Portal to Bind, Mark, Recall, Gate, Call to Arms) into the Travel module, registers them as addressables and adds them to the General Goods merchant. Needs the Travel module. Touches nothing else.")]
 		public static void GenerateTravelSpellsOnly()
@@ -95,98 +100,82 @@ namespace FishMMO.AbilityContent
 				return;
 			}
 
+			GameObject areaPulse = Require<GameObject>(PathAreaPulse);
+			if (areaPulse == null)
+			{
+				return;
+			}
+
 			EnsureFolder(TravelAbilityFolder);
 			EnsureFolder(TravelEventFolder);
+			EnsureFolder(FXFolder);
 
-			AbilityOnHitEvent portalToBindEvent = SaveEvent<AbilityOnHitEvent>(TravelEventFolder, "Portal to Bind Event", ev =>
-			{
-				ev.TargetSelector = new InitiatorTargetSelector();
-				ev.OnConditionsMetActions.Add(portalToBind);
-			});
-			abilities.Add(SaveAbility(TravelAbilityFolder, "Portal to Bind", a =>
-			{
-				a.Description = $"After {PortalToBindCastSeconds:0} seconds of casting, a portal carries you to your home point, wherever it is. It can be cast in combat, but any damage you take breaks the cast.";
-				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
-				a.Type = AbilityType.GroundedMagic;
-				a.ActivationTime = PortalToBindCastSeconds;
-				a.Cooldown = PortalToBindCooldownSeconds;
-				a.HitCount = 1;
-				a.InterruptedByDamage = true;
-				a.ActivationConditions.Add(Cost(mana, PortalToBindManaCost));
-				a.OnHitEvents.Add(portalToBindEvent);
-			}));
+			// ── Effects: each spell's own colour, a ring on the ground and a flash about the body. ──
+			GameObject homeRing = BuildEffect(explosionFX, "Portal to Bind Ring", go => { Recolour(go, HomePalette); MakeGroundRing(go); });
+			GameObject homeFlash = BuildEffect(explosionFX, "Portal to Bind Flash", go => Recolour(go, HomePalette));
+			GameObject markRune = BuildEffect(explosionFX, "Mark Rune", go => { Recolour(go, ArcanePalette); MakeGroundRing(go); });
+			GameObject markGather = BuildEffect(explosionFX, "Mark Gather", go => { Recolour(go, ArcanePalette); MakeImplosion(go); });
+			GameObject recallFlash = BuildEffect(explosionFX, "Recall Flash", go => Recolour(go, ArcanePalette));
+			GameObject gateRing = BuildEffect(explosionFX, "Gate Call Ring", go => { Recolour(go, GatePalette); MakeGroundRing(go); });
+			GameObject gateFlash = BuildEffect(explosionFX, "Gate Call Flash", go => { Recolour(go, GatePalette); MakeImplosion(go); });
+			GameObject rallyRing = BuildEffect(explosionFX, "Call to Arms Ring", go => { Recolour(go, RallyPalette); MakeGroundRing(go); });
+			GameObject rallyFlash = BuildEffect(explosionFX, "Call to Arms Flash", go => Recolour(go, RallyPalette));
 
-			AbilityOnHitEvent markEvent = SaveEvent<AbilityOnHitEvent>(TravelEventFolder, "Mark Event", ev =>
-			{
-				ev.TargetSelector = new InitiatorTargetSelector();
-				ev.OnConditionsMetActions.Add(markLocation);
-			});
-			abilities.Add(SaveAbility(TravelAbilityFolder, "Mark", a =>
-			{
-				a.Description = "Marks the spot you stand on as the place Recall returns you to, replacing your old mark. It cannot be cast inside an instance or where you could not safely be put back down. Any damage you take breaks the cast.";
-				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
-				a.Type = AbilityType.GroundedMagic;
-				a.ActivationTime = MarkCastSeconds;
-				a.Cooldown = MarkCooldownSeconds;
-				a.HitCount = 1;
-				a.InterruptedByDamage = true;
-				a.ActivationConditions.Add(Cost(mana, MarkManaCost));
-				a.OnHitEvents.Add(markEvent);
-			}));
+			/* Each spell is a short-lived, invisible object at the caster's feet (Area Pulse, like Lesser Teleport), not a self-cast:
+			 * a self-cast runs only on the server and the caster's own client, so nobody else ever saw it. The object is sent to
+			 * observers, its spawn chain plays the effects on every peer, and the travel action in the same chain does the work
+			 * on the server alone (each action refuses on a client). The effects come first so they stay where the cast was. */
+			abilities.Add(TravelSpell("Portal to Bind",
+				$"After {PortalToBindCastSeconds:0} seconds of casting, a portal carries you to your home point, wherever it is. It can be cast in combat, but any damage you take breaks the cast.",
+				PortalToBindCastSeconds, PortalToBindCooldownSeconds, PortalToBindManaCost, portalToBind,
+				Fx(homeRing, 3f, 0f), Fx(homeFlash, 2.5f, 1f)));
+			abilities.Add(TravelSpell("Mark",
+				"Marks the spot you stand on as the place Recall returns you to, replacing your old mark. It cannot be cast inside an instance or where you could not safely be put back down. Any damage you take breaks the cast.",
+				MarkCastSeconds, MarkCooldownSeconds, MarkManaCost, markLocation,
+				Fx(markRune, 2f, 0f), Fx(markGather, 1.5f, 1f)));
+			abilities.Add(TravelSpell("Recall",
+				$"After {RecallCastSeconds:0} seconds of casting, returns you to the location you marked, wherever it is. It can be cast in combat, but any damage you take breaks the cast.",
+				RecallCastSeconds, RecallCooldownSeconds, RecallManaCost, recall,
+				Fx(markRune, 2.5f, 0f), Fx(recallFlash, 2.5f, 1f)));
+			abilities.Add(TravelSpell("Gate",
+				"Calls up a gate. When the cast ends, choose a Gate Stone you have discovered on the map, in any land you have visited; a portal then opens in front of you to it for a short while. Anyone may step through, and each traveller can return to where the gate was cast through the lit Gate Stone until the gate closes. Damage breaks the cast and the choice.",
+				GateCastSeconds, GateCooldownSeconds, GateManaCost, openGate,
+				Fx(gateRing, 3.5f, 0f), Fx(gateFlash, 2f, 1f)));
+			abilities.Add(TravelSpell("Call to Arms",
+				"Calls every member of your party to your side, wherever they are. Each is asked, and those who accept are brought to you. It cannot be cast inside an instance. Any damage you take breaks the cast.",
+				CallToArmsCastSeconds, CallToArmsCooldownSeconds, CallToArmsManaCost, callToArms,
+				Fx(rallyRing, 8f, 0f), Fx(rallyFlash, 2f, 1f)));
 
-			AbilityOnHitEvent recallEvent = SaveEvent<AbilityOnHitEvent>(TravelEventFolder, "Recall Event", ev =>
-			{
-				ev.TargetSelector = new InitiatorTargetSelector();
-				ev.OnConditionsMetActions.Add(recall);
-			});
-			abilities.Add(SaveAbility(TravelAbilityFolder, "Recall", a =>
-			{
-				a.Description = $"After {RecallCastSeconds:0} seconds of casting, returns you to the location you marked, wherever it is. It can be cast in combat, but any damage you take breaks the cast.";
-				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
-				a.Type = AbilityType.GroundedMagic;
-				a.ActivationTime = RecallCastSeconds;
-				a.Cooldown = RecallCooldownSeconds;
-				a.HitCount = 1;
-				a.InterruptedByDamage = true;
-				a.ActivationConditions.Add(Cost(mana, RecallManaCost));
-				a.OnHitEvents.Add(recallEvent);
-			}));
+			PlayFXAction Fx(GameObject prefab, float size, float height) => new PlayFXAction { FXPrefab = prefab, Size = size, HeightOffset = height };
 
-			AbilityOnHitEvent gateEvent = SaveEvent<AbilityOnHitEvent>(TravelEventFolder, "Gate Event", ev =>
+			AbilityTemplate TravelSpell(string name, string description, float castSeconds, float cooldownSeconds, int manaCost,
+				BaseAction effect, params PlayFXAction[] fx)
 			{
-				ev.TargetSelector = new InitiatorTargetSelector();
-				ev.OnConditionsMetActions.Add(openGate);
-			});
-			abilities.Add(SaveAbility(TravelAbilityFolder, "Gate", a =>
-			{
-				a.Description = "Calls up a gate. When the cast ends, choose a Gate Stone you have discovered on the map, in any land you have visited; a portal then opens in front of you to it for a short while. Anyone may step through, and each traveller can return to where the gate was cast through the lit Gate Stone until the gate closes. Damage breaks the cast and the choice.";
-				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
-				a.Type = AbilityType.GroundedMagic;
-				a.ActivationTime = GateCastSeconds;
-				a.Cooldown = GateCooldownSeconds;
-				a.HitCount = 1;
-				a.InterruptedByDamage = true;
-				a.ActivationConditions.Add(Cost(mana, GateManaCost));
-				a.OnHitEvents.Add(gateEvent);
-			}));
-
-			AbilityOnHitEvent callToArmsEvent = SaveEvent<AbilityOnHitEvent>(TravelEventFolder, "Call to Arms Event", ev =>
-			{
-				ev.TargetSelector = new InitiatorTargetSelector();
-				ev.OnConditionsMetActions.Add(callToArms);
-			});
-			abilities.Add(SaveAbility(TravelAbilityFolder, "Call to Arms", a =>
-			{
-				a.Description = "Calls every member of your party to your side, wherever they are. Each is asked, and those who accept are brought to you. It cannot be cast inside an instance. Any damage you take breaks the cast.";
-				a.AbilitySpawnTarget = AbilitySpawnTarget.Self;
-				a.Type = AbilityType.GroundedMagic;
-				a.ActivationTime = CallToArmsCastSeconds;
-				a.Cooldown = CallToArmsCooldownSeconds;
-				a.HitCount = 1;
-				a.InterruptedByDamage = true;
-				a.ActivationConditions.Add(Cost(mana, CallToArmsManaCost));
-				a.OnHitEvents.Add(callToArmsEvent);
-			}));
+				AbilityOnSpawnEvent spawn = SaveEvent<AbilityOnSpawnEvent>(TravelEventFolder, $"{name} Event", ev =>
+				{
+					foreach (PlayFXAction play in fx)
+					{
+						ev.OnConditionsMetActions.Add(play);
+					}
+					ev.OnConditionsMetActions.Add(effect);
+				});
+				return SaveAbility(TravelAbilityFolder, name, a =>
+				{
+					a.Description = description;
+					a.AbilityObjectPrefab = areaPulse; // invisible, at the caster's feet: carries the cast to observers
+					a.AbilitySpawnTarget = AbilitySpawnTarget.PointBlank;
+					a.Type = AbilityType.GroundedMagic;
+					a.ActivationTime = castSeconds;
+					a.Speed = 0f;
+					// Long enough for an observer's copy to be drawn (and its effects released) before it ends.
+					a.LifeTime = 0.5f;
+					a.Cooldown = cooldownSeconds;
+					a.HitCount = 1;
+					a.InterruptedByDamage = true;
+					a.ActivationConditions.Add(Cost(mana, manaCost));
+					a.OnSpawnEvents.Add(spawn);
+				});
+			}
 		}
 
 		/// <summary>A new instance of a module's action, found by its assembly-qualified name, or null without the module.</summary>

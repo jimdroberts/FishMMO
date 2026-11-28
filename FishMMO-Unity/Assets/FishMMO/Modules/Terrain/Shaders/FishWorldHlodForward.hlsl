@@ -1,5 +1,6 @@
 // Retain the indirect prop's contact/weather branches without reading instance buffers.
 #define FISH_INDIRECT_INSTANCED 1
+#define FISH_INDIRECT_TERRAIN 1
 static float FishIndirectLodFade = 0.0;
 #include "Assets/FishMMO/Modules/Terrain/Shaders/FishWorldHlodSetup.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishWeatherLitForwardPass.hlsl"

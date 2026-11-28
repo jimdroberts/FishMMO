@@ -9,7 +9,7 @@ namespace FishMMO.Shared
 	/// come to the caster; each who accepts within <see cref="AcceptSeconds"/> is brought to the caster's side.
 	/// </summary>
 	/// <remarks>
-	/// Server only, and always the caster (an initiator target selector on a self-cast ability). Refused outside a party, in
+	/// Server only, and always the caster (on the spawn event of a pulse ability at the caster's feet). Refused outside a party, in
 	/// an arena, a <see cref="NoTravelZone"/> and an instance. Members on other scene servers are reached through the party chat
 	/// pump (<c>PartySignals</c>); the summons is a signed <see cref="TravelTicket"/>, so it cannot be forged by a member.
 	/// </remarks>

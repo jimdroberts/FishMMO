@@ -9,8 +9,8 @@ namespace FishMMO.Shared
 	/// in front of it to that stone for <see cref="LifetimeSeconds"/>.
 	/// </summary>
 	/// <remarks>
-	/// <para>Server only, and always the caster: put it on an <c>AbilityOnHitEvent</c> with an initiator target selector on a
-	/// self-cast ability, like the other travel spells. The cast itself is short; the choice that follows is the long part,
+	/// <para>Server only, and always the caster: put it on the spawn event of an ability whose object is an invisible pulse at
+	/// the caster's feet (<c>PointBlank</c>), like the other travel spells. The cast itself is short; the choice that follows is the long part,
 	/// held by the server (<see cref="IGateHost.BeginChoice"/>) for up to <see cref="ChooseSeconds"/> and ended by choosing,
 	/// cancelling (closing the map), damage or the time running out.</para>
 	/// <para>Castable in combat. Refused in an arena, a <see cref="NoTravelZone"/> and an instance (no gate leads into or out

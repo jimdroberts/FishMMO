@@ -2,15 +2,17 @@
 // FloraPaletteMap): lichen, rime, salt bloom, soot, a tide-mark… drawn where a piece stands, from the biome under its origin, on top of
 // the weathering every building already wears (FishStructureWeathering.hlsl). No textures but the small table; no keywords.
 //
-// The table: _FishCoatTable, 10 RGBA texels a row, one row per biome on the scene's flora map (the row is its palette index, the same
-// grid _FishFloraBiomes FishFlora.hlsl reads), linear:
+// The table: rows of the flora palette (_FishFloraPalette) after the biomes' own, 10 RGBA texels from column 0, one row per biome on the
+// scene's flora map (the row is its palette index, the same grid _FishFloraBiomes FishFlora.hlsl reads), linear. One texture with the
+// palette rather than its own: the terrain's rock pass is at WebGPU's 32 texture parameters. The texels:
 //   0 A.rgb + strength · 1 B.rgb + cover · 2 C.rgb + speckle · 3 foot.rgb + foot height m · 4 skyward, shade, windward (signed), sun ·
 //   5 film, edge, streaks, cracks · 6 patchiness, smoothness (< 0 keep), bleach (signed), keep · 7 mark m, foot from (0 the ground,
 //   1 the sea's low water, 2 the local water: any water within 6 m of the piece on the fine ground map), scale m, foot wind ·
 //   8 uphill (the main colour on the faces toward the slope above), uphill foot bias, foot spread (per piece), year fade ·
 //   9 scour (windward polish), scour top m (0 the whole wall), faults (+ vertical strike-slip, − dipping along the contour), growth
 //   below m (under the sea; above it only a film of the second colour). Zero in 8.zw and 9 draws exactly as formerly.
-// _FishCoatInfo = (on, rows, grid w, grid h): x 0 when no biome on the scene has a coat, and every building draws as before.
+// _FishCoatInfo = (on, rows, grid w, grid h): x 0 when no biome on the scene has a coat, and every building draws as before. The
+// palette has one coat row per biome, so the first is at rows × FISH_FLORA_ROWS.
 //
 // Only the indirect twin's pass includes it (FishWeatherLitIndirect.shader, FXC on purpose: its procedural setup writes the per-draw
 // matrices); needs FishFlora.hlsl, FishWeather.hlsl, FishStructureWeathering.hlsl and FishGroundMap.hlsl (the slope: the fine ground
@@ -23,7 +25,6 @@
 
 #include "Assets/FishMMO/Shaders/Surface/FishSea.hlsl"
 
-Texture2D<float4> _FishCoatTable;
 float4 _FishCoatInfo;
 
 #define FISH_COAT_TEXELS 10
@@ -48,7 +49,8 @@ uint FishCoatRowAt(float2 xz)
 
 float4 FishCoatTexel(uint row, int column)
 {
-    return _FishCoatTable.Load(int3(column, (int)row, 0));
+    uint first = (uint)max(_FishCoatInfo.y, 0.0) * FISH_FLORA_ROWS;
+    return _FishFloraPalette.Load(int3(column, (int)(first + row), 0));
 }
 
 /// <summary>

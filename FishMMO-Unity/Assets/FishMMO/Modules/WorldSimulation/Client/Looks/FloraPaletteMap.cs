@@ -23,7 +23,9 @@ namespace FishMMO.Client
 	/// scene's own look, for ground the map leaves blank).</item>
 	/// <item><c>_FishFloraPalette</c>: RGBAHalf, <see cref="BiomeLooks.Variants"/> wide and <see cref="Rows"/> rows per biome,
 	/// linear colours: foliage (a = running weight), root (a = height), bloom (a = bloom size), accent (a = width), mineral
-	/// (a = bend).</item>
+	/// (a = bend). After the biomes' rows, when some biome here has a structure coat, one row per biome of its coat
+	/// (BuildCoats, FishStructureCoat.hlsl): one table rather than two, because the terrain's rock pass is at WebGPU's 32
+	/// texture parameters.</item>
 	/// <item><c>_FishFloraRect</c> (origin xz, 1/size xz), <c>_FishFloraInfo</c> (on, grid w, grid h, biomes),
 	/// <c>_FishFloraStrength</c> (foliage, bloom, accent, mineral: how far each takes its look), <c>_FishFloraGround</c> (the
 	/// world's bare-ground colour, linear, a = how far mineral ground layers take it: <see cref="BiomeLooks.WorldTraits.Ground"/>).</item>
@@ -52,7 +54,6 @@ namespace FishMMO.Client
 		private static readonly int StrengthId = Shader.PropertyToID("_FishFloraStrength");
 		private static readonly int GroundId = Shader.PropertyToID("_FishFloraGround");
 		private static readonly int WorldId = Shader.PropertyToID("_FishFloraWorld");
-		private static readonly int CoatTableId = Shader.PropertyToID("_FishCoatTable");
 		private static readonly int CoatInfoId = Shader.PropertyToID("_FishCoatInfo");
 
 		/// <summary>How far each kind of thing takes its look: grass and leaves, flowers, fungi and lichen, stones.</summary>
@@ -73,7 +74,7 @@ namespace FishMMO.Client
 		}
 		private static bool enabled = true;
 
-		private static Texture2D biomeTexture, paletteTexture, coatTexture;
+		private static Texture2D biomeTexture, paletteTexture;
 		private static Vector4 rect, info, ground, growth = new Vector4(1f, 1f, 0f, 0f), coatInfo;
 		private static bool hooked, dirty = true, published;
 		private static int builtFrame = -1, retryFrame = -1;
@@ -394,8 +395,9 @@ namespace FishMMO.Client
 			biomeTexture.SetPixelData(indices, 0);
 			biomeTexture.Apply(false, false);
 
-			// The palette: twelve looks a column, five rows a biome, linear light.
-			int rows = looks.Count * Rows;
+			// The palette: twelve looks a column, Rows rows a biome, linear light; then the coats' rows, if any.
+			List<BiomeWeathering> weatherings = CoatedWeatherings();
+			int rows = looks.Count * Rows + (weatherings != null ? weatherings.Count : 0);
 			EnsureTexture(ref paletteTexture, BiomeLooks.Variants, rows, TextureFormat.RGBAHalf, "Flora Palette");
 			var pixels = new Color[BiomeLooks.Variants * rows];
 			for (int b = 0; b < looks.Count; b++)
@@ -416,9 +418,9 @@ namespace FishMMO.Client
 					pixels[(row + 5) * BiomeLooks.Variants + v] = new Color(variant.Shift.r, variant.Shift.g, variant.Shift.b, 1f);
 				}
 			}
+			BuildCoats(weatherings, world.Atmosphere, pixels, looks.Count * Rows, w, h);
 			paletteTexture.SetPixels(pixels);
 			paletteTexture.Apply(false, false);
-			BuildCoats(world.Atmosphere, w, h);
 			// How the cold glows move, biome by biome: the same rows and grid.
 			GlowModeTable.Build(rowBiomes, indices, w, h, rect, body != null && body.CloudWorldStructures != null ? body.CloudWorldStructures.GlowModes : null);
 			GlowModeTable.Place(settings);
@@ -444,37 +446,46 @@ namespace FishMMO.Client
 			Debug.Log($"[Flora] {described}.");
 		}
 
-		/// <summary>
-		/// The coat table (FishStructureCoat.hlsl): per palette row the coat its biome's weathering lays over buildings
-		/// (<see cref="BiomeStructureCoats.Texels"/>, the parts that need air dropped on this world), <see cref="BiomeStructureCoats.TexelsPerBiome"/>
-		/// texels a row. <c>_FishCoatInfo</c> = (on, rows, grid w, grid h); on only when some biome here has a coat, so a scene whose biomes
-		/// name none draws every building as before. Follows the build, not <see cref="Enabled"/> (the looks' A/B): a coat is weathering.
-		/// </summary>
-		private static void BuildCoats(AtmosphereKind air, int gridW, int gridH)
+		/// <summary>Each palette row's biome weathering, or null when no biome here has a coat (the palette then has no coat rows).</summary>
+		private static List<BiomeWeathering> CoatedWeatherings()
 		{
 			var weatherings = new List<BiomeWeathering>(rowBiomes.Count);
 			foreach (BiomeTemplate biome in rowBiomes)
 			{
 				weatherings.Add(biome != null ? biome.Weathering : default);
 			}
-			if (!BiomeStructureCoats.AnyCoat(weatherings))
+			return BiomeStructureCoats.AnyCoat(weatherings) ? weatherings : null;
+		}
+
+		/// <summary>
+		/// The coat rows (FishStructureCoat.hlsl), after the biomes' rows in the palette: per palette row, from <paramref name="firstRow"/>,
+		/// the coat its biome's weathering lays over buildings (<see cref="BiomeStructureCoats.Texels"/>, the parts that need air dropped on
+		/// this world), <see cref="BiomeStructureCoats.TexelsPerBiome"/> texels from column 0. <c>_FishCoatInfo</c> = (on, rows, grid w,
+		/// grid h); on only when some biome here has a coat, so a scene whose biomes name none draws every building as before. The shader
+		/// finds the first coat row as rows × <see cref="Rows"/>: one coat row per palette biome. Follows the build, not
+		/// <see cref="Enabled"/> (the looks' A/B): a coat is weathering.
+		/// </summary>
+		private static void BuildCoats(List<BiomeWeathering> weatherings, AtmosphereKind air, Color[] pixels, int firstRow, int gridW, int gridH)
+		{
+			coatInfo = Vector4.zero;
+			if (weatherings == null)
 			{
-				coatInfo = Vector4.zero;
 				return;
 			}
 			int width = BiomeStructureCoats.TexelsPerBiome;
-			EnsureTexture(ref coatTexture, width, weatherings.Count, TextureFormat.RGBAHalf, "Structure Coats");
-			var pixels = new Color[width * weatherings.Count];
+			if (width > BiomeLooks.Variants)
+			{
+				Debug.LogError($"[Flora] A structure coat is {width} texels, wider than the palette's {BiomeLooks.Variants}: coats left off.");
+				return;
+			}
 			for (int row = 0; row < weatherings.Count; row++)
 			{
 				Vector4[] texels = BiomeStructureCoats.Texels(weatherings[row], air);
 				for (int t = 0; t < width; t++)
 				{
-					pixels[row * width + t] = new Color(texels[t].x, texels[t].y, texels[t].z, texels[t].w);
+					pixels[(firstRow + row) * BiomeLooks.Variants + t] = new Color(texels[t].x, texels[t].y, texels[t].z, texels[t].w);
 				}
 			}
-			coatTexture.SetPixels(pixels);
-			coatTexture.Apply(false, false);
 			coatInfo = new Vector4(1f, weatherings.Count, gridW, gridH);
 		}
 
@@ -533,11 +544,7 @@ namespace FishMMO.Client
 			Shader.SetGlobalVector(StrengthId, Strength);
 			Shader.SetGlobalVector(GroundId, on ? ground : Vector4.zero);
 			Shader.SetGlobalVector(WorldId, on ? growth : new Vector4(1f, 1f, 0f, 0f));
-			if (coatTexture != null)
-			{
-				Shader.SetGlobalTexture(CoatTableId, coatTexture);
-			}
-			Shader.SetGlobalVector(CoatInfoId, published && coatTexture != null ? coatInfo : Vector4.zero);
+			Shader.SetGlobalVector(CoatInfoId, published && paletteTexture != null ? coatInfo : Vector4.zero);
 			GlowModeTable.Publish(published);
 			BurnMosaicTable.Publish(on);
 			GroundGlowTable.Publish(on);
@@ -568,11 +575,6 @@ namespace FishMMO.Client
 			{
 				Object.Destroy(paletteTexture);
 				paletteTexture = null;
-			}
-			if (coatTexture != null)
-			{
-				Object.Destroy(coatTexture);
-				coatTexture = null;
 			}
 		}
 

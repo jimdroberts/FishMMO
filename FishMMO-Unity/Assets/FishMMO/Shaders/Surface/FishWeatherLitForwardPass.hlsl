@@ -4,13 +4,19 @@
 #ifndef FISHMMO_WEATHER_LIT_FORWARD_PASS_INCLUDED
 #define FISHMMO_WEATHER_LIT_FORWARD_PASS_INCLUDED
 
+// ── FishMMO edit: the terrain's draws bind no trail map (FishWeather.hlsl FISH_NO_TRAILS): with the rock's ground band, crevices,
+// flora and coat this pass is at WebGPU's 32 texture parameters (WebGpuRenderingCompatibilityTests). A trail shows only in the
+// band at a rock's foot, which then shows the ground untrodden; the terrain itself still draws every print. ──
+#if defined(FISH_INDIRECT_TERRAIN) && !defined(FISH_NO_TRAILS)
+#define FISH_NO_TRAILS
+#endif
 #include "Assets/FishMMO/Shaders/Surface/FishSurface.hlsl"
 // ── FishMMO edit: the instanced tree channels' per-instance LOD cross-fade (contract in the file). ──
 #include "Assets/FishMMO/Shaders/FishLodFade.hlsl"
 #include "Assets/FishMMO/Shaders/Surface/FishGroundColour.hlsl"
 // ── FishMMO edit: rock-against-rock crevices (the indirect twin's rocks only). ──
 #include "Assets/FishMMO/Shaders/Surface/FishRockContact.hlsl"
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
 // ── FishMMO edit: the biomes' looks on this world (FishFlora.hlsl, FloraPaletteMap), for the stones the terrain scatters
 // (the indirect twin's detail draws only: texel loads, no sampler). ──
 #include "Assets/FishMMO/Shaders/Surface/FishFlora.hlsl"
@@ -37,7 +43,7 @@ float _FishFloraOn;
 // sixteen, and a texture's own sampler (sampler_FishGroundColour) is refused in a program that does not read that texture. ──
 #define FISH_GROUND_MAP_SAMPLER sampler_LinearClamp
 #include "Assets/FishMMO/Shaders/Surface/FishGroundMap.hlsl"
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
 // ── FishMMO edit: the coat a biome's weather lays over its buildings (FishStructureCoat.hlsl, FloraPaletteMap's table; after the ground map,
 // which gives it the slope a piece stands on). ──
 #include "Assets/FishMMO/Shaders/Surface/FishStructureCoat.hlsl"
@@ -52,7 +58,7 @@ float _FishFloraOn;
 #include "Assets/FishMMO/Shaders/Surface/FishIndoor.hlsl"
 // ── FishMMO edit: a cave's rock dressed by its habitat (FishCaveRock.hlsl): the plain shader's cave rock materials only (the
 // indirect twin never draws cave rock, and its contact and rock-origin interpolators take the same slots). ──
-#if defined(_FISH_CAVE_ROCK) && !defined(FISH_INDIRECT_INSTANCED)
+#if defined(_FISH_CAVE_ROCK) && !defined(FISH_INDIRECT_TERRAIN)
 #define FISH_CAVE_ROCK_ON
 #include "Assets/FishMMO/Shaders/Surface/FishCaveRock.hlsl"
 #endif
@@ -106,7 +112,7 @@ struct Varyings
     half4 tangentWS                : TEXCOORD3;    // xyz: tangent, w: sign
 #endif
 
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     // ── FishMMO edit: metres above the terrain straight below, for the contact blend (FishGroundColour.hlsl). ──
     float fishContact               : TEXCOORD4;
     float3 fishRockOrigin           : TEXCOORD11;   // this rock's world position, to tell it from its neighbours
@@ -306,7 +312,7 @@ Varyings LitPassVertex(Attributes input)
 #if defined(REQUIRES_WORLD_SPACE_POS_INTERPOLATOR)
     output.positionWS = vertexInput.positionWS;
 #endif
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     output.fishContact = FishContactHeight(vertexInput.positionWS, TransformObjectToWorld(float3(0.0, 0.0, 0.0)));
     output.fishRockOrigin = TransformObjectToWorld(float3(0.0, 0.0, 0.0));
 #elif defined(FISH_CAVE_ROCK_ON)
@@ -369,7 +375,7 @@ void LitPassFragment(
     // 1 for everything but a structure's sheltered surfaces (set in the structure block below, the instanced twin's only);
     // the textured moss further on reads it.
     half fishStructureOpen = 1.0h;
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     // ── FishMMO edit: a terrain rock sits IN the ground. Over a band at its base, and in the crevices where it meets
     // another rock, it renders the TERRAIN — the terrain's own surface there (FishGroundColour.hlsl FishGroundContact)
     // lit by the terrain's own lighting and weather (FishGroundContactLit.hlsl), blended with the rock's lit colour
@@ -476,7 +482,7 @@ void LitPassFragment(
     // ── FishMMO edit: moss (FishMoss.hlsl), ahead of the weather so rain darkens it and snow covers it like the rest.
     // After the crevices and the structure's weathering, whose shade it reads as where damp collects. A GPU-drawn rock
     // knows its height over the terrain exactly; anything else reads the fine ground map's. ──
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     float fishMossAbove = input.fishContact;
 #else
     float fishMossAbove = 1e4;
@@ -503,7 +509,7 @@ void LitPassFragment(
         FishWeatherSurface(inputData.positionWS, surfaceData.albedo, weathered, surfaceData.smoothness, surfaceData.metallic, surfaceData.occlusion);
         inputData.normalWS = normalize(lerp(inputData.normalWS, weathered, _FishWeatherAmount));
     }
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     // ── FishMMO edit: distant terrain rocks settle into the landscape (FishGroundColour.hlsl). Only the
     // GPU-instanced twin (terrain rocks, boulders, formations, cliff rocks): buildings and props drawn with
     // this shader keep their own colour at any distance (the structure kit's are drawn by this twin too: flagged). ──
@@ -558,7 +564,7 @@ void LitPassFragment(
         fishSunTaken = fishSeaDaylight < 1.0h ? 1.0h - (1.0h - fishSunTaken) * fishSeaDaylight : fishSunTaken;
         color.rgb = max(0.0h, color.rgb - fishSunTaken * LightingPhysicallyBased(fishSunBrdf, fishSun, inputData.normalWS, inputData.viewDirectionWS));
     }
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     // ── FishMMO edit: the ground's lit colour over the band and in the crevices (above). ──
     if (fishHasGround && fishGroundWeight > 0.0h)
     {

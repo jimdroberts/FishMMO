@@ -365,7 +365,10 @@ namespace FishMMO.UnitTests
 			string shader = SourceScanPins.ReadCode(Shaders + "FishRockFillet.shader");
 			StringAssert.Contains("#pragma multi_compile_local_fragment _ " + RockFillets.LookArrayKeyword, shader);
 			string pass = SourceScanPins.ReadCode(Shaders + "FishRockFilletPass.hlsl");
-			Ordered(pass, "#if defined(" + RockFillets.LookArrayKeyword + ")",
+			// From the switch on: InOrder finds each anchor's first occurrence, and the pass has an #endif before it.
+			int at = pass.IndexOf("#if defined(" + RockFillets.LookArrayKeyword + ")", System.StringComparison.Ordinal);
+			Assert.That(at, Is.GreaterThanOrEqualTo(0), "no switch on " + RockFillets.LookArrayKeyword);
+			Ordered(pass.Substring(at), "#if defined(" + RockFillets.LookArrayKeyword + ")",
 				"#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D_ARRAY(array,",
 				"#else",
 				"#define FISH_FILLET_MAP(map, mapSampler, array, slice, uv) ((half4)SAMPLE_TEXTURE2D(map, mapSampler, uv))",

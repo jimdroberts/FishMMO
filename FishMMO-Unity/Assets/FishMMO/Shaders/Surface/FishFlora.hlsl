@@ -11,7 +11,8 @@
 
 Texture2D<float> _FishFloraBiomes;     // R8: the biome map grid, each texel the biome's palette index (0 = the scene's own look)
 Texture2D<float4> _FishFloraPalette;   // 12 wide, 7 rows a biome, linear: foliage (a running weight), root (a height),
-                                       // bloom (a bloom size), accent (a width), mineral (a bend), living green's shift, the biome's ground shift
+                                       // bloom (a bloom size), accent (a width), mineral (a bend), living green's shift, the biome's ground shift;
+                                       // after the biomes' rows, the structure coats' when there are any (FishStructureCoat.hlsl)
 float4 _FishFloraRect;                 // xy the grid's world xz origin, zw one over its xz size (0 when the scene has no map)
 float4 _FishFloraInfo;                 // x 1 when on, y grid width, z grid height, w biomes in the palette
 float4 _FishFloraStrength;             // how far each takes its look: x foliage, y bloom, z accent, w mineral

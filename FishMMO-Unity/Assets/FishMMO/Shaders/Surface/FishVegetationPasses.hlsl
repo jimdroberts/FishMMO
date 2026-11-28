@@ -1165,7 +1165,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     groundSite = (FishGroundSite)0;
     bool hasGround = false;
     FishGroundPixel groundPixel = (FishGroundPixel)0;
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     UNITY_BRANCH
     if (_Clinging < 0.5)
     {
@@ -1269,7 +1269,7 @@ half4 VegForwardFragment(VegVaryings input, FRONT_FACE_TYPE face : FRONT_FACE_SE
     // the same way).
     back *= saturate(-dot(normalWS * IS_FRONT_VFACE(face, 1.0, -1.0), mainLight.direction) * 2.0 + 0.3);
     color.rgb += albedo * mainLight.color * (mainLight.shadowAttenuation * mainLight.distanceAttenuation * back * _Translucency * (half)(1.0 - distanceFar));
-#if defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_INDIRECT_TERRAIN)
     if (hasGround && groundWeight > 0.0h)
     {
         color.rgb = lerp(color.rgb, FishGroundLit(inputData, groundPixel, 1.0h, groundDx, groundDy), groundWeight);
@@ -1353,7 +1353,7 @@ VegDepthVaryings VegDepthVertex(VegAttributes input)
         return output;
     }
 #endif
-#if defined(FISH_VEG_PASS_SHADOW) && defined(_CASTING_PUNCTUAL_LIGHT_SHADOW) && defined(FISH_INDIRECT_INSTANCED)
+#if defined(FISH_VEG_PASS_SHADOW) && defined(_CASTING_PUNCTUAL_LIGHT_SHADOW) && defined(FISH_INDIRECT_TERRAIN)
     // GPU-drawn plants never cast into a point or spot light's shadow (SiteLightPool's indoor lights): their draws carry
     // bounds round the camera, so URP puts them into every cube face of every such light, while those lights exist to
     // keep a room's light from leaking through its walls. Dropped here, before any of the plant's own work.

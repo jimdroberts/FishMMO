@@ -176,6 +176,14 @@ struct FishVisible
     #endif
 #endif
 
+// Drawn by the terrain's GPU renderers, either way: RenderMeshIndirect (FISH_INDIRECT_INSTANCED) or the batch group
+// (FISH_INDIRECT_DOTS). The passes' terrain-only work (a rock's ground band and crevices, the distant settle, the stones' flora,
+// the buildings' coat, the plants' ground contact) stands under this, so both draw alike. FISH_INDIRECT_INSTANCED stays for
+// what only the procedural setup has (its buffers, its per-instance LOD fade).
+#if defined(FISH_INDIRECT_INSTANCED) || defined(FISH_INDIRECT_DOTS)
+    #define FISH_INDIRECT_TERRAIN 1
+#endif
+
 // The inverse of an affine T·R·S with orthogonal 3×3 columns c0, c1, c2 (no shear). With
 // M3 = R·S, inverse(M3) = S⁻¹·Rᵀ, whose row i is column i of M3 divided by its squared length
 // (|cᵢ|² = sᵢ²): about fifteen flops, against a general 3×3 inverse's cofactors and determinant.

@@ -274,6 +274,43 @@
 
 
 /* ═══════════════════════════════════════════════════════════
+   GATE (the Gate spell's choice of a Gate Stone)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hidden until a Gate waits for its stone; UITKMap.RefreshGateList shows it inline. */
+.map-gate-section {
+    display: none;
+}
+
+.map-gate__hint {
+    font-size: 10px;
+    white-space: normal;
+    margin-bottom: 4px;
+}
+
+.map-gate-list {
+    flex-direction: column;
+}
+
+.map-gate__row {
+    height: 22px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    font-size: 10px;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.map-gate__row--selected {
+    border-color: var(--map-gate-stone);
+    color: var(--map-gate-stone);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    WAYPOINT
    ═══════════════════════════════════════════════════════════ */
 

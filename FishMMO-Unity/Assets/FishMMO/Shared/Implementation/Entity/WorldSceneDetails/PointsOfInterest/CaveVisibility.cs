@@ -17,7 +17,7 @@ namespace FishMMO.Shared
 	/// No property block on the pieces: one takes a renderer out of the SRP Batcher and the GPU Resident Drawer. The cave
 	/// mode of the rock shader's ground contact (<c>_FishContactOn</c> 2, FishGroundColour.hlsl) was set through one, but
 	/// the pieces wear FishMMO/Weather Lit, whose forward pass compiles the contact only for the GPU-driven rocks
-	/// (FISH_INDIRECT_INSTANCED): the value was read by nothing they draw. A cave contact for the pieces would be a
+	/// (FISH_INDIRECT_TERRAIN): the value was read by nothing they draw. A cave contact for the pieces would be a
 	/// per-material value (a keyword, or a field of the material's constant buffer), never a block.
 	/// </para>
 	/// <para>

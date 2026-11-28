@@ -10,8 +10,8 @@ namespace FishMMO.Shared
 	/// (issue #241). Recall sends it back there.
 	/// </summary>
 	/// <remarks>
-	/// <para>Server only, and always the caster: put it on an <c>AbilityOnHitEvent</c> with an initiator target selector on a
-	/// self-cast ability.</para>
+	/// <para>Server only, and always the caster: put it on the spawn event of an ability whose object is an invisible pulse at
+	/// the caster's feet (<c>PointBlank</c>), after the effects that event plays, so observers see the cast.</para>
 	/// <para>Refused in an arena, in a <see cref="NoTravelZone"/>, inside an instance, and anywhere the caster could not safely
 	/// be put back down later (<see cref="StandingSpot"/>, the bindstone's rule). A plot the caster may not enter needs no rule
 	/// of its own: the Housing module moves trespassers off a plot, on arrival as at any other time.</para>

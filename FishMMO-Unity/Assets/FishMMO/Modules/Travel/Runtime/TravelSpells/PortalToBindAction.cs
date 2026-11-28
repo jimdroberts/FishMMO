@@ -10,8 +10,8 @@ namespace FishMMO.Shared
 	/// (issue #241).
 	/// </summary>
 	/// <remarks>
-	/// <para>Server only, and always the caster: put it on an <c>AbilityOnHitEvent</c> with an initiator target selector on
-	/// a self-cast ability. The move is the one a respawn at the bind point makes (<see cref="CharacterTransfer.TransferToBindPoint"/>).</para>
+	/// <para>Server only, and always the caster: put it on the spawn event of an ability whose object is an invisible pulse
+	/// at the caster's feet (<c>PointBlank</c>), after the effects that event plays. The move is the one a respawn at the bind point makes (<see cref="CharacterTransfer.TransferToBindPoint"/>).</para>
 	/// <para>This is the escape spell: it is castable in combat and never checks whether the bind point is occupied. The ability
 	/// that carries it should have a cast time and <c>InterruptedByDamage</c>, so attacking the caster is how to stop it.</para>
 	/// </remarks>

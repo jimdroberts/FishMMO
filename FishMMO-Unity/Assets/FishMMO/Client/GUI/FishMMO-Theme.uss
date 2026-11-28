@@ -224,6 +224,7 @@
     --map-note:         rgb(250, 216, 90);
     --map-waypoint:     rgb(255, 156, 56);
     --map-waypoint-selected: rgb(96, 232, 150);
+    --map-gate-stone:   rgb(209, 184, 255);
     --map-guide:        rgb(250, 110, 255);
     --map-dungeon:      rgb(214, 96, 168);
     --map-housing:      rgb(120, 220, 160);

@@ -132,6 +132,19 @@ namespace FishMMO.Client
 		/// <summary>Name of the label explaining the waypoint section's state.</summary>
 		private const string WAYPOINT_HINT_NAME = "map-waypoint-hint";
 
+		/// <summary>Name of the section listing the discovered Gate Stones while a Gate waits for its destination.</summary>
+		private const string GATE_SECTION_NAME = "map-gate-section";
+
+		/// <summary>Name of the label above the Gate Stone list.</summary>
+		private const string GATE_HINT_NAME = "map-gate-hint";
+
+		/// <summary>Name of the container the Gate Stone rows are built into.</summary>
+		private const string GATE_LIST_NAME = "map-gate-list";
+
+		/// <summary>Class of one Gate Stone row, and of the selected one.</summary>
+		private const string GATE_ROW_CLASS = "map-gate__row";
+		private const string GATE_ROW_SELECTED_CLASS = "map-gate__row--selected";
+
 		/// <summary>
 		/// How long the travel button stays disabled waiting for the server's answer, in seconds.
 		/// A lost reply must not leave the button dead for the rest of the session.
@@ -204,6 +217,12 @@ namespace FishMMO.Client
 
 		/// <summary>Whether a Gate spell waits for this map to choose its Gate Stone (<see cref="GateStoneChoice"/>).</summary>
 		private bool gateMode;
+
+		/// <summary>The Gate Stone section: shown only in gate mode, it lists every discovered stone in any land.</summary>
+		private VisualElement gateSection;
+		private Label gateHint;
+		private VisualElement gateList;
+		private readonly List<DiscoveredGateStone> gateStones = new List<DiscoveredGateStone>();
 
 		/// <summary>The selected waypoint's index within the current scene.</summary>
 		private int selectedWaypointIndex;
@@ -416,6 +435,10 @@ namespace FishMMO.Client
 				waypointTravelButton.clicked += OnWaypointButtonClicked;
 			}
 
+			gateSection = root.Q<VisualElement>(GATE_SECTION_NAME);
+			gateHint = root.Q<Label>(GATE_HINT_NAME);
+			gateList = root.Q<VisualElement>(GATE_LIST_NAME);
+
 			BuildFilterToggles();
 			BuildColorSwatches();
 
@@ -456,6 +479,7 @@ namespace FishMMO.Client
 			ApplySceneToView();
 			RefreshWaypointPanel();
 			RefreshGuidePanel();
+			RefreshGateList();
 		}
 
 		/// <summary>
@@ -513,6 +537,7 @@ namespace FishMMO.Client
 			nextMarkerRefreshTime = 0.0;
 			RefreshNotes();
 			RefreshWaypointPanel();
+			RefreshGateList();
 
 			/* The readouts persist with the tree and would describe wherever the pointer was when the
 			 * map was closed until it next moved over the map. */
@@ -545,6 +570,7 @@ namespace FishMMO.Client
 				{
 					gateMode = false;
 					GateStoneChoice.Cancel();
+					RefreshGateList();
 				}
 			}
 		}
@@ -689,6 +715,13 @@ namespace FishMMO.Client
 		private void RefreshMarkers()
 		{
 			ClientMapSystem.SceneView view = ClientMapSystem.Viewed;
+			if (gateMode)
+			{
+				// The Gate's choice: the character and its discovered Gate Stones, nothing else, whatever the filters say.
+				CollectGateModeMarkers(view);
+				mapView.SetMarkers(markerBuffer);
+				return;
+			}
 			if (view.IsCurrent)
 			{
 				// Live markers (the character, the party, NPCs) exist only in the scene the character stands in.
@@ -719,6 +752,37 @@ namespace FishMMO.Client
 			}
 
 			mapView.SetMarkers(markerBuffer);
+		}
+
+		/// <summary>
+		/// Gate mode's markers: the local character (in its own scene) and the Gate Stones it has discovered in the viewed scene.
+		/// </summary>
+		private void CollectGateModeMarkers(ClientMapSystem.SceneView view)
+		{
+			markerBuffer.Clear();
+			if (view.IsCurrent)
+			{
+				ClientMapSystem.Filter.Collect(markerBuffer, Character, true, view.Fog);
+				for (int i = markerBuffer.Count - 1; i >= 0; --i)
+				{
+					if (markerBuffer[i].Type != MapMarkerType.Self)
+					{
+						markerBuffer.RemoveAt(i);
+					}
+				}
+			}
+			IWaypointController waypointController = null;
+			Character?.TryGet(out waypointController);
+			int start = markerBuffer.Count;
+			MapContent.AppendWaypoints(markerBuffer, view.Details, view.SceneName, waypointController, true);
+			for (int i = markerBuffer.Count - 1; i >= start; --i)
+			{
+				if (view.Details == null || !view.Details.Waypoints.TryGetValue(markerBuffer[i].WaypointIndex, out SceneWaypointDetails details) ||
+					details == null || !details.IsGateStone)
+				{
+					markerBuffer.RemoveAt(i);
+				}
+			}
 		}
 
 		/// <summary>
@@ -1434,6 +1498,7 @@ namespace FishMMO.Client
 			selectedWaypointIndex = waypointIndex;
 			ShowSelectedWaypoint();
 			RefreshWaypointPanel();
+			RefreshGateList();
 		}
 
 		/// <summary>
@@ -1619,17 +1684,110 @@ namespace FishMMO.Client
 			GateStoneChoice.Choose(ClientMapSystem.Viewed.SceneName, selectedWaypointIndex);
 		}
 
-		/// <summary>A Gate waits for its stone: the map opens on the scene the character stands in, in gate mode.</summary>
+		/// <summary>
+		/// A Gate waits for its stone: the map opens on the scene the character stands in, in gate mode, showing only the Gate
+		/// Stones the character has discovered, with every one of them (in any land) listed in the side bar.
+		/// </summary>
 		private void GateStoneChoice_OnBegan()
 		{
 			gateMode = true;
 			hasSelectedWaypoint = false;
-			ShowSelectedWaypoint();
 			if (!Visible)
 			{
 				Show();
 			}
-			RefreshWaypointPanel();
+			else
+			{
+				ClientMapSystem.ViewScene(null);
+			}
+			RefreshGateList();
+			// A stone in this land is the likeliest choice: selected, so one click opens the gate.
+			if (gateStones.Count > 0 && string.Equals(gateStones[0].SceneName, ClientMapSystem.SceneName, StringComparison.Ordinal))
+			{
+				SelectWaypoint(gateStones[0].WaypointIndex);
+			}
+			else
+			{
+				ShowSelectedWaypoint();
+				RefreshWaypointPanel();
+			}
+			nextMarkerRefreshTime = 0.0;
+			Log.Debug("UITKMap", $"Gate mode: {gateStones.Count} discovered Gate Stone(s), {GateStoneChoice.RemainingSeconds:0} s to choose.");
+		}
+
+		/// <summary>
+		/// Rebuilds the Gate Stone list: shown only in gate mode, one row per discovered stone (this land's first), the selected
+		/// one marked. A row shows its stone on the map and selects it.
+		/// </summary>
+		private void RefreshGateList()
+		{
+			if (gateSection == null)
+			{
+				return;
+			}
+			gateSection.style.display = gateMode ? DisplayStyle.Flex : DisplayStyle.None;
+			if (!gateMode)
+			{
+				gateList?.Clear();
+				gateStones.Clear();
+				return;
+			}
+
+			IWaypointController waypoints = null;
+			Character?.TryGet(out waypoints);
+			GateStoneDirectory.Collect(ClientMapSystem.DetailsCache, waypoints, ClientMapSystem.SceneName, gateStones);
+
+			if (gateHint != null)
+			{
+				gateHint.text = gateStones.Count == 0
+					? "You have discovered no Gate Stone. Find one and use it (E) to open gates to it."
+					: "Choose where the gate leads, then OPEN GATE.";
+			}
+			if (gateList == null)
+			{
+				return;
+			}
+			gateList.Clear();
+			string viewed = ClientMapSystem.Viewed.SceneName;
+			for (int i = 0; i < gateStones.Count; ++i)
+			{
+				DiscoveredGateStone stone = gateStones[i];
+				bool here = string.Equals(stone.SceneName, ClientMapSystem.SceneName, StringComparison.Ordinal);
+				string name = string.IsNullOrEmpty(stone.Details.Name) ? "Gate Stone" : stone.Details.Name;
+				Button row = new Button(() => ChooseGateStoneRow(stone))
+				{
+					text = here ? name : $"{name}  ·  {SceneDisplayNameFor(stone.SceneName)}",
+					tooltip = here ? $"{name} (this land)" : $"{name}, in {SceneDisplayNameFor(stone.SceneName)}",
+				};
+				row.AddToClassList("fish-button");
+				row.AddToClassList("fish-button--ghost");
+				row.AddToClassList(GATE_ROW_CLASS);
+				if (hasSelectedWaypoint && selectedWaypointIndex == stone.WaypointIndex &&
+					string.Equals(stone.SceneName, viewed, StringComparison.Ordinal))
+				{
+					row.AddToClassList(GATE_ROW_SELECTED_CLASS);
+				}
+				gateList.Add(row);
+			}
+		}
+
+		/// <summary>A Gate Stone row was clicked: show its land, select it and centre the map on it.</summary>
+		private void ChooseGateStoneRow(DiscoveredGateStone stone)
+		{
+			if (!gateMode)
+			{
+				return;
+			}
+			bool here = string.Equals(stone.SceneName, ClientMapSystem.SceneName, StringComparison.Ordinal);
+			// Switching the viewed scene clears the selection, so it comes first.
+			ClientMapSystem.ViewScene(here ? null : stone.SceneName);
+			SelectWaypoint(stone.WaypointIndex);
+			if (TryGetWaypointDetails(stone.WaypointIndex, out SceneWaypointDetails details))
+			{
+				center = details.Position;
+				ClampCenter();
+				ApplyView();
+			}
 		}
 
 		/// <summary>The wait ended: gate mode ends and the map it opened closes.</summary>
@@ -1643,6 +1801,8 @@ namespace FishMMO.Client
 			hasSelectedWaypoint = false;
 			ShowSelectedWaypoint();
 			RefreshWaypointPanel();
+			RefreshGateList();
+			nextMarkerRefreshTime = 0.0;
 			if (Visible)
 			{
 				Hide();
@@ -1707,6 +1867,7 @@ namespace FishMMO.Client
 
 			nextMarkerRefreshTime = 0.0;
 			ClientUIAudio.Play(WaypointDiscoveredSound);
+			RefreshGateList();
 
 			string name = string.Equals(sceneName, ClientMapSystem.SceneName, StringComparison.Ordinal) &&
 				TryGetWaypointDetails(waypointIndex, out SceneWaypointDetails details)
@@ -1823,6 +1984,7 @@ namespace FishMMO.Client
 			RefreshExplored();
 			nextMarkerRefreshTime = 0.0;
 			RefreshWaypointPanel();
+			RefreshGateList();
 		}
 
 		private void MapSystem_OnVisitedScenesChanged()

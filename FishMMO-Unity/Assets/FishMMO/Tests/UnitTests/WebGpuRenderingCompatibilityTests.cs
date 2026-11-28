@@ -90,6 +90,9 @@ namespace FishMMO.UnitTests
                 foreach(var p in Passes(name,n=>n=="ForwardLit"||n=="ShadowCaster"||n=="DepthOnly"||n=="DepthNormals"||n=="VegetationPrime"))
                 {
                     var keywords=HeavyKeywords.Concat(new[]{"DOTS_INSTANCING_ON"});
+                    // GPU-drawn plants never cast into a point or spot light (FishVegetationPasses.hlsl): that caster is an empty
+                    // program, which reads no instance data at all. The directional caster is the one to check.
+                    if(name=="FishVegetationIndirect"&&p.Name=="ShadowCaster")keywords=keywords.Where(k=>k!="_CASTING_PUNCTUAL_LIGHT_SHADOW");
                     if(firstInstance)keywords=keywords.Concat(new[]{WebGpuDrawCapabilities.FirstInstanceKeyword});
                     string label=name+" "+p.Name+" DOTS";
                     var union=Buffers(p,ShaderType.Vertex,keywords.ToArray(),ShaderCompilerPlatform.WebGPU,BuildTarget.WebGL,label);
@@ -173,6 +176,76 @@ namespace FishMMO.UnitTests
                 }
             }
             Assert.That(found,Is.True,shader+" has no "+pass+" pass");
+        }
+
+        /// <summary>
+        /// The texture parameters Unity's WebGPU backend lets one program bind; a program with more loads with the warning
+        /// "Shader '...' uses N texture parameters, more than the 32 supported by the current graphics device".
+        /// </summary>
+        const int WebGpuTextureParameters = 32;
+
+        // Every pass of the lit shaders the browser draws, at the heaviest lighting state with light cookies, within the 32
+        // texture parameters (vertex ∪ fragment, as Unity reports WebGPU programs).
+        [TestCase("FishWeatherLit",null)]
+        [TestCase("FishWeatherLit","INSTANCING_ON")]
+        [TestCase("FishWeatherLitIndirect","PROCEDURAL_INSTANCING_ON")]
+        [TestCase("FishWeatherLitIndirect","DOTS_INSTANCING_ON")]
+        [TestCase("FishVegetationIndirect","PROCEDURAL_INSTANCING_ON")]
+        [TestCase("FishVegetationIndirect","DOTS_INSTANCING_ON")]
+        public void LitPassesFitWebGpuTextureParameters(string shader,string instancing)
+        {
+            var keywords=HeavyKeywords.Concat(new[]{"_ADDITIONAL_LIGHTS","_LIGHT_COOKIES"}).ToList();
+            if(instancing!=null)keywords.Add(instancing);
+            var failures=new List<string>();
+            int passes=0;
+            foreach(var p in Passes(shader,n=>n!="Meta"&&n!="Universal2D"))
+            {
+                passes++;
+                foreach(bool firstInstance in new[]{false,true})
+                {
+                    var k=firstInstance?keywords.Concat(new[]{WebGpuDrawCapabilities.FirstInstanceKeyword}).ToArray():keywords.ToArray();
+                    string label=shader+" "+p.Name+" "+(instancing??"plain")+(firstInstance?" first-instance":"");
+                    var result=p.CompileVariant(ShaderType.Vertex,k,ShaderCompilerPlatform.WebGPU,BuildTarget.WebGL);
+                    Assert.That(result.Success,Is.True,label+": "+string.Join("\n",result.Messages.Select(m=>m.message)));
+                    var textures=result.TextureBindings.Select(t=>t.Name).ToArray();
+                    var resources=result.ResourceBindings.Select(r=>r.Name+"["+r.Kind+"]").ToArray();
+                    Debug.Log("[WebGPU texture budget] "+label+" textures "+textures.Length+", resources "+resources.Length+": "+string.Join(", ",resources));
+                    if(textures.Length>WebGpuTextureParameters)failures.Add(label+" "+textures.Length+": "+string.Join(", ",textures));
+                }
+            }
+            Assert.That(passes,Is.GreaterThan(0),shader+" has no passes");
+            Assert.That(failures,Is.Empty,string.Join("\n",failures));
+        }
+
+        // The batch group's draws (DOTS) do the terrain's work exactly as RenderMeshIndirect's (procedural): a rock's ground band
+        // and crevices, the stones' flora, the buildings' coat, the plants' ground contact (FISH_INDIRECT_TERRAIN). They once
+        // compiled it for the procedural setup only, so every batch-group draw went without, on WebGPU and Vulkan alike.
+        [TestCase("FishWeatherLitIndirect","_FishRockSdf")]
+        [TestCase("FishVegetationIndirect","_FishGroundHeights")]
+        public void DotsForwardBindsWhatTheProceduralForwardBinds(string shader,string terrainTexture)
+        {
+            var keywords=HeavyKeywords.Concat(new[]{"_ADDITIONAL_LIGHTS","_LIGHT_COOKIES"}).ToArray();
+            bool found=false;
+            foreach(var p in Passes(shader,n=>n=="ForwardLit"))
+            {
+                found=true;
+                foreach(var api in new[]{ShaderCompilerPlatform.WebGPU,ShaderCompilerPlatform.Vulkan})
+                {
+                    var target=api==ShaderCompilerPlatform.WebGPU?BuildTarget.WebGL:BuildTarget.StandaloneLinux64;
+                    string[] Textures(string instancing)
+                    {
+                        var result=p.CompileVariant(ShaderType.Vertex,keywords.Concat(new[]{instancing}).ToArray(),api,target);
+                        Assert.That(result.Success,Is.True,shader+" "+instancing+" "+api+": "+string.Join("\n",result.Messages.Select(m=>m.message)));
+                        return result.TextureBindings.Select(t=>t.Name).OrderBy(n=>n,StringComparer.Ordinal).ToArray();
+                    }
+                    var procedural=Textures("PROCEDURAL_INSTANCING_ON");
+                    var dots=Textures("DOTS_INSTANCING_ON");
+                    if(procedural.Length==0&&dots.Length==0)continue; // no reflection on this API
+                    Assert.That(dots,Does.Contain(terrainTexture),shader+" DOTS "+api+" skips the terrain's work");
+                    Assert.That(dots,Is.EquivalentTo(procedural),shader+" "+api+": DOTS "+string.Join(", ",dots)+"\nprocedural "+string.Join(", ",procedural));
+                }
+            }
+            Assert.That(found,Is.True,shader+" has no ForwardLit pass");
         }
 
         // Native keeps URP's lighting cbuffers: the switch is WebGPU-only.

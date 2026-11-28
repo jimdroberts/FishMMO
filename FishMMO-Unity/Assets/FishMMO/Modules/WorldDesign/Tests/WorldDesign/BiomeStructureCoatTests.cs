@@ -12,7 +12,7 @@ namespace FishMMO.UnitTests.WorldDesign
 {
 	/// <summary>
 	/// The structure COATS every biome draft's new finish asked for, drawn on the GPU
-	/// (BiomeStructureCoats → FloraPaletteMap's _FishCoatTable → FishStructureCoat.hlsl). A weathering with no coat writes the same mark,
+	/// (BiomeStructureCoats → FloraPaletteMap's coat rows in _FishFloraPalette → FishStructureCoat.hlsl). A weathering with no coat writes the same mark,
 	/// a row of zeros and a table switched off, so every building draws as before.
 	/// </summary>
 	public class BiomeStructureCoatTests
@@ -264,7 +264,7 @@ namespace FishMMO.UnitTests.WorldDesign
 			string pass = ProjectFiles.ReadAllText(Path.Combine(folder, "FishWeatherLitForwardPass.hlsl"));
 			int include = pass.IndexOf("#include \"Assets/FishMMO/Shaders/Surface/FishStructureCoat.hlsl\"", StringComparison.Ordinal);
 			Assert.That(include, Is.GreaterThan(0));
-			Assert.That(pass.LastIndexOf("#if defined(FISH_INDIRECT_INSTANCED)", include, StringComparison.Ordinal),
+			Assert.That(pass.LastIndexOf("#if defined(FISH_INDIRECT_TERRAIN)", include, StringComparison.Ordinal),
 				Is.GreaterThan(pass.LastIndexOf("#endif", include, StringComparison.Ordinal)), "the include stands under the indirect twin's #if");
 			Assert.That(pass.IndexOf("FishStructureCoat(", StringComparison.Ordinal), Is.GreaterThan(pass.IndexOf("FishStructureWeather(inputData", StringComparison.Ordinal)),
 				"the coat lies over the weathering");

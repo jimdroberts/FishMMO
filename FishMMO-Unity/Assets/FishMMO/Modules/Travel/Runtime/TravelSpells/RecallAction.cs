@@ -8,8 +8,8 @@ namespace FishMMO.Shared
 	/// The Recall spell's effect: sends the caster to its marked location (issue #241), in this scene or another.
 	/// </summary>
 	/// <remarks>
-	/// <para>Server only, and always the caster: put it on an <c>AbilityOnHitEvent</c> with an initiator target selector on a
-	/// self-cast ability. Castable in combat; the ability should carry <c>InterruptedByDamage</c>.</para>
+	/// <para>Server only, and always the caster: put it on the spawn event of an ability whose object is an invisible pulse at
+	/// the caster's feet (<c>PointBlank</c>), after the effects that event plays. Castable in combat; the ability should carry <c>InterruptedByDamage</c>.</para>
 	/// <para><b>Channel.</b> A mark in the scene the caster is standing in is a local move in the caster's own channel, so
 	/// recalling never splits a group across channels of one scene. From any other scene (or from inside an instance) the
 	/// caster is handed to the mark's own channel when it still runs and has room, and to another channel of the scene
